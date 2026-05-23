@@ -82,6 +82,7 @@ void main() {
     final imported = sanitizer.prepareDefinitionForImport(definitionJson);
 
     expect(imported.state, AgentActionState.needsValidation);
+    expect(imported.lastPreflightSnapshotHash, isNull);
     expect(imported.policies.remote.isEnabled, isFalse);
     expect(imported.policies.remote.requiresReapproval, isTrue);
     expect(imported.policies.remote.approvedBy, isNull);

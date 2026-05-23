@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_scanner.dart';
+import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -17,6 +18,23 @@ class ActionEnvironmentResolver {
   static const int _maxVariableValueLength = 32767;
 
   final AgentActionSecretPlaceholderResolver _secretPlaceholderResolver;
+
+  bool resolveIncludeParentEnvironment({
+    required AgentActionEnvironmentPolicy policy,
+    String? operationalProfile,
+  }) {
+    final configured = policy.includeParentEnvironment;
+    if (configured != null) {
+      return configured;
+    }
+
+    final normalizedProfile = operationalProfile?.trim().toLowerCase();
+    if (normalizedProfile == AgentActionGateConstants.prodOperationalProfileName) {
+      return false;
+    }
+
+    return true;
+  }
 
   ActionValidationFailure? validatePolicy({
     required String actionId,

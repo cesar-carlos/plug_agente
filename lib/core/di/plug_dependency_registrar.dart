@@ -399,6 +399,7 @@ void registerPlugDependencyGraph(
       () => CommandLineActionProcessRunner(
         pathValidator: getIt<ActionPathValidator>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
+        operationalProfileResolver: const AgentOperationalProfileResolver(),
       ),
     )
     ..registerLazySingleton<ExecutableActionProcessRunner>(
@@ -481,7 +482,7 @@ void registerPlugDependencyGraph(
       () => AgentActionSecretReferenceFingerprinter(getIt<IAgentActionSecretStore>()),
     )
     ..registerLazySingleton<AgentActionRuntimeStateGuard>(
-      AgentActionRuntimeStateGuard.new,
+      () => AgentActionRuntimeStateGuard(getIt<FeatureFlags>()),
     )
     ..registerLazySingleton(ElevatedActionRunnerReadinessService.new)
     ..registerLazySingleton<IAgentActionsRemoteCapabilityProvider>(

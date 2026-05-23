@@ -20,6 +20,7 @@ class AgentActionDriftMapper {
       policiesJson: jsonEncode(_policiesToJson(definition.policies)),
       definitionVersion: definition.definitionVersion,
       definitionSnapshotHash: definition.definitionSnapshotHash,
+      lastPreflightSnapshotHash: definition.lastPreflightSnapshotHash,
       createdAt: definition.createdAt ?? now,
       updatedAt: definition.updatedAt ?? now,
     );
@@ -41,6 +42,7 @@ class AgentActionDriftMapper {
       policies: _policiesFromJson(_decodeObject(data.policiesJson)),
       definitionVersion: data.definitionVersion,
       definitionSnapshotHash: data.definitionSnapshotHash,
+      lastPreflightSnapshotHash: data.lastPreflightSnapshotHash,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     );
@@ -336,6 +338,8 @@ class AgentActionDriftMapper {
         'allowedProfiles': policies.environment.allowedProfiles.toList(growable: false),
         'allowedVariableNames': policies.environment.allowedVariableNames.toList(growable: false),
         'variables': Map<String, String>.from(policies.environment.variables),
+        if (policies.environment.includeParentEnvironment != null)
+          'includeParentEnvironment': policies.environment.includeParentEnvironment,
       },
       'path': {
         'allowedWorkingDirectories': policies.path.allowedWorkingDirectories.toList(growable: false),
@@ -481,6 +485,7 @@ class AgentActionDriftMapper {
         allowedProfiles: _readStringList(environment, 'allowedProfiles').toSet(),
         allowedVariableNames: _readStringList(environment, 'allowedVariableNames').toSet(),
         variables: _readStringMap(environment, 'variables'),
+        includeParentEnvironment: environment['includeParentEnvironment'] as bool?,
       ),
       path: AgentActionPathPolicy(
         allowedWorkingDirectories: _readStringList(path, 'allowedWorkingDirectories').toSet(),
@@ -693,6 +698,7 @@ class AgentActionDriftMapper {
       'type': definition.type.name,
       'state': definition.state.name,
       'definitionVersion': definition.definitionVersion,
+      'lastPreflightSnapshotHash': definition.lastPreflightSnapshotHash,
       'config': _configToJson(definition.config),
       'policies': _policiesToJson(definition.policies),
     };
@@ -722,6 +728,7 @@ class AgentActionDriftMapper {
           : AgentActionState.values.byName(stateRaw),
       policies: _policiesFromJson(_readObject(json, 'policies')),
       definitionVersion: json['definitionVersion'] as int? ?? 1,
+      lastPreflightSnapshotHash: json['lastPreflightSnapshotHash'] as String?,
     );
   }
 

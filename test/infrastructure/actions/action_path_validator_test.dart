@@ -418,5 +418,60 @@ void main() {
         containsPair('reason', AgentActionPathContextConstants.pathContentChangedAfterSaveReason),
       );
     });
+
+    test('should require working directory allowlist in production profile', () async {
+      final validator = ActionPathValidator(
+        isProductionProfile: () => true,
+      );
+
+      final result = await validator.validateWorkingDirectory(
+        actionId: 'action-1',
+        path: const AgentActionPathReference(originalPath: r'C:\Data7'),
+        pathPolicy: const AgentActionPathPolicy(),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(
+        (result.exceptionOrNull()! as ActionValidationFailure).context,
+        containsPair('reason', AgentActionPathContextConstants.productionPathAllowlistRequiredReason),
+      );
+    });
+
+    test('should allow empty allowlist in non-production profile', () async {
+      final validator = ActionPathValidator(
+        directoryExists: (_) async => true,
+        canonicalizeDirectory: (_) async => r'C:\Data7',
+        isProductionProfile: () => false,
+      );
+
+      final result = await validator.validateWorkingDirectory(
+        actionId: 'action-1',
+        path: const AgentActionPathReference(originalPath: r'C:\Data7'),
+        pathPolicy: const AgentActionPathPolicy(),
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('should reject required file in production when allowlist is empty', () async {
+      final validator = ActionPathValidator(
+        fileExists: (_) async => true,
+        canonicalizeFile: (_) async => r'C:\Apps\tool.exe',
+        isProductionProfile: () => true,
+      );
+
+      final result = await validator.validateRequiredFile(
+        actionId: 'action-1',
+        field: 'executablePath',
+        path: const AgentActionPathReference(originalPath: r'C:\Apps\tool.exe'),
+        allowedExtensions: {'.exe'},
+      );
+
+      expect(result.isError(), isTrue);
+      expect(
+        (result.exceptionOrNull()! as ActionValidationFailure).context,
+        containsPair('reason', AgentActionPathContextConstants.productionPathAllowlistRequiredReason),
+      );
+    });
   });
 }

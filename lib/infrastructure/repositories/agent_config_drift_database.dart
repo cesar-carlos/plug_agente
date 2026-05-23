@@ -50,7 +50,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   static const _walCheckpointInterval = Duration(minutes: 5);
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -208,6 +208,9 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
         await m.createTable(agentActionCapturedOutputChunkTable);
         await _addAgentActionExecutionCapturedOutputChunkColumnsIfMissing(m);
       }
+      if (from < 26) {
+        await _addAgentActionDefinitionLastPreflightSnapshotHashColumnIfMissing(m);
+      }
       await _createClientTokenIndexes();
       await _createAgentActionIndexes();
       await _createRpcIdempotencyIndexes();
@@ -340,6 +343,25 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
     if (!existing.contains(sqlName)) {
       await m.addColumn(agentActionExecutionTable, failurePhaseColumn);
     }
+  }
+
+  Future<void> _addAgentActionDefinitionLastPreflightSnapshotHashColumnIfMissing(
+    Migrator m,
+  ) async {
+    final existing = await _readAgentActionDefinitionTableColumnNames();
+    final column = agentActionDefinitionTable.lastPreflightSnapshotHash;
+    final sqlName = column.name;
+    if (!existing.contains(sqlName)) {
+      await m.addColumn(agentActionDefinitionTable, column);
+    }
+  }
+
+  Future<Set<String>> _readAgentActionDefinitionTableColumnNames() async {
+    final rows = await customSelect(
+      'PRAGMA table_info("agent_action_definition_table")',
+      readsFrom: {agentActionDefinitionTable},
+    ).get();
+    return {for (final row in rows) row.read<String>('name')};
   }
 
   Future<void> _addAgentActionExecutionRuntimeIdentityColumnsIfMissing(

@@ -20,6 +20,12 @@ abstract class ITransportClient {
   /// Fired when the transport detects an authentication failure (401 / token
   /// invalid). The callback is fire-and-forget; the caller is responsible for
   /// scheduling the async recovery work without blocking the socket event loop.
+  ///
+  /// **Contract:** [setOnTokenExpired], [setOnReconnectionNeeded], and
+  /// [setOnHubLifecycle] remain registered after [disconnect]. Recovery flows
+  /// call [disconnect] before reconnecting; implementations must not clear
+  /// these callbacks on disconnect (only [setMessageCallback] / explicit null
+  /// may clear them).
   void setOnTokenExpired(void Function()? callback);
   void setOnReconnectionNeeded(void Function()? callback);
 

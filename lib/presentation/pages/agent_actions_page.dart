@@ -1390,7 +1390,11 @@ class _SelectedActionDetailContent extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           InfoBar(
             title: Text(l10n.agentActionsNeedsValidationTitle),
-            content: Text(l10n.agentActionsNeedsValidationMessage),
+            content: Text(
+              provider.isPreflightValidForDefinition(definition)
+                  ? l10n.agentActionsPreflightReadyForActivation
+                  : l10n.agentActionsNeedsValidationMessage,
+            ),
             severity: InfoBarSeverity.warning,
             isLong: true,
           ),

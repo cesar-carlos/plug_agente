@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -21,11 +22,18 @@ class AgentActionRuntimeStateSnapshot {
 }
 
 class AgentActionRuntimeStateGuard {
+  AgentActionRuntimeStateGuard([FeatureFlags? featureFlags]) : _featureFlags = featureFlags;
+
+  final FeatureFlags? _featureFlags;
+
   AgentActionRuntimeStateSnapshot _snapshot = const AgentActionRuntimeStateSnapshot(
     status: AgentActionSubsystemStatus.ready,
   );
 
   AgentActionRuntimeStateSnapshot get snapshot => _snapshot;
+
+  bool get _maintenanceStrictModeEnabled =>
+      _featureFlags?.enableAgentActionsMaintenanceStrictMode ?? false;
 
   void markReady() {
     _snapshot = const AgentActionRuntimeStateSnapshot(
@@ -84,7 +92,7 @@ class AgentActionRuntimeStateGuard {
             ? Failure(_failureFor(current, request: request, actionType: actionType))
             : const Success(unit),
       AgentActionSubsystemStatus.maintenance =>
-        request.source == AgentActionRequestSource.localUi
+        request.source == AgentActionRequestSource.localUi && !_maintenanceStrictModeEnabled
             ? const Success(unit)
             : Failure(_failureFor(current, request: request, actionType: actionType)),
       AgentActionSubsystemStatus.draining =>
@@ -117,7 +125,10 @@ class AgentActionRuntimeStateGuard {
         if (snapshot.reason != null) 'detail': snapshot.reason,
         if (snapshot.unavailableActionTypes.isNotEmpty)
           'unavailable_action_types': snapshot.unavailableActionTypes.map((type) => type.name).toList(growable: false),
-        'user_message': _userMessageFor(snapshot.status),
+        'user_message': _userMessageForMaintenanceBlock(
+          snapshot.status,
+          request.source,
+        ),
       },
     );
   }
@@ -156,5 +167,18 @@ class AgentActionRuntimeStateGuard {
       AgentActionSubsystemStatus.disabled => 'As acoes do agente estao desativadas neste ambiente.',
       AgentActionSubsystemStatus.ready => 'As acoes do agente estao prontas.',
     };
+  }
+
+  String _userMessageForMaintenanceBlock(
+    AgentActionSubsystemStatus status,
+    AgentActionRequestSource source,
+  ) {
+    if (status == AgentActionSubsystemStatus.maintenance &&
+        source == AgentActionRequestSource.localUi &&
+        _maintenanceStrictModeEnabled) {
+      return 'Todas as execucoes estao bloqueadas pelo modo de manutencao, incluindo execucao manual.';
+    }
+
+    return _userMessageFor(status);
   }
 }

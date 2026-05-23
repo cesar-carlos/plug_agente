@@ -18,6 +18,7 @@ class AuthProvider extends ChangeNotifier {
   String _error = '';
   AuthToken? _currentToken;
   String? _activeConfigId;
+  bool _suppressAuthSuccessModalOnce = false;
 
   AuthStatus get status => _status;
   String get error => _error;
@@ -153,12 +154,27 @@ class AuthProvider extends ChangeNotifier {
     AuthToken token, {
     bool authenticated = true,
     String? configId,
+    bool silent = false,
   }) {
+    final priorAuthenticated = _status == AuthStatus.authenticated;
     _currentToken = token;
     _activeConfigId = _normalizeConfigId(configId) ?? _activeConfigId;
     _status = authenticated ? AuthStatus.authenticated : AuthStatus.unauthenticated;
     _error = '';
+    if (silent && !priorAuthenticated && _status == AuthStatus.authenticated) {
+      _suppressAuthSuccessModalOnce = true;
+    }
     notifyListeners();
+  }
+
+  /// When [restoreToken] was called with `silent: true`, the next pull returns
+  /// `true` once so UI can skip the "authenticated successfully" modal.
+  bool pullSuppressAuthSuccessModalOnce() {
+    if (!_suppressAuthSuccessModalOnce) {
+      return false;
+    }
+    _suppressAuthSuccessModalOnce = false;
+    return true;
   }
 
   void setRecoveryError(String message) {

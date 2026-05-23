@@ -81,6 +81,7 @@ class AgentActionBackupSanitizer {
     final definition = _codec.definitionFromPortableJson(sanitized);
     return definition.copyWith(
       state: AgentActionState.needsValidation,
+      lastPreflightSnapshotHash: null,
       policies: definition.policies.copyWith(
         remote: AgentActionRemotePolicy(
           allowAdHoc: definition.policies.remote.allowAdHoc,

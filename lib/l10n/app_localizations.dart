@@ -2012,6 +2012,24 @@ abstract class AppLocalizations {
   /// **'Test this action locally before running or enabling remote execution.'**
   String get agentActionsNeedsValidationMessage;
 
+  /// No description provided for @agentActionsPreflightRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preflight required for activation'**
+  String get agentActionsPreflightRequiredTitle;
+
+  /// No description provided for @agentActionsPreflightRequiredForActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Run \"Test action\" successfully before setting this action to Active.'**
+  String get agentActionsPreflightRequiredForActive;
+
+  /// No description provided for @agentActionsPreflightReadyForActivation.
+  ///
+  /// In en, this message translates to:
+  /// **'Preflight passed. Set the state to Active and save to enable execution.'**
+  String get agentActionsPreflightReadyForActivation;
+
   /// No description provided for @agentActionsSecretPlaceholdersTitle.
   ///
   /// In en, this message translates to:
@@ -2305,6 +2323,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scheduled runs, app start/close triggers, and remote runs are paused. You can still run actions from this screen and edit definitions.'**
   String get agentActionsMaintenanceModeInfoMessage;
+
+  /// No description provided for @agentActionsMaintenanceStrictMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Block manual execution too'**
+  String get agentActionsMaintenanceStrictMode;
 
   /// No description provided for @agentActionsElevatedRunnerNotReadyTitle.
   ///
@@ -7411,6 +7435,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hub: Waiting for server...'**
   String get connectionStatusHubReconnectingWaitingHub;
+
+  /// No description provided for @connectionStatusHubReconnectingNegotiationTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: Protocol negotiation stalled; retrying...'**
+  String get connectionStatusHubReconnectingNegotiationTimedOut;
+
+  /// No description provided for @connectionStatusSessionAuthenticated.
+  ///
+  /// In en, this message translates to:
+  /// **'Session: signed in'**
+  String get connectionStatusSessionAuthenticated;
+
+  /// No description provided for @connectionStatusSessionUnauthenticated.
+  ///
+  /// In en, this message translates to:
+  /// **'Session: not signed in'**
+  String get connectionStatusSessionUnauthenticated;
+
+  /// No description provided for @connectionStatusSessionError.
+  ///
+  /// In en, this message translates to:
+  /// **'Session: error'**
+  String get connectionStatusSessionError;
+
+  /// No description provided for @wsSubtitleSessionWaitingForHub.
+  ///
+  /// In en, this message translates to:
+  /// **'You are signed in; waiting for the hub connection to finish.'**
+  String get wsSubtitleSessionWaitingForHub;
+
+  /// No description provided for @diagnosticsHubRecoverySnapshotTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub recovery (live)'**
+  String get diagnosticsHubRecoverySnapshotTitle;
+
+  /// No description provided for @diagnosticsHubRecoveryRecoveryId.
+  ///
+  /// In en, this message translates to:
+  /// **'recovery_id'**
+  String get diagnosticsHubRecoveryRecoveryId;
+
+  /// No description provided for @diagnosticsHubRecoveryConnectionStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'connection_status'**
+  String get diagnosticsHubRecoveryConnectionStatus;
+
+  /// No description provided for @diagnosticsHubRecoveryUiHint.
+  ///
+  /// In en, this message translates to:
+  /// **'ui_hint'**
+  String get diagnosticsHubRecoveryUiHint;
+
+  /// No description provided for @diagnosticsHubRecoveryConsecutiveFailures.
+  ///
+  /// In en, this message translates to:
+  /// **'consecutive_failures'**
+  String get diagnosticsHubRecoveryConsecutiveFailures;
+
+  /// No description provided for @diagnosticsHubRecoveryPersistentTick.
+  ///
+  /// In en, this message translates to:
+  /// **'persistent_tick_count'**
+  String get diagnosticsHubRecoveryPersistentTick;
+
+  /// No description provided for @diagnosticsHubRecoveryPersistentFailures.
+  ///
+  /// In en, this message translates to:
+  /// **'persistent_failure_count'**
+  String get diagnosticsHubRecoveryPersistentFailures;
+
+  /// No description provided for @diagnosticsHubRecoveryHardReloginAttempted.
+  ///
+  /// In en, this message translates to:
+  /// **'hard_relogin_attempted_in_cycle'**
+  String get diagnosticsHubRecoveryHardReloginAttempted;
+
+  /// No description provided for @diagnosticsHubRecoveryLastError.
+  ///
+  /// In en, this message translates to:
+  /// **'last_error'**
+  String get diagnosticsHubRecoveryLastError;
+
+  /// No description provided for @diagnosticsHubRecoveryCopyAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy all'**
+  String get diagnosticsHubRecoveryCopyAll;
+
+  /// No description provided for @diagnosticsHubRecoveryCopiedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub recovery diagnostics copied to the clipboard.'**
+  String get diagnosticsHubRecoveryCopiedToast;
 
   /// No description provided for @connectionStatusHubError.
   ///

@@ -3,7 +3,10 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:json_schema/json_schema.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
+import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_path_context_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_path_prod_defaults_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/windows_action_path_normalizer.dart';
@@ -60,6 +63,8 @@ class PathSnapshotCheck {
   bool get hasWarning => warningMessage != null && warningMessage!.isNotEmpty;
 }
 
+typedef AgentActionProductionProfileResolver = bool Function();
+
 class ActionPathValidator {
   ActionPathValidator({
     AgentActionPathExists? fileExists,
@@ -69,6 +74,7 @@ class ActionPathValidator {
     AgentActionFileLengthResolver? fileLength,
     AgentActionFileTextReader? readText,
     AgentActionLaunchAccessValidator? launchAccessValidator,
+    AgentActionProductionProfileResolver? isProductionProfile,
   }) : _fileExists = fileExists ?? _defaultFileExists,
        _directoryExists = directoryExists ?? _defaultDirectoryExists,
        _canonicalizeFile = canonicalizeFile ?? _defaultCanonicalizeFile,
@@ -76,7 +82,8 @@ class ActionPathValidator {
        _fileLength = fileLength ?? _defaultFileLength,
        _readText = readText ?? _defaultReadText,
        _launchAccessValidator =
-           launchAccessValidator ?? WindowsExecutableLaunchAccessChecker.validateLaunchAccess;
+           launchAccessValidator ?? WindowsExecutableLaunchAccessChecker.validateLaunchAccess,
+       _isProductionProfile = isProductionProfile ?? _defaultIsProductionProfile;
 
   final AgentActionPathExists _fileExists;
   final AgentActionPathExists _directoryExists;
@@ -85,6 +92,41 @@ class ActionPathValidator {
   final AgentActionFileLengthResolver _fileLength;
   final AgentActionFileTextReader _readText;
   final AgentActionLaunchAccessValidator _launchAccessValidator;
+  final AgentActionProductionProfileResolver _isProductionProfile;
+
+  static bool _defaultIsProductionProfile() {
+    final raw = AppEnvironment.get(AgentActionGateConstants.operationalProfileEnvironmentKey);
+    return AgentActionPathProdDefaultsConstants.isProductionProfile(raw);
+  }
+
+  String? get _currentOperationalProfile {
+    return AppEnvironment.get(AgentActionGateConstants.operationalProfileEnvironmentKey);
+  }
+
+  ActionValidationFailure? validateProductionWorkingDirectoryAllowlist({
+    required String actionId,
+    required AgentActionPathPolicy pathPolicy,
+    required String phase,
+  }) {
+    if (!_isProductionProfile()) {
+      return null;
+    }
+    if (_hasNonBlankAllowlist(pathPolicy.allowedWorkingDirectories)) {
+      return null;
+    }
+
+    return ActionValidationFailure.withContext(
+      message: 'Production profile requires explicit working directory allowlist.',
+      context: {
+        'action_id': actionId,
+        'field': 'path.allowedWorkingDirectories',
+        'phase': phase,
+        'reason': AgentActionPathContextConstants.productionPathAllowlistRequiredReason,
+        'operational_profile': _currentOperationalProfile,
+        'user_message': AgentActionPathProdDefaultsConstants.productionAllowlistRequiredUserMessage,
+      },
+    );
+  }
 
   Future<Result<AgentActionPathValidation>> validateWorkingDirectory({
     required String actionId,
@@ -92,6 +134,15 @@ class ActionPathValidator {
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
     String phase = 'definition_validation',
   }) async {
+    final productionAllowlistFailure = validateProductionWorkingDirectoryAllowlist(
+      actionId: actionId,
+      pathPolicy: pathPolicy,
+      phase: phase,
+    );
+    if (productionAllowlistFailure != null) {
+      return Failure(productionAllowlistFailure);
+    }
+
     final originalPath = path?.displayPath.trim();
     if (originalPath == null) {
       return const Success(AgentActionPathValidation.notProvided());
@@ -328,6 +379,16 @@ class ActionPathValidator {
     String notAllowedUserMessage = 'Arquivo fora da lista permitida para esta acao.',
     bool? requireLaunchAccess,
   }) async {
+    if (allowedDirectories.isEmpty && _isProductionProfile()) {
+      return Failure(
+        validateProductionWorkingDirectoryAllowlist(
+          actionId: actionId,
+          pathPolicy: AgentActionPathPolicy(allowedWorkingDirectories: allowedDirectories),
+          phase: phase,
+        )!,
+      );
+    }
+
     final originalPath = path.displayPath.trim();
     if (originalPath.isEmpty) {
       return Failure(
@@ -721,6 +782,9 @@ class ActionPathValidator {
     required Set<String> allowedDirectories,
   }) async {
     if (allowedDirectories.isEmpty) {
+      if (_isProductionProfile()) {
+        return false;
+      }
       return true;
     }
 
@@ -884,5 +948,15 @@ class ActionPathValidator {
       final candidateWithDot = normalizedCandidate.startsWith('.') ? normalizedCandidate : '.$normalizedCandidate';
       return normalizedExtension == candidateWithDot;
     });
+  }
+
+  bool _hasNonBlankAllowlist(Set<String> allowedDirectories) {
+    for (final directory in allowedDirectories) {
+      if (directory.trim().isNotEmpty) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }

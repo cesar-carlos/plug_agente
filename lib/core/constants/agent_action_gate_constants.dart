@@ -39,4 +39,6 @@ abstract final class AgentActionGateConstants {
 
   /// Optional operational profile for [AgentActionEnvironmentPolicy] (`dev`, `homolog`, `prod`, etc.).
   static const String operationalProfileEnvironmentKey = 'AGENT_OPERATIONAL_PROFILE';
+
+  static const String prodOperationalProfileName = 'prod';
 }

@@ -308,6 +308,7 @@ class AgentActionEnvironmentPolicy {
     this.allowedProfiles = const {},
     this.allowedVariableNames = const {},
     this.variables = const {},
+    this.includeParentEnvironment,
   });
 
   final Set<String> allowedProfiles;
@@ -317,6 +318,10 @@ class AgentActionEnvironmentPolicy {
 
   /// Literal values or `${secret:name}` placeholders applied to the child process environment.
   final Map<String, String> variables;
+
+  /// When `null`, parent environment is inherited except in the `prod` operational profile.
+  /// When `false`, only [variables] (and runtime injection) are passed to the child process.
+  final bool? includeParentEnvironment;
 
   bool allowsProfile(String? profile) {
     if (allowedProfiles.isEmpty) {
@@ -345,11 +350,15 @@ class AgentActionEnvironmentPolicy {
     Set<String>? allowedProfiles,
     Set<String>? allowedVariableNames,
     Map<String, String>? variables,
+    bool? includeParentEnvironment,
+    bool clearIncludeParentEnvironment = false,
   }) {
     return AgentActionEnvironmentPolicy(
       allowedProfiles: allowedProfiles ?? this.allowedProfiles,
       allowedVariableNames: allowedVariableNames ?? this.allowedVariableNames,
       variables: variables ?? this.variables,
+      includeParentEnvironment:
+          clearIncludeParentEnvironment ? null : (includeParentEnvironment ?? this.includeParentEnvironment),
     );
   }
 }

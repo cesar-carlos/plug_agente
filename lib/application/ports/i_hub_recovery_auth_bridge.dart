@@ -21,7 +21,7 @@ abstract interface class IHubRecoveryAuthBridge {
 
   Future<void> logout({String? configId});
 
-  void restoreToken(AuthToken token, {String? configId});
+  void restoreToken(AuthToken token, {String? configId, bool silent = false});
 
   void setRecoveryError(String message);
 }

@@ -115,6 +115,7 @@ abstract final class AgentActionFailureCode {
   static const pathNotFound = 'ACTION_PATH_NOT_FOUND';
   static const pathPermissionDenied = 'ACTION_PATH_PERMISSION_DENIED';
   static const pathSnapshotMismatch = 'ACTION_PATH_SNAPSHOT_MISMATCH';
+  static const preflightRequiredForActive = 'ACTION_PREFLIGHT_REQUIRED_FOR_ACTIVE';
   static const processIdMismatch = 'ACTION_PROCESS_ID_MISMATCH';
   static const processIdentityMismatch = 'ACTION_PROCESS_IDENTITY_MISMATCH';
   static const processIdentityUnavailable = 'ACTION_PROCESS_IDENTITY_UNAVAILABLE';

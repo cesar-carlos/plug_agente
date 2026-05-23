@@ -104,6 +104,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   _PowerShellDraftMode _powerShellMode = _PowerShellDraftMode.inline;
   _PowerShellExecutable _powerShellExecutable = _PowerShellExecutable.windowsPowerShell;
   AgentActionState _state = AgentActionState.needsValidation;
+  bool _isDraftModifiedSinceLoad = false;
   bool _notifyOnSuccess = false;
   bool _notifyOnFailure = false;
   bool _notifyOnTimeout = false;
@@ -135,6 +136,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   @override
   void initState() {
     super.initState();
+    _attachDraftChangeListeners();
     _loadDefinition(widget.definition);
     _resetVisibleDialogSections();
   }
@@ -153,6 +155,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
 
   @override
   void dispose() {
+    _detachDraftChangeListeners();
     _nameController.dispose();
     _descriptionController.dispose();
     _commandController.dispose();
@@ -199,6 +202,70 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   void _setValidationMessage(String message) {
     setState(() {
       _validationMessage = message;
+    });
+  }
+
+  List<TextEditingController> get _draftChangeControllers => <TextEditingController>[
+    _nameController,
+    _descriptionController,
+    _commandController,
+    _workingDirectoryController,
+    _executableTargetPathController,
+    _executableArgumentsController,
+    _scriptPathController,
+    _scriptInterpreterPathController,
+    _jarPathController,
+    _javaExecutablePathController,
+    _smtpProfileIdController,
+    _emailFromController,
+    _emailToController,
+    _emailCcController,
+    _emailBccController,
+    _emailSubjectController,
+    _emailBodyController,
+    _emailAttachmentsController,
+    _comProgIdController,
+    _comMemberNameController,
+    _comArgumentsController,
+    _executorPathController,
+    _projectPathController,
+    _data7ConfigPathController,
+    _connectionIdController,
+    _connectionLabelController,
+    _maxRuntimeMinutesController,
+    _allowedProfilesController,
+    _allowedEnvironmentVariableNamesController,
+    _environmentVariablesController,
+    _acceptedExitCodesController,
+    _runtimeParameterSchemaController,
+    _maxConcurrentController,
+    _maxQueuedController,
+    _allowedWorkingDirectoriesController,
+    _allowedContextDirectoriesController,
+  ];
+
+  void _attachDraftChangeListeners() {
+    for (final controller in _draftChangeControllers) {
+      controller.addListener(_onDraftChanged);
+    }
+  }
+
+  void _detachDraftChangeListeners() {
+    for (final controller in _draftChangeControllers) {
+      controller.removeListener(_onDraftChanged);
+    }
+  }
+
+  void _onDraftChanged() {
+    if (_isDraftModifiedSinceLoad) {
+      return;
+    }
+
+    setState(() {
+      _isDraftModifiedSinceLoad = true;
+      if (_state == AgentActionState.active) {
+        _state = AgentActionState.needsValidation;
+      }
     });
   }
 
@@ -345,6 +412,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
 
   void _loadDefinition(AgentActionDefinition? definition) {
     _validationMessage = null;
+    _isDraftModifiedSinceLoad = false;
     if (definition == null) {
       _clearDraft();
       return;
@@ -642,6 +710,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
     _connectionIdController.clear();
     _connectionLabelController.clear();
     _state = AgentActionState.needsValidation;
+    _isDraftModifiedSinceLoad = false;
     _notifyOnSuccess = false;
     _notifyOnFailure = false;
     _notifyOnTimeout = false;
@@ -1044,6 +1113,16 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
       return _showValidationDialog(message);
     }
 
+    if (_state == AgentActionState.active &&
+        !widget.provider.canSetDefinitionActive(
+          _editingActionId,
+          draftModified: _isDraftModifiedSinceLoad,
+        )) {
+      final message = widget.l10n.agentActionsPreflightRequiredForActive;
+      _setValidationMessage(message);
+      return _showValidationDialog(message);
+    }
+
     final saveRequest = switch (_draftKind) {
       _AgentActionDraftKind.commandLine => _saveCommandLineDraft(),
       _AgentActionDraftKind.executable => _saveExecutableDraft(),
@@ -1065,6 +1144,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
 
     setState(() {
       _validationMessage = null;
+      _isDraftModifiedSinceLoad = false;
     });
     widget.onSaved?.call();
     return true;
@@ -1185,6 +1265,10 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                               });
                             },
                     );
+              final canSelectActiveState = widget.provider.canSetDefinitionActive(
+                _editingActionId,
+                draftModified: _isDraftModifiedSinceLoad,
+              );
               final stateField = AppDropdown<AgentActionState>(
                 label: widget.l10n.agentActionsFormState,
                 helpTitle: widget.l10n.agentActionsHelpStateTitle,
@@ -1194,6 +1278,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                     .map(
                       (state) => ComboBoxItem<AgentActionState>(
                         value: state,
+                        enabled: state != AgentActionState.active || canSelectActiveState,
                         child: Text(_stateLabel(state, widget.l10n)),
                       ),
                     )
@@ -1204,11 +1289,30 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         if (value == null) {
                           return;
                         }
+                        if (value == AgentActionState.active && !canSelectActiveState) {
+                          _setValidationMessage(widget.l10n.agentActionsPreflightRequiredForActive);
+                          return;
+                        }
                         setState(() {
                           _state = value;
+                          _validationMessage = null;
                         });
                       },
               );
+              final preflightGateInfoBar = !canSelectActiveState
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: AppSpacing.sm),
+                        InfoBar(
+                          title: Text(widget.l10n.agentActionsPreflightRequiredTitle),
+                          content: Text(widget.l10n.agentActionsPreflightRequiredForActive),
+                          severity: InfoBarSeverity.warning,
+                          isLong: true,
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink();
 
               if (stackFields) {
                 return Column(
@@ -1219,18 +1323,25 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                     typeField,
                     const SizedBox(height: AppSpacing.sm),
                     stateField,
+                    preflightGateInfoBar,
                   ],
                 );
               }
 
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: nameField),
-                  const SizedBox(width: AppSpacing.md),
-                  SizedBox(width: 220, child: typeField),
-                  const SizedBox(width: AppSpacing.md),
-                  SizedBox(width: 220, child: stateField),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: nameField),
+                      const SizedBox(width: AppSpacing.md),
+                      SizedBox(width: 220, child: typeField),
+                      const SizedBox(width: AppSpacing.md),
+                      SizedBox(width: 220, child: stateField),
+                    ],
+                  ),
+                  preflightGateInfoBar,
                 ],
               );
             },

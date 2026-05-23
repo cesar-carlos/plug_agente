@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
 import 'package:plug_agente/application/actions/agent_action_failure_diagnostics.dart';
 import 'package:plug_agente/application/actions/agent_action_remote_audit_support_export.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
@@ -80,6 +81,7 @@ class AgentActionsProvider extends ChangeNotifier {
     GlobalStorageContext? globalStorageContext,
     AgentActionTriggerScheduler? triggerScheduler,
     IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
+    AgentActionDefinitionSnapshotter? definitionSnapshotter,
     DateTime Function()? now,
   }) : _runtimeStateGuard = runtimeStateGuard,
        _subsystemCoordinator = subsystemCoordinator,
@@ -92,6 +94,7 @@ class AgentActionsProvider extends ChangeNotifier {
        _globalStorageContext = globalStorageContext,
        _triggerScheduler = triggerScheduler,
        _comObjectInvocationDiagnostics = comObjectInvocationDiagnostics,
+       _definitionSnapshotter = definitionSnapshotter ?? const AgentActionDefinitionSnapshotter(),
        _now = now ?? DateTime.now;
   static const AgentActionRemoteAuditSupportExport _remoteAuditExport = AgentActionRemoteAuditSupportExport();
 
@@ -125,9 +128,12 @@ class AgentActionsProvider extends ChangeNotifier {
   final GlobalStorageContext? _globalStorageContext;
   final AgentActionTriggerScheduler? _triggerScheduler;
   final IComObjectInvocationDiagnostics? _comObjectInvocationDiagnostics;
+  final AgentActionDefinitionSnapshotter _definitionSnapshotter;
   final DateTime Function() _now;
 
   bool _isPreparingElevatedRunner = false;
+
+  final Map<String, String> _sessionPreflightSnapshotHashes = <String, String>{};
 
   List<AgentActionDefinition> _definitions = <AgentActionDefinition>[];
   List<AgentActionExecution> _executions = <AgentActionExecution>[];
@@ -232,6 +238,7 @@ class AgentActionsProvider extends ChangeNotifier {
   bool get isElevatedRunnerDegraded => _elevatedRunnerReadiness?.isDegraded ?? false;
   bool get isPreparingElevatedRunner => _isPreparingElevatedRunner;
   bool get isMaintenanceMode => _featureFlags.enableAgentActionsMaintenanceMode;
+  bool get isMaintenanceStrictMode => _featureFlags.enableAgentActionsMaintenanceStrictMode;
   bool get canManageTriggers => isFeatureEnabled && !isMaintenanceMode;
   bool get canTransferBundle =>
       canManageTriggers && !_isLoading && !_isTransferringBundle && !_isSaving && !_isDeleting;
@@ -345,6 +352,29 @@ class AgentActionsProvider extends ChangeNotifier {
 
   bool get canSaveAction {
     return isFeatureEnabled && !_isSaving;
+  }
+
+  bool canSetDefinitionActive(String? actionId, {required bool draftModified}) {
+    if (draftModified || actionId == null || actionId.trim().isEmpty) {
+      return false;
+    }
+
+    final definition = _existingDefinition(actionId);
+    if (definition == null) {
+      return false;
+    }
+
+    return isPreflightValidForDefinition(definition);
+  }
+
+  bool isPreflightValidForDefinition(AgentActionDefinition definition) {
+    final recordedPreflightHash =
+        _sessionPreflightSnapshotHashes[definition.id] ?? definition.lastPreflightSnapshotHash;
+    if (recordedPreflightHash == null || recordedPreflightHash.isEmpty) {
+      return false;
+    }
+
+    return recordedPreflightHash == _preflightContentSnapshotHash(definition);
   }
 
   bool get canDeleteSelected {
@@ -470,6 +500,7 @@ class AgentActionsProvider extends ChangeNotifier {
 
     _definitions = definitionsResult.getOrThrow();
     _executions = executionsResult.getOrThrow();
+    _syncSessionPreflightSnapshotHashes();
     _selectedActionId = _resolveSelectedActionId();
 
     if (_featureFlags.enableAgentActionRemoteAudit) {
@@ -709,6 +740,11 @@ class AgentActionsProvider extends ChangeNotifier {
         }
       }
     }
+    notifyListeners();
+  }
+
+  Future<void> setMaintenanceStrictMode({required bool enabled}) async {
+    await _featureFlags.setEnableAgentActionsMaintenanceStrictMode(enabled);
     notifyListeners();
   }
 
@@ -1070,6 +1106,7 @@ class AgentActionsProvider extends ChangeNotifier {
         pathPolicy: pathPolicy,
       ),
       definitionVersion: existing?.definitionVersion ?? 1,
+      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
       createdAt: existing?.createdAt ?? _now(),
       updatedAt: _now(),
     );
@@ -1150,6 +1187,7 @@ class AgentActionsProvider extends ChangeNotifier {
         pathPolicy: pathPolicy,
       ),
       definitionVersion: existing?.definitionVersion ?? 1,
+      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
       createdAt: existing?.createdAt ?? _now(),
       updatedAt: _now(),
     );
@@ -1237,6 +1275,7 @@ class AgentActionsProvider extends ChangeNotifier {
         pathPolicy: pathPolicy,
       ),
       definitionVersion: existing?.definitionVersion ?? 1,
+      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
       createdAt: existing?.createdAt ?? _now(),
       updatedAt: _now(),
     );
@@ -1324,6 +1363,7 @@ class AgentActionsProvider extends ChangeNotifier {
         pathPolicy: pathPolicy,
       ),
       definitionVersion: existing?.definitionVersion ?? 1,
+      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
       createdAt: existing?.createdAt ?? _now(),
       updatedAt: _now(),
     );
@@ -1403,6 +1443,7 @@ class AgentActionsProvider extends ChangeNotifier {
         pathPolicy: pathPolicy,
       ),
       definitionVersion: existing?.definitionVersion ?? 1,
+      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
       createdAt: existing?.createdAt ?? _now(),
       updatedAt: _now(),
     );
@@ -1472,6 +1513,7 @@ class AgentActionsProvider extends ChangeNotifier {
         pathPolicy: pathPolicy,
       ),
       definitionVersion: existing?.definitionVersion ?? 1,
+      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
       createdAt: existing?.createdAt ?? _now(),
       updatedAt: _now(),
     );
@@ -1551,6 +1593,7 @@ class AgentActionsProvider extends ChangeNotifier {
         pathPolicy: pathPolicy,
       ),
       definitionVersion: existing?.definitionVersion ?? 1,
+      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
       createdAt: existing?.createdAt ?? _now(),
       updatedAt: _now(),
     );
@@ -1780,6 +1823,7 @@ class AgentActionsProvider extends ChangeNotifier {
       final failure = result.exceptionOrNull()!;
       _lastTestedActionId = definition.id;
       _lastTestCanRun = false;
+      _sessionPreflightSnapshotHashes.remove(definition.id);
       _errorMessage = _messageFor(failure);
       _applyTestFailurePreview(failure);
       _isTesting = false;
@@ -1791,6 +1835,8 @@ class AgentActionsProvider extends ChangeNotifier {
     _lastTestedActionId = definition.id;
     _lastTestCanRun = preflight.canRun;
     _lastTestDiagnostics = preflight.redactedDiagnostics;
+
+    await _recordPreflightSuccess(definition);
 
     final previewResult = await _previewDefinition(definition.id);
     previewResult.fold(
@@ -1959,6 +2005,58 @@ class AgentActionsProvider extends ChangeNotifier {
     _lastTestCommandPreview = null;
     _lastTestPreviewErrorMessage = null;
     _lastTestDiagnostics = const <String, Object?>{};
+  }
+
+  String _preflightContentSnapshotHash(AgentActionDefinition definition) {
+    return _definitionSnapshotter.snapshotHash(
+      definition.copyWith(state: AgentActionState.needsValidation),
+    );
+  }
+
+  String? _resolveLastPreflightSnapshotHash(AgentActionDefinition? existing) {
+    if (existing == null) {
+      return null;
+    }
+
+    return _sessionPreflightSnapshotHashes[existing.id] ?? existing.lastPreflightSnapshotHash;
+  }
+
+  void _syncSessionPreflightSnapshotHashes() {
+    _sessionPreflightSnapshotHashes.clear();
+    for (final definition in _definitions) {
+      final hash = definition.lastPreflightSnapshotHash;
+      if (hash != null && hash.isNotEmpty && isPreflightValidForDefinition(definition)) {
+        _sessionPreflightSnapshotHashes[definition.id] = hash;
+      }
+    }
+  }
+
+  Future<void> _recordPreflightSuccess(AgentActionDefinition definition) async {
+    final preflightSnapshotHash = _preflightContentSnapshotHash(definition);
+    _sessionPreflightSnapshotHashes[definition.id] = preflightSnapshotHash;
+
+    if (definition.lastPreflightSnapshotHash == preflightSnapshotHash) {
+      notifyListeners();
+      return;
+    }
+
+    final result = await _saveDefinition(
+      definition.copyWith(lastPreflightSnapshotHash: preflightSnapshotHash),
+    );
+    result.fold(
+      (savedDefinition) {
+        _definitions = _definitions
+            .map(
+              (AgentActionDefinition item) => item.id == savedDefinition.id ? savedDefinition : item,
+            )
+            .toList(growable: false);
+        _errorMessage = null;
+      },
+      (failure) {
+        _errorMessage = _messageFor(failure);
+      },
+    );
+    notifyListeners();
   }
 
   Future<void> _syncTriggersForSelection() async {

@@ -93,9 +93,44 @@ class SaveAgentActionDefinition {
       }
     }
 
-    final definitionWithSnapshot = definitionWithRemote.copyWith(
-      definitionSnapshotHash: _snapshotter.snapshotHash(definitionWithRemote),
+    final pendingSnapshotHash = _snapshotter.snapshotHash(definitionWithRemote);
+    if (definitionWithRemote.state == AgentActionState.active) {
+      final preflightSnapshotHash = _preflightContentSnapshotHash(persistedDefinition);
+      final recordedPreflightHash = definition.lastPreflightSnapshotHash ?? definitionWithRemote.lastPreflightSnapshotHash;
+      if (recordedPreflightHash == null || recordedPreflightHash != preflightSnapshotHash) {
+        return Failure(
+          ActionValidationFailure.withContext(
+            message: 'Action preflight validation is required before activation.',
+            code: AgentActionFailureCode.preflightRequiredForActive,
+            context: {
+              'action_id': definitionWithRemote.id,
+              'reason': 'preflight_required_for_active',
+              'user_message':
+                  'Execute "Testar acao" com sucesso antes de salvar esta acao como ativa.',
+            },
+          ),
+        );
+      }
+    }
+
+    var definitionWithSnapshot = definitionWithRemote.copyWith(
+      definitionSnapshotHash: pendingSnapshotHash,
     );
+    if (definitionWithRemote.state != AgentActionState.active) {
+      final preflightSnapshotHash = _preflightContentSnapshotHash(persistedDefinition);
+      if (definitionWithSnapshot.lastPreflightSnapshotHash != null &&
+          definitionWithSnapshot.lastPreflightSnapshotHash != preflightSnapshotHash) {
+        definitionWithSnapshot = definitionWithSnapshot.copyWith(
+          lastPreflightSnapshotHash: null,
+        );
+      }
+    }
     return _repository.saveDefinition(definitionWithSnapshot);
+  }
+
+  String _preflightContentSnapshotHash(AgentActionDefinition definition) {
+    return _snapshotter.snapshotHash(
+      definition.copyWith(state: AgentActionState.needsValidation),
+    );
   }
 }

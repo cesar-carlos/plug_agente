@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:plug_agente/application/actions/action_environment_resolver.dart';
+import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
@@ -19,15 +20,17 @@ import 'package:result_dart/result_dart.dart';
 class ScriptActionProcessRunner implements AgentActionLocalRunner {
   ScriptActionProcessRunner({
     AgentActionProcessStarter? processStarter,
-    ActionCommandNormalizer commandNormalizer = const ActionCommandNormalizer(),
+    ActionCommandNormalizer? commandNormalizer,
     ActionPathValidator? pathValidator,
     ActionEnvironmentResolver? environmentResolver,
+    AgentOperationalProfileResolver? operationalProfileResolver,
     ActionProcessStdinSetup? stdinSetup,
     AgentActionRedactor redactor = const AgentActionRedactor(),
   }) : _processStarter = processStarter ?? Process.start,
-       _commandNormalizer = commandNormalizer,
+       _commandNormalizer = commandNormalizer ?? ActionCommandNormalizer(),
        _pathValidator = pathValidator ?? ActionPathValidator(),
        _environmentResolver = environmentResolver ?? const ActionEnvironmentResolver(),
+       _operationalProfileResolver = operationalProfileResolver ?? const AgentOperationalProfileResolver(),
        _stdinSetup = stdinSetup ?? const ActionProcessStdinSetup(),
        _redactor = redactor;
 
@@ -35,6 +38,7 @@ class ScriptActionProcessRunner implements AgentActionLocalRunner {
   final ActionCommandNormalizer _commandNormalizer;
   final ActionPathValidator _pathValidator;
   final ActionEnvironmentResolver _environmentResolver;
+  final AgentOperationalProfileResolver _operationalProfileResolver;
   final ActionProcessStdinSetup _stdinSetup;
   final AgentActionRedactor _redactor;
   final Map<String, Process> _activeProcessesByExecutionId = <String, Process>{};
@@ -113,6 +117,10 @@ class ScriptActionProcessRunner implements AgentActionLocalRunner {
       return Failure(environmentResult.exceptionOrNull()!);
     }
     final processEnvironment = environmentResult.getOrThrow();
+    final includeParentEnvironment = _environmentResolver.resolveIncludeParentEnvironment(
+      policy: definition.policies.environment,
+      operationalProfile: _operationalProfileResolver.currentProfile,
+    );
     final startMode = ActionProcessWindowModeResolver.resolve(definition.policies.process.windowMode);
 
     try {
@@ -122,7 +130,7 @@ class ScriptActionProcessRunner implements AgentActionLocalRunner {
         invocation.arguments,
         workingDirectory: workingDirectory,
         environment: processEnvironment.isEmpty ? null : processEnvironment,
-        includeParentEnvironment: true,
+        includeParentEnvironment: includeParentEnvironment,
         runInShell: invocation.runInShell,
         mode: startMode,
       );

@@ -59,8 +59,8 @@ class HubRecoveryAuthBridge implements IHubRecoveryAuthBridge {
   }
 
   @override
-  void restoreToken(AuthToken token, {String? configId}) {
-    _authProvider.restoreToken(token, configId: configId);
+  void restoreToken(AuthToken token, {String? configId, bool silent = false}) {
+    _authProvider.restoreToken(token, configId: configId, silent: silent);
   }
 
   @override

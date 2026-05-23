@@ -647,6 +647,80 @@ void main() {
       expect(notifications.whereType<HubTransportAutoReconnectSucceeded>(), isEmpty);
     });
 
+    test('should keep hub lifecycle callback after disconnect for recovery reconnect', () async {
+      final notifications = <HubLifecycleNotification>[];
+      client.setOnHubLifecycle(notifications.add);
+
+      final firstConnect = client.connect('https://hub.test', 'agent-1', authToken: 'token-1');
+      emitEvent('connect');
+      await firstConnect;
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications.whereType<HubProtocolReady>(), hasLength(1));
+
+      await client.disconnect();
+
+      final secondConnect = client.connect('https://hub.test', 'agent-1', authToken: 'token-2');
+      emitEvent('connect');
+      await secondConnect;
+      emitEvent(
+        'agent:capabilities',
+        encodeWirePayload({
+          'capabilities': ProtocolCapabilities.defaultCapabilities().toJson(),
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(notifications.whereType<HubProtocolReady>(), hasLength(2));
+    });
+
+    test('should keep token-expired callback after disconnect', () async {
+      var tokenExpiredCalls = 0;
+      client.setOnTokenExpired(() => tokenExpiredCalls++);
+
+      final first = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await first;
+      await client.disconnect();
+
+      final second = client.connect('https://hub.test', 'agent-1', authToken: 'bad');
+      emitEvent('connect');
+      emitEvent('connect_error', <dynamic, dynamic>{
+        'code': 'auth_failed',
+        'message': 'Hub rejected the token',
+      });
+      final result = await second;
+
+      expect(result.isError(), isTrue);
+      expect(tokenExpiredCalls, 1);
+    });
+
+    test('should keep reconnection-needed callback after disconnect', () async {
+      var reconnectCalls = 0;
+      client.setOnReconnectionNeeded(() => reconnectCalls++);
+
+      final first = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await first;
+      await negotiateProtocol();
+      await client.disconnect();
+
+      final second = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await second;
+      await negotiateProtocol();
+      emitManagerEvent('reconnect_failed');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(reconnectCalls, 1);
+    });
+
     test('should fail fast when binary PayloadFrame transport is disabled', () async {
       when(() => mockFeatureFlags.enableBinaryPayload).thenReturn(false);
 

@@ -46,6 +46,8 @@ class FeatureFlags {
   static const _keyEnableElevatedAgentActions = 'feature_enable_elevated_agent_actions';
   static const _keyEnableAgentActionRemoteAudit = 'feature_enable_agent_action_remote_audit';
   static const _keyEnableAgentActionsMaintenanceMode = 'feature_enable_agent_actions_maintenance_mode';
+  static const _keyEnableAgentActionsMaintenanceStrictMode =
+      'feature_enable_agent_actions_maintenance_strict_mode';
   static const _keyEnableParallelJsonRpcBatchDispatch = 'feature_enable_parallel_json_rpc_batch_dispatch';
 
   /// Binary PayloadFrame transport is mandatory in the current socket contract.
@@ -378,6 +380,15 @@ class FeatureFlags {
     await _prefs.setBool(_keyEnableAgentActionsMaintenanceMode, value);
   }
 
+  /// When true together with [enableAgentActionsMaintenanceMode], manual local UI
+  /// executions are blocked as well as remote and scheduled runs.
+  bool get enableAgentActionsMaintenanceStrictMode =>
+      _prefs.getBool(_keyEnableAgentActionsMaintenanceStrictMode) ?? false;
+
+  Future<void> setEnableAgentActionsMaintenanceStrictMode(bool value) async {
+    await _prefs.setBool(_keyEnableAgentActionsMaintenanceStrictMode, value);
+  }
+
   /// When true, read-only JSON-RPC batches may dispatch whitelisted methods in
   /// parallel (bounded pool) after sequential guard evaluation, when the hub
   /// also negotiates `parallelBatchDispatch`.
@@ -429,6 +440,7 @@ class FeatureFlags {
     await setEnableRemoteAdHocAgentActions(false);
     await setEnableElevatedAgentActions(false);
     await setEnableAgentActionsMaintenanceMode(false);
+    await setEnableAgentActionsMaintenanceStrictMode(false);
     await setEnableAgentActionRemoteAudit(true);
     await setEnableParallelJsonRpcBatchDispatch(false);
     await resetHubResilienceOverrides();

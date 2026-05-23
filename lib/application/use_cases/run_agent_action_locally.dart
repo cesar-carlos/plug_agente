@@ -435,18 +435,27 @@ class RunAgentActionLocally {
       );
     }
 
-    if (flags.enableAgentActionsMaintenanceMode && request.source != AgentActionRequestSource.localUi) {
-      return Failure(
-        ActionAuthorizationFailure.withContext(
-          message: 'Agent actions maintenance mode blocks non-manual executions.',
-          code: AgentActionFailureCode.maintenanceMode,
-          context: {
-            'reason': AgentActionGateConstants.maintenanceModeReason,
-            'source': request.source.name,
-            'user_message': 'As execucoes remotas e agendadas estao bloqueadas pelo modo de manutencao.',
-          },
-        ),
-      );
+    if (flags.enableAgentActionsMaintenanceMode) {
+      final blocksLocal =
+          request.source == AgentActionRequestSource.localUi && flags.enableAgentActionsMaintenanceStrictMode;
+      if (request.source != AgentActionRequestSource.localUi || blocksLocal) {
+        return Failure(
+          ActionAuthorizationFailure.withContext(
+            message: blocksLocal
+                ? 'Agent actions maintenance mode blocks all executions including manual runs.'
+                : 'Agent actions maintenance mode blocks non-manual executions.',
+            code: AgentActionFailureCode.maintenanceMode,
+            context: {
+              'reason': AgentActionGateConstants.maintenanceModeReason,
+              'source': request.source.name,
+              'maintenance_strict_mode': flags.enableAgentActionsMaintenanceStrictMode,
+              'user_message': blocksLocal
+                  ? 'Todas as execucoes estao bloqueadas pelo modo de manutencao, incluindo execucao manual.'
+                  : 'As execucoes remotas e agendadas estao bloqueadas pelo modo de manutencao.',
+            },
+          ),
+        );
+      }
     }
 
     return const Success(unit);

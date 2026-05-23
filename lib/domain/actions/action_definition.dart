@@ -12,6 +12,7 @@ class AgentActionDefinition {
     this.policies = const AgentActionDefinitionPolicies(),
     this.definitionVersion = 1,
     this.definitionSnapshotHash,
+    this.lastPreflightSnapshotHash,
     this.createdAt,
     this.updatedAt,
   });
@@ -24,12 +25,15 @@ class AgentActionDefinition {
   final AgentActionDefinitionPolicies policies;
   final int definitionVersion;
   final String? definitionSnapshotHash;
+  final String? lastPreflightSnapshotHash;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   AgentActionType get type => config.type;
 
   bool get canRun => state == AgentActionState.active;
+
+  static const Object _unset = Object();
 
   AgentActionDefinition copyWith({
     String? id,
@@ -40,6 +44,7 @@ class AgentActionDefinition {
     AgentActionDefinitionPolicies? policies,
     int? definitionVersion,
     String? definitionSnapshotHash,
+    Object? lastPreflightSnapshotHash = _unset,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -52,6 +57,9 @@ class AgentActionDefinition {
       policies: policies ?? this.policies,
       definitionVersion: definitionVersion ?? this.definitionVersion,
       definitionSnapshotHash: definitionSnapshotHash ?? this.definitionSnapshotHash,
+      lastPreflightSnapshotHash: identical(lastPreflightSnapshotHash, _unset)
+          ? this.lastPreflightSnapshotHash
+          : lastPreflightSnapshotHash as String?,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

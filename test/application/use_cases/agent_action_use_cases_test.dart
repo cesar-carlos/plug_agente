@@ -51,6 +51,34 @@ import 'package:plug_agente/domain/repositories/i_elevated_action_runner_bridge.
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+Future<Result<AgentActionDefinition>> saveDefinitionForTest(
+  SaveAgentActionDefinition useCase,
+  AgentActionDefinition definition,
+) async {
+  if (definition.state != AgentActionState.active) {
+    return useCase(definition);
+  }
+
+  final staged = await useCase(
+    definition.copyWith(state: AgentActionState.needsValidation),
+  );
+  if (staged.isError()) {
+    return staged;
+  }
+
+  final saved = staged.getOrThrow();
+  const snapshotter = AgentActionDefinitionSnapshotter();
+  final preflightHash = snapshotter.snapshotHash(
+    saved.copyWith(state: AgentActionState.needsValidation),
+  );
+  return useCase(
+    saved.copyWith(
+      state: AgentActionState.active,
+      lastPreflightSnapshotHash: preflightHash,
+    ),
+  );
+}
+
 class FakeCommandLineActionAdapter implements AgentActionAdapter {
   const FakeCommandLineActionAdapter({
     this.normalizedDefinitionFactory,
@@ -572,12 +600,83 @@ void main() {
         config: CommandLineActionConfig(command: 'dir'),
       );
 
-      final result = await useCase(definition);
+      final result = await saveDefinitionForTest(useCase, definition);
 
       expect(result.isSuccess(), isTrue);
       final saved = repository.definitions['action-1']!;
       expect(saved.definitionSnapshotHash, startsWith('sha256:'));
       expect(result.getOrThrow().definitionSnapshotHash, saved.definitionSnapshotHash);
+    });
+
+    test('should reject saving active definition without successful preflight', () async {
+      final useCase = SaveAgentActionDefinition(
+        repository,
+        validateDefinition,
+        const AgentActionDefinitionSnapshotter(),
+        featureFlags,
+      );
+      const definition = AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+
+      final result = await useCase(definition);
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
+      expect((result.exceptionOrNull()! as ActionValidationFailure).code, AgentActionFailureCode.preflightRequiredForActive);
+      expect(repository.definitions, isEmpty);
+    });
+
+    test('should allow saving active definition after preflight hash is recorded', () async {
+      final useCase = SaveAgentActionDefinition(
+        repository,
+        validateDefinition,
+        const AgentActionDefinitionSnapshotter(),
+        featureFlags,
+      );
+      const definition = AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+
+      final result = await saveDefinitionForTest(useCase, definition);
+
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrThrow().state, AgentActionState.active);
+      expect(result.getOrThrow().lastPreflightSnapshotHash, isNotNull);
+    });
+
+    test('should invalidate preflight hash when definition content changes on save', () async {
+      final useCase = SaveAgentActionDefinition(
+        repository,
+        validateDefinition,
+        const AgentActionDefinitionSnapshotter(),
+        featureFlags,
+      );
+      const definition = AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+
+      final first = await saveDefinitionForTest(useCase, definition);
+      expect(first.isSuccess(), isTrue);
+
+      final activeWithoutPreflight = await useCase(
+        first.getOrThrow().copyWith(
+          config: const CommandLineActionConfig(command: 'dir /b'),
+          lastPreflightSnapshotHash: first.getOrThrow().lastPreflightSnapshotHash,
+        ),
+      );
+
+      expect(activeWithoutPreflight.isError(), isTrue);
+      expect((activeWithoutPreflight.exceptionOrNull()! as ActionValidationFailure).code, AgentActionFailureCode.preflightRequiredForActive);
     });
 
     test('should clear runElevated when elevated feature flag is disabled', () async {
@@ -598,7 +697,7 @@ void main() {
         ),
       );
 
-      final result = await useCase(definition);
+      final result = await saveDefinitionForTest(useCase, definition);
 
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow().policies.elevated.runElevated, isFalse);
@@ -617,6 +716,9 @@ void main() {
       );
       final approvedAt = DateTime.utc(2026, 5, 20, 9);
       final initialFingerprints = await fingerprinter.fingerprintsFor(base);
+      final preflightHash = snapshotter.snapshotHash(
+        base.copyWith(state: AgentActionState.needsValidation),
+      );
       repository.definitions['action-secret'] = base.copyWith(
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
@@ -629,6 +731,7 @@ void main() {
             ),
           ),
         ),
+        lastPreflightSnapshotHash: preflightHash,
       );
 
       await secretStore.saveSecret('api', 'v2');
@@ -641,6 +744,8 @@ void main() {
       );
       final result = await useCase(
         base.copyWith(
+          state: AgentActionState.needsValidation,
+          lastPreflightSnapshotHash: null,
           policies: AgentActionDefinitionPolicies(
             remote: AgentActionRemotePolicy(
               isEnabled: true,
@@ -679,7 +784,7 @@ void main() {
         ),
       );
 
-      final result = await useCase(definition);
+      final result = await saveDefinitionForTest(useCase, definition);
 
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow().policies.remote.allowAdHoc, isFalse);
@@ -699,7 +804,7 @@ void main() {
         config: CommandLineActionConfig(command: 'dir'),
       );
 
-      final result = await useCase(definition);
+      final result = await saveDefinitionForTest(useCase, definition);
 
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow().id, 'action-x');
@@ -766,7 +871,7 @@ void main() {
         ),
       );
 
-      final result = await useCase(definition);
+      final result = await saveDefinitionForTest(useCase, definition);
 
       expect(result.isSuccess(), isTrue);
       expect(repository.definitions['action-1'], isNotNull);
@@ -815,11 +920,11 @@ void main() {
         ),
       );
 
-      final first = await useCase(initial);
+      final first = await saveDefinitionForTest(useCase, initial);
       expect(first.isSuccess(), isTrue);
       expect(first.getOrThrow().policies.remote.canRunSavedAction, isTrue);
 
-      final changed = initial.copyWith(
+      final changed = first.getOrThrow().copyWith(
         config: const CommandLineActionConfig(command: 'dir /b'),
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
@@ -828,9 +933,21 @@ void main() {
             approvedBy: 'local-ui',
           ),
         ),
+        state: AgentActionState.needsValidation,
+        lastPreflightSnapshotHash: null,
       );
 
-      final second = await useCase(changed);
+      final staged = await useCase(changed);
+      expect(staged.isSuccess(), isTrue);
+      final preflightHash = snapshotter.snapshotHash(
+        staged.getOrThrow().copyWith(state: AgentActionState.needsValidation),
+      );
+      final second = await useCase(
+        staged.getOrThrow().copyWith(
+          state: AgentActionState.active,
+          lastPreflightSnapshotHash: preflightHash,
+        ),
+      );
 
       expect(second.isSuccess(), isTrue);
       final remote = second.getOrThrow().policies.remote;
@@ -852,8 +969,9 @@ void main() {
         config: CommandLineActionConfig(command: 'dir'),
       );
 
-      final first = await useCase(baseDefinition);
-      final second = await useCase(
+      final first = await saveDefinitionForTest(useCase, baseDefinition);
+      final second = await saveDefinitionForTest(
+        useCase,
         baseDefinition.copyWith(
           config: const CommandLineActionConfig(command: 'dir /b'),
         ),
@@ -895,7 +1013,8 @@ void main() {
         featureFlags,
       );
 
-      final result = await useCase(
+      final result = await saveDefinitionForTest(
+        useCase,
         const AgentActionDefinition(
           id: 'action-1',
           name: 'Run command',
@@ -3962,6 +4081,86 @@ void main() {
         const AgentActionExecutionRequest(
           actionId: 'action-1',
           source: AgentActionRequestSource.scheduler,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<ActionAuthorizationFailure>());
+      expect((result.exceptionOrNull()! as ActionAuthorizationFailure).code, AgentActionFailureCode.maintenanceMode);
+      expect(repository.savedExecutions, isEmpty);
+    });
+
+    test('should allow local execution when maintenance mode is enabled without strict mode', () async {
+      repository.definitions['action-1'] = const AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableAgentActionsMaintenanceMode(true);
+      final runtimeStateGuard = AgentActionRuntimeStateGuard(flags)..markMaintenance(reason: 'operator');
+      final useCase = RunAgentActionLocally(
+        repository,
+        AgentActionLocalRunnerRegistry([
+          FakeAgentActionLocalRunner(
+            result: Success(
+              AgentActionProcessResult(
+                status: AgentActionExecutionStatus.succeeded,
+                pid: 1234,
+                exitCode: 0,
+                processStartedAt: DateTime(2026, 5, 15, 10),
+                finishedAt: DateTime(2026, 5, 15, 10, 1),
+                stdout: AgentActionCapturedOutput.disabled,
+                stderr: AgentActionCapturedOutput.disabled,
+                redactionApplied: true,
+              ),
+            ),
+          ),
+        ]),
+        const Uuid(),
+        featureFlags: flags,
+        runtimeStateGuard: runtimeStateGuard,
+      );
+
+      final result = await useCase(
+        const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      expect(repository.savedExecutions, isNotEmpty);
+    });
+
+    test('should reject local execution when maintenance strict mode is enabled', () async {
+      repository.definitions['action-1'] = const AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableAgentActionsMaintenanceMode(true);
+      await flags.setEnableAgentActionsMaintenanceStrictMode(true);
+      final runtimeStateGuard = AgentActionRuntimeStateGuard(flags)..markMaintenance(reason: 'operator');
+      final useCase = RunAgentActionLocally(
+        repository,
+        AgentActionLocalRunnerRegistry([
+          FakeAgentActionLocalRunner(
+            result: Failure(ActionRuntimeFailure('Should not run')),
+          ),
+        ]),
+        const Uuid(),
+        featureFlags: flags,
+        runtimeStateGuard: runtimeStateGuard,
+      );
+
+      final result = await useCase(
+        const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
         ),
       );
 

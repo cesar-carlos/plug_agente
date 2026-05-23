@@ -118,7 +118,9 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
         _previousAuthStatus != AuthStatus.authenticated &&
         currentStatus == AuthStatus.authenticated &&
         currentError.isEmpty) {
-      _showSuccessModal();
+      if (!authProvider.pullSuppressAuthSuccessModalOnce()) {
+        _showSuccessModal();
+      }
     }
 
     if (isCurrentPageConfig &&

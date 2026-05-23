@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_path_context_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
@@ -240,6 +241,88 @@ void main() {
       expect(failure.code, AgentActionFailureCode.pathSnapshotMismatch);
       expect(failure.context, containsPair('reason', AgentActionPathContextConstants.pathChangedAfterSaveReason));
       expect(failure.context, containsPair('phase', 'execution_preflight'));
+    });
+
+    test('should reject dangerous command during definition validation', () async {
+      final result = await adapter.validateDefinition(
+        const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Dangerous command',
+          config: CommandLineActionConfig(command: 'format C: /Y'),
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(
+        failure.context,
+        containsPair('reason', AgentActionCommandSafetyConstants.dangerousCommandPatternReason),
+      );
+      expect(failure.context, containsPair('phase', 'definition_validation'));
+    });
+
+    test('should reject dangerous command during execution preflight', () async {
+      final result = await adapter.prepareExecution(
+        definition: const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Dangerous command',
+          state: AgentActionState.active,
+          config: CommandLineActionConfig(command: r'powershell -enc ABC'),
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(
+        failure.context,
+        containsPair('reason', AgentActionCommandSafetyConstants.dangerousCommandPatternReason),
+      );
+      expect(failure.context, containsPair('phase', 'execution_preflight'));
+    });
+
+    test('should reject prod profile when working directory allowlist is empty', () async {
+      final adapter = CommandLineActionAdapter(
+        pathValidator: ActionPathValidator(
+          isProductionProfile: () => true,
+        ),
+      );
+
+      final result = await adapter.validateDefinition(
+        const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Prod without allowlist',
+          config: CommandLineActionConfig(command: 'dir'),
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(
+        failure.context,
+        containsPair('reason', AgentActionPathContextConstants.productionPathAllowlistRequiredReason),
+      );
+    });
+
+    test('should allow dev profile when working directory allowlist is empty', () async {
+      final adapter = CommandLineActionAdapter(
+        pathValidator: ActionPathValidator(
+          isProductionProfile: () => false,
+        ),
+      );
+
+      final result = await adapter.validateDefinition(
+        const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Dev without allowlist',
+          config: CommandLineActionConfig(command: 'dir'),
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
     });
   });
 }

@@ -295,7 +295,7 @@ void main() {
 
       expect(result.kind, TokenRefreshResultKind.refreshed);
       expect(result.token, 'new-token');
-      verify(() => bridge.restoreToken(any(), configId: 'cfg-1')).called(1);
+      verify(() => bridge.restoreToken(any(), configId: 'cfg-1', silent: true)).called(1);
     });
 
     test('should execute hard relogin through recovery auth bridge', () async {
@@ -326,7 +326,7 @@ void main() {
       expect(result.outcome, HardReloginOutcome.success);
       expect(result.token, 'relogin-token');
       verify(() => bridge.logout(configId: 'cfg-1')).called(1);
-      verify(() => bridge.restoreToken(any(), configId: 'cfg-1')).called(1);
+      verify(() => bridge.restoreToken(any(), configId: 'cfg-1', silent: true)).called(1);
     });
 
     test('should map hard relogin failure to recovery error', () async {

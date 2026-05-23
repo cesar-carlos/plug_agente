@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
 import 'package:plug_agente/core/constants/agent_action_path_context_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -423,7 +424,54 @@ void main() {
         containsPair('reason', AgentActionProcessConstants.processNotActiveReason),
       );
     });
+
+    test('should disable parent environment inheritance in prod operational profile by default', () async {
+      late bool capturedIncludeParentEnvironment;
+      final runner = CommandLineActionProcessRunner(
+        pathValidator: _acceptingPathValidator(),
+        operationalProfileResolver: _FixedProfileResolver('prod'),
+        processStarter:
+            (
+              String executable,
+              List<String> arguments, {
+              String? workingDirectory,
+              Map<String, String>? environment,
+              bool includeParentEnvironment = true,
+              bool runInShell = false,
+              ProcessStartMode mode = ProcessStartMode.normal,
+            }) async {
+              capturedIncludeParentEnvironment = includeParentEnvironment;
+              return _FakeProcess(pid: 1234, exitCode: 0);
+            },
+      );
+
+      final result = await runner.run(
+        executionId: 'execution-1',
+        definition: const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Command',
+          state: AgentActionState.active,
+          config: CommandLineActionConfig(command: 'echo ok'),
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      expect(capturedIncludeParentEnvironment, isFalse);
+    });
   });
+}
+
+class _FixedProfileResolver extends AgentOperationalProfileResolver {
+  const _FixedProfileResolver(this._profile);
+
+  final String _profile;
+
+  @override
+  String? get currentProfile => _profile;
 }
 
 ActionPathValidator _acceptingPathValidator() {

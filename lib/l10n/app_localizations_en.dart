@@ -1064,6 +1064,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Test this action locally before running or enabling remote execution.';
 
   @override
+  String get agentActionsPreflightRequiredTitle => 'Preflight required for activation';
+
+  @override
+  String get agentActionsPreflightRequiredForActive =>
+      'Run \"Test action\" successfully before setting this action to Active.';
+
+  @override
+  String get agentActionsPreflightReadyForActivation =>
+      'Preflight passed. Set the state to Active and save to enable execution.';
+
+  @override
   String get agentActionsSecretPlaceholdersTitle => 'Secret placeholders referenced';
 
   @override
@@ -1228,6 +1239,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentActionsMaintenanceModeInfoMessage =>
       'Scheduled runs, app start/close triggers, and remote runs are paused. You can still run actions from this screen and edit definitions.';
+
+  @override
+  String get agentActionsMaintenanceStrictMode => 'Block manual execution too';
 
   @override
   String get agentActionsElevatedRunnerNotReadyTitle => 'Elevated runner not prepared';
@@ -3927,6 +3941,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connectionStatusHubReconnectingWaitingHub => 'Hub: Waiting for server...';
+
+  @override
+  String get connectionStatusHubReconnectingNegotiationTimedOut => 'Hub: Protocol negotiation stalled; retrying...';
+
+  @override
+  String get connectionStatusSessionAuthenticated => 'Session: signed in';
+
+  @override
+  String get connectionStatusSessionUnauthenticated => 'Session: not signed in';
+
+  @override
+  String get connectionStatusSessionError => 'Session: error';
+
+  @override
+  String get wsSubtitleSessionWaitingForHub => 'You are signed in; waiting for the hub connection to finish.';
+
+  @override
+  String get diagnosticsHubRecoverySnapshotTitle => 'Hub recovery (live)';
+
+  @override
+  String get diagnosticsHubRecoveryRecoveryId => 'recovery_id';
+
+  @override
+  String get diagnosticsHubRecoveryConnectionStatus => 'connection_status';
+
+  @override
+  String get diagnosticsHubRecoveryUiHint => 'ui_hint';
+
+  @override
+  String get diagnosticsHubRecoveryConsecutiveFailures => 'consecutive_failures';
+
+  @override
+  String get diagnosticsHubRecoveryPersistentTick => 'persistent_tick_count';
+
+  @override
+  String get diagnosticsHubRecoveryPersistentFailures => 'persistent_failure_count';
+
+  @override
+  String get diagnosticsHubRecoveryHardReloginAttempted => 'hard_relogin_attempted_in_cycle';
+
+  @override
+  String get diagnosticsHubRecoveryLastError => 'last_error';
+
+  @override
+  String get diagnosticsHubRecoveryCopyAll => 'Copy all';
+
+  @override
+  String get diagnosticsHubRecoveryCopiedToast => 'Hub recovery diagnostics copied to the clipboard.';
 
   @override
   String get connectionStatusHubError => 'Hub: Connection error';

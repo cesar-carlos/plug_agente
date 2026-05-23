@@ -7,7 +7,7 @@ import 'package:result_dart/result_dart.dart';
 ///
 /// Connect retries intentionally live in two upper layers only:
 ///   1. The Socket.IO client itself (transport-level reconnect).
-///   2. `ConnectionProvider._recoverConnection` (burst + persistent retry).
+///   2. `HubRecoveryOrchestrator.runBurstRecovery` / `runPersistentTick` via `ConnectionProvider`.
 ///
 /// Wrapping `connect` here in a generic `IRetryManager` would multiply attempts
 /// (3x retry-manager * 3x burst = up to 9x) and delay user feedback by ~30s on

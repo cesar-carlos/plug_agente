@@ -382,6 +382,17 @@ class _ServerSection extends StatelessWidget {
                       isLoading: isAuthenticating,
                       onPressed: canSubmit ? onLoginOrLogout : null,
                     ),
+                    if (isAuthenticatedForConfig &&
+                        !connectionProvider.isConnected &&
+                        (connectionProvider.isReconnecting ||
+                            connectionProvider.status == ConnectionStatus.connecting ||
+                            connectionProvider.status == ConnectionStatus.negotiating)) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        l10n.wsSubtitleSessionWaitingForHub,
+                        style: context.captionText,
+                      ),
+                    ],
                   ],
                 ),
               ),

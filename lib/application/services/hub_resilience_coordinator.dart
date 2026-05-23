@@ -281,7 +281,7 @@ class HubResilienceCoordinator {
     );
     return refreshResult.fold(
       (token) {
-        bridge.restoreToken(token, configId: context.configId);
+        bridge.restoreToken(token, configId: context.configId, silent: true);
         _lastHubRefreshHttpCompletedAt = DateTime.now();
         final normalizedToken = token.token.trim();
         return TokenRefreshResult.refreshed(normalizedToken);
@@ -340,7 +340,7 @@ class HubResilienceCoordinator {
       );
       return reloginResult.fold(
         (token) {
-          bridge.restoreToken(token, configId: context.configId);
+          bridge.restoreToken(token, configId: context.configId, silent: true);
           return HardReloginResult(
             outcome: HardReloginOutcome.success,
             token: token.token.trim(),

@@ -254,6 +254,25 @@ void main() {
       });
     });
 
+    group('restoreToken', () {
+      test('silent transition arms pullSuppressAuthSuccessModalOnce once', () {
+        const token = AuthToken(token: 't', refreshToken: 'r');
+        provider.restoreToken(token, configId: configId, silent: true);
+
+        expect(provider.pullSuppressAuthSuccessModalOnce(), isTrue);
+        expect(provider.pullSuppressAuthSuccessModalOnce(), isFalse);
+      });
+
+      test('silent restore when already authenticated does not arm suppression', () {
+        const first = AuthToken(token: 't1', refreshToken: 'r1');
+        const second = AuthToken(token: 't2', refreshToken: 'r2');
+        provider.restoreToken(first, configId: configId);
+        provider.restoreToken(second, configId: configId, silent: true);
+
+        expect(provider.pullSuppressAuthSuccessModalOnce(), isFalse);
+      });
+    });
+
     group('clearError', () {
       test('should clear error message', () async {
         when(

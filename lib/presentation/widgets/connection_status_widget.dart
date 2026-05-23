@@ -2,6 +2,8 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/extensions/hub_recovery_ui_hint_l10n.dart';
+import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -13,12 +15,12 @@ class ConnectionStatusWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Consumer<ConnectionProvider>(
-      builder: (context, connectionProvider, child) {
+    return Consumer2<ConnectionProvider, AuthProvider>(
+      builder: (context, connectionProvider, authProvider, child) {
         final colors = context.appColors;
-        IconData icon;
-        Color color;
-        String statusText;
+        final IconData icon;
+        final Color color;
+        final String statusText;
 
         switch (connectionProvider.status) {
           case ConnectionStatus.connected:
@@ -36,12 +38,7 @@ class ConnectionStatusWidget extends StatelessWidget {
           case ConnectionStatus.reconnecting:
             icon = FluentIcons.sync;
             color = colors.warning;
-            statusText = switch (connectionProvider.hubRecoveryUiHint) {
-              HubRecoveryUiHint.signingIn => l10n.connectionStatusHubReconnectingSigningIn,
-              HubRecoveryUiHint.connectingSocket => l10n.connectionStatusHubReconnectingSocket,
-              HubRecoveryUiHint.awaitingHubReachability => l10n.connectionStatusHubReconnectingWaitingHub,
-              HubRecoveryUiHint.none => l10n.connectionStatusHubReconnecting,
-            };
+            statusText = connectionProvider.hubRecoveryUiHint.connectionStatusLabel(l10n);
           case ConnectionStatus.error:
             icon = FluentIcons.error_badge;
             color = colors.error;
@@ -51,6 +48,13 @@ class ConnectionStatusWidget extends StatelessWidget {
             color = colors.disabled;
             statusText = l10n.connectionStatusHubDisconnected;
         }
+
+        final sessionText = _sessionLine(l10n, authProvider);
+        final sessionColor = switch (authProvider.status) {
+          AuthStatus.error => colors.error,
+          AuthStatus.authenticated => colors.success,
+          _ => colors.disabled,
+        };
 
         final dbShort = connectionProvider.isDbConnected
             ? l10n.connectionStatusDatabaseConnected
@@ -68,6 +72,11 @@ class ConnectionStatusWidget extends StatelessWidget {
                 height: 1.2,
               )
             : context.bodyText;
+        final sessionStyle = lineStyle.copyWith(
+          fontSize: compact ? 11 : 12,
+          fontWeight: FontWeight.w500,
+          color: sessionColor,
+        );
 
         return Container(
           padding: compact
@@ -83,38 +92,59 @@ class ConnectionStatusWidget extends StatelessWidget {
             color: FluentTheme.of(context).resources.subtleFillColorSecondary,
             borderRadius: BorderRadius.circular(compact ? AppRadius.sm : AppRadius.md),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: iconSize),
-              SizedBox(width: compact ? AppSpacing.xs : AppSpacing.sm),
-              Tooltip(
-                message: hubErrorTooltip ?? statusText,
-                child: Text(
-                  statusText,
-                  style: lineStyle.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Tooltip(
-                message: l10n.connectionStatusDatabaseTooltip,
-                child: Semantics(
-                  label: '$dbShort. ${l10n.connectionStatusDatabaseTooltip}',
-                  child: Text(
-                    dbShort,
-                    style: lineStyle.copyWith(
-                      color: connectionProvider.isDbConnected ? colors.success : colors.disabled,
+              Row(
+                children: [
+                  Icon(icon, color: color, size: iconSize),
+                  SizedBox(width: compact ? AppSpacing.xs : AppSpacing.sm),
+                  Expanded(
+                    child: Tooltip(
+                      message: hubErrorTooltip ?? statusText,
+                      child: Text(
+                        statusText,
+                        style: lineStyle.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  Tooltip(
+                    message: l10n.connectionStatusDatabaseTooltip,
+                    child: Semantics(
+                      label: '$dbShort. ${l10n.connectionStatusDatabaseTooltip}',
+                      child: Text(
+                        dbShort,
+                        style: lineStyle.copyWith(
+                          color: connectionProvider.isDbConnected ? colors.success : colors.disabled,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: EdgeInsets.only(left: iconSize + (compact ? AppSpacing.xs : AppSpacing.sm)),
+                child: Text(sessionText, style: sessionStyle),
               ),
             ],
           ),
         );
       },
     );
+  }
+
+  static String _sessionLine(AppLocalizations l10n, AuthProvider authProvider) {
+    if (authProvider.error.trim().isNotEmpty) {
+      return l10n.connectionStatusSessionError;
+    }
+    if (authProvider.status == AuthStatus.authenticated) {
+      return l10n.connectionStatusSessionAuthenticated;
+    }
+    return l10n.connectionStatusSessionUnauthenticated;
   }
 
   static String _hubErrorTooltip(

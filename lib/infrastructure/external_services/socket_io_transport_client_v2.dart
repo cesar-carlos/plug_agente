@@ -823,7 +823,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
   Future<Result<void>> disconnect() async {
     try {
       _connectGeneration++;
-      _onHubLifecycle = null;
+      // See ITransportClient: do not clear _onTokenExpired / _onReconnectionNeeded /
+      // _onHubLifecycle here — recovery reconnects after disconnect and must
+      // still receive HubProtocolReady and related lifecycle events.
       _heartbeat.stop();
       _closeSocket();
       _authorizationDecisionLogger.resetSessionState();

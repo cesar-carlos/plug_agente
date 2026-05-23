@@ -177,7 +177,7 @@ void main() {
       ).called(greaterThanOrEqualTo(4));
     });
 
-    test('full hub recovery orders transport disconnect before relogin then socket connect', () async {
+    test('burst hub recovery skips proactive hard relogin before first reconnect', () async {
       final events = <String>[];
       var connectPhase = 0;
       when(
@@ -210,9 +210,19 @@ void main() {
           any(),
           authenticated: any(named: 'authenticated'),
           configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
         ),
       ).thenReturn(null);
       when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
+      when(
+        () => mockHubRecoveryAuthCoordinator.refreshSession(
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
+        ),
+      ).thenAnswer(
+        (_) async => const Success(AuthToken(token: 't', refreshToken: 'r')),
+      );
       when(
         () => mockHubRecoveryAuthCoordinator.loginWithStoredCredentials(
           any<String>(),
@@ -263,13 +273,9 @@ void main() {
       fakeTransport.triggerProtocolReady();
       await waitForStatus(provider, ConnectionStatus.connected);
 
-      final d = events.indexOf('disconnect');
-      final lo = events.indexOf('logout');
-      final li = events.indexOf('login');
-      expect(d, greaterThanOrEqualTo(0));
-      expect(d, lessThan(lo));
-      expect(lo, lessThan(li));
-      expect(li, lessThan(events.indexOf('connect_2')));
+      expect(events.contains('logout'), isFalse);
+      expect(events.contains('login'), isFalse);
+      expect(events.where((String e) => e.startsWith('connect_')).length, greaterThanOrEqualTo(2));
 
       await provider.disconnect();
     });
@@ -521,6 +527,7 @@ void main() {
             any(),
             authenticated: any(named: 'authenticated'),
             configId: any(named: 'configId'),
+            silent: any(named: 'silent'),
           ),
         ).thenReturn(null);
         when(

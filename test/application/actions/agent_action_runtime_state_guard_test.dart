@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 
@@ -108,6 +110,28 @@ void main() {
       expect(remoteResult.isError(), isTrue);
       final failure = remoteResult.exceptionOrNull()! as ActionAuthorizationFailure;
       expect(failure.code, AgentActionFailureCode.maintenanceMode);
+    });
+
+    test('blocks local UI execution when maintenance strict mode is enabled', () async {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableAgentActionsMaintenanceStrictMode(true);
+      final guard = AgentActionRuntimeStateGuard(flags)..markMaintenance(reason: 'operator');
+
+      final localResult = guard.ensureCanAcceptExecution(
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+        actionType: AgentActionType.commandLine,
+      );
+
+      expect(localResult.isError(), isTrue);
+      final failure = localResult.exceptionOrNull()! as ActionAuthorizationFailure;
+      expect(failure.code, AgentActionFailureCode.maintenanceMode);
+      expect(
+        failure.context['user_message'],
+        'Todas as execucoes estao bloqueadas pelo modo de manutencao, incluindo execucao manual.',
+      );
     });
 
     test('blocks only unavailable action types while degraded', () {

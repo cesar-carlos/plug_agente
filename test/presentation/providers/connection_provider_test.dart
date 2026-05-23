@@ -14,6 +14,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain_failures;
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
+import 'package:plug_agente/domain/value_objects/hub_recovery_ui_hint.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -483,6 +484,7 @@ void main() {
             any(),
             authenticated: any(named: 'authenticated'),
             configId: any(named: 'configId'),
+            silent: any(named: 'silent'),
           ),
         ).thenReturn(null);
 
@@ -719,6 +721,80 @@ void main() {
       await provider.disconnect();
     });
 
+    test(
+      'should run persistent reconnect tick immediately on HubTransportDisconnected '
+      'when persistent timer is active (regression: do not wait for periodic interval)',
+      () async {
+        var connectCalls = 0;
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          connectCalls++;
+          return Failure(Exception('hub socket unavailable'));
+        });
+        when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
+
+        final configWithCredentials = Config(
+          id: 'cfg-1',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17 for SQL Server',
+          connectionString: '',
+          username: '',
+          databaseName: '',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          serverUrl: 'https://hub.test',
+          agentId: 'agent-1',
+          authUsername: 'agent_user',
+          authPassword: 'agent_pass',
+          authToken: 'tok-1',
+          refreshToken: 'refresh-1',
+        );
+        when(() => configProvider.currentConfig).thenReturn(configWithCredentials);
+
+        final mockAuth = _MockAuthProvider();
+        when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
+          const AuthToken(token: 'tok-1', refreshToken: 'refresh-1'),
+        );
+        when(() => mockAuth.isAuthenticated).thenReturn(true);
+        when(() => mockAuth.error).thenReturn('');
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          checkHubAvailabilityUseCase: checkHubAvailability,
+          configProvider: configProvider,
+          authProvider: mockAuth,
+          transportClient: transport,
+          hubPersistentRetryInterval: const Duration(hours: 1),
+          hubPersistentRetryMaxFailedTicks: 0,
+          hubTokenRefreshMinInterval: Duration.zero,
+          enableHardReloginRecovery: false,
+        );
+
+        provider.startPersistentHubRecovery(
+          configId: 'cfg-1',
+          serverUrl: 'https://hub.test',
+          agentId: 'agent-1',
+          authToken: 'tok-1',
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        final callsAfterFirstTick = connectCalls;
+        expect(callsAfterFirstTick, greaterThanOrEqualTo(1));
+
+        transport.onHubLifecycle?.call(const HubTransportDisconnected());
+
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        expect(connectCalls, greaterThan(callsAfterFirstTick));
+
+        await provider.disconnect();
+      },
+    );
+
     test('skips reconnect socket attempts while hub probe is offline', () async {
       when(
         () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
@@ -804,6 +880,7 @@ void main() {
           any(),
           authenticated: any(named: 'authenticated'),
           configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
         ),
       ).thenReturn(null);
       when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
@@ -880,6 +957,7 @@ void main() {
           any(),
           authenticated: any(named: 'authenticated'),
           configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
         ),
       ).thenReturn(null);
       when(
@@ -1007,6 +1085,7 @@ void main() {
           any(),
           authenticated: any(named: 'authenticated'),
           configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
         ),
       ).thenReturn(null);
 
@@ -1108,6 +1187,7 @@ void main() {
           any(),
           authenticated: any(named: 'authenticated'),
           configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
         ),
       ).thenReturn(null);
       when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
@@ -1175,6 +1255,121 @@ void main() {
 
       await _waitForStatus(provider, ConnectionStatus.error, timeout: const Duration(seconds: 8));
       expect(provider.error, isNotEmpty);
+
+      await provider.disconnect();
+    });
+  });
+
+  group('ConnectionProvider.hubRecoveryDiagnostics', () {
+    test('should expose baseline snapshot when disconnected', () {
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        transportClient: transport,
+      );
+
+      final snapshot = provider.hubRecoveryDiagnostics;
+
+      expect(snapshot.connectionStatusName, ConnectionStatus.disconnected.name);
+      expect(snapshot.hubRecoveryUiHintName, HubRecoveryUiHint.none.name);
+      expect(snapshot.consecutiveReconnectFailures, 0);
+      expect(snapshot.persistentRetryTickCount, 0);
+      expect(snapshot.persistentFailureCount, 0);
+      expect(snapshot.hardReloginAttemptedInCycle, isFalse);
+      expect(snapshot.lastError, isEmpty);
+    });
+
+    test('consecutiveReconnectFailures reflects failed burst attempts', () async {
+      var connectCalls = 0;
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async {
+        connectCalls++;
+        if (connectCalls == 1) {
+          return const Success(unit);
+        }
+        return Failure(Exception('hub down'));
+      });
+      when(() => checkHubAvailability(any())).thenAnswer((_) async => true);
+
+      final configWithCredentials = Config(
+        id: 'cfg-1',
+        driverName: 'SQL Server',
+        odbcDriverName: 'ODBC Driver 17 for SQL Server',
+        connectionString: '',
+        username: '',
+        databaseName: '',
+        host: 'localhost',
+        port: 1433,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        serverUrl: 'https://hub.test',
+        agentId: 'agent-1',
+        authUsername: 'agent_user',
+        authPassword: 'agent_pass',
+        authToken: 'tok-1',
+        refreshToken: 'refresh-1',
+      );
+      when(() => configProvider.currentConfig).thenReturn(configWithCredentials);
+
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
+        const AuthToken(token: 'access', refreshToken: 'refresh'),
+      );
+      when(() => mockAuth.setRecoveryError(any())).thenReturn(null);
+      when(
+        () => mockAuth.restoreToken(
+          any(),
+          authenticated: any(named: 'authenticated'),
+          configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
+        ),
+      ).thenReturn(null);
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
+        ),
+      ).thenAnswer(
+        (_) async => Failure(
+          domain_failures.NetworkFailure.withContext(
+            message: 'hub offline',
+            context: const <String, Object>{},
+          ),
+        ),
+      );
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        checkHubAvailabilityUseCase: checkHubAvailability,
+        configProvider: configProvider,
+        authProvider: mockAuth,
+        transportClient: transport,
+        initialReconnectDelay: Duration.zero,
+        maxReconnectDelay: Duration.zero,
+        maxReconnectAttempts: 3,
+        tokenRefreshIntervalAttempts: 2,
+        hubTokenRefreshMinInterval: Duration.zero,
+        enableHardReloginRecovery: false,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+      transport.triggerProtocolReady();
+      transport.onReconnectionNeeded?.call();
+
+      await _waitForStatus(provider, ConnectionStatus.reconnecting);
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (DateTime.now().isBefore(deadline) &&
+          provider.hubRecoveryDiagnostics.consecutiveReconnectFailures < 3) {
+        await Future<void>.delayed(const Duration(milliseconds: 15));
+      }
+
+      expect(provider.hubRecoveryDiagnostics.consecutiveReconnectFailures, greaterThanOrEqualTo(3));
 
       await provider.disconnect();
     });

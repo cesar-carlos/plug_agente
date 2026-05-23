@@ -148,6 +148,7 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
           authProvider.restoreToken(
             session.token,
             configId: startupContext.configId,
+            silent: true,
           );
         },
         (failure) {

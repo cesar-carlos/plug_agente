@@ -1,15 +1,21 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/domain/value_objects/hub_recovery_diagnostics_snapshot.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/extensions/hub_recovery_diagnostics_snapshot_clipboard.dart';
+import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
+import 'package:provider/provider.dart';
 
 /// Advanced diagnostics toggles (may log sensitive SQL). Requires dependency
 /// injection setup so the service locator is ready.
@@ -156,6 +162,13 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                     l10n.diagnosticsOdbcPaginatedSqlLogDescription,
                     style: context.captionText,
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Consumer<ConnectionProvider>(
+                    builder: (context, connection, _) {
+                      final snap = connection.hubRecoveryDiagnostics;
+                      return _HubRecoveryDiagnosticsCard(snapshot: snap);
+                    },
+                  ),
                   const SizedBox(height: AppSpacing.xl),
                   SettingsSectionTitle(
                     title: l10n.diagnosticsHubReconnectSectionTitle,
@@ -223,4 +236,85 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
       ),
     );
   }
+}
+
+class _HubRecoveryDiagnosticsCard extends StatelessWidget {
+  const _HubRecoveryDiagnosticsCard({required this.snapshot});
+
+  final HubRecoveryDiagnosticsSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final style = context.captionText;
+    Widget row(String label, String value) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+        child: SelectableText.rich(
+          TextSpan(
+            style: style,
+            children: [
+              TextSpan(text: '$label: ', style: style.copyWith(fontWeight: FontWeight.w600)),
+              TextSpan(text: value.isEmpty ? '—' : value),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return AppCard(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.diagnosticsHubRecoverySnapshotTitle,
+                    style: context.bodyText.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                AppButton(
+                  label: l10n.diagnosticsHubRecoveryCopyAll,
+                  isPrimary: false,
+                  onPressed: () => unawaited(_copyHubRecoveryDiagnostics(context, l10n, snapshot)),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            row(l10n.diagnosticsHubRecoveryRecoveryId, snapshot.recoveryId ?? ''),
+            row(l10n.diagnosticsHubRecoveryConnectionStatus, snapshot.connectionStatusName),
+            row(l10n.diagnosticsHubRecoveryUiHint, snapshot.hubRecoveryUiHintName),
+            row(l10n.diagnosticsHubRecoveryConsecutiveFailures, '${snapshot.consecutiveReconnectFailures}'),
+            row(l10n.diagnosticsHubRecoveryPersistentTick, '${snapshot.persistentRetryTickCount}'),
+            row(l10n.diagnosticsHubRecoveryPersistentFailures, '${snapshot.persistentFailureCount}'),
+            row(l10n.diagnosticsHubRecoveryHardReloginAttempted, '${snapshot.hardReloginAttemptedInCycle}'),
+            row(l10n.diagnosticsHubRecoveryLastError, snapshot.lastError),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _copyHubRecoveryDiagnostics(
+  BuildContext context,
+  AppLocalizations l10n,
+  HubRecoveryDiagnosticsSnapshot snapshot,
+) async {
+  await Clipboard.setData(ClipboardData(text: snapshot.formattedForClipboard(l10n)));
+  if (!context.mounted) {
+    return;
+  }
+  displayInfoBar(
+    context,
+    builder: (BuildContext context, void Function() close) => InfoBar(
+      title: Text(l10n.diagnosticsHubRecoveryCopiedToast),
+      severity: InfoBarSeverity.success,
+      onClose: close,
+    ),
+  );
 }

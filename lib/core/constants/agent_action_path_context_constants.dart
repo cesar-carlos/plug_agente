@@ -33,4 +33,6 @@ abstract final class AgentActionPathContextConstants {
   static const String pathExecutePermissionDeniedReason = 'path_execute_permission_denied';
 
   static const String pathLaunchProbeFailedReason = 'path_launch_probe_failed';
+
+  static const String productionPathAllowlistRequiredReason = 'production_path_allowlist_required';
 }

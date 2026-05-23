@@ -45,6 +45,19 @@ class AgentActionsToolbarCard extends StatelessWidget {
                 : null,
             content: Text(l10n.agentActionsMaintenanceMode),
           ),
+          if (provider.isMaintenanceMode)
+            Checkbox(
+              checked: provider.isMaintenanceStrictMode,
+              onChanged: provider.isFeatureEnabled
+                  ? (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      unawaited(provider.setMaintenanceStrictMode(enabled: value));
+                    }
+                  : null,
+              content: Text(l10n.agentActionsMaintenanceStrictMode),
+            ),
         ],
       ),
     );

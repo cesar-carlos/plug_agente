@@ -1066,6 +1066,17 @@ class AppLocalizationsPt extends AppLocalizations {
       'Teste esta acao localmente antes de executar ou habilitar execucao remota.';
 
   @override
+  String get agentActionsPreflightRequiredTitle => 'Validacao obrigatoria para ativar';
+
+  @override
+  String get agentActionsPreflightRequiredForActive =>
+      'Execute \"Testar acao\" com sucesso antes de definir esta acao como Ativa.';
+
+  @override
+  String get agentActionsPreflightReadyForActivation =>
+      'Preflight concluido. Defina o estado como Ativa e salve para habilitar a execucao.';
+
+  @override
   String get agentActionsSecretPlaceholdersTitle => 'Placeholders de segredo referenciados';
 
   @override
@@ -1230,6 +1241,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get agentActionsMaintenanceModeInfoMessage =>
       'Execucoes agendadas, gatilhos de inicio/fechamento do app e execucoes remotas ficam pausadas. Voce ainda pode executar acoes nesta tela e editar definicoes.';
+
+  @override
+  String get agentActionsMaintenanceStrictMode => 'Bloquear execucao manual tambem';
 
   @override
   String get agentActionsElevatedRunnerNotReadyTitle => 'Executor elevado nao preparado';
@@ -3936,6 +3950,54 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get connectionStatusHubReconnectingWaitingHub => 'Hub: A aguardar o servidor...';
+
+  @override
+  String get connectionStatusHubReconnectingNegotiationTimedOut => 'Hub: Negociação de protocolo parada; a repetir...';
+
+  @override
+  String get connectionStatusSessionAuthenticated => 'Sessão: autenticado';
+
+  @override
+  String get connectionStatusSessionUnauthenticated => 'Sessão: sem autenticação';
+
+  @override
+  String get connectionStatusSessionError => 'Sessão: erro';
+
+  @override
+  String get wsSubtitleSessionWaitingForHub => 'Sessão ativa; a aguardar a ligação ao hub.';
+
+  @override
+  String get diagnosticsHubRecoverySnapshotTitle => 'Recuperação do hub (em tempo real)';
+
+  @override
+  String get diagnosticsHubRecoveryRecoveryId => 'recovery_id';
+
+  @override
+  String get diagnosticsHubRecoveryConnectionStatus => 'connection_status';
+
+  @override
+  String get diagnosticsHubRecoveryUiHint => 'ui_hint';
+
+  @override
+  String get diagnosticsHubRecoveryConsecutiveFailures => 'consecutive_failures';
+
+  @override
+  String get diagnosticsHubRecoveryPersistentTick => 'persistent_tick_count';
+
+  @override
+  String get diagnosticsHubRecoveryPersistentFailures => 'persistent_failure_count';
+
+  @override
+  String get diagnosticsHubRecoveryHardReloginAttempted => 'hard_relogin_attempted_in_cycle';
+
+  @override
+  String get diagnosticsHubRecoveryLastError => 'last_error';
+
+  @override
+  String get diagnosticsHubRecoveryCopyAll => 'Copiar tudo';
+
+  @override
+  String get diagnosticsHubRecoveryCopiedToast => 'Diagnóstico de recuperação do hub copiado.';
 
   @override
   String get connectionStatusHubError => 'Hub: Erro de conexão';

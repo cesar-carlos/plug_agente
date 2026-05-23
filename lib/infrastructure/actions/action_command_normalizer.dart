@@ -8,6 +8,7 @@ import 'package:plug_agente/core/constants/agent_action_script_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/core/utils/windows_command_line_quoter.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
 import 'package:result_dart/result_dart.dart';
 
 class AgentActionCommandInvocation {
@@ -29,7 +30,11 @@ class AgentActionCommandInvocation {
 }
 
 class ActionCommandNormalizer {
-  const ActionCommandNormalizer();
+  const ActionCommandNormalizer({
+    ActionCommandSafetyValidator commandSafetyValidator = const ActionCommandSafetyValidator(),
+  }) : _commandSafetyValidator = commandSafetyValidator;
+
+  final ActionCommandSafetyValidator _commandSafetyValidator;
 
   Result<AgentActionCommandInvocation> normalizeCommandLine({
     required String actionId,
@@ -50,6 +55,15 @@ class ActionCommandNormalizer {
           },
         ),
       );
+    }
+
+    final safetyFailure = _commandSafetyValidator.validate(
+      actionId: actionId,
+      command: normalizedCommand,
+      phase: phase,
+    );
+    if (safetyFailure != null) {
+      return Failure(safetyFailure);
     }
 
     return Success(

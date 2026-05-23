@@ -302,7 +302,6 @@ void main() {
     await provider.saveCommandLineAction(
       name: 'Run dir',
       command: 'dir',
-      state: AgentActionState.active,
     );
 
     expect(provider.errorMessage, isNull);
@@ -337,7 +336,6 @@ void main() {
       data7ConfigPath: r'C:\Data7\bin\Data7.Config',
       connectionId: '34512A51-672C-4ECE-9991-F43E175E7A8B',
       connectionLabel: 'Estacao',
-      state: AgentActionState.active,
     );
 
     expect(provider.errorMessage, isNull);
@@ -1126,6 +1124,73 @@ void main() {
     expect(repository.triggers['trigger-1']?.isEnabled, isFalse);
 
     exportFile.deleteSync();
+  });
+
+  test('should block saving active command-line action without preflight validation', () async {
+    await provider.load();
+
+    final saved = await provider.saveCommandLineAction(
+      name: 'Needs test',
+      command: 'dir',
+      state: AgentActionState.active,
+    );
+
+    expect(saved, isFalse);
+    expect(provider.errorMessage, isNotNull);
+    expect(repository.definitions, isEmpty);
+  });
+
+  test('should allow saving active action after successful preflight test', () async {
+    repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.needsValidation,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+    await provider.load();
+    provider.selectAction('action-1');
+
+    await provider.testSelectedAction();
+    expect(provider.isPreflightValidForDefinition(provider.selectedDefinition!), isTrue);
+
+    final saved = await provider.saveCommandLineAction(
+      actionId: 'action-1',
+      name: 'Run command',
+      command: 'dir',
+      state: AgentActionState.active,
+    );
+
+    expect(saved, isTrue);
+    expect(repository.definitions['action-1']?.state, AgentActionState.active);
+    expect(repository.definitions['action-1']?.lastPreflightSnapshotHash, isNotNull);
+  });
+
+  test('should block active save after config changes without retest', () async {
+    repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.needsValidation,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+    await provider.load();
+    provider.selectAction('action-1');
+
+    await provider.testSelectedAction();
+    expect(provider.canSetDefinitionActive('action-1', draftModified: false), isTrue);
+
+    final savedWithChange = await provider.saveCommandLineAction(
+      actionId: 'action-1',
+      name: 'Run command',
+      command: 'dir /b',
+      state: AgentActionState.active,
+    );
+
+    expect(savedWithChange, isFalse);
+    expect(repository.definitions['action-1']?.config, isA<CommandLineActionConfig>());
+    expect(
+      (repository.definitions['action-1']!.config as CommandLineActionConfig).command,
+      'dir',
+    );
   });
 }
 

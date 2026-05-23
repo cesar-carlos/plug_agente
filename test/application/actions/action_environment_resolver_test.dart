@@ -96,6 +96,39 @@ void main() {
         AgentActionValidationConstants.environmentVariableNotAllowedReason,
       );
     });
+
+    test('should default includeParentEnvironment to false for prod profile', () {
+      const resolver = ActionEnvironmentResolver();
+
+      final includeParent = resolver.resolveIncludeParentEnvironment(
+        policy: const AgentActionEnvironmentPolicy(),
+        operationalProfile: 'prod',
+      );
+
+      check(includeParent).isFalse();
+    });
+
+    test('should default includeParentEnvironment to true for non-prod profile', () {
+      const resolver = ActionEnvironmentResolver();
+
+      final includeParent = resolver.resolveIncludeParentEnvironment(
+        policy: const AgentActionEnvironmentPolicy(),
+        operationalProfile: 'dev',
+      );
+
+      check(includeParent).isTrue();
+    });
+
+    test('should honor explicit includeParentEnvironment override', () {
+      const resolver = ActionEnvironmentResolver();
+
+      final includeParent = resolver.resolveIncludeParentEnvironment(
+        policy: const AgentActionEnvironmentPolicy(includeParentEnvironment: true),
+        operationalProfile: 'prod',
+      );
+
+      check(includeParent).isTrue();
+    });
   });
 }
 
