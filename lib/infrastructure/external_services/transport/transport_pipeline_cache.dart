@@ -70,6 +70,7 @@ class TransportPipelineCache {
       compression: pipelineCompression,
       compressionThreshold: threshold,
       maxInflationRatio: maxInflationRatio,
+      gzipIsolateThresholdBytes: ConnectionConstants.gzipIsolateThresholdBytes,
       protocol: protocol.protocol,
       metricsCollector: _metricsCollector,
     );
@@ -106,6 +107,7 @@ class TransportPipelineCache {
       compression: frame.cmp,
       compressionThreshold: protocol.compressionThreshold,
       maxInflationRatio: protocol.maxInflationRatio,
+      gzipIsolateThresholdBytes: ConnectionConstants.gzipIsolateThresholdBytes,
       schemaVersion: frame.schemaVersion,
       protocol: protocol.protocol,
       metricsCollector: _metricsCollector,

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 
 void main() {

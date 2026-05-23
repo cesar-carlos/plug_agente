@@ -4,6 +4,7 @@ import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
@@ -252,6 +253,7 @@ class RpcBatchInboundHandler {
 
       final responses = <({int index, RpcResponse response})>[];
       final responseMethodsById = <Object?, String>{};
+      final pendingDispatches = <({int index, RpcRequest request})>[];
 
       for (var index = 0; index < requests.length; index++) {
         final request = requests[index];
@@ -287,25 +289,23 @@ class RpcBatchInboundHandler {
           continue;
         }
 
-        final clientToken = _extractClientTokenFromRpcParams(request.params);
-        final response = await _dispatcher.dispatch(
-          request,
-          _agentIdProvider(),
-          clientToken: clientToken,
-          limits: _protocolProvider().effectiveLimits,
-          negotiatedExtensions: _protocolProvider().negotiatedExtensions,
-        );
-        final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
-        _authorizationDecisionLogger.log(
-          request: request,
-          response: tracedResponse,
-          clientToken: clientToken,
-        );
-        if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
-          continue;
+        pendingDispatches.add((index: index, request: request));
+      }
+
+      if (pendingDispatches.isNotEmpty) {
+        if (_shouldUseParallelBatchDispatch(requests)) {
+          await _dispatchBatchItemsInParallel(
+            pendingDispatches,
+            responses,
+            responseMethodsById,
+          );
+        } else {
+          await _dispatchBatchItemsSequentially(
+            pendingDispatches,
+            responses,
+            responseMethodsById,
+          );
         }
-        responses.add((index: index, response: tracedResponse));
-        responseMethodsById[request.id] = request.method;
       }
 
       if (responses.isEmpty) {
@@ -358,6 +358,109 @@ class RpcBatchInboundHandler {
   bool _isAgentActionBatchReadMethod(String method) {
     return method == AgentActionRpcConstants.agentActionGetExecutionRpcMethodName ||
         method == AgentActionRpcConstants.agentActionValidateRunRpcMethodName;
+  }
+
+  bool _shouldUseParallelBatchDispatch(List<RpcRequest> requests) {
+    if (!_featureFlags.enableParallelJsonRpcBatchDispatch || requests.length < 2) {
+      return false;
+    }
+
+    final method = requests.first.method;
+    if (!RpcBatchConstants.parallelJsonRpcBatchDispatchAllowedMethods.contains(method)) {
+      return false;
+    }
+
+    for (final request in requests) {
+      if (request.method != method) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  Future<void> _dispatchBatchItemsSequentially(
+    List<({int index, RpcRequest request})> items,
+    List<({int index, RpcResponse response})> responses,
+    Map<Object?, String> responseMethodsById,
+  ) async {
+    for (final item in items) {
+      final dispatchResult = await _executeBatchDispatchItem(
+        index: item.index,
+        request: item.request,
+      );
+      _recordBatchDispatchResult(
+        dispatchResult,
+        responses,
+        responseMethodsById,
+      );
+    }
+  }
+
+  Future<void> _dispatchBatchItemsInParallel(
+    List<({int index, RpcRequest request})> items,
+    List<({int index, RpcResponse response})> responses,
+    Map<Object?, String> responseMethodsById,
+  ) async {
+    final semaphore = PoolSemaphore(RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency);
+    final dispatchResults = await Future.wait(
+      items.map((item) async {
+        await semaphore.acquire();
+        try {
+          return await _executeBatchDispatchItem(
+            index: item.index,
+            request: item.request,
+          );
+        } finally {
+          semaphore.release();
+        }
+      }),
+    );
+
+    for (final dispatchResult in dispatchResults) {
+      _recordBatchDispatchResult(
+        dispatchResult,
+        responses,
+        responseMethodsById,
+      );
+    }
+  }
+
+  Future<({int index, RpcResponse? response, Object? id, String method})> _executeBatchDispatchItem({
+    required int index,
+    required RpcRequest request,
+  }) async {
+    final clientToken = _extractClientTokenFromRpcParams(request.params);
+    final response = await _dispatcher.dispatch(
+      request,
+      _agentIdProvider(),
+      clientToken: clientToken,
+      limits: _protocolProvider().effectiveLimits,
+      negotiatedExtensions: _protocolProvider().negotiatedExtensions,
+    );
+    final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
+    _authorizationDecisionLogger.log(
+      request: request,
+      response: tracedResponse,
+      clientToken: clientToken,
+    );
+    if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
+      return (index: index, response: null, id: request.id, method: request.method);
+    }
+    return (index: index, response: tracedResponse, id: request.id, method: request.method);
+  }
+
+  void _recordBatchDispatchResult(
+    ({int index, RpcResponse? response, Object? id, String method}) dispatchResult,
+    List<({int index, RpcResponse response})> responses,
+    Map<Object?, String> responseMethodsById,
+  ) {
+    final response = dispatchResult.response;
+    if (response == null) {
+      return;
+    }
+    responses.add((index: dispatchResult.index, response: response));
+    responseMethodsById[dispatchResult.id] = dispatchResult.method;
   }
 
   Future<void> _emitBatchRequestAck(List<RpcRequest> requests) async {

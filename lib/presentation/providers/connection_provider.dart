@@ -13,6 +13,7 @@ import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/transport_reconnect_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/utils/async_operation_gate.dart';
 import 'package:plug_agente/core/utils/reconnect_delay_calculator.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
@@ -171,10 +172,8 @@ class ConnectionProvider extends ChangeNotifier {
   String? _resilienceRecoveryId;
   DateTime? _lastHardReloginEndedAt;
   HubRecoveryUiHint _hubRecoveryUiHint = HubRecoveryUiHint.none;
-  Future<void> _hubConnectMutex = Future<void>.value();
-  int _hubConnectEpoch = 0;
-  Future<void> _recoveryHandlerMutex = Future<void>.value();
-  bool _exclusiveRecoveryCoalesced = false;
+  final AsyncOperationGate _hubConnectGate = AsyncOperationGate();
+  final ExclusiveRecoveryGate _recoveryGate = ExclusiveRecoveryGate();
 
   static const Duration _defaultInitialReconnectDelay = Duration(
     seconds: AppConstants.reconnectIntervalSeconds,
@@ -279,64 +278,40 @@ class ConnectionProvider extends ChangeNotifier {
   }
 
   void _invalidateHubConnectEpoch() {
-    _hubConnectEpoch++;
+    _hubConnectGate.invalidateEpoch();
   }
 
   Future<T> _runSerializedHubConnect<T>(
     Future<T> Function() action, {
     T? staleResult,
-  }) async {
-    final epoch = ++_hubConnectEpoch;
-    final previous = _hubConnectMutex;
-    final release = Completer<void>();
-    _hubConnectMutex = release.future;
-    try {
-      await previous;
-      if (_isDisconnectRequested || epoch != _hubConnectEpoch) {
-        if (staleResult != null) {
-          return staleResult;
-        }
-        throw StateError('Hub connect epoch $epoch is stale (current $_hubConnectEpoch)');
-      }
-      return await action();
-    } finally {
-      release.complete();
-    }
+  }) {
+    return _hubConnectGate.runSerialized(
+      action,
+      staleResult: staleResult,
+      shouldAbort: () => _isDisconnectRequested,
+    );
   }
 
-  Future<void> _scheduleExclusiveRecovery(Future<void> Function() handler) async {
-    if (_isDisconnectRequested) {
-      return;
-    }
-    if (_exclusiveRecoveryCoalesced) {
-      AppLogger.debug(
-        'resilience: ${_resilienceLogPrefix()}reconnect event=recovery_coalesced '
-        'reason=handler_already_scheduled',
-      );
-      return;
-    }
-    _exclusiveRecoveryCoalesced = true;
-    final previous = _recoveryHandlerMutex;
-    final release = Completer<void>();
-    _recoveryHandlerMutex = release.future;
-    try {
-      await previous;
-      if (_isDisconnectRequested) {
-        return;
-      }
-      if (_isReconnecting || _hubPersistentRetryTimer != null || _persistentRetryInFlight) {
+  Future<void> _scheduleExclusiveRecovery(Future<void> Function() handler) {
+    return _recoveryGate.schedule(
+      handler: handler,
+      shouldAbort: () => _isDisconnectRequested,
+      shouldSkipAfterLock: () =>
+          _isReconnecting || _hubPersistentRetryTimer != null || _persistentRetryInFlight,
+      onCoalesced: () {
+        AppLogger.debug(
+          'resilience: ${_resilienceLogPrefix()}reconnect event=recovery_coalesced '
+          'reason=handler_already_scheduled',
+        );
+      },
+      onSkippedAfterLock: () {
         AppLogger.debug(
           'resilience: ${_resilienceLogPrefix()}reconnect event=recovery_skipped '
           'reason=already_recovering reconnecting=$_isReconnecting '
           'persistent_timer=${_hubPersistentRetryTimer != null}',
         );
-        return;
-      }
-      await handler();
-    } finally {
-      _exclusiveRecoveryCoalesced = false;
-      release.complete();
-    }
+      },
+    );
   }
 
   void _beginResilienceRecovery() {

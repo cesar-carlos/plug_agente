@@ -115,5 +115,21 @@ void main() {
       expect(flags.enableElevatedAgentActions, isFalse);
       expect(flags.enableAgentActionRemoteAudit, isTrue);
     });
+
+    test('keeps parallel JSON-RPC batch dispatch disabled by default', () async {
+      final store = InMemoryAppSettingsStore();
+      final flags = FeatureFlags(store);
+
+      expect(flags.enableParallelJsonRpcBatchDispatch, isFalse);
+
+      await flags.setEnableParallelJsonRpcBatchDispatch(true);
+
+      expect(flags.enableParallelJsonRpcBatchDispatch, isTrue);
+      expect(store.getBool('feature_enable_parallel_json_rpc_batch_dispatch'), isTrue);
+
+      await flags.resetToDefaults();
+
+      expect(flags.enableParallelJsonRpcBatchDispatch, isFalse);
+    });
   });
 }

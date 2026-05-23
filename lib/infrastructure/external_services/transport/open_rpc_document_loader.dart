@@ -5,26 +5,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:plug_agente/core/logger/app_logger.dart';
-
-/// Thrown when the OpenRPC document cannot be loaded from the asset bundle or
-/// disk. Callers should surface this as an RPC error instead of advertising
-/// zero methods.
-class OpenRpcDocumentLoadException implements Exception {
-  OpenRpcDocumentLoadException({
-    required this.message,
-    this.assetError,
-    this.fileError,
-    this.cwd,
-  });
-
-  final String message;
-  final Object? assetError;
-  final Object? fileError;
-  final String? cwd;
-
-  @override
-  String toString() => 'OpenRpcDocumentLoadException: $message';
-}
+import 'package:plug_agente/domain/protocol/open_rpc_document_load_exception.dart';
 
 /// Loads the OpenRPC document used to answer `rpc.discover` requests.
 ///

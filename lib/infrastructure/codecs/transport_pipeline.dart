@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -12,8 +13,6 @@ import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-/// Bytes above which compression runs in isolate to avoid jank.
-const int gzipIsolateThresholdBytes = 32 * 1024;
 const int defaultTransportCompressionThresholdBytes = 4096;
 const double defaultTransportMaxInflationRatio = 10;
 
@@ -111,6 +110,7 @@ class TransportPipeline {
     required this.compression,
     this.compressionThreshold = defaultTransportCompressionThresholdBytes,
     this.maxInflationRatio = defaultTransportMaxInflationRatio,
+    this.gzipIsolateThresholdBytes = ConnectionConstants.defaultGzipIsolateThresholdBytes,
     this.schemaVersion = '1.0',
     this.protocol = 'jsonrpc-v2',
     this.metricsCollector,
@@ -128,6 +128,9 @@ class TransportPipeline {
 
   /// Maximum decoded/compressed ratio accepted by peers for gzip frames.
   final double maxInflationRatio;
+
+  /// Minimum payload size (bytes) to run GZIP compress/decompress in a background isolate.
+  final int gzipIsolateThresholdBytes;
 
   /// Schema version for the payload frame.
   final String schemaVersion;

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
@@ -13,17 +14,50 @@ import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 
 const int defaultTransportCompressionThresholdBytes = 4096;
 
+const String _usage = '''
+Transport pipeline benchmark (sync codec path).
+
+This tool exercises PayloadCodec/CompressionCodec directly on the main isolate.
+It does not call TransportPipeline.prepareSendAsync/receiveProcessAsync, so
+changing --gzip-isolate-threshold here only affects the report metadata and
+comparison against runtime ConnectionConstants.gzipIsolateThresholdBytes.
+Production isolate behaviour is controlled by TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES
+(or the default 32 KiB) on TransportPipeline instances.
+
+Usage:
+  dart run tool/benchmark_transport_pipeline.dart [options]
+
+Options:
+  --iterations <n>                 Benchmark iterations per case (default: 20)
+  --threshold <bytes>              compressionThreshold for gzip/auto (default: 4096)
+  --gzip-isolate-threshold <bytes> GZIP isolate threshold for report (default: 32768
+                                   or TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES)
+  --json                           Emit JSON instead of plain text
+  --help                           Show this help
+''';
+
 Future<void> main(List<String> args) async {
+  if (args.contains('--help') || args.contains('-h')) {
+    stdout.writeln(_usage.trim());
+    return;
+  }
+
   final iterations = _readIntArg(args, '--iterations', 20).clamp(1, 10000);
   final threshold = _readIntArg(
     args,
     '--threshold',
     defaultTransportCompressionThresholdBytes,
   ).clamp(0, 1024 * 1024 * 1024);
+  final gzipIsolateThreshold = _readIntArg(
+    args,
+    '--gzip-isolate-threshold',
+    ConnectionConstants.gzipIsolateThresholdBytes,
+  ).clamp(1, 1024 * 1024 * 1024);
   final jsonOutput = args.contains('--json');
   final results = await _buildBenchmarkResults(
     iterations: iterations,
     threshold: threshold,
+    gzipIsolateThresholdBytes: gzipIsolateThreshold,
   );
 
   if (jsonOutput) {
@@ -31,27 +65,41 @@ Future<void> main(List<String> args) async {
       const JsonEncoder.withIndent('  ').convert(<String, dynamic>{
         'iterations': iterations,
         'threshold_bytes': threshold,
+        'gzip_isolate_threshold_bytes': gzipIsolateThreshold,
+        'note': 'Sync codec benchmark; isolate threshold does not affect measured timings.',
         'results': results,
       }),
     );
     return;
   }
 
-  stdout.writeln(_buildPlainTextReport(results, iterations: iterations, threshold: threshold));
+  stdout.writeln(
+    _buildPlainTextReport(
+      results,
+      iterations: iterations,
+      threshold: threshold,
+      gzipIsolateThresholdBytes: gzipIsolateThreshold,
+    ),
+  );
 }
 
 Future<String> buildTransportPipelineBenchmarkReport({
   int iterations = 20,
   int warmupIterations = 1,
   int threshold = defaultTransportCompressionThresholdBytes,
+  int? gzipIsolateThresholdBytes,
 }) async {
+  final effectiveGzipIsolateThreshold =
+      gzipIsolateThresholdBytes ?? ConnectionConstants.gzipIsolateThresholdBytes;
   await _buildBenchmarkResults(
     iterations: warmupIterations.clamp(0, 1000),
     threshold: threshold,
+    gzipIsolateThresholdBytes: effectiveGzipIsolateThreshold,
   );
   final results = await _buildBenchmarkResults(
     iterations: iterations.clamp(1, 10000),
     threshold: threshold,
+    gzipIsolateThresholdBytes: effectiveGzipIsolateThreshold,
   );
   final buffer = StringBuffer()
     ..writeln('# Transport Pipeline Benchmark')
@@ -59,7 +107,9 @@ Future<String> buildTransportPipelineBenchmarkReport({
     ..writeln('- iterations: $iterations')
     ..writeln('- warmupIterations: $warmupIterations')
     ..writeln('- thresholdBytes: $threshold')
+    ..writeln('- gzipIsolateThresholdBytes: $effectiveGzipIsolateThreshold')
     ..writeln('- maxInflationRatio: $defaultTransportMaxInflationRatio')
+    ..writeln('- note: sync codec path only; isolate threshold is metadata (see tool --help)')
     ..writeln('- stage-p50/p95/p99 (ms)')
     ..writeln()
     ..writeln(
@@ -81,6 +131,7 @@ Future<String> buildTransportPipelineBenchmarkReport({
 Future<List<Map<String, dynamic>>> _buildBenchmarkResults({
   required int iterations,
   required int threshold,
+  required int gzipIsolateThresholdBytes,
 }) async {
   if (iterations <= 0) {
     return const <Map<String, dynamic>>[];
@@ -397,10 +448,13 @@ String _buildPlainTextReport(
   List<Map<String, dynamic>> results, {
   required int iterations,
   required int threshold,
+  required int gzipIsolateThresholdBytes,
 }) {
   final buffer = StringBuffer()
     ..writeln('Transport pipeline benchmark')
-    ..writeln('iterations=$iterations threshold_bytes=$threshold')
+    ..writeln('iterations=$iterations threshold_bytes=$threshold '
+        'gzip_isolate_threshold_bytes=$gzipIsolateThresholdBytes')
+    ..writeln('note: sync codec path; isolate threshold does not affect timings')
     ..writeln()
     ..writeln(
       [

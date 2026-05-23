@@ -1329,12 +1329,15 @@ falha de autenticacao pode solicitar refresh da credencial).
 
 ## Metodo `rpc.discover`
 
-- **Onde roda:** tratado no transporte (`SocketIOTransportClientV2`) **antes** do
-`RpcMethodDispatcher`; nao passa por `sql.execute` nem exige `client_token`.
+- **Onde roda:** despachado por `RpcMethodDispatcher` via `RpcDiscoverRpcHandler`;
+nao passa por `sql.execute` nem exige `client_token`.
 - **Resultado:** corpo do documento OpenRPC publicado (`docs/communication/openrpc.json`),
-carregado de asset em runtime com fallback para disco e documento minimo embutido.
-- **Batch:** cada item de batch com `method: "rpc.discover"` e processado da mesma
-forma no loop do transporte.
+carregado por `OpenRpcDocumentLoader` (asset em runtime, fallback para disco em
+`<cwd>/docs/communication/openrpc.json`). Se nenhuma fonte estiver disponivel, o
+loader lanca `OpenRpcDocumentLoadException`; nao ha documento OpenRPC minimo
+embutido.
+- **Batch:** cada item de batch com `method: "rpc.discover"` e processado pelo
+dispatcher como qualquer outro metodo RPC.
 - **Notifications e contrato estrito:** com `enableSocketNotificationsContract`
 ativo, um pedido **sem** `id` (notification JSON-RPC) **nao** recebe
 `rpc:response` — regra geral de notifications. Para obter o OpenRPC, o hub deve
@@ -1842,6 +1845,10 @@ campo `payload` entra na entrada canonica como base64 dos bytes transmitidos e
 o campo `signature` nunca participa da assinatura.
 - **Compatibilidade**: quando o modo binario estiver desativado por feature
 flag, a assinatura legada sobre o payload logico JSON continua sendo aceita.
+- **`signatureScope`**: valor negociado `transport-frame` indica que a politica
+de `signatureRequired` se aplica a assinatura do `PayloadFrame` (camada 1).
+Assinatura no envelope JSON logico (camada 2) e compatibilidade legada e nao e
+anunciada por `signatureScope`.
 - **Algoritmos suportados**: `hmac-sha256` (inicial). Extensivel para `ed25519` no futuro.
 - **Key management**: chaves compartilhadas ficam no secure storage local. As
 variaveis `PAYLOAD_SIGNING_KEY`/`PAYLOAD_SIGNING_KEY_ID` continuam aceitas para
@@ -1849,6 +1856,32 @@ bootstrap legado e sao migradas para storage seguro quando possivel.
 `PAYLOAD_SIGNING_KEYS_JSON` ou `PAYLOAD_SIGNING_KEYS` permitem multiplas chaves;
 `PAYLOAD_SIGNING_ACTIVE_KEY_ID` define a chave ativa de assinatura. O agente
 assina com a chave ativa e verifica com qualquer `key_id` configurado.
+
+### Frame vs logical signing (hub implementer)
+
+Duas camadas de assinatura existem; **nao misture ambas na mesma mensagem**.
+
+1. **Frame de transporte** (`PayloadFrame.signature`): padrao para todo trafego
+   Socket.IO apos `agent:capabilities` com `binaryPayload` e `transportFrame`.
+   O hub verifica **antes** de descomprimir/decodificar. Entrada canonica =
+   campos do frame + base64 dos bytes em `payload`; exclua `signature`.
+2. **JSON logico** (`signature` no topo do JSON-RPC decodificado): **somente
+   legado** quando o `PayloadFrame` binario nao e usado. O hub verifica **depois**
+   do decode JSON, antes do dispatch RPC.
+
+No contrato atual, sessoes exigem frames binarios — implemente **somente a
+camada 1**. A camada 2 existe para retrocompatibilidade.
+
+Ambas as falhas retornam `-32001` / `reason: invalid_signature`; use logs ou
+estagio da validacao (decode do frame vs validacao RPC) para distinguir.
+
+`signatureRequired` negociado aplica-se a assinatura de **frame** em modo
+binario; assinatura logica segue `enablePayloadSigning` apenas quando o
+transporte binario esta desligado.
+
+Vetores de contrato: `test/fixtures/payload_signing_test_vectors.json`. Ordem
+de recebimento recomendada: ver secao "Assinatura e validacao logica" em
+`docs/communication/socketio_client_binary_transport.md`.
 
 ### Feature flag
 
@@ -2247,8 +2280,8 @@ execucoes terminais `skipped`.
 `computeReconnectDelay` (base 5 s, teto 60 s, jitter).
 - Assinatura invalida: `error.data.reason` = `invalid_signature` com codigo
 `-32001` (inclui falha de assinatura do `PayloadFrame` na decodificacao).
-- `rpc.discover`: fluxo no transporte, OpenRPC, e interacao com notifications
-estritas.
+- `rpc.discover`: fluxo no dispatcher (`RpcDiscoverRpcHandler` +
+`OpenRpcDocumentLoader`), OpenRPC, e interacao com notifications estritas.
 - `agent.getProfile`: metodo RPC para consulta de cadastro atual do agente,
 documentado no OpenRPC e retornado via `rpc:response`.
 - Exemplo de `extensions` em capabilities alinhado ao default do agente.

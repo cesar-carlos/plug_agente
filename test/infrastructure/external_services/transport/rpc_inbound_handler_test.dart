@@ -87,6 +87,7 @@ void main() {
     when(() => featureFlags.requireIncomingPayloadSignatures).thenReturn(false);
     when(() => featureFlags.outboundCompressionMode).thenReturn(OutboundCompressionMode.none);
     when(() => featureFlags.compressionThreshold).thenReturn(2048);
+    when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(false);
 
     dispatcher = _MockDispatcher();
     protocol = const ProtocolConfig(

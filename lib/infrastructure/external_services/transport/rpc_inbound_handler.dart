@@ -223,6 +223,7 @@ class RpcInboundHandler {
   /// Processes a single inbound `rpc:request`. Acks are emitted as soon as the
   /// payload is parsed so the hub can release its in-flight slot quickly.
   Future<void> handleRequest(dynamic data) async {
+    dynamic inboundRequestId;
     try {
       final wirePayload = _unwrapWirePayload(data);
       dynamic payload = wirePayload.payload;
@@ -274,6 +275,7 @@ class RpcInboundHandler {
       }
 
       final requestMap = payload;
+      inboundRequestId = requestMap['id'];
       if (_exceedsPayloadLimit(requestMap)) {
         await _sendSchemaValidationError(
           requestMap['id'],
@@ -392,7 +394,7 @@ class RpcInboundHandler {
       // because it can leak internal stack traces or sensitive payload data;
       // the correlation id lets operators link this response to the log entry.
       final errorResponse = RpcResponse.error(
-        id: null,
+        id: inboundRequestId,
         error: RpcError(
           code: RpcErrorCode.internalError,
           message: RpcErrorCode.getMessage(RpcErrorCode.internalError),

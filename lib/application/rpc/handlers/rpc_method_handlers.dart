@@ -1,6 +1,7 @@
 import 'package:plug_agente/application/rpc/rpc_method_handler.dart';
 import 'package:plug_agente/application/rpc/rpc_method_handler_operations.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/open_rpc_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
 Iterable<RpcMethodHandler> createDefaultRpcMethodHandlers(
@@ -40,8 +41,28 @@ class RpcDiscoverRpcHandler implements RpcMethodHandler {
 
   @override
   Future<RpcResponse> handle(RpcRequest request, RpcDispatchContext context) async {
-    final document = await _loadDocument();
-    return RpcResponse.success(id: request.id, result: document);
+    try {
+      final document = await _loadDocument();
+      return RpcResponse.success(id: request.id, result: document);
+    } on OpenRpcDocumentLoadException {
+      const code = RpcErrorCode.internalError;
+      return RpcResponse.error(
+        id: request.id,
+        error: RpcError(
+          code: code,
+          message: RpcErrorCode.getMessage(code),
+          data: RpcErrorCode.buildErrorData(
+            code: code,
+            technicalMessage: OpenRpcConstants.loadFailedTechnicalMessage,
+            correlationId: request.id?.toString(),
+            subreason: OpenRpcConstants.unavailableSubreason,
+            extra: <String, dynamic>{
+              'failure_code': OpenRpcConstants.loadFailedFailureCode,
+            },
+          ),
+        ),
+      );
+    }
   }
 }
 

@@ -143,6 +143,37 @@ void main() {
       expect(ConnectionConstants.directOdbcConnectionOverrideExceedsPool(4), isTrue);
     });
 
+    test('should default gzip isolate threshold to 32 KiB', () {
+      expect(
+        ConnectionConstants.gzipIsolateThresholdBytes,
+        ConnectionConstants.defaultGzipIsolateThresholdBytes,
+      );
+      expect(ConnectionConstants.defaultGzipIsolateThresholdBytes, 32 * 1024);
+    });
+
+    test('should use TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES when valid', () {
+      dotenv.loadFromString(envString: 'TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES=65536');
+
+      expect(ConnectionConstants.gzipIsolateThresholdBytes, 65536);
+    });
+
+    test('should ignore invalid TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES override', () {
+      dotenv.loadFromString(envString: 'TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES=invalid');
+
+      expect(
+        ConnectionConstants.gzipIsolateThresholdBytes,
+        ConnectionConstants.defaultGzipIsolateThresholdBytes,
+      );
+
+      dotenv.clean();
+      dotenv.loadFromString(envString: 'TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES=0');
+
+      expect(
+        ConnectionConstants.gzipIsolateThresholdBytes,
+        ConnectionConstants.defaultGzipIsolateThresholdBytes,
+      );
+    });
+
     test('should default RPC idempotency entry TTL to 300 seconds', () {
       expect(ConnectionConstants.rpcIdempotencyEntryTtl, const Duration(seconds: 300));
     });

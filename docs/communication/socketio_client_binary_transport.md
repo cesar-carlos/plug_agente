@@ -201,11 +201,14 @@ Benchmark local recomendado antes de alterar esses valores:
 ```bash
 dart run tool/benchmark_transport_pipeline.dart --iterations 20
 dart run tool/benchmark_transport_pipeline.dart --iterations 20 --json
+dart run tool/benchmark_transport_pipeline.dart --help
 ```
 
 O benchmark compara `none`, `auto` e `gzip` com payloads SQL sinteticos e
 exporta percentis de encode, compressao, decode e descompressao via
-`ProtocolMetricsSummary.toJson()`.
+`ProtocolMetricsSummary.toJson()`. Usa o caminho sync de codec (nao
+`TransportPipeline.prepareSendAsync`); o limiar de isolate (`--gzip-isolate-threshold`
+ou `TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES`) aparece no relatorio como metadata.
 
 Para clientes, a regra pratica permanece:
 
@@ -215,6 +218,10 @@ Para clientes, a regra pratica permanece:
 - nao enviar campos extras em `meta` fora do conjunto publicado pelo schema.
 
 ## Assinatura e validacao logica
+
+Para a distincao entre assinatura de frame (`PayloadFrame.signature`) e
+assinatura legada no JSON logico, ver "Frame vs logical signing (hub
+implementer)" em `docs/communication/socket_communication_standard.md`.
 
 As regras de schema validation, autorizacao e JSON-RPC continuam valendo sobre
 o payload logico apos decode.

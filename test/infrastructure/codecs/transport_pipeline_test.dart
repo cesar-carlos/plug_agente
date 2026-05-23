@@ -458,7 +458,7 @@ void main() {
           encoding: 'json',
           compression: 'none',
         );
-        final invalidGzip = Uint8List(gzipIsolateThresholdBytes);
+        final invalidGzip = Uint8List(pipeline.gzipIsolateThresholdBytes);
         final frame = PayloadFrame(
           schemaVersion: '1.0',
           enc: 'json',

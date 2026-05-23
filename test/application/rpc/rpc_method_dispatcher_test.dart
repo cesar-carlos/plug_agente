@@ -359,6 +359,41 @@ void main() {
       expect(response.error!.code, equals(RpcErrorCode.methodNotFound));
     });
 
+    test('should return structured internalError when OpenRPC document load fails', () async {
+      final discoverDispatcher = RpcMethodDispatcher(
+        databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+        featureFlags: mockFeatureFlags,
+        streamingGateway: mockStreamingGateway,
+        odbcNativeMetricsService: mockOdbcNativeMetricsService,
+        loadOpenRpcDocument: () => Future<Map<String, dynamic>>.error(
+          OpenRpcDocumentLoadException(message: 'OpenRPC document unavailable'),
+        ),
+      );
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'rpc.discover',
+        id: 'disc-fail',
+      );
+
+      final response = await discoverDispatcher.dispatch(request, 'agent-1');
+
+      expect(response.isError, isTrue);
+      expect(response.id, 'disc-fail');
+      expect(response.error!.code, equals(RpcErrorCode.internalError));
+      final data = response.error!.data as Map<String, dynamic>;
+      expect(data['failure_code'], 'openrpc_load_failed');
+      expect(data['subreason'], 'openrpc_unavailable');
+      expect(data['technical_message'], isA<String>());
+      expect(data['technical_message'], isNot(contains('OpenRpcDocumentLoadException')));
+    });
+
     test('should allow agent.getProfile without client token when auth is enabled', () async {
       when(
         () => mockFeatureFlags.enableClientTokenAuthorization,

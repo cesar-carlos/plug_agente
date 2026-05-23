@@ -339,4 +339,13 @@ class ConnectionConstants {
   /// Outgoing `rpc:response` contract validation is skipped above this UTF-8 JSON
   /// size to limit CPU on huge results (0 disables the soft cap).
   static const int socketOutgoingContractValidationMaxBytes = 2 * 1024 * 1024;
+
+  /// Default payload size above which GZIP compress/decompress runs in a background isolate.
+  static const int defaultGzipIsolateThresholdBytes = 32 * 1024;
+
+  /// GZIP payload size above which transport compress/decompress uses `compute`.
+  ///
+  /// Override with env `TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES` (positive integer bytes).
+  static int get gzipIsolateThresholdBytes =>
+      _positiveIntEnv('TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES') ?? defaultGzipIsolateThresholdBytes;
 }
