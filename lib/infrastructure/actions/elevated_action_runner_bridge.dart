@@ -9,8 +9,7 @@ import 'package:plug_agente/infrastructure/actions/elevated_action_execution_mat
 import 'package:plug_agente/infrastructure/actions/elevated_action_request_protector.dart';
 import 'package:result_dart/result_dart.dart';
 
-typedef ElevatedScheduledTaskRunner =
-    Future<ProcessResult> Function(String taskName);
+typedef ElevatedScheduledTaskRunner = Future<ProcessResult> Function(String taskName);
 
 /// Integrates the main app with the Windows elevated helper via request files and schtasks.
 class ElevatedActionRunnerBridge implements IElevatedActionRunnerBridge {
@@ -18,20 +17,23 @@ class ElevatedActionRunnerBridge implements IElevatedActionRunnerBridge {
     required ElevatedActionRequestProtector requestProtector,
     required ElevatedActionExecutionMaterializer materializer,
     ElevatedScheduledTaskRunner? scheduledTaskRunner,
+    bool Function()? isWindows,
   }) : _requestProtector = requestProtector,
        _materializer = materializer,
-       _scheduledTaskRunner = scheduledTaskRunner ?? _runScheduledTask;
+       _scheduledTaskRunner = scheduledTaskRunner ?? _runScheduledTask,
+       _isWindows = isWindows ?? (() => Platform.isWindows);
 
   final ElevatedActionRequestProtector _requestProtector;
   final ElevatedActionExecutionMaterializer _materializer;
   final ElevatedScheduledTaskRunner _scheduledTaskRunner;
+  final bool Function() _isWindows;
 
   @override
   Future<Result<void>> submitExecution({
     required String executionId,
     required AgentActionDefinition definition,
   }) async {
-    if (!Platform.isWindows) {
+    if (!_isWindows()) {
       return Failure(
         ActionRuntimeFailure.withContext(
           message: 'Elevated agent action runner is only supported on Windows.',
@@ -72,8 +74,7 @@ class ElevatedActionRunnerBridge implements IElevatedActionRunnerBridge {
               'phase': AgentActionProcessConstants.elevatedSubmitPhase,
               'exit_code': processResult.exitCode,
               'reason': AgentActionGateConstants.elevatedSubmitFailedReason,
-              'user_message':
-                  'Nao foi possivel acionar o executor elevado. Verifique a tarefa agendada do helper.',
+              'user_message': 'Nao foi possivel acionar o executor elevado. Verifique a tarefa agendada do helper.',
             },
           ),
         );
@@ -89,8 +90,7 @@ class ElevatedActionRunnerBridge implements IElevatedActionRunnerBridge {
             'execution_id': executionId.trim(),
             'phase': AgentActionProcessConstants.elevatedSubmitPhase,
             'reason': AgentActionGateConstants.elevatedSubmitFailedReason,
-            'user_message':
-                'Nao foi possivel acionar o executor elevado. Verifique a tarefa agendada do helper.',
+            'user_message': 'Nao foi possivel acionar o executor elevado. Verifique a tarefa agendada do helper.',
           },
         ),
       );

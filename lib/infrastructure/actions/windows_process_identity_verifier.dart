@@ -97,8 +97,8 @@ abstract final class WindowsProcessIdentityVerifier {
       return true;
     }
 
-    final expectedBase = p.basename(expectedTrim).toLowerCase();
-    final actualBase = p.basename(actualTrim).toLowerCase();
+    final expectedBase = p.windows.basename(expectedTrim).toLowerCase();
+    final actualBase = p.windows.basename(actualTrim).toLowerCase();
     if (expectedBase == actualBase) {
       if (!expectedTrim.contains(r'\') && !expectedTrim.contains('/')) {
         return true;

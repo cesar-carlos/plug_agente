@@ -39,6 +39,7 @@ void main() {
           }
           return ProcessResult(1, 1, '', 'not found');
         },
+        isWindows: () => true,
       );
     });
 

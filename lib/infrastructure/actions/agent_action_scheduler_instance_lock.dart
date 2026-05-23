@@ -19,6 +19,7 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
        _currentPid = currentPid ?? _currentProcessPid;
 
   static const String _lockFileName = 'agent_action_scheduler.lock';
+  static final Set<String> _heldLockFilePaths = <String>{};
 
   static int _currentProcessPid() => pid;
 
@@ -38,9 +39,14 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
     }
 
     final file = File(_lockFilePath);
+    RandomAccessFile? handle;
     try {
       await file.parent.create(recursive: true);
-      final handle = await file.open(mode: FileMode.write);
+      if (_heldLockFilePaths.contains(_lockFilePath)) {
+        return Failure(_lockedFailure());
+      }
+
+      handle = await file.open(mode: FileMode.write);
       await handle.lock();
       final identity = _runtimeIdentity;
       final payload = StringBuffer()
@@ -54,20 +60,11 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
       await handle.writeString(payload.toString());
       await handle.flush();
       _handle = handle;
+      _heldLockFilePaths.add(_lockFilePath);
       return const Success(unit);
     } on FileSystemException catch (error) {
-      return Failure(
-        ActionAuthorizationFailure.withContext(
-          message: 'Another Plug Agente process is already running the action scheduler.',
-          code: AgentActionFailureCode.schedulerBootstrapFailed,
-          cause: error,
-          context: const {
-            'reason': AgentActionTriggerConstants.schedulerInstanceLockedReason,
-            'user_message':
-                'Outro processo do Plug Agente ja esta executando o agendador de acoes nesta pasta de dados.',
-          },
-        ),
-      );
+      await _closeQuietly(handle);
+      return Failure(_lockedFailure(error));
     }
   }
 
@@ -78,6 +75,7 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
     if (handle == null) {
       return;
     }
+    _heldLockFilePaths.remove(_lockFilePath);
 
     try {
       await handle.unlock();
@@ -90,6 +88,30 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
       File(_lockFilePath).deleteSync();
     } on FileSystemException {
       // Lock file may already be gone after crash recovery.
+    }
+  }
+
+  ActionAuthorizationFailure _lockedFailure([Object? cause]) {
+    return ActionAuthorizationFailure.withContext(
+      message: 'Another Plug Agente process is already running the action scheduler.',
+      code: AgentActionFailureCode.schedulerBootstrapFailed,
+      cause: cause,
+      context: const {
+        'reason': AgentActionTriggerConstants.schedulerInstanceLockedReason,
+        'user_message': 'Outro processo do Plug Agente ja esta executando o agendador de acoes nesta pasta de dados.',
+      },
+    );
+  }
+
+  Future<void> _closeQuietly(RandomAccessFile? handle) async {
+    if (handle == null) {
+      return;
+    }
+
+    try {
+      await handle.close();
+    } on FileSystemException {
+      // Best-effort cleanup after a failed acquisition.
     }
   }
 }

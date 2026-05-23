@@ -17,6 +17,7 @@ void main() {
       cleanup = CleanupExpiredElevatedBridgeArtifacts(
         storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
         now: () => DateTime.utc(2026, 5, 18, 14),
+        isWindows: () => true,
       );
     });
 
@@ -65,6 +66,7 @@ void main() {
         storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
         metrics: metrics,
         now: () => DateTime.utc(2026, 5, 18, 14),
+        isWindows: () => true,
       );
       final requestsDir = AgentActionElevatedConstants.requestsDirectoryPath(tempDir.path);
       await Directory(requestsDir).create(recursive: true);

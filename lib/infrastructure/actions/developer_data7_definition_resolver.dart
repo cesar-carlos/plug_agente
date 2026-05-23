@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/constants/agent_action_developer_data7_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -256,7 +255,7 @@ class DeveloperData7DefinitionResolver {
         connection: connection,
         catalogConnectionCount: catalog.connections.length,
         usedDefaultConfigPath: locatedConfigPath.usedDefaultLocation,
-        workingDirectory: File(executorPath.canonicalPath).parent.path,
+        workingDirectory: p.windows.dirname(executorPath.canonicalPath),
       ),
     );
   }

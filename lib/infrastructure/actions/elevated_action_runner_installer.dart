@@ -21,17 +21,20 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
     required GlobalStorageContext storageContext,
     ProcessRunner? processRunner,
     ElevatedActionDirectoryAclHardener? directoryAclHardener,
+    bool Function()? isWindows,
   }) : _storageContext = storageContext,
        _processRunner = processRunner ?? Process.run,
-       _directoryAclHardener = directoryAclHardener ?? ElevatedActionDirectoryAclHardener();
+       _directoryAclHardener = directoryAclHardener ?? ElevatedActionDirectoryAclHardener(),
+       _isWindows = isWindows ?? (() => Platform.isWindows);
 
   final GlobalStorageContext _storageContext;
   final ProcessRunner _processRunner;
   final ElevatedActionDirectoryAclHardener _directoryAclHardener;
+  final bool Function() _isWindows;
 
   @override
   Future<ElevatedActionRunnerInstallStatus> getStatus() async {
-    if (!Platform.isWindows) {
+    if (!_isWindows()) {
       return const ElevatedActionRunnerInstallStatus(
         state: ElevatedActionRunnerInstallState.unsupportedPlatform,
       );
@@ -69,7 +72,7 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
 
   @override
   Future<Result<void>> install({required bool requestElevation}) async {
-    if (!Platform.isWindows) {
+    if (!_isWindows()) {
       return Failure(
         ActionRuntimeFailure.withContext(
           message: 'Elevated action runner install is only supported on Windows.',
@@ -145,7 +148,7 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
   }
 
   Future<Result<void>> removeScheduledTask({required bool requestElevation}) async {
-    if (!Platform.isWindows) {
+    if (!_isWindows()) {
       return const Success(unit);
     }
 

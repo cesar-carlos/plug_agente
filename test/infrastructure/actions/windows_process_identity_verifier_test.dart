@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/windows_process_identity_verifier.dart';
+
 void main() {
   group('WindowsProcessIdentityVerifier.executablePathsMatch', () {
     test('should match full paths after normalization', () {

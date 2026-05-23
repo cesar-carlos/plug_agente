@@ -12,16 +12,19 @@ class CleanupExpiredElevatedBridgeArtifacts {
     required GlobalStorageContext storageContext,
     AgentActionExecutionMetricsCollector? metrics,
     DateTime Function()? now,
+    bool Function()? isWindows,
   }) : _storageContext = storageContext,
        _metrics = metrics,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _isWindows = isWindows ?? (() => Platform.isWindows);
 
   final GlobalStorageContext _storageContext;
   final AgentActionExecutionMetricsCollector? _metrics;
   final DateTime Function() _now;
+  final bool Function() _isWindows;
 
   Future<Result<int>> call({DateTime? referenceTime}) async {
-    if (!Platform.isWindows) {
+    if (!_isWindows()) {
       return const Success(0);
     }
 

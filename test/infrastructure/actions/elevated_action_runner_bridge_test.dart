@@ -38,6 +38,7 @@ void main() {
         requestProtector: protector,
         materializer: materializer,
         scheduledTaskRunner: (_) async => ProcessResult(1, 1, 'failed', 'failed'),
+        isWindows: () => true,
       );
 
       final result = await bridge.submitExecution(
@@ -54,6 +55,7 @@ void main() {
         requestProtector: protector,
         materializer: materializer,
         scheduledTaskRunner: (_) async => ProcessResult(0, 0, '', ''),
+        isWindows: () => true,
       );
 
       final result = await bridge.submitExecution(
