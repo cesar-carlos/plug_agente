@@ -1,6 +1,4 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
@@ -22,7 +20,6 @@ class AgentActionsPreflightSettingsCard extends StatefulWidget {
 }
 
 class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPreflightSettingsCard> {
-  late final AgentActionPreflightSettings _settings;
   late final TextEditingController _daysController;
 
   bool _isSaving = false;
@@ -33,8 +30,7 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
   @override
   void initState() {
     super.initState();
-    _settings = getIt<AgentActionPreflightSettings>();
-    _daysController = TextEditingController(text: '${_settings.validityDays}');
+    _daysController = TextEditingController(text: '${widget.provider.preflightValidityDays}');
   }
 
   @override
@@ -89,7 +85,7 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
                 child: Text(l10n.agentActionsPreflightSettingsDiscard),
               ),
               Button(
-                onPressed: widget.provider.isFeatureEnabled && !_isSaving && _settings.hasPersistedOverride
+                onPressed: widget.provider.isFeatureEnabled && !_isSaving && widget.provider.hasPreflightPersistedOverride
                     ? _onUseEnvDefaults
                     : null,
                 child: Text(l10n.agentActionsPreflightSettingsUseEnvDefaults),
@@ -114,11 +110,11 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
       _isSaving = true;
       _validationMessage = null;
     });
-    await _settings.save(validityDays: parsed);
+    await widget.provider.savePreflightValidityDays(parsed);
     if (!mounted) {
       return;
     }
-    _daysController.text = '${_settings.validityDays}';
+    _daysController.text = '${widget.provider.preflightValidityDays}';
     setState(() {
       _isSaving = false;
     });
@@ -131,13 +127,12 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
         onClose: close,
       ),
     );
-    widget.provider.notifyListeners();
   }
 
   void _onDiscard() {
     setState(() {
       _validationMessage = null;
-      _daysController.text = '${_settings.validityDays}';
+      _daysController.text = '${widget.provider.preflightValidityDays}';
     });
   }
 
@@ -146,11 +141,11 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
       _isSaving = true;
       _validationMessage = null;
     });
-    await _settings.clearPersistedOverride();
+    await widget.provider.clearPreflightPersistedOverride();
     if (!mounted) {
       return;
     }
-    _daysController.text = '${_settings.validityDays}';
+    _daysController.text = '${widget.provider.preflightValidityDays}';
     setState(() {
       _isSaving = false;
     });
@@ -163,6 +158,5 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
         onClose: close,
       ),
     );
-    widget.provider.notifyListeners();
   }
 }

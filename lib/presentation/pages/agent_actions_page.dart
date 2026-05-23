@@ -24,6 +24,7 @@ import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_ui_preferences.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_definition_dialog.dart';
@@ -39,7 +40,7 @@ import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_ret
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_runtime_support_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_summary_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_toolbar_card.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_confirm_dialog.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_help_button.dart';
@@ -72,18 +73,6 @@ class _AgentActionsPageKeys {
   }
 }
 
-class _AgentActionsUiPreferenceKeys {
-  static const String selectedTab = 'agent_actions.ui.selected_tab';
-  static const String definitionTypeFilter = 'agent_actions.ui.definition_type_filter';
-  static const String definitionStateFilter = 'agent_actions.ui.definition_state_filter';
-  static const String definitionSearch = 'agent_actions.ui.definition_search';
-  static const String historyStatusFilter = 'agent_actions.ui.history_status_filter';
-  static const String historySourceFilter = 'agent_actions.ui.history_source_filter';
-  static const String historyPeriodFilter = 'agent_actions.ui.history_period_filter';
-  static const String historyFailurePhaseFilter = 'agent_actions.ui.history_failure_phase_filter';
-  static const String historySearch = 'agent_actions.ui.history_search';
-}
-
 class AgentActionsPage extends StatefulWidget {
   const AgentActionsPage({super.key});
 
@@ -95,11 +84,13 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
   int _selectedTabIndex = 0;
   bool _restoredUiPreferences = false;
   bool _isActionEditorDialogPendingOrOpen = false;
+  late final AgentActionsUiPreferences _uiPreferences;
 
   @override
   void initState() {
     super.initState();
-    _selectedTabIndex = _settingsStore()?.getInt(_AgentActionsUiPreferenceKeys.selectedTab) ?? 0;
+    _uiPreferences = AgentActionsUiPreferences(_settingsStore);
+    _selectedTabIndex = _uiPreferences.readSelectedTabIndex() ?? 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -224,6 +215,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
         body: _AgentActionsActionsTab(
           provider: provider,
           l10n: l10n,
+          uiPreferences: _uiPreferences,
           onCreateAction: () => _scheduleActionEditorDialog(context, provider, l10n),
           onShowDetails: (definition) => _showActionDetailsDialog(
             context,
@@ -242,7 +234,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       AppFluentTabItem(
         icon: FluentIcons.history,
         text: l10n.agentActionsHistoryTitle,
-        body: _AgentActionsHistoryTab(provider: provider, l10n: l10n),
+        body: _AgentActionsHistoryTab(provider: provider, l10n: l10n, uiPreferences: _uiPreferences),
       ),
       AppFluentTabItem(
         icon: FluentIcons.settings,
@@ -272,7 +264,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
 
   void _handleTabChanged(int index) {
     setState(() => _selectedTabIndex = index);
-    unawaited(_settingsStore()?.setInt(_AgentActionsUiPreferenceKeys.selectedTab, index));
+    unawaited(_uiPreferences.persistSelectedTabIndex(index));
   }
 
   void _restoreProviderUiPreferences(AgentActionsProvider provider) {
@@ -280,41 +272,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       return;
     }
     _restoredUiPreferences = true;
-
-    final store = _settingsStore();
-    if (store == null) {
-      return;
-    }
-
-    provider
-      ..setDefinitionTypeFilter(
-        _enumByName(AgentActionType.values, store.getString(_AgentActionsUiPreferenceKeys.definitionTypeFilter)),
-      )
-      ..setDefinitionStateFilter(
-        _enumByName(AgentActionState.values, store.getString(_AgentActionsUiPreferenceKeys.definitionStateFilter)),
-      )
-      ..setDefinitionSearchQuery(store.getString(_AgentActionsUiPreferenceKeys.definitionSearch) ?? '')
-      ..setHistoryStatusFilter(
-        _enumByName(
-          AgentActionExecutionStatus.values,
-          store.getString(_AgentActionsUiPreferenceKeys.historyStatusFilter),
-        ),
-      )
-      ..setHistorySourceFilter(
-        _enumByName(
-          AgentActionRequestSource.values,
-          store.getString(_AgentActionsUiPreferenceKeys.historySourceFilter),
-        ),
-      )
-      ..setHistoryPeriodFilter(
-        _enumByName(
-              AgentActionHistoryPeriod.values,
-              store.getString(_AgentActionsUiPreferenceKeys.historyPeriodFilter),
-            ) ??
-            AgentActionHistoryPeriod.all,
-      )
-      ..setHistoryFailurePhaseFilter(store.getString(_AgentActionsUiPreferenceKeys.historyFailurePhaseFilter))
-      ..setHistorySearchQuery(store.getString(_AgentActionsUiPreferenceKeys.historySearch) ?? '');
+    _uiPreferences.restoreInto(provider);
   }
 
   void _runPageShortcut(VoidCallback action) {
@@ -522,40 +480,6 @@ IAppSettingsStore? _settingsStore() {
   return getIt.isRegistered<IAppSettingsStore>() ? getIt<IAppSettingsStore>() : null;
 }
 
-T? _enumByName<T extends Enum>(List<T> values, String? name) {
-  if (name == null || name.isEmpty) {
-    return null;
-  }
-  for (final value in values) {
-    if (value.name == name) {
-      return value;
-    }
-  }
-  return null;
-}
-
-Future<void> _persistUiPreference(String key, String? value) async {
-  final store = _settingsStore();
-  if (store == null) {
-    return;
-  }
-  if (value == null || value.isEmpty) {
-    await store.remove(key);
-    return;
-  }
-  await store.setString(key, value);
-}
-
-Future<void> _removeUiPreferences(List<String> keys) async {
-  final store = _settingsStore();
-  if (store == null) {
-    return;
-  }
-  for (final key in keys) {
-    await store.remove(key);
-  }
-}
-
 class _AgentActionsStatusStrip extends StatelessWidget {
   const _AgentActionsStatusStrip({
     required this.provider,
@@ -607,6 +531,7 @@ class _AgentActionsActionsTab extends StatelessWidget {
   const _AgentActionsActionsTab({
     required this.provider,
     required this.l10n,
+    required this.uiPreferences,
     required this.onCreateAction,
     required this.onShowDetails,
     required this.onEditAction,
@@ -614,6 +539,7 @@ class _AgentActionsActionsTab extends StatelessWidget {
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
+  final AgentActionsUiPreferences uiPreferences;
   final VoidCallback onCreateAction;
   final ValueChanged<AgentActionDefinition> onShowDetails;
   final ValueChanged<AgentActionDefinition> onEditAction;
@@ -633,6 +559,7 @@ class _AgentActionsActionsTab extends StatelessWidget {
           child: _AgentActionsList(
             provider: provider,
             l10n: l10n,
+            uiPreferences: uiPreferences,
             onCreateAction: onCreateAction,
             onShowDetails: onShowDetails,
             onAddTrigger: (definition) {
@@ -659,10 +586,12 @@ class _AgentActionsHistoryTab extends StatelessWidget {
   const _AgentActionsHistoryTab({
     required this.provider,
     required this.l10n,
+    required this.uiPreferences,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
+  final AgentActionsUiPreferences uiPreferences;
 
   @override
   Widget build(BuildContext context) {
@@ -692,7 +621,7 @@ class _AgentActionsHistoryTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          _AgentActionsHistoryFilters(provider: provider, l10n: l10n),
+          _AgentActionsHistoryFilters(provider: provider, l10n: l10n, uiPreferences: uiPreferences),
           const SizedBox(height: AppSpacing.md),
           Expanded(
             child: _AgentActionExecutionList(
@@ -731,7 +660,7 @@ class _AgentActionsSettingsTab extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         AgentActionsDangerousCommandWarnCard(provider: provider, l10n: l10n),
         const SizedBox(height: AppSpacing.md),
-        AgentActionsRetentionCard(l10n: l10n),
+        AgentActionsRetentionCard(l10n: l10n, provider: provider),
         if (runtimeCapabilities.isDegraded ||
             runtimeCapabilities.isUnsupported ||
             runtimeDiagnostics?.source == RuntimeDetectionSource.detectionFailed) ...[
@@ -908,6 +837,7 @@ class _AgentActionsList extends StatelessWidget {
   const _AgentActionsList({
     required this.provider,
     required this.l10n,
+    required this.uiPreferences,
     required this.onCreateAction,
     required this.onShowDetails,
     required this.onAddTrigger,
@@ -916,6 +846,7 @@ class _AgentActionsList extends StatelessWidget {
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
+  final AgentActionsUiPreferences uiPreferences;
   final VoidCallback onCreateAction;
   final ValueChanged<AgentActionDefinition> onShowDetails;
   final ValueChanged<AgentActionDefinition> onAddTrigger;
@@ -979,7 +910,7 @@ class _AgentActionsList extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _AgentActionsDefinitionFilters(provider: provider, l10n: l10n),
+          _AgentActionsDefinitionFilters(provider: provider, l10n: l10n, uiPreferences: uiPreferences),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
             child: AppDataGridScrollable<AgentActionDefinition>(
@@ -987,7 +918,7 @@ class _AgentActionsList extends StatelessWidget {
                 AppGridColumn(label: l10n.agentActionsFormName, flex: 4),
                 AppGridColumn(label: l10n.agentActionsFormType, flex: 2),
                 AppGridColumn(label: l10n.agentActionsFormState, flex: 2),
-                const AppGridColumn(label: 'Riscos/Gatilhos', flex: 2),
+                AppGridColumn(label: l10n.agentActionsGridColumnRisksTriggers, flex: 2),
                 AppGridColumn(label: l10n.ctGridColumnActions, flex: 5, alignment: Alignment.centerRight),
               ],
               rows: visibleDefinitions,
@@ -1186,10 +1117,12 @@ class _AgentActionsDefinitionFilters extends StatefulWidget {
   const _AgentActionsDefinitionFilters({
     required this.provider,
     required this.l10n,
+    required this.uiPreferences,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
+  final AgentActionsUiPreferences uiPreferences;
 
   @override
   State<_AgentActionsDefinitionFilters> createState() => _AgentActionsDefinitionFiltersState();
@@ -1244,7 +1177,7 @@ class _AgentActionsDefinitionFiltersState extends State<_AgentActionsDefinitionF
             ],
             onChanged: (type) {
               provider.setDefinitionTypeFilter(type);
-              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.definitionTypeFilter, type?.name));
+              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.definitionTypeFilter, type?.name));
             },
           ),
         ),
@@ -1266,7 +1199,7 @@ class _AgentActionsDefinitionFiltersState extends State<_AgentActionsDefinitionF
             ],
             onChanged: (state) {
               provider.setDefinitionStateFilter(state);
-              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.definitionStateFilter, state?.name));
+              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.definitionStateFilter, state?.name));
             },
           ),
         ),
@@ -1277,7 +1210,7 @@ class _AgentActionsDefinitionFiltersState extends State<_AgentActionsDefinitionF
             controller: _searchController,
             onChanged: (query) {
               provider.setDefinitionSearchQuery(query);
-              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.definitionSearch, query.trim()));
+              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.definitionSearch, query.trim()));
             },
             textInputAction: TextInputAction.search,
           ),
@@ -1287,10 +1220,10 @@ class _AgentActionsDefinitionFiltersState extends State<_AgentActionsDefinitionF
               ? () {
                   provider.clearDefinitionFilters();
                   unawaited(
-                    _removeUiPreferences([
-                      _AgentActionsUiPreferenceKeys.definitionTypeFilter,
-                      _AgentActionsUiPreferenceKeys.definitionStateFilter,
-                      _AgentActionsUiPreferenceKeys.definitionSearch,
+                    widget.uiPreferences.removeKeys([
+                      AgentActionsUiPreferenceKeys.definitionTypeFilter,
+                      AgentActionsUiPreferenceKeys.definitionStateFilter,
+                      AgentActionsUiPreferenceKeys.definitionSearch,
                     ]),
                   );
                 }
@@ -1725,35 +1658,15 @@ Future<void> _confirmDeleteTrigger(
   AppLocalizations l10n,
 ) async {
   final label = _triggerDeleteConfirmLabel(trigger, l10n);
-  final confirmed = await showDialog<bool>(
+  final confirmed = await AppConfirmDialog.show(
     context: context,
-    builder: (context) {
-      return ContentDialog(
-        title: AppDialogTitleBar(
-          title: Text(l10n.agentActionsTriggerDeleteConfirmTitle),
-          closeTooltip: l10n.btnClose,
-          onClose: () => Navigator.pop(context, false),
-        ),
-        content: Text(l10n.agentActionsTriggerDeleteConfirmMessage(label)),
-        actions: [
-          Button(
-            child: Text(l10n.agentActionsTriggerDeleteCancel),
-            onPressed: () {
-              Navigator.pop(context, false);
-            },
-          ),
-          FilledButton(
-            child: Text(l10n.agentActionsTriggerDeleteConfirm),
-            onPressed: () {
-              Navigator.pop(context, true);
-            },
-          ),
-        ],
-      );
-    },
+    title: l10n.agentActionsTriggerDeleteConfirmTitle,
+    message: l10n.agentActionsTriggerDeleteConfirmMessage(label),
+    confirmLabel: l10n.agentActionsTriggerDeleteConfirm,
+    cancelLabel: l10n.agentActionsTriggerDeleteCancel,
   );
 
-  if (confirmed ?? false) {
+  if (confirmed) {
     await provider.deleteTrigger(trigger.id);
   }
 }
@@ -1764,35 +1677,15 @@ Future<void> _confirmDelete(
   AgentActionDefinition definition,
   AppLocalizations l10n,
 ) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await AppConfirmDialog.show(
     context: context,
-    builder: (context) {
-      return ContentDialog(
-        title: AppDialogTitleBar(
-          title: Text(l10n.agentActionsDeleteConfirmTitle),
-          closeTooltip: l10n.btnClose,
-          onClose: () => Navigator.pop(context, false),
-        ),
-        content: Text(l10n.agentActionsDeleteConfirmMessage(definition.name)),
-        actions: [
-          Button(
-            child: Text(l10n.agentActionsDeleteCancel),
-            onPressed: () {
-              Navigator.pop(context, false);
-            },
-          ),
-          FilledButton(
-            child: Text(l10n.agentActionsDeleteConfirm),
-            onPressed: () {
-              Navigator.pop(context, true);
-            },
-          ),
-        ],
-      );
-    },
+    title: l10n.agentActionsDeleteConfirmTitle,
+    message: l10n.agentActionsDeleteConfirmMessage(definition.name),
+    confirmLabel: l10n.agentActionsDeleteConfirm,
+    cancelLabel: l10n.agentActionsDeleteCancel,
   );
 
-  if (confirmed ?? false) {
+  if (confirmed) {
     await provider.deleteSelectedAction();
   }
 }
@@ -1884,10 +1777,12 @@ class _AgentActionsHistoryFilters extends StatefulWidget {
   const _AgentActionsHistoryFilters({
     required this.provider,
     required this.l10n,
+    required this.uiPreferences,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
+  final AgentActionsUiPreferences uiPreferences;
 
   @override
   State<_AgentActionsHistoryFilters> createState() => _AgentActionsHistoryFiltersState();
@@ -1944,7 +1839,7 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
             ],
             onChanged: (status) {
               provider.setHistoryStatusFilter(status);
-              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historyStatusFilter, status?.name));
+              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.historyStatusFilter, status?.name));
             },
           ),
         ),
@@ -1966,7 +1861,7 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
             ],
             onChanged: (source) {
               provider.setHistorySourceFilter(source);
-              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historySourceFilter, source?.name));
+              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.historySourceFilter, source?.name));
             },
           ),
         ),
@@ -1988,7 +1883,7 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
                 return;
               }
               provider.setHistoryPeriodFilter(period);
-              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historyPeriodFilter, period.name));
+              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.historyPeriodFilter, period.name));
             },
           ),
         ),
@@ -2010,7 +1905,7 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
             ],
             onChanged: (phase) {
               provider.setHistoryFailurePhaseFilter(phase);
-              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historyFailurePhaseFilter, phase));
+              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.historyFailurePhaseFilter, phase));
             },
           ),
         ),
@@ -2021,7 +1916,7 @@ class _AgentActionsHistoryFiltersState extends State<_AgentActionsHistoryFilters
             controller: _searchController,
             onChanged: (query) {
               provider.setHistorySearchQuery(query);
-              unawaited(_persistUiPreference(_AgentActionsUiPreferenceKeys.historySearch, query.trim()));
+              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.historySearch, query.trim()));
             },
             textInputAction: TextInputAction.search,
           ),

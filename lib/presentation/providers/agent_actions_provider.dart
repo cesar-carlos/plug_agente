@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
@@ -13,6 +12,8 @@ import 'package:plug_agente/application/actions/agent_action_secret_availability
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
+import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
+import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_secret.dart';
@@ -35,14 +36,16 @@ import 'package:plug_agente/application/use_cases/slice_agent_action_captured_ou
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
+import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
-import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -73,7 +76,10 @@ class AgentActionsProvider extends ChangeNotifier {
     this._exportBundle,
     this._importBundle,
     this._featureFlags,
-    this._uuid, {
+    this._uuid,
+    this._commandSafetyAssessor,
+    this._retentionSettings,
+    this._bundleFileGateway, {
     AgentActionRuntimeStateGuard? runtimeStateGuard,
     AgentActionSubsystemCoordinator? subsystemCoordinator,
     ActionExecutionQueue? executionQueue,
@@ -86,7 +92,6 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionTriggerScheduler? triggerScheduler,
     IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
     AgentActionDefinitionSnapshotter? definitionSnapshotter,
-    ActionCommandSafetyValidator? commandSafetyValidator,
     AgentActionPreflightSettings? preflightSettings,
     DateTime Function()? now,
   }) : _runtimeStateGuard = runtimeStateGuard,
@@ -101,7 +106,6 @@ class AgentActionsProvider extends ChangeNotifier {
        _triggerScheduler = triggerScheduler,
        _comObjectInvocationDiagnostics = comObjectInvocationDiagnostics,
        _definitionSnapshotter = definitionSnapshotter ?? const AgentActionDefinitionSnapshotter(),
-       _commandSafetyValidator = commandSafetyValidator ?? const ActionCommandSafetyValidator(),
        _preflightSettings = preflightSettings,
        _now = now ?? DateTime.now;
   static const AgentActionRemoteAuditSupportExport _remoteAuditExport = AgentActionRemoteAuditSupportExport();
@@ -125,6 +129,9 @@ class AgentActionsProvider extends ChangeNotifier {
   final ImportAgentActionsBundle _importBundle;
   final FeatureFlags _featureFlags;
   final Uuid _uuid;
+  final IActionCommandSafetyAssessor _commandSafetyAssessor;
+  final AgentActionRetentionSettings _retentionSettings;
+  final IAgentActionsBundleFileGateway _bundleFileGateway;
   final AgentActionRuntimeStateGuard? _runtimeStateGuard;
   final AgentActionSubsystemCoordinator? _subsystemCoordinator;
   final ActionExecutionQueue? _executionQueue;
@@ -137,7 +144,6 @@ class AgentActionsProvider extends ChangeNotifier {
   final AgentActionTriggerScheduler? _triggerScheduler;
   final IComObjectInvocationDiagnostics? _comObjectInvocationDiagnostics;
   final AgentActionDefinitionSnapshotter _definitionSnapshotter;
-  final ActionCommandSafetyValidator _commandSafetyValidator;
   final AgentActionPreflightSettings? _preflightSettings;
   final DateTime Function() _now;
 
@@ -450,7 +456,7 @@ class AgentActionsProvider extends ChangeNotifier {
       return const AgentActionDangerousCommandAssessment.allow();
     }
 
-    return _commandSafetyValidator.assessForLocalRun(
+    return _commandSafetyAssessor.assessForLocalRun(
       command: config.command,
       warnModeEnabled: isDangerousCommandWarnModeEnabled,
     );
@@ -458,6 +464,55 @@ class AgentActionsProvider extends ChangeNotifier {
 
   void reportDangerousCommandBlocked(String message) {
     _errorMessage = message;
+    notifyListeners();
+  }
+
+  int get preflightValidityDays =>
+      _preflightSettings?.validityDays ?? AgentActionPolicyDefaults.preflightValidityDuration.inDays;
+
+  bool get hasPreflightPersistedOverride => _preflightSettings?.hasPersistedOverride ?? false;
+
+  Future<void> savePreflightValidityDays(int days) async {
+    final settings = _preflightSettings;
+    if (settings == null) {
+      return;
+    }
+    await settings.save(validityDays: days);
+    notifyListeners();
+  }
+
+  Future<void> clearPreflightPersistedOverride() async {
+    final settings = _preflightSettings;
+    if (settings == null) {
+      return;
+    }
+    await settings.clearPersistedOverride();
+    notifyListeners();
+  }
+
+  int get executionRetentionDays => _retentionSettings.executionRetentionDays;
+
+  int get remoteAuditRetentionDays => _retentionSettings.remoteAuditRetentionDays;
+
+  int get capturedOutputRetentionHours => _retentionSettings.capturedOutputRetentionHours;
+
+  bool get hasRetentionPersistedOverrides => _retentionSettings.hasPersistedOverrides;
+
+  Future<void> saveRetentionSettings({
+    required int executionDays,
+    required int remoteAuditDays,
+    required int capturedOutputHours,
+  }) async {
+    await _retentionSettings.save(
+      executionDays: executionDays,
+      remoteAuditDays: remoteAuditDays,
+      capturedOutputHours: capturedOutputHours,
+    );
+    notifyListeners();
+  }
+
+  Future<void> clearRetentionPersistedOverrides() async {
+    await _retentionSettings.clearPersistedOverrides();
     notifyListeners();
   }
 
@@ -1689,11 +1744,10 @@ class AgentActionsProvider extends ChangeNotifier {
       return false;
     }
 
-    try {
-      await File(filePath).writeAsString(result.getOrThrow());
-    } on IOException {
+    final writeResult = await _bundleFileGateway.writeText(filePath, result.getOrThrow());
+    if (writeResult.isError()) {
       _isTransferringBundle = false;
-      _errorMessage = 'Nao foi possivel gravar o arquivo de exportacao. Verifique o caminho e as permissoes.';
+      _errorMessage = lookupAppLocalizations(PlatformDispatcher.instance.locale).agentActionsBundleExportWriteFailed;
       notifyListeners();
       return false;
     }
@@ -1712,15 +1766,15 @@ class AgentActionsProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    late final String payload;
-    try {
-      payload = await File(filePath).readAsString();
-    } on IOException {
+    final readResult = await _bundleFileGateway.readText(filePath);
+    if (readResult.isError()) {
       _isTransferringBundle = false;
-      _errorMessage = 'Nao foi possivel ler o arquivo de importacao. Verifique o caminho e as permissoes.';
+      _errorMessage = lookupAppLocalizations(PlatformDispatcher.instance.locale).agentActionsBundleImportReadFailed;
       notifyListeners();
       return null;
     }
+
+    final payload = readResult.getOrThrow();
 
     final result = await _importBundle(payload);
     if (result.isError()) {

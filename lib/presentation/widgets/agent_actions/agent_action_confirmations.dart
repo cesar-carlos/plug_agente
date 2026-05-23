@@ -1,6 +1,6 @@
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/widgets.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_confirm_dialog.dart';
 
 Future<bool> confirmReapproveRemoteAgentAction({
   required BuildContext context,
@@ -104,34 +104,12 @@ Future<bool> _confirm({
   required String message,
   required String confirmLabel,
   required String cancelLabel,
-}) async {
-  final confirmed = await showDialog<bool>(
+}) {
+  return AppConfirmDialog.show(
     context: context,
-    builder: (BuildContext dialogContext) {
-      return ContentDialog(
-        title: AppDialogTitleBar(
-          title: Text(title),
-          closeTooltip: AppLocalizations.of(dialogContext)!.btnClose,
-          onClose: () => Navigator.pop(dialogContext, false),
-        ),
-        content: Text(message),
-        actions: [
-          Button(
-            child: Text(cancelLabel),
-            onPressed: () {
-              Navigator.pop(dialogContext, false);
-            },
-          ),
-          FilledButton(
-            child: Text(confirmLabel),
-            onPressed: () {
-              Navigator.pop(dialogContext, true);
-            },
-          ),
-        ],
-      );
-    },
+    title: title,
+    message: message,
+    confirmLabel: confirmLabel,
+    cancelLabel: cancelLabel,
   );
-
-  return confirmed ?? false;
 }

@@ -151,7 +151,7 @@ class ConfigProvider extends ChangeNotifier {
     }
     return latestResult ??
         Failure(
-          domain_errors.ValidationFailure('Nenhuma configuraÃ§Ã£o para salvar'),
+          domain_errors.ValidationFailure('Nenhuma configuração para salvar'),
         );
   }
 

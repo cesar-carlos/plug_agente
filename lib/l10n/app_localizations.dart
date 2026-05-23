@@ -272,6 +272,24 @@ abstract class AppLocalizations {
   /// **'Could not open the file picker.'**
   String get agentActionsBundlePickerError;
 
+  /// No description provided for @agentActionsGridColumnRisksTriggers.
+  ///
+  /// In en, this message translates to:
+  /// **'Risks/Triggers'**
+  String get agentActionsGridColumnRisksTriggers;
+
+  /// No description provided for @agentActionsBundleExportWriteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not write the export file. Check the file path and permissions.'**
+  String get agentActionsBundleExportWriteFailed;
+
+  /// No description provided for @agentActionsBundleImportReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the import file. Check the file path and permissions.'**
+  String get agentActionsBundleImportReadFailed;
+
   /// No description provided for @agentActionsTestSuccessTitle.
   ///
   /// In en, this message translates to:

@@ -1,25 +1,25 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
 class AgentActionsRetentionCard extends StatefulWidget {
   const AgentActionsRetentionCard({
     required this.l10n,
+    required this.provider,
     super.key,
   });
 
   final AppLocalizations l10n;
+  final AgentActionsProvider provider;
 
   @override
   State<AgentActionsRetentionCard> createState() => _AgentActionsRetentionCardState();
 }
 
 class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
-  late final AgentActionRetentionSettings _settings;
   late final TextEditingController _executionDaysController;
   late final TextEditingController _auditDaysController;
   late final TextEditingController _capturedHoursController;
@@ -32,16 +32,9 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
   @override
   void initState() {
     super.initState();
-    _settings = getIt<AgentActionRetentionSettings>();
-    _executionDaysController = TextEditingController(
-      text: '${_settings.executionRetentionDays}',
-    );
-    _auditDaysController = TextEditingController(
-      text: '${_settings.remoteAuditRetentionDays}',
-    );
-    _capturedHoursController = TextEditingController(
-      text: '${_settings.capturedOutputRetentionHours}',
-    );
+    _executionDaysController = TextEditingController(text: '${widget.provider.executionRetentionDays}');
+    _auditDaysController = TextEditingController(text: '${widget.provider.remoteAuditRetentionDays}');
+    _capturedHoursController = TextEditingController(text: '${widget.provider.capturedOutputRetentionHours}');
   }
 
   @override
@@ -53,9 +46,9 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
   }
 
   void _reloadFromSettings() {
-    _executionDaysController.text = '${_settings.executionRetentionDays}';
-    _auditDaysController.text = '${_settings.remoteAuditRetentionDays}';
-    _capturedHoursController.text = '${_settings.capturedOutputRetentionHours}';
+    _executionDaysController.text = '${widget.provider.executionRetentionDays}';
+    _auditDaysController.text = '${widget.provider.remoteAuditRetentionDays}';
+    _capturedHoursController.text = '${widget.provider.capturedOutputRetentionHours}';
   }
 
   Future<void> _restoreEnvironmentDefaults() async {
@@ -64,7 +57,7 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
       _validationMessage = null;
     });
 
-    await _settings.clearPersistedOverrides();
+    await widget.provider.clearRetentionPersistedOverrides();
 
     if (!mounted) {
       return;
@@ -103,7 +96,7 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
       _validationMessage = null;
     });
 
-    await _settings.save(
+    await widget.provider.saveRetentionSettings(
       executionDays: executionDays,
       remoteAuditDays: auditDays,
       capturedOutputHours: capturedHours,
@@ -232,7 +225,7 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
                       },
                 child: Text(l10n.agentActionsRetentionReset),
               ),
-              if (_settings.hasPersistedOverrides)
+              if (widget.provider.hasRetentionPersistedOverrides)
                 Button(
                   onPressed: _isSaving ? null : _restoreEnvironmentDefaults,
                   child: Text(l10n.agentActionsRetentionUseEnvDefaults),
@@ -244,7 +237,7 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
             l10n.agentActionsRetentionEnvVariables,
             style: context.captionText,
           ),
-          if (_settings.hasPersistedOverrides) ...[
+          if (widget.provider.hasRetentionPersistedOverrides) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
               l10n.agentActionsRetentionPersistedHint,

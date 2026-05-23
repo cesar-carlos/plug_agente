@@ -22,7 +22,9 @@ import 'package:plug_agente/application/actions/elevated_action_execution_abort_
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/actions/elevated_action_status_file_syncer.dart';
 import 'package:plug_agente/application/actions/elevated_agent_action_execution_service.dart';
+import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
+import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/rpc/agent_action_remote_authorization_service.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
@@ -171,7 +173,9 @@ import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dar
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
 import 'package:plug_agente/infrastructure/actions/actions.dart';
+import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/infrastructure/backup/local_app_data_backup_service.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
@@ -369,8 +373,14 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IComObjectInvocationDiagnostics>(
       () => ComObjectInvocationDiagnostics(getIt<ComObjectInvocationRegistry>()),
     )
+    ..registerLazySingleton<ActionCommandSafetyValidator>(() => const ActionCommandSafetyValidator())
+    ..registerLazySingleton<IActionCommandSafetyAssessor>(() => getIt<ActionCommandSafetyValidator>())
+    ..registerLazySingleton<IAgentActionsBundleFileGateway>(() => const AgentActionsBundleFileGateway())
     ..registerLazySingleton<ActionCommandNormalizer>(
-      () => ActionCommandNormalizer(featureFlags: getIt<FeatureFlags>()),
+      () => ActionCommandNormalizer(
+        commandSafetyValidator: getIt<ActionCommandSafetyValidator>(),
+        featureFlags: getIt<FeatureFlags>(),
+      ),
     )
     ..registerLazySingleton<AgentActionAdapterRegistry>(
       () => AgentActionAdapterRegistry([

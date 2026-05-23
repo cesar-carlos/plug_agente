@@ -92,8 +92,8 @@ O ecossistema usa dois estilos de comunicacao complementares:
 
 - HTTP/REST para autenticacao, health checks e operacoes administrativas
 - Socket.IO com namespaces separados:
-  - `/agents` â€” agentes conectam aqui; ciclo de vida (register, heartbeat, rpc response/ack)
-  - `/consumers` â€” consumers conectam aqui; enviam `agents:command` e recebem `agents:command_response`
+  - `/agents` — agentes conectam aqui; ciclo de vida (register, heartbeat, rpc response/ack)
+  - `/consumers` — consumers conectam aqui; enviam `agents:command` e recebem `agents:command_response`
 
 No projeto atual, a base HTTP inclui:
 
@@ -115,8 +115,8 @@ No projeto atual, a base HTTP inclui:
 
 Canal Socket para consumers (namespace `/consumers`):
 
-- `agents:command` â€” envia comando ao agente (payload equivalente ao body da REST)
-- `agents:command_response` â€” resposta normalizada ou erro
+- `agents:command` — envia comando ao agente (payload equivalente ao body da REST)
+- `agents:command_response` — resposta normalizada ou erro
 
 ## Fluxo macro do sistema
 

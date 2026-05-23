@@ -20,3 +20,4 @@ export 'elevated_action_runner_readiness_service.dart';
 export 'elevated_action_status_file.dart';
 export 'elevated_action_status_file_syncer.dart';
 export 'elevated_agent_action_execution_service.dart';
+export 'i_action_command_safety_assessor.dart';

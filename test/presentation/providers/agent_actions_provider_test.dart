@@ -32,6 +32,7 @@ import 'package:plug_agente/core/constants/agent_action_command_safety_constants
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
+import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
@@ -40,6 +41,8 @@ import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_developer_data7_connection_gateway.dart';
+import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
+import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_portable_codec.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
@@ -55,10 +58,13 @@ void main() {
   late AgentActionsProvider provider;
   late _FakeDeveloperData7ConnectionGateway developerData7ConnectionGateway;
 
+  late AgentActionRetentionSettings retentionSettings;
+
   setUp(() {
     repository = _FakeAgentActionRepository();
     appSettingsStore = InMemoryAppSettingsStore();
     preflightSettings = AgentActionPreflightSettings(appSettingsStore);
+    retentionSettings = AgentActionRetentionSettings(appSettingsStore);
     featureFlags = FeatureFlags(appSettingsStore);
     executionQueue = ActionExecutionQueue();
     developerData7ConnectionGateway = _FakeDeveloperData7ConnectionGateway();
@@ -136,6 +142,9 @@ void main() {
       ),
       featureFlags,
       const Uuid(),
+      const ActionCommandSafetyValidator(),
+      retentionSettings,
+      const AgentActionsBundleFileGateway(),
       now: () => DateTime(2026, 5, 15, 12),
       preflightSettings: preflightSettings,
     );
@@ -552,6 +561,9 @@ void main() {
       ),
       featureFlags,
       const Uuid(),
+      const ActionCommandSafetyValidator(),
+      retentionSettings,
+      const AgentActionsBundleFileGateway(),
       triggerScheduler: scheduler,
       preflightSettings: preflightSettings,
     );
@@ -580,6 +592,7 @@ void main() {
       repository: repository,
       featureFlags: featureFlags,
       preflightSettings: preflightSettings,
+      retentionSettings: retentionSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
       runnerRegistry: runnerRegistry,
@@ -600,6 +613,7 @@ void main() {
       repository: repository,
       featureFlags: featureFlags,
       preflightSettings: preflightSettings,
+      retentionSettings: retentionSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
       runnerRegistry: runnerRegistry,
@@ -618,6 +632,7 @@ void main() {
       repository: repository,
       featureFlags: featureFlags,
       preflightSettings: preflightSettings,
+      retentionSettings: retentionSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
       runnerRegistry: runnerRegistry,
@@ -638,6 +653,7 @@ void main() {
       repository: repository,
       featureFlags: featureFlags,
       preflightSettings: preflightSettings,
+      retentionSettings: retentionSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
       runnerRegistry: runnerRegistry,
@@ -654,6 +670,7 @@ void main() {
       repository: repository,
       featureFlags: featureFlags,
       preflightSettings: preflightSettings,
+      retentionSettings: retentionSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
     );
@@ -1293,6 +1310,7 @@ AgentActionsProvider _buildProvider({
   required _FakeAgentActionRepository repository,
   required FeatureFlags featureFlags,
   required AgentActionPreflightSettings preflightSettings,
+  required AgentActionRetentionSettings retentionSettings,
   required ActionExecutionQueue executionQueue,
   required _FakeDeveloperData7ConnectionGateway developerData7ConnectionGateway,
   AgentActionLocalRunnerRegistry? runnerRegistry,
@@ -1374,6 +1392,9 @@ AgentActionsProvider _buildProvider({
     ),
     featureFlags,
     const Uuid(),
+    const ActionCommandSafetyValidator(),
+    retentionSettings,
+    const AgentActionsBundleFileGateway(),
     triggerScheduler: triggerScheduler,
     comObjectInvocationDiagnostics: comObjectInvocationDiagnostics,
     now: () => DateTime(2026, 5, 15, 12),

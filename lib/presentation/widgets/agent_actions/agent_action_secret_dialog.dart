@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_confirm_dialog.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
 import 'package:plug_agente/shared/widgets/common/form/password_field.dart';
 import 'package:result_dart/result_dart.dart';
@@ -116,32 +117,12 @@ Future<bool> confirmDeleteAgentActionSecret({
   required BuildContext context,
   required AppLocalizations l10n,
   required String secretName,
-}) async {
-  final confirmed = await showDialog<bool>(
+}) {
+  return AppConfirmDialog.show(
     context: context,
-    builder: (BuildContext dialogContext) {
-      return ContentDialog(
-        title: AppDialogTitleBar(
-          title: Text(l10n.agentActionsSecretDeleteTitle),
-          closeTooltip: l10n.btnClose,
-          onClose: () => Navigator.pop(dialogContext, false),
-        ),
-        content: Text(l10n.agentActionsSecretDeleteMessage(secretName)),
-        actions: [
-          Button(
-            key: const ValueKey<String>('agent_action_secret_delete_cancel_button'),
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(l10n.agentActionsSecretDeleteCancel),
-          ),
-          FilledButton(
-            key: const ValueKey<String>('agent_action_secret_delete_confirm_button'),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(l10n.agentActionsSecretDeleteConfirm),
-          ),
-        ],
-      );
-    },
+    title: l10n.agentActionsSecretDeleteTitle,
+    message: l10n.agentActionsSecretDeleteMessage(secretName),
+    confirmLabel: l10n.agentActionsSecretDeleteConfirm,
+    cancelLabel: l10n.agentActionsSecretDeleteCancel,
   );
-
-  return confirmed ?? false;
 }

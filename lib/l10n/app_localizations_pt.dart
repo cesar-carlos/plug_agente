@@ -119,6 +119,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsBundlePickerError => 'Nao foi possivel abrir o seletor de arquivos.';
 
   @override
+  String get agentActionsGridColumnRisksTriggers => 'Riscos/Gatilhos';
+
+  @override
+  String get agentActionsBundleExportWriteFailed =>
+      'Nao foi possivel gravar o arquivo de exportacao. Verifique o caminho e as permissoes.';
+
+  @override
+  String get agentActionsBundleImportReadFailed =>
+      'Nao foi possivel ler o arquivo de importacao. Verifique o caminho e as permissoes.';
+
+  @override
   String get agentActionsTestSuccessTitle => 'Teste da acao concluido';
 
   @override

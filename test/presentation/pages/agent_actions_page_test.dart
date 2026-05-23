@@ -54,6 +54,8 @@ import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instanc
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_developer_data7_connection_gateway.dart';
+import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
+import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_portable_codec.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions_page.dart';
@@ -2883,6 +2885,9 @@ class _AgentActionsPageHarness {
       ),
       featureFlags,
       const Uuid(),
+      const ActionCommandSafetyValidator(),
+      retentionSettings,
+      const AgentActionsBundleFileGateway(),
       triggerScheduler: triggerScheduler,
       comObjectInvocationDiagnostics: comObjectInvocationDiagnostics,
       runtimeStateGuard: _runtimeStateGuard,

@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
 import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 
@@ -11,7 +12,7 @@ class ActionCommandSafetyMatch {
   final String description;
 }
 
-class ActionCommandSafetyValidator {
+class ActionCommandSafetyValidator implements IActionCommandSafetyAssessor {
   const ActionCommandSafetyValidator({
     List<AgentActionDangerousCommandPattern>? patterns,
     AgentActionCommandSafetyMode mode = AgentActionCommandSafetyConstants.defaultMode,
@@ -69,6 +70,7 @@ class ActionCommandSafetyValidator {
     );
   }
 
+  @override
   AgentActionDangerousCommandAssessment assessForLocalRun({
     required String command,
     required bool warnModeEnabled,

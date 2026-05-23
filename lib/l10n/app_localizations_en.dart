@@ -119,6 +119,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsBundlePickerError => 'Could not open the file picker.';
 
   @override
+  String get agentActionsGridColumnRisksTriggers => 'Risks/Triggers';
+
+  @override
+  String get agentActionsBundleExportWriteFailed =>
+      'Could not write the export file. Check the file path and permissions.';
+
+  @override
+  String get agentActionsBundleImportReadFailed =>
+      'Could not read the import file. Check the file path and permissions.';
+
+  @override
   String get agentActionsTestSuccessTitle => 'Action test completed';
 
   @override

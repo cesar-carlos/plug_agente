@@ -5,6 +5,8 @@ import 'package:plug_agente/application/actions/agent_action_secret_availability
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
+import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
+import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
@@ -54,6 +56,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
+import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
@@ -196,6 +199,9 @@ class AppRoot extends StatelessWidget {
             getIt<ImportAgentActionsBundle>(),
             getIt<FeatureFlags>(),
             getIt<Uuid>(),
+            getIt<IActionCommandSafetyAssessor>(),
+            getIt<AgentActionRetentionSettings>(),
+            getIt<IAgentActionsBundleFileGateway>(),
             runtimeStateGuard: getIt.isRegistered<AgentActionRuntimeStateGuard>()
                 ? getIt<AgentActionRuntimeStateGuard>()
                 : null,

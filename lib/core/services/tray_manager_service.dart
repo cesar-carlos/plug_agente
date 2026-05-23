@@ -92,7 +92,7 @@ class TrayManagerService with TrayListener implements ITrayService {
       await trayManager.destroy();
     } on Object catch (error, stackTrace) {
       _logger.w(
-        'Falha ao desmontar TrayManager apÃ³s erro de inicializaÃ§Ã£o',
+        'Falha ao desmontar TrayManager após erro de inicialização',
         error: error,
         stackTrace: stackTrace,
       );
