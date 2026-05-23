@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.6.9+1</title>
+   <pubDate>Sat, 23 May 2026 18:44:30 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.8...v1.6.9</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.9/PlugAgente-Setup-1.6.9.exe" sparkle:version="1.6.9+1" sparkle:os="windows" plug:sha256="9e0e536071e5240e2a4d81c2dc8065b335a0e53698b99fa5875f84c016749eee" plug:channel="stable" plug:rolloutPercentage="100" length="21173534" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.6.8+1</title>
    <pubDate>Sat, 23 May 2026 14:24:04 +0000</pubDate>
    <description>Release includes the Windows installer asset PlugAgente-Setup-1.6.8.exe.
@@ -62,17 +68,6 @@ Highlights:
    <pubDate>Thu, 07 May 2026 20:48:17 +0000</pubDate>
    <description>See appcast.xml and merged PR #1. Windows installer: PlugAgente-Setup-1.6.0.exe (sparkle:version 1.6.0+1).</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.0/PlugAgente-Setup-1.6.0.exe" sparkle:version="1.6.0+1" sparkle:os="windows" length="36766313" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.5.3+1</title>
-   <pubDate>Mon, 04 May 2026 18:03:27 +0000</pubDate>
-   <description>Version 1.5.3
-
-- Harden the Windows auto-update flow by keeping the updater feed fixed per session and adding explicit trigger/completion timeout handling.
-- Persist manual update diagnostics, add dedicated auto-update metrics, and improve the Settings UI technical details for support scenarios.
-- Add DSA-signing support to the installer/release pipeline and embed the WinSparkle public key resource for future signed appcast publishing.
-- Release includes the Windows installer asset PlugAgente-Setup-1.5.3.exe.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.3/PlugAgente-Setup-1.5.3.exe" sparkle:version="1.5.3+1" sparkle:os="windows" length="36874668" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
