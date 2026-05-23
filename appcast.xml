@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:plug="https://plug.se7esistemas.com/appcast" version="2.0">
+<rss xmlns:plug="https://plug.se7esistemas.com/appcast" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
  <channel>
   <title>Plug Agente Updates</title>
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
+  <item>
+   <title>Version 1.6.8+1</title>
+   <pubDate>Sat, 23 May 2026 14:19:01 +0000</pubDate>
+   <description>Release includes the Windows installer asset PlugAgente-Setup-1.6.8.exe.
+
+Highlights:
+- Resilience phases 1-3, batch RPC phase 3, and async benchmark.
+- JSON-RPC batch parallel transport improvements.
+- Transport hardening, silent update diagnostics, startup/socket resilience, and agent actions improvements.</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.8/PlugAgente-Setup-1.6.8.exe" sparkle:version="1.6.8+1" sparkle:os="windows" plug:sha256="c48c70b73b9e87b1b78d352644187e600d76179c3886b79cf8310fa9660a06cb" plug:channel="stable" plug:rolloutPercentage="100" length="41300361" type="application/octet-stream" />
+  </item>
   <item>
    <title>Version 1.6.7+1</title>
    <pubDate>Thu, 14 May 2026 20:58:16 +0000</pubDate>
@@ -62,16 +73,6 @@
 - Add DSA-signing support to the installer/release pipeline and embed the WinSparkle public key resource for future signed appcast publishing.
 - Release includes the Windows installer asset PlugAgente-Setup-1.5.3.exe.</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.3/PlugAgente-Setup-1.5.3.exe" sparkle:version="1.5.3+1" sparkle:os="windows" length="36874668" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.5.2+1</title>
-   <pubDate>Mon, 04 May 2026 15:18:16 +0000</pubDate>
-   <description>Version 1.5.2
-
-- ODBC reliability improvements for timeout, cancelation, pooling, and invalid-connection recovery.
-- Added regression coverage for provider recovery behavior and live bulk DML execution.
-- Release includes Windows installer asset PlugAgente-Setup-1.5.2.exe.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.5.2/PlugAgente-Setup-1.5.2.exe" sparkle:version="1.5.2+1" sparkle:os="windows" length="36873558" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
