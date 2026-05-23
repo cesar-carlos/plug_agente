@@ -77,6 +77,7 @@ void main() {
       expect(flags.enableElevatedAgentActions, isFalse);
       expect(flags.enableAgentActionRemoteAudit, isTrue);
       expect(flags.enableAgentActionsMaintenanceMode, isFalse);
+      expect(flags.enableAgentActionDangerousCommandWarnMode, isFalse);
 
       await flags.setEnableAgentActions(false);
       await flags.setEnableRemoteAgentActions(true);
@@ -98,6 +99,7 @@ void main() {
       expect(flags.enableElevatedAgentActions, isFalse);
       expect(flags.enableAgentActionRemoteAudit, isTrue);
       expect(flags.enableAgentActionsMaintenanceMode, isFalse);
+      expect(flags.enableAgentActionDangerousCommandWarnMode, isFalse);
     });
 
     test('disableAgentActionsRemoteRollout should turn off remote ad-hoc and elevated only', () async {

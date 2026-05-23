@@ -58,7 +58,36 @@ void main() {
       expect(failure, isNull);
       expect(
         warnValidator.warningMessageFor('format C: /Y'),
-        isNotNull,
+        AgentActionCommandSafetyConstants.userMessageWarnPattern(
+          patternId: 'format',
+          patternDescription: 'disk format',
+        ),
+      );
+    });
+
+    test('should assess local run policy from warn mode flag', () {
+      const validator = ActionCommandSafetyValidator();
+
+      expect(
+        validator.assessForLocalRun(
+          command: 'format C: /Y',
+          warnModeEnabled: false,
+        ).isBlocked,
+        isTrue,
+      );
+      expect(
+        validator.assessForLocalRun(
+          command: 'format C: /Y',
+          warnModeEnabled: true,
+        ).requiresConfirmation,
+        isTrue,
+      );
+      expect(
+        validator.assessForLocalRun(
+          command: 'echo ok',
+          warnModeEnabled: true,
+        ).policy,
+        AgentActionDangerousCommandRunPolicy.allow,
       );
     });
   });

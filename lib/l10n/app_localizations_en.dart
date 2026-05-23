@@ -693,7 +693,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsHelpPathAllowlistMessage =>
-      'Restricts allowed working directories and context files. Use absolute paths, one per line; empty adds no extra local allowlist.';
+      'Restricts allowed working directories and context files. Use absolute paths, one per line; empty adds no extra local allowlist. In production profile, command-line, executable, and script actions require working-directory allowlists (failure reason: production_path_allowlist_required).';
 
   @override
   String get agentActionsHelpProcessWindowTitle => 'Process window';
@@ -1071,8 +1071,83 @@ class AppLocalizationsEn extends AppLocalizations {
       'Run \"Test action\" successfully before setting this action to Active.';
 
   @override
+  String get agentActionsPreflightExpiredTitle => 'Preflight re-test required';
+
+  @override
+  String get agentActionsPreflightExpiredForActive =>
+      'The last successful preflight has expired. Run \"Test action\" again before setting this action to Active.';
+
+  @override
+  String get agentActionsPreflightValidTitle => 'Preflight valid';
+
+  @override
+  String agentActionsPreflightExpiresAt(String expiresAt) {
+    return 'Preflight remains valid until $expiresAt. Run \"Test action\" again before this time to keep activation enabled.';
+  }
+
+  @override
   String get agentActionsPreflightReadyForActivation =>
       'Preflight passed. Set the state to Active and save to enable execution.';
+
+  @override
+  String get agentActionsPreflightSettingsTitle => 'Preflight validity';
+
+  @override
+  String get agentActionsPreflightSettingsDescription =>
+      'How long a successful \"Test action\" remains valid for activating an action. Saved values override the AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS environment variable for this installation.';
+
+  @override
+  String get agentActionsPreflightSettingsValidityDays => 'Validity window (days)';
+
+  @override
+  String get agentActionsPreflightSettingsEnvHint =>
+      'Allowed range: 1–365 days. After changing this value, existing preflight timestamps are still evaluated against the new window on the next save or UI refresh.';
+
+  @override
+  String get agentActionsPreflightSettingsSave => 'Save preflight window';
+
+  @override
+  String get agentActionsPreflightSettingsDiscard => 'Discard changes';
+
+  @override
+  String get agentActionsPreflightSettingsUseEnvDefaults => 'Use environment defaults';
+
+  @override
+  String get agentActionsPreflightSettingsInvalidTitle => 'Invalid value';
+
+  @override
+  String get agentActionsPreflightSettingsInvalidValue => 'Enter a valid whole number of days (1–365).';
+
+  @override
+  String get agentActionsPreflightSettingsSavedTitle => 'Preflight window saved';
+
+  @override
+  String get agentActionsPreflightSettingsSavedMessage => 'The validity window was updated for this installation.';
+
+  @override
+  String get agentActionsPreflightSettingsClearedTitle => 'Preflight window restored';
+
+  @override
+  String get agentActionsPreflightSettingsClearedMessage =>
+      'The custom window was removed. The agent now follows AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS or the default.';
+
+  @override
+  String get agentActionsDangerousCommandWarnModeTitle => 'Dangerous command warn mode (homologation)';
+
+  @override
+  String get agentActionsDangerousCommandWarnModeEnabled =>
+      'Warn mode is ON: risky command-line patterns show a confirmation dialog instead of blocking at validation. Do not use in production.';
+
+  @override
+  String get agentActionsDangerousCommandWarnModeDisabled =>
+      'Warn mode is OFF: risky command-line patterns are blocked unless the command is changed. Enable only in homologation via feature flag or environment.';
+
+  @override
+  String get agentActionsProductionPathAllowlistRequiredTitle => 'Production path allowlist required';
+
+  @override
+  String get agentActionsProductionPathAllowlistRequiredMessage =>
+      'The operational profile is production. Command-line, executable, and script actions must define allowed working directories before save or run (production_path_allowlist_required).';
 
   @override
   String get agentActionsSecretPlaceholdersTitle => 'Secret placeholders referenced';
@@ -1226,6 +1301,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsConfirmElevatedCancel => 'Cancel';
+
+  @override
+  String get agentActionsConfirmDangerousCommandTitle => 'Run high-risk command?';
+
+  @override
+  String agentActionsConfirmDangerousCommandMessage(String patternId, String patternDescription) {
+    return 'The command matches pattern \"$patternId\" ($patternDescription). Review carefully before running in production.';
+  }
+
+  @override
+  String get agentActionsConfirmDangerousCommandConfirm => 'Run anyway';
+
+  @override
+  String get agentActionsConfirmDangerousCommandCancel => 'Cancel';
+
+  @override
+  String get agentActionsDangerousCommandBlockedTitle => 'Command blocked';
+
+  @override
+  String get agentActionsDangerousCommandBlockedMessage =>
+      'The command matches a high-risk pattern and was blocked for safety. Review the command or request operational approval.';
+
+  @override
+  String get agentActionsDangerousCommandWarnTitle => 'High-risk command detected';
+
+  @override
+  String agentActionsDangerousCommandWarnMessage(String patternId, String patternDescription) {
+    return 'The command matches pattern \"$patternId\" ($patternDescription). Manual run requires confirmation.';
+  }
 
   @override
   String get agentActionsValidationTitle => 'Check the action fields';

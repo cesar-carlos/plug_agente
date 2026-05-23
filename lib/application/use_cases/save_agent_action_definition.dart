@@ -5,6 +5,7 @@ import 'package:plug_agente/application/actions/agent_action_secret_reference_fi
 import 'package:plug_agente/application/use_cases/validate_agent_action_definition.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
+import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:result_dart/result_dart.dart';
@@ -16,8 +17,10 @@ class SaveAgentActionDefinition {
     this._snapshotter,
     this._featureFlags, {
     AgentActionSecretReferenceFingerprinter? secretReferenceFingerprinter,
+    AgentActionPreflightSettings? preflightSettings,
     DateTime Function()? now,
   }) : _secretReferenceFingerprinter = secretReferenceFingerprinter,
+       _preflightSettings = preflightSettings,
        _now = now ?? DateTime.now;
 
   final IAgentActionRepository _repository;
@@ -25,6 +28,7 @@ class SaveAgentActionDefinition {
   final AgentActionDefinitionSnapshotter _snapshotter;
   final FeatureFlags _featureFlags;
   final AgentActionSecretReferenceFingerprinter? _secretReferenceFingerprinter;
+  final AgentActionPreflightSettings? _preflightSettings;
   final DateTime Function() _now;
   late final AgentActionRemoteApprovalReconciler _remoteApprovalReconciler = AgentActionRemoteApprovalReconciler(
     _snapshotter,
@@ -108,12 +112,14 @@ class SaveAgentActionDefinition {
         expectedHash: preflightSnapshotHash,
         lastValidatedAt: recordedPreflightValidatedAt,
         now: _now(),
+        settings: _preflightSettings,
       )) {
         final isExpired = recordedPreflightHash != null &&
             recordedPreflightHash == preflightSnapshotHash &&
             !AgentActionPreflightValidity.isTimestampValid(
               recordedPreflightValidatedAt,
               now: _now(),
+              settings: _preflightSettings,
             );
         return Failure(
           ActionValidationFailure.withContext(
@@ -128,7 +134,11 @@ class SaveAgentActionDefinition {
               'reason': isExpired ? 'preflight_expired_for_active' : 'preflight_required_for_active',
               if (recordedPreflightValidatedAt != null)
                 'last_preflight_validated_at': recordedPreflightValidatedAt.toUtc().toIso8601String(),
-              if (AgentActionPreflightValidity.expiresAt(recordedPreflightValidatedAt) case final DateTime expiry)
+              if (AgentActionPreflightValidity.expiresAt(
+                    recordedPreflightValidatedAt,
+                    settings: _preflightSettings,
+                  )
+                  case final DateTime expiry)
                 'preflight_expires_at': expiry.toIso8601String(),
               'user_message': isExpired
                   ? 'O preflight desta acao expirou. Execute "Testar acao" novamente antes de salvar como Ativa.'

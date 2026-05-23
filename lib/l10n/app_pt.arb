@@ -232,7 +232,7 @@
   "agentActionsHelpQueueTitle": "Concorrencia e fila",
   "agentActionsHelpQueueMessage": "Define quantas execucoes desta acao podem rodar ao mesmo tempo, quantas aguardam fila e se novas solicitacoes devem falhar, esperar ou substituir fila cheia.",
   "agentActionsHelpPathAllowlistTitle": "Allowlist de diretorios",
-  "agentActionsHelpPathAllowlistMessage": "Restringe diretorios de trabalho e arquivos de contexto permitidos. Use caminhos absolutos, um por linha; campo vazio nao adiciona allowlist local extra.",
+  "agentActionsHelpPathAllowlistMessage": "Restringe diretorios de trabalho e arquivos de contexto permitidos. Use caminhos absolutos, um por linha; campo vazio nao adiciona allowlist local extra. No perfil de producao, acoes de linha de comando, executavel e script exigem allowlist de diretorio de trabalho (motivo de falha: production_path_allowlist_required).",
   "agentActionsHelpProcessWindowTitle": "Janela do processo",
   "agentActionsHelpProcessWindowMessage": "Controla a janela do processo iniciado localmente: normal, oculta ou minimizada, conforme suporte do Windows.",
   "agentActionsHelpCaptureTitle": "Captura de saida",
@@ -355,7 +355,36 @@
   "agentActionsNeedsValidationMessage": "Teste esta acao localmente antes de executar ou habilitar execucao remota.",
   "agentActionsPreflightRequiredTitle": "Validacao obrigatoria para ativar",
   "agentActionsPreflightRequiredForActive": "Execute \"Testar acao\" com sucesso antes de definir esta acao como Ativa.",
+  "agentActionsPreflightExpiredTitle": "Re-teste de preflight necessario",
+  "agentActionsPreflightExpiredForActive": "O ultimo preflight bem-sucedido expirou. Execute \"Testar acao\" novamente antes de definir esta acao como Ativa.",
+  "agentActionsPreflightValidTitle": "Preflight valido",
+  "agentActionsPreflightExpiresAt": "O preflight permanece valido ate {expiresAt}. Execute \"Testar acao\" novamente antes desse horario para manter a ativacao habilitada.",
+  "@agentActionsPreflightExpiresAt": {
+    "placeholders": {
+      "expiresAt": {
+        "type": "String"
+      }
+    }
+  },
   "agentActionsPreflightReadyForActivation": "Preflight concluido. Defina o estado como Ativa e salve para habilitar a execucao.",
+  "agentActionsPreflightSettingsTitle": "Validade do preflight",
+  "agentActionsPreflightSettingsDescription": "Por quanto tempo um \"Testar acao\" bem-sucedido permanece valido para ativar uma acao. Valores salvos substituem a variavel de ambiente AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS nesta instalacao.",
+  "agentActionsPreflightSettingsValidityDays": "Janela de validade (dias)",
+  "agentActionsPreflightSettingsEnvHint": "Intervalo permitido: 1 a 365 dias. Apos alterar, os timestamps de preflight existentes passam a ser avaliados com a nova janela no proximo salvamento ou atualizacao da UI.",
+  "agentActionsPreflightSettingsSave": "Salvar janela de preflight",
+  "agentActionsPreflightSettingsDiscard": "Descartar alteracoes",
+  "agentActionsPreflightSettingsUseEnvDefaults": "Usar padrao do ambiente",
+  "agentActionsPreflightSettingsInvalidTitle": "Valor invalido",
+  "agentActionsPreflightSettingsInvalidValue": "Informe um numero inteiro de dias valido (1 a 365).",
+  "agentActionsPreflightSettingsSavedTitle": "Janela de preflight salva",
+  "agentActionsPreflightSettingsSavedMessage": "A janela de validade foi atualizada para esta instalacao.",
+  "agentActionsPreflightSettingsClearedTitle": "Janela de preflight restaurada",
+  "agentActionsPreflightSettingsClearedMessage": "O valor customizado foi removido. O agente segue AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS ou o padrao.",
+  "agentActionsDangerousCommandWarnModeTitle": "Modo aviso para comandos perigosos (homologacao)",
+  "agentActionsDangerousCommandWarnModeEnabled": "Modo aviso LIGADO: padroes de risco na linha de comando exibem confirmacao em vez de bloquear na validacao. Nao use em producao.",
+  "agentActionsDangerousCommandWarnModeDisabled": "Modo aviso DESLIGADO: padroes de risco sao bloqueados ate o comando ser alterado. Ative apenas em homologacao via feature flag ou ambiente.",
+  "agentActionsProductionPathAllowlistRequiredTitle": "Allowlist de caminhos obrigatoria em producao",
+  "agentActionsProductionPathAllowlistRequiredMessage": "O perfil operacional e producao. Acoes de linha de comando, executavel e script devem definir diretorios de trabalho permitidos antes de salvar ou executar (production_path_allowlist_required).",
   "agentActionsSecretPlaceholdersTitle": "Placeholders de segredo referenciados",
   "agentActionsSecretPlaceholdersMessage": "Esta acao referencia segredos: {secretNames}. Configure-os no armazenamento seguro antes de executar.",
   "@agentActionsSecretPlaceholdersMessage": {
@@ -446,6 +475,34 @@
   "agentActionsConfirmElevatedMessage": "As execucoes usam o helper elevado e privilegios de administrador nesta maquina. Instale e prepare o helper antes de habilitar.",
   "agentActionsConfirmElevatedConfirm": "Habilitar elevada",
   "agentActionsConfirmElevatedCancel": "Cancelar",
+  "agentActionsConfirmDangerousCommandTitle": "Executar comando de alto risco?",
+  "agentActionsConfirmDangerousCommandMessage": "O comando corresponde ao padrao \"{patternId}\" ({patternDescription}). Revise com cuidado antes de executar em producao.",
+  "@agentActionsConfirmDangerousCommandMessage": {
+    "placeholders": {
+      "patternId": {
+        "type": "String"
+      },
+      "patternDescription": {
+        "type": "String"
+      }
+    }
+  },
+  "agentActionsConfirmDangerousCommandConfirm": "Executar mesmo assim",
+  "agentActionsConfirmDangerousCommandCancel": "Cancelar",
+  "agentActionsDangerousCommandBlockedTitle": "Comando bloqueado",
+  "agentActionsDangerousCommandBlockedMessage": "O comando contem um padrao de alto risco e foi bloqueado por seguranca. Revise o comando ou solicite aprovacao operacional.",
+  "agentActionsDangerousCommandWarnTitle": "Comando de alto risco detectado",
+  "agentActionsDangerousCommandWarnMessage": "O comando corresponde ao padrao \"{patternId}\" ({patternDescription}). A execucao manual exige confirmacao.",
+  "@agentActionsDangerousCommandWarnMessage": {
+    "placeholders": {
+      "patternId": {
+        "type": "String"
+      },
+      "patternDescription": {
+        "type": "String"
+      }
+    }
+  },
   "agentActionsValidationTitle": "Confira os campos da acao",
   "agentActionsMaintenanceMode": "Modo de manutencao",
   "agentActionsMaintenanceModeInfoTitle": "Modo de manutencao ativo",

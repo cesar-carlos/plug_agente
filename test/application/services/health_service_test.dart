@@ -81,6 +81,7 @@ void main() {
       final status = service.getHealthStatus();
       final agentActions = status['agent_actions']! as Map<String, Object?>;
       expect(agentActions['enabled'], isTrue);
+      expect(agentActions['maintenance_strict_mode'], isFalse);
       expect(agentActions['status'], 'degraded');
       expect(agentActions['unavailable_types'], ['developer']);
       final queueCounters = agentActions['queue_counters']! as Map<String, Object?>;
@@ -100,6 +101,23 @@ void main() {
       final executionDuration = agentActions['execution_duration_ms']! as Map<String, Object?>;
       expect(executionDuration['sample_count'], 1);
       expect(executionDuration['avg_time_ms'], 250.0);
+    });
+
+    test('should expose maintenance_strict_mode when strict maintenance is enabled', () async {
+      final store = InMemoryAppSettingsStore();
+      final flags = FeatureFlags(store);
+      await flags.setEnableAgentActionsMaintenanceMode(true);
+      await flags.setEnableAgentActionsMaintenanceStrictMode(true);
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+      );
+
+      final status = service.getHealthStatus();
+      final agentActions = status['agent_actions']! as Map<String, Object?>;
+      expect(agentActions['maintenance_mode'], isTrue);
+      expect(agentActions['maintenance_strict_mode'], isTrue);
     });
 
     test('should expose scheduler diagnostics in agent_actions when scheduler is wired', () {

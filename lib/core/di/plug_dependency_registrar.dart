@@ -122,6 +122,7 @@ import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
@@ -368,9 +369,13 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IComObjectInvocationDiagnostics>(
       () => ComObjectInvocationDiagnostics(getIt<ComObjectInvocationRegistry>()),
     )
+    ..registerLazySingleton<ActionCommandNormalizer>(
+      () => ActionCommandNormalizer(featureFlags: getIt<FeatureFlags>()),
+    )
     ..registerLazySingleton<AgentActionAdapterRegistry>(
       () => AgentActionAdapterRegistry([
         CommandLineActionAdapter(
+          commandNormalizer: getIt<ActionCommandNormalizer>(),
           pathValidator: getIt<ActionPathValidator>(),
         ),
         ExecutableActionAdapter(
@@ -397,6 +402,7 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton<CommandLineActionProcessRunner>(
       () => CommandLineActionProcessRunner(
+        commandNormalizer: getIt<ActionCommandNormalizer>(),
         pathValidator: getIt<ActionPathValidator>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
@@ -579,6 +585,9 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton(MetricsCollector.new)
     ..registerLazySingleton<AgentActionRetentionSettings>(
       () => AgentActionRetentionSettings(getIt<IAppSettingsStore>()),
+    )
+    ..registerLazySingleton<AgentActionPreflightSettings>(
+      () => AgentActionPreflightSettings(getIt<IAppSettingsStore>()),
     )
     ..registerLazySingleton(
       () => HealthService(
@@ -1032,6 +1041,7 @@ void registerPlugDependencyGraph(
         getIt<AgentActionDefinitionSnapshotter>(),
         getIt<FeatureFlags>(),
         secretReferenceFingerprinter: getIt<AgentActionSecretReferenceFingerprinter>(),
+        preflightSettings: getIt<AgentActionPreflightSettings>(),
       ),
     )
     ..registerLazySingleton(

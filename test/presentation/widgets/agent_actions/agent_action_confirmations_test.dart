@@ -77,4 +77,82 @@ void main() {
 
     expect(confirmed, isTrue);
   });
+
+  testWidgets('confirmDangerousCommandRun returns false when cancelled', (tester) async {
+    bool? confirmed;
+
+    await tester.pumpWidget(
+      FluentApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ScaffoldPage(
+          content: Builder(
+            builder: (BuildContext context) {
+              return FilledButton(
+                onPressed: () async {
+                  confirmed = await confirmDangerousCommandRun(
+                    context: context,
+                    l10n: AppLocalizations.of(context)!,
+                    patternId: 'rm_rf',
+                    patternDescription: 'Recursive delete',
+                  );
+                },
+                child: const Text('Open dangerous command confirm'),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open dangerous command confirm'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Run high-risk command?'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(confirmed, isFalse);
+  });
+
+  testWidgets('confirmDangerousCommandRun returns true when confirmed', (tester) async {
+    bool? confirmed;
+
+    await tester.pumpWidget(
+      FluentApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ScaffoldPage(
+          content: Builder(
+            builder: (BuildContext context) {
+              return FilledButton(
+                onPressed: () async {
+                  confirmed = await confirmDangerousCommandRun(
+                    context: context,
+                    l10n: AppLocalizations.of(context)!,
+                    patternId: 'rm_rf',
+                    patternDescription: 'Recursive delete',
+                  );
+                },
+                child: const Text('Open dangerous command confirm'),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open dangerous command confirm'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Run anyway'));
+    await tester.pumpAndSettle();
+
+    expect(confirmed, isTrue);
+  });
 }

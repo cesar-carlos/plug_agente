@@ -1331,7 +1331,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpPathAllowlistMessage.
   ///
   /// In en, this message translates to:
-  /// **'Restricts allowed working directories and context files. Use absolute paths, one per line; empty adds no extra local allowlist.'**
+  /// **'Restricts allowed working directories and context files. Use absolute paths, one per line; empty adds no extra local allowlist. In production profile, command-line, executable, and script actions require working-directory allowlists (failure reason: production_path_allowlist_required).'**
   String get agentActionsHelpPathAllowlistMessage;
 
   /// No description provided for @agentActionsHelpProcessWindowTitle.
@@ -2024,11 +2024,143 @@ abstract class AppLocalizations {
   /// **'Run \"Test action\" successfully before setting this action to Active.'**
   String get agentActionsPreflightRequiredForActive;
 
+  /// No description provided for @agentActionsPreflightExpiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preflight re-test required'**
+  String get agentActionsPreflightExpiredTitle;
+
+  /// No description provided for @agentActionsPreflightExpiredForActive.
+  ///
+  /// In en, this message translates to:
+  /// **'The last successful preflight has expired. Run \"Test action\" again before setting this action to Active.'**
+  String get agentActionsPreflightExpiredForActive;
+
+  /// No description provided for @agentActionsPreflightValidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preflight valid'**
+  String get agentActionsPreflightValidTitle;
+
+  /// No description provided for @agentActionsPreflightExpiresAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Preflight remains valid until {expiresAt}. Run \"Test action\" again before this time to keep activation enabled.'**
+  String agentActionsPreflightExpiresAt(String expiresAt);
+
   /// No description provided for @agentActionsPreflightReadyForActivation.
   ///
   /// In en, this message translates to:
   /// **'Preflight passed. Set the state to Active and save to enable execution.'**
   String get agentActionsPreflightReadyForActivation;
+
+  /// No description provided for @agentActionsPreflightSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preflight validity'**
+  String get agentActionsPreflightSettingsTitle;
+
+  /// No description provided for @agentActionsPreflightSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'How long a successful \"Test action\" remains valid for activating an action. Saved values override the AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS environment variable for this installation.'**
+  String get agentActionsPreflightSettingsDescription;
+
+  /// No description provided for @agentActionsPreflightSettingsValidityDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Validity window (days)'**
+  String get agentActionsPreflightSettingsValidityDays;
+
+  /// No description provided for @agentActionsPreflightSettingsEnvHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed range: 1–365 days. After changing this value, existing preflight timestamps are still evaluated against the new window on the next save or UI refresh.'**
+  String get agentActionsPreflightSettingsEnvHint;
+
+  /// No description provided for @agentActionsPreflightSettingsSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save preflight window'**
+  String get agentActionsPreflightSettingsSave;
+
+  /// No description provided for @agentActionsPreflightSettingsDiscard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes'**
+  String get agentActionsPreflightSettingsDiscard;
+
+  /// No description provided for @agentActionsPreflightSettingsUseEnvDefaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Use environment defaults'**
+  String get agentActionsPreflightSettingsUseEnvDefaults;
+
+  /// No description provided for @agentActionsPreflightSettingsInvalidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid value'**
+  String get agentActionsPreflightSettingsInvalidTitle;
+
+  /// No description provided for @agentActionsPreflightSettingsInvalidValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid whole number of days (1–365).'**
+  String get agentActionsPreflightSettingsInvalidValue;
+
+  /// No description provided for @agentActionsPreflightSettingsSavedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preflight window saved'**
+  String get agentActionsPreflightSettingsSavedTitle;
+
+  /// No description provided for @agentActionsPreflightSettingsSavedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The validity window was updated for this installation.'**
+  String get agentActionsPreflightSettingsSavedMessage;
+
+  /// No description provided for @agentActionsPreflightSettingsClearedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preflight window restored'**
+  String get agentActionsPreflightSettingsClearedTitle;
+
+  /// No description provided for @agentActionsPreflightSettingsClearedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The custom window was removed. The agent now follows AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS or the default.'**
+  String get agentActionsPreflightSettingsClearedMessage;
+
+  /// No description provided for @agentActionsDangerousCommandWarnModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dangerous command warn mode (homologation)'**
+  String get agentActionsDangerousCommandWarnModeTitle;
+
+  /// No description provided for @agentActionsDangerousCommandWarnModeEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Warn mode is ON: risky command-line patterns show a confirmation dialog instead of blocking at validation. Do not use in production.'**
+  String get agentActionsDangerousCommandWarnModeEnabled;
+
+  /// No description provided for @agentActionsDangerousCommandWarnModeDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Warn mode is OFF: risky command-line patterns are blocked unless the command is changed. Enable only in homologation via feature flag or environment.'**
+  String get agentActionsDangerousCommandWarnModeDisabled;
+
+  /// No description provided for @agentActionsProductionPathAllowlistRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Production path allowlist required'**
+  String get agentActionsProductionPathAllowlistRequiredTitle;
+
+  /// No description provided for @agentActionsProductionPathAllowlistRequiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The operational profile is production. Command-line, executable, and script actions must define allowed working directories before save or run (production_path_allowlist_required).'**
+  String get agentActionsProductionPathAllowlistRequiredMessage;
 
   /// No description provided for @agentActionsSecretPlaceholdersTitle.
   ///
@@ -2299,6 +2431,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get agentActionsConfirmElevatedCancel;
+
+  /// No description provided for @agentActionsConfirmDangerousCommandTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Run high-risk command?'**
+  String get agentActionsConfirmDangerousCommandTitle;
+
+  /// No description provided for @agentActionsConfirmDangerousCommandMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The command matches pattern \"{patternId}\" ({patternDescription}). Review carefully before running in production.'**
+  String agentActionsConfirmDangerousCommandMessage(String patternId, String patternDescription);
+
+  /// No description provided for @agentActionsConfirmDangerousCommandConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Run anyway'**
+  String get agentActionsConfirmDangerousCommandConfirm;
+
+  /// No description provided for @agentActionsConfirmDangerousCommandCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentActionsConfirmDangerousCommandCancel;
+
+  /// No description provided for @agentActionsDangerousCommandBlockedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Command blocked'**
+  String get agentActionsDangerousCommandBlockedTitle;
+
+  /// No description provided for @agentActionsDangerousCommandBlockedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The command matches a high-risk pattern and was blocked for safety. Review the command or request operational approval.'**
+  String get agentActionsDangerousCommandBlockedMessage;
+
+  /// No description provided for @agentActionsDangerousCommandWarnTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'High-risk command detected'**
+  String get agentActionsDangerousCommandWarnTitle;
+
+  /// No description provided for @agentActionsDangerousCommandWarnMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The command matches pattern \"{patternId}\" ({patternDescription}). Manual run requires confirmation.'**
+  String agentActionsDangerousCommandWarnMessage(String patternId, String patternDescription);
 
   /// No description provided for @agentActionsValidationTitle.
   ///

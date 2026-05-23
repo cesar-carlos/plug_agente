@@ -105,6 +105,7 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   _PowerShellExecutable _powerShellExecutable = _PowerShellExecutable.windowsPowerShell;
   AgentActionState _state = AgentActionState.needsValidation;
   bool _isDraftModifiedSinceLoad = false;
+  bool _applyingLoadedDefinition = false;
   bool _notifyOnSuccess = false;
   bool _notifyOnFailure = false;
   bool _notifyOnTimeout = false;
@@ -257,6 +258,9 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   }
 
   void _onDraftChanged() {
+    if (_applyingLoadedDefinition) {
+      return;
+    }
     if (_isDraftModifiedSinceLoad) {
       return;
     }
@@ -413,10 +417,12 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
   void _loadDefinition(AgentActionDefinition? definition) {
     _validationMessage = null;
     _isDraftModifiedSinceLoad = false;
-    if (definition == null) {
-      _clearDraft();
-      return;
-    }
+    _applyingLoadedDefinition = true;
+    try {
+      if (definition == null) {
+        _clearDraft();
+        return;
+      }
     _editingActionId = definition.id;
     _nameController.text = definition.name;
     _descriptionController.text = definition.description ?? '';
@@ -677,6 +683,9 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           selectedConnectionId: config.connectionId,
         );
     }
+    } finally {
+      _applyingLoadedDefinition = false;
+    }
   }
 
   void _clearDraft([_AgentActionDraftKind? draftKind]) {
@@ -812,6 +821,76 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
     return AgentActionPathPolicy(
       allowedWorkingDirectories: _parseCommaSeparatedTokens(_allowedWorkingDirectoriesController.text),
       allowedContextDirectories: _parseCommaSeparatedTokens(_allowedContextDirectoriesController.text),
+    );
+  }
+
+  bool get _draftRequiresProductionPathAllowlist {
+    return switch (_draftType) {
+      AgentActionType.commandLine || AgentActionType.executable || AgentActionType.script => true,
+      _ => false,
+    };
+  }
+
+  bool get _shouldShowProductionPathAllowlistWarning {
+    if (!_operationalProfileResolver.isProductionProfile || !_draftRequiresProductionPathAllowlist) {
+      return false;
+    }
+
+    return _draftPathPolicy().allowedWorkingDirectories.isEmpty;
+  }
+
+  Widget _buildPreflightGateInfoBar({required bool canSelectActiveState}) {
+    final definition = widget.definition;
+    if (canSelectActiveState) {
+      if (definition == null || _isDraftModifiedSinceLoad) {
+        return const SizedBox.shrink();
+      }
+
+      final expiresAt = widget.provider.preflightExpiresAtForDefinition(definition);
+      if (expiresAt == null) {
+        return const SizedBox.shrink();
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: AppSpacing.sm),
+          InfoBar(
+            title: Text(widget.l10n.agentActionsPreflightValidTitle),
+            content: Text(
+              widget.l10n.agentActionsPreflightExpiresAt(
+                DateFormat.yMMMd().add_jm().format(expiresAt.toLocal()),
+              ),
+            ),
+            isLong: true,
+          ),
+        ],
+      );
+    }
+
+    final isExpired = definition != null &&
+        !_isDraftModifiedSinceLoad &&
+        widget.provider.isPreflightExpiredForDefinition(definition);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppSpacing.sm),
+        InfoBar(
+          title: Text(
+            isExpired
+                ? widget.l10n.agentActionsPreflightExpiredTitle
+                : widget.l10n.agentActionsPreflightRequiredTitle,
+          ),
+          content: Text(
+            isExpired
+                ? widget.l10n.agentActionsPreflightExpiredForActive
+                : widget.l10n.agentActionsPreflightRequiredForActive,
+          ),
+          severity: InfoBarSeverity.warning,
+          isLong: true,
+        ),
+      ],
     );
   }
 
@@ -1299,20 +1378,9 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
                         });
                       },
               );
-              final preflightGateInfoBar = !canSelectActiveState
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: AppSpacing.sm),
-                        InfoBar(
-                          title: Text(widget.l10n.agentActionsPreflightRequiredTitle),
-                          content: Text(widget.l10n.agentActionsPreflightRequiredForActive),
-                          severity: InfoBarSeverity.warning,
-                          isLong: true,
-                        ),
-                      ],
-                    )
-                  : const SizedBox.shrink();
+              final preflightGateInfoBar = _buildPreflightGateInfoBar(
+                canSelectActiveState: canSelectActiveState,
+              );
 
               if (stackFields) {
                 return Column(
@@ -1778,6 +1846,15 @@ class _AgentActionEditorState extends State<_AgentActionEditor> {
           hint: widget.l10n.agentActionsFormPathAllowlistHint,
           textInputAction: TextInputAction.next,
         ),
+        if (_shouldShowProductionPathAllowlistWarning) ...[
+          const SizedBox(height: AppSpacing.sm),
+          InfoBar(
+            title: Text(widget.l10n.agentActionsProductionPathAllowlistRequiredTitle),
+            content: Text(widget.l10n.agentActionsProductionPathAllowlistRequiredMessage),
+            severity: InfoBarSeverity.error,
+            isLong: true,
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         if (_draftCapturesProcessOutput) ...[
           AppDropdown<AgentActionProcessWindowMode>(

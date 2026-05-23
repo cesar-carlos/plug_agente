@@ -80,6 +80,24 @@ Future<bool> confirmEnableElevatedAgentAction({
   );
 }
 
+Future<bool> confirmDangerousCommandRun({
+  required BuildContext context,
+  required AppLocalizations l10n,
+  required String patternId,
+  required String patternDescription,
+}) {
+  return _confirm(
+    context: context,
+    title: l10n.agentActionsConfirmDangerousCommandTitle,
+    message: l10n.agentActionsConfirmDangerousCommandMessage(
+      patternId,
+      patternDescription,
+    ),
+    confirmLabel: l10n.agentActionsConfirmDangerousCommandConfirm,
+    cancelLabel: l10n.agentActionsConfirmDangerousCommandCancel,
+  );
+}
+
 Future<bool> _confirm({
   required BuildContext context,
   required String title,

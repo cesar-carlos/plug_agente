@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_backup_sanitizer.dart';
@@ -41,6 +42,7 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/windows_version_info.dart';
+import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/utils/powershell_command_line.dart';
@@ -508,6 +510,106 @@ void main() {
 
     expect(find.text(ptL10n.agentActionsFormRemoteAdHocFeatureDisabledTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormRemoteAdHocFeatureDisabledMessage), findsOneWidget);
+  });
+
+  testWidgets('shows preflight expired infobar when last validation is stale', (tester) async {
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2000));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    await harness.provider.load();
+    harness.provider.selectAction('action-1');
+    final live = harness.provider.selectedDefinition!;
+    const snapshotter = AgentActionDefinitionSnapshotter();
+    final preflightHash = snapshotter.snapshotHash(
+      live.copyWith(state: AgentActionState.needsValidation),
+    );
+    harness.repository.definitions['action-1'] = live.copyWith(
+      lastPreflightSnapshotHash: preflightHash,
+      lastPreflightValidatedAt: DateTime.utc(2020),
+    );
+    await harness.provider.load();
+    harness.provider.selectAction('action-1');
+
+    final fromProvider = harness.provider.definitions.single;
+    expect(fromProvider.lastPreflightValidatedAt, DateTime.utc(2020));
+    expect(harness.provider.isPreflightExpiredForDefinition(fromProvider), isTrue);
+
+    await _openSelectedActionDialog(tester);
+
+    expect(find.text(ptL10n.agentActionsPreflightExpiredTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsPreflightExpiredForActive), findsOneWidget);
+  });
+
+  testWidgets('shows production path allowlist error when operational profile is prod and allowlist is empty', (tester) async {
+    dotenv.loadFromString(envString: 'AGENT_OPERATIONAL_PROFILE=prod');
+    addTearDown(dotenv.clean);
+
+    final harness = _AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'CLI action',
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2400));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    await _openSelectedActionDialog(tester);
+
+    expect(find.text(ptL10n.agentActionsProductionPathAllowlistRequiredTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsProductionPathAllowlistRequiredMessage), findsOneWidget);
+  });
+
+  testWidgets('toggles maintenance strict mode checkbox when maintenance is on', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    expect(harness.provider.isMaintenanceStrictMode, isFalse);
+
+    await harness.provider.setMaintenanceMode(enabled: true);
+    await tester.pumpAndSettle();
+
+    final strictCheckbox = find.widgetWithText(Checkbox, ptL10n.agentActionsMaintenanceStrictMode);
+    expect(strictCheckbox, findsOneWidget);
+    expect(tester.widget<Checkbox>(strictCheckbox).checked, isFalse);
+
+    await tester.tap(strictCheckbox);
+    await tester.pumpAndSettle();
+
+    expect(harness.provider.isMaintenanceStrictMode, isTrue);
+    expect(tester.widget<Checkbox>(strictCheckbox).checked, isTrue);
+  });
+
+  testWidgets('preferences tab shows dangerous-command warn card and reflects flag changes', (tester) async {
+    final harness = _AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    await _openTab(tester, ptL10n.configTabPreferences);
+
+    expect(find.text(ptL10n.agentActionsPreflightSettingsTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsDangerousCommandWarnModeTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsDangerousCommandWarnModeDisabled), findsOneWidget);
+
+    await harness.featureFlags.setEnableAgentActionDangerousCommandWarnMode(true);
+    harness.provider.notifyListeners();
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsDangerousCommandWarnModeEnabled), findsOneWidget);
   });
 
   testWidgets('shows runtime support diagnostics card when desktop runtime is degraded', (tester) async {
@@ -2730,6 +2832,7 @@ class _AgentActionsPageHarness {
       validateDefinition,
       const AgentActionDefinitionSnapshotter(),
       featureFlags,
+      preflightSettings: preflightSettings,
     );
     const portableCodec = AgentActionPortableCodec();
     final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);
@@ -2790,6 +2893,7 @@ class _AgentActionsPageHarness {
       saveAgentActionSecret: _actionSecretStore == null ? null : SaveAgentActionSecret(_actionSecretStore),
       deleteAgentActionSecret: _actionSecretStore == null ? null : DeleteAgentActionSecret(_actionSecretStore),
       now: () => DateTime(2026, 5, 15, 12),
+      preflightSettings: preflightSettings,
     );
   }
 
@@ -2797,6 +2901,7 @@ class _AgentActionsPageHarness {
   final _FakeAgentActionRepository repository = _FakeAgentActionRepository();
   final InMemoryAppSettingsStore appSettingsStore = InMemoryAppSettingsStore();
   late final AgentActionRetentionSettings retentionSettings = AgentActionRetentionSettings(appSettingsStore);
+  late final AgentActionPreflightSettings preflightSettings = AgentActionPreflightSettings(appSettingsStore);
   late final FeatureFlags featureFlags = FeatureFlags(appSettingsStore);
   final ActionExecutionQueue executionQueue = ActionExecutionQueue();
   final IDeveloperData7ConnectionGateway _developerConnectionGateway;
@@ -2821,6 +2926,10 @@ class _AgentActionsPageHarness {
       getIt.unregister<AgentActionRetentionSettings>();
     }
     getIt.registerSingleton<AgentActionRetentionSettings>(retentionSettings);
+    if (getIt.isRegistered<AgentActionPreflightSettings>()) {
+      getIt.unregister<AgentActionPreflightSettings>();
+    }
+    getIt.registerSingleton<AgentActionPreflightSettings>(preflightSettings);
     if (getIt.isRegistered<IAppSettingsStore>()) {
       getIt.unregister<IAppSettingsStore>();
     }

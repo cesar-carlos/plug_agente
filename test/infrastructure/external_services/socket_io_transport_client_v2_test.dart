@@ -279,6 +279,7 @@ void main() {
       when(() => mockFeatureFlags.enableRemoteAdHocAgentActions).thenReturn(false);
       when(() => mockFeatureFlags.enableElevatedAgentActions).thenReturn(false);
       when(() => mockFeatureFlags.enableAgentActionsMaintenanceMode).thenReturn(false);
+      when(() => mockFeatureFlags.enableAgentActionsMaintenanceStrictMode).thenReturn(false);
       when(() => mockFeatureFlags.enableAgentActionRemoteAudit).thenReturn(false);
       when(() => mockFeatureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(false);
       when(

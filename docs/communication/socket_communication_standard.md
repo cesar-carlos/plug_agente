@@ -1573,6 +1573,7 @@ Exemplo de capacidades anunciadas (alinhado a
       "supportsElevated": false,
       "status": "ready",
       "maintenanceMode": false,
+      "maintenanceStrictMode": false,
       "unavailableTypes": [],
       "defaultQueueLimits": {
         "maxConcurrent": 1,

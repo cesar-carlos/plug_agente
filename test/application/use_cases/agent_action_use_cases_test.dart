@@ -75,6 +75,7 @@ Future<Result<AgentActionDefinition>> saveDefinitionForTest(
     saved.copyWith(
       state: AgentActionState.active,
       lastPreflightSnapshotHash: preflightHash,
+      lastPreflightValidatedAt: DateTime.now().toUtc(),
     ),
   );
 }
@@ -649,6 +650,41 @@ void main() {
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow().state, AgentActionState.active);
       expect(result.getOrThrow().lastPreflightSnapshotHash, isNotNull);
+    });
+
+    test('should reject saving active definition when preflight validation expired', () async {
+      final useCase = SaveAgentActionDefinition(
+        repository,
+        validateDefinition,
+        const AgentActionDefinitionSnapshotter(),
+        featureFlags,
+        now: () => DateTime.utc(2026, 6, 25),
+      );
+      const definition = AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+
+      final staged = await useCase(definition.copyWith(state: AgentActionState.needsValidation));
+      expect(staged.isSuccess(), isTrue);
+
+      const snapshotter = AgentActionDefinitionSnapshotter();
+      final preflightHash = snapshotter.snapshotHash(
+        definition.copyWith(state: AgentActionState.needsValidation),
+      );
+      repository.definitions['action-1'] = staged.getOrThrow().copyWith(
+        lastPreflightSnapshotHash: preflightHash,
+        lastPreflightValidatedAt: DateTime.utc(2026, 4),
+      );
+
+      final result = await useCase(
+        repository.definitions['action-1']!.copyWith(state: AgentActionState.active),
+      );
+
+      expect(result.isError(), isTrue);
+      expect((result.exceptionOrNull()! as ActionValidationFailure).code, AgentActionFailureCode.preflightExpiredForActive);
     });
 
     test('should invalidate preflight hash when definition content changes on save', () async {

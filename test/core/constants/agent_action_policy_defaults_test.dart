@@ -11,6 +11,8 @@ void main() {
       expect(AgentActionPolicyDefaults.maxRetryAttempts, 1);
       expect(AgentActionPolicyDefaults.maxContextBytes, 256 * 1024);
       expect(AgentActionPolicyDefaults.maxCapturedOutputBytes, 64 * 1024);
+      expect(AgentActionPolicyDefaults.defaultPreflightValidityDays, 30);
+      expect(AgentActionPolicyDefaults.preflightValidityDuration, const Duration(days: 30));
     });
 
     test('should expose queue limits for capabilities', () {

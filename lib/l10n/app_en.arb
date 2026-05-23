@@ -232,7 +232,7 @@
   "agentActionsHelpQueueTitle": "Concurrency and queue",
   "agentActionsHelpQueueMessage": "Defines how many runs of this action may execute simultaneously, how many wait in queue, and whether new requests fail, wait, or replace a full queue.",
   "agentActionsHelpPathAllowlistTitle": "Directory allowlist",
-  "agentActionsHelpPathAllowlistMessage": "Restricts allowed working directories and context files. Use absolute paths, one per line; empty adds no extra local allowlist.",
+  "agentActionsHelpPathAllowlistMessage": "Restricts allowed working directories and context files. Use absolute paths, one per line; empty adds no extra local allowlist. In production profile, command-line, executable, and script actions require working-directory allowlists (failure reason: production_path_allowlist_required).",
   "agentActionsHelpProcessWindowTitle": "Process window",
   "agentActionsHelpProcessWindowMessage": "Controls the locally started process window: normal, hidden, or minimized, according to Windows support.",
   "agentActionsHelpCaptureTitle": "Output capture",
@@ -355,7 +355,36 @@
   "agentActionsNeedsValidationMessage": "Test this action locally before running or enabling remote execution.",
   "agentActionsPreflightRequiredTitle": "Preflight required for activation",
   "agentActionsPreflightRequiredForActive": "Run \"Test action\" successfully before setting this action to Active.",
+  "agentActionsPreflightExpiredTitle": "Preflight re-test required",
+  "agentActionsPreflightExpiredForActive": "The last successful preflight has expired. Run \"Test action\" again before setting this action to Active.",
+  "agentActionsPreflightValidTitle": "Preflight valid",
+  "agentActionsPreflightExpiresAt": "Preflight remains valid until {expiresAt}. Run \"Test action\" again before this time to keep activation enabled.",
+  "@agentActionsPreflightExpiresAt": {
+    "placeholders": {
+      "expiresAt": {
+        "type": "String"
+      }
+    }
+  },
   "agentActionsPreflightReadyForActivation": "Preflight passed. Set the state to Active and save to enable execution.",
+  "agentActionsPreflightSettingsTitle": "Preflight validity",
+  "agentActionsPreflightSettingsDescription": "How long a successful \"Test action\" remains valid for activating an action. Saved values override the AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS environment variable for this installation.",
+  "agentActionsPreflightSettingsValidityDays": "Validity window (days)",
+  "agentActionsPreflightSettingsEnvHint": "Allowed range: 1–365 days. After changing this value, existing preflight timestamps are still evaluated against the new window on the next save or UI refresh.",
+  "agentActionsPreflightSettingsSave": "Save preflight window",
+  "agentActionsPreflightSettingsDiscard": "Discard changes",
+  "agentActionsPreflightSettingsUseEnvDefaults": "Use environment defaults",
+  "agentActionsPreflightSettingsInvalidTitle": "Invalid value",
+  "agentActionsPreflightSettingsInvalidValue": "Enter a valid whole number of days (1–365).",
+  "agentActionsPreflightSettingsSavedTitle": "Preflight window saved",
+  "agentActionsPreflightSettingsSavedMessage": "The validity window was updated for this installation.",
+  "agentActionsPreflightSettingsClearedTitle": "Preflight window restored",
+  "agentActionsPreflightSettingsClearedMessage": "The custom window was removed. The agent now follows AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS or the default.",
+  "agentActionsDangerousCommandWarnModeTitle": "Dangerous command warn mode (homologation)",
+  "agentActionsDangerousCommandWarnModeEnabled": "Warn mode is ON: risky command-line patterns show a confirmation dialog instead of blocking at validation. Do not use in production.",
+  "agentActionsDangerousCommandWarnModeDisabled": "Warn mode is OFF: risky command-line patterns are blocked unless the command is changed. Enable only in homologation via feature flag or environment.",
+  "agentActionsProductionPathAllowlistRequiredTitle": "Production path allowlist required",
+  "agentActionsProductionPathAllowlistRequiredMessage": "The operational profile is production. Command-line, executable, and script actions must define allowed working directories before save or run (production_path_allowlist_required).",
   "agentActionsSecretPlaceholdersTitle": "Secret placeholders referenced",
   "agentActionsSecretPlaceholdersMessage": "This action references secrets: {secretNames}. Configure them in secure storage before running.",
   "@agentActionsSecretPlaceholdersMessage": {
@@ -446,6 +475,34 @@
   "agentActionsConfirmElevatedMessage": "Runs use the elevated helper and administrator privileges on this machine. Install and prepare the helper before enabling.",
   "agentActionsConfirmElevatedConfirm": "Enable elevated",
   "agentActionsConfirmElevatedCancel": "Cancel",
+  "agentActionsConfirmDangerousCommandTitle": "Run high-risk command?",
+  "agentActionsConfirmDangerousCommandMessage": "The command matches pattern \"{patternId}\" ({patternDescription}). Review carefully before running in production.",
+  "@agentActionsConfirmDangerousCommandMessage": {
+    "placeholders": {
+      "patternId": {
+        "type": "String"
+      },
+      "patternDescription": {
+        "type": "String"
+      }
+    }
+  },
+  "agentActionsConfirmDangerousCommandConfirm": "Run anyway",
+  "agentActionsConfirmDangerousCommandCancel": "Cancel",
+  "agentActionsDangerousCommandBlockedTitle": "Command blocked",
+  "agentActionsDangerousCommandBlockedMessage": "The command matches a high-risk pattern and was blocked for safety. Review the command or request operational approval.",
+  "agentActionsDangerousCommandWarnTitle": "High-risk command detected",
+  "agentActionsDangerousCommandWarnMessage": "The command matches pattern \"{patternId}\" ({patternDescription}). Manual run requires confirmation.",
+  "@agentActionsDangerousCommandWarnMessage": {
+    "placeholders": {
+      "patternId": {
+        "type": "String"
+      },
+      "patternDescription": {
+        "type": "String"
+      }
+    }
+  },
   "agentActionsValidationTitle": "Check the action fields",
   "agentActionsMaintenanceMode": "Maintenance mode",
   "agentActionsMaintenanceModeInfoTitle": "Maintenance mode is on",

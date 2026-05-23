@@ -2786,6 +2786,17 @@ class $AgentActionDefinitionTableTable extends AgentActionDefinitionTable
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _lastPreflightValidatedAtMeta =
+      const VerificationMeta('lastPreflightValidatedAt');
+  @override
+  late final GeneratedColumn<DateTime> lastPreflightValidatedAt =
+      GeneratedColumn<DateTime>(
+        'last_preflight_validated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2820,6 +2831,7 @@ class $AgentActionDefinitionTableTable extends AgentActionDefinitionTable
     definitionVersion,
     definitionSnapshotHash,
     lastPreflightSnapshotHash,
+    lastPreflightValidatedAt,
     createdAt,
     updatedAt,
   ];
@@ -2919,6 +2931,15 @@ class $AgentActionDefinitionTableTable extends AgentActionDefinitionTable
         ),
       );
     }
+    if (data.containsKey('last_preflight_validated_at')) {
+      context.handle(
+        _lastPreflightValidatedAtMeta,
+        lastPreflightValidatedAt.isAcceptableOrUnknown(
+          data['last_preflight_validated_at']!,
+          _lastPreflightValidatedAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2987,6 +3008,10 @@ class $AgentActionDefinitionTableTable extends AgentActionDefinitionTable
         DriftSqlType.string,
         data['${effectivePrefix}last_preflight_snapshot_hash'],
       ),
+      lastPreflightValidatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_preflight_validated_at'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -3016,6 +3041,7 @@ class AgentActionDefinitionData extends DataClass
   final int definitionVersion;
   final String? definitionSnapshotHash;
   final String? lastPreflightSnapshotHash;
+  final DateTime? lastPreflightValidatedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   const AgentActionDefinitionData({
@@ -3029,6 +3055,7 @@ class AgentActionDefinitionData extends DataClass
     required this.definitionVersion,
     this.definitionSnapshotHash,
     this.lastPreflightSnapshotHash,
+    this.lastPreflightValidatedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -3055,6 +3082,11 @@ class AgentActionDefinitionData extends DataClass
         lastPreflightSnapshotHash,
       );
     }
+    if (!nullToAbsent || lastPreflightValidatedAt != null) {
+      map['last_preflight_validated_at'] = Variable<DateTime>(
+        lastPreflightValidatedAt,
+      );
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -3079,6 +3111,9 @@ class AgentActionDefinitionData extends DataClass
           lastPreflightSnapshotHash == null && nullToAbsent
           ? const Value.absent()
           : Value(lastPreflightSnapshotHash),
+      lastPreflightValidatedAt: lastPreflightValidatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPreflightValidatedAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -3104,6 +3139,9 @@ class AgentActionDefinitionData extends DataClass
       lastPreflightSnapshotHash: serializer.fromJson<String?>(
         json['lastPreflightSnapshotHash'],
       ),
+      lastPreflightValidatedAt: serializer.fromJson<DateTime?>(
+        json['lastPreflightValidatedAt'],
+      ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -3126,6 +3164,9 @@ class AgentActionDefinitionData extends DataClass
       'lastPreflightSnapshotHash': serializer.toJson<String?>(
         lastPreflightSnapshotHash,
       ),
+      'lastPreflightValidatedAt': serializer.toJson<DateTime?>(
+        lastPreflightValidatedAt,
+      ),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -3142,6 +3183,7 @@ class AgentActionDefinitionData extends DataClass
     int? definitionVersion,
     Value<String?> definitionSnapshotHash = const Value.absent(),
     Value<String?> lastPreflightSnapshotHash = const Value.absent(),
+    Value<DateTime?> lastPreflightValidatedAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => AgentActionDefinitionData(
@@ -3159,6 +3201,9 @@ class AgentActionDefinitionData extends DataClass
     lastPreflightSnapshotHash: lastPreflightSnapshotHash.present
         ? lastPreflightSnapshotHash.value
         : this.lastPreflightSnapshotHash,
+    lastPreflightValidatedAt: lastPreflightValidatedAt.present
+        ? lastPreflightValidatedAt.value
+        : this.lastPreflightValidatedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -3188,6 +3233,9 @@ class AgentActionDefinitionData extends DataClass
       lastPreflightSnapshotHash: data.lastPreflightSnapshotHash.present
           ? data.lastPreflightSnapshotHash.value
           : this.lastPreflightSnapshotHash,
+      lastPreflightValidatedAt: data.lastPreflightValidatedAt.present
+          ? data.lastPreflightValidatedAt.value
+          : this.lastPreflightValidatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -3206,6 +3254,7 @@ class AgentActionDefinitionData extends DataClass
           ..write('definitionVersion: $definitionVersion, ')
           ..write('definitionSnapshotHash: $definitionSnapshotHash, ')
           ..write('lastPreflightSnapshotHash: $lastPreflightSnapshotHash, ')
+          ..write('lastPreflightValidatedAt: $lastPreflightValidatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -3224,6 +3273,7 @@ class AgentActionDefinitionData extends DataClass
     definitionVersion,
     definitionSnapshotHash,
     lastPreflightSnapshotHash,
+    lastPreflightValidatedAt,
     createdAt,
     updatedAt,
   );
@@ -3241,6 +3291,7 @@ class AgentActionDefinitionData extends DataClass
           other.definitionVersion == this.definitionVersion &&
           other.definitionSnapshotHash == this.definitionSnapshotHash &&
           other.lastPreflightSnapshotHash == this.lastPreflightSnapshotHash &&
+          other.lastPreflightValidatedAt == this.lastPreflightValidatedAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -3257,6 +3308,7 @@ class AgentActionDefinitionTableCompanion
   final Value<int> definitionVersion;
   final Value<String?> definitionSnapshotHash;
   final Value<String?> lastPreflightSnapshotHash;
+  final Value<DateTime?> lastPreflightValidatedAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -3271,6 +3323,7 @@ class AgentActionDefinitionTableCompanion
     this.definitionVersion = const Value.absent(),
     this.definitionSnapshotHash = const Value.absent(),
     this.lastPreflightSnapshotHash = const Value.absent(),
+    this.lastPreflightValidatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3286,6 +3339,7 @@ class AgentActionDefinitionTableCompanion
     this.definitionVersion = const Value.absent(),
     this.definitionSnapshotHash = const Value.absent(),
     this.lastPreflightSnapshotHash = const Value.absent(),
+    this.lastPreflightValidatedAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -3308,6 +3362,7 @@ class AgentActionDefinitionTableCompanion
     Expression<int>? definitionVersion,
     Expression<String>? definitionSnapshotHash,
     Expression<String>? lastPreflightSnapshotHash,
+    Expression<DateTime>? lastPreflightValidatedAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -3325,6 +3380,8 @@ class AgentActionDefinitionTableCompanion
         'definition_snapshot_hash': definitionSnapshotHash,
       if (lastPreflightSnapshotHash != null)
         'last_preflight_snapshot_hash': lastPreflightSnapshotHash,
+      if (lastPreflightValidatedAt != null)
+        'last_preflight_validated_at': lastPreflightValidatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -3342,6 +3399,7 @@ class AgentActionDefinitionTableCompanion
     Value<int>? definitionVersion,
     Value<String?>? definitionSnapshotHash,
     Value<String?>? lastPreflightSnapshotHash,
+    Value<DateTime?>? lastPreflightValidatedAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -3359,6 +3417,8 @@ class AgentActionDefinitionTableCompanion
           definitionSnapshotHash ?? this.definitionSnapshotHash,
       lastPreflightSnapshotHash:
           lastPreflightSnapshotHash ?? this.lastPreflightSnapshotHash,
+      lastPreflightValidatedAt:
+          lastPreflightValidatedAt ?? this.lastPreflightValidatedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -3402,6 +3462,11 @@ class AgentActionDefinitionTableCompanion
         lastPreflightSnapshotHash.value,
       );
     }
+    if (lastPreflightValidatedAt.present) {
+      map['last_preflight_validated_at'] = Variable<DateTime>(
+        lastPreflightValidatedAt.value,
+      );
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -3427,6 +3492,7 @@ class AgentActionDefinitionTableCompanion
           ..write('definitionVersion: $definitionVersion, ')
           ..write('definitionSnapshotHash: $definitionSnapshotHash, ')
           ..write('lastPreflightSnapshotHash: $lastPreflightSnapshotHash, ')
+          ..write('lastPreflightValidatedAt: $lastPreflightValidatedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -9170,6 +9236,7 @@ typedef $$AgentActionDefinitionTableTableCreateCompanionBuilder =
       Value<int> definitionVersion,
       Value<String?> definitionSnapshotHash,
       Value<String?> lastPreflightSnapshotHash,
+      Value<DateTime?> lastPreflightValidatedAt,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -9186,6 +9253,7 @@ typedef $$AgentActionDefinitionTableTableUpdateCompanionBuilder =
       Value<int> definitionVersion,
       Value<String?> definitionSnapshotHash,
       Value<String?> lastPreflightSnapshotHash,
+      Value<DateTime?> lastPreflightValidatedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -9247,6 +9315,11 @@ class $$AgentActionDefinitionTableTableFilterComposer
 
   ColumnFilters<String> get lastPreflightSnapshotHash => $composableBuilder(
     column: $table.lastPreflightSnapshotHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastPreflightValidatedAt => $composableBuilder(
+    column: $table.lastPreflightValidatedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9320,6 +9393,11 @@ class $$AgentActionDefinitionTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get lastPreflightValidatedAt => $composableBuilder(
+    column: $table.lastPreflightValidatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -9379,6 +9457,11 @@ class $$AgentActionDefinitionTableTableAnnotationComposer
 
   GeneratedColumn<String> get lastPreflightSnapshotHash => $composableBuilder(
     column: $table.lastPreflightSnapshotHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastPreflightValidatedAt => $composableBuilder(
+    column: $table.lastPreflightValidatedAt,
     builder: (column) => column,
   );
 
@@ -9445,6 +9528,8 @@ class $$AgentActionDefinitionTableTableTableManager
                 Value<int> definitionVersion = const Value.absent(),
                 Value<String?> definitionSnapshotHash = const Value.absent(),
                 Value<String?> lastPreflightSnapshotHash = const Value.absent(),
+                Value<DateTime?> lastPreflightValidatedAt =
+                    const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -9459,6 +9544,7 @@ class $$AgentActionDefinitionTableTableTableManager
                 definitionVersion: definitionVersion,
                 definitionSnapshotHash: definitionSnapshotHash,
                 lastPreflightSnapshotHash: lastPreflightSnapshotHash,
+                lastPreflightValidatedAt: lastPreflightValidatedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -9475,6 +9561,8 @@ class $$AgentActionDefinitionTableTableTableManager
                 Value<int> definitionVersion = const Value.absent(),
                 Value<String?> definitionSnapshotHash = const Value.absent(),
                 Value<String?> lastPreflightSnapshotHash = const Value.absent(),
+                Value<DateTime?> lastPreflightValidatedAt =
+                    const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -9489,6 +9577,7 @@ class $$AgentActionDefinitionTableTableTableManager
                 definitionVersion: definitionVersion,
                 definitionSnapshotHash: definitionSnapshotHash,
                 lastPreflightSnapshotHash: lastPreflightSnapshotHash,
+                lastPreflightValidatedAt: lastPreflightValidatedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

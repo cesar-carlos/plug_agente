@@ -5,8 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
-import 'package:plug_agente/application/actions/agent_action_preflight_validity.dart';
 import 'package:plug_agente/application/actions/agent_action_failure_diagnostics.dart';
+import 'package:plug_agente/application/actions/agent_action_preflight_validity.dart';
 import 'package:plug_agente/application/actions/agent_action_remote_audit_support_export.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_availability_checker.dart';
@@ -36,6 +36,7 @@ import 'package:plug_agente/application/use_cases/test_agent_action_definition.d
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
@@ -86,6 +87,7 @@ class AgentActionsProvider extends ChangeNotifier {
     IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
     AgentActionDefinitionSnapshotter? definitionSnapshotter,
     ActionCommandSafetyValidator? commandSafetyValidator,
+    AgentActionPreflightSettings? preflightSettings,
     DateTime Function()? now,
   }) : _runtimeStateGuard = runtimeStateGuard,
        _subsystemCoordinator = subsystemCoordinator,
@@ -100,6 +102,7 @@ class AgentActionsProvider extends ChangeNotifier {
        _comObjectInvocationDiagnostics = comObjectInvocationDiagnostics,
        _definitionSnapshotter = definitionSnapshotter ?? const AgentActionDefinitionSnapshotter(),
        _commandSafetyValidator = commandSafetyValidator ?? const ActionCommandSafetyValidator(),
+       _preflightSettings = preflightSettings,
        _now = now ?? DateTime.now;
   static const AgentActionRemoteAuditSupportExport _remoteAuditExport = AgentActionRemoteAuditSupportExport();
 
@@ -135,6 +138,7 @@ class AgentActionsProvider extends ChangeNotifier {
   final IComObjectInvocationDiagnostics? _comObjectInvocationDiagnostics;
   final AgentActionDefinitionSnapshotter _definitionSnapshotter;
   final ActionCommandSafetyValidator _commandSafetyValidator;
+  final AgentActionPreflightSettings? _preflightSettings;
   final DateTime Function() _now;
 
   bool _isPreparingElevatedRunner = false;
@@ -386,6 +390,7 @@ class AgentActionsProvider extends ChangeNotifier {
       expectedHash: _preflightContentSnapshotHash(definition),
       lastValidatedAt: recordedPreflightValidatedAt,
       now: _now(),
+      settings: _preflightSettings,
     );
   }
 
@@ -402,13 +407,14 @@ class AgentActionsProvider extends ChangeNotifier {
     return !AgentActionPreflightValidity.isTimestampValid(
       recordedPreflightValidatedAt,
       now: _now(),
+      settings: _preflightSettings,
     );
   }
 
   DateTime? preflightExpiresAtForDefinition(AgentActionDefinition definition) {
     final recordedPreflightValidatedAt =
         _sessionPreflightValidatedAt[definition.id] ?? definition.lastPreflightValidatedAt;
-    return AgentActionPreflightValidity.expiresAt(recordedPreflightValidatedAt);
+    return AgentActionPreflightValidity.expiresAt(recordedPreflightValidatedAt, settings: _preflightSettings);
   }
 
   bool get canDeleteSelected {
@@ -2159,4 +2165,20 @@ class AgentActionsProvider extends ChangeNotifier {
       return;
     }
 
-    final l
+    final loaded = result.getOrThrow().toList(growable: false);
+    loaded.sort((AgentActionTrigger left, AgentActionTrigger right) {
+      final leftName = (left.name ?? '').trim();
+      final rightName = (right.name ?? '').trim();
+      final nameCompare = leftName.toLowerCase().compareTo(rightName.toLowerCase());
+      if (nameCompare != 0) {
+        return nameCompare;
+      }
+
+      return left.id.compareTo(right.id);
+    });
+
+    _triggers = loaded;
+    _isLoadingTriggers = false;
+    notifyListeners();
+  }
+}

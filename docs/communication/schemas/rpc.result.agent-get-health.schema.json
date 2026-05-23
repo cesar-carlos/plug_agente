@@ -143,6 +143,10 @@
         "remote_enabled": { "type": "boolean" },
         "remote_ad_hoc_enabled": { "type": "boolean" },
         "maintenance_mode": { "type": "boolean" },
+        "maintenance_strict_mode": {
+          "type": "boolean",
+          "description": "True when maintenance mode also blocks local UI manual runs (strict maintenance)."
+        },
         "remote_audit_enabled": { "type": "boolean" },
         "elevated_enabled": {
           "type": "boolean",

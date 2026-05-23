@@ -695,7 +695,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsHelpPathAllowlistMessage =>
-      'Restringe diretorios de trabalho e arquivos de contexto permitidos. Use caminhos absolutos, um por linha; campo vazio nao adiciona allowlist local extra.';
+      'Restringe diretorios de trabalho e arquivos de contexto permitidos. Use caminhos absolutos, um por linha; campo vazio nao adiciona allowlist local extra. No perfil de producao, acoes de linha de comando, executavel e script exigem allowlist de diretorio de trabalho (motivo de falha: production_path_allowlist_required).';
 
   @override
   String get agentActionsHelpProcessWindowTitle => 'Janela do processo';
@@ -1073,8 +1073,83 @@ class AppLocalizationsPt extends AppLocalizations {
       'Execute \"Testar acao\" com sucesso antes de definir esta acao como Ativa.';
 
   @override
+  String get agentActionsPreflightExpiredTitle => 'Re-teste de preflight necessario';
+
+  @override
+  String get agentActionsPreflightExpiredForActive =>
+      'O ultimo preflight bem-sucedido expirou. Execute \"Testar acao\" novamente antes de definir esta acao como Ativa.';
+
+  @override
+  String get agentActionsPreflightValidTitle => 'Preflight valido';
+
+  @override
+  String agentActionsPreflightExpiresAt(String expiresAt) {
+    return 'O preflight permanece valido ate $expiresAt. Execute \"Testar acao\" novamente antes desse horario para manter a ativacao habilitada.';
+  }
+
+  @override
   String get agentActionsPreflightReadyForActivation =>
       'Preflight concluido. Defina o estado como Ativa e salve para habilitar a execucao.';
+
+  @override
+  String get agentActionsPreflightSettingsTitle => 'Validade do preflight';
+
+  @override
+  String get agentActionsPreflightSettingsDescription =>
+      'Por quanto tempo um \"Testar acao\" bem-sucedido permanece valido para ativar uma acao. Valores salvos substituem a variavel de ambiente AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS nesta instalacao.';
+
+  @override
+  String get agentActionsPreflightSettingsValidityDays => 'Janela de validade (dias)';
+
+  @override
+  String get agentActionsPreflightSettingsEnvHint =>
+      'Intervalo permitido: 1 a 365 dias. Apos alterar, os timestamps de preflight existentes passam a ser avaliados com a nova janela no proximo salvamento ou atualizacao da UI.';
+
+  @override
+  String get agentActionsPreflightSettingsSave => 'Salvar janela de preflight';
+
+  @override
+  String get agentActionsPreflightSettingsDiscard => 'Descartar alteracoes';
+
+  @override
+  String get agentActionsPreflightSettingsUseEnvDefaults => 'Usar padrao do ambiente';
+
+  @override
+  String get agentActionsPreflightSettingsInvalidTitle => 'Valor invalido';
+
+  @override
+  String get agentActionsPreflightSettingsInvalidValue => 'Informe um numero inteiro de dias valido (1 a 365).';
+
+  @override
+  String get agentActionsPreflightSettingsSavedTitle => 'Janela de preflight salva';
+
+  @override
+  String get agentActionsPreflightSettingsSavedMessage => 'A janela de validade foi atualizada para esta instalacao.';
+
+  @override
+  String get agentActionsPreflightSettingsClearedTitle => 'Janela de preflight restaurada';
+
+  @override
+  String get agentActionsPreflightSettingsClearedMessage =>
+      'O valor customizado foi removido. O agente segue AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS ou o padrao.';
+
+  @override
+  String get agentActionsDangerousCommandWarnModeTitle => 'Modo aviso para comandos perigosos (homologacao)';
+
+  @override
+  String get agentActionsDangerousCommandWarnModeEnabled =>
+      'Modo aviso LIGADO: padroes de risco na linha de comando exibem confirmacao em vez de bloquear na validacao. Nao use em producao.';
+
+  @override
+  String get agentActionsDangerousCommandWarnModeDisabled =>
+      'Modo aviso DESLIGADO: padroes de risco sao bloqueados ate o comando ser alterado. Ative apenas em homologacao via feature flag ou ambiente.';
+
+  @override
+  String get agentActionsProductionPathAllowlistRequiredTitle => 'Allowlist de caminhos obrigatoria em producao';
+
+  @override
+  String get agentActionsProductionPathAllowlistRequiredMessage =>
+      'O perfil operacional e producao. Acoes de linha de comando, executavel e script devem definir diretorios de trabalho permitidos antes de salvar ou executar (production_path_allowlist_required).';
 
   @override
   String get agentActionsSecretPlaceholdersTitle => 'Placeholders de segredo referenciados';
@@ -1228,6 +1303,35 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsConfirmElevatedCancel => 'Cancelar';
+
+  @override
+  String get agentActionsConfirmDangerousCommandTitle => 'Executar comando de alto risco?';
+
+  @override
+  String agentActionsConfirmDangerousCommandMessage(String patternId, String patternDescription) {
+    return 'O comando corresponde ao padrao \"$patternId\" ($patternDescription). Revise com cuidado antes de executar em producao.';
+  }
+
+  @override
+  String get agentActionsConfirmDangerousCommandConfirm => 'Executar mesmo assim';
+
+  @override
+  String get agentActionsConfirmDangerousCommandCancel => 'Cancelar';
+
+  @override
+  String get agentActionsDangerousCommandBlockedTitle => 'Comando bloqueado';
+
+  @override
+  String get agentActionsDangerousCommandBlockedMessage =>
+      'O comando contem um padrao de alto risco e foi bloqueado por seguranca. Revise o comando ou solicite aprovacao operacional.';
+
+  @override
+  String get agentActionsDangerousCommandWarnTitle => 'Comando de alto risco detectado';
+
+  @override
+  String agentActionsDangerousCommandWarnMessage(String patternId, String patternDescription) {
+    return 'O comando corresponde ao padrao \"$patternId\" ($patternDescription). A execucao manual exige confirmacao.';
+  }
 
   @override
   String get agentActionsValidationTitle => 'Confira os campos da acao';

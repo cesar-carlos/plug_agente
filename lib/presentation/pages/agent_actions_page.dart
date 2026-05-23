@@ -6,10 +6,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' as widgets;
+import 'package:intl/intl.dart';
 import 'package:plug_agente/application/actions/actions.dart';
 import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
 import 'package:plug_agente/application/rpc/agent_action_execution_output_pager.dart';
 import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_failure_phase_filter_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
@@ -29,7 +31,9 @@ import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_deta
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_secrets_section.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_dialog.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_dangerous_command_warn_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_detail_panel.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_preflight_settings_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_remote_audit_panel.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_retention_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_runtime_support_card.dart';
@@ -151,7 +155,13 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
               const widgets.SingleActivator(LogicalKeyboardKey.keyR, control: true): () {
                 _runPageShortcut(() {
                   if (provider.canRunSelected) {
-                    unawaited(provider.runSelectedAction());
+                    unawaited(
+                      _runSelectedActionWithDangerousCommandCheck(
+                        context,
+                        provider,
+                        l10n,
+                      ),
+                    );
                   }
                 });
               },
@@ -717,6 +727,10 @@ class _AgentActionsSettingsTab extends StatelessWidget {
         AgentActionsSummaryCard(provider: provider, l10n: l10n),
         const SizedBox(height: AppSpacing.md),
         ..._elevatedRunnerStatusWidgets(provider, l10n),
+        AgentActionsPreflightSettingsCard(provider: provider, l10n: l10n),
+        const SizedBox(height: AppSpacing.md),
+        AgentActionsDangerousCommandWarnCard(provider: provider, l10n: l10n),
+        const SizedBox(height: AppSpacing.md),
         AgentActionsRetentionCard(l10n: l10n),
         if (runtimeCapabilities.isDegraded ||
             runtimeCapabilities.isUnsupported ||
@@ -1087,7 +1101,14 @@ class _DefinitionRowActions extends StatelessWidget {
             onPressed: provider.canRunDefinition(definition)
                 ? () {
                     provider.selectAction(definition.id);
-                    unawaited(provider.runSelectedAction());
+                    unawaited(
+                      _runSelectedActionWithDangerousCommandCheck(
+                        context,
+                        provider,
+                        l10n,
+                        definition: definition,
+                      ),
+                    );
                   }
                 : null,
           ),
@@ -1349,6 +1370,11 @@ class _SelectedActionDetailContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
+        ..._dangerousCommandRunGuidance(
+          provider: provider,
+          definition: definition,
+          l10n: l10n,
+        ),
         if (provider.lastTestedActionId == definition.id) ...[
           InfoBar(
             title: Text(l10n.agentActionsTestSuccessTitle),
@@ -1769,6 +1795,89 @@ Future<void> _confirmDelete(
   if (confirmed ?? false) {
     await provider.deleteSelectedAction();
   }
+}
+
+Future<void> _runSelectedActionWithDangerousCommandCheck(
+  BuildContext context,
+  AgentActionsProvider provider,
+  AppLocalizations l10n, {
+  AgentActionDefinition? definition,
+}) async {
+  final target = definition ?? provider.selectedDefinition;
+  if (target == null || !provider.canRunDefinition(target)) {
+    return;
+  }
+
+  provider.selectAction(target.id);
+  final assessment = provider.assessDangerousCommandForRun(target);
+  if (assessment.isBlocked) {
+    provider.reportDangerousCommandBlocked(l10n.agentActionsDangerousCommandBlockedMessage);
+    return;
+  }
+
+  if (assessment.requiresConfirmation) {
+    final match = assessment.match;
+    if (match == null) {
+      return;
+    }
+
+    final confirmed = await confirmDangerousCommandRun(
+      context: context,
+      l10n: l10n,
+      patternId: match.patternId,
+      patternDescription: match.description,
+    );
+    if (!confirmed) {
+      return;
+    }
+  }
+
+  await provider.runSelectedAction();
+}
+
+List<Widget> _dangerousCommandRunGuidance({
+  required AgentActionsProvider provider,
+  required AgentActionDefinition definition,
+  required AppLocalizations l10n,
+}) {
+  final assessment = provider.assessDangerousCommandForRun(definition);
+  if (assessment.policy == AgentActionDangerousCommandRunPolicy.allow) {
+    return const <Widget>[];
+  }
+
+  final match = assessment.match;
+  if (match == null) {
+    return const <Widget>[];
+  }
+
+  if (assessment.isBlocked) {
+    return <Widget>[
+      InfoBar(
+        key: ValueKey<String>('agent_action_dangerous_command_blocked_${definition.id}'),
+        title: Text(l10n.agentActionsDangerousCommandBlockedTitle),
+        content: Text(l10n.agentActionsDangerousCommandBlockedMessage),
+        severity: InfoBarSeverity.error,
+        isLong: true,
+      ),
+      const SizedBox(height: AppSpacing.sm),
+    ];
+  }
+
+  return <Widget>[
+    InfoBar(
+      key: ValueKey<String>('agent_action_dangerous_command_warn_${definition.id}'),
+      title: Text(l10n.agentActionsDangerousCommandWarnTitle),
+      content: Text(
+        l10n.agentActionsDangerousCommandWarnMessage(
+          match.patternId,
+          match.description,
+        ),
+      ),
+      severity: InfoBarSeverity.warning,
+      isLong: true,
+    ),
+    const SizedBox(height: AppSpacing.sm),
+  ];
 }
 
 class _AgentActionsHistoryFilters extends StatefulWidget {

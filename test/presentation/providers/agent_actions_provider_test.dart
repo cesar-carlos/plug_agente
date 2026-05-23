@@ -28,8 +28,10 @@ import 'package:plug_agente/application/use_cases/validate_agent_action_definiti
 import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
+import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
@@ -46,6 +48,8 @@ import 'package:uuid/uuid.dart';
 
 void main() {
   late _FakeAgentActionRepository repository;
+  late InMemoryAppSettingsStore appSettingsStore;
+  late AgentActionPreflightSettings preflightSettings;
   late FeatureFlags featureFlags;
   late ActionExecutionQueue executionQueue;
   late AgentActionsProvider provider;
@@ -53,7 +57,9 @@ void main() {
 
   setUp(() {
     repository = _FakeAgentActionRepository();
-    featureFlags = FeatureFlags(InMemoryAppSettingsStore());
+    appSettingsStore = InMemoryAppSettingsStore();
+    preflightSettings = AgentActionPreflightSettings(appSettingsStore);
+    featureFlags = FeatureFlags(appSettingsStore);
     executionQueue = ActionExecutionQueue();
     developerData7ConnectionGateway = _FakeDeveloperData7ConnectionGateway();
 
@@ -79,6 +85,7 @@ void main() {
       validateDefinition,
       const AgentActionDefinitionSnapshotter(),
       featureFlags,
+      preflightSettings: preflightSettings,
     );
     const portableCodec = AgentActionPortableCodec();
     final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);
@@ -130,6 +137,7 @@ void main() {
       featureFlags,
       const Uuid(),
       now: () => DateTime(2026, 5, 15, 12),
+      preflightSettings: preflightSettings,
     );
   });
 
@@ -473,6 +481,7 @@ void main() {
       validateDefinition,
       const AgentActionDefinitionSnapshotter(),
       featureFlags,
+      preflightSettings: preflightSettings,
     );
     final dispatchTrigger = DispatchAgentActionTrigger(
       repository,
@@ -544,6 +553,7 @@ void main() {
       featureFlags,
       const Uuid(),
       triggerScheduler: scheduler,
+      preflightSettings: preflightSettings,
     );
 
     expect(
@@ -569,6 +579,7 @@ void main() {
     final providerWithCom = _buildProvider(
       repository: repository,
       featureFlags: featureFlags,
+      preflightSettings: preflightSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
       runnerRegistry: runnerRegistry,
@@ -588,6 +599,7 @@ void main() {
     final providerWithCom = _buildProvider(
       repository: repository,
       featureFlags: featureFlags,
+      preflightSettings: preflightSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
       runnerRegistry: runnerRegistry,
@@ -605,6 +617,7 @@ void main() {
     final providerWithCom = _buildProvider(
       repository: repository,
       featureFlags: featureFlags,
+      preflightSettings: preflightSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
       runnerRegistry: runnerRegistry,
@@ -624,6 +637,7 @@ void main() {
     final providerWithCom = _buildProvider(
       repository: repository,
       featureFlags: featureFlags,
+      preflightSettings: preflightSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
       runnerRegistry: runnerRegistry,
@@ -639,6 +653,7 @@ void main() {
     final providerWithoutDiagnostics = _buildProvider(
       repository: repository,
       featureFlags: featureFlags,
+      preflightSettings: preflightSettings,
       executionQueue: executionQueue,
       developerData7ConnectionGateway: developerData7ConnectionGateway,
     );
@@ -1162,6 +1177,44 @@ void main() {
     expect(saved, isTrue);
     expect(repository.definitions['action-1']?.state, AgentActionState.active);
     expect(repository.definitions['action-1']?.lastPreflightSnapshotHash, isNotNull);
+    expect(repository.definitions['action-1']?.lastPreflightValidatedAt, isNotNull);
+  });
+
+  test('should block active save when preflight validation expired', () async {
+    repository.definitions['action-1'] = AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      config: const CommandLineActionConfig(command: 'dir'),
+      lastPreflightSnapshotHash: 'sha256:stale',
+      lastPreflightValidatedAt: DateTime.utc(2020),
+    );
+    await provider.load();
+    provider.selectAction('action-1');
+
+    const snapshotter = AgentActionDefinitionSnapshotter();
+    final definition = provider.selectedDefinition!;
+    final preflightHash = snapshotter.snapshotHash(
+      definition.copyWith(state: AgentActionState.needsValidation),
+    );
+    repository.definitions['action-1'] = definition.copyWith(
+      lastPreflightSnapshotHash: preflightHash,
+      lastPreflightValidatedAt: DateTime.utc(2020),
+    );
+    await provider.load();
+    provider.selectAction('action-1');
+
+    expect(provider.isPreflightExpiredForDefinition(provider.selectedDefinition!), isTrue);
+    expect(provider.canSetDefinitionActive('action-1', draftModified: false), isFalse);
+
+    final saved = await provider.saveCommandLineAction(
+      actionId: 'action-1',
+      name: 'Run command',
+      command: 'dir',
+      state: AgentActionState.active,
+    );
+
+    expect(saved, isFalse);
+    expect(repository.definitions['action-1']?.state, isNot(AgentActionState.active));
   });
 
   test('should block active save after config changes without retest', () async {
@@ -1190,11 +1243,56 @@ void main() {
       'dir',
     );
   });
+
+  test('should block dangerous command-line runs by default', () {
+    final definition = _commandLineDefinition(command: 'format C: /Y');
+
+    final assessment = provider.assessDangerousCommandForRun(definition);
+
+    expect(assessment.isBlocked, isTrue);
+    expect(assessment.match?.patternId, 'format');
+    expect(provider.isDangerousCommandWarnModeEnabled, isFalse);
+  });
+
+  test('should warn instead of block when dangerous command warn mode is enabled', () async {
+    await featureFlags.setEnableAgentActionDangerousCommandWarnMode(true);
+    final definition = _commandLineDefinition(command: 'format C: /Y');
+
+    final assessment = provider.assessDangerousCommandForRun(definition);
+
+    expect(assessment.requiresConfirmation, isTrue);
+    expect(assessment.isBlocked, isFalse);
+    expect(assessment.match?.patternId, 'format');
+  });
+
+  test('should allow safe command-line runs', () {
+    final definition = _commandLineDefinition(command: 'echo hello');
+
+    final assessment = provider.assessDangerousCommandForRun(definition);
+
+    expect(assessment.policy, AgentActionDangerousCommandRunPolicy.allow);
+  });
+
+  test('should report blocked dangerous command message', () {
+    provider.reportDangerousCommandBlocked('blocked for safety');
+
+    expect(provider.errorMessage, 'blocked for safety');
+  });
+}
+
+AgentActionDefinition _commandLineDefinition({required String command}) {
+  return AgentActionDefinition(
+    id: 'action-dangerous',
+    name: 'Dangerous command',
+    state: AgentActionState.active,
+    config: CommandLineActionConfig(command: command),
+  );
 }
 
 AgentActionsProvider _buildProvider({
   required _FakeAgentActionRepository repository,
   required FeatureFlags featureFlags,
+  required AgentActionPreflightSettings preflightSettings,
   required ActionExecutionQueue executionQueue,
   required _FakeDeveloperData7ConnectionGateway developerData7ConnectionGateway,
   AgentActionLocalRunnerRegistry? runnerRegistry,
@@ -1225,6 +1323,7 @@ AgentActionsProvider _buildProvider({
     validateDefinition,
     const AgentActionDefinitionSnapshotter(),
     featureFlags,
+    preflightSettings: preflightSettings,
   );
   const portableCodec = AgentActionPortableCodec();
   final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);
@@ -1278,6 +1377,7 @@ AgentActionsProvider _buildProvider({
     triggerScheduler: triggerScheduler,
     comObjectInvocationDiagnostics: comObjectInvocationDiagnostics,
     now: () => DateTime(2026, 5, 15, 12),
+    preflightSettings: preflightSettings,
   );
 }
 
