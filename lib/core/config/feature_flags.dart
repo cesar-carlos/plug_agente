@@ -403,7 +403,10 @@ class FeatureFlags {
   /// When true, read-only JSON-RPC batches may dispatch whitelisted methods in
   /// parallel (bounded pool) after sequential guard evaluation, when the hub
   /// also negotiates `parallelBatchDispatch`.
-  bool get enableParallelJsonRpcBatchDispatch => _prefs.getBool(_keyEnableParallelJsonRpcBatchDispatch) ?? false;
+  /// Parallel dispatch for read-only sql.execute items in JSON-RPC batches.
+  /// Negotiation-gated: only activates when the hub also advertises support in
+  /// capabilities. Uses a pool-aware semaphore to avoid ODBC oversubscription.
+  bool get enableParallelJsonRpcBatchDispatch => _prefs.getBool(_keyEnableParallelJsonRpcBatchDispatch) ?? true;
 
   Future<void> setEnableParallelJsonRpcBatchDispatch(bool value) async {
     await _prefs.setBool(_keyEnableParallelJsonRpcBatchDispatch, value);
@@ -454,7 +457,7 @@ class FeatureFlags {
     await setEnableAgentActionsMaintenanceStrictMode(false);
     await setEnableAgentActionDangerousCommandWarnMode(false);
     await setEnableAgentActionRemoteAudit(true);
-    await setEnableParallelJsonRpcBatchDispatch(false);
+    await setEnableParallelJsonRpcBatchDispatch(true);
     await resetHubResilienceOverrides();
   }
 }
