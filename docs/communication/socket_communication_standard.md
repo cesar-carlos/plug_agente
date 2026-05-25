@@ -130,8 +130,13 @@ handshake.
 
 - `agent:heartbeat`
   - enviado periodicamente pelo agente quando protocolo efetivo e v2
+  - payload: `{ agent_id, timestamp, protocol, trace_id }` onde `trace_id` e
+    um identificador unico gerado por emissao para correlacao em rastreamento
+    distribuido
 - `hub:heartbeat_ack`
   - recebido do hub como confirmacao de heartbeat
+  - o hub deve espelhar o `trace_id` recebido no ack quando presente, permitindo
+    correlacionar emissao e confirmacao sem relogio sincronizado
   - na ausencia de `ack` por janelas consecutivas, o agente marca conexao como
   stale e aciona fluxo de reconexao
 
@@ -147,15 +152,29 @@ handshake.
 | ---------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agent:register`       | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities, profile?, profile_version?, profile_updated_at? }>` | `agent:capabilities` ou `agent:register_error`                                                                                                             |
 | `agent:capabilities`   | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
-| `agent:register_error` | hub -> agente | `{ code, reason, message }` (estrutura JSON, NAO PayloadFrame)          | rejeicao de `agent:register`. `code/reason` `transient_failure` ou `rate_limited` agendam novo registro; demais valores forçam reconexao.                  |
+| `agent:register_error` | hub -> agente | `{ code, reason, message }` (estrutura JSON, NAO PayloadFrame)          | rejeicao de `agent:register`. Ver tabela de codigos abaixo.                                                                                                |
 | `agent:ready`          | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                 |
 | `rpc:request`          | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response`                                                                                                                                             |
 | `rpc:request_ack`      | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
 | `rpc:batch_ack`        | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`                            | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
 | `rpc:chunk`            | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
 | `rpc:complete`         | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
-| `rpc:stream.pull`      | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | (quando `enableSocketBackpressure`)                                                                                                                        |
+| `rpc:stream.pull`      | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | registrado pelo agente quando qualquer flag de streaming estiver ativa (`enableSocketBackpressure`, `enableSocketStreamingChunks` ou `enableSocketStreamingFromDb`); `window_size` so e processado ativamente quando `enableSocketBackpressure` |
 
+
+### Codigos de agent:register_error
+
+| `code` / `reason` | Comportamento do agente |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `transient_failure` | Recuperavel: agenda novo `agent:register` via timer de capabilities sem fechar o socket |
+| `rate_limited` | Recuperavel: idem; aguarda nova tentativa apos ciclo de timeout de capabilities |
+| `auth_failed` | Terminal: fecha o socket e aciona reconexao completa com refresh de token |
+| `unauthorized` | Terminal: idem |
+| `forbidden` | Terminal: idem |
+| `agent_not_found` | Terminal: idem |
+| qualquer outro valor ou ausente | Recuperavel por padrao: tratado como `transient_failure` para nao interromper conexao por codigos desconhecidos introduzidos pelo hub |
+
+O agente nunca envia resposta a `agent:register_error`; o evento e assimetrico.
 
 **Timeout de capabilities:** Se o hub nao responder com `agent:capabilities` dentro
 de `capabilitiesTimeoutMs` (default 8 s) apos `agent:register`, o agente reenvia

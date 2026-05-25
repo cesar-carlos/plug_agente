@@ -16,6 +16,7 @@ Estado implementado atual:
 | Testes de integracao end-to-end para limites negociados | planned | Fase 6    |
 | Rotacao automatica de chaves de assinatura              | planned | Fase 6    |
 | Monitoramento/alertas de payload signing failures       | planned | Fase 6    |
+| Homologacao E2E hub-agente para `client_token.getPolicy` (rate limit, retry_after_ms / reset_at) | planned | Fase 6 |
 
 
 ## Itens concluidos (removidos do backlog)
@@ -38,6 +39,10 @@ Estado implementado atual:
 | Transporte binario em `PayloadFrame` para eventos de aplicacao    | v2.4         |
 | Compressao GZIP na borda de transporte com fallback por threshold | v2.4         |
 | Rotacao manual de chaves por `key_id` e diagnostico de assinatura | pos-v2.8     |
+| Offload de HMAC-SHA256 para isolate via `compute()` acima de 64 KiB (`PayloadSigner.signFrameAsync`) | pos-v2.11 |
+| `trace_id` em `agent:heartbeat` para correlacao de rastreamento distribuido | pos-v2.11 |
+| `rpc:stream.pull` registrado para qualquer flag de streaming ativa (nao so backpressure) | pos-v2.11 |
+| Codigos terminais vs recuperaveis de `agent:register_error` documentados e implementados | pos-v2.11 |
 
 
 ## Fase 5 - Hardening residual (concluida)
@@ -53,9 +58,10 @@ Todos os itens da Fase 5 foram implementados:
 Objetivo:
 
 - Homologar clientes no fluxo encode/compress/decode/decompress.
-- Testes de integracao de ponta a ponta.
+- Testes de integracao de ponta a ponta para limites negociados e delivery guarantees.
 - Automatizar rotacao de chaves de assinatura sem downtime.
 - Alertas operacionais para falhas de assinatura.
+- Homologar `client_token.getPolicy` E2E com hub real (rate limit, `retry_after_ms`).
 
 ## Criterio de rollout
 

@@ -629,4 +629,131 @@ void main() {
       await handleFuture;
     });
   });
+
+  group('rpc:batch_ack delivery guarantee (B3)', () {
+    test('should emit rpc:batch_ack with request ids when enableSocketDeliveryGuarantees is true', () async {
+      when(() => featureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+
+      final emittedEvents = <({String event, dynamic payload})>[];
+      final trackingHandler = RpcBatchInboundHandler(
+        featureFlags: featureFlags,
+        protocolProvider: () => protocol,
+        logSummarizer: PayloadLogSummarizer(thresholdBytes: 8192),
+        responsePreparer: RpcResponsePreparer(
+          featureFlags: featureFlags,
+          logSummarizer: PayloadLogSummarizer(thresholdBytes: 8192),
+          contractValidator: const RpcContractValidator(),
+          protocolProvider: () => protocol,
+          usesBinaryTransport: () => true,
+          agentIdProvider: () => 'agent-1',
+        ),
+        authorizationDecisionLogger: AuthorizationDecisionLogger(
+          featureFlags: featureFlags,
+          logMessage: (_, _, _) {},
+          agentIdProvider: () => 'agent-1',
+          onTokenRefreshRequested: () {},
+        ),
+        dispatcher: dispatcher,
+        requestGuard: RpcRequestGuard(maxRequestsPerWindow: 1000),
+        schemaValidator: const RpcRequestSchemaValidator(),
+        agentIdProvider: () => 'agent-1',
+        emitInboundRpcResponse: (response, {methodsById = const {}}) async {
+          emittedResponses.add(response);
+        },
+        emitEvent: (event, payload) async {
+          emittedEvents.add((event: event, payload: payload));
+        },
+        sendSchemaValidationError: (_, _, _, {errorReason}) async {},
+        validateBatchRequestJsonSchemasOrEmit: (_) async => true,
+        hasNullIdCompatibilityViolation: (_) => false,
+      );
+
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (inv) async => RpcResponse.success(
+          id: (inv.positionalArguments[0] as RpcRequest).id,
+          result: <String, dynamic>{},
+        ),
+      );
+
+      final batch = [
+        _batchItem(id: 'req-1', method: 'sql.execute', params: {'sql': 'SELECT 1'}),
+        _batchItem(id: 'req-2', method: 'sql.execute', params: {'sql': 'SELECT 2'}),
+      ];
+
+      await trackingHandler.handleBatchRequest(batch);
+
+      final ackEvents = emittedEvents.where((e) => e.event == 'rpc:batch_ack').toList();
+      expect(ackEvents, hasLength(1));
+      final ackPayload = ackEvents.single.payload as Map<String, dynamic>;
+      expect(ackPayload['request_ids'], containsAll(['req-1', 'req-2']));
+      expect(ackPayload.containsKey('received_at'), isTrue);
+    });
+
+    test('should NOT emit rpc:batch_ack when enableSocketDeliveryGuarantees is false', () async {
+      when(() => featureFlags.enableSocketDeliveryGuarantees).thenReturn(false);
+
+      final emittedEvents = <({String event, dynamic payload})>[];
+      final trackingHandler = RpcBatchInboundHandler(
+        featureFlags: featureFlags,
+        protocolProvider: () => protocol,
+        logSummarizer: PayloadLogSummarizer(thresholdBytes: 8192),
+        responsePreparer: RpcResponsePreparer(
+          featureFlags: featureFlags,
+          logSummarizer: PayloadLogSummarizer(thresholdBytes: 8192),
+          contractValidator: const RpcContractValidator(),
+          protocolProvider: () => protocol,
+          usesBinaryTransport: () => true,
+          agentIdProvider: () => 'agent-1',
+        ),
+        authorizationDecisionLogger: AuthorizationDecisionLogger(
+          featureFlags: featureFlags,
+          logMessage: (_, _, _) {},
+          agentIdProvider: () => 'agent-1',
+          onTokenRefreshRequested: () {},
+        ),
+        dispatcher: dispatcher,
+        requestGuard: RpcRequestGuard(maxRequestsPerWindow: 1000),
+        schemaValidator: const RpcRequestSchemaValidator(),
+        agentIdProvider: () => 'agent-1',
+        emitInboundRpcResponse: (response, {methodsById = const {}}) async {
+          emittedResponses.add(response);
+        },
+        emitEvent: (event, payload) async {
+          emittedEvents.add((event: event, payload: payload));
+        },
+        sendSchemaValidationError: (_, _, _, {errorReason}) async {},
+        validateBatchRequestJsonSchemasOrEmit: (_) async => true,
+        hasNullIdCompatibilityViolation: (_) => false,
+      );
+
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (inv) async => RpcResponse.success(
+          id: (inv.positionalArguments[0] as RpcRequest).id,
+          result: <String, dynamic>{},
+        ),
+      );
+
+      await trackingHandler.handleBatchRequest([
+        _batchItem(id: 'req-1', method: 'sql.execute', params: {'sql': 'SELECT 1'}),
+      ]);
+
+      expect(emittedEvents.where((e) => e.event == 'rpc:batch_ack'), isEmpty);
+    });
+  });
 }

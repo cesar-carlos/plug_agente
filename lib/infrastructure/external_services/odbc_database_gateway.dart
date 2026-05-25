@@ -421,8 +421,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   QueryResponse _createSuccessResponse(
     QueryRequest request,
-    QueryResult queryResult,
-  ) {
+    QueryResult queryResult, {
+    DateTime? startedAt,
+  }) {
     final rawData = OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
       queryResult,
     );
@@ -433,13 +434,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final data = paginationResponse == null ? rawData : rawData.take(request.pagination!.pageSize).toList();
 
     final isDml = _isDmlQuery(request.query);
+    final finishedAt = DateTime.now();
     return QueryResponse(
       id: _uuid.v4(),
       requestId: request.id,
       agentId: request.agentId,
       data: data,
       affectedRows: isDml ? data.length : null,
-      timestamp: DateTime.now(),
+      startedAt: startedAt,
+      timestamp: finishedAt,
       columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
         queryResult.columns,
       ),
@@ -452,8 +455,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   /// set row count (legacy single-field compatibility for RPC).
   QueryResponse _createSuccessResponseFromMulti(
     QueryRequest request,
-    QueryResultMulti queryResult,
-  ) {
+    QueryResultMulti queryResult, {
+    DateTime? startedAt,
+  }) {
     final resultSets = <QueryResultSet>[];
     final items = <QueryResponseItem>[];
     var resultSetIndex = 0;
@@ -503,6 +507,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       agentId: request.agentId,
       data: primaryResultSet.rows,
       affectedRows: totalAffectedRows > 0 ? totalAffectedRows : primaryResultSet.rowCount,
+      startedAt: startedAt,
       timestamp: DateTime.now(),
       columnMetadata: primaryResultSet.columnMetadata,
       resultSets: resultSets,
@@ -2637,6 +2642,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
 
       if (timeout != null && !usesMultiResultExecution && !_hasNamedParameters(preparedExecution)) {
+        final startedAt = DateTime.now();
         final asyncResult = await _runNativeAsyncQueryWithTimeout(
           connectionId: connId,
           query: preparedExecution.sql,
@@ -2644,7 +2650,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         );
         if (asyncResult.isSuccess()) {
           return _QueryExecutionOutcome.success(
-            _createSuccessResponse(request, asyncResult.getOrThrow()),
+            _createSuccessResponse(request, asyncResult.getOrThrow(), startedAt: startedAt),
           );
         }
 
@@ -2755,6 +2761,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
 
     final preparedStatementId = stmtId.getOrThrow();
+    final startedAt = DateTime.now();
     final result = await _executePreparedStatementWithTimeout(
       connectionId: connectionId,
       preparedExecution: preparedExecution,
@@ -2763,7 +2770,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
     return result.fold(
       (queryResult) => _QueryExecutionOutcome.success(
-        _createSuccessResponse(request, queryResult),
+        _createSuccessResponse(request, queryResult, startedAt: startedAt),
       ),
       _QueryExecutionOutcome.failure,
     );
@@ -2792,6 +2799,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         );
       }
 
+      final startedAt = DateTime.now();
       final result = await _executePreparedStatementWithTimeout(
         connectionId: connectionId,
         preparedExecution: preparedExecution,
@@ -2800,7 +2808,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
       return result.fold(
         (queryResult) => _QueryExecutionOutcome.success(
-          _createSuccessResponse(request, queryResult),
+          _createSuccessResponse(request, queryResult, startedAt: startedAt),
         ),
         _QueryExecutionOutcome.failure,
       );
@@ -3695,13 +3703,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       request,
       preparedExecution,
     )) {
+      final startedAt = DateTime.now();
       final queryResult = await _service.executeQueryMultiFull(
         connectionId,
         preparedExecution.sql,
       );
       return queryResult.fold(
         (success) => _QueryExecutionOutcome.success(
-          _createSuccessResponseFromMulti(request, success),
+          _createSuccessResponseFromMulti(request, success, startedAt: startedAt),
         ),
         _QueryExecutionOutcome.failure,
       );
@@ -3712,6 +3721,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       _logResultEncodingIfNeeded(resultEncoding);
     }
 
+    final startedAt = DateTime.now();
     final queryResult = resultEncoding == ResultEncoding.rowMajor
         ? await _executeQueryRowMajor(connectionId, preparedExecution)
         : await _executeQueryWithResultEncoding(
@@ -3722,7 +3732,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     return queryResult.fold(
       (success) => _QueryExecutionOutcome.success(
-        _createSuccessResponse(request, success),
+        _createSuccessResponse(request, success, startedAt: startedAt),
       ),
       _QueryExecutionOutcome.failure,
     );
