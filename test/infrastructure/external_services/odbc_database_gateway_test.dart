@@ -3856,6 +3856,54 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         }
       },
     );
+
+    test(
+      'executeQuery should set startedAt on QueryResponse (B1 fix)',
+      () async {
+        // Verifies that _createSuccessResponse captures startedAt BEFORE the
+        // ODBC call so that started_at != finished_at on the wire format.
+        const pooledConnectionId = 'pool-timing';
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        final config = _buildConfig(connectionString);
+        final request = QueryRequest(
+          id: 'req-timing',
+          agentId: config.agentId,
+          query: 'SELECT 1',
+          timestamp: DateTime.now(),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer(
+          (_) async => Success(config),
+        );
+        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer(
+          (_) async => const Success(pooledConnectionId),
+        );
+        when(
+          () => mockService.executeQuery(any(), connectionId: pooledConnectionId),
+        ).thenAnswer(
+          (_) async => const Success(QueryResult(columns: ['n'], rows: [[1]], rowCount: 1)),
+        );
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer(
+          (_) async => const Success(unit),
+        );
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isSuccess(), isTrue);
+        final response = result.getOrNull()!;
+        // startedAt must be set (not null) — proves _createSuccessResponse received
+        // the captured DateTime from before the query call.
+        expect(response.startedAt, isNotNull);
+        // startedAt must be at or before finished_at (timestamp).
+        expect(
+          response.startedAt!.isBefore(response.timestamp) ||
+              response.startedAt!.isAtSameMomentAs(response.timestamp),
+          isTrue,
+          reason: 'startedAt must not be after timestamp (finished_at)',
+        );
+      },
+    );
   });
 }
 

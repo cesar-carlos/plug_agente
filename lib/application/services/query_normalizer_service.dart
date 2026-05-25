@@ -44,6 +44,7 @@ class QueryNormalizerService {
       data: normalizedData,
       affectedRows: response.affectedRows,
       startedAt: response.startedAt,
+      wasTruncated: response.wasTruncated,
       timestamp: response.timestamp,
       error: response.error,
       columnMetadata: response.columnMetadata,

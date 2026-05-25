@@ -21,6 +21,7 @@ abstract final class QueryResponseRpcMapper {
       'finished_at': finishedAt.toIso8601String(),
       'rows': response.data,
       'row_count': response.data.length,
+      if (response.wasTruncated) 'truncated': true,
       if (response.affectedRows != null) 'affected_rows': response.affectedRows,
       if (response.columnMetadata != null) 'column_metadata': response.columnMetadata,
       if (response.hasMultiResult) ...{

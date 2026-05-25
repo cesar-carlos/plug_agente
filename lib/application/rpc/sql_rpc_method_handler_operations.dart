@@ -1995,6 +1995,7 @@ class SqlRpcMethodHandlerOperations {
       data: primary.rows,
       affectedRows: response.affectedRows,
       startedAt: response.startedAt,
+      wasTruncated: response.wasTruncated,
       timestamp: response.timestamp,
       error: response.error,
       columnMetadata: primary.columnMetadata,

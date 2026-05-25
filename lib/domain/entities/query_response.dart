@@ -61,6 +61,7 @@ class QueryResponse {
     required this.data,
     required this.timestamp,
     this.startedAt,
+    this.wasTruncated = false,
     this.affectedRows,
     this.error,
     this.columnMetadata,
@@ -80,6 +81,12 @@ class QueryResponse {
 
   /// When the response was produced (= finished_at in the wire format).
   final DateTime timestamp;
+
+  /// Whether [data] was cut to fit within a row limit. When `true` the
+  /// transport mapper includes `"truncated": true` in the wire result so the
+  /// hub knows the result set is incomplete.
+  final bool wasTruncated;
+
   final String? error;
   final List<Map<String, dynamic>>? columnMetadata;
   final QueryPaginationInfo? pagination;

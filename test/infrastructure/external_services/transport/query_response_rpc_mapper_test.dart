@@ -84,6 +84,29 @@ void main() {
 
         expect(result['affected_rows'], 42);
       });
+
+      test('should include truncated:true when wasTruncated is set (B2)', () {
+        final response = QueryResponse(
+          id: 'exec-3',
+          requestId: 'req-3',
+          agentId: 'agent-1',
+          data: const [],
+          timestamp: baseTimestamp,
+          wasTruncated: true,
+        );
+
+        final result = QueryResponseRpcMapper.toRpcResult(response);
+
+        expect(result['truncated'], isTrue);
+      });
+
+      test('should NOT include truncated when wasTruncated is false (default)', () {
+        final response = buildResponse();
+
+        final result = QueryResponseRpcMapper.toRpcResult(response);
+
+        expect(result.containsKey('truncated'), isFalse);
+      });
     });
 
     group('toRpcResponse', () {
