@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/security/payload_signing_canonicalizer.dart';
 
@@ -132,6 +132,36 @@ class PayloadSigner {
     return signFrameWithMetrics(frame).signature;
   }
 
+  /// Async variant of [signFrameWithMetrics]: offloads the HMAC-SHA256
+  /// computation to a background isolate via `compute()`. Canonicalization
+  /// runs on the main isolate; only the HMAC step is offloaded, since that
+  /// is the CPU-intensive part and the canonical bytes are a plain `Uint8List`
+  /// that can be transferred cheaply.
+  Future<PayloadSigningResult> signFrameAsync(PayloadFrame frame) async {
+    final keyId = activeKeyId;
+    final key = _keyBytes[keyId]!;
+
+    final canonicalizeSw = Stopwatch()..start();
+    final canonicalBytes = _canonicalizeFrameUtf8(frame);
+    canonicalizeSw.stop();
+
+    final signSw = Stopwatch()..start();
+    final hmacValue = await compute(_computeHmacIsolate, (canonicalBytes, key));
+    signSw.stop();
+
+    return PayloadSigningResult(
+      signature: PayloadSignature(
+        alg: supportedAlgorithm,
+        value: hmacValue,
+        keyId: keyId,
+      ),
+      metrics: PayloadSigningMetrics(
+        canonicalizeDurationUs: canonicalizeSw.elapsedMicroseconds,
+        signDurationUs: signSw.elapsedMicroseconds,
+      ),
+    );
+  }
+
   PayloadSigningResult signFrameWithMetrics(PayloadFrame frame) {
     final keyId = activeKeyId;
     final key = _keyBytes[keyId]!;
@@ -248,4 +278,15 @@ class PayloadSigner {
     }
     return active;
   }
+}
+
+/// Top-level function for [PayloadSigner.signFrameAsync] — must be top-level
+/// so it can be passed to `compute()`.
+///
+/// Receives a record of (canonicalBytes, keyBytes) and returns the
+/// HMAC-SHA256 digest as a base64-encoded string.
+String _computeHmacIsolate((Uint8List, Uint8List) args) {
+  final (data, key) = args;
+  final digest = Hmac(sha256, key).convert(data);
+  return base64Encode(digest.bytes);
 }

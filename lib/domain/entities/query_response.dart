@@ -60,6 +60,7 @@ class QueryResponse {
     required this.agentId,
     required this.data,
     required this.timestamp,
+    this.startedAt,
     this.affectedRows,
     this.error,
     this.columnMetadata,
@@ -72,6 +73,12 @@ class QueryResponse {
   final String agentId;
   final List<Map<String, dynamic>> data;
   final int? affectedRows;
+
+  /// When the SQL execution actually began. `null` when not tracked (legacy
+  /// construction sites). The transport mapper falls back to [timestamp].
+  final DateTime? startedAt;
+
+  /// When the response was produced (= finished_at in the wire format).
   final DateTime timestamp;
   final String? error;
   final List<Map<String, dynamic>>? columnMetadata;

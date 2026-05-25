@@ -185,7 +185,12 @@ class TransportSocketEventBinder {
       unawaited(_inboundHandler.handleRequestWithRelease(data));
     });
 
-    if (_featureFlags.enableSocketBackpressure) {
+    // Register rpc:stream.pull whenever any streaming path is active: the hub
+    // may send pull credits even when the backpressure flag is off but chunked
+    // or DB streaming is enabled; silently dropping them would stall streams.
+    if (_featureFlags.enableSocketBackpressure ||
+        _featureFlags.enableSocketStreamingChunks ||
+        _featureFlags.enableSocketStreamingFromDb) {
       socket.on('rpc:stream.pull', (data) {
         _logMessage('RECEIVED', 'rpc:stream.pull', data);
         _streamPullHandler.handlePull(data);

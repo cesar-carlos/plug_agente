@@ -11,6 +11,7 @@ import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
@@ -23,10 +24,35 @@ import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbou
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_pipeline_cache.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
+import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
+import 'package:result_dart/result_dart.dart';
 
 class _MockFeatureFlags extends Mock implements FeatureFlags {}
+
+/// Fake validator that always rejects every call — used to test schema-gate paths.
+class _AlwaysRejectingValidator extends JsonSchemaContractValidator {
+  _AlwaysRejectingValidator()
+    : super(loader: TransportSchemaLoader(assetLoader: (_) async => '{}'));
+
+  @override
+  Result<void> validate({
+    required String schemaId,
+    required Object? payload,
+    String direction = 'unknown',
+  }) =>
+      Failure(
+        domain.ValidationFailure.withContext(
+          message: 'schema_rejected_in_test',
+          context: {'schema_id': schemaId},
+        ),
+      );
+
+  @override
+  bool isLoaded(String schemaId) => true;
+}
 
 class _MockDispatcher extends Mock implements IRpcRequestDispatcher, RpcMethodDispatcher {}
 
@@ -863,6 +889,128 @@ void main() {
           negotiatedExtensions: any(named: 'negotiatedExtensions'),
         ),
       );
+    });
+  });
+
+  RpcInboundHandler buildHandlerWithValidator(JsonSchemaContractValidator validator) {
+    final pipelineCache = TransportPipelineCache(
+      protocolProvider: () => protocol,
+      hasReceivedCapabilities: () => true,
+      featureFlags: featureFlags,
+    );
+    final summarizer = PayloadLogSummarizer(thresholdBytes: 8192);
+    final frameCodec = PayloadFrameCodec(
+      pipelineCache: pipelineCache,
+      protocolProvider: () => protocol,
+      localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+      hasReceivedCapabilities: () => true,
+      localShouldSignOutgoing: () => false,
+      localRequiresIncomingSignature: () => false,
+    );
+    final preparer = RpcResponsePreparer(
+      featureFlags: featureFlags,
+      logSummarizer: summarizer,
+      contractValidator: const RpcContractValidator(),
+      protocolProvider: () => protocol,
+      usesBinaryTransport: () => true,
+      agentIdProvider: () => 'agent-1',
+    );
+    final authzLogger = AuthorizationDecisionLogger(
+      featureFlags: featureFlags,
+      logMessage: (_, _, _) {},
+      agentIdProvider: () => 'agent-1',
+      onTokenRefreshRequested: () {},
+    );
+    return RpcInboundHandler(
+      featureFlags: featureFlags,
+      protocolProvider: () => protocol,
+      agentIdProvider: () => 'agent-1',
+      frameCodec: frameCodec,
+      logSummarizer: summarizer,
+      responsePreparer: preparer,
+      authorizationDecisionLogger: authzLogger,
+      dispatcher: dispatcher,
+      requestGuard: RpcRequestGuard(),
+      schemaValidator: const RpcRequestSchemaValidator(),
+      streamEmitterFactory: _MockStreamEmitter.new,
+      emitRpcResponse: (response) async => emittedResponses.add(response),
+      emitEvent: (event, payload) async {},
+      hasReceivedCapabilities: () => true,
+      jsonSchemaValidator: validator,
+    );
+  }
+
+  group('batch validation error id (M5)', () {
+    test('should use first batch item id in error response when batch fails validation', () async {
+      when(() => featureFlags.enableSocketSchemaValidation).thenReturn(true);
+
+      final h = buildHandlerWithValidator(_AlwaysRejectingValidator());
+
+      final batch = [
+        {'jsonrpc': '2.0', 'id': 'first-id', 'method': 'sql.execute', 'params': {'sql': 'SELECT 1'}},
+        {'jsonrpc': '2.0', 'id': 'second-id', 'method': 'sql.execute', 'params': {'sql': 'SELECT 2'}},
+      ];
+
+      await h.handleBatchRequest(batch);
+
+      expect(emittedResponses, hasLength(1));
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.id, 'first-id');
+    });
+  });
+
+  group('schema validation size gate (P1)', () {
+    test('skips schema validation for large payloads and dispatches normally', () async {
+      when(() => featureFlags.enableSocketSchemaValidation).thenReturn(true);
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((_) async => RpcResponse.success(id: 'big-req', result: <String, dynamic>{}));
+
+      final h = buildHandlerWithValidator(_AlwaysRejectingValidator());
+
+      // Build a valid PayloadFrame for the large request so the handler can
+      // decode it before checking schema validation.
+      final largePayload = {'sql': 'x' * (ConnectionConstants.schemaValidationSkipAboveBytes + 1024)};
+      final requestMap = {
+        'jsonrpc': '2.0',
+        'id': 'big-req',
+        'method': 'sql.execute',
+        'params': largePayload,
+      };
+      final pipelineCache = TransportPipelineCache(
+        protocolProvider: () => protocol,
+        hasReceivedCapabilities: () => true,
+        featureFlags: featureFlags,
+      );
+      final frameCodec = PayloadFrameCodec(
+        pipelineCache: pipelineCache,
+        protocolProvider: () => protocol,
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        hasReceivedCapabilities: () => true,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
+      );
+      final wire = (await frameCodec.prepareOutgoing(event: 'rpc:request', logicalPayload: requestMap)).getOrThrow();
+
+      await h.handleRequest(wire);
+
+      verify(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).called(1);
     });
   });
 }

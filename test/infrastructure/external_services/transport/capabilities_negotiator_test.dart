@@ -61,6 +61,7 @@ void main() {
       registerProfileProvider: registerProfileProvider,
       emit: (event, payload) async {
         emitted.add((event: event, payload: payload));
+        return true;
       },
       decodeIncoming:
           decode ??
@@ -183,15 +184,50 @@ void main() {
       expect(reconnectCalls, 0);
     });
 
-    test('returns true and requests reconnect for non-recoverable register errors', () {
+    test('returns true and requests reconnect for known-terminal register errors (auth_failed)', () {
       final neg = buildNegotiator();
 
       final shouldReconnect = neg.handleRegisterError({
-        'code': 'unsupported_protocol',
-        'message': 'no compatible protocol',
+        'code': 'auth_failed',
+        'message': 'authentication failed',
       });
 
       expect(shouldReconnect, isTrue);
+      expect(reconnectCalls, 1);
+    });
+
+    test('should treat unknown error codes as recoverable (M2)', () {
+      // Unknown codes should NOT force immediate reconnect; they are treated
+      // as transient so the capabilities-timeout re-register loop handles them.
+      final neg = buildNegotiator();
+      addTearDown(neg.reset);
+
+      for (final unknownCode in ['unsupported_protocol', 'new_future_code', 'unknown_error']) {
+        reconnectCalls = 0;
+        final shouldReconnect = neg.handleRegisterError({'code': unknownCode, 'message': 'msg'});
+        expect(shouldReconnect, isFalse, reason: 'code=$unknownCode should be recoverable');
+        expect(reconnectCalls, 0, reason: 'code=$unknownCode should not trigger reconnect');
+      }
+    });
+
+    test('should return false from sendRegisterAndStartTimeout when emit fails (H2)', () async {
+      // Simulate _emitEventAsync returning false (encode failure / socket null)
+      final failingEmitNeg = CapabilitiesNegotiator(
+        negotiator: negotiator,
+        featureFlags: featureFlags,
+        contractValidator: const RpcContractValidator(),
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        agentIdProvider: () => 'agent-1',
+        emit: (event, payload) async => false,
+        decodeIncoming: (payload, {String? sourceEvent}) =>
+            Success<Object, Exception>(payload as Object) as Result<dynamic>,
+        onTimeoutReconnect: () => reconnectCalls++,
+      );
+      addTearDown(failingEmitNeg.reset);
+
+      final sent = await failingEmitNeg.sendRegisterAndStartTimeout();
+
+      expect(sent, isFalse);
       expect(reconnectCalls, 1);
     });
   });
@@ -340,6 +376,7 @@ void main() {
         agentIdProvider: () => 'agent-1',
         emit: (event, payload) async {
           emitted.add((event: event, payload: payload));
+          return true;
         },
         decodeIncoming: (payload, {String? sourceEvent}) {
           return Success<Object, Exception>(payload as Object) as Result<dynamic>;

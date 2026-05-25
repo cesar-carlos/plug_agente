@@ -43,6 +43,7 @@ class QueryNormalizerService {
       agentId: response.agentId,
       data: normalizedData,
       affectedRows: response.affectedRows,
+      startedAt: response.startedAt,
       timestamp: response.timestamp,
       error: response.error,
       columnMetadata: response.columnMetadata,

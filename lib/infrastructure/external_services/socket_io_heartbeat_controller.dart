@@ -18,7 +18,16 @@ final class SocketIoHeartbeatController {
     int? maxMissed,
   }) : _interval = interval ?? ConnectionConstants.socketHeartbeatInterval,
        _ackTimeout = ackTimeout ?? ConnectionConstants.socketHeartbeatAckTimeout,
-       _maxMissed = maxMissed ?? ConnectionConstants.socketMaxMissedHeartbeats;
+       _maxMissed = maxMissed ?? ConnectionConstants.socketMaxMissedHeartbeats {
+    // ackTimeout must be strictly less than the periodic interval. If it were
+    // equal or greater, a late ack-timer fire and the next periodic tick could
+    // both call _handleTimeout for the same beat, doubling _missedHeartbeats.
+    assert(
+      _ackTimeout < _interval,
+      'socketHeartbeatAckTimeout ($_ackTimeout) must be less than '
+      'socketHeartbeatInterval ($_interval)',
+    );
+  }
 
   final bool Function() isConnected;
   final void Function() emitHeartbeat;
@@ -66,9 +75,10 @@ final class SocketIoHeartbeatController {
     if (!isConnected()) {
       return;
     }
-
+    // If we are still waiting for an ack from the previous beat, the _ackTimer
+    // has already fired (or is about to) and will increment _missedHeartbeats.
+    // Do not emit another heartbeat until the pending one is resolved.
     if (_waitingAck) {
-      _handleTimeout();
       return;
     }
 

@@ -54,7 +54,7 @@ class CapabilitiesNegotiator {
     required RpcContractValidator contractValidator,
     required ProtocolCapabilities Function() localCapabilitiesProvider,
     required String Function() agentIdProvider,
-    required Future<void> Function(String event, dynamic payload) emit,
+    required Future<bool> Function(String event, dynamic payload) emit,
     required Result<dynamic> Function(dynamic payload, {String? sourceEvent}) decodeIncoming,
     required void Function() onTimeoutReconnect,
     Future<Map<String, dynamic>?> Function()? registerProfileProvider,
@@ -76,7 +76,7 @@ class CapabilitiesNegotiator {
   final ProtocolCapabilities Function() _localCapabilitiesProvider;
   final String Function() _agentIdProvider;
   final Future<Map<String, dynamic>?> Function()? _registerProfileProvider;
-  final Future<void> Function(String event, dynamic payload) _emit;
+  final Future<bool> Function(String event, dynamic payload) _emit;
   final Result<dynamic> Function(dynamic payload, {String? sourceEvent}) _decodeIncoming;
   final void Function() _onTimeoutReconnect;
   final PayloadSigner? _payloadSigner;
@@ -138,8 +138,11 @@ class CapabilitiesNegotiator {
   static bool _isRecoverableRegisterError(String? code, String? reason) {
     if (code == null && reason == null) return false;
     final lc = (code ?? '').toLowerCase();
-    final lr = (reason ?? '').toLowerCase();
-    return lc == 'transient_failure' || lr == 'transient_failure' || lc == 'rate_limited' || lr == 'rate_limited';
+    // Known terminal errors: force reconnect so the app can re-authenticate.
+    // Unknown codes are treated as transient to avoid unnecessary reconnect
+    // bursts when the hub introduces new error codes not yet listed here.
+    const knownTerminal = {'auth_failed', 'unauthorized', 'forbidden', 'agent_not_found'};
+    return !knownTerminal.contains(lc);
   }
 
   /// Sends the `agent:register` frame followed by the timeout watchdog.
@@ -248,8 +251,8 @@ class CapabilitiesNegotiator {
       }
     }
 
-    await _emit('agent:register', registerData);
-    return true;
+    final emitted = await _emit('agent:register', registerData);
+    return emitted;
   }
 
   void _startTimeoutTimer() {

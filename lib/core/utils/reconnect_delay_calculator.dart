@@ -2,6 +2,9 @@ import 'dart:math';
 
 /// Computes reconnect delay with exponential backoff and optional jitter.
 ///
+/// Uses [Duration.inMilliseconds] to preserve sub-second precision in
+/// [initialDelay] (e.g. `Duration(milliseconds: 500)` is respected exactly).
+///
 /// Used by the app-level connection recovery flow (`ConnectionProvider`).
 /// Jitter (±15% by default) helps avoid thundering herd when many
 /// clients reconnect after an outage.
@@ -15,12 +18,11 @@ Duration computeReconnectDelay({
   final attemptOffset = attempt - 1;
   final safeExponent = attemptOffset < 0 ? 0 : (attemptOffset > 5 ? 5 : attemptOffset);
   final multiplier = 1 << safeExponent;
-  final seconds = initialDelay.inSeconds * multiplier;
-  final cappedSeconds = seconds > maxDelay.inSeconds ? maxDelay.inSeconds : seconds;
-  final baseMs = cappedSeconds * 1000;
+  final baseMs = initialDelay.inMilliseconds * multiplier;
+  final cappedMs = baseMs > maxDelay.inMilliseconds ? maxDelay.inMilliseconds : baseMs;
   final rng = random ?? Random();
   final jitterFactor = (rng.nextDouble() * 2 - 1) * jitterFraction;
-  final jitteredMs = (baseMs * (1 + jitterFactor)).round();
+  final jitteredMs = (cappedMs * (1 + jitterFactor)).round();
   final safeMs = jitteredMs < 100 ? 100 : jitteredMs;
   return Duration(milliseconds: safeMs);
 }

@@ -29,6 +29,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/authoriza
 import 'package:plug_agente/infrastructure/external_services/transport/capabilities_negotiator.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/query_response_rpc_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_handler.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_stream_pull_handler.dart';
@@ -44,6 +45,35 @@ import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validat
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
+/// Optional dependencies for [SocketIOTransportClientV2], grouped to reduce
+/// constructor arity. All fields are nullable/have defaults; pass a
+/// `const SocketIOTransportClientV2Options()` when no optional features are needed.
+class SocketIOTransportClientV2Options {
+  const SocketIOTransportClientV2Options({
+    this.payloadSigner,
+    this.payloadSigningConfig,
+    this.protocolMetricsCollector,
+    this.logSummarizer,
+    this.agentActionsRemoteCapabilityProvider,
+    this.agentActionLocalRunnerRegistry,
+    this.registerProfileProvider,
+    this.metricsCollector,
+    this.jsonSchemaValidator,
+    this.schemaCatalog = const RpcMethodSchemaCatalog(),
+  });
+
+  final PayloadSigner? payloadSigner;
+  final PayloadSigningConfig? payloadSigningConfig;
+  final ProtocolMetricsCollector? protocolMetricsCollector;
+  final PayloadLogSummarizer? logSummarizer;
+  final IAgentActionsRemoteCapabilityProvider? agentActionsRemoteCapabilityProvider;
+  final AgentActionLocalRunnerRegistry? agentActionLocalRunnerRegistry;
+  final Future<Map<String, dynamic>?> Function()? registerProfileProvider;
+  final MetricsCollector? metricsCollector;
+  final JsonSchemaContractValidator? jsonSchemaValidator;
+  final RpcMethodSchemaCatalog schemaCatalog;
+}
+
 /// Socket.IO transport client for the v2 RPC contract.
 class SocketIOTransportClientV2 implements ITransportClient {
   SocketIOTransportClientV2({
@@ -51,39 +81,30 @@ class SocketIOTransportClientV2 implements ITransportClient {
     required IProtocolNegotiator negotiator,
     required IRpcRequestDispatcher rpcDispatcher,
     required FeatureFlags featureFlags,
-    PayloadSigner? payloadSigner,
-    PayloadSigningConfig? payloadSigningConfig,
-    ProtocolMetricsCollector? protocolMetricsCollector,
-    PayloadLogSummarizer? logSummarizer,
-    IAgentActionsRemoteCapabilityProvider? agentActionsRemoteCapabilityProvider,
-    AgentActionLocalRunnerRegistry? agentActionLocalRunnerRegistry,
-    Future<Map<String, dynamic>?> Function()? registerProfileProvider,
-    MetricsCollector? metricsCollector,
-    JsonSchemaContractValidator? jsonSchemaValidator,
-    RpcMethodSchemaCatalog schemaCatalog = const RpcMethodSchemaCatalog(),
+    SocketIOTransportClientV2Options options = const SocketIOTransportClientV2Options(),
   }) : _dataSource = dataSource,
        _negotiator = negotiator,
        _rpcDispatcher = rpcDispatcher,
        _featureFlags = featureFlags,
-       _agentActionsRemoteCapabilityProvider = agentActionsRemoteCapabilityProvider,
-       _agentActionLocalRunnerRegistry = agentActionLocalRunnerRegistry,
-       _metricsCollector = metricsCollector,
-       _jsonSchemaValidator = jsonSchemaValidator,
-       _schemaCatalog = schemaCatalog,
-       _payloadSigner = payloadSigner,
+       _agentActionsRemoteCapabilityProvider = options.agentActionsRemoteCapabilityProvider,
+       _agentActionLocalRunnerRegistry = options.agentActionLocalRunnerRegistry,
+       _metricsCollector = options.metricsCollector,
+       _jsonSchemaValidator = options.jsonSchemaValidator,
+       _schemaCatalog = options.schemaCatalog,
+       _payloadSigner = options.payloadSigner,
        _payloadSigningConfig =
-           payloadSigningConfig ??
+           options.payloadSigningConfig ??
            PayloadSigningConfig(
-             activeKeyId: payloadSigner?.activeKeyId,
-             keys: payloadSigner == null
+             activeKeyId: options.payloadSigner?.activeKeyId,
+             keys: options.payloadSigner == null
                  ? const <String, String>{}
                  : {
-                     for (final keyId in payloadSigner.keyIds) keyId: '<configured>',
+                     for (final keyId in options.payloadSigner!.keyIds) keyId: '<configured>',
                    },
            ),
-       _protocolMetricsCollector = protocolMetricsCollector,
+       _protocolMetricsCollector = options.protocolMetricsCollector,
        _logSummarizer =
-           logSummarizer ??
+           options.logSummarizer ??
            PayloadLogSummarizer(
              thresholdBytes: ConnectionConstants.socketLogPayloadSummaryThresholdBytes,
            ) {
@@ -120,7 +141,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       contractValidator: _contractValidator,
       localCapabilitiesProvider: _localCapabilities,
       agentIdProvider: () => _agentId,
-      registerProfileProvider: registerProfileProvider,
+      registerProfileProvider: options.registerProfileProvider,
       emit: _emitEventAsync,
       decodeIncoming: _frameCodec.decodeIncoming,
       onTimeoutReconnect: () => _onReconnectionNeeded?.call(),
@@ -137,7 +158,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       frameCodec: _frameCodec,
       contractValidator: _contractValidator,
       protocolProvider: () => _currentProtocol,
-      emitEventAsync: _emitEventAsync,
+      emitEventAsync: _emitEventVoid,
       logMessage: _logMessage,
     );
     _inboundHandler = RpcInboundHandler(
@@ -154,7 +175,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       streamEmitterFactory: _streamPullHandler.createStreamEmitter,
       emitRpcResponse: _emitRpcResponse,
       emitRpcResponseWithMethodContext: _emitRpcResponse,
-      emitEvent: _emitEventAsync,
+      emitEvent: _emitEventVoid,
       hasReceivedCapabilities: () => _hasReceivedCapabilities,
       jsonSchemaValidator: _jsonSchemaValidator,
       schemaCatalog: _schemaCatalog,
@@ -212,6 +233,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
   io.Socket? _socket;
   int _connectGeneration = 0;
   String? _resilienceRecoveryId;
+
+  // Cached local capabilities — recomputed on every connect() since feature
+  // flags may be updated between sessions. Cleared on _closeSocket().
+  ProtocolCapabilities? _cachedLocalCapabilities;
   String _resilienceLogPrefix() {
     final id = _resilienceRecoveryId;
     if (id == null || id.isEmpty) {
@@ -282,7 +307,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   ProtocolCapabilities _localCapabilities() {
-    return ProtocolCapabilities.defaultCapabilities(
+    return _cachedLocalCapabilities ??= ProtocolCapabilities.defaultCapabilities(
       binaryPayload: _featureFlags.enableBinaryPayload,
       compressions: _featureFlags.outboundCompressionMode == OutboundCompressionMode.none
           ? const ['none']
@@ -397,9 +422,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
     const totalAttempts = maxRetries + 1;
 
     for (var attempt = 0; attempt < totalAttempts; attempt++) {
+      // Capture _socket per iteration: if the socket is closed mid-retry the
+      // null-assertion operator on a nullable field would throw TypeError (not
+      // Exception) and escape the catch below.
+      final socket = _socket;
+      if (socket == null) return;
       try {
         _logMessage('SENT', 'rpc:response', validatedPayload);
-        await _socket!.timeout(timeoutMs).emitWithAckAsync('rpc:response', outgoingPayload);
+        await socket.timeout(timeoutMs).emitWithAckAsync('rpc:response', outgoingPayload);
         return;
       } on Exception catch (e) {
         final remaining = totalAttempts - attempt - 1;
@@ -521,7 +551,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   void _handleDisconnect(dynamic reason) {
     _heartbeat.stop();
-    unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
     final asString = reason is String ? reason : reason?.toString();
     final serverInitiated = isHubIoServerInitiatedDisconnect(asString);
     final disconnectLine =
@@ -591,20 +620,35 @@ class SocketIOTransportClientV2 implements ITransportClient {
     unawaited(_emitEventAsync(event, logicalPayload));
   }
 
-  Future<void> _emitEventAsync(String event, dynamic logicalPayload) async {
+  /// Emits [event] after framing [logicalPayload] through the transport
+  /// pipeline. Returns `true` when the event was actually emitted; `false`
+  /// when the socket is absent or encoding failed (failure is logged as a
+  /// warning so callers can react to silent drops — e.g. agent:register).
+  Future<bool> _emitEventAsync(String event, dynamic logicalPayload) async {
     if (_socket == null) {
-      return;
+      return false;
     }
     final outgoingResult = await _prepareOutgoingPayloadAsync(
       event,
       logicalPayload,
     );
     if (outgoingResult.isError()) {
-      return;
+      AppLogger.warning(
+        '_emitEventAsync: failed to encode $event — frame dropped',
+        outgoingResult.exceptionOrNull(),
+      );
+      return false;
     }
     final outgoingPayload = outgoingResult.getOrThrow();
     _logMessage('SENT', event, logicalPayload);
     _socket!.emit(event, outgoingPayload);
+    return true;
+  }
+
+  /// `Future<void>` wrapper for callers that need a void-returning callback
+  /// (RpcInboundHandler, RpcStreamPullHandler). Discards the bool result.
+  Future<void> _emitEventVoid(String event, dynamic logicalPayload) async {
+    await _emitEventAsync(event, logicalPayload);
   }
 
   Future<Result<Map<String, dynamic>>> _prepareOutgoingPayloadAsync(
@@ -638,12 +682,6 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (event != 'rpc:response') {
       return;
     }
-    if (!jsonTreeLikelyExceedsByteBudget(
-      logicalPayload,
-      ConnectionConstants.socketOutgoingContractValidationMaxBytes,
-    )) {
-      return;
-    }
     final streamingChunks = _featureFlags.enableSocketStreamingChunks;
     final streamingFromDb = _featureFlags.enableSocketStreamingFromDb;
     final backpressure = _featureFlags.enableSocketBackpressure;
@@ -651,7 +689,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
       return;
     }
     const category = 'large_rpc_response_without_full_streaming';
+    // Check the rate limiter BEFORE the O(n) payload tree scan so that once
+    // the log budget is exhausted we avoid the scan cost entirely.
     if (!_diagnosticLogLimiter.shouldLog(category)) {
+      return;
+    }
+    if (!jsonTreeLikelyExceedsByteBudget(
+      logicalPayload,
+      ConnectionConstants.socketOutgoingContractValidationMaxBytes,
+    )) {
       return;
     }
     final diagnostic = <String, dynamic>{
@@ -846,6 +892,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _socketEventBinder.clearSubscriptions();
     _capabilitiesNegotiator.reset();
     _pipelineCache.reset();
+    _cachedLocalCapabilities = null;
     unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
     final socket = _socket;
     _socket = null;
@@ -884,79 +931,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
   /// Sends response using RPC v2 protocol.
   Future<Result<void>> _sendRpcResponse(QueryResponse response) async {
     try {
-      // Convert QueryResponse to RPC response format
-      final result = {
-        'execution_id': response.id,
-        'started_at': response.timestamp.toIso8601String(),
-        'finished_at': response.timestamp.toIso8601String(),
-        'rows': response.data,
-        'row_count': response.data.length,
-        if (response.affectedRows != null) 'affected_rows': response.affectedRows,
-        if (response.columnMetadata != null) 'column_metadata': response.columnMetadata,
-        if (response.hasMultiResult) ...{
-          'multi_result': true,
-          'result_set_count': response.resultSets.length,
-          'item_count': response.items.length,
-          'result_sets': response.resultSets
-              .map(
-                (resultSet) => {
-                  'index': resultSet.index,
-                  'rows': resultSet.rows,
-                  'row_count': resultSet.rowCount,
-                  if (resultSet.affectedRows != null) 'affected_rows': resultSet.affectedRows,
-                  if (resultSet.columnMetadata != null) 'column_metadata': resultSet.columnMetadata,
-                },
-              )
-              .toList(growable: false),
-          'items': response.items
-              .map(
-                (item) => item.resultSet != null
-                    ? {
-                        'type': 'result_set',
-                        'index': item.index,
-                        'result_set_index': item.resultSet!.index,
-                        'rows': item.resultSet!.rows,
-                        'row_count': item.resultSet!.rowCount,
-                        if (item.resultSet!.affectedRows != null) 'affected_rows': item.resultSet!.affectedRows,
-                        if (item.resultSet!.columnMetadata != null) 'column_metadata': item.resultSet!.columnMetadata,
-                      }
-                    : {
-                        'type': 'row_count',
-                        'index': item.index,
-                        'affected_rows': item.rowCount,
-                      },
-              )
-              .toList(growable: false),
-        },
-        if (response.pagination != null)
-          'pagination': {
-            'page': response.pagination!.page,
-            'page_size': response.pagination!.pageSize,
-            'returned_rows': response.pagination!.returnedRows,
-            'has_next_page': response.pagination!.hasNextPage,
-            'has_previous_page': response.pagination!.hasPreviousPage,
-            if (response.pagination!.currentCursor != null) 'current_cursor': response.pagination!.currentCursor,
-            if (response.pagination!.nextCursor != null) 'next_cursor': response.pagination!.nextCursor,
-          },
-      };
-
-      final rpcResponse = response.error != null
-          ? RpcResponse.error(
-              id: response.requestId,
-              error: RpcError(
-                code: RpcErrorCode.sqlExecutionFailed,
-                message: RpcErrorCode.getMessage(
-                  RpcErrorCode.sqlExecutionFailed,
-                ),
-                data: RpcErrorCode.buildErrorData(
-                  code: RpcErrorCode.sqlExecutionFailed,
-                  technicalMessage: response.error!,
-                  correlationId: response.requestId,
-                ),
-              ),
-            )
-          : RpcResponse.success(id: response.requestId, result: result);
-
+      final rpcResponse = QueryResponseRpcMapper.toRpcResponse(response);
       await _emitRpcResponse(rpcResponse);
 
       return const Success<Object, Exception>(Object());
@@ -972,10 +947,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _emitAgentHeartbeat() {
+    // Unique trace id per heartbeat for distributed-tracing correlation.
+    final traceId =
+        '${DateTime.now().microsecondsSinceEpoch}-${_agentId.hashCode.toUnsigned(20).toRadixString(16)}';
     final payload = <String, dynamic>{
       'agent_id': _agentId,
       'timestamp': DateTime.now().toUtc().toIso8601String(),
       'protocol': _currentProtocol.protocol,
+      'trace_id': traceId,
     };
     _emitEvent('agent:heartbeat', payload);
   }
@@ -1012,7 +991,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
       return;
     }
     _heartbeat.onAckReceived();
-    _logMessage('RECEIVED', 'hub:heartbeat_ack', payload);
+    // Echo the trace_id from the ack payload in the log so outbound heartbeat
+    // and its ack can be correlated in distributed traces.
+    final traceId = payload is Map<String, dynamic> ? payload['trace_id'] : null;
+    final logged = traceId != null
+        ? <String, dynamic>{...(payload as Map<String, dynamic>), 'correlated_trace_id': traceId}
+        : payload;
+    _logMessage('RECEIVED', 'hub:heartbeat_ack', logged);
   }
 
   bool _supportsProtocolReadyAck() {

@@ -1994,6 +1994,7 @@ class SqlRpcMethodHandlerOperations {
       agentId: response.agentId,
       data: primary.rows,
       affectedRows: response.affectedRows,
+      startedAt: response.startedAt,
       timestamp: response.timestamp,
       error: response.error,
       columnMetadata: primary.columnMetadata,

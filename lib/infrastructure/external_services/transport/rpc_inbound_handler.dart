@@ -452,8 +452,11 @@ class RpcInboundHandler {
     );
     if (batchValidation.isError()) {
       final failure = batchValidation.exceptionOrNull()! as domain.Failure;
+      // Include the id of the first well-formed item so the hub can identify
+      // which request triggered validation failure without resending the batch.
+      final firstId = data.whereType<Map<String, dynamic>>().firstOrNull?['id'];
       await _sendSchemaValidationError(
-        null,
+        firstId,
         RpcErrorCode.invalidRequest,
         failure.message,
       );
@@ -469,6 +472,13 @@ class RpcInboundHandler {
   }
 
   Future<bool> _validateSingleRequestJsonSchemasOrEmit(Map<String, dynamic> requestMap) async {
+    // Skip JSON Schema validation for very large payloads: the size limit was
+    // already enforced upstream; re-walking a large tree here is O(payload).
+    if (_logSummarizer.exceedsByteBudget(requestMap, ConnectionConstants.schemaValidationSkipAboveBytes)) {
+      _jsonSchemaValidator?.recordSkippedLargePayload(direction: 'inbound');
+      return true;
+    }
+
     final envelopeFailure = _validateRequestEnvelopeJsonSchema(requestMap);
     if (envelopeFailure != null) {
       await _sendSchemaValidationError(
@@ -522,6 +532,12 @@ class RpcInboundHandler {
 
     final schemaId = _schemaCatalog.paramsSchemaFor(method);
     if (schemaId == null) {
+      return null;
+    }
+
+    // Short-circuit: skip validation when the schema is not loaded rather than
+    // paying the allocation cost of the validate() call.
+    if (!jsonSchemaValidator.isLoaded(schemaId)) {
       return null;
     }
 

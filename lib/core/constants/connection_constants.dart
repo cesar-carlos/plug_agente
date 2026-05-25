@@ -344,6 +344,11 @@ class ConnectionConstants {
   /// summary (when `FeatureFlags.enableSocketSummarizeLargePayloadLogs` is on).
   static const int socketLogPayloadSummaryThresholdBytes = 8192;
 
+  /// Inbound `rpc:request` payloads above this UTF-8 size skip JSON Schema
+  /// validation to avoid O(payload) cost on already-size-limited messages.
+  /// Requests this large already passed the negotiated payload limit check.
+  static const int schemaValidationSkipAboveBytes = 128 * 1024;
+
   /// Outgoing `rpc:response` contract validation is skipped above this UTF-8 JSON
   /// size to limit CPU on huge results (0 disables the soft cap).
   static const int socketOutgoingContractValidationMaxBytes = 2 * 1024 * 1024;
@@ -364,4 +369,15 @@ class ConnectionConstants {
   /// Override with env `TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES` (positive integer bytes).
   static int get gzipIsolateThresholdBytes =>
       _positiveIntEnv('TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES') ?? defaultGzipIsolateThresholdBytes;
+
+  /// Transport-frame original size above which HMAC-SHA256 signing/verification
+  /// is offloaded to a background isolate via `compute()`.
+  ///
+  /// HMAC is O(frame_size); for frames above this threshold the main-isolate
+  /// signing cost is comparable to the gzip cost and worth offloading.
+  /// Override with env `TRANSPORT_SIGNING_ISOLATE_THRESHOLD_BYTES`.
+  static const int defaultSigningIsolateThresholdBytes = 64 * 1024;
+
+  static int get signingIsolateThresholdBytes =>
+      _positiveIntEnv('TRANSPORT_SIGNING_ISOLATE_THRESHOLD_BYTES') ?? defaultSigningIsolateThresholdBytes;
 }

@@ -3,6 +3,15 @@ import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart
 import 'package:result_dart/result_dart.dart';
 
 abstract class ITransportClient {
+  /// Initiates the transport connection to [serverUrl].
+  ///
+  /// Returns `Success` once the socket is connected **and** `agent:register`
+  /// has been sent to the hub. This does **not** mean the protocol is ready
+  /// for RPC traffic: full readiness (capabilities negotiated) is signalled
+  /// by the `HubProtocolReady` notification delivered via [setOnHubLifecycle].
+  ///
+  /// Callers that need to send RPC requests must wait for `HubProtocolReady`
+  /// rather than acting immediately on the `Success` result of `connect`.
   Future<Result<void>> connect(
     String serverUrl,
     String agentId, {

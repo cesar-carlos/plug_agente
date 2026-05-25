@@ -802,16 +802,18 @@ void registerPlugDependencyGraph(
           negotiator: getIt<IProtocolNegotiator>(),
           rpcDispatcher: getIt<IRpcRequestDispatcher>(),
           featureFlags: getIt<FeatureFlags>(),
-          payloadSigner: payloadSigner,
-          payloadSigningConfig: signingConfig,
-          protocolMetricsCollector: getIt<ProtocolMetricsCollector>(),
-          metricsCollector: getIt<MetricsCollector>(),
-          agentActionsRemoteCapabilityProvider: getIt<IAgentActionsRemoteCapabilityProvider>(),
-          agentActionLocalRunnerRegistry: getIt<AgentActionLocalRunnerRegistry>(),
-          registerProfileProvider: getIt<AgentRegisterProfileProvider>().loadSnapshot,
-          jsonSchemaValidator: getIt.isRegistered<JsonSchemaContractValidator>()
-              ? getIt<JsonSchemaContractValidator>()
-              : null,
+          options: SocketIOTransportClientV2Options(
+            payloadSigner: payloadSigner,
+            payloadSigningConfig: signingConfig,
+            protocolMetricsCollector: getIt<ProtocolMetricsCollector>(),
+            metricsCollector: getIt<MetricsCollector>(),
+            agentActionsRemoteCapabilityProvider: getIt<IAgentActionsRemoteCapabilityProvider>(),
+            agentActionLocalRunnerRegistry: getIt<AgentActionLocalRunnerRegistry>(),
+            registerProfileProvider: getIt<AgentRegisterProfileProvider>().loadSnapshot,
+            jsonSchemaValidator: getIt.isRegistered<JsonSchemaContractValidator>()
+                ? getIt<JsonSchemaContractValidator>()
+                : null,
+          ),
         );
       },
     )

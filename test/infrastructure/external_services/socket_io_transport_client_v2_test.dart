@@ -311,7 +311,7 @@ void main() {
         negotiator: mockNegotiator,
         rpcDispatcher: mockDispatcher,
         featureFlags: mockFeatureFlags,
-        protocolMetricsCollector: metricsCollector,
+        options: SocketIOTransportClientV2Options(protocolMetricsCollector: metricsCollector),
       );
     });
 
@@ -359,9 +359,11 @@ void main() {
         negotiator: mockNegotiator,
         rpcDispatcher: mockDispatcher,
         featureFlags: mockFeatureFlags,
-        protocolMetricsCollector: metricsCollector,
-        agentActionsRemoteCapabilityProvider: capabilityProvider,
-        agentActionLocalRunnerRegistry: runnerRegistry,
+        options: SocketIOTransportClientV2Options(
+          protocolMetricsCollector: metricsCollector,
+          agentActionsRemoteCapabilityProvider: capabilityProvider,
+          agentActionLocalRunnerRegistry: runnerRegistry,
+        ),
       );
 
       final connectFuture = client.connect('https://hub.test', 'agent-1');
@@ -425,6 +427,52 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(reconnectRequests, 1);
+    });
+
+    test('should NOT call cancelActiveStreamOnDisconnect inside _handleDisconnect (H3)', () async {
+      // After removing the duplicate cancel in _handleDisconnect, a transport
+      // disconnect event alone must NOT call cancelActiveStreamOnDisconnect;
+      // only _closeSocket (called from connect/disconnect) owns that call.
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+
+      // Reset interactions so the call from connect()._closeSocket is not counted.
+      clearInteractions(mockDispatcher);
+
+      emitEvent('disconnect', 'transport close');
+      await Future<void>.delayed(Duration.zero);
+
+      verifyNever(() => mockDispatcher.cancelActiveStreamOnDisconnect());
+    });
+
+    test('should include startedAt in rpc:response when sendResponse provides it (H1)', () async {
+      final finishedAt = DateTime.utc(2026, 5, 1, 12);
+      final startedAt = DateTime.utc(2026, 5, 1, 11, 59, 55);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+
+      await client.sendResponse(
+        QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-1',
+          agentId: 'agent-1',
+          data: const [],
+          timestamp: finishedAt,
+          startedAt: startedAt,
+        ),
+      );
+
+      final responseItems = emitted.where((item) => item.event == 'rpc:response').toList();
+      expect(responseItems, isNotEmpty);
+      final payload = decodeWirePayload(responseItems.first.data) as Map<String, dynamic>;
+      final result = payload['result'] as Map<String, dynamic>;
+      expect(result['started_at'], startedAt.toIso8601String());
+      expect(result['finished_at'], finishedAt.toIso8601String());
+      expect(result['started_at'] != result['finished_at'], isTrue);
     });
 
     test('should register reconnect lifecycle handlers on Socket.IO manager', () async {
@@ -512,14 +560,16 @@ void main() {
         negotiator: mockNegotiator,
         rpcDispatcher: mockDispatcher,
         featureFlags: mockFeatureFlags,
-        registerProfileProvider: () async {
-          profileCalls += 1;
-          if (profileCalls > 1) {
-            throw StateError('profile unavailable');
-          }
-          return null;
-        },
-        protocolMetricsCollector: metricsCollector,
+        options: SocketIOTransportClientV2Options(
+          registerProfileProvider: () async {
+            profileCalls += 1;
+            if (profileCalls > 1) {
+              throw StateError('profile unavailable');
+            }
+            return null;
+          },
+          protocolMetricsCollector: metricsCollector,
+        ),
       );
       var reconnectRequests = 0;
       client.setOnReconnectionNeeded(() => reconnectRequests++);
@@ -799,7 +849,7 @@ void main() {
       verify(() => mockSocket.dispose()).called(1);
     });
 
-    test('should close current socket when register error is non-recoverable', () async {
+    test('should close current socket when register error is a known terminal code', () async {
       var reconnectionRequested = false;
       client.setOnReconnectionNeeded(() {
         reconnectionRequested = true;
@@ -809,9 +859,10 @@ void main() {
       emitEvent('connect');
       await connectFuture;
 
+      // 'auth_failed' is a known-terminal code — should force reconnect.
       emitEvent('agent:register_error', {
-        'code': 'unsupported_protocol',
-        'message': 'no compatible protocol',
+        'code': 'auth_failed',
+        'message': 'authentication failed',
       });
 
       expect(reconnectionRequested, isTrue);

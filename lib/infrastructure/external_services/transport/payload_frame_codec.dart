@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/logger/log_rate_limiter.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -150,7 +151,11 @@ class PayloadFrameCodec {
           ),
         );
       }
-      final signingResult = signer.signFrameWithMetrics(frame);
+      // Offload HMAC to a background isolate for large frames to avoid
+      // blocking the main isolate during sustained high-throughput scenarios.
+      final signingResult = frame.originalSize > ConnectionConstants.signingIsolateThresholdBytes
+          ? await signer.signFrameAsync(frame)
+          : signer.signFrameWithMetrics(frame);
       frame = frame.copyWith(
         signature: signingResult.signature.toJson(),
       );

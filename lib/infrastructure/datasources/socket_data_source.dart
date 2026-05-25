@@ -9,7 +9,6 @@ class SocketDataSource {
         .setTransports(['websocket'])
         .disableAutoConnect()
         .enableForceNew()
-        .setRememberUpgrade(true)
         .setTimeout(ConnectionConstants.socketConnectionTimeoutMs)
         .setAckTimeout(ConnectionConstants.socketAckTimeoutMs)
         .setReconnectionAttempts(ConnectionConstants.socketReconnectionAttempts)

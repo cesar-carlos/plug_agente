@@ -3,6 +3,21 @@ import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat
 
 void main() {
   group('SocketIoHeartbeatController', () {
+    test('should assert when ackTimeout >= interval', () {
+      expect(
+        () => SocketIoHeartbeatController(
+          isConnected: () => true,
+          emitHeartbeat: () {},
+          logMessage: (_, _, _) {},
+          onConnectionStale: () {},
+          interval: const Duration(milliseconds: 10),
+          ackTimeout: const Duration(milliseconds: 10), // equal — should fail assert
+          maxMissed: 2,
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     test('should call onConnectionStale after max missed acks', () async {
       const connected = true;
       final staleCalls = <int>[];
@@ -10,7 +25,7 @@ void main() {
       final controller = SocketIoHeartbeatController(
         isConnected: () => connected,
         emitHeartbeat: () {},
-        logMessage: (String direction, String event, dynamic data) {},
+        logMessage: (_, _, _) {},
         onConnectionStale: () => staleCalls.add(1),
         interval: const Duration(milliseconds: 10),
         ackTimeout: const Duration(milliseconds: 5),
@@ -31,7 +46,7 @@ void main() {
       final controller = SocketIoHeartbeatController(
         isConnected: () => connected,
         emitHeartbeat: () {},
-        logMessage: (String direction, String event, dynamic data) {},
+        logMessage: (_, _, _) {},
         onConnectionStale: () => staleCalls.add(1),
         interval: const Duration(milliseconds: 20),
         ackTimeout: const Duration(milliseconds: 8),
