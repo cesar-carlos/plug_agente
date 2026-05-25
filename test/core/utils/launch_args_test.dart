@@ -40,4 +40,38 @@ void main() {
       expect(isAutostartLaunch(['autostart']), isFalse);
     });
   });
+
+  group('containsAutostartLaunchToken', () {
+    test('should return true when command line contains standalone autostart token', () {
+      expect(
+        containsAutostartLaunchToken(r'"C:\Program Files\PlugAgente\plug_agente.exe" "--autostart"'),
+        isTrue,
+      );
+      expect(
+        containsAutostartLaunchToken(r'"C:\Program Files\PlugAgente\plug_agente.exe" --autostart'),
+        isTrue,
+      );
+      expect(
+        containsAutostartLaunchToken(
+          r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run Plug Agente REG_SZ "plug_agente.exe" "--autostart"',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should reject partial autostart tokens in command line text', () {
+      expect(
+        containsAutostartLaunchToken('"plug_agente.exe" "--autostart-extra"'),
+        isFalse,
+      );
+      expect(
+        containsAutostartLaunchToken('"plug_agente.exe" prefix--autostart'),
+        isFalse,
+      );
+      expect(
+        containsAutostartLaunchToken('"plug_agente.exe" --autostart-extra'),
+        isFalse,
+      );
+    });
+  });
 }

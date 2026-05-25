@@ -1,13 +1,18 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/runtime/windows_version_info.dart';
+import 'package:plug_agente/core/settings/app_settings_keys.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/presentation/boot/app_initializer.dart';
 import 'package:result_dart/result_dart.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('passes detected runtime diagnostics through bootstrap setup callback', () async {
     var capturedCapabilities = null as RuntimeCapabilities?;
     var capturedDiagnostics = null as RuntimeDetectionDiagnostics?;
@@ -94,6 +99,65 @@ void main() {
     expect(capturedCapabilities?.isDegraded, isTrue);
     expect(capturedDiagnostics?.source, RuntimeDetectionSource.detectionFailed);
     expect(capturedDiagnostics?.rawOperatingSystemVersion, 'Windows mystery build');
+  });
+
+  group('resolveStartupWindowPreferences', () {
+    test('should not start minimized on manual launch even when preference is enabled', () async {
+      final settingsStore = InMemoryAppSettingsStore({
+        AppSettingsKeys.startMinimized: true,
+      });
+
+      final preferences = resolveStartupWindowPreferences(
+        settingsStore,
+      );
+
+      expect(preferences.startMinimized, isFalse);
+    });
+
+    test('should start minimized only on autostart launch with tray support', () async {
+      final settingsStore = InMemoryAppSettingsStore({
+        AppSettingsKeys.startMinimized: true,
+      });
+
+      final preferences = resolveStartupWindowPreferences(
+        settingsStore,
+        isAutostartLaunch: true,
+      );
+
+      expect(preferences.startMinimized, isTrue);
+    });
+
+    test('should not start minimized on autostart launch without tray support', () async {
+      final settingsStore = InMemoryAppSettingsStore({
+        AppSettingsKeys.startMinimized: true,
+      });
+
+      final preferences = resolveStartupWindowPreferences(
+        settingsStore,
+        canStartMinimized: false,
+        isAutostartLaunch: true,
+      );
+
+      expect(preferences.startMinimized, isFalse);
+    });
+  });
+
+  test('showNativeRuntimeWindow invokes native runtime showWindow method', () async {
+    const channel = MethodChannel('plug_agente/runtime');
+    MethodCall? capturedCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      MethodCall call,
+    ) async {
+      capturedCall = call;
+      return null;
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null),
+    );
+
+    await showNativeRuntimeWindow();
+
+    expect(capturedCall?.method, 'showWindow');
   });
 }
 

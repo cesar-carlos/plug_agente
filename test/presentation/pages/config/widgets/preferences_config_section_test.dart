@@ -22,6 +22,7 @@ void main() {
     bool closeToTray = true,
     bool startupSupported = true,
     bool startMinimizedSupported = true,
+    bool trayBehaviorSupported = true,
     SystemSettingsErrorState? startupError,
     SystemSettingsErrorState? preferenceError,
     SystemSettingsNoticeState? startupNotice,
@@ -50,6 +51,7 @@ void main() {
               closeToTray: closeToTray,
               startupSupported: startupSupported,
               startMinimizedSupported: startMinimizedSupported,
+              trayBehaviorSupported: trayBehaviorSupported,
               startupError: startupError,
               preferenceError: preferenceError,
               startupNotice: startupNotice,
@@ -143,6 +145,38 @@ void main() {
         );
         expect(toggle.onChanged, isNull);
         expect(find.text(ptL10n.gsToggleStartMinimizedRequiresTray), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'minimizeToTray toggle is disabled when tray support is unavailable',
+      (tester) async {
+        await pumpSection(
+          tester,
+          trayBehaviorSupported: false,
+        );
+
+        final toggle = tester.widget<ToggleSwitch>(
+          findToggleFor(ptL10n.gsToggleMinimizeToTray),
+        );
+        expect(toggle.onChanged, isNull);
+        expect(find.text(ptL10n.gsToggleStartMinimizedRequiresTray), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'closeToTray toggle is disabled when tray support is unavailable',
+      (tester) async {
+        await pumpSection(
+          tester,
+          trayBehaviorSupported: false,
+        );
+
+        final toggle = tester.widget<ToggleSwitch>(
+          findToggleFor(ptL10n.gsToggleCloseToTray),
+        );
+        expect(toggle.onChanged, isNull);
+        expect(find.text(ptL10n.gsToggleStartMinimizedRequiresTray), findsWidgets);
       },
     );
   });

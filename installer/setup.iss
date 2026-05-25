@@ -65,7 +65,7 @@ Type: dirifempty; Name: "{commonappdata}\PlugAgente"
 [Code]
 function GetAutostartValue(Param: String): String;
 begin
-  Result := AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + '{#AutostartArg}';
+  Result := AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + ' ' + AddQuotes('{#AutostartArg}');
 end;
 
 function ShouldLaunchAfterSilentUpdate(): Boolean;

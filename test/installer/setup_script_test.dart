@@ -46,5 +46,23 @@ void main() {
       expect(buildScript, contains('AUTO_UPDATE_REQUIRE_VALID_SIGNATURE'));
       expect(buildScript, contains('--dart-define='));
     });
+
+    test('uses canonical autostart argument without embedding separators in the constant', () {
+      final canonical = File('constants/autostart_arg.txt').readAsStringSync().trim();
+      final constantsScript = File('installer/constants.iss').readAsStringSync();
+      final setupScript = File('installer/setup.iss').readAsStringSync();
+      final defineMatch = RegExp(r'#define\s+AutostartArg\s+"([^"]+)"').firstMatch(constantsScript);
+
+      expect(defineMatch, isNotNull);
+      expect(defineMatch!.group(1), canonical);
+      expect(defineMatch.group(1), isNot(startsWith(' ')));
+      expect(defineMatch.group(1), isNot(endsWith(' ')));
+      expect(
+        setupScript,
+        contains(
+          r"AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + ' ' + AddQuotes('{#AutostartArg}')",
+        ),
+      );
+    });
   });
 }

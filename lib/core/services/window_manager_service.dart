@@ -275,6 +275,8 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
   }
 
   Future<void> allowQuitForUpdate() async {
+    _isClosing = true;
+    _closeToTray = false;
     await windowManager.setPreventClose(false);
   }
 

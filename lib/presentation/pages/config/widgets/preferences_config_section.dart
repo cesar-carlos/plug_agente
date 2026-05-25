@@ -21,6 +21,7 @@ class PreferencesConfigSection extends StatelessWidget {
     required this.onRepairStartupLaunchConfiguration,
     this.startupSupported = true,
     this.startMinimizedSupported = true,
+    this.trayBehaviorSupported = true,
     this.startupError,
     this.preferenceError,
     this.startupNotice,
@@ -41,6 +42,7 @@ class PreferencesConfigSection extends StatelessWidget {
   final VoidCallback onRepairStartupLaunchConfiguration;
   final bool startupSupported;
   final bool startMinimizedSupported;
+  final bool trayBehaviorSupported;
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
   final SystemSettingsNoticeState? startupNotice;
@@ -105,14 +107,16 @@ class PreferencesConfigSection extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
               label: l10n.gsToggleMinimizeToTray,
+              description: trayBehaviorSupported ? null : l10n.gsToggleStartMinimizedRequiresTray,
               value: minimizeToTray,
-              onChanged: onMinimizeToTrayChanged,
+              onChanged: trayBehaviorSupported ? onMinimizeToTrayChanged : null,
             ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
               label: l10n.gsToggleCloseToTray,
+              description: trayBehaviorSupported ? null : l10n.gsToggleStartMinimizedRequiresTray,
               value: closeToTray,
-              onChanged: onCloseToTrayChanged,
+              onChanged: trayBehaviorSupported ? onCloseToTrayChanged : null,
             ),
             if (preferenceError != null) ...[
               const SizedBox(height: AppSpacing.md),

@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/core/utils/launch_args.dart';
 
 const _runKeyPath = r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run';
 const _runValueName = 'Plug Agente';
@@ -44,7 +45,7 @@ Future<void> main(List<String> args) async {
         : _CheckResult.pass('Windows startup registry', registryValue),
   );
   checks.add(
-    registryValue?.contains(AppStrings.singleInstanceArgAutostart) ?? false
+    registryValue != null && containsAutostartLaunchToken(registryValue)
         ? const _CheckResult.pass('Autostart argument', AppStrings.singleInstanceArgAutostart)
         : const _CheckResult.fail(
             'Autostart argument',

@@ -268,5 +268,51 @@ void main() {
       check(calls.length).equals(1);
       check(calls.single.arguments).contains('query');
     });
+
+    test('should repair registry entry when autostart argument is only a partial token', () async {
+      if (!Platform.isWindows) {
+        return;
+      }
+
+      final calls = <_ProcessInvocation>[];
+      final results = Queue<ProcessResult>.from(<ProcessResult>[
+        ProcessResult(
+          1,
+          0,
+          'Plug Agente REG_SZ "plug_agente.exe" "${AppStrings.singleInstanceArgAutostart}-extra"',
+          '',
+        ),
+        ProcessResult(
+          2,
+          0,
+          '',
+          '',
+        ),
+      ]);
+
+      Future<ProcessResult> processRunner(
+        String executable,
+        List<String> arguments,
+      ) async {
+        calls.add(
+          _ProcessInvocation(
+            executable: executable,
+            arguments: arguments,
+          ),
+        );
+        return results.removeFirst();
+      }
+
+      final service = AutoStartService(processRunner: processRunner);
+      final result = await service.ensureLaunchConfiguration();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.repaired),
+        (_) => fail('Expected success'),
+      );
+      check(calls.length).equals(2);
+      check(calls[1].arguments).contains('add');
+    });
   });
 }

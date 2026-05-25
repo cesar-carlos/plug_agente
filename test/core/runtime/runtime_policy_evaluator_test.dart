@@ -104,7 +104,7 @@ void main() {
     });
 
     group('Windows Server 2016+', () {
-      test('should return full core with shell limits for Server 2016+', () {
+      test('should return full core with notification/update limits for Server 2016+', () {
         const versionInfo = WindowsVersionInfo(
           majorVersion: 10,
           minorVersion: 0,
@@ -117,7 +117,7 @@ void main() {
 
         expect(capabilities.mode, RuntimeMode.full);
         expect(capabilities.isDegraded, isFalse);
-        expect(capabilities.supportsTray, isFalse);
+        expect(capabilities.supportsTray, isTrue);
         expect(capabilities.supportsNotifications, isFalse);
         expect(capabilities.supportsAutoUpdate, isFalse);
         expect(capabilities.supportsWindowManager, isTrue);

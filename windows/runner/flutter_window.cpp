@@ -8,6 +8,7 @@ namespace {
 
 constexpr char kRuntimeChannelName[] = "plug_agente/runtime";
 constexpr char kDeepLinkMethodName[] = "deliverDeepLink";
+constexpr char kShowWindowMethodName[] = "showWindow";
 constexpr ULONG_PTR kRuntimeDeepLinkMessageId = 0x706c7567;
 
 }  // namespace
@@ -39,6 +40,22 @@ bool FlutterWindow::OnCreate() {
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(), kRuntimeChannelName,
           &flutter::StandardMethodCodec::GetInstance());
+  runtime_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() == kShowWindowMethodName) {
+          if (this->Show()) {
+            result->Success(flutter::EncodableValue(true));
+          } else {
+            result->Error("show_window_failed",
+                          "Failed to show the native window.");
+          }
+          return;
+        }
+
+        result->NotImplemented();
+      });
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     if (show_on_first_frame_) {

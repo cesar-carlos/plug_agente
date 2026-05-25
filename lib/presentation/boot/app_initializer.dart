@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
@@ -35,6 +36,7 @@ import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/core/utils/launch_args.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/presentation/boot/app_bootstrap_data.dart';
@@ -60,13 +62,24 @@ typedef InitializeDesktopFeaturesOverride =
 
 typedef ResolveInitialRouteOverride = String? Function(List<String> args);
 
+typedef NativeWindowVisibilityFallback = Future<void> Function();
+
+const MethodChannel _runtimeChannel = MethodChannel('plug_agente/runtime');
+
+@visibleForTesting
+Future<void> showNativeRuntimeWindow() async {
+  await _runtimeChannel.invokeMethod<bool>('showWindow');
+}
+
 @visibleForTesting
 StartupWindowPreferences resolveStartupWindowPreferences(
   IAppSettingsStore settingsStore, {
   bool canStartMinimized = true,
+  bool isAutostartLaunch = false,
 }) {
   return (
-    startMinimized: canStartMinimized && (settingsStore.getBool(AppSettingsKeys.startMinimized) ?? false),
+    startMinimized:
+        canStartMinimized && isAutostartLaunch && (settingsStore.getBool(AppSettingsKeys.startMinimized) ?? false),
     minimizeToTray: settingsStore.getBool(AppSettingsKeys.minimizeToTray) ?? true,
     closeToTray: settingsStore.getBool(AppSettingsKeys.closeToTray) ?? true,
   );
@@ -79,18 +92,22 @@ class AppInitializer {
     this.bootstrapPhasesOverride,
     this.initializeDesktopFeaturesOverride,
     this.resolveInitialRouteOverride,
-  });
+    NativeWindowVisibilityFallback? nativeWindowVisibilityFallback,
+  }) : _nativeWindowVisibilityFallback = nativeWindowVisibilityFallback ?? showNativeRuntimeWindow;
 
   final IWindowsRuntimeProbe runtimeProbe;
   final SetupDependenciesOverride? setupDependenciesOverride;
   final BootstrapPhasesOverride? bootstrapPhasesOverride;
   final InitializeDesktopFeaturesOverride? initializeDesktopFeaturesOverride;
   final ResolveInitialRouteOverride? resolveInitialRouteOverride;
+  final NativeWindowVisibilityFallback _nativeWindowVisibilityFallback;
   RuntimeDetectionDiagnostics? _lastRuntimeDetectionDiagnostics;
+  bool _isAutostartLaunch = false;
 
   Future<AppBootstrapData> initialize(List<String> args) async {
     AppUptime.markStarted();
     await AppEnvironment.loadOptional();
+    _isAutostartLaunch = isAutostartLaunch(args);
 
     final capabilities = await _resolveRuntimeCapabilities();
     await (setupDependenciesOverride ?? setupDependencies)(
@@ -711,6 +728,7 @@ class AppInitializer {
       final preferences = resolveStartupWindowPreferences(
         prefs,
         canStartMinimized: capabilities.supportsTray,
+        isAutostartLaunch: _isAutostartLaunch,
       );
 
       await windowManagerService.initialize(
@@ -737,7 +755,26 @@ class AppInitializer {
         error: e,
         stackTrace: stackTrace,
       );
+      await _restoreNativeWindowAfterWindowManagerFailure();
       return null;
+    }
+  }
+
+  Future<void> _restoreNativeWindowAfterWindowManagerFailure() async {
+    if (!_isAutostartLaunch) {
+      return;
+    }
+
+    try {
+      await _nativeWindowVisibilityFallback();
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to restore native window after window manager initialization failure',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -781,6 +818,25 @@ class AppInitializer {
     } on Exception catch (e, stackTrace) {
       developer.log(
         'Failed to initialize tray manager (continuing without tray)',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+      await _restoreWindowAfterTrayFailure(windowManagerService);
+    }
+  }
+
+  Future<void> _restoreWindowAfterTrayFailure(
+    WindowManagerService windowManagerService,
+  ) async {
+    try {
+      if (!await windowManagerService.isVisible()) {
+        await windowManagerService.show();
+      }
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to restore window after tray initialization failure',
         name: 'app_initializer',
         level: 900,
         error: e,

@@ -34,8 +34,12 @@ if ($header -notmatch "kAutostartArg\[\] = `"$canonical`"") {
 }
 
 $constantsIss = Get-Content $constantsIssPath -Raw
-if ($constantsIss -notmatch [regex]::Escape($canonical)) {
-  Write-Host "MISMATCH: installer/constants.iss does not contain $canonical"
+$constantsIssMatch = [regex]::Match($constantsIss, '#define\s+AutostartArg\s+"([^"]+)"')
+if (-not $constantsIssMatch.Success) {
+  Write-Host "MISMATCH: installer/constants.iss does not define AutostartArg"
+  $fail = $true
+} elseif ($constantsIssMatch.Groups[1].Value -ne $canonical) {
+  Write-Host "MISMATCH: installer/constants.iss AutostartArg is '$($constantsIssMatch.Groups[1].Value)', expected '$canonical'"
   $fail = $true
 }
 

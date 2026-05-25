@@ -427,6 +427,7 @@ class _ConfigPageState extends State<ConfigPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final capabilities = getIt<RuntimeCapabilities>();
+    final supportsTray = capabilities.supportsTray;
     final themeProvider = context.watch<ThemeProvider>();
     final systemSettingsProvider = context.watch<SystemSettingsProvider>();
     final startupSupported = getIt.isRegistered<IStartupService>();
@@ -459,8 +460,8 @@ class _ConfigPageState extends State<ConfigPage> {
             isDarkThemeEnabled: themeProvider.isDarkMode,
             startWithWindows: systemSettingsProvider.startWithWindows,
             startMinimized: systemSettingsProvider.startMinimized,
-            minimizeToTray: systemSettingsProvider.minimizeToTray,
-            closeToTray: systemSettingsProvider.closeToTray,
+            minimizeToTray: supportsTray && systemSettingsProvider.minimizeToTray,
+            closeToTray: supportsTray && systemSettingsProvider.closeToTray,
             lastUpdateCheck: lastUpdateLabel,
             lastBackgroundUpdateCheck: lastBackgroundUpdateLabel,
             lastAutomaticUpdateCheck: lastAutomaticUpdateLabel,
@@ -469,7 +470,8 @@ class _ConfigPageState extends State<ConfigPage> {
             isCheckingUpdates: _isCheckingUpdates,
             isCheckingAutomaticUpdates: _isCheckingAutomaticUpdates,
             startupSupported: startupSupported,
-            startMinimizedSupported: capabilities.supportsTray,
+            startMinimizedSupported: supportsTray,
+            trayBehaviorSupported: supportsTray,
             startupError: systemSettingsProvider.startupError,
             preferenceError: systemSettingsProvider.preferenceError,
             startupNotice: systemSettingsProvider.startupNotice,
@@ -515,6 +517,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.isCheckingAutomaticUpdates,
     required this.startupSupported,
     required this.startMinimizedSupported,
+    required this.trayBehaviorSupported,
     required this.startupError,
     required this.preferenceError,
     required this.startupNotice,
@@ -548,6 +551,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final bool isCheckingAutomaticUpdates;
   final bool startupSupported;
   final bool startMinimizedSupported;
+  final bool trayBehaviorSupported;
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
   final SystemSettingsNoticeState? startupNotice;
@@ -596,6 +600,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             closeToTray: widget.closeToTray,
             startupSupported: widget.startupSupported,
             startMinimizedSupported: widget.startMinimizedSupported,
+            trayBehaviorSupported: widget.trayBehaviorSupported,
             startupError: widget.startupError,
             preferenceError: widget.preferenceError,
             startupNotice: widget.startupNotice,

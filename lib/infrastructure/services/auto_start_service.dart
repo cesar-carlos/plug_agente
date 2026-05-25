@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
+import 'package:plug_agente/core/utils/launch_args.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -368,6 +369,6 @@ class AutoStartService implements IStartupService {
 
   bool _hasAutostartArgument(ProcessResult result) {
     final output = '${result.stdout}\n${result.stderr}';
-    return output.contains(AppStrings.singleInstanceArgAutostart);
+    return containsAutostartLaunchToken(output);
   }
 }
