@@ -5630,6 +5630,12 @@ abstract class AppLocalizations {
   /// **'HTTP probe succeeded'**
   String get configUpdateTechnicalProbeSucceeded;
 
+  /// No description provided for @configUpdateTechnicalProbeMatchesSparkle.
+  ///
+  /// In en, this message translates to:
+  /// **'Probe matches WinSparkle'**
+  String get configUpdateTechnicalProbeMatchesSparkle;
+
   /// No description provided for @configUpdateTechnicalCompletionSource.
   ///
   /// In en, this message translates to:

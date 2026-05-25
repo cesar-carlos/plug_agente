@@ -185,4 +185,138 @@ void main() {
       expect(result, 7200);
     });
   });
+
+  group('resolveAutoUpdateDownloadTimeoutSeconds', () {
+    test('returns default when not configured', () {
+      final result = resolveAutoUpdateDownloadTimeoutSeconds(
+        environment: const {},
+      );
+
+      expect(result, 300);
+    });
+
+    test('returns default when value is below minimum', () {
+      final result = resolveAutoUpdateDownloadTimeoutSeconds(
+        environment: const {
+          'AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS': '30',
+        },
+      );
+
+      expect(result, 300);
+    });
+
+    test('returns default when value is non-numeric', () {
+      final result = resolveAutoUpdateDownloadTimeoutSeconds(
+        environment: const {
+          'AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS': 'fast',
+        },
+      );
+
+      expect(result, 300);
+    });
+
+    test('returns configured value when at minimum boundary', () {
+      final result = resolveAutoUpdateDownloadTimeoutSeconds(
+        environment: const {
+          'AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS': '60',
+        },
+      );
+
+      expect(result, 60);
+    });
+
+    test('returns configured value when above minimum', () {
+      final result = resolveAutoUpdateDownloadTimeoutSeconds(
+        environment: const {
+          'AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS': '600',
+        },
+      );
+
+      expect(result, 600);
+    });
+  });
+
+  group('resolveAutoUpdateHelperWaitMinutes', () {
+    test('returns default when not configured', () {
+      expect(resolveAutoUpdateHelperWaitMinutes(environment: const {}), 30);
+    });
+
+    test('returns default when below minimum', () {
+      expect(
+        resolveAutoUpdateHelperWaitMinutes(
+          environment: const {'AUTO_UPDATE_HELPER_WAIT_MINUTES': '2'},
+        ),
+        30,
+      );
+    });
+
+    test('returns default when above maximum', () {
+      expect(
+        resolveAutoUpdateHelperWaitMinutes(
+          environment: const {'AUTO_UPDATE_HELPER_WAIT_MINUTES': '200'},
+        ),
+        30,
+      );
+    });
+
+    test('returns default when non-numeric', () {
+      expect(
+        resolveAutoUpdateHelperWaitMinutes(
+          environment: const {'AUTO_UPDATE_HELPER_WAIT_MINUTES': 'fast'},
+        ),
+        30,
+      );
+    });
+
+    test('returns configured value at minimum boundary', () {
+      expect(
+        resolveAutoUpdateHelperWaitMinutes(
+          environment: const {'AUTO_UPDATE_HELPER_WAIT_MINUTES': '5'},
+        ),
+        5,
+      );
+    });
+
+    test('returns configured value at maximum boundary', () {
+      expect(
+        resolveAutoUpdateHelperWaitMinutes(
+          environment: const {'AUTO_UPDATE_HELPER_WAIT_MINUTES': '120'},
+        ),
+        120,
+      );
+    });
+  });
+
+  group('resolveAutoUpdateRequireValidSignature', () {
+    test('returns true when not configured (secure default)', () {
+      expect(
+        resolveAutoUpdateRequireValidSignature(environment: const {}),
+        isTrue,
+      );
+    });
+
+    test('returns false when explicitly set to false', () {
+      for (final value in ['false', '0', 'no', 'nao']) {
+        expect(
+          resolveAutoUpdateRequireValidSignature(
+            environment: {'AUTO_UPDATE_REQUIRE_VALID_SIGNATURE': value},
+          ),
+          isFalse,
+          reason: 'expected false for value="$value"',
+        );
+      }
+    });
+
+    test('returns true when set to true or any non-false value', () {
+      for (final value in ['true', '1', 'yes', 'sim']) {
+        expect(
+          resolveAutoUpdateRequireValidSignature(
+            environment: {'AUTO_UPDATE_REQUIRE_VALID_SIGNATURE': value},
+          ),
+          isTrue,
+          reason: 'expected true for value="$value"',
+        );
+      }
+    });
+  });
 }

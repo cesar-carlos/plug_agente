@@ -72,6 +72,7 @@ class UpdateCheckDiagnostics {
     this.validationErrorCode,
     this.errorMessage,
     this.probeErrorMessage,
+    this.probeMatchesSparkle,
   });
 
   final DateTime checkedAt;
@@ -125,6 +126,10 @@ class UpdateCheckDiagnostics {
   final String? validationErrorCode;
   final String? errorMessage;
   final String? probeErrorMessage;
+  /// Whether the version the custom probe found matches the version WinSparkle
+  /// reported. `null` when the check did not complete both paths, or when one
+  /// of the two versions is unavailable. `false` signals a CDN cache skew.
+  final bool? probeMatchesSparkle;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -179,6 +184,7 @@ class UpdateCheckDiagnostics {
       'validationErrorCode': validationErrorCode,
       'errorMessage': errorMessage,
       'probeErrorMessage': probeErrorMessage,
+      'probeMatchesSparkle': probeMatchesSparkle,
     };
   }
 
@@ -247,6 +253,7 @@ class UpdateCheckDiagnostics {
       validationErrorCode: json['validationErrorCode'] as String?,
       errorMessage: json['errorMessage'] as String?,
       probeErrorMessage: json['probeErrorMessage'] as String?,
+      probeMatchesSparkle: json['probeMatchesSparkle'] as bool?,
     );
   }
 
@@ -302,6 +309,7 @@ class UpdateCheckDiagnostics {
     String? validationErrorCode,
     String? errorMessage,
     String? probeErrorMessage,
+    bool? probeMatchesSparkle,
   }) {
     return UpdateCheckDiagnostics(
       checkedAt: checkedAt ?? this.checkedAt,
@@ -355,6 +363,7 @@ class UpdateCheckDiagnostics {
       validationErrorCode: validationErrorCode ?? this.validationErrorCode,
       errorMessage: errorMessage ?? this.errorMessage,
       probeErrorMessage: probeErrorMessage ?? this.probeErrorMessage,
+      probeMatchesSparkle: probeMatchesSparkle ?? this.probeMatchesSparkle,
     );
   }
 

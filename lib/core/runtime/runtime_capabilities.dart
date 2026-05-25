@@ -22,13 +22,13 @@ class RuntimeCapabilities {
     );
   }
 
-  /// Windows Server 2016+ com app desktop: nucleo completo; notificacao/update limitados.
+  /// Windows Server 2016+ com app desktop: nucleo completo; notificacoes limitadas.
   factory RuntimeCapabilities.serverShellLimited() {
     return const RuntimeCapabilities(
       mode: RuntimeMode.full,
       supportsTray: true,
       supportsNotifications: false,
-      supportsAutoUpdate: false,
+      supportsAutoUpdate: true,
       supportsWindowManager: true,
     );
   }

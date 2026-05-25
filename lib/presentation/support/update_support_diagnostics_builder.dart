@@ -92,6 +92,13 @@ class UpdateSupportDiagnosticsBuilder {
             ? l10n.configUpdateTechnicalOfficialFeedYes
             : l10n.configUpdateTechnicalOfficialFeedNo,
       ),
+      if (diagnostics.probeMatchesSparkle != null)
+        SupportDiagnosticsField(
+          key: l10n.configUpdateTechnicalProbeMatchesSparkle,
+          value: diagnostics.probeMatchesSparkle!
+              ? l10n.configUpdateTechnicalOfficialFeedYes
+              : l10n.configUpdateTechnicalOfficialFeedNo,
+        ),
       SupportDiagnosticsField(
         key: l10n.configUpdateTechnicalCompletionSource,
         value: _formatCompletionSource(l10n, diagnostics.completionSource),

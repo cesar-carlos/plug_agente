@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
+import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -110,6 +111,10 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
   );
   int cleanupCount = 0;
   int installCount = 0;
+  /// Optional hook executed just before the install result is returned, allowing
+  /// tests to simulate state changes that happen during download (e.g. the user
+  /// disabling silent updates while the installer is running).
+  Future<void> Function()? onBeforeReturn;
 
   @override
   Future<Result<SilentUpdateInstallResult>> install(
@@ -117,6 +122,9 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
   ) async {
     installCount++;
     this.request = request;
+    if (onBeforeReturn != null) {
+      await onBeforeReturn!();
+    }
     return result;
   }
 
@@ -125,6 +133,53 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
     cleanupCount++;
     return const Success(unit);
   }
+}
+
+class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
+  bool _isSilentCheckInProgress = false;
+  bool automaticSilentUpdatesEnabledValue = true;
+  UpdateCheckDiagnostics? lastAutomaticDiagnosticsValue;
+
+  int reconcilePendingAndScheduleCallCount = 0;
+  int scheduleAndStartCallCount = 0;
+  int stopCallCount = 0;
+  int checkSilentlyCallCount = 0;
+  int resetFailureCooldownCallCount = 0;
+  int hydrateCallCount = 0;
+
+  Result<bool> checkSilentlyResult = const Success(false);
+
+  void setInProgress(bool value) => _isSilentCheckInProgress = value;
+
+  @override
+  bool get isSilentCheckInProgress => _isSilentCheckInProgress;
+
+  @override
+  bool get automaticSilentUpdatesEnabled => automaticSilentUpdatesEnabledValue;
+
+  @override
+  UpdateCheckDiagnostics? get lastAutomaticDiagnostics => lastAutomaticDiagnosticsValue;
+
+  @override
+  void hydratePersistedDiagnostics() => hydrateCallCount++;
+
+  @override
+  Future<void> reconcilePendingAndSchedule() async => reconcilePendingAndScheduleCallCount++;
+
+  @override
+  Future<Result<bool>> checkSilently() async {
+    checkSilentlyCallCount++;
+    return checkSilentlyResult;
+  }
+
+  @override
+  void scheduleAndStart() => scheduleAndStartCallCount++;
+
+  @override
+  void stop() => stopCallCount++;
+
+  @override
+  Future<void> resetFailureCooldownIfNeeded() async => resetFailureCooldownCallCount++;
 }
 
 void main() {
@@ -293,7 +348,7 @@ void main() {
         );
         expect(fakeInstaller.request?.version, '99.0.0+1');
         expect(fakeInstaller.request?.sha256, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
-        expect(fakeInstaller.request?.requireValidSignature, isFalse);
+        expect(fakeInstaller.request?.requireValidSignature, isTrue);
         expect(closeCalled, isTrue);
         expect(settingsStore.getString('auto_update.pending_silent_update'), contains('99.0.0+1'));
         expect(
@@ -314,8 +369,56 @@ void main() {
         );
         expect(orchestrator.lastAutomaticDiagnostics?.appPid, 1234);
         expect(orchestrator.lastAutomaticDiagnostics?.updateDirectorySecurityStatus, 'restricted');
-        expect(orchestrator.lastAutomaticDiagnostics?.signatureRequired, isFalse);
+        expect(orchestrator.lastAutomaticDiagnostics?.signatureRequired, isTrue);
         expect(orchestrator.lastAutomaticDiagnostics?.appcastProbeOs, 'windows');
+      });
+
+      test('does not close the app when silent updates are disabled mid-download', () async {
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            latestVersion: '99.0.0+1',
+            assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
+            assetSize: 5,
+            assetName: 'PlugAgente-Setup-99.0.0.exe',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            itemCount: 1,
+          );
+        // Installer that disables silent updates after returning success,
+        // simulating the user toggling the setting while the download ran.
+        var closeCalled = false;
+        late AutoUpdateOrchestrator orchestrator;
+        final fakeInstaller = FakeSilentUpdateInstaller()
+          ..onBeforeReturn = () async {
+            await orchestrator.setAutomaticSilentUpdatesEnabled(false);
+          };
+        orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: fakeProbe,
+          silentUpdateInstaller: fakeInstaller,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          closeApplicationForSilentUpdate: () async {
+            closeCalled = true;
+          },
+        );
+
+        final result = await orchestrator.checkSilently();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (started) => expect(started, isFalse),
+          (_) => fail('Expected success'),
+        );
+        expect(closeCalled, isFalse);
+        expect(
+          orchestrator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticDisabled,
+        );
+        // Pending install record should have been cleared.
+        expect(settingsStore.getString('auto_update.pending_silent_update'), isNull);
       });
 
       test('runs only one probe and install for concurrent silent checks', () async {
@@ -637,6 +740,40 @@ void main() {
         expect(orchestrator.lastAutomaticDiagnostics?.rolloutEligible, isFalse);
       });
 
+      test('uses the same rollout bucket for diagnostics and eligibility check', () async {
+        // Do NOT pre-seed the bucket — force first-generation path.
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            latestVersion: '99.0.0+1',
+            assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
+            assetSize: 5,
+            assetName: 'PlugAgente-Setup-99.0.0.exe',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            channel: 'stable',
+            rolloutPercentage: 100,
+            itemCount: 1,
+          );
+        final fakeInstaller = FakeSilentUpdateInstaller();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: fakeProbe,
+          silentUpdateInstaller: fakeInstaller,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.checkSilently();
+
+        final diag = orchestrator.lastAutomaticDiagnostics;
+        expect(diag, isNotNull);
+        final persistedBucket = settingsStore.getInt('auto_update.rollout_bucket');
+        // rolloutBucket in diagnostics must equal the persisted bucket (same
+        // value was used for both recording and eligibility).
+        expect(diag!.rolloutBucket, persistedBucket);
+      });
+
       test('skips silent update when rollout bucket is outside percentage', () async {
         await settingsStore.setInt('auto_update.rollout_bucket', 50);
         final fakeProbe = FakeAppcastProbeService()
@@ -673,12 +810,12 @@ void main() {
         expect(orchestrator.lastAutomaticDiagnostics?.rolloutPercentage, 25);
       });
 
-      test('passes signature requirement to silent installer when configured', () async {
+      test('passes signature=false to silent installer when explicitly opted out', () async {
         dotenv.clean();
         dotenv.loadFromString(
           envString:
               'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
-              'AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true',
+              'AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false',
         );
         final fakeProbe = FakeAppcastProbeService()
           ..result = const AppcastProbeResult(
@@ -703,8 +840,8 @@ void main() {
         final result = await orchestrator.checkSilently();
 
         expect(result.isSuccess(), isTrue);
-        expect(fakeInstaller.request?.requireValidSignature, isTrue);
-        expect(orchestrator.lastAutomaticDiagnostics?.signatureRequired, isTrue);
+        expect(fakeInstaller.request?.requireValidSignature, isFalse);
+        expect(orchestrator.lastAutomaticDiagnostics?.signatureRequired, isFalse);
       });
 
       test('pauses automatic checks after repeated silent update failures', () async {
@@ -906,6 +1043,56 @@ void main() {
         expect(orchestrator.lastAutomaticDiagnostics?.launcherState, 'elevatedStarted');
         expect(orchestrator.lastAutomaticDiagnostics?.automaticFailureCount, isNull);
         expect(settingsStore.getString('auto_update.pending_silent_update'), isNotNull);
+      });
+
+      test('clears stale pending record without incrementing failure counter', () async {
+        // Persist a pending record with explicit paths that do not exist on disk.
+        // This simulates a previous install where the app was reinstalled to a
+        // different directory, leaving the stored absolute paths invalid.
+        final stalePending = <String, Object?>{
+          'version': '99.0.0+1',
+          'installerPath': r'C:\OldPath\PlugAgente\updates\PlugAgente-Setup-99.0.0.exe',
+          'launcherPath': r'C:\OldPath\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+          'launcherStatusPath':
+              r'C:\OldPath\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+          'logPath': r'C:\OldPath\PlugAgente\updates\PlugAgente-Update-99.0.0+1.log',
+          'installDirectory': r'C:\OldPath\PlugAgente',
+          'strategy': 'currentUserThenElevated',
+          'appPid': 9999,
+          'updateDirectorySecurityStatus': 'restricted',
+          'startedAt': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+        };
+        await settingsStore.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(stalePending),
+        );
+
+        final fakeProbe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            latestVersion: '99.0.0+1',
+            assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
+            assetSize: 5,
+            assetName: 'PlugAgente-Setup-99.0.0.exe',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+            itemCount: 1,
+          );
+        final fakeInstaller = FakeSilentUpdateInstaller();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: fakeProbe,
+          silentUpdateInstaller: fakeInstaller,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        // startAutomaticChecks calls _reconcilePendingSilentUpdate before checking.
+        await orchestrator.startAutomaticChecks();
+
+        // Stale pending should be cleared without incrementing the failure counter.
+        expect(settingsStore.getInt('auto_update.automatic_failure_count'), isNull);
+        expect(settingsStore.getString('auto_update.pending_silent_update'), isNull);
       });
     });
 
@@ -1361,6 +1548,128 @@ void main() {
           UpdateCheckCompletionSource.updaterError,
         );
         expect(metricsCollector.autoUpdateBackgroundCheckUpdaterErrorCount, 1);
+      });
+    });
+
+    group('routing via FakeSilentUpdateCoordinator', () {
+      test('checkInBackground delegates to coordinator when silent updates are enabled', () async {
+        final fakeCoordinator = FakeSilentUpdateCoordinator();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.checkInBackground();
+
+        expect(fakeCoordinator.checkSilentlyCallCount, 1);
+      });
+
+      test('checkInBackground uses Sparkle path when silent updates are disabled', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final fakeCoordinator = FakeSilentUpdateCoordinator()
+          ..automaticSilentUpdatesEnabledValue = false;
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.checkInBackground();
+
+        expect(fakeCoordinator.checkSilentlyCallCount, 0);
+        expect(fakeGateway.lastInBackground, isTrue);
+      });
+
+      test('startAutomaticChecks calls reconcilePendingAndSchedule on coordinator', () async {
+        final fakeCoordinator = FakeSilentUpdateCoordinator();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        await orchestrator.startAutomaticChecks();
+
+        expect(fakeCoordinator.reconcilePendingAndScheduleCallCount, 1);
+      });
+
+      test('setAutomaticSilentUpdatesEnabled(true) calls coordinator.scheduleAndStart', () async {
+        final fakeCoordinator = FakeSilentUpdateCoordinator();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.setAutomaticSilentUpdatesEnabled(true);
+
+        expect(fakeCoordinator.scheduleAndStartCallCount, 1);
+        expect(fakeCoordinator.stopCallCount, 0);
+      });
+
+      test('setAutomaticSilentUpdatesEnabled(false) calls coordinator.stop', () async {
+        final fakeCoordinator = FakeSilentUpdateCoordinator();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.setAutomaticSilentUpdatesEnabled(false);
+
+        expect(fakeCoordinator.stopCallCount, 1);
+        expect(fakeCoordinator.scheduleAndStartCallCount, 0);
+      });
+
+      test('isSilentCheckInProgress delegates to coordinator', () {
+        final fakeCoordinator = FakeSilentUpdateCoordinator()..setInProgress(true);
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        expect(orchestrator.isSilentCheckInProgress, isTrue);
+        fakeCoordinator.setInProgress(false);
+        expect(orchestrator.isSilentCheckInProgress, isFalse);
+      });
+
+      test('lastAutomaticDiagnostics delegates to coordinator', () {
+        final diag = UpdateCheckDiagnostics(
+          checkedAt: DateTime.now(),
+          configuredFeedUrl: 'https://example.com/appcast.xml',
+          requestedFeedUrl: 'https://example.com/appcast.xml',
+          completionSource: UpdateCheckCompletionSource.automaticUpdateNotAvailable,
+        );
+        final fakeCoordinator = FakeSilentUpdateCoordinator()..lastAutomaticDiagnosticsValue = diag;
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        expect(orchestrator.lastAutomaticDiagnostics?.completionSource,
+            UpdateCheckCompletionSource.automaticUpdateNotAvailable);
       });
     });
   });

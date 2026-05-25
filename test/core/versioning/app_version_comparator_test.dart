@@ -20,5 +20,28 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('strips pre-release label before comparing', () {
+      // "1.2.3-beta.1" is treated as "1.2.3" (build = 0).
+      expect(AppVersionComparator.compare('1.2.3-beta.1', '1.2.2'), greaterThan(0));
+      expect(AppVersionComparator.compare('1.2.3-beta.1', '1.2.3'), 0);
+      expect(AppVersionComparator.compare('1.2.3-beta.1', '1.2.4'), lessThan(0));
+    });
+
+    test('strips pre-release label while preserving build metadata', () {
+      // "1.2.3-rc.1+5" → "1.2.3+5"; build 5 > build 0.
+      expect(AppVersionComparator.compare('1.2.3-rc.1+5', '1.2.3'), greaterThan(0));
+    });
+
+    test('isRemoteVersionNewer returns false when remote is pre-release of same base', () {
+      // Appcast accidentally ships "1.2.3-beta.1"; treated equal to current "1.2.3".
+      expect(
+        AppVersionComparator.isRemoteVersionNewer(
+          remoteVersion: '1.2.3-beta.1',
+          currentVersion: '1.2.3',
+        ),
+        isFalse,
+      );
+    });
   });
 }

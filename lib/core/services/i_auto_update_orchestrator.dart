@@ -4,6 +4,9 @@ import 'package:result_dart/result_dart.dart';
 abstract class IAutoUpdateOrchestrator {
   bool get isAvailable;
   bool get automaticSilentUpdatesEnabled;
+  /// `true` while a silent update download/install cycle is in progress.
+  /// Useful for the UI to show a progress indicator without polling.
+  bool get isSilentCheckInProgress;
   UpdateCheckDiagnostics? get lastManualDiagnostics;
   UpdateCheckDiagnostics? get lastBackgroundDiagnostics;
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics;

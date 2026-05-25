@@ -30,7 +30,21 @@ class _ParsedAppVersion implements Comparable<_ParsedAppVersion> {
 
   static _ParsedAppVersion parse(String value) {
     final normalized = value.trim();
-    final parts = normalized.split('+');
+    // Strip optional SemVer pre-release label, preserving any build metadata:
+    //   "1.2.3-beta.1"    → "1.2.3"
+    //   "1.2.3-rc.1+5"    → "1.2.3+5"
+    //   "1.2.3+5"         → "1.2.3+5"  (unchanged)
+    final String withoutPreRelease;
+    final dashIndex = normalized.indexOf('-');
+    if (dashIndex >= 0) {
+      final plusIndex = normalized.indexOf('+');
+      withoutPreRelease = plusIndex > dashIndex
+          ? normalized.substring(0, dashIndex) + normalized.substring(plusIndex)
+          : normalized.substring(0, dashIndex);
+    } else {
+      withoutPreRelease = normalized;
+    }
+    final parts = withoutPreRelease.split('+');
     final semanticParts = parts.first.split('.');
     if (semanticParts.length != 3 || parts.length > 2) {
       throw FormatException('Invalid app version: $value');

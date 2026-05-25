@@ -155,6 +155,47 @@ void main() {
       expect(result.itemCount, 1);
     });
 
+    test('returns error message when appcast has only non-windows items', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() async {
+        await server.close(force: true);
+      });
+
+      server.listen((request) async {
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentType = ContentType('application', 'rss+xml', charset: 'utf-8')
+          ..write('''
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:plug="https://plug.se7esistemas.com/appcast">
+  <channel>
+    <item>
+      <enclosure
+        url="https://example.com/PlugAgente-2.0.0.dmg"
+        length="9999"
+        sparkle:version="2.0.0+1"
+        sparkle:os="macos"
+        plug:sha256="2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" />
+    </item>
+  </channel>
+</rss>''');
+        await request.response.close();
+      });
+
+      const service = AppcastProbeService();
+      final result = await service.probeLatest(
+        feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
+      );
+
+      // Should not return a macos candidate; doing so would cause a validation
+      // failure that incorrectly increments the automatic failure counter.
+      expect(result.latestVersion, isNull);
+      expect(result.errorMessage, isNotNull);
+      expect(result.errorMessage, contains('Windows'));
+    });
+
     test('returns explicit error when latest item has no sparkle version', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() async {

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:xml/xml.dart';
 
 class AppcastProbeResult {
@@ -46,6 +47,8 @@ class AppcastProbeService implements IAppcastProbeService {
   static const String _sparkleNamespace = 'http://www.andymatuschak.org/xml-namespaces/sparkle';
   static const String _plugNamespace = 'https://plug.se7esistemas.com/appcast';
 
+  static String get _userAgent => 'PlugAgente/${AppConstants.appVersion} (Windows; Sparkle/appcast-probe)';
+
   @override
   Future<AppcastProbeResult> probeLatest({
     required String feedUrl,
@@ -63,6 +66,7 @@ class AppcastProbeService implements IAppcastProbeService {
     client.connectionTimeout = timeout;
     try {
       final request = await client.getUrl(uri).timeout(timeout);
+      request.headers.set(HttpHeaders.userAgentHeader, _userAgent);
       request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
       request.headers.set(HttpHeaders.pragmaHeader, 'no-cache');
       request.headers.set(
@@ -107,7 +111,6 @@ class AppcastProbeService implements IAppcastProbeService {
       }
 
       _ProbeCandidate? legacyCandidate;
-      _ProbeCandidate? unsupportedOsCandidate;
       String? firstCandidateError;
       for (final item in items) {
         final enclosure = _firstChildElementByName(item, 'enclosure');
@@ -137,17 +140,17 @@ class AppcastProbeService implements IAppcastProbeService {
         }
         if (os == null || os.isEmpty) {
           legacyCandidate ??= candidate;
-          continue;
         }
-        unsupportedOsCandidate ??= candidate;
+        // Items with an explicit non-windows OS are silently skipped; using
+        // them as a fallback would cause a validation failure that increments
+        // the automatic failure counter without a real problem.
       }
 
-      final selectedCandidate = legacyCandidate ?? unsupportedOsCandidate;
-      if (selectedCandidate != null) {
+      if (legacyCandidate != null) {
         return _resultFromCandidate(
           feedUrl: feedUrl,
           itemCount: items.length,
-          candidate: selectedCandidate,
+          candidate: legacyCandidate,
         );
       }
 
@@ -162,7 +165,7 @@ class AppcastProbeService implements IAppcastProbeService {
       return AppcastProbeResult(
         requestUrl: feedUrl,
         itemCount: items.length,
-        errorMessage: 'Appcast missing supported item',
+        errorMessage: 'Appcast missing supported Windows item',
       );
     } on Exception catch (e) {
       return AppcastProbeResult(

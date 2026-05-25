@@ -110,6 +110,7 @@ import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -1273,7 +1274,13 @@ void registerPlugDependencyGraph(
       ),
     )
     ..registerLazySingleton<ISilentUpdateInstaller>(
-      HttpSilentUpdateInstaller.new,
+      () => HttpSilentUpdateInstaller(
+        downloadTimeout: Duration(
+          seconds: resolveAutoUpdateDownloadTimeoutSeconds(
+            environment: AppEnvironment.snapshot(),
+          ),
+        ),
+      ),
     )
     ..registerLazySingleton<IAutoUpdateOrchestrator>(
       () => AutoUpdateOrchestrator(
@@ -1281,6 +1288,11 @@ void registerPlugDependencyGraph(
         silentUpdateInstaller: getIt<ISilentUpdateInstaller>(),
         settingsStore: getIt<IAppSettingsStore>(),
         metricsCollector: getIt<MetricsCollector>(),
+        helperWaitDuration: Duration(
+          minutes: resolveAutoUpdateHelperWaitMinutes(
+            environment: AppEnvironment.snapshot(),
+          ),
+        ),
         closeApplicationForSilentUpdate: () async {
           if (getIt.isRegistered<WindowManagerService>()) {
             await getIt<WindowManagerService>().close();

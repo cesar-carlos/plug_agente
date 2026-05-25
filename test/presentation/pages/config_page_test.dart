@@ -39,6 +39,9 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   bool automaticSilentUpdatesEnabled;
 
   @override
+  bool isSilentCheckInProgress = false;
+
+  @override
   UpdateCheckDiagnostics? lastManualDiagnostics;
 
   @override

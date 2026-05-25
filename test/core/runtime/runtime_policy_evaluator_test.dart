@@ -104,7 +104,7 @@ void main() {
     });
 
     group('Windows Server 2016+', () {
-      test('should return full core with notification/update limits for Server 2016+', () {
+      test('should return full core with notification limit only for Server 2016+', () {
         const versionInfo = WindowsVersionInfo(
           majorVersion: 10,
           minorVersion: 0,
@@ -119,9 +119,39 @@ void main() {
         expect(capabilities.isDegraded, isFalse);
         expect(capabilities.supportsTray, isTrue);
         expect(capabilities.supportsNotifications, isFalse);
-        expect(capabilities.supportsAutoUpdate, isFalse);
+        expect(capabilities.supportsAutoUpdate, isTrue);
         expect(capabilities.supportsWindowManager, isTrue);
         expect(capabilities.degradationReasons, isEmpty);
+      });
+
+      test('should enable auto-update for Server 2019', () {
+        const versionInfo = WindowsVersionInfo(
+          majorVersion: 10,
+          minorVersion: 0,
+          buildNumber: 17763,
+          isServer: true,
+          productName: 'Windows Server 2019',
+        );
+
+        final capabilities = evaluator.evaluate(versionInfo);
+
+        expect(capabilities.supportsAutoUpdate, isTrue);
+        expect(capabilities.supportsNotifications, isFalse);
+      });
+
+      test('should enable auto-update for Server 2022', () {
+        const versionInfo = WindowsVersionInfo(
+          majorVersion: 10,
+          minorVersion: 0,
+          buildNumber: 20348,
+          isServer: true,
+          productName: 'Windows Server 2022',
+        );
+
+        final capabilities = evaluator.evaluate(versionInfo);
+
+        expect(capabilities.supportsAutoUpdate, isTrue);
+        expect(capabilities.supportsNotifications, isFalse);
       });
     });
 

@@ -1155,6 +1155,7 @@
   "configUpdateTechnicalOfficialFeed": "Feed oficial",
   "configUpdateTechnicalProbeRequestUrl": "URL do probe",
   "configUpdateTechnicalProbeSucceeded": "Probe HTTP bem-sucedido",
+  "configUpdateTechnicalProbeMatchesSparkle": "Probe coincide com WinSparkle",
   "configUpdateTechnicalCompletionSource": "Resultado do check",
   "configUpdateTechnicalTriggerDurationMs": "Tempo do disparo (ms)",
   "configUpdateTechnicalTotalDurationMs": "Tempo total (ms)",

@@ -3019,6 +3019,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configUpdateTechnicalProbeSucceeded => 'Probe HTTP bem-sucedido';
 
   @override
+  String get configUpdateTechnicalProbeMatchesSparkle => 'Probe coincide com WinSparkle';
+
+  @override
   String get configUpdateTechnicalCompletionSource => 'Resultado do check';
 
   @override

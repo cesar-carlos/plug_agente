@@ -102,6 +102,37 @@ const int _defaultCheckIntervalSeconds = 3600;
 const int _minimumCheckIntervalSeconds = 3600;
 const String defaultAutoUpdateChannel = 'stable';
 
+const int _defaultDownloadTimeoutSeconds = 300;
+const int _minimumDownloadTimeoutSeconds = 60;
+
+int resolveAutoUpdateDownloadTimeoutSeconds({
+  required Map<String, String> environment,
+}) {
+  final raw = environment['AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS']?.trim() ?? '';
+  if (raw.isEmpty) return _defaultDownloadTimeoutSeconds;
+  final parsed = int.tryParse(raw);
+  if (parsed == null || parsed < _minimumDownloadTimeoutSeconds) {
+    return _defaultDownloadTimeoutSeconds;
+  }
+  return parsed;
+}
+
+const int _defaultHelperWaitMinutes = 30;
+const int _minimumHelperWaitMinutes = 5;
+const int _maximumHelperWaitMinutes = 120;
+
+int resolveAutoUpdateHelperWaitMinutes({
+  required Map<String, String> environment,
+}) {
+  final raw = environment['AUTO_UPDATE_HELPER_WAIT_MINUTES']?.trim() ?? '';
+  if (raw.isEmpty) return _defaultHelperWaitMinutes;
+  final parsed = int.tryParse(raw);
+  if (parsed == null || parsed < _minimumHelperWaitMinutes || parsed > _maximumHelperWaitMinutes) {
+    return _defaultHelperWaitMinutes;
+  }
+  return parsed;
+}
+
 int resolveAutoUpdateCheckIntervalSeconds({
   required Map<String, String> environment,
 }) {
@@ -133,7 +164,7 @@ bool resolveAutoUpdateRequireValidSignature({
   final raw = (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_REQUIRE_VALID_SIGNATURE')).trim();
   final value = raw.isNotEmpty ? raw : environment['AUTO_UPDATE_REQUIRE_VALID_SIGNATURE']?.trim() ?? '';
   return switch (value.toLowerCase()) {
-    '1' || 'true' || 'yes' || 'sim' => true,
-    _ => false,
+    '0' || 'false' || 'no' || 'nao' => false,
+    _ => true,
   };
 }

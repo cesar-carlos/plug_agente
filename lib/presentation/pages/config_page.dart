@@ -44,7 +44,6 @@ class _ConfigPageState extends State<ConfigPage> {
 
   String _lastUpdateCheck = '';
   bool _isCheckingUpdates = false;
-  bool _isCheckingAutomaticUpdates = false;
 
   /// `AppConstants.appVersion` é mantido em sincronia com `pubspec.yaml` pelo
   /// script `installer/update_version.py`. Usamos a constante diretamente para
@@ -289,11 +288,11 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _checkAutomaticUpdatesNow() async {
-    if (_isCheckingAutomaticUpdates) {
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    if (orchestrator.isSilentCheckInProgress) {
       return;
     }
     final l10n = AppLocalizations.of(context)!;
-    final orchestrator = getIt<IAutoUpdateOrchestrator>();
     if (!orchestrator.isAvailable) {
       SettingsFeedback.showError(
         context: context,
@@ -303,9 +302,8 @@ class _ConfigPageState extends State<ConfigPage> {
       return;
     }
 
-    setState(() {
-      _isCheckingAutomaticUpdates = true;
-    });
+    // Trigger a rebuild so the button reflects isSilentCheckInProgress = true.
+    setState(() {});
 
     final result = await orchestrator.checkSilently();
 
@@ -313,9 +311,8 @@ class _ConfigPageState extends State<ConfigPage> {
       return;
     }
 
-    setState(() {
-      _isCheckingAutomaticUpdates = false;
-    });
+    // Trigger a rebuild so the button reflects isSilentCheckInProgress = false.
+    setState(() {});
 
     result.fold(
       (_) {
@@ -468,7 +465,7 @@ class _ConfigPageState extends State<ConfigPage> {
             autoUpdateFeedStatus: autoUpdateFeedStatusLabel,
             automaticSilentUpdatesEnabled: orchestrator.automaticSilentUpdatesEnabled,
             isCheckingUpdates: _isCheckingUpdates,
-            isCheckingAutomaticUpdates: _isCheckingAutomaticUpdates,
+            isCheckingAutomaticUpdates: orchestrator.isSilentCheckInProgress,
             startupSupported: startupSupported,
             startMinimizedSupported: supportsTray,
             trayBehaviorSupported: supportsTray,
