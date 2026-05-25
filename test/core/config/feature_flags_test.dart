@@ -118,20 +118,21 @@ void main() {
       expect(flags.enableAgentActionRemoteAudit, isTrue);
     });
 
-    test('keeps parallel JSON-RPC batch dispatch disabled by default', () async {
+    test('enables parallel JSON-RPC batch dispatch by default', () async {
+      // Default changed to true: negotiation-gated, safe for all deployments.
       final store = InMemoryAppSettingsStore();
       final flags = FeatureFlags(store);
 
-      expect(flags.enableParallelJsonRpcBatchDispatch, isFalse);
-
-      await flags.setEnableParallelJsonRpcBatchDispatch(true);
-
       expect(flags.enableParallelJsonRpcBatchDispatch, isTrue);
-      expect(store.getBool('feature_enable_parallel_json_rpc_batch_dispatch'), isTrue);
+
+      await flags.setEnableParallelJsonRpcBatchDispatch(false);
+
+      expect(flags.enableParallelJsonRpcBatchDispatch, isFalse);
+      expect(store.getBool('feature_enable_parallel_json_rpc_batch_dispatch'), isFalse);
 
       await flags.resetToDefaults();
 
-      expect(flags.enableParallelJsonRpcBatchDispatch, isFalse);
+      expect(flags.enableParallelJsonRpcBatchDispatch, isTrue);
     });
   });
 }
