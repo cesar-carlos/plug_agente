@@ -839,7 +839,13 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     final installerPath = pending.installerPath;
     final launcherPath = pending.launcherPath;
     final statusPath = pending.launcherStatusPath;
-    if (installerPath == null && launcherPath == null) return false;
+    // A pending with no paths was written before the download started (the
+    // coordinator persists the pending record before calling installer.install).
+    // If the process crashed or the download failed silently between that
+    // persist and the post-download update, the record stays with null paths
+    // forever and blocks future update checks. Treat it as stale so the next
+    // checkSilently() can start a fresh download cycle.
+    if (installerPath == null && launcherPath == null) return true;
     final installerMissing = installerPath == null || !File(installerPath).existsSync();
     final launcherMissing = launcherPath == null || !File(launcherPath).existsSync();
     final statusMissing = statusPath == null || !File(statusPath).existsSync();

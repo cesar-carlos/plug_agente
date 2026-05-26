@@ -972,6 +972,10 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
         _cancelPersistentRetryTimer();
         clearHubRecoveryUiHint();
         _status = ConnectionStatus.connected;
+        // Clear the burst-recovery flag so isReconnecting reflects the
+        // connected state immediately, without waiting for the async
+        // _handleReconnectionNeeded to return and clear it at its finally.
+        _isReconnecting = false;
         _error = '';
         notifyListeners();
       case HubTransportAutoReconnectSucceeded():
@@ -993,6 +997,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
         _cancelPersistentRetryTimer();
         clearHubRecoveryUiHint();
         _status = ConnectionStatus.connected;
+        _isReconnecting = false;
         _error = '';
         notifyListeners();
     }
