@@ -30,12 +30,15 @@ class SqlStreamingCoordinator {
     required String streamId,
     required String executionId,
     required String? requestId,
+    String? clientToken,
   }) {
+    final owner = clientToken?.trim();
     final execution = ActiveSqlStreamExecution(
       streamId: streamId,
       executionId: executionId,
       requestId: requestId,
       cancellationToken: CancellationToken(),
+      ownerClientToken: (owner != null && owner.isNotEmpty) ? owner : null,
     );
     _activeByStreamId[streamId] = execution;
     _activeByExecutionId[executionId] = execution;
@@ -171,12 +174,16 @@ class ActiveSqlStreamExecution {
     required this.executionId,
     required this.requestId,
     required this.cancellationToken,
+    this.ownerClientToken,
   });
 
   final String streamId;
   final String executionId;
   final String? requestId;
   final CancellationToken cancellationToken;
+  /// Normalized (trimmed) clientToken that initiated the stream, or null when
+  /// the stream was started without a client token (hub direct call).
+  final String? ownerClientToken;
   StreamingCancelReason? cancelReason;
 
   void cancel(StreamingCancelReason reason) {

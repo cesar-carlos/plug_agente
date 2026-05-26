@@ -359,6 +359,7 @@ class SqlRpcMethodHandlerOperations {
       timeoutMs: requestedTimeoutMs,
       negotiatedExtensions: negotiatedExtensions,
       preferDbStreaming: options?['prefer_db_streaming'] == true,
+      clientToken: clientToken,
     );
     if (streamingFromDbResponse != null) {
       return streamingFromDbResponse;
@@ -535,6 +536,7 @@ class SqlRpcMethodHandlerOperations {
     required int timeoutMs,
     required Map<String, dynamic> negotiatedExtensions,
     required bool preferDbStreaming,
+    String? clientToken,
   }) async {
     final autoStreamingReason = _dbStreamingAutoReason(
       queryRequest: queryRequest,
@@ -611,6 +613,7 @@ class SqlRpcMethodHandlerOperations {
       streamId: streamId,
       requestId: request.id?.toString(),
       executionId: executionId,
+      clientToken: clientToken,
     );
 
     try {
@@ -1649,6 +1652,33 @@ class SqlRpcMethodHandlerOperations {
     );
     if (activeExecution == null) {
       return _support.executionNotFound(request);
+    }
+
+    // Ownership check: if the stream was started by a specific clientToken,
+    // require the cancel request to carry the same token. This prevents a
+    // hub peer from cancelling streams it did not initiate.
+    if (_featureFlags.enableClientTokenAuthorization) {
+      final cancelToken = (params['client_token'] as String? ??
+              params['auth'] as String? ??
+              params['clientToken'] as String?)
+          ?.trim();
+      final ownerToken = activeExecution.ownerClientToken;
+      if (ownerToken != null && ownerToken.isNotEmpty) {
+        if (cancelToken == null || cancelToken.isEmpty || cancelToken != ownerToken) {
+          final rpcError = FailureToRpcErrorMapper.map(
+            domain.ValidationFailure.withContext(
+              message: 'sql.cancel: clientToken does not match the token that started the stream.',
+              context: {
+                'reason': 'cancel_token_mismatch',
+                'execution_id': executionId,
+              },
+            ),
+            instance: request.id?.toString(),
+            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+          );
+          return RpcResponse.error(id: request.id, error: rpcError);
+        }
+      }
     }
 
     final cancelResult = await _sqlStreamingCoordinator.cancel(

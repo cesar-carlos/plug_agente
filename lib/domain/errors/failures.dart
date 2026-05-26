@@ -1,10 +1,6 @@
 import 'dart:developer' as developer;
 
-// TODO(arch): domain imports core — domain should not depend on core utilities.
-// Tracked in codebase-audit-round3.canvas.tsx (r3-08).
-// Remediation: move LogSanitizer-equivalent to domain/utils/ or inject
-// redaction via a domain port so domain remains free of core dependencies.
-import 'package:plug_agente/core/utils/log_sanitizer.dart';
+import 'package:plug_agente/domain/utils/log_sanitizer.dart';
 
 abstract class Failure implements Exception {
   Failure(this.message, String defaultCode)

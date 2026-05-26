@@ -92,15 +92,10 @@ class AgentActionDefinitionTable extends Table {
 }
 
 @DataClassName('AgentActionTriggerData')
-// TODO(arch): AgentActionTriggerTable.actionId, AgentActionExecutionTable.actionId,
-// and AgentActionCapturedOutputChunkTable.executionId have no Drift foreign-key
-// constraints (REFERENCES). Orphan rows are possible after deleteDefinition.
-// Tracked in codebase-audit-round5.canvas.tsx (r5-19).
-// Remediation: add `references(AgentActionDefinitionTable, #id)` with
-// onDelete: KeyAction.setNull or cascade, or enforce cleanup in repository.
 class AgentActionTriggerTable extends Table {
   TextColumn get id => text()();
-  TextColumn get actionId => text()();
+  TextColumn get actionId =>
+      text().references(AgentActionDefinitionTable, #id, onDelete: KeyAction.cascade)();
   TextColumn get type => text()();
   TextColumn get name => text().nullable()();
   BoolColumn get isEnabled => boolean().withDefault(const Constant(true))();
@@ -172,7 +167,8 @@ class RpcIdempotencyCacheTable extends Table {
 
 @DataClassName('AgentActionCapturedOutputChunkData')
 class AgentActionCapturedOutputChunkTable extends Table {
-  TextColumn get executionId => text()();
+  TextColumn get executionId =>
+      text().references(AgentActionExecutionTable, #id, onDelete: KeyAction.cascade)();
   TextColumn get stream => text()();
   IntColumn get chunkIndex => integer()();
   IntColumn get utf8Offset => integer()();

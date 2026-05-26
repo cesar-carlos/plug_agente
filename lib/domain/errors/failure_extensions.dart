@@ -1,8 +1,3 @@
-// TODO(arch): domain/errors imports core/logger — domain must not depend on
-// core infrastructure. Tracked in codebase-audit-round3.canvas.tsx (r3-09).
-// Remediation: move logError() to an application/presentation helper;
-// keep domain extensions limited to code/message mapping only.
-import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 
 extension ObjectFailureExtension on Object {
@@ -114,24 +109,6 @@ extension ExceptionToFailureExtension on Object {
 }
 
 extension ResultLoggingExtension on Object {
-  String logError(
-    String operation, {
-    Map<String, dynamic> context = const {},
-  }) {
-    final failure = asFailure;
-    final contextSuffix = context.isEmpty ? '' : ' | context: $context';
-    if (failure != null) {
-      AppLogger.error(
-        '$operation: ${failure.message}$contextSuffix',
-        failure.toString(),
-      );
-      return failure.message;
-    }
-
-    AppLogger.error('$operation: ${toUserMessage()}$contextSuffix', this);
-    return toUserMessage();
-  }
-
   bool get requiresModalDialog {
     if (!isFailure) {
       return false;

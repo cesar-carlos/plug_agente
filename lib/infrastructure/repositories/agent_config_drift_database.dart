@@ -50,7 +50,7 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
   static const _walCheckpointInterval = Duration(minutes: 5);
 
   @override
-  int get schemaVersion => 27;
+  int get schemaVersion => 28;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -213,6 +213,18 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
       }
       if (from < 27) {
         await _addAgentActionDefinitionLastPreflightValidatedAtColumnIfMissing(m);
+      }
+      if (from < 28) {
+        // Recreate AgentActionTriggerTable and AgentActionCapturedOutputChunkTable
+        // to add REFERENCES (FK) constraints. TableMigration copies data and
+        // recreates the table with the updated schema.
+        // AgentActionExecutionTable.actionId is intentionally left without a FK
+        // to preserve execution history after definition deletion (enforced at
+        // the repository level in deleteDefinition).
+        // ignore: experimental_member_use - TableMigration is Drift's API for table recreation
+        await m.alterTable(TableMigration(agentActionTriggerTable));
+        // ignore: experimental_member_use
+        await m.alterTable(TableMigration(agentActionCapturedOutputChunkTable));
       }
       await _createClientTokenIndexes();
       await _createAgentActionIndexes();

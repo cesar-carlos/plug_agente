@@ -22,27 +22,30 @@ class CompressionService {
       );
     }
 
-    // TODO(performance): resultSets are compressed sequentially — each await
-    // blocks for one isolate round-trip. For large multi-result responses this
-    // adds N serial delays. Consider compressing in parallel with a concurrency
-    // cap, or compressing once at the envelope level.
-    // Tracked in codebase-audit-round5.canvas.tsx (r5-20).
+    // Compress all result sets in parallel — each _compressor.compress call
+    // is an isolate round-trip, so parallel dispatch removes N-1 serial delays
+    // on multi-result responses.
     final compressedResultSets = <QueryResultSet>[];
     final compressedByLogicalIndex = <int, QueryResultSet>{};
-    for (final resultSet in response.resultSets) {
-      final compressedRows = await _compressor.compress(resultSet.rows);
-      if (compressedRows.isError()) {
-        return Failure(
-          domain.CompressionFailure.withContext(
-            message: 'Failed to compress response data',
-            cause: compressedRows.exceptionOrNull(),
-            context: {'reason': SqlPipelineContextConstants.resultSetCompressionFailedReason},
-          ),
-        );
+    if (response.resultSets.isNotEmpty) {
+      final futures = response.resultSets
+          .map((resultSet) => _compressor.compress(resultSet.rows).then((r) => (resultSet: resultSet, rows: r)))
+          .toList(growable: false);
+      final results = await Future.wait(futures);
+      for (final entry in results) {
+        if (entry.rows.isError()) {
+          return Failure(
+            domain.CompressionFailure.withContext(
+              message: 'Failed to compress response data',
+              cause: entry.rows.exceptionOrNull(),
+              context: {'reason': SqlPipelineContextConstants.resultSetCompressionFailedReason},
+            ),
+          );
+        }
+        final compressed = entry.resultSet.copyWith(rows: entry.rows.getOrNull());
+        compressedResultSets.add(compressed);
+        compressedByLogicalIndex[entry.resultSet.index] = compressed;
       }
-      final compressed = resultSet.copyWith(rows: compressedRows.getOrNull());
-      compressedResultSets.add(compressed);
-      compressedByLogicalIndex[resultSet.index] = compressed;
     }
 
     final compressedItems = response.items
@@ -96,20 +99,25 @@ class CompressionService {
 
     final decompressedResultSets = <QueryResultSet>[];
     final decompressedByLogicalIndex = <int, QueryResultSet>{};
-    for (final resultSet in response.resultSets) {
-      final decompressedRows = await _compressor.decompress(resultSet.rows);
-      if (decompressedRows.isError()) {
-        return Failure(
-          domain.CompressionFailure.withContext(
-            message: 'Failed to decompress response data',
-            cause: decompressedRows.exceptionOrNull(),
-            context: {'reason': SqlPipelineContextConstants.resultSetDecompressionFailedReason},
-          ),
-        );
+    if (response.resultSets.isNotEmpty) {
+      final futures = response.resultSets
+          .map((resultSet) => _compressor.decompress(resultSet.rows).then((r) => (resultSet: resultSet, rows: r)))
+          .toList(growable: false);
+      final results = await Future.wait(futures);
+      for (final entry in results) {
+        if (entry.rows.isError()) {
+          return Failure(
+            domain.CompressionFailure.withContext(
+              message: 'Failed to decompress response data',
+              cause: entry.rows.exceptionOrNull(),
+              context: {'reason': SqlPipelineContextConstants.resultSetDecompressionFailedReason},
+            ),
+          );
+        }
+        final decompressed = entry.resultSet.copyWith(rows: entry.rows.getOrNull());
+        decompressedResultSets.add(decompressed);
+        decompressedByLogicalIndex[entry.resultSet.index] = decompressed;
       }
-      final decompressed = resultSet.copyWith(rows: decompressedRows.getOrNull());
-      decompressedResultSets.add(decompressed);
-      decompressedByLogicalIndex[resultSet.index] = decompressed;
     }
 
     final decompressedItems = response.items
