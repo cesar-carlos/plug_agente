@@ -503,24 +503,57 @@ class RpcBatchInboundHandler {
     required int index,
     required RpcRequest request,
   }) async {
-    final clientToken = _extractClientTokenFromRpcParams(request.params);
-    final response = await _dispatcher.dispatch(
-      request,
-      _agentIdProvider(),
-      clientToken: clientToken,
-      limits: _protocolProvider().effectiveLimits,
-      negotiatedExtensions: _protocolProvider().negotiatedExtensions,
-    );
-    final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
-    _authorizationDecisionLogger.log(
-      request: request,
-      response: tracedResponse,
-      clientToken: clientToken,
-    );
-    if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
-      return (index: index, response: null, id: request.id, method: request.method);
+    try {
+      final clientToken = _extractClientTokenFromRpcParams(request.params);
+      final response = await _dispatcher.dispatch(
+        request,
+        _agentIdProvider(),
+        clientToken: clientToken,
+        limits: _protocolProvider().effectiveLimits,
+        negotiatedExtensions: _protocolProvider().negotiatedExtensions,
+      );
+      final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
+      _authorizationDecisionLogger.log(
+        request: request,
+        response: tracedResponse,
+        clientToken: clientToken,
+      );
+      if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
+        return (index: index, response: null, id: request.id, method: request.method);
+      }
+      return (index: index, response: tracedResponse, id: request.id, method: request.method);
+    } on Exception catch (error, stackTrace) {
+      // A per-item exception must not discard all other batch responses.
+      // Map to internalError for this specific request.id and continue.
+      AppLogger.error(
+        'Unhandled exception dispatching batch item ${request.id}',
+        error,
+        stackTrace,
+      );
+      if (request.isNotification) {
+        return (index: index, response: null, id: request.id, method: request.method);
+      }
+      return (
+        index: index,
+        response: RpcResponse.error(
+          id: request.id,
+          error: RpcError(
+            code: RpcErrorCode.internalError,
+            message: RpcErrorCode.getMessage(RpcErrorCode.internalError),
+            data: RpcErrorCode.buildErrorData(
+              code: RpcErrorCode.internalError,
+              technicalMessage: RpcInboundConstants.unhandledBatchProcessingTechnicalMessage,
+              extra: {
+                'failure_code': RpcInboundConstants.unhandledBatchExceptionFailureCode,
+                'item_index': index,
+              },
+            ),
+          ),
+        ),
+        id: request.id,
+        method: request.method,
+      );
     }
-    return (index: index, response: tracedResponse, id: request.id, method: request.method);
   }
 
   void _recordBatchDispatchResult(

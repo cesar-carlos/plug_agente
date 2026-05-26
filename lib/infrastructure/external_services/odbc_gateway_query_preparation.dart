@@ -47,12 +47,17 @@ class OdbcGatewayQueryPreparation {
       );
     }
 
-    final requiresExplicitOrderBy =
-        databaseType == DatabaseType.sqlServer || databaseType == DatabaseType.sybaseAnywhere;
-    if (requiresExplicitOrderBy && pagination.orderBy.isEmpty) {
+    // All engines require ORDER BY for stable page-offset pagination.
+    // PostgreSQL does NOT guarantee row order without it — results across pages
+    // can skip or duplicate rows if the planner picks a different scan order.
+    if (pagination.orderBy.isEmpty) {
+      final engineName = switch (databaseType) {
+        DatabaseType.sqlServer => 'SQL Server',
+        DatabaseType.sybaseAnywhere => 'SQL Anywhere',
+        DatabaseType.postgresql => 'PostgreSQL',
+      };
       return domain.ValidationFailure(
-        'Page-offset pagination requires an explicit ORDER BY for '
-        'SQL Server and SQL Anywhere',
+        'Page-offset pagination requires an explicit ORDER BY for $engineName',
       );
     }
 

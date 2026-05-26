@@ -163,14 +163,29 @@ class JwtJwksVerifier {
       }
 
       if (config.issuer != null && config.issuer!.isNotEmpty) {
-        final expectedIssuer = Uri.tryParse(config.issuer!);
+        final configuredIssuer = config.issuer!.trim();
+        // Reject if the configured issuer is not a parseable URI — fail closed
+        // rather than silently bypassing issuer validation on misconfiguration.
+        final expectedIssuer = Uri.tryParse(configuredIssuer);
+        if (expectedIssuer == null) {
+          final result = Failure<Map<String, dynamic>, Exception>(
+            domain.ConfigurationFailure.withContext(
+              message: 'JWKS issuer is configured but is not a valid URI: "$configuredIssuer"',
+              context: {
+                'authentication': true,
+                'reason': AuthorizationContextConstants.invalidJwksConfigReason,
+              },
+            ),
+          );
+          return _finalizeResult(result);
+        }
         final actualIssuer = claims.issuer;
-        if (expectedIssuer != null && (actualIssuer == null || actualIssuer.toString() != config.issuer)) {
+        if (actualIssuer == null || actualIssuer.toString() != configuredIssuer) {
           final result = Failure<Map<String, dynamic>, Exception>(
             domain.ConfigurationFailure.withContext(
               message:
                   'Token issuer "${actualIssuer ?? "null"}" does not match '
-                  'expected "${config.issuer}"',
+                  'expected "$configuredIssuer"',
               context: {
                 'authentication': true,
                 'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
@@ -212,7 +227,9 @@ class JwtJwksVerifier {
           },
         ),
       );
-      return _finalizeResult(result);
+      // JoseException may indicate JWKS unavailability (network/parse) — count
+      // toward the circuit so repeated infra failures eventually open it.
+      return _finalizeResult(result, countInCircuit: true);
     } on Exception catch (error) {
       final result = Failure<Map<String, dynamic>, Exception>(
         domain.ConfigurationFailure.withContext(
@@ -224,22 +241,31 @@ class JwtJwksVerifier {
           },
         ),
       );
-      return _finalizeResult(result);
+      // Generic Exception = IO/network error fetching JWKS — definitely infra.
+      return _finalizeResult(result, countInCircuit: true);
     }
   }
 
+  // Only infrastructure failures (JWKS network/crypto errors) should count
+  // toward the circuit breaker. Client-side token errors (expired, wrong
+  // algorithm, issuer mismatch, etc.) must NOT open the circuit — they would
+  // block all token verification for 30 s just because one client sent a
+  // bad token.
   Result<Map<String, dynamic>> _finalizeResult(
-    Result<Map<String, dynamic>> result,
-  ) {
+    Result<Map<String, dynamic>> result, {
+    bool countInCircuit = false,
+  }) {
     if (result.isSuccess()) {
       _consecutiveFailures = 0;
       _circuitOpenUntil = null;
       return result;
     }
 
-    _consecutiveFailures++;
-    if (_consecutiveFailures >= failureThreshold) {
-      _circuitOpenUntil = _now().add(circuitOpenDuration);
+    if (countInCircuit) {
+      _consecutiveFailures++;
+      if (_consecutiveFailures >= failureThreshold) {
+        _circuitOpenUntil = _now().add(circuitOpenDuration);
+      }
     }
     return result;
   }

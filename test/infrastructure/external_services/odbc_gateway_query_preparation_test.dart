@@ -80,7 +80,7 @@ void main() {
       );
 
       test(
-        'should allow PostgreSQL pagination without ORDER BY terms',
+        'should require ORDER BY for PostgreSQL pagination (non-deterministic without it)',
         () {
           const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
           final failure = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
@@ -90,7 +90,8 @@ void main() {
             ),
             DatabaseType.postgresql,
           );
-          expect(failure, isNull);
+          expect(failure, isNotNull);
+          expect(failure!.message, contains('ORDER BY'));
         },
       );
     });
