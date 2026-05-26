@@ -153,6 +153,19 @@ class TransportSocketEventBinder {
     });
 
     socket.on('disconnect', (dynamic reason) {
+      // Guard against stale disconnect events from a previous socket that
+      // fires after a new connect() has incremented the generation. Without
+      // this guard, the old socket's disconnect would trigger recovery while
+      // the new connection is already in progress (hub audit C1 / r1-1).
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        AppLogger.debug(
+          'resilience: ${_resilienceLogPrefix()}socket_transport '
+          'event=disconnect_ignored_stale_generation '
+          'generation=$connectGeneration current=${_connectGenerationProvider()} '
+          'reason=$reason',
+        );
+        return;
+      }
       _logMessage('RECEIVED', 'disconnect', reason);
       _onDisconnect(reason);
     });
