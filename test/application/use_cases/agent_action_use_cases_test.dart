@@ -2866,7 +2866,7 @@ void main() {
       expect(execution.exitCode, 2);
       expect(execution.failureCode, AgentActionFailureCode.exitCodeRejected);
       expect(execution.failurePhase, 'process_exit');
-      expect(execution.failureMessage, 'Comando finalizou com codigo de saida 2.');
+      expect(execution.failureMessage, 'Command exited with code 2.');
       expect(execution.stderrText, 'file not found');
       expect(repository.savedExecutions, hasLength(3));
     });

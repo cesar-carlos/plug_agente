@@ -51,6 +51,7 @@ void main() {
       when(
         () => repository.listExecutions(
           statuses: const {AgentActionExecutionStatus.queued},
+          limit: any(named: 'limit'),
         ),
       ).thenAnswer(
         (_) async => Success([execution(id: 'q1', status: AgentActionExecutionStatus.queued)]),
@@ -58,6 +59,7 @@ void main() {
       when(
         () => repository.listExecutions(
           statuses: const {AgentActionExecutionStatus.running},
+          limit: any(named: 'limit'),
         ),
       ).thenAnswer(
         (_) async => Success([execution(id: 'r1', status: AgentActionExecutionStatus.running)]),
@@ -87,11 +89,13 @@ void main() {
       when(
         () => repository.listExecutions(
           statuses: const {AgentActionExecutionStatus.queued},
+          limit: any(named: 'limit'),
         ),
       ).thenAnswer((_) async => const Success([]));
       when(
         () => repository.listExecutions(
           statuses: const {AgentActionExecutionStatus.running},
+          limit: any(named: 'limit'),
         ),
       ).thenAnswer(
         (_) async => Success([execution(id: 'r1', status: AgentActionExecutionStatus.running)]),
@@ -111,11 +115,13 @@ void main() {
       when(
         () => repository.listExecutions(
           statuses: const {AgentActionExecutionStatus.queued},
+          limit: any(named: 'limit'),
         ),
       ).thenAnswer((_) async => const Success([]));
       when(
         () => repository.listExecutions(
           statuses: const {AgentActionExecutionStatus.running},
+          limit: any(named: 'limit'),
         ),
       ).thenAnswer(
         (_) async => Success([execution(id: 'r1', status: AgentActionExecutionStatus.running)]),

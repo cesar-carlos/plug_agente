@@ -145,10 +145,12 @@ void main() {
 
     await notify(definition: definition, execution: execution);
 
+    // failureMessage is intentionally NOT surfaced in OS notifications;
+    // failureFallbackBody is used regardless (see AgentActionNotificationMessages).
     verify(
       () => sendNotification(
         title: 'Backup job',
-        body: 'Exit code 2',
+        body: 'Execution finished with a failure.',
         payload: 'agent_action:exec-1',
       ),
     ).called(1);

@@ -13,13 +13,15 @@ void main() {
       );
     });
 
-    test('should prefer failure message when present', () {
+    test('should use fallback body for failed status (failureMessage is not surfaced in notifications)', () {
+      // failureMessage is intentionally NOT surfaced in OS notifications to
+      // avoid leaking technical details; failureFallbackBody is always used.
       expect(
         messages.bodyFor(
           status: AgentActionExecutionStatus.failed,
           failureMessage: ' Exit code 2 ',
         ),
-        'Exit code 2',
+        messages.failureFallbackBody,
       );
     });
 
