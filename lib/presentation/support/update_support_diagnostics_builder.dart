@@ -101,7 +101,7 @@ class UpdateSupportDiagnosticsBuilder {
         ),
       SupportDiagnosticsField(
         key: l10n.configUpdateTechnicalCompletionSource,
-        value: _formatCompletionSource(l10n, diagnostics.completionSource),
+        value: formatCompletionSource(l10n, diagnostics.completionSource),
       ),
       SupportDiagnosticsField(
         key: l10n.configUpdateTechnicalTriggerDurationMs,
@@ -284,7 +284,11 @@ class UpdateSupportDiagnosticsBuilder {
     return completedAt.difference(startedAt).inMilliseconds.toString();
   }
 
-  String _formatCompletionSource(
+  /// Formats a [UpdateCheckCompletionSource] to a localized display string.
+  ///
+  /// Exposed as `static` so callers (e.g. `ConfigPage`) can reuse it without
+  /// duplicating the switch.
+  static String formatCompletionSource(
     AppLocalizations l10n,
     UpdateCheckCompletionSource? source,
   ) {

@@ -85,7 +85,8 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
                 child: Text(l10n.agentActionsPreflightSettingsDiscard),
               ),
               Button(
-                onPressed: widget.provider.isFeatureEnabled && !_isSaving && widget.provider.hasPreflightPersistedOverride
+                onPressed:
+                    widget.provider.isFeatureEnabled && !_isSaving && widget.provider.hasPreflightPersistedOverride
                     ? _onUseEnvDefaults
                     : null,
                 child: Text(l10n.agentActionsPreflightSettingsUseEnvDefaults),

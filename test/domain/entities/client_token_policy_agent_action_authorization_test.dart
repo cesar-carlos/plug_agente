@@ -89,7 +89,8 @@ void main() {
       check(
         ClientTokenPolicyAgentActionAuthorization.grantsRemoteAgentAction(
           policyPayload: <String, dynamic>{
-            'token_scope': '${AgentActionRpcConstants.agentActionsCancelScope} ${AgentActionRpcConstants.agentActionsRunScope}',
+            'token_scope':
+                '${AgentActionRpcConstants.agentActionsCancelScope} ${AgentActionRpcConstants.agentActionsRunScope}',
           },
           requiredScope: AgentActionRpcConstants.agentActionsRunScope,
           actionId: 'a1',

@@ -164,8 +164,7 @@ class ComObjectActionAdapter implements AgentActionAdapter {
       );
     }
 
-    if (requireRegistration &&
-        !_invocationRegistry.isRegistered(progId: progId, memberName: memberName)) {
+    if (requireRegistration && !_invocationRegistry.isRegistered(progId: progId, memberName: memberName)) {
       return Failure(
         ActionValidationFailure.withContext(
           message: 'COM object invocation is not registered for this agent.',
@@ -175,8 +174,7 @@ class ComObjectActionAdapter implements AgentActionAdapter {
             'member_name': memberName,
             'phase': phase,
             'reason': AgentActionComObjectConstants.invocationNotRegisteredReason,
-            'user_message':
-                'Esta combinacao de ProgID e membro COM nao esta habilitada neste agente.',
+            'user_message': 'Esta combinacao de ProgID e membro COM nao esta habilitada neste agente.',
           },
         ),
       );

@@ -1,5 +1,9 @@
 import 'dart:developer' as developer;
 
+// TODO(arch): domain imports core — domain should not depend on core utilities.
+// Tracked in codebase-audit-round3.canvas.tsx (r3-08).
+// Remediation: move LogSanitizer-equivalent to domain/utils/ or inject
+// redaction via a domain port so domain remains free of core dependencies.
 import 'package:plug_agente/core/utils/log_sanitizer.dart';
 
 abstract class Failure implements Exception {
@@ -73,8 +77,12 @@ class ServerFailure extends Failure {
          defaultCode: 'SERVER_ERROR',
        );
 
+  /// Defaults to false — a ServerFailure represents an unexpected server-side
+  /// error (5xx, parse error, I/O failure) which is not reliably retryable.
+  /// Callers should set context['transient'] = true if the failure is known
+  /// to be transient (e.g. 503 responses).
   @override
-  bool get isTransient => true;
+  bool get isTransient => context['transient'] == true;
 }
 
 class NetworkFailure extends Failure {

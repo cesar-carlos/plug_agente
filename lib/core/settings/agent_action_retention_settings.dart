@@ -118,5 +118,9 @@ class AgentActionRetentionSettings {
 
   static String? _optionalEnv(String key) => AppEnvironment.get(key);
 
-  static int _clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;
+  static int _clamp(int value, int min, int max) => value < min
+      ? min
+      : value > max
+      ? max
+      : value;
 }

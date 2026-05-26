@@ -151,7 +151,10 @@ class ClientTokenSummary {
         isUtc: true,
       );
     }
-    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    // Explicit epoch sentinel when the hub sends an absent or unparseable
+    // created_at. Callers should treat DateTime.utc(1970) as "unknown" for
+    // display and sort purposes rather than a real creation time.
+    return DateTime.utc(1970);
   }
 
   static DateTime? _parseDateTimeOrNull(Object? rawValue) {

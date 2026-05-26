@@ -14,8 +14,7 @@ const List<String> agentActionSecurityGateMvpTypes = <String>[
 ];
 
 const Map<String, String> agentActionThreatModelSummaryByType = <String, String>{
-  'commandLine':
-      'Shell/cmd; injection + stdout leak — normalizer, allowlist, capturePolicy, redactor.',
+  'commandLine': 'Shell/cmd; injection + stdout leak — normalizer, allowlist, capturePolicy, redactor.',
   'executable': 'CreateProcess; binary swap — path snapshot/hash, allowlist.',
   'script': 'Interpreter + script; hijack — path validation, encoding policy.',
   'jar': 'java + JAR — path/Java preflight.',
@@ -23,8 +22,7 @@ const Map<String, String> agentActionThreatModelSummaryByType = <String, String>
       'SMTP/attachments — secure storage, path validation on attachments; re-approve remote after secret rotation.',
   'comObject':
       'COM ProgId — production handlers in com_object_production_registrations.dart (stub only for homologation).',
-  'developer':
-      'Data7 XML — catalog id/label only, no password in hash; no remote config override.',
+  'developer': 'Data7 XML — catalog id/label only, no password in hash; no remote config override.',
 };
 
 /// Resolves action types from CLI [args] or returns all MVP types when empty.
@@ -33,8 +31,7 @@ List<String> resolveSecurityGateActionTypes(List<String> args) {
   return requested.isEmpty ? agentActionSecurityGateMvpTypes : requested;
 }
 
-String? threatModelSummaryFor(String actionType) =>
-    agentActionThreatModelSummaryByType[actionType];
+String? threatModelSummaryFor(String actionType) => agentActionThreatModelSummaryByType[actionType];
 
 void printAgentActionSecurityGateChecklist(List<String> types) {
   print('Agent action security gate — PR checklist (plug_agente)');

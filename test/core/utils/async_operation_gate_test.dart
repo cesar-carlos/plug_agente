@@ -147,16 +147,20 @@ void main() {
         inFlightHandlers--;
       }
 
-      unawaited(recoveryGate.schedule(
-        handler: handler,
-        shouldAbort: () => false,
-        shouldSkipAfterLock: () => false,
-      ));
-      unawaited(recoveryGate.schedule(
-        handler: handler,
-        shouldAbort: () => false,
-        shouldSkipAfterLock: () => false,
-      ));
+      unawaited(
+        recoveryGate.schedule(
+          handler: handler,
+          shouldAbort: () => false,
+          shouldSkipAfterLock: () => false,
+        ),
+      );
+      unawaited(
+        recoveryGate.schedule(
+          handler: handler,
+          shouldAbort: () => false,
+          shouldSkipAfterLock: () => false,
+        ),
+      );
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(handlerRuns, 1);
@@ -192,14 +196,16 @@ void main() {
       var coalesced = false;
       Completer<void>? handlerGate;
 
-      unawaited(recoveryGate.schedule(
-        handler: () async {
-          handlerGate ??= Completer<void>();
-          await handlerGate!.future;
-        },
-        shouldAbort: () => false,
-        shouldSkipAfterLock: () => false,
-      ));
+      unawaited(
+        recoveryGate.schedule(
+          handler: () async {
+            handlerGate ??= Completer<void>();
+            await handlerGate!.future;
+          },
+          shouldAbort: () => false,
+          shouldSkipAfterLock: () => false,
+        ),
+      );
 
       await Future<void>.delayed(const Duration(milliseconds: 5));
 

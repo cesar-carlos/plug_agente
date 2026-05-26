@@ -18,12 +18,10 @@ class _CoordinatorFakeRepository implements IAgentActionRepository {
   final Map<String, AgentActionExecution> executions = <String, AgentActionExecution>{};
 
   @override
-  Future<Result<AgentActionDefinition>> saveDefinition(AgentActionDefinition definition) async =>
-      Success(definition);
+  Future<Result<AgentActionDefinition>> saveDefinition(AgentActionDefinition definition) async => Success(definition);
 
   @override
-  Future<Result<AgentActionDefinition>> getDefinition(String id) async =>
-      Failure(ActionNotFoundFailure('missing'));
+  Future<Result<AgentActionDefinition>> getDefinition(String id) async => Failure(ActionNotFoundFailure('missing'));
 
   @override
   Future<Result<List<AgentActionDefinition>>> listDefinitions() async => const Success(<AgentActionDefinition>[]);
@@ -42,22 +40,19 @@ class _CoordinatorFakeRepository implements IAgentActionRepository {
     String? actionId,
     bool? isEnabled,
     Set<AgentActionTriggerType>? types,
-  }) async =>
-      const Success(<AgentActionTrigger>[]);
+  }) async => const Success(<AgentActionTrigger>[]);
 
   @override
   Future<Result<void>> deleteTrigger(String id) async => const Success(unit);
 
   @override
-  Future<Result<AgentActionExecution>> saveExecution(AgentActionExecution execution) async =>
-      Success(execution);
+  Future<Result<AgentActionExecution>> saveExecution(AgentActionExecution execution) async => Success(execution);
 
   @override
   Future<Result<AgentActionExecution>> getExecution(
     String id, {
     bool hydrateCapturedOutput = true,
-  }) async =>
-      Failure(ActionNotFoundFailure('missing'));
+  }) async => Failure(ActionNotFoundFailure('missing'));
 
   @override
   Future<Result<CapturedOutputUtf8Window>> sliceCapturedOutput({
@@ -65,16 +60,15 @@ class _CoordinatorFakeRepository implements IAgentActionRepository {
     required String stream,
     required int offsetUtf8,
     required int maxBytes,
-  }) async =>
-      Success(
-        (
-          text: '',
-          nextOffset: offsetUtf8,
-          totalBytes: 0,
-          responseTruncated: false,
-          effectiveStart: offsetUtf8,
-        ),
-      );
+  }) async => Success(
+    (
+      text: '',
+      nextOffset: offsetUtf8,
+      totalBytes: 0,
+      responseTruncated: false,
+      effectiveStart: offsetUtf8,
+    ),
+  );
 
   @override
   Future<Result<List<AgentActionExecution>>> listExecutions({
@@ -83,15 +77,13 @@ class _CoordinatorFakeRepository implements IAgentActionRepository {
     Set<AgentActionExecutionStatus>? statuses,
     DateTime? requestedAfter,
     int? limit,
-  }) async =>
-      const Success(<AgentActionExecution>[]);
+  }) async => const Success(<AgentActionExecution>[]);
 
   @override
   Future<Result<int>> cleanupExecutions({required DateTime olderThan}) async => const Success(0);
 
   @override
-  Future<Result<int>> clearCapturedOutputOlderThan({required DateTime olderThan}) async =>
-      const Success(0);
+  Future<Result<int>> clearCapturedOutputOlderThan({required DateTime olderThan}) async => const Success(0);
 }
 
 void main() {

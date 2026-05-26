@@ -28,7 +28,7 @@ void main() {
         expect(failure.context['odbc_native_code'], 18456);
         expect(
           failure.context['user_message'],
-          contains('Verifique usuario, senha e permissoes'),
+          contains('Check username, password, and permissions'),
         );
       },
     );
@@ -270,7 +270,7 @@ void main() {
       );
       expect(
         failure.context['user_message'],
-        'A consulta em streaming foi cancelada.',
+        'The streaming query was cancelled.',
       );
     });
   });

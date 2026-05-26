@@ -190,8 +190,7 @@ abstract final class AgentActionRpcConstants {
   }
 
   /// Default queue caps advertised in `extensions.agentActions.defaultQueueLimits`.
-  static int get remoteAgentActionsDefaultMaxConcurrent =>
-      AgentActionPolicyDefaults.maxConcurrentActions;
+  static int get remoteAgentActionsDefaultMaxConcurrent => AgentActionPolicyDefaults.maxConcurrentActions;
 
   static int get remoteAgentActionsDefaultMaxQueued => AgentActionPolicyDefaults.maxQueuedActions;
 
@@ -204,11 +203,10 @@ abstract final class AgentActionRpcConstants {
       AgentActionPolicyDefaults.defaultQueueLimitsCapability;
 
   /// Operational limits advertised in `extensions.agentActions.limits`.
-  static Map<String, Object?> get remoteAgentActionsLimitsCapability =>
-      AgentActionPolicyDefaults.limitsCapability(
-        defaultMaxOutputBytesPerStream: defaultMaxOutputBytesPerStream,
-        maxMaxOutputBytesPerStream: maxMaxOutputBytesPerStream,
-      );
+  static Map<String, Object?> get remoteAgentActionsLimitsCapability => AgentActionPolicyDefaults.limitsCapability(
+    defaultMaxOutputBytesPerStream: defaultMaxOutputBytesPerStream,
+    maxMaxOutputBytesPerStream: maxMaxOutputBytesPerStream,
+  );
 
   /// Keys in `extensions.agentActions.batchPolicy` advertised at registration.
   static const String agentActionsBatchPolicyRunKey = 'run';

@@ -224,8 +224,7 @@ class ActionCommandNormalizer {
     }
     final normalizedArguments = normalizedArgumentsResult.getOrThrow();
     final scriptExtension = _extensionOf(normalizedScript);
-    if (scriptExtension == null ||
-        !AgentActionScriptConstants.allowedScriptExtensions.contains(scriptExtension)) {
+    if (scriptExtension == null || !AgentActionScriptConstants.allowedScriptExtensions.contains(scriptExtension)) {
       return Failure(
         ActionValidationFailure.withContext(
           message: 'Script extension is not supported.',
@@ -489,10 +488,10 @@ class ActionCommandNormalizer {
             message: 'Executable action arguments cannot contain blank values.',
             context: {
               'action_id': actionId,
-            'field': field,
-            'phase': phase,
-            'argument_index': index,
-            'reason': AgentActionExecutableConstants.invalidArgumentsReason,
+              'field': field,
+              'phase': phase,
+              'argument_index': index,
+              'reason': AgentActionExecutableConstants.invalidArgumentsReason,
               'user_message': 'Remova argumentos vazios antes de salvar ou executar a acao.',
             },
           ),
@@ -504,10 +503,10 @@ class ActionCommandNormalizer {
             message: 'Executable action argument exceeds the allowed length.',
             context: {
               'action_id': actionId,
-            'field': field,
-            'phase': phase,
-            'argument_index': index,
-            'max_argument_length': AgentActionExecutableConstants.maxArgumentLength,
+              'field': field,
+              'phase': phase,
+              'argument_index': index,
+              'max_argument_length': AgentActionExecutableConstants.maxArgumentLength,
               'reason': AgentActionExecutableConstants.argumentTooLongReason,
               'user_message': 'Um dos argumentos configurados e longo demais para esta acao.',
             },

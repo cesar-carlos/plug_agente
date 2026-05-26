@@ -31,7 +31,7 @@ class SaveAgentActionExecution {
           context: const {
             'field': 'actionId',
             'reason': AgentActionValidationConstants.fieldRequiredReason,
-            'user_message': 'Informe a acao vinculada a esta execucao antes de salvar.',
+            'user_message': 'Provide the action linked to this execution before saving.',
           },
         ),
       );

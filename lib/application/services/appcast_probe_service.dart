@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:xml/xml.dart';
 
 class AppcastProbeResult {
@@ -110,7 +111,11 @@ class AppcastProbeService implements IAppcastProbeService {
         );
       }
 
-      _ProbeCandidate? legacyCandidate;
+      // Collect all Windows-eligible candidates and pick the highest version.
+      // Previously the first matching item was returned immediately, which meant
+      // a misordered feed could offer the wrong (older) build.
+      _ProbeCandidate? bestWindowsCandidate;
+      _ProbeCandidate? bestLegacyCandidate;
       String? firstCandidateError;
       for (final item in items) {
         final enclosure = _firstChildElementByName(item, 'enclosure');
@@ -132,25 +137,34 @@ class AppcastProbeService implements IAppcastProbeService {
           os: os,
         );
         if (os == 'windows') {
-          return _resultFromCandidate(
-            feedUrl: feedUrl,
-            itemCount: items.length,
-            candidate: candidate,
-          );
+          if (bestWindowsCandidate == null ||
+              AppVersionComparator.compare(latestVersion, bestWindowsCandidate.latestVersion) > 0) {
+            bestWindowsCandidate = candidate;
+          }
+        } else if (os == null || os.isEmpty) {
+          // Legacy entries without an explicit OS are used only when no
+          // explicit Windows entry exists.
+          if (bestLegacyCandidate == null ||
+              AppVersionComparator.compare(latestVersion, bestLegacyCandidate.latestVersion) > 0) {
+            bestLegacyCandidate = candidate;
+          }
         }
-        if (os == null || os.isEmpty) {
-          legacyCandidate ??= candidate;
-        }
-        // Items with an explicit non-windows OS are silently skipped; using
-        // them as a fallback would cause a validation failure that increments
-        // the automatic failure counter without a real problem.
+        // Items with an explicit non-windows OS are silently skipped.
       }
 
-      if (legacyCandidate != null) {
+      if (bestWindowsCandidate != null) {
         return _resultFromCandidate(
           feedUrl: feedUrl,
           itemCount: items.length,
-          candidate: legacyCandidate,
+          candidate: bestWindowsCandidate,
+        );
+      }
+
+      if (bestLegacyCandidate != null) {
+        return _resultFromCandidate(
+          feedUrl: feedUrl,
+          itemCount: items.length,
+          candidate: bestLegacyCandidate,
         );
       }
 

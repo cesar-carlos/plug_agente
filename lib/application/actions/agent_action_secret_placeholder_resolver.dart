@@ -6,8 +6,7 @@ import 'package:result_dart/result_dart.dart';
 
 /// Resolves `${secret:name}` placeholders using [IAgentActionSecretStore] at execution time.
 class AgentActionSecretPlaceholderResolver {
-  const AgentActionSecretPlaceholderResolver({IAgentActionSecretStore? secretStore})
-    : _secretStore = secretStore;
+  const AgentActionSecretPlaceholderResolver({IAgentActionSecretStore? secretStore}) : _secretStore = secretStore;
 
   final IAgentActionSecretStore? _secretStore;
 

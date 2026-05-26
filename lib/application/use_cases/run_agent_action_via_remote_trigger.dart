@@ -98,8 +98,7 @@ class RunAgentActionViaRemoteTrigger {
           context: {
             'action_id': actionId,
             'reason': AgentActionTriggerConstants.remoteTriggerRequiredReason,
-            'user_message':
-                'Cadastre e habilite um gatilho remoto para esta acao antes de executar pelo Hub.',
+            'user_message': 'Cadastre e habilite um gatilho remoto para esta acao antes de executar pelo Hub.',
           },
         ),
       );
@@ -113,8 +112,7 @@ class RunAgentActionViaRemoteTrigger {
             'action_id': actionId,
             'trigger_ids': triggers.map((trigger) => trigger.id).toList(growable: false),
             'reason': AgentActionTriggerConstants.remoteTriggerAmbiguousReason,
-            'user_message':
-                'Esta acao possui mais de um gatilho remoto ativo. Informe trigger_id na chamada do Hub.',
+            'user_message': 'Esta acao possui mais de um gatilho remoto ativo. Informe trigger_id na chamada do Hub.',
           },
         ),
       );

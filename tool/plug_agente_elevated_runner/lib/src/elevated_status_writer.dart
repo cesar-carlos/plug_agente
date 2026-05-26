@@ -39,9 +39,14 @@ class ElevatedStatusWriter {
   final String appDirectoryPath;
 
   Future<void> write(ElevatedStatusPayload payload) async {
-    final directory = Directory(ElevatedContract.statusDirectory(appDirectoryPath));
+    final directory = Directory(
+      ElevatedContract.statusDirectory(appDirectoryPath),
+    );
     await directory.create(recursive: true);
-    final path = ElevatedContract.statusFilePath(appDirectoryPath, payload.executionId);
+    final path = ElevatedContract.statusFilePath(
+      appDirectoryPath,
+      payload.executionId,
+    );
     final tempPath = '$path.tmp';
     final body = <String, Object?>{
       'version': ElevatedContract.statusSchemaVersion,
@@ -51,12 +56,14 @@ class ElevatedStatusWriter {
       'redactionApplied': payload.redactionApplied,
       if (payload.exitCode != null) 'exitCode': payload.exitCode,
       if (payload.failureCode != null) 'failureCode': payload.failureCode,
-      if (payload.failureMessage != null) 'failureMessage': payload.failureMessage,
+      if (payload.failureMessage != null)
+        'failureMessage': payload.failureMessage,
       if (payload.stdoutText != null) 'stdoutText': payload.stdoutText,
       if (payload.stderrText != null) 'stderrText': payload.stderrText,
       if (payload.stdoutTruncated) 'stdoutTruncated': true,
       if (payload.stderrTruncated) 'stderrTruncated': true,
-      if (payload.processCommandPreview != null) 'processCommandPreview': payload.processCommandPreview,
+      if (payload.processCommandPreview != null)
+        'processCommandPreview': payload.processCommandPreview,
     };
     final file = File(tempPath);
     await file.writeAsString(jsonEncode(body));

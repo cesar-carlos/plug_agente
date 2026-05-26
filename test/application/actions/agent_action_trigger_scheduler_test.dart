@@ -150,16 +150,15 @@ class FakeAgentActionRepository implements IAgentActionRepository {
     required String stream,
     required int offsetUtf8,
     required int maxBytes,
-  }) async =>
-      Success(
-        (
-          text: '',
-          nextOffset: offsetUtf8,
-          totalBytes: 0,
-          responseTruncated: false,
-          effectiveStart: offsetUtf8,
-        ),
-      );
+  }) async => Success(
+    (
+      text: '',
+      nextOffset: offsetUtf8,
+      totalBytes: 0,
+      responseTruncated: false,
+      effectiveStart: offsetUtf8,
+    ),
+  );
 
   @override
   Future<Result<List<AgentActionExecution>>> listExecutions({
@@ -632,11 +631,17 @@ void main() {
 
       final retryResult = await scheduler.start();
       expect(retryResult.isError(), isTrue);
-      expect((retryResult.exceptionOrNull()! as ActionAuthorizationFailure).code, AgentActionFailureCode.schedulerBootstrapFailed);
+      expect(
+        (retryResult.exceptionOrNull()! as ActionAuthorizationFailure).code,
+        AgentActionFailureCode.schedulerBootstrapFailed,
+      );
 
       final appStartResult = await scheduler.dispatchAppStartTriggers();
       expect(appStartResult.isError(), isTrue);
-      expect((appStartResult.exceptionOrNull()! as ActionAuthorizationFailure).code, AgentActionFailureCode.schedulerBootstrapFailed);
+      expect(
+        (appStartResult.exceptionOrNull()! as ActionAuthorizationFailure).code,
+        AgentActionFailureCode.schedulerBootstrapFailed,
+      );
     });
 
     test('should not start scheduler while maintenance mode is enabled', () async {

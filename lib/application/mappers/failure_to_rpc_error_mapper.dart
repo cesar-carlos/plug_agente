@@ -250,8 +250,7 @@ class FailureToRpcErrorMapper {
       ActionNotFoundFailure() ||
       ActionQueueFailure() ||
       ActionTimeoutFailure() ||
-      ActionRuntimeFailure() =>
-        RpcErrorCode.categoryAction,
+      ActionRuntimeFailure() => RpcErrorCode.categoryAction,
       _ => null,
     };
   }
@@ -426,6 +425,11 @@ class FailureToRpcErrorMapper {
         }
       }
       if (code == RpcErrorCode.agentActionsTemporarilyUnavailable) {
+        // Always use the canonical RPC reason for maintenance, regardless of
+        // which internal constant the guard stored in context['reason'].
+        if (failure.code == AgentActionFailureCode.maintenanceMode) {
+          return AgentActionRpcConstants.agentActionsMaintenanceModeErrorReason;
+        }
         final reason = failure.context['reason']?.toString();
         if (reason != null && reason.isNotEmpty) {
           return reason;

@@ -29,8 +29,7 @@ class _MemoryAuditStore implements IAgentActionRemoteAuditStore {
   Future<int> deleteWhereOccurredBefore({
     required DateTime cutoffUtc,
     required int limit,
-  }) async =>
-      0;
+  }) async => 0;
 }
 
 AgentActionExecution _remoteExecution({
@@ -127,8 +126,7 @@ void main() {
 
     await recorder.recordCancelRequested(_remoteExecution(status: AgentActionExecutionStatus.running));
 
-    check(store.rows.single.outcome)
-        .equals(AgentActionRemoteAuditConstants.outcomeLifecycleCancelRequested);
+    check(store.rows.single.outcome).equals(AgentActionRemoteAuditConstants.outcomeLifecycleCancelRequested);
     check(store.rows.single.rpcMethod).equals(AgentActionRpcConstants.agentActionCancelRpcMethodName);
   });
 }

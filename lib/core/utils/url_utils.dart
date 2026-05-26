@@ -16,15 +16,29 @@ String joinServerUrlAndPath(String serverUrl, String path) {
   return '$normalizedServerUrl$normalizedPath';
 }
 
+/// Maps a WebSocket scheme to its HTTP equivalent for use with HTTP clients.
+///
+/// `wss://` → `https://`, `ws://` → `http://`.
+/// This ensures that hub URLs stored as WebSocket URLs are correctly handled
+/// by Dio and other HTTP clients (e.g. AuthClient).
+String _normalizeSchemeForHttp(String url) {
+  if (url.startsWith('wss://')) {
+    return 'https://${url.substring('wss://'.length)}';
+  }
+  if (url.startsWith('ws://')) {
+    return 'http://${url.substring('ws://'.length)}';
+  }
+  return url;
+}
+
 String hubHttpBaseUrl(String serverUrl) {
-  final normalizedServerUrl = normalizeServerUrl(serverUrl);
+  final normalizedServerUrl = _normalizeSchemeForHttp(normalizeServerUrl(serverUrl));
   if (normalizedServerUrl.isEmpty) {
     return normalizedServerUrl;
   }
 
   final parsedUri = Uri.tryParse(normalizedServerUrl);
-  if (parsedUri == null ||
-      (!parsedUri.hasScheme && !normalizedServerUrl.startsWith('//'))) {
+  if (parsedUri == null || (!parsedUri.hasScheme && !normalizedServerUrl.startsWith('//'))) {
     final lowerUrl = normalizedServerUrl.toLowerCase();
     const agentsSuffix = '/$_agentsNamespace';
     const consumersSuffix = '/$_consumersNamespace';
@@ -43,9 +57,7 @@ String hubHttpBaseUrl(String serverUrl) {
     return normalizedServerUrl;
   }
 
-  final pathSegments = parsedUri.pathSegments
-      .where((segment) => segment.isNotEmpty)
-      .toList();
+  final pathSegments = parsedUri.pathSegments.where((segment) => segment.isNotEmpty).toList();
   if (pathSegments.isNotEmpty) {
     final lastSegment = pathSegments.last.toLowerCase();
     if (lastSegment == _agentsNamespace || lastSegment == _consumersNamespace) {

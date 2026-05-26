@@ -475,39 +475,42 @@ void main() {
       expect(responses.map((response) => response.id), ['sql-1', 'sql-2', 'sql-3']);
     });
 
-    test('should stay sequential for homogeneous sql.execute batch containing write SQL when flag is enabled', () async {
-      when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(true);
-      final dispatchStarted = <String>[];
-      final unblockDispatch = Completer<void>();
+    test(
+      'should stay sequential for homogeneous sql.execute batch containing write SQL when flag is enabled',
+      () async {
+        when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(true);
+        final dispatchStarted = <String>[];
+        final unblockDispatch = Completer<void>();
 
-      when(
-        () => dispatcher.dispatch(
-          any(),
-          any(),
-          clientToken: any(named: 'clientToken'),
-          limits: any(named: 'limits'),
-          negotiatedExtensions: any(named: 'negotiatedExtensions'),
-        ),
-      ).thenAnswer((invocation) async {
-        final request = invocation.positionalArguments[0] as RpcRequest;
-        dispatchStarted.add(request.id.toString());
-        await unblockDispatch.future;
-        return RpcResponse.success(id: request.id, result: <String, dynamic>{'ok': request.id});
-      });
+        when(
+          () => dispatcher.dispatch(
+            any(),
+            any(),
+            clientToken: any(named: 'clientToken'),
+            limits: any(named: 'limits'),
+            negotiatedExtensions: any(named: 'negotiatedExtensions'),
+          ),
+        ).thenAnswer((invocation) async {
+          final request = invocation.positionalArguments[0] as RpcRequest;
+          dispatchStarted.add(request.id.toString());
+          await unblockDispatch.future;
+          return RpcResponse.success(id: request.id, result: <String, dynamic>{'ok': request.id});
+        });
 
-      final handleFuture = batchHandler.handleBatchRequest([
-        _batchItem(id: 'sql-1', method: 'sql.execute', params: {'sql': 'SELECT 1'}),
-        _batchItem(id: 'sql-2', method: 'sql.execute', params: {'sql': 'INSERT INTO t VALUES (1)'}),
-      ]);
+        final handleFuture = batchHandler.handleBatchRequest([
+          _batchItem(id: 'sql-1', method: 'sql.execute', params: {'sql': 'SELECT 1'}),
+          _batchItem(id: 'sql-2', method: 'sql.execute', params: {'sql': 'INSERT INTO t VALUES (1)'}),
+        ]);
 
-      await pumpEventQueue();
-      expect(dispatchStarted, ['sql-1']);
+        await pumpEventQueue();
+        expect(dispatchStarted, ['sql-1']);
 
-      unblockDispatch.complete();
-      await handleFuture;
+        unblockDispatch.complete();
+        await handleFuture;
 
-      expect(dispatchStarted, ['sql-1', 'sql-2']);
-    });
+        expect(dispatchStarted, ['sql-1', 'sql-2']);
+      },
+    );
 
     test('should stay sequential for SELECT-only sql.execute batch when flag is disabled', () async {
       when(() => featureFlags.enableParallelJsonRpcBatchDispatch).thenReturn(false);

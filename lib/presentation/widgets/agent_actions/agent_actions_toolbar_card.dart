@@ -16,12 +16,17 @@ class AgentActionsToolbarCard extends StatelessWidget {
     required this.provider,
     required this.l10n,
     this.onCreateAction,
+    this.onRunSelected,
     super.key,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
   final VoidCallback? onCreateAction;
+
+  /// Called when the user taps "Run selected". Callers are responsible for
+  /// routing through the dangerous-command check before executing.
+  final VoidCallback? onRunSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +121,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
         ),
       ),
       Button(
-        onPressed: provider.canRunSelected ? provider.runSelectedAction : null,
+        onPressed: provider.canRunSelected ? (onRunSelected ?? provider.runSelectedAction) : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -197,7 +202,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
         return;
       }
 
-      final ok = await provider.exportBundleToFile(path);
+      final ok = await provider.exportBundleToFile(path, l10n: l10n);
       if (!context.mounted) {
         return;
       }
@@ -253,7 +258,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
         return;
       }
 
-      final summary = await provider.importBundleFromFile(path);
+      final summary = await provider.importBundleFromFile(path, l10n: l10n);
       if (!context.mounted) {
         return;
       }

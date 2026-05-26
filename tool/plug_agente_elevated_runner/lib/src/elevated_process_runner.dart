@@ -40,7 +40,9 @@ class ElevatedProcessRunner {
       );
     }
 
-    if (!ElevatedContract.supportedElevatedActionTypeNames.contains(context.actionType)) {
+    if (!ElevatedContract.supportedElevatedActionTypeNames.contains(
+      context.actionType,
+    )) {
       return _failed(
         executionId: context.executionId,
         failureCode: 'ACTION_UNSUPPORTED_FOR_ELEVATED_RUNNER',
@@ -62,8 +64,14 @@ class ElevatedProcessRunner {
         runInShell: false,
       );
 
-      final stdoutFuture = _readStream(process.stdout, maxBytes: maxOutputBytes);
-      final stderrFuture = _readStream(process.stderr, maxBytes: maxOutputBytes);
+      final stdoutFuture = _readStream(
+        process.stdout,
+        maxBytes: maxOutputBytes,
+      );
+      final stderrFuture = _readStream(
+        process.stderr,
+        maxBytes: maxOutputBytes,
+      );
 
       var timedOut = false;
       var cancelled = false;
@@ -78,7 +86,9 @@ class ElevatedProcessRunner {
         }
 
         try {
-          exitCode = await process.exitCode.timeout(ElevatedContract.pollInterval);
+          exitCode = await process.exitCode.timeout(
+            ElevatedContract.pollInterval,
+          );
           break;
         } on TimeoutException {
           continue;
@@ -134,7 +144,9 @@ class ElevatedProcessRunner {
         finishedAt: finishedAt,
         exitCode: normalizedExitCode,
         failureCode: succeeded ? null : 'ACTION_EXIT_CODE_REJECTED',
-        failureMessage: succeeded ? null : 'Command finished with exit code $normalizedExitCode.',
+        failureMessage: succeeded
+            ? null
+            : 'Command finished with exit code $normalizedExitCode.',
         stdoutText: stdout.text,
         stderrText: stderr.text,
         stdoutTruncated: stdout.truncated,
@@ -148,7 +160,9 @@ class ElevatedProcessRunner {
         failureMessage: 'Elevated process failed: $error',
       );
     } finally {
-      await ElevatedMaterializedReader(appDirectoryPath: appDirectoryPath).delete(context.executionId);
+      await ElevatedMaterializedReader(
+        appDirectoryPath: appDirectoryPath,
+      ).delete(context.executionId);
     }
   }
 
@@ -193,7 +207,10 @@ class ElevatedProcessRunner {
     if (exitCode is Map) {
       final values = exitCode['acceptedExitCodes'];
       if (values is List) {
-        return values.whereType<num>().map((num value) => value.toInt()).toSet();
+        return values
+            .whereType<num>()
+            .map((num value) => value.toInt())
+            .toSet();
       }
     }
     return <int>{0};
@@ -239,11 +256,15 @@ class ElevatedProcessRunner {
   }
 
   bool _isCancellationRequested(String executionId) {
-    return File(ElevatedContract.cancelFilePath(appDirectoryPath, executionId)).existsSync();
+    return File(
+      ElevatedContract.cancelFilePath(appDirectoryPath, executionId),
+    ).existsSync();
   }
 
   Future<void> _deleteCancelMarker(String executionId) async {
-    final file = File(ElevatedContract.cancelFilePath(appDirectoryPath, executionId));
+    final file = File(
+      ElevatedContract.cancelFilePath(appDirectoryPath, executionId),
+    );
     try {
       if (file.existsSync()) {
         await file.delete();

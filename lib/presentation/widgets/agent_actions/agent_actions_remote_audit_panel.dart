@@ -15,11 +15,16 @@ class AgentActionsRemoteAuditPanel extends StatefulWidget {
   const AgentActionsRemoteAuditPanel({
     required this.provider,
     required this.l10n,
+    this.onShowInHistory,
     super.key,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
+
+  /// Called after a remote audit entry is successfully correlated to a history
+  /// execution. Use this to switch the parent's tab to History.
+  final VoidCallback? onShowInHistory;
 
   @override
   State<AgentActionsRemoteAuditPanel> createState() => _AgentActionsRemoteAuditPanelState();
@@ -148,24 +153,26 @@ class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPa
   }
 
   List<Widget> _filterButtons() {
-    return AgentActionRemoteAuditViewFilter.values.map((AgentActionRemoteAuditViewFilter value) {
-      final label = switch (value) {
-        AgentActionRemoteAuditViewFilter.all => l10n.agentActionsRemoteAuditFilterAll,
-        AgentActionRemoteAuditViewFilter.rpc => l10n.agentActionsRemoteAuditFilterRpc,
-        AgentActionRemoteAuditViewFilter.lifecycle => l10n.agentActionsRemoteAuditFilterLifecycle,
-      };
-      final isSelected = _filter == value;
-      return Button(
-        onPressed: isSelected
-            ? null
-            : () {
-                setState(() {
-                  _filter = value;
-                });
-              },
-        child: Text(label),
-      );
-    }).toList(growable: false);
+    return AgentActionRemoteAuditViewFilter.values
+        .map((AgentActionRemoteAuditViewFilter value) {
+          final label = switch (value) {
+            AgentActionRemoteAuditViewFilter.all => l10n.agentActionsRemoteAuditFilterAll,
+            AgentActionRemoteAuditViewFilter.rpc => l10n.agentActionsRemoteAuditFilterRpc,
+            AgentActionRemoteAuditViewFilter.lifecycle => l10n.agentActionsRemoteAuditFilterLifecycle,
+          };
+          final isSelected = _filter == value;
+          return Button(
+            onPressed: isSelected
+                ? null
+                : () {
+                    setState(() {
+                      _filter = value;
+                    });
+                  },
+            child: Text(label),
+          );
+        })
+        .toList(growable: false);
   }
 
   void _onShowInHistory(BuildContext context, AgentActionRemoteAuditRecord record) {
@@ -178,6 +185,7 @@ class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPa
       return;
     }
     if (result == AgentActionRemoteAuditFocusResult.succeeded) {
+      widget.onShowInHistory?.call();
       return;
     }
 

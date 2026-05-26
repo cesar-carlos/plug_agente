@@ -291,15 +291,18 @@ class OdbcNativeConnectionPool
       handshakeHeld = true;
     } on TimeoutException {
       developer.log(
-        'Native pool discard: handshake timeout; disconnect anyway',
+        'Native pool discard: handshake timeout; poolReleaseConnection anyway',
         name: 'connection_pool',
         level: 900,
       );
     }
 
+    // odbc_fast 3.9.0: disconnect() returns ValidationError for pool-owned
+    // connections. Pool connections must be returned via poolReleaseConnection,
+    // which rolls back uncommitted work before making the slot available again.
     late Result<void> result;
     try {
-      result = await _service.disconnect(connectionId);
+      result = await _service.poolReleaseConnection(connectionId);
     } finally {
       if (handshakeHeld) {
         _nativeHandshakeSemaphore.release();
@@ -497,18 +500,14 @@ class OdbcNativeConnectionPool
   Future<Result<void>> healthCheckAll() async {
     final errors = <String>[];
 
-    var poolIndex = 0;
-    for (final entry in _pools.entries) {
-      final result = await _service.poolHealthCheck(entry.value);
+    for (final poolId in _pools.values) {
+      // odbc_fast 3.9.0: poolHealthCheck returns Failure(ConnectionError) for
+      // unhealthy pools; Success(false) is no longer emitted.
+      final result = await _service.poolHealthCheck(poolId);
       result.fold(
-        (isHealthy) {
-          if (!isHealthy) {
-            errors.add('Pool #$poolIndex unhealthy');
-          }
-        },
+        (_) {},
         (error) => errors.add(_odbcErrorMessage(error)),
       );
-      poolIndex++;
     }
 
     if (errors.isNotEmpty) {

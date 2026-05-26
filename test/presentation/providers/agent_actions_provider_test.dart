@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_backup_sanitizer.dart';
@@ -42,6 +44,7 @@ import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnost
 import 'package:plug_agente/domain/repositories/i_developer_data7_connection_gateway.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_portable_codec.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:result_dart/result_dart.dart';
@@ -312,7 +315,7 @@ void main() {
     );
 
     expect(ok, isFalse);
-    expect(provider.errorMessage, isNotEmpty);
+    expect(provider.triggerErrorMessage, isNotEmpty);
   });
 
   test('saves command line action through validated use case', () async {
@@ -1135,14 +1138,15 @@ void main() {
 
     const exportPath = '/tmp/agent_actions_bundle_export_test.json';
 
-    final exported = await provider.exportBundleToFile(exportPath);
+    final testL10n = lookupAppLocalizations(const Locale('en'));
+    final exported = await provider.exportBundleToFile(exportPath, l10n: testL10n);
     expect(exported, isTrue);
     expect(bundleFileGateway.files.containsKey(exportPath), isTrue);
 
     repository.definitions.clear();
     repository.triggers.clear();
 
-    final imported = await provider.importBundleFromFile(exportPath);
+    final imported = await provider.importBundleFromFile(exportPath, l10n: testL10n);
     expect(imported, isNotNull);
     expect(imported!.importedDefinitionIds, ['action-1']);
     expect(imported.importedTriggerIds, ['trigger-1']);

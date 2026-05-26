@@ -47,9 +47,9 @@ final class AgentActionCapturedOutputChunkStore {
   }
 
   Future<void> deleteForExecution(String executionId) async {
-    await (_database.delete(_database.agentActionCapturedOutputChunkTable)
-          ..where((table) => table.executionId.equals(executionId)))
-        .go();
+    await (_database.delete(
+      _database.agentActionCapturedOutputChunkTable,
+    )..where((table) => table.executionId.equals(executionId))).go();
   }
 
   Future<void> deleteForTerminalExecutionsOlderThan(DateTime olderThan) async {
@@ -65,9 +65,9 @@ final class AgentActionCapturedOutputChunkStore {
       ..addColumns([executionIds])
       ..where(isTerminal & (finishedBefore | requestedBefore));
 
-    await (_database.delete(_database.agentActionCapturedOutputChunkTable)
-          ..where((table) => table.executionId.isInQuery(subquery)))
-        .go();
+    await (_database.delete(
+      _database.agentActionCapturedOutputChunkTable,
+    )..where((table) => table.executionId.isInQuery(subquery))).go();
   }
 
   Future<CapturedOutputUtf8Window?> sliceStreamWindow({

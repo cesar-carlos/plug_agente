@@ -87,7 +87,8 @@ SilentUpdateCoordinator _makeCoordinator({
   final settings = store ?? InMemoryAppSettingsStore();
   dotenv.clean();
   dotenv.loadFromString(
-    envString: 'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
+    envString:
+        'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
         'AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600',
   );
   return SilentUpdateCoordinator(
@@ -107,7 +108,8 @@ void main() {
   setUpAll(() {
     dotenv.clean();
     dotenv.loadFromString(
-      envString: 'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
+      envString:
+          'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
           'AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600',
     );
   });
@@ -251,8 +253,7 @@ void main() {
         final store = InMemoryAppSettingsStore();
         var closeCalled = false;
         late SilentUpdateCoordinator coordinator;
-        final installer = _FakeInstaller()
-          ..installCount = 0;
+        final installer = _FakeInstaller()..installCount = 0;
 
         // Coordinator reference needed inside onBeforeReturn — build it before using it.
         coordinator = SilentUpdateCoordinator(
@@ -315,8 +316,7 @@ void main() {
           'version': '99.0.0+1',
           'installerPath': r'C:\OldPath\App\updates\PlugAgente-Setup-99.0.0.exe',
           'launcherPath': r'C:\OldPath\App\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
-          'launcherStatusPath':
-              r'C:\OldPath\App\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+          'launcherStatusPath': r'C:\OldPath\App\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
           'logPath': r'C:\OldPath\App\updates\PlugAgente-Update-99.0.0+1.log',
           'installDirectory': r'C:\OldPath\App',
           'strategy': 'currentUserThenElevated',

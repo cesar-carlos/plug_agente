@@ -19,26 +19,29 @@ import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_coll
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
-typedef AgentMetadataRpcInvalidParams = RpcResponse Function(
-  RpcRequest request,
-  String detail, {
-  String? rpcReason,
-  Map<String, dynamic> extraFields,
-});
+typedef AgentMetadataRpcInvalidParams =
+    RpcResponse Function(
+      RpcRequest request,
+      String detail, {
+      String? rpcReason,
+      Map<String, dynamic> extraFields,
+    });
 
-typedef AgentMetadataRpcInternalError = RpcResponse Function(
-  RpcRequest request,
-  String detail,
-);
+typedef AgentMetadataRpcInternalError =
+    RpcResponse Function(
+      RpcRequest request,
+      String detail,
+    );
 
-typedef AgentMetadataRpcAuthorizeWithBudget = Future<Result<void>> Function({
-  required String token,
-  required String sql,
-  required String? requestDatabase,
-  required String? requestId,
-  required String method,
-  required DateTime? deadline,
-});
+typedef AgentMetadataRpcAuthorizeWithBudget =
+    Future<Result<void>> Function({
+      required String token,
+      required String sql,
+      required String? requestDatabase,
+      required String? requestId,
+      required String method,
+      required DateTime? deadline,
+    });
 
 class AgentMetadataRpcMethodHandlerSupport {
   const AgentMetadataRpcMethodHandlerSupport({

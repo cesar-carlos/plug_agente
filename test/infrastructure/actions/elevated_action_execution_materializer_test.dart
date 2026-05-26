@@ -46,9 +46,11 @@ void main() {
       );
 
       expect(result.isSuccess(), isTrue);
-      final materialized = jsonDecode(
-        await File(AgentActionElevatedConstants.materializedFilePath(tempDir.path, 'exec-1')).readAsString(),
-      ) as Map<String, dynamic>;
+      final materialized =
+          jsonDecode(
+                await File(AgentActionElevatedConstants.materializedFilePath(tempDir.path, 'exec-1')).readAsString(),
+              )
+              as Map<String, dynamic>;
       expect(materialized['nonce'], 'nonce-1');
       expect(materialized['actionType'], 'commandLine');
       final launch = materialized['launch'] as Map<String, dynamic>;
@@ -80,11 +82,13 @@ void main() {
       );
 
       expect(result.isSuccess(), isTrue);
-      final materialized = jsonDecode(
-        await File(
-          AgentActionElevatedConstants.materializedFilePath(tempDir.path, 'exec-sensitive'),
-        ).readAsString(),
-      ) as Map<String, dynamic>;
+      final materialized =
+          jsonDecode(
+                await File(
+                  AgentActionElevatedConstants.materializedFilePath(tempDir.path, 'exec-sensitive'),
+                ).readAsString(),
+              )
+              as Map<String, dynamic>;
       final launch = materialized['launch'] as Map<String, dynamic>;
       expect(launch['commandPreview'], 'cmd.exe /C [REDACTED_COMMAND]');
     });

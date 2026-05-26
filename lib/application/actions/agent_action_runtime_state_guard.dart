@@ -32,8 +32,7 @@ class AgentActionRuntimeStateGuard {
 
   AgentActionRuntimeStateSnapshot get snapshot => _snapshot;
 
-  bool get _maintenanceStrictModeEnabled =>
-      _featureFlags?.enableAgentActionsMaintenanceStrictMode ?? false;
+  bool get _maintenanceStrictModeEnabled => _featureFlags?.enableAgentActionsMaintenanceStrictMode ?? false;
 
   void markReady() {
     _snapshot = const AgentActionRuntimeStateSnapshot(
@@ -156,16 +155,17 @@ class AgentActionRuntimeStateGuard {
   }
 
   String _userMessageFor(AgentActionSubsystemStatus status) {
+    // User-facing messages for RPC callers are resolved by
+    // RpcErrorUserMessageLocalizer using the RPC error code. These strings are
+    // intentionally kept technical and language-neutral so they are safe to
+    // surface in logs and diagnostic payloads without exposing locale state.
     return switch (status) {
-      AgentActionSubsystemStatus.starting =>
-        'As acoes do agente ainda estao inicializando. Tente novamente em instantes.',
-      AgentActionSubsystemStatus.draining =>
-        'O Plug Agente esta finalizando operacoes e nao aceita novas execucoes agora.',
-      AgentActionSubsystemStatus.maintenance =>
-        'As execucoes remotas e agendadas estao bloqueadas pelo modo de manutencao.',
-      AgentActionSubsystemStatus.degraded => 'O executor desta acao esta temporariamente indisponivel.',
-      AgentActionSubsystemStatus.disabled => 'As acoes do agente estao desativadas neste ambiente.',
-      AgentActionSubsystemStatus.ready => 'As acoes do agente estao prontas.',
+      AgentActionSubsystemStatus.starting => 'Agent actions subsystem is initializing.',
+      AgentActionSubsystemStatus.draining => 'Agent actions subsystem is draining; no new executions accepted.',
+      AgentActionSubsystemStatus.maintenance => 'Remote and scheduled executions are blocked by maintenance mode.',
+      AgentActionSubsystemStatus.degraded => 'The runner for this action type is temporarily unavailable.',
+      AgentActionSubsystemStatus.disabled => 'Agent actions are disabled in this environment.',
+      AgentActionSubsystemStatus.ready => 'Agent actions subsystem is ready.',
     };
   }
 
@@ -176,7 +176,7 @@ class AgentActionRuntimeStateGuard {
     if (status == AgentActionSubsystemStatus.maintenance &&
         source == AgentActionRequestSource.localUi &&
         _maintenanceStrictModeEnabled) {
-      return 'Todas as execucoes estao bloqueadas pelo modo de manutencao, incluindo execucao manual.';
+      return 'All executions are blocked by maintenance mode, including manual execution.';
     }
 
     return _userMessageFor(status);

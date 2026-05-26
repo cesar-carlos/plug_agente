@@ -199,6 +199,10 @@ class CapabilitiesNegotiator {
           ? ProtocolCapabilities.fromJson(payload['capabilities'] as Map<String, dynamic>)
           : agentCapabilities;
 
+      // negotiate() throws StateError when no common protocols exist.
+      // The StateError is caught by the outer `on Object catch` at the bottom
+      // of handleEnvelope and returned as CapabilitiesNegotiationFailure.
+      // This is controlled — no unhandled exception escapes this method.
       final negotiatedProtocol = _negotiator.negotiate(
         agentCapabilities: agentCapabilities,
         serverCapabilities: serverCapabilities,

@@ -2,6 +2,13 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 
+/// Stable key for each tab in the Agent Actions page.
+///
+/// Using a named key instead of a raw index prevents a persisted index from
+/// landing on the wrong tab when the tab list changes (e.g. when
+/// [AgentActionsProvider.isRemoteAuditSectionVisible] toggles).
+enum AgentActionsTab { actions, history, settings, remoteAudit }
+
 /// Keys for persisting Agent Actions UI filters and tab selection in [IAppSettingsStore].
 abstract final class AgentActionsUiPreferenceKeys {
   static const String selectedTab = 'agent_actions.ui.selected_tab';
@@ -23,16 +30,17 @@ class AgentActionsUiPreferences {
 
   IAppSettingsStore? get _store => _resolveStore();
 
-  int? readSelectedTabIndex() {
-    return _store?.getInt(AgentActionsUiPreferenceKeys.selectedTab);
+  AgentActionsTab readSelectedTab() {
+    final raw = _store?.getString(AgentActionsUiPreferenceKeys.selectedTab);
+    return _enumByName(AgentActionsTab.values, raw) ?? AgentActionsTab.actions;
   }
 
-  Future<void> persistSelectedTabIndex(int index) async {
+  Future<void> persistSelectedTab(AgentActionsTab tab) async {
     final store = _store;
     if (store == null) {
       return;
     }
-    await store.setInt(AgentActionsUiPreferenceKeys.selectedTab, index);
+    await store.setString(AgentActionsUiPreferenceKeys.selectedTab, tab.name);
   }
 
   void restoreInto(AgentActionsProvider provider) {
@@ -66,7 +74,7 @@ class AgentActionsUiPreferences {
               AgentActionHistoryPeriod.values,
               store.getString(AgentActionsUiPreferenceKeys.historyPeriodFilter),
             ) ??
-            AgentActionHistoryPeriod.all,
+            AgentActionHistoryPeriod.last3Days,
       )
       ..setHistoryFailurePhaseFilter(store.getString(AgentActionsUiPreferenceKeys.historyFailurePhaseFilter))
       ..setHistorySearchQuery(store.getString(AgentActionsUiPreferenceKeys.historySearch) ?? '');

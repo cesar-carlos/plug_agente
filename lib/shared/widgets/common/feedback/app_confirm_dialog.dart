@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 
 /// Desktop confirmation dialog aligned with [MessageModal] (Fluent confirmation pattern).

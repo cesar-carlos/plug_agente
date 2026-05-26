@@ -8,7 +8,9 @@ import 'package:test/test.dart';
 void main() {
   group('ActionProcessWindowModeResolver', () {
     test('should map window modes to process start modes', () {
-      check(ActionProcessWindowModeResolver.resolve(AgentActionProcessWindowMode.normal)).equals(ProcessStartMode.normal);
+      check(
+        ActionProcessWindowModeResolver.resolve(AgentActionProcessWindowMode.normal),
+      ).equals(ProcessStartMode.normal);
       check(
         ActionProcessWindowModeResolver.resolve(AgentActionProcessWindowMode.minimized),
       ).equals(ProcessStartMode.normal);

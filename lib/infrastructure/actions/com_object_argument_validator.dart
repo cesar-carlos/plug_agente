@@ -119,8 +119,7 @@ abstract final class ComObjectArgumentValidator {
           'value_type': value.runtimeType.toString(),
           'phase': phase,
           'reason': AgentActionComObjectConstants.invalidArgumentsReason,
-          'user_message':
-              'Argumentos COM suportam apenas texto, numero e booleano nesta versao.',
+          'user_message': 'Argumentos COM suportam apenas texto, numero e booleano nesta versao.',
         },
       ),
     );

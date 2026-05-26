@@ -225,8 +225,12 @@ abstract class RpcErrorCode {
       parseError || invalidRequest || methodNotFound || invalidParams => categoryValidation,
       authenticationFailed || unauthorized => categoryAuth,
       timeout || networkError => categoryNetwork,
-      invalidPayload || decodingFailed || compressionFailed || rateLimited || replayDetected || agentActionsTemporarilyUnavailable =>
-        categoryTransport,
+      invalidPayload ||
+      decodingFailed ||
+      compressionFailed ||
+      rateLimited ||
+      replayDetected ||
+      agentActionsTemporarilyUnavailable => categoryTransport,
       sqlValidationFailed || sqlExecutionFailed || transactionFailed || resultTooLarge || queryTimeout => categorySql,
       connectionPoolExhausted ||
       databaseConnectionFailed ||

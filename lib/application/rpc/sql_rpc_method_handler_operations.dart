@@ -39,46 +39,52 @@ import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-typedef SqlRpcInvalidParams = RpcResponse Function(
-  RpcRequest request,
-  String detail, {
-  String? rpcReason,
-  Map<String, dynamic> extraFields,
-});
+typedef SqlRpcInvalidParams =
+    RpcResponse Function(
+      RpcRequest request,
+      String detail, {
+      String? rpcReason,
+      Map<String, dynamic> extraFields,
+    });
 
-typedef SqlRpcConsumeIdempotentCache = Future<RpcResponse?> Function(
-  RpcRequest request,
-  String? idempotencyKey,
-  String idempotencyFingerprint,
-);
+typedef SqlRpcConsumeIdempotentCache =
+    Future<RpcResponse?> Function(
+      RpcRequest request,
+      String? idempotencyKey,
+      String idempotencyFingerprint,
+    );
 
-typedef SqlRpcStoreIdempotentSuccess = Future<void> Function({
-  required RpcRequest request,
-  required String? idempotencyKey,
-  required String idempotencyFingerprint,
-  required RpcResponse response,
-});
+typedef SqlRpcStoreIdempotentSuccess =
+    Future<void> Function({
+      required RpcRequest request,
+      required String? idempotencyKey,
+      required String idempotencyFingerprint,
+      required RpcResponse response,
+    });
 
-typedef SqlRpcRunIdempotentExecution = Future<RpcResponse> Function({
-  required RpcRequest request,
-  required String? idempotencyKey,
-  required String idempotencyFingerprint,
-  required Future<RpcResponse> Function() execute,
-});
+typedef SqlRpcRunIdempotentExecution =
+    Future<RpcResponse> Function({
+      required RpcRequest request,
+      required String? idempotencyKey,
+      required String idempotencyFingerprint,
+      required Future<RpcResponse> Function() execute,
+    });
 
-typedef SqlRpcAuthorizeWithBudget = Future<Result<void>> Function({
-  required String token,
-  required String sql,
-  required String? requestDatabase,
-  required String? requestId,
-  required String method,
-  required DateTime? deadline,
-});
+typedef SqlRpcAuthorizeWithBudget =
+    Future<Result<void>> Function({
+      required String token,
+      required String sql,
+      required String? requestDatabase,
+      required String? requestId,
+      required String method,
+      required DateTime? deadline,
+    });
 
-typedef SqlRpcEffectiveStageTimeout = Duration? Function({
-  required DateTime? deadline,
-  required Duration stageBudget,
-});
+typedef SqlRpcEffectiveStageTimeout =
+    Duration? Function({
+      required DateTime? deadline,
+      required Duration stageBudget,
+    });
 
 class SqlRpcMethodHandlerSupport {
   const SqlRpcMethodHandlerSupport({
@@ -372,146 +378,148 @@ class SqlRpcMethodHandlerOperations {
         );
 
         return result.fold<Future<RpcResponse>>(
-      (QueryResponse queryResponse) async {
-        // Normalize
-        var normalized = _normalizerService.normalize(queryResponse);
+          (QueryResponse queryResponse) async {
+            // Normalize
+            var normalized = _normalizerService.normalize(queryResponse);
 
-        var multiResultSetsTruncated = false;
-        if (normalized.resultSets.isNotEmpty) {
-          final beforeMulti = normalized;
-          normalized = _applyMaxRowsToMultiResultSets(normalized, maxRows);
-          multiResultSetsTruncated = _multiResultSetsWereTruncated(
-            beforeMulti,
-            normalized,
-          );
-        }
-
-        final limitedRows = normalized.resultSets.isNotEmpty
-            ? normalized.data
-            : truncateSqlResultRows(normalized.data, maxRows);
-        final wasTruncated =
-            multiResultSetsTruncated ||
-            (!normalized.resultSets.isNotEmpty && limitedRows.length != normalized.data.length);
-        final useStreaming =
-            _featureFlags.enableSocketStreamingChunks &&
-            streamEmitter != null &&
-            !request.isNotification &&
-            pagination == null &&
-            !normalized.hasMultiResult &&
-            limitedRows.length > limits.streamingRowThreshold;
-
-        if (useStreaming) {
-          final streamId = 'stream-${queryRequest.id}';
-          final rows = limitedRows;
-          final totalChunks = (rows.length / limits.streamingChunkSize).ceil();
-          var overflowed = false;
-
-          for (var i = 0; i < rows.length && !overflowed; i += limits.streamingChunkSize) {
-            final chunkEnd = i + limits.streamingChunkSize > rows.length ? rows.length : i + limits.streamingChunkSize;
-            final chunkRows = rows.sublist(i, chunkEnd);
-            if (!await streamEmitter.emitChunk(
-              RpcStreamChunk(
-                streamId: streamId,
-                requestId: request.id,
-                chunkIndex: i ~/ limits.streamingChunkSize,
-                rows: chunkRows,
-                totalChunks: totalChunks,
-                columnMetadata: normalized.columnMetadata,
-              ),
-            )) {
-              overflowed = true;
-              break;
+            var multiResultSetsTruncated = false;
+            if (normalized.resultSets.isNotEmpty) {
+              final beforeMulti = normalized;
+              normalized = _applyMaxRowsToMultiResultSets(normalized, maxRows);
+              multiResultSetsTruncated = _multiResultSetsWereTruncated(
+                beforeMulti,
+                normalized,
+              );
             }
-          }
 
-          if (!overflowed) {
-            _dispatchMetrics?.recordSqlExecuteStreamingChunksResponse();
-          }
+            final limitedRows = normalized.resultSets.isNotEmpty
+                ? normalized.data
+                : truncateSqlResultRows(normalized.data, maxRows);
+            final wasTruncated =
+                multiResultSetsTruncated ||
+                (!normalized.resultSets.isNotEmpty && limitedRows.length != normalized.data.length);
+            final useStreaming =
+                _featureFlags.enableSocketStreamingChunks &&
+                streamEmitter != null &&
+                !request.isNotification &&
+                pagination == null &&
+                !normalized.hasMultiResult &&
+                limitedRows.length > limits.streamingRowThreshold;
 
-          if (overflowed) {
-            await _emitTerminalComplete(
-              streamEmitter: streamEmitter,
-              streamId: streamId,
-              requestId: request.id,
-              totalRows: rows.length,
-              status: StreamTerminalStatus.aborted,
-            );
-            return RpcResponse.error(
-              id: request.id,
-              error: RpcError(
-                code: RpcErrorCode.resultTooLarge,
-                message: RpcErrorCode.getMessage(RpcErrorCode.resultTooLarge),
-                data: RpcErrorCode.buildErrorData(
-                  code: RpcErrorCode.resultTooLarge,
-                  technicalMessage:
-                      'Streaming buffer overflowed: hub not consuming fast enough; '
-                      'stream cancelled to avoid data loss.',
-                  correlationId: request.id?.toString(),
-                  subreason: RpcStreamingConstants.backpressureOverflowReason,
+            if (useStreaming) {
+              final streamId = 'stream-${queryRequest.id}';
+              final rows = limitedRows;
+              final totalChunks = (rows.length / limits.streamingChunkSize).ceil();
+              var overflowed = false;
+
+              for (var i = 0; i < rows.length && !overflowed; i += limits.streamingChunkSize) {
+                final chunkEnd = i + limits.streamingChunkSize > rows.length
+                    ? rows.length
+                    : i + limits.streamingChunkSize;
+                final chunkRows = rows.sublist(i, chunkEnd);
+                if (!await streamEmitter.emitChunk(
+                  RpcStreamChunk(
+                    streamId: streamId,
+                    requestId: request.id,
+                    chunkIndex: i ~/ limits.streamingChunkSize,
+                    rows: chunkRows,
+                    totalChunks: totalChunks,
+                    columnMetadata: normalized.columnMetadata,
+                  ),
+                )) {
+                  overflowed = true;
+                  break;
+                }
+              }
+
+              if (!overflowed) {
+                _dispatchMetrics?.recordSqlExecuteStreamingChunksResponse();
+              }
+
+              if (overflowed) {
+                await _emitTerminalComplete(
+                  streamEmitter: streamEmitter,
+                  streamId: streamId,
+                  requestId: request.id,
+                  totalRows: rows.length,
+                  status: StreamTerminalStatus.aborted,
+                );
+                return RpcResponse.error(
+                  id: request.id,
+                  error: RpcError(
+                    code: RpcErrorCode.resultTooLarge,
+                    message: RpcErrorCode.getMessage(RpcErrorCode.resultTooLarge),
+                    data: RpcErrorCode.buildErrorData(
+                      code: RpcErrorCode.resultTooLarge,
+                      technicalMessage:
+                          'Streaming buffer overflowed: hub not consuming fast enough; '
+                          'stream cancelled to avoid data loss.',
+                      correlationId: request.id?.toString(),
+                      subreason: RpcStreamingConstants.backpressureOverflowReason,
+                    ),
+                  ),
+                );
+              }
+
+              await streamEmitter.emitComplete(
+                RpcStreamComplete(
+                  streamId: streamId,
+                  requestId: request.id,
+                  totalRows: rows.length,
+                  affectedRows: normalized.affectedRows,
+                  executionId: normalized.id,
+                  startedAt: queryRequest.timestamp.toIso8601String(),
+                  finishedAt: normalized.timestamp.toIso8601String(),
                 ),
-              ),
+              );
+
+              final resultData = {
+                'stream_id': streamId,
+                'execution_id': normalized.id,
+                'started_at': queryRequest.timestamp.toIso8601String(),
+                'finished_at': normalized.timestamp.toIso8601String(),
+                'sql_handling_mode': queryRequest.sqlHandlingMode.name,
+                'max_rows_handling': 'response_truncation',
+                'effective_max_rows': maxRows,
+                'rows': <Map<String, dynamic>>[],
+                'row_count': 0,
+                'affected_rows': normalized.affectedRows,
+                'returned_rows': rows.length,
+                if (wasTruncated) 'truncated': true,
+                if (normalized.columnMetadata != null) 'column_metadata': normalized.columnMetadata,
+                if (normalized.pagination != null) 'pagination': _buildPaginationResult(normalized.pagination!),
+              };
+
+              return RpcResponse.success(id: request.id, result: resultData);
+            }
+
+            final resultData = _buildExecuteResultData(
+              normalized,
+              startedAt: queryRequest.timestamp,
+              finishedAt: normalized.timestamp,
+              limitedRows: limitedRows,
+              wasTruncated: wasTruncated,
+              sqlHandlingMode: queryRequest.sqlHandlingMode,
+              effectiveMaxRows: maxRows,
+              forceMultiResultEnvelope: multiResultRequested,
             );
-          }
 
-          await streamEmitter.emitComplete(
-            RpcStreamComplete(
-              streamId: streamId,
-              requestId: request.id,
-              totalRows: rows.length,
-              affectedRows: normalized.affectedRows,
-              executionId: normalized.id,
-              startedAt: queryRequest.timestamp.toIso8601String(),
-              finishedAt: normalized.timestamp.toIso8601String(),
-            ),
-          );
-
-          final resultData = {
-            'stream_id': streamId,
-            'execution_id': normalized.id,
-            'started_at': queryRequest.timestamp.toIso8601String(),
-            'finished_at': normalized.timestamp.toIso8601String(),
-            'sql_handling_mode': queryRequest.sqlHandlingMode.name,
-            'max_rows_handling': 'response_truncation',
-            'effective_max_rows': maxRows,
-            'rows': <Map<String, dynamic>>[],
-            'row_count': 0,
-            'affected_rows': normalized.affectedRows,
-            'returned_rows': rows.length,
-            if (wasTruncated) 'truncated': true,
-            if (normalized.columnMetadata != null) 'column_metadata': normalized.columnMetadata,
-            if (normalized.pagination != null) 'pagination': _buildPaginationResult(normalized.pagination!),
-          };
-
-          return RpcResponse.success(id: request.id, result: resultData);
-        }
-
-        final resultData = _buildExecuteResultData(
-          normalized,
-          startedAt: queryRequest.timestamp,
-          finishedAt: normalized.timestamp,
-          limitedRows: limitedRows,
-          wasTruncated: wasTruncated,
-          sqlHandlingMode: queryRequest.sqlHandlingMode,
-          effectiveMaxRows: maxRows,
-          forceMultiResultEnvelope: multiResultRequested,
+            final rpcResponse = RpcResponse.success(
+              id: request.id,
+              result: resultData,
+            );
+            _dispatchMetrics?.recordSqlExecuteMaterializedResponse();
+            return rpcResponse;
+          },
+          (Exception failure) async {
+            final rpcError = FailureToRpcErrorMapper.map(
+              failure as domain.Failure,
+              instance: request.id?.toString(),
+              useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+            );
+            return RpcResponse.error(id: request.id, error: rpcError);
+          },
         );
-
-        final rpcResponse = RpcResponse.success(
-          id: request.id,
-          result: resultData,
-        );
-        _dispatchMetrics?.recordSqlExecuteMaterializedResponse();
-        return rpcResponse;
-      },
-      (Exception failure) async {
-        final rpcError = FailureToRpcErrorMapper.map(
-          failure as domain.Failure,
-          instance: request.id?.toString(),
-          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-        );
-        return RpcResponse.error(id: request.id, error: rpcError);
-      },
-    );
       },
     );
   }
@@ -1415,7 +1423,6 @@ class SqlRpcMethodHandlerOperations {
     return null;
   }
 
-
   Future<Result<QueryResponse>> _executeQueryWithBudget(
     QueryRequest queryRequest, {
     required String? database,
@@ -1604,7 +1611,6 @@ class SqlRpcMethodHandlerOperations {
       );
     }
   }
-
 
   int _resolveRequestedTimeoutMs(Map<String, dynamic> params) {
     final options = params['options'] as Map<String, dynamic>?;

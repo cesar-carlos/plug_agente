@@ -93,32 +93,28 @@ class AgentActionRuntimeExecutionValidator {
           'user_message': 'Remova o arquivo de contexto: o modo stdin nao usa path de arquivo.',
         },
       ),
-      AgentActionContextInjectionMode.stdin when !_hasStdinPayload(request) =>
-        ActionValidationFailure.withContext(
-          message: 'Stdin injection requires a non-empty runtime stdin payload.',
-          context: {
-            'action_id': actionId,
-            'field': 'runtimeParameters.${AgentActionProcessConstants.stdinRuntimeParameterKey}',
-            'phase': phase,
-            'injection_mode': policy.injectionMode.name,
-            'reason': AgentActionValidationConstants.contextInjectionRequiresStdinPayloadReason,
-            'user_message':
-                'Informe o texto de entrada padrao em runtimeParameters.stdin antes de executar.',
-          },
-        ),
-      AgentActionContextInjectionMode.environment when hasContextPath =>
-        ActionValidationFailure.withContext(
-          message: 'Context file path is not supported for environment injection mode.',
-          context: {
-            'action_id': actionId,
-            'field': 'contextPath',
-            'phase': phase,
-            'injection_mode': policy.injectionMode.name,
-            'reason': AgentActionValidationConstants.contextInjectionRejectsFileReason,
-            'user_message':
-                'Remova o arquivo de contexto: o modo de variaveis de ambiente usa parametros runtime.',
-          },
-        ),
+      AgentActionContextInjectionMode.stdin when !_hasStdinPayload(request) => ActionValidationFailure.withContext(
+        message: 'Stdin injection requires a non-empty runtime stdin payload.',
+        context: {
+          'action_id': actionId,
+          'field': 'runtimeParameters.${AgentActionProcessConstants.stdinRuntimeParameterKey}',
+          'phase': phase,
+          'injection_mode': policy.injectionMode.name,
+          'reason': AgentActionValidationConstants.contextInjectionRequiresStdinPayloadReason,
+          'user_message': 'Informe o texto de entrada padrao em runtimeParameters.stdin antes de executar.',
+        },
+      ),
+      AgentActionContextInjectionMode.environment when hasContextPath => ActionValidationFailure.withContext(
+        message: 'Context file path is not supported for environment injection mode.',
+        context: {
+          'action_id': actionId,
+          'field': 'contextPath',
+          'phase': phase,
+          'injection_mode': policy.injectionMode.name,
+          'reason': AgentActionValidationConstants.contextInjectionRejectsFileReason,
+          'user_message': 'Remova o arquivo de contexto: o modo de variaveis de ambiente usa parametros runtime.',
+        },
+      ),
       _ => null,
     };
   }

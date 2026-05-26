@@ -1,4 +1,4 @@
-import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/domain/entities/agent_action_authorization_scopes.dart';
 
 /// Interprets hub-issued `ClientTokenPolicy.payload` for remote `agent.action.*`
 /// when `enableClientTokenAuthorization` is on, per `socket_communication_standard.md`.
@@ -35,7 +35,7 @@ abstract final class ClientTokenPolicyAgentActionAuthorization {
       return false;
     }
     final normalizedRequired = requiredScope.toLowerCase();
-    final hasWildcard = granted.contains(AgentActionRpcConstants.agentActionsWildcardScope.toLowerCase());
+    final hasWildcard = granted.contains(AgentActionAuthorizationScopes.wildcard.toLowerCase());
     final hasRequired = hasWildcard || granted.contains(normalizedRequired);
     if (!hasRequired) {
       return false;
@@ -101,11 +101,7 @@ abstract final class ClientTokenPolicyAgentActionAuthorization {
 
   static Set<String> _parseStringSet(Object? raw) {
     if (raw is Iterable) {
-      return raw
-          .whereType<String>()
-          .map((String s) => s.trim())
-          .where((String s) => s.isNotEmpty)
-          .toSet();
+      return raw.whereType<String>().map((String s) => s.trim()).where((String s) => s.isNotEmpty).toSet();
     }
     return <String>{};
   }

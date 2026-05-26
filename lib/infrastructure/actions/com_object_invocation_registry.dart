@@ -28,8 +28,8 @@ class ComObjectInvocationRegistry {
     required String progId,
     required String memberName,
   }) {
-    final handler = _handlers[
-        (
+    final handler =
+        _handlers[(
           progId: _normalizeProgId(progId),
           memberName: _normalizeMemberName(memberName),
         )];
@@ -42,8 +42,7 @@ class ComObjectInvocationRegistry {
             'member_name': memberName,
             'phase': AgentActionProcessConstants.executionPreflightPhase,
             'reason': AgentActionComObjectConstants.invocationNotRegisteredReason,
-            'user_message':
-                'Esta combinacao de ProgID e membro COM nao esta habilitada neste agente.',
+            'user_message': 'Esta combinacao de ProgID e membro COM nao esta habilitada neste agente.',
           },
         ),
       );

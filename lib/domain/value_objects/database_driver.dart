@@ -2,8 +2,7 @@ enum DatabaseDriver {
   sqlServer('SQL Server'),
   postgreSQL('PostgreSQL'),
   sqlAnywhere('SQL Anywhere'),
-  unknown('Unknown')
-  ;
+  unknown('Unknown');
 
   const DatabaseDriver(this.displayName);
 

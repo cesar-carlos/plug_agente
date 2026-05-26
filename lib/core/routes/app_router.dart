@@ -58,7 +58,7 @@ GoRouter createAppRouter({
               if (tab == 'websocket') {
                 return WebSocketSettingsPage(configId: id);
               }
-              if (tab == 'database' || tab == 'advanced') {
+              if (tab == AppRouteTabs.database || tab == AppRouteTabs.advanced) {
                 return DatabaseSettingsPage(configId: id, initialTab: tab);
               }
               return const ConfigPage();
@@ -72,7 +72,7 @@ GoRouter createAppRouter({
               if (tab == 'websocket') {
                 return const WebSocketSettingsPage();
               }
-              if (tab == 'database' || tab == 'advanced') {
+              if (tab == AppRouteTabs.database || tab == AppRouteTabs.advanced) {
                 return DatabaseSettingsPage(initialTab: tab);
               }
               return const ConfigPage();

@@ -5,14 +5,21 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 class TrayService with TrayListener {
-  Future<void> initialize() async {
+  /// Initializes the system tray icon and context menu.
+  ///
+  /// showWindowLabel and exitLabel should come from AppLocalizations
+  /// so labels appear in the OS-level context menu using the active locale.
+  Future<void> initialize({
+    String showWindowLabel = 'Show Window',
+    String exitLabel = 'Exit',
+  }) async {
     await trayManager.setIcon('assets/icons/icon-512-dark.svg');
 
     final menu = Menu(
       items: [
         MenuItem(
           key: 'show_window',
-          label: 'Show Window',
+          label: showWindowLabel,
           onClick: (_) async {
             await windowManager.show();
             await windowManager.focus();
@@ -21,8 +28,9 @@ class TrayService with TrayListener {
         MenuItem.separator(),
         MenuItem(
           key: 'exit',
-          label: 'Exit',
+          label: exitLabel,
           onClick: (_) async {
+            trayManager.removeListener(this);
             await trayManager.destroy();
             await windowManager.close();
           },

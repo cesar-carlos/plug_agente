@@ -310,9 +310,7 @@ class HubResilienceCoordinator {
   }) async {
     if (!ignoreCooldown && isHardReloginCooldownActive(hardReloginCooldown)) {
       final last = _lastHardReloginEndedAt;
-      final remainingMs = last == null
-          ? 0
-          : (hardReloginCooldown - DateTime.now().difference(last)).inMilliseconds;
+      final remainingMs = last == null ? 0 : (hardReloginCooldown - DateTime.now().difference(last)).inMilliseconds;
       AppLogger.info(
         'resilience: ${resilienceLogPrefix()}hard_relogin event=skipped_cooldown '
         'remaining_ms=${remainingMs.clamp(0, 86400000)} '

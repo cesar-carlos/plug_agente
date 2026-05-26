@@ -35,7 +35,16 @@ String _projectRootPath() {
   return Directory.current.path;
 }
 
-void main() {
+/// Usage: dart run tool/check_e2e_env.dart [--fail-if-missing-odbc] [--fail-if-missing-live-api] [--fail-if-missing-hub]
+///
+/// Without flags: prints diagnostic report and exits 0 (informational only).
+/// With flags: exits 1 if the specified test category has no configured vars.
+/// Useful as a CI gate: fail fast when required live-test vars are absent.
+void main(List<String> args) {
+  final failIfMissingOdbc = args.contains('--fail-if-missing-odbc');
+  final failIfMissingLiveApi = args.contains('--fail-if-missing-live-api');
+  final failIfMissingHub = args.contains('--fail-if-missing-hub');
+
   final root = _projectRootPath();
   final envFile = File('$root${Platform.pathSeparator}.env');
   final exampleFile = File('$root${Platform.pathSeparator}.env.example');
@@ -303,13 +312,17 @@ void main() {
 
   final elevatedExe = get('ELEVATED_ACTION_RUNNER_EXE');
   final elevatedExeOk = elevatedExe != null && elevatedExe.isNotEmpty && File(elevatedExe).existsSync();
-  final defaultElevatedBuild = File('$root${Platform.pathSeparator}build${Platform.pathSeparator}elevated_runner${Platform.pathSeparator}plug_agente_elevated_runner.exe');
+  final defaultElevatedBuild = File(
+    '$root${Platform.pathSeparator}build${Platform.pathSeparator}elevated_runner${Platform.pathSeparator}plug_agente_elevated_runner.exe',
+  );
   print('');
   print('ELEVATED_ACTION_RUNNER_EXE: ${elevatedExe ?? "(nao definido — tenta exe ao lado do plug_agente.exe)"}');
   if (elevatedExeOk) {
     print('  -> helper elevado: caminho do .env existe');
   } else if (defaultElevatedBuild.existsSync()) {
-    print('  -> build local encontrado: ${defaultElevatedBuild.path} (defina ELEVATED_ACTION_RUNNER_EXE ou copie para o runner Release)');
+    print(
+      '  -> build local encontrado: ${defaultElevatedBuild.path} (defina ELEVATED_ACTION_RUNNER_EXE ou copie para o runner Release)',
+    );
   } else {
     print(r'  -> helper elevado: rode .\tool\build_elevated_runner.ps1 antes de homologar elevado na UI');
   }
@@ -334,6 +347,24 @@ void main() {
     'Elevated (unit): flutter test test/infrastructure/actions/elevated_action_runner_installer_test.dart',
   );
   print('Burst (opt-in): flutter test test/integration/sql_queue_burst_test.dart');
+
+  // CI gate: exit(1) when the caller requires specific categories to be configured.
+  var shouldFail = false;
+  if (failIfMissingOdbc && !anyOdbcValid) {
+    print('\n[FAIL] --fail-if-missing-odbc: no ODBC DSN configured.');
+    shouldFail = true;
+  }
+  if (failIfMissingLiveApi && !runLiveApi) {
+    print('\n[FAIL] --fail-if-missing-live-api: RUN_LIVE_API_TESTS is not true.');
+    shouldFail = true;
+  }
+  if (failIfMissingHub && !runLiveHub) {
+    print('\n[FAIL] --fail-if-missing-hub: RUN_LIVE_HUB_TESTS is not true or hub URL/token absent.');
+    shouldFail = true;
+  }
+  if (shouldFail) {
+    exit(1);
+  }
 }
 
 Map<String, String> _loadEnv(File file) {

@@ -514,23 +514,26 @@ void main() {
       expect(data['failure_code'], equals(AgentActionFailureCode.remoteIdempotencyRequired));
     });
 
-    test('should map ActionValidationFailure remote context to invalidParams with remote_context_not_supported reason', () {
-      final failure = ActionValidationFailure.withContext(
-        message: 'Remote agent action RPC does not accept inline context in MVP.',
-        code: AgentActionFailureCode.remoteContextNotSupported,
-        context: {
-          'field': 'context_json',
-          'reason': AgentActionRpcConstants.remoteContextNotSupportedRpcReason,
-        },
-      );
+    test(
+      'should map ActionValidationFailure remote context to invalidParams with remote_context_not_supported reason',
+      () {
+        final failure = ActionValidationFailure.withContext(
+          message: 'Remote agent action RPC does not accept inline context in MVP.',
+          code: AgentActionFailureCode.remoteContextNotSupported,
+          context: {
+            'field': 'context_json',
+            'reason': AgentActionRpcConstants.remoteContextNotSupportedRpcReason,
+          },
+        );
 
-      final rpcError = FailureToRpcErrorMapper.map(failure);
-      final data = rpcError.data as Map<String, dynamic>;
+        final rpcError = FailureToRpcErrorMapper.map(failure);
+        final data = rpcError.data as Map<String, dynamic>;
 
-      expect(rpcError.code, equals(RpcErrorCode.invalidParams));
-      expect(data['category'], equals(RpcErrorCode.categoryAction));
-      expect(data['reason'], equals(AgentActionRpcConstants.remoteContextNotSupportedRpcReason));
-    });
+        expect(rpcError.code, equals(RpcErrorCode.invalidParams));
+        expect(data['category'], equals(RpcErrorCode.categoryAction));
+        expect(data['reason'], equals(AgentActionRpcConstants.remoteContextNotSupportedRpcReason));
+      },
+    );
 
     test('should map ActionAuthorizationFailure remote disabled to unauthorized with action category', () {
       final failure = ActionAuthorizationFailure.withContext(

@@ -793,7 +793,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
     return ListenableBuilder(
       listenable: provider,
       builder: (BuildContext context, Widget? child) {
-        final remoteError = provider.errorMessage;
+        final remoteError = provider.triggerErrorMessage;
 
         return ContentDialog(
           constraints: BoxConstraints(

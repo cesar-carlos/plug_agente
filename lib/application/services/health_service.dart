@@ -156,6 +156,36 @@ class HealthService {
     );
   }
 
+  /// Derives an overall status string from the available pool/queue diagnostics.
+  ///
+  /// - 'degraded': native circuit open, or SQL queue ≥90% saturated, or
+  ///   recent 90% saturation events detected.
+  /// - 'healthy': no degradation signals detected.
+  ///
+  /// Hub consumers should treat absence of 'healthy' as actionable.
+  String _deriveOverallStatus({
+    required Map<String, Object?> poolDiagnostics,
+    required QueuedDatabaseGateway? queuedGateway,
+    required Map<String, Object?> metrics,
+  }) {
+    if (poolDiagnostics['native_circuit_open'] == true) {
+      return 'degraded';
+    }
+
+    if (queuedGateway != null) {
+      final maxSize = queuedGateway.maxQueueSize;
+      final currentSize = queuedGateway.queueSize;
+      if (maxSize > 0 && currentSize / maxSize >= 0.9) {
+        return 'degraded';
+      }
+      if ((metrics['sql_queue_saturation_90_count'] as int? ?? 0) > 0) {
+        return 'degraded';
+      }
+    }
+
+    return 'healthy';
+  }
+
   Map<String, Object?> _buildHealthStatus({
     int? poolActiveCount,
     Map<String, Object?> poolDiagnostics = const <String, Object?>{},
@@ -167,8 +197,13 @@ class HealthService {
     final nativeFallbacks = metrics['odbc_native_pool_fallback'] as int? ?? 0;
 
     final identity = _agentRuntimeIdentity;
+    final status = _deriveOverallStatus(
+      poolDiagnostics: poolDiagnostics,
+      queuedGateway: queuedGateway,
+      metrics: metrics,
+    );
     return {
-      'status': 'healthy',
+      'status': status,
       'timestamp': DateTime.now().toIso8601String(),
       'version': AppConstants.appVersion,
       if (identity != null)

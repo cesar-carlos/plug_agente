@@ -27,10 +27,8 @@ class CreateClientToken {
       return Failure(
         domain.ValidationFailure(
           switch (payloadValidationError) {
-            ClientTokenPayloadValidationError.databaseMustBeString =>
-              'payload.database must be a string',
-            ClientTokenPayloadValidationError.databaseCannotBeEmpty =>
-              'payload.database must not be empty',
+            ClientTokenPayloadValidationError.databaseMustBeString => 'payload.database must be a string',
+            ClientTokenPayloadValidationError.databaseCannotBeEmpty => 'payload.database must not be empty',
           },
         ),
       );

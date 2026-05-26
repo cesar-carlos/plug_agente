@@ -26,7 +26,9 @@ class AgentActionsDangerousCommandWarnCard extends StatelessWidget {
         title: Text(l10n.agentActionsDangerousCommandWarnModeTitle),
         severity: enabled ? InfoBarSeverity.warning : InfoBarSeverity.info,
         content: Text(
-          enabled ? l10n.agentActionsDangerousCommandWarnModeEnabled : l10n.agentActionsDangerousCommandWarnModeDisabled,
+          enabled
+              ? l10n.agentActionsDangerousCommandWarnModeEnabled
+              : l10n.agentActionsDangerousCommandWarnModeDisabled,
         ),
         isLong: true,
       ),

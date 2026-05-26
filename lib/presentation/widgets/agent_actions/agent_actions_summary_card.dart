@@ -33,9 +33,7 @@ class AgentActionsSummaryCard extends StatelessWidget {
           if (provider.comObjectHandlersRegisteredCount case final int count)
             _Metric(
               label: l10n.agentActionsSummaryComHandlers,
-              value: count > 0
-                  ? count.toString()
-                  : l10n.agentActionsSummaryComHandlersNone,
+              value: count > 0 ? count.toString() : l10n.agentActionsSummaryComHandlersNone,
             ),
         ],
       ),

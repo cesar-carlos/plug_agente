@@ -10,7 +10,10 @@ class SqlInvestigationCollector implements ISqlInvestigationCollector {
   SqlInvestigationCollector({int maxEvents = AppConstants.dashboardDiagnosticFeedMaxItems}) : _maxEvents = maxEvents;
 
   final int _maxEvents;
-  final List<SqlInvestigationEvent> _events = [];
+
+  // ListQueue gives O(1) addFirst/removeLast, replacing the previous O(n)
+  // List.insert(0, ...) pattern on the hot RPC denial path.
+  final ListQueue<SqlInvestigationEvent> _events = ListQueue<SqlInvestigationEvent>();
   final StreamController<SqlInvestigationEvent> _controller = StreamController<SqlInvestigationEvent>.broadcast();
   final StreamController<void> _revisionController = StreamController<void>.broadcast(sync: true);
 
@@ -21,7 +24,8 @@ class SqlInvestigationCollector implements ISqlInvestigationCollector {
   Stream<void> get feedRevisionStream => _revisionController.stream;
 
   @override
-  List<SqlInvestigationEvent> get events => UnmodifiableListView<SqlInvestigationEvent>(_events);
+  List<SqlInvestigationEvent> get events =>
+      UnmodifiableListView<SqlInvestigationEvent>(_events.toList(growable: false));
 
   @override
   void recordAuthorizationDenied({
@@ -74,9 +78,9 @@ class SqlInvestigationCollector implements ISqlInvestigationCollector {
   }
 
   void _add(SqlInvestigationEvent event) {
-    _events.insert(0, event);
-    if (_events.length > _maxEvents) {
-      _events.removeRange(_maxEvents, _events.length);
+    _events.addFirst(event); // O(1)
+    while (_events.length > _maxEvents) {
+      _events.removeLast(); // O(1)
     }
     if (!_controller.isClosed) {
       _controller.add(event);
@@ -85,7 +89,7 @@ class SqlInvestigationCollector implements ISqlInvestigationCollector {
 
   @override
   void clear() {
-    _events.clear();
+    _events.clear(); // O(1) for ListQueue
     if (!_revisionController.isClosed) {
       _revisionController.add(null);
     }

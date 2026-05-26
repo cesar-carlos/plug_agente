@@ -60,36 +60,6 @@ class _ConfigPageState extends State<ConfigPage> {
     return '$day/$month/$year $hour:$minute';
   }
 
-  String _formatCompletionSource(
-    AppLocalizations l10n,
-    UpdateCheckCompletionSource? source,
-  ) {
-    return switch (source) {
-      UpdateCheckCompletionSource.updateAvailable => l10n.configUpdateCompletionSourceUpdateAvailable,
-      UpdateCheckCompletionSource.updateNotAvailable => l10n.configUpdateCompletionSourceUpdateNotAvailable,
-      UpdateCheckCompletionSource.updaterError => l10n.configUpdateCompletionSourceUpdaterError,
-      UpdateCheckCompletionSource.triggerTimeout => l10n.configUpdateCompletionSourceTriggerTimeout,
-      UpdateCheckCompletionSource.completionTimeout => l10n.configUpdateCompletionSourceCompletionTimeout,
-      UpdateCheckCompletionSource.triggerFailure => l10n.configUpdateCompletionSourceTriggerFailure,
-      UpdateCheckCompletionSource.notInitialized => l10n.configUpdateCompletionSourceNotInitialized,
-      UpdateCheckCompletionSource.circuitOpen => l10n.configUpdateCompletionSourceCircuitOpen,
-      UpdateCheckCompletionSource.automaticDisabled => l10n.configUpdateCompletionSourceAutomaticDisabled,
-      UpdateCheckCompletionSource.automaticPendingCompleted =>
-        l10n.configUpdateCompletionSourceAutomaticPendingCompleted,
-      UpdateCheckCompletionSource.automaticPendingFailed => l10n.configUpdateCompletionSourceAutomaticPendingFailed,
-      UpdateCheckCompletionSource.automaticUpdateNotAvailable =>
-        l10n.configUpdateCompletionSourceAutomaticUpdateNotAvailable,
-      UpdateCheckCompletionSource.automaticValidationFailure =>
-        l10n.configUpdateCompletionSourceAutomaticValidationFailure,
-      UpdateCheckCompletionSource.automaticDownloadFailure => l10n.configUpdateCompletionSourceAutomaticDownloadFailure,
-      UpdateCheckCompletionSource.automaticInstallStarted => l10n.configUpdateCompletionSourceAutomaticInstallStarted,
-      UpdateCheckCompletionSource.automaticInstallFailure => l10n.configUpdateCompletionSourceAutomaticInstallFailure,
-      UpdateCheckCompletionSource.automaticCooldown => l10n.configUpdateCompletionSourceAutomaticCooldown,
-      UpdateCheckCompletionSource.automaticRolloutSkipped => l10n.configUpdateCompletionSourceAutomaticRolloutSkipped,
-      null => '-',
-    };
-  }
-
   String _getUpdateUnavailableMessage(AppLocalizations l10n) {
     final capabilities = getIt<RuntimeCapabilities>();
     if (!capabilities.supportsAutoUpdate) {
@@ -114,7 +84,7 @@ class _ConfigPageState extends State<ConfigPage> {
     final checkedAt = _formatLastUpdateCheck(diagnostics.checkedAt);
     final completion = diagnostics.completionSource == null
         ? ''
-        : ' - ${_formatCompletionSource(l10n, diagnostics.completionSource)}';
+        : ' - ${UpdateSupportDiagnosticsBuilder.formatCompletionSource(l10n, diagnostics.completionSource)}';
     return '${l10n.configLastBackgroundUpdatePrefix}$checkedAt$completion';
   }
 
@@ -129,7 +99,7 @@ class _ConfigPageState extends State<ConfigPage> {
     final checkedAt = _formatLastUpdateCheck(diagnostics.checkedAt);
     final completion = diagnostics.completionSource == null
         ? ''
-        : ' - ${_formatCompletionSource(l10n, diagnostics.completionSource)}';
+        : ' - ${UpdateSupportDiagnosticsBuilder.formatCompletionSource(l10n, diagnostics.completionSource)}';
     return '${l10n.configLastAutomaticUpdatePrefix}$checkedAt$completion';
   }
 
@@ -322,7 +292,7 @@ class _ConfigPageState extends State<ConfigPage> {
           null,
           orchestrator.lastAutomaticDiagnostics,
         );
-        final source = _formatCompletionSource(
+        final source = UpdateSupportDiagnosticsBuilder.formatCompletionSource(
           l10n,
           orchestrator.lastAutomaticDiagnostics?.completionSource,
         );

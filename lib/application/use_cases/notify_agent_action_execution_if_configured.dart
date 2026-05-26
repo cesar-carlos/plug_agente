@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:plug_agente/application/actions/agent_action_notification_messages.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -17,8 +19,7 @@ class NotifyAgentActionExecutionIfConfigured {
   final AgentActionNotificationMessagesResolver _resolveMessages;
   final bool Function()? _notificationsSupported;
 
-  static AgentActionNotificationMessages _defaultEnglishMessages() =>
-      AgentActionNotificationMessages.english;
+  static AgentActionNotificationMessages _defaultEnglishMessages() => AgentActionNotificationMessages.english;
 
   Future<void> call({
     required AgentActionDefinition definition,
@@ -42,10 +43,20 @@ class NotifyAgentActionExecutionIfConfigured {
       return;
     }
 
-    await _sendNotification(
+    final result = await _sendNotification(
       title: title,
       body: body,
       payload: 'agent_action:${execution.id}',
+    );
+    result.fold(
+      (_) {},
+      (failure) {
+        developer.log(
+          'Failed to send agent action notification: $failure',
+          name: 'notify_agent_action_execution',
+          level: 900,
+        );
+      },
     );
   }
 }

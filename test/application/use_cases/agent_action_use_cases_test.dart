@@ -627,7 +627,10 @@ void main() {
 
       expect(result.isError(), isTrue);
       expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-      expect((result.exceptionOrNull()! as ActionValidationFailure).code, AgentActionFailureCode.preflightRequiredForActive);
+      expect(
+        (result.exceptionOrNull()! as ActionValidationFailure).code,
+        AgentActionFailureCode.preflightRequiredForActive,
+      );
       expect(repository.definitions, isEmpty);
     });
 
@@ -684,7 +687,10 @@ void main() {
       );
 
       expect(result.isError(), isTrue);
-      expect((result.exceptionOrNull()! as ActionValidationFailure).code, AgentActionFailureCode.preflightExpiredForActive);
+      expect(
+        (result.exceptionOrNull()! as ActionValidationFailure).code,
+        AgentActionFailureCode.preflightExpiredForActive,
+      );
     });
 
     test('should invalidate preflight hash when definition content changes on save', () async {
@@ -712,7 +718,10 @@ void main() {
       );
 
       expect(activeWithoutPreflight.isError(), isTrue);
-      expect((activeWithoutPreflight.exceptionOrNull()! as ActionValidationFailure).code, AgentActionFailureCode.preflightRequiredForActive);
+      expect(
+        (activeWithoutPreflight.exceptionOrNull()! as ActionValidationFailure).code,
+        AgentActionFailureCode.preflightRequiredForActive,
+      );
     });
 
     test('should clear runElevated when elevated feature flag is disabled', () async {

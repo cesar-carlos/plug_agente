@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
@@ -88,7 +89,21 @@ List<Widget> buildAgentActionSchedulerOperationalIssueWidgets(AgentActionsProvid
     _ => null,
   };
   if (message == null) {
-    return const <Widget>[];
+    developer.log(
+      'Unknown schedulerOperationalIssueReason: $reason',
+      name: 'agent_actions_status_strip',
+      level: 900,
+    );
+    return <Widget>[
+      InfoBar(
+        key: const ValueKey<String>('agent_actions_scheduler_unknown_issue'),
+        title: Text(l10n.agentActionsSchedulerOperationalIssueTitle),
+        content: Text(l10n.agentActionsSubsystemStatusDegradedTitle),
+        severity: InfoBarSeverity.warning,
+        isLong: true,
+      ),
+      const SizedBox(height: AppSpacing.md),
+    ];
   }
 
   return <Widget>[

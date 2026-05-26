@@ -4,6 +4,5 @@ abstract final class OpenRpcConstants {
 
   static const String unavailableSubreason = 'openrpc_unavailable';
 
-  static const String loadFailedTechnicalMessage =
-      'OpenRPC document unavailable from asset bundle and disk';
+  static const String loadFailedTechnicalMessage = 'OpenRPC document unavailable from asset bundle and disk';
 }

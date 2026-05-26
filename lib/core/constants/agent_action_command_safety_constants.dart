@@ -43,8 +43,7 @@ class AgentActionDangerousCommandAssessment {
     this.match,
   });
 
-  const AgentActionDangerousCommandAssessment.allow()
-    : this._(policy: AgentActionDangerousCommandRunPolicy.allow);
+  const AgentActionDangerousCommandAssessment.allow() : this._(policy: AgentActionDangerousCommandRunPolicy.allow);
 
   const AgentActionDangerousCommandAssessment.warn({
     required AgentActionDangerousCommandMatch match,

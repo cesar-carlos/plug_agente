@@ -20,14 +20,20 @@ class TrayManagerService with TrayListener implements ITrayService {
   bool _isInitialized = false;
   bool _interactionsEnabled = false;
   String? _cachedIconPath;
+  String _showWindowLabel = 'Open Plug Database';
+  String _exitLabel = 'Exit';
 
   @override
   Future<void> initialize({
     void Function(TrayMenuAction)? onMenuAction,
+    String showWindowLabel = 'Open Plug Database',
+    String exitLabel = 'Exit',
   }) async {
     if (_isInitialized) return;
 
     _onMenuAction = onMenuAction;
+    _showWindowLabel = showWindowLabel;
+    _exitLabel = exitLabel;
     trayManager.addListener(this);
 
     try {
@@ -42,7 +48,7 @@ class TrayManagerService with TrayListener implements ITrayService {
       }
     } on Exception catch (e, stackTrace) {
       _logger.e(
-        'Erro ao configurar ícone da bandeja',
+        'Failed to set tray icon',
         error: e,
         stackTrace: stackTrace,
       );
@@ -50,7 +56,7 @@ class TrayManagerService with TrayListener implements ITrayService {
         final executablePath = Platform.resolvedExecutable;
         await trayManager.setIcon(executablePath);
       } on Exception catch (e2) {
-        _logger.e('Erro crítico ao configurar ícone', error: e2);
+        _logger.e('Critical error setting tray icon', error: e2);
       }
     }
 
@@ -63,10 +69,10 @@ class TrayManagerService with TrayListener implements ITrayService {
 
       _isInitialized = true;
       _enableInteractionsAfterWarmup();
-      _logger.i('TrayManager inicializado');
+      _logger.i('TrayManager initialized');
     } on Exception catch (e, stackTrace) {
       _logger.e(
-        'Erro durante inicialização do TrayManager',
+        'Error during TrayManager initialization',
         error: e,
         stackTrace: stackTrace,
       );
@@ -92,7 +98,7 @@ class TrayManagerService with TrayListener implements ITrayService {
       await trayManager.destroy();
     } on Object catch (error, stackTrace) {
       _logger.w(
-        'Falha ao desmontar TrayManager após erro de inicialização',
+        'Failed to destroy TrayManager after initialization error',
         error: error,
         stackTrace: stackTrace,
       );
@@ -136,17 +142,17 @@ class TrayManagerService with TrayListener implements ITrayService {
             return _cachedIconPath!;
           } on Exception catch (e) {
             _logger.w(
-              'rootBundle não disponível ainda, tentando método alternativo: $e',
+              'rootBundle not yet available, trying alternative method: $e',
             );
             // Se rootBundle não estiver disponível, retornar executável
             return executablePath;
           }
         } on Exception catch (e) {
-          _logger.w('Erro ao criar ícone temporário: $e');
+          _logger.w('Failed to create temporary icon: $e');
           return executablePath;
         }
       } on Exception catch (e) {
-        _logger.w('Não foi possível copiar ícone dos assets: $e');
+        _logger.w('Could not copy icon from assets: $e');
       }
 
       final paths = [
@@ -184,16 +190,16 @@ class TrayManagerService with TrayListener implements ITrayService {
     try {
       final menu = Menu(
         items: [
-          MenuItem(key: 'show', label: 'Abrir Plug Database'),
+          MenuItem(key: 'show', label: _showWindowLabel),
           MenuItem.separator(),
-          MenuItem(key: 'exit', label: 'Sair'),
+          MenuItem(key: 'exit', label: _exitLabel),
         ],
       );
 
       await trayManager.setContextMenu(menu);
     } on Exception catch (e, stackTrace) {
       _logger.e(
-        'Erro ao configurar menu de contexto',
+        'Failed to configure tray context menu',
         error: e,
         stackTrace: stackTrace,
       );
@@ -264,7 +270,7 @@ class TrayManagerService with TrayListener implements ITrayService {
 
   Future<void> _showContextMenu() async {
     if (!_isInitialized) {
-      _logger.w('TrayManager não está inicializado');
+      _logger.w('TrayManager is not initialized');
       return;
     }
 
@@ -274,7 +280,7 @@ class TrayManagerService with TrayListener implements ITrayService {
       await trayManager.popUpContextMenu();
     } on Exception catch (e, stackTrace) {
       _logger.e(
-        'Erro ao exibir menu de contexto',
+        'Failed to show context menu',
         error: e,
         stackTrace: stackTrace,
       );

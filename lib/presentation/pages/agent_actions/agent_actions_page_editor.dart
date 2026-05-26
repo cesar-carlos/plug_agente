@@ -8,6 +8,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
 import 'package:plug_agente/application/actions/actions.dart';
 import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
+import 'package:plug_agente/core/constants/agent_action_approval_constants.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -173,7 +174,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
   static const AgentOperationalProfileResolver _operationalProfileResolver = AgentOperationalProfileResolver();
   static const ActionEnvironmentResolver _environmentResolver = ActionEnvironmentResolver();
-  static const String _localRemoteApprover = 'local-ui';
+  static const String _localRemoteApprover = AgentActionApprovalConstants.localUiApprover;
 
   @override
   void initState() {

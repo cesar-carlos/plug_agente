@@ -35,7 +35,9 @@ class AppLogger {
   static void logNetwork(String method, String url, [dynamic data]) {
     _instance.d('$method $url');
     if (data != null) {
-      _instance.d('Data: $data');
+      // Sanitize before logging — HTTP bodies can contain tokens or passwords.
+      final sanitized = data is Map<String, dynamic> ? LogSanitizer.sanitizeParameters(data) : data.toString();
+      _instance.d('Data: $sanitized');
     }
   }
 }

@@ -8,13 +8,14 @@ enum StreamTerminalStatus {
   aborted,
 
   /// Stream was interrupted by an execution error (e.g. ODBC failure).
-  error
-  ;
+  error;
 
   String toJson() => name;
 
   static StreamTerminalStatus fromJson(String value) => StreamTerminalStatus.values.firstWhere(
     (s) => s.name == value,
+    // Unknown wire values default to error so the hub treats the stream as
+    // failed. Log the unknown value at the transport boundary for monitoring.
     orElse: () => StreamTerminalStatus.error,
   );
 }

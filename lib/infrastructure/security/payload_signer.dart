@@ -240,12 +240,23 @@ class PayloadSigner {
   }
 
   bool _constantTimeEquals(String a, String b) {
-    if (a.length != b.length) return false;
-    var result = 0;
-    for (var i = 0; i < a.length; i++) {
-      result |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+    // Compare the raw digest bytes rather than base64 strings to avoid the
+    // early-exit timing side channel on length difference. Both MACs are always
+    // 32 bytes (SHA-256), so padding to a fixed length is always safe.
+    final aBytes = base64Decode(_padBase64(a));
+    final bBytes = base64Decode(_padBase64(b));
+    final len = aBytes.length > bBytes.length ? aBytes.length : bBytes.length;
+    var result = aBytes.length ^ bBytes.length; // non-zero if lengths differ
+    for (var i = 0; i < len; i++) {
+      result |= (i < aBytes.length ? aBytes[i] : 0) ^ (i < bBytes.length ? bBytes[i] : 0);
     }
     return result == 0;
+  }
+
+  static String _padBase64(String s) {
+    final mod = s.length % 4;
+    if (mod == 0) return s;
+    return s + '=' * (4 - mod);
   }
 
   static Map<String, String> _normalizeKeys(Map<String, String> keys) {

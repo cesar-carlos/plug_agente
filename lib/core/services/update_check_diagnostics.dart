@@ -126,6 +126,7 @@ class UpdateCheckDiagnostics {
   final String? validationErrorCode;
   final String? errorMessage;
   final String? probeErrorMessage;
+
   /// Whether the version the custom probe found matches the version WinSparkle
   /// reported. `null` when the check did not complete both paths, or when one
   /// of the two versions is unavailable. `false` signals a CDN cache skew.

@@ -81,8 +81,7 @@ class ActionPathValidator {
        _canonicalizeDirectory = canonicalizeDirectory ?? _defaultCanonicalizeDirectory,
        _fileLength = fileLength ?? _defaultFileLength,
        _readText = readText ?? _defaultReadText,
-       _launchAccessValidator =
-           launchAccessValidator ?? WindowsExecutableLaunchAccessChecker.validateLaunchAccess,
+       _launchAccessValidator = launchAccessValidator ?? WindowsExecutableLaunchAccessChecker.validateLaunchAccess,
        _isProductionProfile = isProductionProfile ?? _defaultIsProductionProfile;
 
   final AgentActionPathExists _fileExists;
@@ -875,9 +874,7 @@ class ActionPathValidator {
     }
 
     return ActionValidationFailure.withContext(
-      message: isDirectory
-          ? 'Working directory is not readable.'
-          : 'Required file is not readable.',
+      message: isDirectory ? 'Working directory is not readable.' : 'Required file is not readable.',
       code: AgentActionFailureCode.pathPermissionDenied,
       cause: cause,
       context: {

@@ -36,9 +36,10 @@ class ReconcileAgentActionExecutions {
     final now = _now();
     var reconciledCount = 0;
     for (final execution in executionsResult.getOrThrow()) {
-      final orphanTerminated = execution.status == AgentActionExecutionStatus.running && await _orphanProcessTerminator.tryTerminateRunningProcess(execution);
-      const baseFailureMessage =
-          'Execucao interrompida porque o Plug Agente foi reiniciado antes da conclusao.';
+      final orphanTerminated =
+          execution.status == AgentActionExecutionStatus.running &&
+          await _orphanProcessTerminator.tryTerminateRunningProcess(execution);
+      const baseFailureMessage = 'Execucao interrompida porque o Plug Agente foi reiniciado antes da conclusao.';
       final saveResult = await _saveExecution(
         execution.copyWith(
           status: AgentActionExecutionStatus.interrupted,

@@ -31,8 +31,7 @@ abstract class _OperationsRpcMethodHandler implements RpcMethodHandler {
 }
 
 class RpcDiscoverRpcHandler implements RpcMethodHandler {
-  RpcDiscoverRpcHandler({required Future<Map<String, dynamic>> Function() loadDocument})
-    : _loadDocument = loadDocument;
+  RpcDiscoverRpcHandler({required Future<Map<String, dynamic>> Function() loadDocument}) : _loadDocument = loadDocument;
 
   final Future<Map<String, dynamic>> Function() _loadDocument;
 
@@ -125,6 +124,11 @@ class SqlCancelRpcHandler extends _OperationsRpcMethodHandler {
   @override
   String get method => 'sql.cancel';
 
+  // TODO(security): sql.cancel does not check clientToken — any hub peer that
+  // opened the socket can cancel an active stream if it knows/guesses the
+  // request_id or execution_id. Add the same client-token auth as sql.execute,
+  // binding cancel to the token/session that started the stream.
+  // Tracked in codebase-audit-round5.canvas.tsx (r5-18).
   @override
   Future<RpcResponse> handle(RpcRequest request, RpcDispatchContext context) {
     return operations.handleSqlCancel(request);

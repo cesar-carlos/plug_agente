@@ -294,14 +294,18 @@ class AgentConfigRepository implements IAgentConfigRepository {
   }
 
   Config _mapDataToEntityMetadata(ConfigData data) {
+    // Hub auth credentials must never come from the Drift row directly in the
+    // metadata path — they are always read from IHubSessionStore in the full
+    // getById() flow. Nulling them here prevents legacy plaintext values
+    // (rows written before the secure-store migration) from leaking into
+    // agent.getProfile / health / ODBC metadata consumers.
     return Config(
       id: data.id,
       serverUrl: data.serverUrl,
       agentId: data.agentId,
-      authToken: data.authToken,
-      refreshToken: data.refreshToken,
+      // authToken, refreshToken, authPassword intentionally omitted (default null)
+      // to prevent legacy Drift plaintext values from leaking out.
       authUsername: data.authUsername,
-      authPassword: data.authPassword,
       driverName: data.driverName,
       odbcDriverName: data.odbcDriverName,
       connectionString: data.connectionString,

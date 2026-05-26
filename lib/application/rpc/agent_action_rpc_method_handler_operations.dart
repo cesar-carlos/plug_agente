@@ -1,4 +1,4 @@
-﻿import 'dart:developer' as developer;
+import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/actions/agent_action_remote_rate_limiter.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
@@ -31,37 +31,42 @@ import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:uuid/uuid.dart';
 
-typedef AgentActionRpcInvalidParams = RpcResponse Function(
-  RpcRequest request,
-  String detail, {
-  String? rpcReason,
-  Map<String, dynamic> extraFields,
-});
+typedef AgentActionRpcInvalidParams =
+    RpcResponse Function(
+      RpcRequest request,
+      String detail, {
+      String? rpcReason,
+      Map<String, dynamic> extraFields,
+    });
 
-typedef AgentActionRpcInternalError = RpcResponse Function(
-  RpcRequest request,
-  String detail,
-);
+typedef AgentActionRpcInternalError =
+    RpcResponse Function(
+      RpcRequest request,
+      String detail,
+    );
 
-typedef AgentActionRpcConsumeIdempotentCache = Future<RpcResponse?> Function(
-  RpcRequest request,
-  String? idempotencyKey,
-  String idempotencyFingerprint,
-);
+typedef AgentActionRpcConsumeIdempotentCache =
+    Future<RpcResponse?> Function(
+      RpcRequest request,
+      String? idempotencyKey,
+      String idempotencyFingerprint,
+    );
 
-typedef AgentActionRpcStoreIdempotentSuccess = Future<void> Function({
-  required RpcRequest request,
-  required String? idempotencyKey,
-  required String idempotencyFingerprint,
-  required RpcResponse response,
-});
+typedef AgentActionRpcStoreIdempotentSuccess =
+    Future<void> Function({
+      required RpcRequest request,
+      required String? idempotencyKey,
+      required String idempotencyFingerprint,
+      required RpcResponse response,
+    });
 
-typedef AgentActionRpcRunIdempotentExecution = Future<RpcResponse> Function({
-  required RpcRequest request,
-  required String? idempotencyKey,
-  required String idempotencyFingerprint,
-  required Future<RpcResponse> Function() execute,
-});
+typedef AgentActionRpcRunIdempotentExecution =
+    Future<RpcResponse> Function({
+      required RpcRequest request,
+      required String? idempotencyKey,
+      required String idempotencyFingerprint,
+      required Future<RpcResponse> Function() execute,
+    });
 
 class AgentActionRpcMethodHandlerSupport {
   const AgentActionRpcMethodHandlerSupport({
@@ -165,6 +170,7 @@ class AgentActionRpcMethodHandlerOperations {
     }
     return candidate.toLowerCase();
   }
+
   String? _trimmedAgentActionRpcCorrelationParam(
     RpcRequest request,
     String paramKey,

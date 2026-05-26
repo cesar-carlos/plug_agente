@@ -22,11 +22,16 @@ class CenteredMessage extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 64, color: theme.accentColor),
+            ExcludeSemantics(
+              child: Icon(icon, size: 64, color: theme.accentColor),
+            ),
             const SizedBox(height: AppSpacing.md),
-            Text(
-              title,
-              style: context.sectionTitle.copyWith(fontWeight: FontWeight.w700),
+            Semantics(
+              header: true,
+              child: Text(
+                title,
+                style: context.sectionTitle.copyWith(fontWeight: FontWeight.w700),
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(

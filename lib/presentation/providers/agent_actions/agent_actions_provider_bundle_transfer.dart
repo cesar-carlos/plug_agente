@@ -1,6 +1,10 @@
 part of '../agent_actions_provider.dart';
 
-Future<bool> exportBundleToFileFor(AgentActionsProvider provider, String filePath) async {
+Future<bool> exportBundleToFileFor(
+  AgentActionsProvider provider,
+  String filePath, {
+  required AppLocalizations l10n,
+}) async {
   if (!provider.canTransferBundle) {
     return false;
   }
@@ -23,8 +27,7 @@ Future<bool> exportBundleToFileFor(AgentActionsProvider provider, String filePat
   final writeResult = await provider._bundleFileGateway.writeText(filePath, result.getOrThrow());
   if (writeResult.isError()) {
     provider._isTransferringBundle = false;
-    provider._errorMessage =
-        lookupAppLocalizations(PlatformDispatcher.instance.locale).agentActionsBundleExportWriteFailed;
+    provider._errorMessage = l10n.agentActionsBundleExportWriteFailed;
     provider.notifyListeners();
     return false;
   }
@@ -36,8 +39,9 @@ Future<bool> exportBundleToFileFor(AgentActionsProvider provider, String filePat
 
 Future<ImportAgentActionsBundleSummary?> importBundleFromFileFor(
   AgentActionsProvider provider,
-  String filePath,
-) async {
+  String filePath, {
+  required AppLocalizations l10n,
+}) async {
   if (!provider.canTransferBundle) {
     return null;
   }
@@ -49,8 +53,7 @@ Future<ImportAgentActionsBundleSummary?> importBundleFromFileFor(
   final readResult = await provider._bundleFileGateway.readText(filePath);
   if (readResult.isError()) {
     provider._isTransferringBundle = false;
-    provider._errorMessage =
-        lookupAppLocalizations(PlatformDispatcher.instance.locale).agentActionsBundleImportReadFailed;
+    provider._errorMessage = l10n.agentActionsBundleImportReadFailed;
     provider.notifyListeners();
     return null;
   }

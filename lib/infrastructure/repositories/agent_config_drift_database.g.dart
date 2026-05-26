@@ -3,8 +3,7 @@
 part of 'agent_config_drift_database.dart';
 
 // ignore_for_file: type=lint
-class $ConfigTableTable extends ConfigTable
-    with TableInfo<$ConfigTableTable, ConfigData> {
+class $ConfigTableTable extends ConfigTable with TableInfo<$ConfigTableTable, ConfigData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -330,17 +329,15 @@ class $ConfigTableTable extends ConfigTable
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _hubProfileUpdatedAtMeta =
-      const VerificationMeta('hubProfileUpdatedAt');
+  static const VerificationMeta _hubProfileUpdatedAtMeta = const VerificationMeta('hubProfileUpdatedAt');
   @override
-  late final GeneratedColumn<String> hubProfileUpdatedAt =
-      GeneratedColumn<String>(
-        'hub_profile_updated_at',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<String> hubProfileUpdatedAt = GeneratedColumn<String>(
+    'hub_profile_updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -926,25 +923,15 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       id: Value(id),
       serverUrl: Value(serverUrl),
       agentId: Value(agentId),
-      authToken: authToken == null && nullToAbsent
-          ? const Value.absent()
-          : Value(authToken),
-      refreshToken: refreshToken == null && nullToAbsent
-          ? const Value.absent()
-          : Value(refreshToken),
-      authUsername: authUsername == null && nullToAbsent
-          ? const Value.absent()
-          : Value(authUsername),
-      authPassword: authPassword == null && nullToAbsent
-          ? const Value.absent()
-          : Value(authPassword),
+      authToken: authToken == null && nullToAbsent ? const Value.absent() : Value(authToken),
+      refreshToken: refreshToken == null && nullToAbsent ? const Value.absent() : Value(refreshToken),
+      authUsername: authUsername == null && nullToAbsent ? const Value.absent() : Value(authUsername),
+      authPassword: authPassword == null && nullToAbsent ? const Value.absent() : Value(authPassword),
       driverName: Value(driverName),
       odbcDriverName: Value(odbcDriverName),
       connectionString: Value(connectionString),
       username: Value(username),
-      password: password == null && nullToAbsent
-          ? const Value.absent()
-          : Value(password),
+      password: password == null && nullToAbsent ? const Value.absent() : Value(password),
       databaseName: Value(databaseName),
       host: Value(host),
       port: Value(port),
@@ -961,9 +948,7 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       nomeMunicipio: Value(nomeMunicipio),
       ufMunicipio: Value(ufMunicipio),
       observacao: Value(observacao),
-      hubProfileVersion: hubProfileVersion == null && nullToAbsent
-          ? const Value.absent()
-          : Value(hubProfileVersion),
+      hubProfileVersion: hubProfileVersion == null && nullToAbsent ? const Value.absent() : Value(hubProfileVersion),
       hubProfileUpdatedAt: hubProfileUpdatedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(hubProfileUpdatedAt),
@@ -1115,12 +1100,8 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     nomeMunicipio: nomeMunicipio ?? this.nomeMunicipio,
     ufMunicipio: ufMunicipio ?? this.ufMunicipio,
     observacao: observacao ?? this.observacao,
-    hubProfileVersion: hubProfileVersion.present
-        ? hubProfileVersion.value
-        : this.hubProfileVersion,
-    hubProfileUpdatedAt: hubProfileUpdatedAt.present
-        ? hubProfileUpdatedAt.value
-        : this.hubProfileUpdatedAt,
+    hubProfileVersion: hubProfileVersion.present ? hubProfileVersion.value : this.hubProfileVersion,
+    hubProfileUpdatedAt: hubProfileUpdatedAt.present ? hubProfileUpdatedAt.value : this.hubProfileUpdatedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1130,62 +1111,32 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       serverUrl: data.serverUrl.present ? data.serverUrl.value : this.serverUrl,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
       authToken: data.authToken.present ? data.authToken.value : this.authToken,
-      refreshToken: data.refreshToken.present
-          ? data.refreshToken.value
-          : this.refreshToken,
-      authUsername: data.authUsername.present
-          ? data.authUsername.value
-          : this.authUsername,
-      authPassword: data.authPassword.present
-          ? data.authPassword.value
-          : this.authPassword,
-      driverName: data.driverName.present
-          ? data.driverName.value
-          : this.driverName,
-      odbcDriverName: data.odbcDriverName.present
-          ? data.odbcDriverName.value
-          : this.odbcDriverName,
-      connectionString: data.connectionString.present
-          ? data.connectionString.value
-          : this.connectionString,
+      refreshToken: data.refreshToken.present ? data.refreshToken.value : this.refreshToken,
+      authUsername: data.authUsername.present ? data.authUsername.value : this.authUsername,
+      authPassword: data.authPassword.present ? data.authPassword.value : this.authPassword,
+      driverName: data.driverName.present ? data.driverName.value : this.driverName,
+      odbcDriverName: data.odbcDriverName.present ? data.odbcDriverName.value : this.odbcDriverName,
+      connectionString: data.connectionString.present ? data.connectionString.value : this.connectionString,
       username: data.username.present ? data.username.value : this.username,
       password: data.password.present ? data.password.value : this.password,
-      databaseName: data.databaseName.present
-          ? data.databaseName.value
-          : this.databaseName,
+      databaseName: data.databaseName.present ? data.databaseName.value : this.databaseName,
       host: data.host.present ? data.host.value : this.host,
       port: data.port.present ? data.port.value : this.port,
       nome: data.nome.present ? data.nome.value : this.nome,
-      nomeFantasia: data.nomeFantasia.present
-          ? data.nomeFantasia.value
-          : this.nomeFantasia,
-      cnaeCnpjCpf: data.cnaeCnpjCpf.present
-          ? data.cnaeCnpjCpf.value
-          : this.cnaeCnpjCpf,
+      nomeFantasia: data.nomeFantasia.present ? data.nomeFantasia.value : this.nomeFantasia,
+      cnaeCnpjCpf: data.cnaeCnpjCpf.present ? data.cnaeCnpjCpf.value : this.cnaeCnpjCpf,
       telefone: data.telefone.present ? data.telefone.value : this.telefone,
       celular: data.celular.present ? data.celular.value : this.celular,
       email: data.email.present ? data.email.value : this.email,
       endereco: data.endereco.present ? data.endereco.value : this.endereco,
-      numeroEndereco: data.numeroEndereco.present
-          ? data.numeroEndereco.value
-          : this.numeroEndereco,
+      numeroEndereco: data.numeroEndereco.present ? data.numeroEndereco.value : this.numeroEndereco,
       bairro: data.bairro.present ? data.bairro.value : this.bairro,
       cep: data.cep.present ? data.cep.value : this.cep,
-      nomeMunicipio: data.nomeMunicipio.present
-          ? data.nomeMunicipio.value
-          : this.nomeMunicipio,
-      ufMunicipio: data.ufMunicipio.present
-          ? data.ufMunicipio.value
-          : this.ufMunicipio,
-      observacao: data.observacao.present
-          ? data.observacao.value
-          : this.observacao,
-      hubProfileVersion: data.hubProfileVersion.present
-          ? data.hubProfileVersion.value
-          : this.hubProfileVersion,
-      hubProfileUpdatedAt: data.hubProfileUpdatedAt.present
-          ? data.hubProfileUpdatedAt.value
-          : this.hubProfileUpdatedAt,
+      nomeMunicipio: data.nomeMunicipio.present ? data.nomeMunicipio.value : this.nomeMunicipio,
+      ufMunicipio: data.ufMunicipio.present ? data.ufMunicipio.value : this.ufMunicipio,
+      observacao: data.observacao.present ? data.observacao.value : this.observacao,
+      hubProfileVersion: data.hubProfileVersion.present ? data.hubProfileVersion.value : this.hubProfileVersion,
+      hubProfileUpdatedAt: data.hubProfileUpdatedAt.present ? data.hubProfileUpdatedAt.value : this.hubProfileUpdatedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1480,8 +1431,7 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       if (ufMunicipio != null) 'uf_municipio': ufMunicipio,
       if (observacao != null) 'observacao': observacao,
       if (hubProfileVersion != null) 'hub_profile_version': hubProfileVersion,
-      if (hubProfileUpdatedAt != null)
-        'hub_profile_updated_at': hubProfileUpdatedAt,
+      if (hubProfileUpdatedAt != null) 'hub_profile_updated_at': hubProfileUpdatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1872,20 +1822,18 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
     ),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _globalPermissionsJsonMeta =
-      const VerificationMeta('globalPermissionsJson');
+  static const VerificationMeta _globalPermissionsJsonMeta = const VerificationMeta('globalPermissionsJson');
   @override
-  late final GeneratedColumn<String> globalPermissionsJson =
-      GeneratedColumn<String>(
-        'global_permissions_json',
-        aliasedName,
-        false,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-        defaultValue: const Constant(
-          '{"read":false,"update":false,"delete":false,"ddl":false}',
-        ),
-      );
+  late final GeneratedColumn<String> globalPermissionsJson = GeneratedColumn<String>(
+    'global_permissions_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(
+      '{"read":false,"update":false,"delete":false,"ddl":false}',
+    ),
+  );
   static const VerificationMeta _rulesJsonMeta = const VerificationMeta(
     'rulesJson',
   );
@@ -2159,8 +2107,7 @@ class $ClientTokenCacheTableTable extends ClientTokenCacheTable
   }
 }
 
-class ClientTokenCacheData extends DataClass
-    implements Insertable<ClientTokenCacheData> {
+class ClientTokenCacheData extends DataClass implements Insertable<ClientTokenCacheData> {
   final String id;
   final String clientId;
   final String name;
@@ -2233,16 +2180,10 @@ class ClientTokenCacheData extends DataClass
       name: Value(name),
       isRevoked: Value(isRevoked),
       version: Value(version),
-      agentId: agentId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(agentId),
-      tokenValue: tokenValue == null && nullToAbsent
-          ? const Value.absent()
-          : Value(tokenValue),
+      agentId: agentId == null && nullToAbsent ? const Value.absent() : Value(agentId),
+      tokenValue: tokenValue == null && nullToAbsent ? const Value.absent() : Value(tokenValue),
       createdAt: Value(createdAt),
-      updatedAt: updatedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(updatedAt),
+      updatedAt: updatedAt == null && nullToAbsent ? const Value.absent() : Value(updatedAt),
       payloadJson: Value(payloadJson),
       allTables: Value(allTables),
       allViews: Value(allViews),
@@ -2350,19 +2291,13 @@ class ClientTokenCacheData extends DataClass
       isRevoked: data.isRevoked.present ? data.isRevoked.value : this.isRevoked,
       version: data.version.present ? data.version.value : this.version,
       agentId: data.agentId.present ? data.agentId.value : this.agentId,
-      tokenValue: data.tokenValue.present
-          ? data.tokenValue.value
-          : this.tokenValue,
+      tokenValue: data.tokenValue.present ? data.tokenValue.value : this.tokenValue,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-      payloadJson: data.payloadJson.present
-          ? data.payloadJson.value
-          : this.payloadJson,
+      payloadJson: data.payloadJson.present ? data.payloadJson.value : this.payloadJson,
       allTables: data.allTables.present ? data.allTables.value : this.allTables,
       allViews: data.allViews.present ? data.allViews.value : this.allViews,
-      allPermissions: data.allPermissions.present
-          ? data.allPermissions.value
-          : this.allPermissions,
+      allPermissions: data.allPermissions.present ? data.allPermissions.value : this.allPermissions,
       globalPermissionsJson: data.globalPermissionsJson.present
           ? data.globalPermissionsJson.value
           : this.globalPermissionsJson,
@@ -2439,8 +2374,7 @@ class ClientTokenCacheData extends DataClass
           other.tokenHash == this.tokenHash);
 }
 
-class ClientTokenCacheTableCompanion
-    extends UpdateCompanion<ClientTokenCacheData> {
+class ClientTokenCacheTableCompanion extends UpdateCompanion<ClientTokenCacheData> {
   final Value<String> id;
   final Value<String> clientId;
   final Value<String> name;
@@ -2536,8 +2470,7 @@ class ClientTokenCacheTableCompanion
       if (allTables != null) 'all_tables': allTables,
       if (allViews != null) 'all_views': allViews,
       if (allPermissions != null) 'all_permissions': allPermissions,
-      if (globalPermissionsJson != null)
-        'global_permissions_json': globalPermissionsJson,
+      if (globalPermissionsJson != null) 'global_permissions_json': globalPermissionsJson,
       if (rulesJson != null) 'rules_json': rulesJson,
       if (syncedAt != null) 'synced_at': syncedAt,
       if (tokenHash != null) 'token_hash': tokenHash,
@@ -2579,8 +2512,7 @@ class ClientTokenCacheTableCompanion
       allTables: allTables ?? this.allTables,
       allViews: allViews ?? this.allViews,
       allPermissions: allPermissions ?? this.allPermissions,
-      globalPermissionsJson:
-          globalPermissionsJson ?? this.globalPermissionsJson,
+      globalPermissionsJson: globalPermissionsJson ?? this.globalPermissionsJson,
       rulesJson: rulesJson ?? this.rulesJson,
       syncedAt: syncedAt ?? this.syncedAt,
       tokenHash: tokenHash ?? this.tokenHash,
@@ -2677,8 +2609,7 @@ class ClientTokenCacheTableCompanion
 }
 
 class $AgentActionDefinitionTableTable extends AgentActionDefinitionTable
-    with
-        TableInfo<$AgentActionDefinitionTableTable, AgentActionDefinitionData> {
+    with TableInfo<$AgentActionDefinitionTableTable, AgentActionDefinitionData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -2764,39 +2695,33 @@ class $AgentActionDefinitionTableTable extends AgentActionDefinitionTable
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
-  static const VerificationMeta _definitionSnapshotHashMeta =
-      const VerificationMeta('definitionSnapshotHash');
+  static const VerificationMeta _definitionSnapshotHashMeta = const VerificationMeta('definitionSnapshotHash');
   @override
-  late final GeneratedColumn<String> definitionSnapshotHash =
-      GeneratedColumn<String>(
-        'definition_snapshot_hash',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _lastPreflightSnapshotHashMeta =
-      const VerificationMeta('lastPreflightSnapshotHash');
+  late final GeneratedColumn<String> definitionSnapshotHash = GeneratedColumn<String>(
+    'definition_snapshot_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastPreflightSnapshotHashMeta = const VerificationMeta('lastPreflightSnapshotHash');
   @override
-  late final GeneratedColumn<String> lastPreflightSnapshotHash =
-      GeneratedColumn<String>(
-        'last_preflight_snapshot_hash',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _lastPreflightValidatedAtMeta =
-      const VerificationMeta('lastPreflightValidatedAt');
+  late final GeneratedColumn<String> lastPreflightSnapshotHash = GeneratedColumn<String>(
+    'last_preflight_snapshot_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastPreflightValidatedAtMeta = const VerificationMeta('lastPreflightValidatedAt');
   @override
-  late final GeneratedColumn<DateTime> lastPreflightValidatedAt =
-      GeneratedColumn<DateTime>(
-        'last_preflight_validated_at',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<DateTime> lastPreflightValidatedAt = GeneratedColumn<DateTime>(
+    'last_preflight_validated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -3029,8 +2954,7 @@ class $AgentActionDefinitionTableTable extends AgentActionDefinitionTable
   }
 }
 
-class AgentActionDefinitionData extends DataClass
-    implements Insertable<AgentActionDefinitionData> {
+class AgentActionDefinitionData extends DataClass implements Insertable<AgentActionDefinitionData> {
   final String id;
   final String name;
   final String? description;
@@ -3096,9 +3020,7 @@ class AgentActionDefinitionData extends DataClass
     return AgentActionDefinitionTableCompanion(
       id: Value(id),
       name: Value(name),
-      description: description == null && nullToAbsent
-          ? const Value.absent()
-          : Value(description),
+      description: description == null && nullToAbsent ? const Value.absent() : Value(description),
       type: Value(type),
       state: Value(state),
       configJson: Value(configJson),
@@ -3107,8 +3029,7 @@ class AgentActionDefinitionData extends DataClass
       definitionSnapshotHash: definitionSnapshotHash == null && nullToAbsent
           ? const Value.absent()
           : Value(definitionSnapshotHash),
-      lastPreflightSnapshotHash:
-          lastPreflightSnapshotHash == null && nullToAbsent
+      lastPreflightSnapshotHash: lastPreflightSnapshotHash == null && nullToAbsent
           ? const Value.absent()
           : Value(lastPreflightSnapshotHash),
       lastPreflightValidatedAt: lastPreflightValidatedAt == null && nullToAbsent
@@ -3195,9 +3116,7 @@ class AgentActionDefinitionData extends DataClass
     configJson: configJson ?? this.configJson,
     policiesJson: policiesJson ?? this.policiesJson,
     definitionVersion: definitionVersion ?? this.definitionVersion,
-    definitionSnapshotHash: definitionSnapshotHash.present
-        ? definitionSnapshotHash.value
-        : this.definitionSnapshotHash,
+    definitionSnapshotHash: definitionSnapshotHash.present ? definitionSnapshotHash.value : this.definitionSnapshotHash,
     lastPreflightSnapshotHash: lastPreflightSnapshotHash.present
         ? lastPreflightSnapshotHash.value
         : this.lastPreflightSnapshotHash,
@@ -3213,20 +3132,12 @@ class AgentActionDefinitionData extends DataClass
     return AgentActionDefinitionData(
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
-      description: data.description.present
-          ? data.description.value
-          : this.description,
+      description: data.description.present ? data.description.value : this.description,
       type: data.type.present ? data.type.value : this.type,
       state: data.state.present ? data.state.value : this.state,
-      configJson: data.configJson.present
-          ? data.configJson.value
-          : this.configJson,
-      policiesJson: data.policiesJson.present
-          ? data.policiesJson.value
-          : this.policiesJson,
-      definitionVersion: data.definitionVersion.present
-          ? data.definitionVersion.value
-          : this.definitionVersion,
+      configJson: data.configJson.present ? data.configJson.value : this.configJson,
+      policiesJson: data.policiesJson.present ? data.policiesJson.value : this.policiesJson,
+      definitionVersion: data.definitionVersion.present ? data.definitionVersion.value : this.definitionVersion,
       definitionSnapshotHash: data.definitionSnapshotHash.present
           ? data.definitionSnapshotHash.value
           : this.definitionSnapshotHash,
@@ -3296,8 +3207,7 @@ class AgentActionDefinitionData extends DataClass
           other.updatedAt == this.updatedAt);
 }
 
-class AgentActionDefinitionTableCompanion
-    extends UpdateCompanion<AgentActionDefinitionData> {
+class AgentActionDefinitionTableCompanion extends UpdateCompanion<AgentActionDefinitionData> {
   final Value<String> id;
   final Value<String> name;
   final Value<String?> description;
@@ -3376,12 +3286,9 @@ class AgentActionDefinitionTableCompanion
       if (configJson != null) 'config_json': configJson,
       if (policiesJson != null) 'policies_json': policiesJson,
       if (definitionVersion != null) 'definition_version': definitionVersion,
-      if (definitionSnapshotHash != null)
-        'definition_snapshot_hash': definitionSnapshotHash,
-      if (lastPreflightSnapshotHash != null)
-        'last_preflight_snapshot_hash': lastPreflightSnapshotHash,
-      if (lastPreflightValidatedAt != null)
-        'last_preflight_validated_at': lastPreflightValidatedAt,
+      if (definitionSnapshotHash != null) 'definition_snapshot_hash': definitionSnapshotHash,
+      if (lastPreflightSnapshotHash != null) 'last_preflight_snapshot_hash': lastPreflightSnapshotHash,
+      if (lastPreflightValidatedAt != null) 'last_preflight_validated_at': lastPreflightValidatedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -3413,12 +3320,9 @@ class AgentActionDefinitionTableCompanion
       configJson: configJson ?? this.configJson,
       policiesJson: policiesJson ?? this.policiesJson,
       definitionVersion: definitionVersion ?? this.definitionVersion,
-      definitionSnapshotHash:
-          definitionSnapshotHash ?? this.definitionSnapshotHash,
-      lastPreflightSnapshotHash:
-          lastPreflightSnapshotHash ?? this.lastPreflightSnapshotHash,
-      lastPreflightValidatedAt:
-          lastPreflightValidatedAt ?? this.lastPreflightValidatedAt,
+      definitionSnapshotHash: definitionSnapshotHash ?? this.definitionSnapshotHash,
+      lastPreflightSnapshotHash: lastPreflightSnapshotHash ?? this.lastPreflightSnapshotHash,
+      lastPreflightValidatedAt: lastPreflightValidatedAt ?? this.lastPreflightValidatedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -3575,14 +3479,13 @@ class $AgentActionTriggerTableTable extends AgentActionTriggerTable
     'lastScheduledAt',
   );
   @override
-  late final GeneratedColumn<DateTime> lastScheduledAt =
-      GeneratedColumn<DateTime>(
-        'last_scheduled_at',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<DateTime> lastScheduledAt = GeneratedColumn<DateTime>(
+    'last_scheduled_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _lastRunAtMeta = const VerificationMeta(
     'lastRunAt',
   );
@@ -3796,8 +3699,7 @@ class $AgentActionTriggerTableTable extends AgentActionTriggerTable
   }
 }
 
-class AgentActionTriggerData extends DataClass
-    implements Insertable<AgentActionTriggerData> {
+class AgentActionTriggerData extends DataClass implements Insertable<AgentActionTriggerData> {
   final String id;
   final String actionId;
   final String type;
@@ -3855,15 +3757,9 @@ class AgentActionTriggerData extends DataClass
       name: name == null && nullToAbsent ? const Value.absent() : Value(name),
       isEnabled: Value(isEnabled),
       scheduleJson: Value(scheduleJson),
-      lastScheduledAt: lastScheduledAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(lastScheduledAt),
-      lastRunAt: lastRunAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(lastRunAt),
-      nextRunAt: nextRunAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(nextRunAt),
+      lastScheduledAt: lastScheduledAt == null && nullToAbsent ? const Value.absent() : Value(lastScheduledAt),
+      lastRunAt: lastRunAt == null && nullToAbsent ? const Value.absent() : Value(lastRunAt),
+      nextRunAt: nextRunAt == null && nullToAbsent ? const Value.absent() : Value(nextRunAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -3925,9 +3821,7 @@ class AgentActionTriggerData extends DataClass
     name: name.present ? name.value : this.name,
     isEnabled: isEnabled ?? this.isEnabled,
     scheduleJson: scheduleJson ?? this.scheduleJson,
-    lastScheduledAt: lastScheduledAt.present
-        ? lastScheduledAt.value
-        : this.lastScheduledAt,
+    lastScheduledAt: lastScheduledAt.present ? lastScheduledAt.value : this.lastScheduledAt,
     lastRunAt: lastRunAt.present ? lastRunAt.value : this.lastRunAt,
     nextRunAt: nextRunAt.present ? nextRunAt.value : this.nextRunAt,
     createdAt: createdAt ?? this.createdAt,
@@ -3942,12 +3836,8 @@ class AgentActionTriggerData extends DataClass
       type: data.type.present ? data.type.value : this.type,
       name: data.name.present ? data.name.value : this.name,
       isEnabled: data.isEnabled.present ? data.isEnabled.value : this.isEnabled,
-      scheduleJson: data.scheduleJson.present
-          ? data.scheduleJson.value
-          : this.scheduleJson,
-      lastScheduledAt: data.lastScheduledAt.present
-          ? data.lastScheduledAt.value
-          : this.lastScheduledAt,
+      scheduleJson: data.scheduleJson.present ? data.scheduleJson.value : this.scheduleJson,
+      lastScheduledAt: data.lastScheduledAt.present ? data.lastScheduledAt.value : this.lastScheduledAt,
       lastRunAt: data.lastRunAt.present ? data.lastRunAt.value : this.lastRunAt,
       nextRunAt: data.nextRunAt.present ? data.nextRunAt.value : this.nextRunAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -4004,8 +3894,7 @@ class AgentActionTriggerData extends DataClass
           other.updatedAt == this.updatedAt);
 }
 
-class AgentActionTriggerTableCompanion
-    extends UpdateCompanion<AgentActionTriggerData> {
+class AgentActionTriggerTableCompanion extends UpdateCompanion<AgentActionTriggerData> {
   final Value<String> id;
   final Value<String> actionId;
   final Value<String> type;
@@ -4276,14 +4165,13 @@ class $AgentActionExecutionTableTable extends AgentActionExecutionTable
     'runtimeInstanceId',
   );
   @override
-  late final GeneratedColumn<String> runtimeInstanceId =
-      GeneratedColumn<String>(
-        'runtime_instance_id',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<String> runtimeInstanceId = GeneratedColumn<String>(
+    'runtime_instance_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _runtimeSessionIdMeta = const VerificationMeta(
     'runtimeSessionId',
   );
@@ -4343,26 +4231,24 @@ class $AgentActionExecutionTableTable extends AgentActionExecutionTable
     'queueStartedAt',
   );
   @override
-  late final GeneratedColumn<DateTime> queueStartedAt =
-      GeneratedColumn<DateTime>(
-        'queue_started_at',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<DateTime> queueStartedAt = GeneratedColumn<DateTime>(
+    'queue_started_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _processStartedAtMeta = const VerificationMeta(
     'processStartedAt',
   );
   @override
-  late final GeneratedColumn<DateTime> processStartedAt =
-      GeneratedColumn<DateTime>(
-        'process_started_at',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<DateTime> processStartedAt = GeneratedColumn<DateTime>(
+    'process_started_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _finishedAtMeta = const VerificationMeta(
     'finishedAt',
   );
@@ -4409,16 +4295,14 @@ class $AgentActionExecutionTableTable extends AgentActionExecutionTable
     'processExecutable',
   );
   @override
-  late final GeneratedColumn<String> processExecutable =
-      GeneratedColumn<String>(
-        'process_executable',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _processArgumentCountMeta =
-      const VerificationMeta('processArgumentCount');
+  late final GeneratedColumn<String> processExecutable = GeneratedColumn<String>(
+    'process_executable',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _processArgumentCountMeta = const VerificationMeta('processArgumentCount');
   @override
   late final GeneratedColumn<int> processArgumentCount = GeneratedColumn<int>(
     'process_argument_count',
@@ -4427,17 +4311,15 @@ class $AgentActionExecutionTableTable extends AgentActionExecutionTable
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _processCommandPreviewMeta =
-      const VerificationMeta('processCommandPreview');
+  static const VerificationMeta _processCommandPreviewMeta = const VerificationMeta('processCommandPreview');
   @override
-  late final GeneratedColumn<String> processCommandPreview =
-      GeneratedColumn<String>(
-        'process_command_preview',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<String> processCommandPreview = GeneratedColumn<String>(
+    'process_command_preview',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _stdoutTextMeta = const VerificationMeta(
     'stdoutText',
   );
@@ -4490,8 +4372,7 @@ class $AgentActionExecutionTableTable extends AgentActionExecutionTable
     ),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _stdoutStoredInChunksMeta =
-      const VerificationMeta('stdoutStoredInChunks');
+  static const VerificationMeta _stdoutStoredInChunksMeta = const VerificationMeta('stdoutStoredInChunks');
   @override
   late final GeneratedColumn<bool> stdoutStoredInChunks = GeneratedColumn<bool>(
     'stdout_stored_in_chunks',
@@ -4504,8 +4385,7 @@ class $AgentActionExecutionTableTable extends AgentActionExecutionTable
     ),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _stderrStoredInChunksMeta =
-      const VerificationMeta('stderrStoredInChunks');
+  static const VerificationMeta _stderrStoredInChunksMeta = const VerificationMeta('stderrStoredInChunks');
   @override
   late final GeneratedColumn<bool> stderrStoredInChunks = GeneratedColumn<bool>(
     'stderr_stored_in_chunks',
@@ -4518,17 +4398,15 @@ class $AgentActionExecutionTableTable extends AgentActionExecutionTable
     ),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _definitionSnapshotHashMeta =
-      const VerificationMeta('definitionSnapshotHash');
+  static const VerificationMeta _definitionSnapshotHashMeta = const VerificationMeta('definitionSnapshotHash');
   @override
-  late final GeneratedColumn<String> definitionSnapshotHash =
-      GeneratedColumn<String>(
-        'definition_snapshot_hash',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<String> definitionSnapshotHash = GeneratedColumn<String>(
+    'definition_snapshot_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _contextHashMeta = const VerificationMeta(
     'contextHash',
   );
@@ -5098,8 +4976,7 @@ class $AgentActionExecutionTableTable extends AgentActionExecutionTable
   }
 }
 
-class AgentActionExecutionData extends DataClass
-    implements Insertable<AgentActionExecutionData> {
+class AgentActionExecutionData extends DataClass implements Insertable<AgentActionExecutionData> {
   final String id;
   final String actionId;
   final String actionType;
@@ -5276,64 +5153,30 @@ class AgentActionExecutionData extends DataClass
       status: Value(status),
       requestedAt: Value(requestedAt),
       source: Value(source),
-      idempotencyKey: idempotencyKey == null && nullToAbsent
-          ? const Value.absent()
-          : Value(idempotencyKey),
-      requestedBy: requestedBy == null && nullToAbsent
-          ? const Value.absent()
-          : Value(requestedBy),
-      traceId: traceId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(traceId),
-      runtimeInstanceId: runtimeInstanceId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(runtimeInstanceId),
-      runtimeSessionId: runtimeSessionId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(runtimeSessionId),
-      triggerId: triggerId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(triggerId),
-      triggerType: triggerType == null && nullToAbsent
-          ? const Value.absent()
-          : Value(triggerType),
-      scheduledAt: scheduledAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(scheduledAt),
-      triggeredAt: triggeredAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(triggeredAt),
-      queueStartedAt: queueStartedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(queueStartedAt),
-      processStartedAt: processStartedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(processStartedAt),
-      finishedAt: finishedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(finishedAt),
-      timeoutAt: timeoutAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(timeoutAt),
+      idempotencyKey: idempotencyKey == null && nullToAbsent ? const Value.absent() : Value(idempotencyKey),
+      requestedBy: requestedBy == null && nullToAbsent ? const Value.absent() : Value(requestedBy),
+      traceId: traceId == null && nullToAbsent ? const Value.absent() : Value(traceId),
+      runtimeInstanceId: runtimeInstanceId == null && nullToAbsent ? const Value.absent() : Value(runtimeInstanceId),
+      runtimeSessionId: runtimeSessionId == null && nullToAbsent ? const Value.absent() : Value(runtimeSessionId),
+      triggerId: triggerId == null && nullToAbsent ? const Value.absent() : Value(triggerId),
+      triggerType: triggerType == null && nullToAbsent ? const Value.absent() : Value(triggerType),
+      scheduledAt: scheduledAt == null && nullToAbsent ? const Value.absent() : Value(scheduledAt),
+      triggeredAt: triggeredAt == null && nullToAbsent ? const Value.absent() : Value(triggeredAt),
+      queueStartedAt: queueStartedAt == null && nullToAbsent ? const Value.absent() : Value(queueStartedAt),
+      processStartedAt: processStartedAt == null && nullToAbsent ? const Value.absent() : Value(processStartedAt),
+      finishedAt: finishedAt == null && nullToAbsent ? const Value.absent() : Value(finishedAt),
+      timeoutAt: timeoutAt == null && nullToAbsent ? const Value.absent() : Value(timeoutAt),
       pid: pid == null && nullToAbsent ? const Value.absent() : Value(pid),
-      exitCode: exitCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(exitCode),
-      processExecutable: processExecutable == null && nullToAbsent
-          ? const Value.absent()
-          : Value(processExecutable),
+      exitCode: exitCode == null && nullToAbsent ? const Value.absent() : Value(exitCode),
+      processExecutable: processExecutable == null && nullToAbsent ? const Value.absent() : Value(processExecutable),
       processArgumentCount: processArgumentCount == null && nullToAbsent
           ? const Value.absent()
           : Value(processArgumentCount),
       processCommandPreview: processCommandPreview == null && nullToAbsent
           ? const Value.absent()
           : Value(processCommandPreview),
-      stdoutText: stdoutText == null && nullToAbsent
-          ? const Value.absent()
-          : Value(stdoutText),
-      stderrText: stderrText == null && nullToAbsent
-          ? const Value.absent()
-          : Value(stderrText),
+      stdoutText: stdoutText == null && nullToAbsent ? const Value.absent() : Value(stdoutText),
+      stderrText: stderrText == null && nullToAbsent ? const Value.absent() : Value(stderrText),
       stdoutTruncated: Value(stdoutTruncated),
       stderrTruncated: Value(stderrTruncated),
       stdoutStoredInChunks: Value(stdoutStoredInChunks),
@@ -5341,19 +5184,11 @@ class AgentActionExecutionData extends DataClass
       definitionSnapshotHash: definitionSnapshotHash == null && nullToAbsent
           ? const Value.absent()
           : Value(definitionSnapshotHash),
-      contextHash: contextHash == null && nullToAbsent
-          ? const Value.absent()
-          : Value(contextHash),
+      contextHash: contextHash == null && nullToAbsent ? const Value.absent() : Value(contextHash),
       redactionApplied: Value(redactionApplied),
-      failureCode: failureCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(failureCode),
-      failurePhase: failurePhase == null && nullToAbsent
-          ? const Value.absent()
-          : Value(failurePhase),
-      failureMessage: failureMessage == null && nullToAbsent
-          ? const Value.absent()
-          : Value(failureMessage),
+      failureCode: failureCode == null && nullToAbsent ? const Value.absent() : Value(failureCode),
+      failurePhase: failurePhase == null && nullToAbsent ? const Value.absent() : Value(failurePhase),
+      failureMessage: failureMessage == null && nullToAbsent ? const Value.absent() : Value(failureMessage),
     );
   }
 
@@ -5508,56 +5343,36 @@ class AgentActionExecutionData extends DataClass
     status: status ?? this.status,
     requestedAt: requestedAt ?? this.requestedAt,
     source: source ?? this.source,
-    idempotencyKey: idempotencyKey.present
-        ? idempotencyKey.value
-        : this.idempotencyKey,
+    idempotencyKey: idempotencyKey.present ? idempotencyKey.value : this.idempotencyKey,
     requestedBy: requestedBy.present ? requestedBy.value : this.requestedBy,
     traceId: traceId.present ? traceId.value : this.traceId,
-    runtimeInstanceId: runtimeInstanceId.present
-        ? runtimeInstanceId.value
-        : this.runtimeInstanceId,
-    runtimeSessionId: runtimeSessionId.present
-        ? runtimeSessionId.value
-        : this.runtimeSessionId,
+    runtimeInstanceId: runtimeInstanceId.present ? runtimeInstanceId.value : this.runtimeInstanceId,
+    runtimeSessionId: runtimeSessionId.present ? runtimeSessionId.value : this.runtimeSessionId,
     triggerId: triggerId.present ? triggerId.value : this.triggerId,
     triggerType: triggerType.present ? triggerType.value : this.triggerType,
     scheduledAt: scheduledAt.present ? scheduledAt.value : this.scheduledAt,
     triggeredAt: triggeredAt.present ? triggeredAt.value : this.triggeredAt,
-    queueStartedAt: queueStartedAt.present
-        ? queueStartedAt.value
-        : this.queueStartedAt,
-    processStartedAt: processStartedAt.present
-        ? processStartedAt.value
-        : this.processStartedAt,
+    queueStartedAt: queueStartedAt.present ? queueStartedAt.value : this.queueStartedAt,
+    processStartedAt: processStartedAt.present ? processStartedAt.value : this.processStartedAt,
     finishedAt: finishedAt.present ? finishedAt.value : this.finishedAt,
     timeoutAt: timeoutAt.present ? timeoutAt.value : this.timeoutAt,
     pid: pid.present ? pid.value : this.pid,
     exitCode: exitCode.present ? exitCode.value : this.exitCode,
-    processExecutable: processExecutable.present
-        ? processExecutable.value
-        : this.processExecutable,
-    processArgumentCount: processArgumentCount.present
-        ? processArgumentCount.value
-        : this.processArgumentCount,
-    processCommandPreview: processCommandPreview.present
-        ? processCommandPreview.value
-        : this.processCommandPreview,
+    processExecutable: processExecutable.present ? processExecutable.value : this.processExecutable,
+    processArgumentCount: processArgumentCount.present ? processArgumentCount.value : this.processArgumentCount,
+    processCommandPreview: processCommandPreview.present ? processCommandPreview.value : this.processCommandPreview,
     stdoutText: stdoutText.present ? stdoutText.value : this.stdoutText,
     stderrText: stderrText.present ? stderrText.value : this.stderrText,
     stdoutTruncated: stdoutTruncated ?? this.stdoutTruncated,
     stderrTruncated: stderrTruncated ?? this.stderrTruncated,
     stdoutStoredInChunks: stdoutStoredInChunks ?? this.stdoutStoredInChunks,
     stderrStoredInChunks: stderrStoredInChunks ?? this.stderrStoredInChunks,
-    definitionSnapshotHash: definitionSnapshotHash.present
-        ? definitionSnapshotHash.value
-        : this.definitionSnapshotHash,
+    definitionSnapshotHash: definitionSnapshotHash.present ? definitionSnapshotHash.value : this.definitionSnapshotHash,
     contextHash: contextHash.present ? contextHash.value : this.contextHash,
     redactionApplied: redactionApplied ?? this.redactionApplied,
     failureCode: failureCode.present ? failureCode.value : this.failureCode,
     failurePhase: failurePhase.present ? failurePhase.value : this.failurePhase,
-    failureMessage: failureMessage.present
-        ? failureMessage.value
-        : this.failureMessage,
+    failureMessage: failureMessage.present ? failureMessage.value : this.failureMessage,
   );
   AgentActionExecutionData copyWithCompanion(
     AgentActionExecutionTableCompanion data,
@@ -5565,70 +5380,36 @@ class AgentActionExecutionData extends DataClass
     return AgentActionExecutionData(
       id: data.id.present ? data.id.value : this.id,
       actionId: data.actionId.present ? data.actionId.value : this.actionId,
-      actionType: data.actionType.present
-          ? data.actionType.value
-          : this.actionType,
+      actionType: data.actionType.present ? data.actionType.value : this.actionType,
       status: data.status.present ? data.status.value : this.status,
-      requestedAt: data.requestedAt.present
-          ? data.requestedAt.value
-          : this.requestedAt,
+      requestedAt: data.requestedAt.present ? data.requestedAt.value : this.requestedAt,
       source: data.source.present ? data.source.value : this.source,
-      idempotencyKey: data.idempotencyKey.present
-          ? data.idempotencyKey.value
-          : this.idempotencyKey,
-      requestedBy: data.requestedBy.present
-          ? data.requestedBy.value
-          : this.requestedBy,
+      idempotencyKey: data.idempotencyKey.present ? data.idempotencyKey.value : this.idempotencyKey,
+      requestedBy: data.requestedBy.present ? data.requestedBy.value : this.requestedBy,
       traceId: data.traceId.present ? data.traceId.value : this.traceId,
-      runtimeInstanceId: data.runtimeInstanceId.present
-          ? data.runtimeInstanceId.value
-          : this.runtimeInstanceId,
-      runtimeSessionId: data.runtimeSessionId.present
-          ? data.runtimeSessionId.value
-          : this.runtimeSessionId,
+      runtimeInstanceId: data.runtimeInstanceId.present ? data.runtimeInstanceId.value : this.runtimeInstanceId,
+      runtimeSessionId: data.runtimeSessionId.present ? data.runtimeSessionId.value : this.runtimeSessionId,
       triggerId: data.triggerId.present ? data.triggerId.value : this.triggerId,
-      triggerType: data.triggerType.present
-          ? data.triggerType.value
-          : this.triggerType,
-      scheduledAt: data.scheduledAt.present
-          ? data.scheduledAt.value
-          : this.scheduledAt,
-      triggeredAt: data.triggeredAt.present
-          ? data.triggeredAt.value
-          : this.triggeredAt,
-      queueStartedAt: data.queueStartedAt.present
-          ? data.queueStartedAt.value
-          : this.queueStartedAt,
-      processStartedAt: data.processStartedAt.present
-          ? data.processStartedAt.value
-          : this.processStartedAt,
-      finishedAt: data.finishedAt.present
-          ? data.finishedAt.value
-          : this.finishedAt,
+      triggerType: data.triggerType.present ? data.triggerType.value : this.triggerType,
+      scheduledAt: data.scheduledAt.present ? data.scheduledAt.value : this.scheduledAt,
+      triggeredAt: data.triggeredAt.present ? data.triggeredAt.value : this.triggeredAt,
+      queueStartedAt: data.queueStartedAt.present ? data.queueStartedAt.value : this.queueStartedAt,
+      processStartedAt: data.processStartedAt.present ? data.processStartedAt.value : this.processStartedAt,
+      finishedAt: data.finishedAt.present ? data.finishedAt.value : this.finishedAt,
       timeoutAt: data.timeoutAt.present ? data.timeoutAt.value : this.timeoutAt,
       pid: data.pid.present ? data.pid.value : this.pid,
       exitCode: data.exitCode.present ? data.exitCode.value : this.exitCode,
-      processExecutable: data.processExecutable.present
-          ? data.processExecutable.value
-          : this.processExecutable,
+      processExecutable: data.processExecutable.present ? data.processExecutable.value : this.processExecutable,
       processArgumentCount: data.processArgumentCount.present
           ? data.processArgumentCount.value
           : this.processArgumentCount,
       processCommandPreview: data.processCommandPreview.present
           ? data.processCommandPreview.value
           : this.processCommandPreview,
-      stdoutText: data.stdoutText.present
-          ? data.stdoutText.value
-          : this.stdoutText,
-      stderrText: data.stderrText.present
-          ? data.stderrText.value
-          : this.stderrText,
-      stdoutTruncated: data.stdoutTruncated.present
-          ? data.stdoutTruncated.value
-          : this.stdoutTruncated,
-      stderrTruncated: data.stderrTruncated.present
-          ? data.stderrTruncated.value
-          : this.stderrTruncated,
+      stdoutText: data.stdoutText.present ? data.stdoutText.value : this.stdoutText,
+      stderrText: data.stderrText.present ? data.stderrText.value : this.stderrText,
+      stdoutTruncated: data.stdoutTruncated.present ? data.stdoutTruncated.value : this.stdoutTruncated,
+      stderrTruncated: data.stderrTruncated.present ? data.stderrTruncated.value : this.stderrTruncated,
       stdoutStoredInChunks: data.stdoutStoredInChunks.present
           ? data.stdoutStoredInChunks.value
           : this.stdoutStoredInChunks,
@@ -5638,21 +5419,11 @@ class AgentActionExecutionData extends DataClass
       definitionSnapshotHash: data.definitionSnapshotHash.present
           ? data.definitionSnapshotHash.value
           : this.definitionSnapshotHash,
-      contextHash: data.contextHash.present
-          ? data.contextHash.value
-          : this.contextHash,
-      redactionApplied: data.redactionApplied.present
-          ? data.redactionApplied.value
-          : this.redactionApplied,
-      failureCode: data.failureCode.present
-          ? data.failureCode.value
-          : this.failureCode,
-      failurePhase: data.failurePhase.present
-          ? data.failurePhase.value
-          : this.failurePhase,
-      failureMessage: data.failureMessage.present
-          ? data.failureMessage.value
-          : this.failureMessage,
+      contextHash: data.contextHash.present ? data.contextHash.value : this.contextHash,
+      redactionApplied: data.redactionApplied.present ? data.redactionApplied.value : this.redactionApplied,
+      failureCode: data.failureCode.present ? data.failureCode.value : this.failureCode,
+      failurePhase: data.failurePhase.present ? data.failurePhase.value : this.failurePhase,
+      failureMessage: data.failureMessage.present ? data.failureMessage.value : this.failureMessage,
     );
   }
 
@@ -5780,8 +5551,7 @@ class AgentActionExecutionData extends DataClass
           other.failureMessage == this.failureMessage);
 }
 
-class AgentActionExecutionTableCompanion
-    extends UpdateCompanion<AgentActionExecutionData> {
+class AgentActionExecutionTableCompanion extends UpdateCompanion<AgentActionExecutionData> {
   final Value<String> id;
   final Value<String> actionId;
   final Value<String> actionType;
@@ -5964,20 +5734,15 @@ class AgentActionExecutionTableCompanion
       if (pid != null) 'pid': pid,
       if (exitCode != null) 'exit_code': exitCode,
       if (processExecutable != null) 'process_executable': processExecutable,
-      if (processArgumentCount != null)
-        'process_argument_count': processArgumentCount,
-      if (processCommandPreview != null)
-        'process_command_preview': processCommandPreview,
+      if (processArgumentCount != null) 'process_argument_count': processArgumentCount,
+      if (processCommandPreview != null) 'process_command_preview': processCommandPreview,
       if (stdoutText != null) 'stdout_text': stdoutText,
       if (stderrText != null) 'stderr_text': stderrText,
       if (stdoutTruncated != null) 'stdout_truncated': stdoutTruncated,
       if (stderrTruncated != null) 'stderr_truncated': stderrTruncated,
-      if (stdoutStoredInChunks != null)
-        'stdout_stored_in_chunks': stdoutStoredInChunks,
-      if (stderrStoredInChunks != null)
-        'stderr_stored_in_chunks': stderrStoredInChunks,
-      if (definitionSnapshotHash != null)
-        'definition_snapshot_hash': definitionSnapshotHash,
+      if (stdoutStoredInChunks != null) 'stdout_stored_in_chunks': stdoutStoredInChunks,
+      if (stderrStoredInChunks != null) 'stderr_stored_in_chunks': stderrStoredInChunks,
+      if (definitionSnapshotHash != null) 'definition_snapshot_hash': definitionSnapshotHash,
       if (contextHash != null) 'context_hash': contextHash,
       if (redactionApplied != null) 'redaction_applied': redactionApplied,
       if (failureCode != null) 'failure_code': failureCode,
@@ -6050,16 +5815,14 @@ class AgentActionExecutionTableCompanion
       exitCode: exitCode ?? this.exitCode,
       processExecutable: processExecutable ?? this.processExecutable,
       processArgumentCount: processArgumentCount ?? this.processArgumentCount,
-      processCommandPreview:
-          processCommandPreview ?? this.processCommandPreview,
+      processCommandPreview: processCommandPreview ?? this.processCommandPreview,
       stdoutText: stdoutText ?? this.stdoutText,
       stderrText: stderrText ?? this.stderrText,
       stdoutTruncated: stdoutTruncated ?? this.stdoutTruncated,
       stderrTruncated: stderrTruncated ?? this.stderrTruncated,
       stdoutStoredInChunks: stdoutStoredInChunks ?? this.stdoutStoredInChunks,
       stderrStoredInChunks: stderrStoredInChunks ?? this.stderrStoredInChunks,
-      definitionSnapshotHash:
-          definitionSnapshotHash ?? this.definitionSnapshotHash,
+      definitionSnapshotHash: definitionSnapshotHash ?? this.definitionSnapshotHash,
       contextHash: contextHash ?? this.contextHash,
       redactionApplied: redactionApplied ?? this.redactionApplied,
       failureCode: failureCode ?? this.failureCode,
@@ -6267,17 +6030,15 @@ class $RpcIdempotencyCacheTableTable extends RpcIdempotencyCacheTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _requestFingerprintMeta =
-      const VerificationMeta('requestFingerprint');
+  static const VerificationMeta _requestFingerprintMeta = const VerificationMeta('requestFingerprint');
   @override
-  late final GeneratedColumn<String> requestFingerprint =
-      GeneratedColumn<String>(
-        'request_fingerprint',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<String> requestFingerprint = GeneratedColumn<String>(
+    'request_fingerprint',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _expiresAtMeta = const VerificationMeta(
     'expiresAt',
   );
@@ -6405,8 +6166,7 @@ class $RpcIdempotencyCacheTableTable extends RpcIdempotencyCacheTable
   }
 }
 
-class RpcIdempotencyCacheData extends DataClass
-    implements Insertable<RpcIdempotencyCacheData> {
+class RpcIdempotencyCacheData extends DataClass implements Insertable<RpcIdempotencyCacheData> {
   final String cacheKey;
   final String responseJson;
   final String? requestFingerprint;
@@ -6436,9 +6196,7 @@ class RpcIdempotencyCacheData extends DataClass
     return RpcIdempotencyCacheTableCompanion(
       cacheKey: Value(cacheKey),
       responseJson: Value(responseJson),
-      requestFingerprint: requestFingerprint == null && nullToAbsent
-          ? const Value.absent()
-          : Value(requestFingerprint),
+      requestFingerprint: requestFingerprint == null && nullToAbsent ? const Value.absent() : Value(requestFingerprint),
       expiresAt: Value(expiresAt),
       updatedAt: Value(updatedAt),
     );
@@ -6480,9 +6238,7 @@ class RpcIdempotencyCacheData extends DataClass
   }) => RpcIdempotencyCacheData(
     cacheKey: cacheKey ?? this.cacheKey,
     responseJson: responseJson ?? this.responseJson,
-    requestFingerprint: requestFingerprint.present
-        ? requestFingerprint.value
-        : this.requestFingerprint,
+    requestFingerprint: requestFingerprint.present ? requestFingerprint.value : this.requestFingerprint,
     expiresAt: expiresAt ?? this.expiresAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -6491,12 +6247,8 @@ class RpcIdempotencyCacheData extends DataClass
   ) {
     return RpcIdempotencyCacheData(
       cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
-      responseJson: data.responseJson.present
-          ? data.responseJson.value
-          : this.responseJson,
-      requestFingerprint: data.requestFingerprint.present
-          ? data.requestFingerprint.value
-          : this.requestFingerprint,
+      responseJson: data.responseJson.present ? data.responseJson.value : this.responseJson,
+      requestFingerprint: data.requestFingerprint.present ? data.requestFingerprint.value : this.requestFingerprint,
       expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -6533,8 +6285,7 @@ class RpcIdempotencyCacheData extends DataClass
           other.updatedAt == this.updatedAt);
 }
 
-class RpcIdempotencyCacheTableCompanion
-    extends UpdateCompanion<RpcIdempotencyCacheData> {
+class RpcIdempotencyCacheTableCompanion extends UpdateCompanion<RpcIdempotencyCacheData> {
   final Value<String> cacheKey;
   final Value<String> responseJson;
   final Value<String?> requestFingerprint;
@@ -6635,11 +6386,7 @@ class RpcIdempotencyCacheTableCompanion
 }
 
 class $AgentActionRemoteAuditTableTable extends AgentActionRemoteAuditTable
-    with
-        TableInfo<
-          $AgentActionRemoteAuditTableTable,
-          AgentActionRemoteAuditData
-        > {
+    with TableInfo<$AgentActionRemoteAuditTableTable, AgentActionRemoteAuditData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -6793,14 +6540,13 @@ class $AgentActionRemoteAuditTableTable extends AgentActionRemoteAuditTable
     'runtimeInstanceId',
   );
   @override
-  late final GeneratedColumn<String> runtimeInstanceId =
-      GeneratedColumn<String>(
-        'runtime_instance_id',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<String> runtimeInstanceId = GeneratedColumn<String>(
+    'runtime_instance_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _runtimeSessionIdMeta = const VerificationMeta(
     'runtimeSessionId',
   );
@@ -7061,8 +6807,7 @@ class $AgentActionRemoteAuditTableTable extends AgentActionRemoteAuditTable
   }
 }
 
-class AgentActionRemoteAuditData extends DataClass
-    implements Insertable<AgentActionRemoteAuditData> {
+class AgentActionRemoteAuditData extends DataClass implements Insertable<AgentActionRemoteAuditData> {
   final String id;
   final DateTime occurredAt;
   final String rpcMethod;
@@ -7146,41 +6891,19 @@ class AgentActionRemoteAuditData extends DataClass
       id: Value(id),
       occurredAt: Value(occurredAt),
       rpcMethod: Value(rpcMethod),
-      actionId: actionId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(actionId),
-      executionId: executionId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(executionId),
-      traceId: traceId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(traceId),
-      requestedBy: requestedBy == null && nullToAbsent
-          ? const Value.absent()
-          : Value(requestedBy),
+      actionId: actionId == null && nullToAbsent ? const Value.absent() : Value(actionId),
+      executionId: executionId == null && nullToAbsent ? const Value.absent() : Value(executionId),
+      traceId: traceId == null && nullToAbsent ? const Value.absent() : Value(traceId),
+      requestedBy: requestedBy == null && nullToAbsent ? const Value.absent() : Value(requestedBy),
       outcome: Value(outcome),
-      reasonCode: reasonCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(reasonCode),
-      rpcErrorCode: rpcErrorCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(rpcErrorCode),
+      reasonCode: reasonCode == null && nullToAbsent ? const Value.absent() : Value(reasonCode),
+      rpcErrorCode: rpcErrorCode == null && nullToAbsent ? const Value.absent() : Value(rpcErrorCode),
       credentialPresent: Value(credentialPresent),
-      clientId: clientId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(clientId),
-      tokenJti: tokenJti == null && nullToAbsent
-          ? const Value.absent()
-          : Value(tokenJti),
-      runtimeInstanceId: runtimeInstanceId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(runtimeInstanceId),
-      runtimeSessionId: runtimeSessionId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(runtimeSessionId),
-      idempotencyKey: idempotencyKey == null && nullToAbsent
-          ? const Value.absent()
-          : Value(idempotencyKey),
+      clientId: clientId == null && nullToAbsent ? const Value.absent() : Value(clientId),
+      tokenJti: tokenJti == null && nullToAbsent ? const Value.absent() : Value(tokenJti),
+      runtimeInstanceId: runtimeInstanceId == null && nullToAbsent ? const Value.absent() : Value(runtimeInstanceId),
+      runtimeSessionId: runtimeSessionId == null && nullToAbsent ? const Value.absent() : Value(runtimeSessionId),
+      idempotencyKey: idempotencyKey == null && nullToAbsent ? const Value.absent() : Value(idempotencyKey),
     );
   }
 
@@ -7264,54 +6987,30 @@ class AgentActionRemoteAuditData extends DataClass
     credentialPresent: credentialPresent ?? this.credentialPresent,
     clientId: clientId.present ? clientId.value : this.clientId,
     tokenJti: tokenJti.present ? tokenJti.value : this.tokenJti,
-    runtimeInstanceId: runtimeInstanceId.present
-        ? runtimeInstanceId.value
-        : this.runtimeInstanceId,
-    runtimeSessionId: runtimeSessionId.present
-        ? runtimeSessionId.value
-        : this.runtimeSessionId,
-    idempotencyKey: idempotencyKey.present
-        ? idempotencyKey.value
-        : this.idempotencyKey,
+    runtimeInstanceId: runtimeInstanceId.present ? runtimeInstanceId.value : this.runtimeInstanceId,
+    runtimeSessionId: runtimeSessionId.present ? runtimeSessionId.value : this.runtimeSessionId,
+    idempotencyKey: idempotencyKey.present ? idempotencyKey.value : this.idempotencyKey,
   );
   AgentActionRemoteAuditData copyWithCompanion(
     AgentActionRemoteAuditTableCompanion data,
   ) {
     return AgentActionRemoteAuditData(
       id: data.id.present ? data.id.value : this.id,
-      occurredAt: data.occurredAt.present
-          ? data.occurredAt.value
-          : this.occurredAt,
+      occurredAt: data.occurredAt.present ? data.occurredAt.value : this.occurredAt,
       rpcMethod: data.rpcMethod.present ? data.rpcMethod.value : this.rpcMethod,
       actionId: data.actionId.present ? data.actionId.value : this.actionId,
-      executionId: data.executionId.present
-          ? data.executionId.value
-          : this.executionId,
+      executionId: data.executionId.present ? data.executionId.value : this.executionId,
       traceId: data.traceId.present ? data.traceId.value : this.traceId,
-      requestedBy: data.requestedBy.present
-          ? data.requestedBy.value
-          : this.requestedBy,
+      requestedBy: data.requestedBy.present ? data.requestedBy.value : this.requestedBy,
       outcome: data.outcome.present ? data.outcome.value : this.outcome,
-      reasonCode: data.reasonCode.present
-          ? data.reasonCode.value
-          : this.reasonCode,
-      rpcErrorCode: data.rpcErrorCode.present
-          ? data.rpcErrorCode.value
-          : this.rpcErrorCode,
-      credentialPresent: data.credentialPresent.present
-          ? data.credentialPresent.value
-          : this.credentialPresent,
+      reasonCode: data.reasonCode.present ? data.reasonCode.value : this.reasonCode,
+      rpcErrorCode: data.rpcErrorCode.present ? data.rpcErrorCode.value : this.rpcErrorCode,
+      credentialPresent: data.credentialPresent.present ? data.credentialPresent.value : this.credentialPresent,
       clientId: data.clientId.present ? data.clientId.value : this.clientId,
       tokenJti: data.tokenJti.present ? data.tokenJti.value : this.tokenJti,
-      runtimeInstanceId: data.runtimeInstanceId.present
-          ? data.runtimeInstanceId.value
-          : this.runtimeInstanceId,
-      runtimeSessionId: data.runtimeSessionId.present
-          ? data.runtimeSessionId.value
-          : this.runtimeSessionId,
-      idempotencyKey: data.idempotencyKey.present
-          ? data.idempotencyKey.value
-          : this.idempotencyKey,
+      runtimeInstanceId: data.runtimeInstanceId.present ? data.runtimeInstanceId.value : this.runtimeInstanceId,
+      runtimeSessionId: data.runtimeSessionId.present ? data.runtimeSessionId.value : this.runtimeSessionId,
+      idempotencyKey: data.idempotencyKey.present ? data.idempotencyKey.value : this.idempotencyKey,
     );
   }
 
@@ -7379,8 +7078,7 @@ class AgentActionRemoteAuditData extends DataClass
           other.idempotencyKey == this.idempotencyKey);
 }
 
-class AgentActionRemoteAuditTableCompanion
-    extends UpdateCompanion<AgentActionRemoteAuditData> {
+class AgentActionRemoteAuditTableCompanion extends UpdateCompanion<AgentActionRemoteAuditData> {
   final Value<String> id;
   final Value<DateTime> occurredAt;
   final Value<String> rpcMethod;
@@ -7601,13 +7299,8 @@ class AgentActionRemoteAuditTableCompanion
   }
 }
 
-class $AgentActionCapturedOutputChunkTableTable
-    extends AgentActionCapturedOutputChunkTable
-    with
-        TableInfo<
-          $AgentActionCapturedOutputChunkTableTable,
-          AgentActionCapturedOutputChunkData
-        > {
+class $AgentActionCapturedOutputChunkTableTable extends AgentActionCapturedOutputChunkTable
+    with TableInfo<$AgentActionCapturedOutputChunkTableTable, AgentActionCapturedOutputChunkData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -7772,8 +7465,7 @@ class $AgentActionCapturedOutputChunkTableTable
   }
 }
 
-class AgentActionCapturedOutputChunkData extends DataClass
-    implements Insertable<AgentActionCapturedOutputChunkData> {
+class AgentActionCapturedOutputChunkData extends DataClass implements Insertable<AgentActionCapturedOutputChunkData> {
   final String executionId;
   final String stream;
   final int chunkIndex;
@@ -7849,16 +7541,10 @@ class AgentActionCapturedOutputChunkData extends DataClass
     AgentActionCapturedOutputChunkTableCompanion data,
   ) {
     return AgentActionCapturedOutputChunkData(
-      executionId: data.executionId.present
-          ? data.executionId.value
-          : this.executionId,
+      executionId: data.executionId.present ? data.executionId.value : this.executionId,
       stream: data.stream.present ? data.stream.value : this.stream,
-      chunkIndex: data.chunkIndex.present
-          ? data.chunkIndex.value
-          : this.chunkIndex,
-      utf8Offset: data.utf8Offset.present
-          ? data.utf8Offset.value
-          : this.utf8Offset,
+      chunkIndex: data.chunkIndex.present ? data.chunkIndex.value : this.chunkIndex,
+      utf8Offset: data.utf8Offset.present ? data.utf8Offset.value : this.utf8Offset,
       payload: data.payload.present ? data.payload.value : this.payload,
     );
   }
@@ -7876,8 +7562,7 @@ class AgentActionCapturedOutputChunkData extends DataClass
   }
 
   @override
-  int get hashCode =>
-      Object.hash(executionId, stream, chunkIndex, utf8Offset, payload);
+  int get hashCode => Object.hash(executionId, stream, chunkIndex, utf8Offset, payload);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -7889,8 +7574,7 @@ class AgentActionCapturedOutputChunkData extends DataClass
           other.payload == this.payload);
 }
 
-class AgentActionCapturedOutputChunkTableCompanion
-    extends UpdateCompanion<AgentActionCapturedOutputChunkData> {
+class AgentActionCapturedOutputChunkTableCompanion extends UpdateCompanion<AgentActionCapturedOutputChunkData> {
   final Value<String> executionId;
   final Value<String> stream;
   final Value<int> chunkIndex;
@@ -7995,24 +7679,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ConfigTableTable configTable = $ConfigTableTable(this);
-  late final $ClientTokenCacheTableTable clientTokenCacheTable =
-      $ClientTokenCacheTableTable(this);
-  late final $AgentActionDefinitionTableTable agentActionDefinitionTable =
-      $AgentActionDefinitionTableTable(this);
-  late final $AgentActionTriggerTableTable agentActionTriggerTable =
-      $AgentActionTriggerTableTable(this);
-  late final $AgentActionExecutionTableTable agentActionExecutionTable =
-      $AgentActionExecutionTableTable(this);
-  late final $RpcIdempotencyCacheTableTable rpcIdempotencyCacheTable =
-      $RpcIdempotencyCacheTableTable(this);
-  late final $AgentActionRemoteAuditTableTable agentActionRemoteAuditTable =
-      $AgentActionRemoteAuditTableTable(this);
-  late final $AgentActionCapturedOutputChunkTableTable
-  agentActionCapturedOutputChunkTable =
+  late final $ClientTokenCacheTableTable clientTokenCacheTable = $ClientTokenCacheTableTable(this);
+  late final $AgentActionDefinitionTableTable agentActionDefinitionTable = $AgentActionDefinitionTableTable(this);
+  late final $AgentActionTriggerTableTable agentActionTriggerTable = $AgentActionTriggerTableTable(this);
+  late final $AgentActionExecutionTableTable agentActionExecutionTable = $AgentActionExecutionTableTable(this);
+  late final $RpcIdempotencyCacheTableTable rpcIdempotencyCacheTable = $RpcIdempotencyCacheTableTable(this);
+  late final $AgentActionRemoteAuditTableTable agentActionRemoteAuditTable = $AgentActionRemoteAuditTableTable(this);
+  late final $AgentActionCapturedOutputChunkTableTable agentActionCapturedOutputChunkTable =
       $AgentActionCapturedOutputChunkTableTable(this);
   @override
-  Iterable<TableInfo<Table, Object?>> get allTables =>
-      allSchemaEntities.whereType<TableInfo<Table, Object?>>();
+  Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     configTable,
@@ -8099,8 +7775,7 @@ typedef $$ConfigTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$ConfigTableTableFilterComposer
-    extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableFilterComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -8269,8 +7944,7 @@ class $$ConfigTableTableFilterComposer
   );
 }
 
-class $$ConfigTableTableOrderingComposer
-    extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableOrderingComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -8439,8 +8113,7 @@ class $$ConfigTableTableOrderingComposer
   );
 }
 
-class $$ConfigTableTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ConfigTableTable> {
+class $$ConfigTableTableAnnotationComposer extends Composer<_$AppDatabase, $ConfigTableTable> {
   $$ConfigTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -8448,17 +8121,13 @@ class $$ConfigTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get serverUrl =>
-      $composableBuilder(column: $table.serverUrl, builder: (column) => column);
+  GeneratedColumn<String> get serverUrl => $composableBuilder(column: $table.serverUrl, builder: (column) => column);
 
-  GeneratedColumn<String> get agentId =>
-      $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
 
-  GeneratedColumn<String> get authToken =>
-      $composableBuilder(column: $table.authToken, builder: (column) => column);
+  GeneratedColumn<String> get authToken => $composableBuilder(column: $table.authToken, builder: (column) => column);
 
   GeneratedColumn<String> get refreshToken => $composableBuilder(
     column: $table.refreshToken,
@@ -8490,25 +8159,20 @@ class $$ConfigTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get username =>
-      $composableBuilder(column: $table.username, builder: (column) => column);
+  GeneratedColumn<String> get username => $composableBuilder(column: $table.username, builder: (column) => column);
 
-  GeneratedColumn<String> get password =>
-      $composableBuilder(column: $table.password, builder: (column) => column);
+  GeneratedColumn<String> get password => $composableBuilder(column: $table.password, builder: (column) => column);
 
   GeneratedColumn<String> get databaseName => $composableBuilder(
     column: $table.databaseName,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get host =>
-      $composableBuilder(column: $table.host, builder: (column) => column);
+  GeneratedColumn<String> get host => $composableBuilder(column: $table.host, builder: (column) => column);
 
-  GeneratedColumn<int> get port =>
-      $composableBuilder(column: $table.port, builder: (column) => column);
+  GeneratedColumn<int> get port => $composableBuilder(column: $table.port, builder: (column) => column);
 
-  GeneratedColumn<String> get nome =>
-      $composableBuilder(column: $table.nome, builder: (column) => column);
+  GeneratedColumn<String> get nome => $composableBuilder(column: $table.nome, builder: (column) => column);
 
   GeneratedColumn<String> get nomeFantasia => $composableBuilder(
     column: $table.nomeFantasia,
@@ -8520,28 +8184,22 @@ class $$ConfigTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get telefone =>
-      $composableBuilder(column: $table.telefone, builder: (column) => column);
+  GeneratedColumn<String> get telefone => $composableBuilder(column: $table.telefone, builder: (column) => column);
 
-  GeneratedColumn<String> get celular =>
-      $composableBuilder(column: $table.celular, builder: (column) => column);
+  GeneratedColumn<String> get celular => $composableBuilder(column: $table.celular, builder: (column) => column);
 
-  GeneratedColumn<String> get email =>
-      $composableBuilder(column: $table.email, builder: (column) => column);
+  GeneratedColumn<String> get email => $composableBuilder(column: $table.email, builder: (column) => column);
 
-  GeneratedColumn<String> get endereco =>
-      $composableBuilder(column: $table.endereco, builder: (column) => column);
+  GeneratedColumn<String> get endereco => $composableBuilder(column: $table.endereco, builder: (column) => column);
 
   GeneratedColumn<String> get numeroEndereco => $composableBuilder(
     column: $table.numeroEndereco,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get bairro =>
-      $composableBuilder(column: $table.bairro, builder: (column) => column);
+  GeneratedColumn<String> get bairro => $composableBuilder(column: $table.bairro, builder: (column) => column);
 
-  GeneratedColumn<String> get cep =>
-      $composableBuilder(column: $table.cep, builder: (column) => column);
+  GeneratedColumn<String> get cep => $composableBuilder(column: $table.cep, builder: (column) => column);
 
   GeneratedColumn<String> get nomeMunicipio => $composableBuilder(
     column: $table.nomeMunicipio,
@@ -8568,11 +8226,9 @@ class $$ConfigTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
 class $$ConfigTableTableTableManager
@@ -8598,12 +8254,9 @@ class $$ConfigTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$ConfigTableTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$ConfigTableTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$ConfigTableTableAnnotationComposer($db: db, $table: table),
+          createFilteringComposer: () => $$ConfigTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$ConfigTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$ConfigTableTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -8744,9 +8397,7 @@ class $$ConfigTableTableTableManager
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -8812,8 +8463,7 @@ typedef $$ClientTokenCacheTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$ClientTokenCacheTableTableFilterComposer
-    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableFilterComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -8907,8 +8557,7 @@ class $$ClientTokenCacheTableTableFilterComposer
   );
 }
 
-class $$ClientTokenCacheTableTableOrderingComposer
-    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableOrderingComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -9002,8 +8651,7 @@ class $$ClientTokenCacheTableTableOrderingComposer
   );
 }
 
-class $$ClientTokenCacheTableTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
+class $$ClientTokenCacheTableTableAnnotationComposer extends Composer<_$AppDatabase, $ClientTokenCacheTableTable> {
   $$ClientTokenCacheTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -9011,45 +8659,35 @@ class $$ClientTokenCacheTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get clientId =>
-      $composableBuilder(column: $table.clientId, builder: (column) => column);
+  GeneratedColumn<String> get clientId => $composableBuilder(column: $table.clientId, builder: (column) => column);
 
-  GeneratedColumn<String> get name =>
-      $composableBuilder(column: $table.name, builder: (column) => column);
+  GeneratedColumn<String> get name => $composableBuilder(column: $table.name, builder: (column) => column);
 
-  GeneratedColumn<bool> get isRevoked =>
-      $composableBuilder(column: $table.isRevoked, builder: (column) => column);
+  GeneratedColumn<bool> get isRevoked => $composableBuilder(column: $table.isRevoked, builder: (column) => column);
 
-  GeneratedColumn<int> get version =>
-      $composableBuilder(column: $table.version, builder: (column) => column);
+  GeneratedColumn<int> get version => $composableBuilder(column: $table.version, builder: (column) => column);
 
-  GeneratedColumn<String> get agentId =>
-      $composableBuilder(column: $table.agentId, builder: (column) => column);
+  GeneratedColumn<String> get agentId => $composableBuilder(column: $table.agentId, builder: (column) => column);
 
   GeneratedColumn<String> get tokenValue => $composableBuilder(
     column: $table.tokenValue,
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get payloadJson => $composableBuilder(
     column: $table.payloadJson,
     builder: (column) => column,
   );
 
-  GeneratedColumn<bool> get allTables =>
-      $composableBuilder(column: $table.allTables, builder: (column) => column);
+  GeneratedColumn<bool> get allTables => $composableBuilder(column: $table.allTables, builder: (column) => column);
 
-  GeneratedColumn<bool> get allViews =>
-      $composableBuilder(column: $table.allViews, builder: (column) => column);
+  GeneratedColumn<bool> get allViews => $composableBuilder(column: $table.allViews, builder: (column) => column);
 
   GeneratedColumn<bool> get allPermissions => $composableBuilder(
     column: $table.allPermissions,
@@ -9061,14 +8699,11 @@ class $$ClientTokenCacheTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get rulesJson =>
-      $composableBuilder(column: $table.rulesJson, builder: (column) => column);
+  GeneratedColumn<String> get rulesJson => $composableBuilder(column: $table.rulesJson, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get syncedAt =>
-      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get syncedAt => $composableBuilder(column: $table.syncedAt, builder: (column) => column);
 
-  GeneratedColumn<String> get tokenHash =>
-      $composableBuilder(column: $table.tokenHash, builder: (column) => column);
+  GeneratedColumn<String> get tokenHash => $composableBuilder(column: $table.tokenHash, builder: (column) => column);
 }
 
 class $$ClientTokenCacheTableTableTableManager
@@ -9084,11 +8719,7 @@ class $$ClientTokenCacheTableTableTableManager
           $$ClientTokenCacheTableTableUpdateCompanionBuilder,
           (
             ClientTokenCacheData,
-            BaseReferences<
-              _$AppDatabase,
-              $ClientTokenCacheTableTable,
-              ClientTokenCacheData
-            >,
+            BaseReferences<_$AppDatabase, $ClientTokenCacheTableTable, ClientTokenCacheData>,
           ),
           ClientTokenCacheData,
           PrefetchHooks Function()
@@ -9100,21 +8731,18 @@ class $$ClientTokenCacheTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$ClientTokenCacheTableTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$ClientTokenCacheTableTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$ClientTokenCacheTableTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+          createFilteringComposer: () => $$ClientTokenCacheTableTableFilterComposer(
+            $db: db,
+            $table: table,
+          ),
+          createOrderingComposer: () => $$ClientTokenCacheTableTableOrderingComposer(
+            $db: db,
+            $table: table,
+          ),
+          createComputedFieldComposer: () => $$ClientTokenCacheTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -9195,9 +8823,7 @@ class $$ClientTokenCacheTableTableTableManager
                 tokenHash: tokenHash,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -9215,11 +8841,7 @@ typedef $$ClientTokenCacheTableTableProcessedTableManager =
       $$ClientTokenCacheTableTableUpdateCompanionBuilder,
       (
         ClientTokenCacheData,
-        BaseReferences<
-          _$AppDatabase,
-          $ClientTokenCacheTableTable,
-          ClientTokenCacheData
-        >,
+        BaseReferences<_$AppDatabase, $ClientTokenCacheTableTable, ClientTokenCacheData>,
       ),
       ClientTokenCacheData,
       PrefetchHooks Function()
@@ -9418,22 +9040,18 @@ class $$AgentActionDefinitionTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get name =>
-      $composableBuilder(column: $table.name, builder: (column) => column);
+  GeneratedColumn<String> get name => $composableBuilder(column: $table.name, builder: (column) => column);
 
   GeneratedColumn<String> get description => $composableBuilder(
     column: $table.description,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get type =>
-      $composableBuilder(column: $table.type, builder: (column) => column);
+  GeneratedColumn<String> get type => $composableBuilder(column: $table.type, builder: (column) => column);
 
-  GeneratedColumn<String> get state =>
-      $composableBuilder(column: $table.state, builder: (column) => column);
+  GeneratedColumn<String> get state => $composableBuilder(column: $table.state, builder: (column) => column);
 
   GeneratedColumn<String> get configJson => $composableBuilder(
     column: $table.configJson,
@@ -9465,11 +9083,9 @@ class $$AgentActionDefinitionTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
 class $$AgentActionDefinitionTableTableTableManager
@@ -9485,11 +9101,7 @@ class $$AgentActionDefinitionTableTableTableManager
           $$AgentActionDefinitionTableTableUpdateCompanionBuilder,
           (
             AgentActionDefinitionData,
-            BaseReferences<
-              _$AppDatabase,
-              $AgentActionDefinitionTableTable,
-              AgentActionDefinitionData
-            >,
+            BaseReferences<_$AppDatabase, $AgentActionDefinitionTableTable, AgentActionDefinitionData>,
           ),
           AgentActionDefinitionData,
           PrefetchHooks Function()
@@ -9501,21 +9113,18 @@ class $$AgentActionDefinitionTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$AgentActionDefinitionTableTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$AgentActionDefinitionTableTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$AgentActionDefinitionTableTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+          createFilteringComposer: () => $$AgentActionDefinitionTableTableFilterComposer(
+            $db: db,
+            $table: table,
+          ),
+          createOrderingComposer: () => $$AgentActionDefinitionTableTableOrderingComposer(
+            $db: db,
+            $table: table,
+          ),
+          createComputedFieldComposer: () => $$AgentActionDefinitionTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -9528,8 +9137,7 @@ class $$AgentActionDefinitionTableTableTableManager
                 Value<int> definitionVersion = const Value.absent(),
                 Value<String?> definitionSnapshotHash = const Value.absent(),
                 Value<String?> lastPreflightSnapshotHash = const Value.absent(),
-                Value<DateTime?> lastPreflightValidatedAt =
-                    const Value.absent(),
+                Value<DateTime?> lastPreflightValidatedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -9561,8 +9169,7 @@ class $$AgentActionDefinitionTableTableTableManager
                 Value<int> definitionVersion = const Value.absent(),
                 Value<String?> definitionSnapshotHash = const Value.absent(),
                 Value<String?> lastPreflightSnapshotHash = const Value.absent(),
-                Value<DateTime?> lastPreflightValidatedAt =
-                    const Value.absent(),
+                Value<DateTime?> lastPreflightValidatedAt = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -9582,9 +9189,7 @@ class $$AgentActionDefinitionTableTableTableManager
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -9602,11 +9207,7 @@ typedef $$AgentActionDefinitionTableTableProcessedTableManager =
       $$AgentActionDefinitionTableTableUpdateCompanionBuilder,
       (
         AgentActionDefinitionData,
-        BaseReferences<
-          _$AppDatabase,
-          $AgentActionDefinitionTableTable,
-          AgentActionDefinitionData
-        >,
+        BaseReferences<_$AppDatabase, $AgentActionDefinitionTableTable, AgentActionDefinitionData>,
       ),
       AgentActionDefinitionData,
       PrefetchHooks Function()
@@ -9642,8 +9243,7 @@ typedef $$AgentActionTriggerTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$AgentActionTriggerTableTableFilterComposer
-    extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
+class $$AgentActionTriggerTableTableFilterComposer extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
   $$AgentActionTriggerTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -9707,8 +9307,7 @@ class $$AgentActionTriggerTableTableFilterComposer
   );
 }
 
-class $$AgentActionTriggerTableTableOrderingComposer
-    extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
+class $$AgentActionTriggerTableTableOrderingComposer extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
   $$AgentActionTriggerTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -9772,8 +9371,7 @@ class $$AgentActionTriggerTableTableOrderingComposer
   );
 }
 
-class $$AgentActionTriggerTableTableAnnotationComposer
-    extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
+class $$AgentActionTriggerTableTableAnnotationComposer extends Composer<_$AppDatabase, $AgentActionTriggerTableTable> {
   $$AgentActionTriggerTableTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -9781,20 +9379,15 @@ class $$AgentActionTriggerTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get actionId =>
-      $composableBuilder(column: $table.actionId, builder: (column) => column);
+  GeneratedColumn<String> get actionId => $composableBuilder(column: $table.actionId, builder: (column) => column);
 
-  GeneratedColumn<String> get type =>
-      $composableBuilder(column: $table.type, builder: (column) => column);
+  GeneratedColumn<String> get type => $composableBuilder(column: $table.type, builder: (column) => column);
 
-  GeneratedColumn<String> get name =>
-      $composableBuilder(column: $table.name, builder: (column) => column);
+  GeneratedColumn<String> get name => $composableBuilder(column: $table.name, builder: (column) => column);
 
-  GeneratedColumn<bool> get isEnabled =>
-      $composableBuilder(column: $table.isEnabled, builder: (column) => column);
+  GeneratedColumn<bool> get isEnabled => $composableBuilder(column: $table.isEnabled, builder: (column) => column);
 
   GeneratedColumn<String> get scheduleJson => $composableBuilder(
     column: $table.scheduleJson,
@@ -9806,17 +9399,13 @@ class $$AgentActionTriggerTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get lastRunAt =>
-      $composableBuilder(column: $table.lastRunAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get lastRunAt => $composableBuilder(column: $table.lastRunAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get nextRunAt =>
-      $composableBuilder(column: $table.nextRunAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get nextRunAt => $composableBuilder(column: $table.nextRunAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
 class $$AgentActionTriggerTableTableTableManager
@@ -9832,11 +9421,7 @@ class $$AgentActionTriggerTableTableTableManager
           $$AgentActionTriggerTableTableUpdateCompanionBuilder,
           (
             AgentActionTriggerData,
-            BaseReferences<
-              _$AppDatabase,
-              $AgentActionTriggerTableTable,
-              AgentActionTriggerData
-            >,
+            BaseReferences<_$AppDatabase, $AgentActionTriggerTableTable, AgentActionTriggerData>,
           ),
           AgentActionTriggerData,
           PrefetchHooks Function()
@@ -9848,21 +9433,18 @@ class $$AgentActionTriggerTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$AgentActionTriggerTableTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$AgentActionTriggerTableTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$AgentActionTriggerTableTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+          createFilteringComposer: () => $$AgentActionTriggerTableTableFilterComposer(
+            $db: db,
+            $table: table,
+          ),
+          createOrderingComposer: () => $$AgentActionTriggerTableTableOrderingComposer(
+            $db: db,
+            $table: table,
+          ),
+          createComputedFieldComposer: () => $$AgentActionTriggerTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -9919,9 +9501,7 @@ class $$AgentActionTriggerTableTableTableManager
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -9939,11 +9519,7 @@ typedef $$AgentActionTriggerTableTableProcessedTableManager =
       $$AgentActionTriggerTableTableUpdateCompanionBuilder,
       (
         AgentActionTriggerData,
-        BaseReferences<
-          _$AppDatabase,
-          $AgentActionTriggerTableTable,
-          AgentActionTriggerData
-        >,
+        BaseReferences<_$AppDatabase, $AgentActionTriggerTableTable, AgentActionTriggerData>,
       ),
       AgentActionTriggerData,
       PrefetchHooks Function()
@@ -10029,8 +9605,7 @@ typedef $$AgentActionExecutionTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$AgentActionExecutionTableTableFilterComposer
-    extends Composer<_$AppDatabase, $AgentActionExecutionTableTable> {
+class $$AgentActionExecutionTableTableFilterComposer extends Composer<_$AppDatabase, $AgentActionExecutionTableTable> {
   $$AgentActionExecutionTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -10418,27 +9993,23 @@ class $$AgentActionExecutionTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get actionId =>
-      $composableBuilder(column: $table.actionId, builder: (column) => column);
+  GeneratedColumn<String> get actionId => $composableBuilder(column: $table.actionId, builder: (column) => column);
 
   GeneratedColumn<String> get actionType => $composableBuilder(
     column: $table.actionType,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get status =>
-      $composableBuilder(column: $table.status, builder: (column) => column);
+  GeneratedColumn<String> get status => $composableBuilder(column: $table.status, builder: (column) => column);
 
   GeneratedColumn<DateTime> get requestedAt => $composableBuilder(
     column: $table.requestedAt,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get source =>
-      $composableBuilder(column: $table.source, builder: (column) => column);
+  GeneratedColumn<String> get source => $composableBuilder(column: $table.source, builder: (column) => column);
 
   GeneratedColumn<String> get idempotencyKey => $composableBuilder(
     column: $table.idempotencyKey,
@@ -10450,8 +10021,7 @@ class $$AgentActionExecutionTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get traceId =>
-      $composableBuilder(column: $table.traceId, builder: (column) => column);
+  GeneratedColumn<String> get traceId => $composableBuilder(column: $table.traceId, builder: (column) => column);
 
   GeneratedColumn<String> get runtimeInstanceId => $composableBuilder(
     column: $table.runtimeInstanceId,
@@ -10463,8 +10033,7 @@ class $$AgentActionExecutionTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get triggerId =>
-      $composableBuilder(column: $table.triggerId, builder: (column) => column);
+  GeneratedColumn<String> get triggerId => $composableBuilder(column: $table.triggerId, builder: (column) => column);
 
   GeneratedColumn<String> get triggerType => $composableBuilder(
     column: $table.triggerType,
@@ -10496,14 +10065,11 @@ class $$AgentActionExecutionTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get timeoutAt =>
-      $composableBuilder(column: $table.timeoutAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get timeoutAt => $composableBuilder(column: $table.timeoutAt, builder: (column) => column);
 
-  GeneratedColumn<int> get pid =>
-      $composableBuilder(column: $table.pid, builder: (column) => column);
+  GeneratedColumn<int> get pid => $composableBuilder(column: $table.pid, builder: (column) => column);
 
-  GeneratedColumn<int> get exitCode =>
-      $composableBuilder(column: $table.exitCode, builder: (column) => column);
+  GeneratedColumn<int> get exitCode => $composableBuilder(column: $table.exitCode, builder: (column) => column);
 
   GeneratedColumn<String> get processExecutable => $composableBuilder(
     column: $table.processExecutable,
@@ -10594,11 +10160,7 @@ class $$AgentActionExecutionTableTableTableManager
           $$AgentActionExecutionTableTableUpdateCompanionBuilder,
           (
             AgentActionExecutionData,
-            BaseReferences<
-              _$AppDatabase,
-              $AgentActionExecutionTableTable,
-              AgentActionExecutionData
-            >,
+            BaseReferences<_$AppDatabase, $AgentActionExecutionTableTable, AgentActionExecutionData>,
           ),
           AgentActionExecutionData,
           PrefetchHooks Function()
@@ -10610,21 +10172,18 @@ class $$AgentActionExecutionTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$AgentActionExecutionTableTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$AgentActionExecutionTableTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$AgentActionExecutionTableTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+          createFilteringComposer: () => $$AgentActionExecutionTableTableFilterComposer(
+            $db: db,
+            $table: table,
+          ),
+          createOrderingComposer: () => $$AgentActionExecutionTableTableOrderingComposer(
+            $db: db,
+            $table: table,
+          ),
+          createComputedFieldComposer: () => $$AgentActionExecutionTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -10781,9 +10340,7 @@ class $$AgentActionExecutionTableTableTableManager
                 failureMessage: failureMessage,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -10801,11 +10358,7 @@ typedef $$AgentActionExecutionTableTableProcessedTableManager =
       $$AgentActionExecutionTableTableUpdateCompanionBuilder,
       (
         AgentActionExecutionData,
-        BaseReferences<
-          _$AppDatabase,
-          $AgentActionExecutionTableTable,
-          AgentActionExecutionData
-        >,
+        BaseReferences<_$AppDatabase, $AgentActionExecutionTableTable, AgentActionExecutionData>,
       ),
       AgentActionExecutionData,
       PrefetchHooks Function()
@@ -10829,8 +10382,7 @@ typedef $$RpcIdempotencyCacheTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$RpcIdempotencyCacheTableTableFilterComposer
-    extends Composer<_$AppDatabase, $RpcIdempotencyCacheTableTable> {
+class $$RpcIdempotencyCacheTableTableFilterComposer extends Composer<_$AppDatabase, $RpcIdempotencyCacheTableTable> {
   $$RpcIdempotencyCacheTableTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -10864,8 +10416,7 @@ class $$RpcIdempotencyCacheTableTableFilterComposer
   );
 }
 
-class $$RpcIdempotencyCacheTableTableOrderingComposer
-    extends Composer<_$AppDatabase, $RpcIdempotencyCacheTableTable> {
+class $$RpcIdempotencyCacheTableTableOrderingComposer extends Composer<_$AppDatabase, $RpcIdempotencyCacheTableTable> {
   $$RpcIdempotencyCacheTableTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -10908,8 +10459,7 @@ class $$RpcIdempotencyCacheTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get cacheKey =>
-      $composableBuilder(column: $table.cacheKey, builder: (column) => column);
+  GeneratedColumn<String> get cacheKey => $composableBuilder(column: $table.cacheKey, builder: (column) => column);
 
   GeneratedColumn<String> get responseJson => $composableBuilder(
     column: $table.responseJson,
@@ -10921,11 +10471,9 @@ class $$RpcIdempotencyCacheTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get expiresAt =>
-      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get expiresAt => $composableBuilder(column: $table.expiresAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
 class $$RpcIdempotencyCacheTableTableTableManager
@@ -10941,11 +10489,7 @@ class $$RpcIdempotencyCacheTableTableTableManager
           $$RpcIdempotencyCacheTableTableUpdateCompanionBuilder,
           (
             RpcIdempotencyCacheData,
-            BaseReferences<
-              _$AppDatabase,
-              $RpcIdempotencyCacheTableTable,
-              RpcIdempotencyCacheData
-            >,
+            BaseReferences<_$AppDatabase, $RpcIdempotencyCacheTableTable, RpcIdempotencyCacheData>,
           ),
           RpcIdempotencyCacheData,
           PrefetchHooks Function()
@@ -10957,21 +10501,18 @@ class $$RpcIdempotencyCacheTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$RpcIdempotencyCacheTableTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$RpcIdempotencyCacheTableTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$RpcIdempotencyCacheTableTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+          createFilteringComposer: () => $$RpcIdempotencyCacheTableTableFilterComposer(
+            $db: db,
+            $table: table,
+          ),
+          createOrderingComposer: () => $$RpcIdempotencyCacheTableTableOrderingComposer(
+            $db: db,
+            $table: table,
+          ),
+          createComputedFieldComposer: () => $$RpcIdempotencyCacheTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
           updateCompanionCallback:
               ({
                 Value<String> cacheKey = const Value.absent(),
@@ -11004,9 +10545,7 @@ class $$RpcIdempotencyCacheTableTableTableManager
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -11024,11 +10563,7 @@ typedef $$RpcIdempotencyCacheTableTableProcessedTableManager =
       $$RpcIdempotencyCacheTableTableUpdateCompanionBuilder,
       (
         RpcIdempotencyCacheData,
-        BaseReferences<
-          _$AppDatabase,
-          $RpcIdempotencyCacheTableTable,
-          RpcIdempotencyCacheData
-        >,
+        BaseReferences<_$AppDatabase, $RpcIdempotencyCacheTableTable, RpcIdempotencyCacheData>,
       ),
       RpcIdempotencyCacheData,
       PrefetchHooks Function()
@@ -11263,35 +10798,30 @@ class $$AgentActionRemoteAuditTableTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<DateTime> get occurredAt => $composableBuilder(
     column: $table.occurredAt,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get rpcMethod =>
-      $composableBuilder(column: $table.rpcMethod, builder: (column) => column);
+  GeneratedColumn<String> get rpcMethod => $composableBuilder(column: $table.rpcMethod, builder: (column) => column);
 
-  GeneratedColumn<String> get actionId =>
-      $composableBuilder(column: $table.actionId, builder: (column) => column);
+  GeneratedColumn<String> get actionId => $composableBuilder(column: $table.actionId, builder: (column) => column);
 
   GeneratedColumn<String> get executionId => $composableBuilder(
     column: $table.executionId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get traceId =>
-      $composableBuilder(column: $table.traceId, builder: (column) => column);
+  GeneratedColumn<String> get traceId => $composableBuilder(column: $table.traceId, builder: (column) => column);
 
   GeneratedColumn<String> get requestedBy => $composableBuilder(
     column: $table.requestedBy,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get outcome =>
-      $composableBuilder(column: $table.outcome, builder: (column) => column);
+  GeneratedColumn<String> get outcome => $composableBuilder(column: $table.outcome, builder: (column) => column);
 
   GeneratedColumn<String> get reasonCode => $composableBuilder(
     column: $table.reasonCode,
@@ -11308,11 +10838,9 @@ class $$AgentActionRemoteAuditTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get clientId =>
-      $composableBuilder(column: $table.clientId, builder: (column) => column);
+  GeneratedColumn<String> get clientId => $composableBuilder(column: $table.clientId, builder: (column) => column);
 
-  GeneratedColumn<String> get tokenJti =>
-      $composableBuilder(column: $table.tokenJti, builder: (column) => column);
+  GeneratedColumn<String> get tokenJti => $composableBuilder(column: $table.tokenJti, builder: (column) => column);
 
   GeneratedColumn<String> get runtimeInstanceId => $composableBuilder(
     column: $table.runtimeInstanceId,
@@ -11343,11 +10871,7 @@ class $$AgentActionRemoteAuditTableTableTableManager
           $$AgentActionRemoteAuditTableTableUpdateCompanionBuilder,
           (
             AgentActionRemoteAuditData,
-            BaseReferences<
-              _$AppDatabase,
-              $AgentActionRemoteAuditTableTable,
-              AgentActionRemoteAuditData
-            >,
+            BaseReferences<_$AppDatabase, $AgentActionRemoteAuditTableTable, AgentActionRemoteAuditData>,
           ),
           AgentActionRemoteAuditData,
           PrefetchHooks Function()
@@ -11359,21 +10883,18 @@ class $$AgentActionRemoteAuditTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$AgentActionRemoteAuditTableTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$AgentActionRemoteAuditTableTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$AgentActionRemoteAuditTableTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+          createFilteringComposer: () => $$AgentActionRemoteAuditTableTableFilterComposer(
+            $db: db,
+            $table: table,
+          ),
+          createOrderingComposer: () => $$AgentActionRemoteAuditTableTableOrderingComposer(
+            $db: db,
+            $table: table,
+          ),
+          createComputedFieldComposer: () => $$AgentActionRemoteAuditTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
@@ -11450,9 +10971,7 @@ class $$AgentActionRemoteAuditTableTableTableManager
                 idempotencyKey: idempotencyKey,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -11470,11 +10989,7 @@ typedef $$AgentActionRemoteAuditTableTableProcessedTableManager =
       $$AgentActionRemoteAuditTableTableUpdateCompanionBuilder,
       (
         AgentActionRemoteAuditData,
-        BaseReferences<
-          _$AppDatabase,
-          $AgentActionRemoteAuditTableTable,
-          AgentActionRemoteAuditData
-        >,
+        BaseReferences<_$AppDatabase, $AgentActionRemoteAuditTableTable, AgentActionRemoteAuditData>,
       ),
       AgentActionRemoteAuditData,
       PrefetchHooks Function()
@@ -11582,8 +11097,7 @@ class $$AgentActionCapturedOutputChunkTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get stream =>
-      $composableBuilder(column: $table.stream, builder: (column) => column);
+  GeneratedColumn<String> get stream => $composableBuilder(column: $table.stream, builder: (column) => column);
 
   GeneratedColumn<int> get chunkIndex => $composableBuilder(
     column: $table.chunkIndex,
@@ -11595,8 +11109,7 @@ class $$AgentActionCapturedOutputChunkTableTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get payload =>
-      $composableBuilder(column: $table.payload, builder: (column) => column);
+  GeneratedColumn<String> get payload => $composableBuilder(column: $table.payload, builder: (column) => column);
 }
 
 class $$AgentActionCapturedOutputChunkTableTableTableManager
@@ -11628,21 +11141,18 @@ class $$AgentActionCapturedOutputChunkTableTableTableManager
         TableManagerState(
           db: db,
           table: table,
-          createFilteringComposer: () =>
-              $$AgentActionCapturedOutputChunkTableTableFilterComposer(
-                $db: db,
-                $table: table,
-              ),
-          createOrderingComposer: () =>
-              $$AgentActionCapturedOutputChunkTableTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
-          createComputedFieldComposer: () =>
-              $$AgentActionCapturedOutputChunkTableTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+          createFilteringComposer: () => $$AgentActionCapturedOutputChunkTableTableFilterComposer(
+            $db: db,
+            $table: table,
+          ),
+          createOrderingComposer: () => $$AgentActionCapturedOutputChunkTableTableOrderingComposer(
+            $db: db,
+            $table: table,
+          ),
+          createComputedFieldComposer: () => $$AgentActionCapturedOutputChunkTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
           updateCompanionCallback:
               ({
                 Value<String> executionId = const Value.absent(),
@@ -11675,9 +11185,7 @@ class $$AgentActionCapturedOutputChunkTableTableTableManager
                 payload: payload,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -11695,11 +11203,7 @@ typedef $$AgentActionCapturedOutputChunkTableTableProcessedTableManager =
       $$AgentActionCapturedOutputChunkTableTableUpdateCompanionBuilder,
       (
         AgentActionCapturedOutputChunkData,
-        BaseReferences<
-          _$AppDatabase,
-          $AgentActionCapturedOutputChunkTableTable,
-          AgentActionCapturedOutputChunkData
-        >,
+        BaseReferences<_$AppDatabase, $AgentActionCapturedOutputChunkTableTable, AgentActionCapturedOutputChunkData>,
       ),
       AgentActionCapturedOutputChunkData,
       PrefetchHooks Function()
@@ -11708,21 +11212,18 @@ typedef $$AgentActionCapturedOutputChunkTableTableProcessedTableManager =
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
-  $$ConfigTableTableTableManager get configTable =>
-      $$ConfigTableTableTableManager(_db, _db.configTable);
+  $$ConfigTableTableTableManager get configTable => $$ConfigTableTableTableManager(_db, _db.configTable);
   $$ClientTokenCacheTableTableTableManager get clientTokenCacheTable =>
       $$ClientTokenCacheTableTableTableManager(_db, _db.clientTokenCacheTable);
-  $$AgentActionDefinitionTableTableTableManager
-  get agentActionDefinitionTable =>
+  $$AgentActionDefinitionTableTableTableManager get agentActionDefinitionTable =>
       $$AgentActionDefinitionTableTableTableManager(
         _db,
         _db.agentActionDefinitionTable,
       );
-  $$AgentActionTriggerTableTableTableManager get agentActionTriggerTable =>
-      $$AgentActionTriggerTableTableTableManager(
-        _db,
-        _db.agentActionTriggerTable,
-      );
+  $$AgentActionTriggerTableTableTableManager get agentActionTriggerTable => $$AgentActionTriggerTableTableTableManager(
+    _db,
+    _db.agentActionTriggerTable,
+  );
   $$AgentActionExecutionTableTableTableManager get agentActionExecutionTable =>
       $$AgentActionExecutionTableTableTableManager(
         _db,
@@ -11733,14 +11234,12 @@ class $AppDatabaseManager {
         _db,
         _db.rpcIdempotencyCacheTable,
       );
-  $$AgentActionRemoteAuditTableTableTableManager
-  get agentActionRemoteAuditTable =>
+  $$AgentActionRemoteAuditTableTableTableManager get agentActionRemoteAuditTable =>
       $$AgentActionRemoteAuditTableTableTableManager(
         _db,
         _db.agentActionRemoteAuditTable,
       );
-  $$AgentActionCapturedOutputChunkTableTableTableManager
-  get agentActionCapturedOutputChunkTable =>
+  $$AgentActionCapturedOutputChunkTableTableTableManager get agentActionCapturedOutputChunkTable =>
       $$AgentActionCapturedOutputChunkTableTableTableManager(
         _db,
         _db.agentActionCapturedOutputChunkTable,

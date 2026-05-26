@@ -3882,7 +3882,15 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(
           () => mockService.executeQuery(any(), connectionId: pooledConnectionId),
         ).thenAnswer(
-          (_) async => const Success(QueryResult(columns: ['n'], rows: [[1]], rowCount: 1)),
+          (_) async => const Success(
+            QueryResult(
+              columns: ['n'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          ),
         );
         when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer(
           (_) async => const Success(unit),
@@ -3897,8 +3905,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         expect(response.startedAt, isNotNull);
         // startedAt must be at or before finished_at (timestamp).
         expect(
-          response.startedAt!.isBefore(response.timestamp) ||
-              response.startedAt!.isAtSameMomentAs(response.timestamp),
+          response.startedAt!.isBefore(response.timestamp) || response.startedAt!.isAtSameMomentAs(response.timestamp),
           isTrue,
           reason: 'startedAt must not be after timestamp (finished_at)',
         );

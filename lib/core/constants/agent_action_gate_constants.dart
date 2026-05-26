@@ -1,4 +1,5 @@
-import 'package:plug_agente/domain/actions/action_policies.dart' show AgentActionEnvironmentPolicy, AgentActionRemotePolicy;
+import 'package:plug_agente/domain/actions/action_policies.dart'
+    show AgentActionEnvironmentPolicy, AgentActionRemotePolicy;
 import 'package:plug_agente/domain/actions/actions.dart' show AgentActionEnvironmentPolicy, AgentActionRemotePolicy;
 import 'package:plug_agente/domain/domain.dart' show AgentActionEnvironmentPolicy, AgentActionRemotePolicy;
 

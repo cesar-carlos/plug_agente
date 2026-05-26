@@ -5,10 +5,12 @@ abstract final class ElevatedContract {
   static const int requestSchemaVersion = 1;
   static const int statusSchemaVersion = 1;
 
-  static const String requestsSubdirectoryName = 'agent_actions/elevated/requests';
+  static const String requestsSubdirectoryName =
+      'agent_actions/elevated/requests';
   static const String statusSubdirectoryName = 'agent_actions/elevated/status';
   static const String cancelSubdirectoryName = 'agent_actions/elevated/cancel';
-  static const String materializedSubdirectoryName = 'agent_actions/elevated/materialized';
+  static const String materializedSubdirectoryName =
+      'agent_actions/elevated/materialized';
 
   static const int materializedSchemaVersion = 1;
   static const String databaseFileName = 'agent_config.db';
@@ -56,7 +58,10 @@ abstract final class ElevatedContract {
     return p.join(appDirectoryPath, materializedSubdirectoryName);
   }
 
-  static String materializedFilePath(String appDirectoryPath, String executionId) {
+  static String materializedFilePath(
+    String appDirectoryPath,
+    String executionId,
+  ) {
     return p.join(materializedDirectory(appDirectoryPath), '$executionId.json');
   }
 }

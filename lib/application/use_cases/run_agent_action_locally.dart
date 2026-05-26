@@ -120,7 +120,7 @@ class RunAgentActionLocally {
             'action_id': definition.id,
             'state': definition.state.name,
             'reason': AgentActionGateConstants.actionNotActiveReason,
-            'user_message': 'A acao nao esta ativa. Valide ou ative a acao antes de executar.',
+            'user_message': 'The action is not active. Validate or activate the action before running.',
           },
         ),
       );
@@ -276,7 +276,7 @@ class RunAgentActionLocally {
             'action_id': definition.id,
             'state': definition.state.name,
             'reason': AgentActionGateConstants.actionNotActiveReason,
-            'user_message': 'A acao nao esta ativa. Valide ou ative a acao antes de executar.',
+            'user_message': 'The action is not active. Validate or activate the action before running.',
           },
         ),
       );
@@ -429,7 +429,7 @@ class RunAgentActionLocally {
           code: AgentActionFailureCode.featureDisabled,
           context: const {
             'reason': AgentActionGateConstants.featureDisabledReason,
-            'user_message': 'As acoes do agente estao desativadas neste ambiente.',
+            'user_message': 'Agent actions are disabled in this environment.',
           },
         ),
       );
@@ -583,7 +583,7 @@ class RunAgentActionLocally {
             'action_id': definition.id,
             'source': request.source.name,
             'reason': AgentActionGateConstants.remoteFeatureDisabledReason,
-            'user_message': 'As execucoes remotas de acoes estao desativadas neste ambiente.',
+            'user_message': 'Remote action executions are disabled in this environment.',
           },
         ),
       );
@@ -601,7 +601,7 @@ class RunAgentActionLocally {
             'remote_approved': definition.policies.remote.approvedAt != null,
             'remote_requires_reapproval': definition.policies.remote.requiresReapproval,
             'reason': AgentActionGateConstants.remoteActionNotApprovedReason,
-            'user_message': 'A acao nao esta aprovada para execucao remota.',
+            'user_message': 'The action is not approved for remote execution.',
           },
         ),
       );
@@ -636,7 +636,7 @@ class RunAgentActionLocally {
             'source': request.source.name,
             'field': 'idempotencyKey',
             'reason': AgentActionRpcConstants.remoteIdempotencyRequiredRpcReason,
-            'user_message': 'A execucao remota exige uma chave de idempotencia.',
+            'user_message': 'Remote execution requires an idempotency key.',
           },
         ),
       );
@@ -652,7 +652,7 @@ class RunAgentActionLocally {
             'source': request.source.name,
             'field': 'contextPath',
             'reason': AgentActionRpcConstants.remoteContextNotSupportedRpcReason,
-            'user_message': 'Contexto inline nao e suportado em execucoes remotas nesta versao.',
+            'user_message': 'Inline context is not supported in remote executions in this version.',
           },
         ),
       );
@@ -668,7 +668,7 @@ class RunAgentActionLocally {
             'source': request.source.name,
             'field': 'runtimeParameters',
             'reason': AgentActionRpcConstants.remoteContextNotSupportedRpcReason,
-            'user_message': 'Parametros de runtime nao sao suportados em execucoes remotas nesta versao.',
+            'user_message': 'Runtime parameters are not supported in remote executions in this version.',
           },
         ),
       );
@@ -699,7 +699,7 @@ class RunAgentActionLocally {
           'allowed_profiles': allowedProfiles.toList(growable: false),
           'current_profile': profile,
           'reason': AgentActionGateConstants.environmentProfileDeniedReason,
-          'user_message': 'A acao nao esta autorizada para o perfil operacional atual do agente.',
+          'user_message': 'The action is not authorized for the agent current operational profile.',
         },
       ),
     );
@@ -869,7 +869,7 @@ class RunAgentActionLocally {
             'execution_id': executionId,
             'phase': AgentActionProcessConstants.elevatedSubmitPhase,
             'reason': AgentActionGateConstants.elevatedNotConfiguredReason,
-            'user_message': 'O servico de execucao elevada nao esta disponivel neste agente.',
+            'user_message': 'The elevated execution service is not available on this agent.',
           },
         ),
       );
@@ -1089,11 +1089,11 @@ class RunAgentActionLocally {
     }
 
     return switch (output.status) {
-      AgentActionExecutionStatus.timedOut => 'Comando excedeu o tempo maximo de execucao.',
-      AgentActionExecutionStatus.killed => 'Processo principal foi finalizado.',
-      AgentActionExecutionStatus.failed => 'Comando finalizou com codigo de saida ${output.exitCode}.',
-      AgentActionExecutionStatus.unknown => 'Comando terminou sem codigo de saida conhecido.',
-      _ => 'Falha ao executar acao.',
+      AgentActionExecutionStatus.timedOut => 'Command exceeded the maximum execution time.',
+      AgentActionExecutionStatus.killed => 'Main process was terminated.',
+      AgentActionExecutionStatus.failed => 'Command exited with code ${output.exitCode}.',
+      AgentActionExecutionStatus.unknown => 'Command ended without a known exit code.',
+      _ => 'Failed to execute action.',
     };
   }
 

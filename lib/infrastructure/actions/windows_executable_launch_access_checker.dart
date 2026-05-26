@@ -16,8 +16,7 @@ abstract final class WindowsExecutableLaunchAccessChecker {
     required String phase,
     required String? extension,
   }) {
-    return phase == AgentActionProcessConstants.executionPreflightPhase &&
-        extensionRequiresLaunchAccess(extension);
+    return phase == AgentActionProcessConstants.executionPreflightPhase && extensionRequiresLaunchAccess(extension);
   }
 
   static bool shouldValidateLaunchAccessForPath({

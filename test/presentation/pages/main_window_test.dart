@@ -71,7 +71,9 @@ void main() {
     expect(find.textContaining('10.0.17763'), findsOneWidget);
   });
 
-  testWidgets('keeps unsupported runtime without degraded banner because bootstrap should block earlier', (tester) async {
+  testWidgets('keeps unsupported runtime without degraded banner because bootstrap should block earlier', (
+    tester,
+  ) async {
     await pumpWindow(
       tester,
       capabilities: RuntimeCapabilities.unsupported(

@@ -68,11 +68,13 @@ class RpcRequestSchemaValidator {
       'sql.cancel' => _validateSqlCancelParams(data['params']),
       'agent.getProfile' => _validateAgentGetProfileParams(data['params']),
       'agent.getHealth' => _validateOptionalClientTokenAliasParams(data['params'], 'agent.getHealth'),
-      AgentActionRpcConstants.agentActionGetExecutionRpcMethodName =>
-        _validateAgentActionGetExecutionParams(data['params']),
+      AgentActionRpcConstants.agentActionGetExecutionRpcMethodName => _validateAgentActionGetExecutionParams(
+        data['params'],
+      ),
       AgentActionRpcConstants.agentActionRunRpcMethodName => _validateAgentActionRunParams(data['params']),
-      AgentActionRpcConstants.agentActionValidateRunRpcMethodName =>
-        _validateAgentActionValidateRunParams(data['params']),
+      AgentActionRpcConstants.agentActionValidateRunRpcMethodName => _validateAgentActionValidateRunParams(
+        data['params'],
+      ),
       AgentActionRpcConstants.agentActionCancelRpcMethodName => _validateAgentActionCancelParams(data['params']),
       'client_token.getPolicy' => _validateOptionalClientTokenAliasParams(data['params'], 'client_token.getPolicy'),
       _ => const Success(unit),
@@ -725,9 +727,7 @@ class RpcRequestSchemaValidator {
     };
     final extraKeys = params.keys.where((String key) => !allowedKeys.contains(key)).toList();
     if (extraKeys.isNotEmpty) {
-      final contextKey = extraKeys
-          .where(AgentActionRpcConstants.remoteContextRpcParamKeys.contains)
-          .firstOrNull;
+      final contextKey = extraKeys.where(AgentActionRpcConstants.remoteContextRpcParamKeys.contains).firstOrNull;
       if (contextKey != null) {
         return Failure(
           ActionValidationFailure.withContext(

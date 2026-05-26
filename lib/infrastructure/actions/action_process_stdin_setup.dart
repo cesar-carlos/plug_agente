@@ -12,8 +12,7 @@ import 'package:result_dart/result_dart.dart';
 class ActionProcessStdinSetup {
   const ActionProcessStdinSetup({
     AgentActionSecretPlaceholderResolver? secretPlaceholderResolver,
-  }) : _secretPlaceholderResolver =
-           secretPlaceholderResolver ?? const AgentActionSecretPlaceholderResolver();
+  }) : _secretPlaceholderResolver = secretPlaceholderResolver ?? const AgentActionSecretPlaceholderResolver();
 
   final AgentActionSecretPlaceholderResolver _secretPlaceholderResolver;
 
@@ -44,8 +43,7 @@ class ActionProcessStdinSetup {
             'phase': phase,
             'injection_mode': AgentActionContextInjectionMode.stdin.name,
             'reason': AgentActionValidationConstants.contextInjectionRequiresStdinPayloadReason,
-            'user_message':
-                'Informe o texto de entrada padrao em runtimeParameters.stdin antes de executar.',
+            'user_message': 'Informe o texto de entrada padrao em runtimeParameters.stdin antes de executar.',
           },
         ),
       );

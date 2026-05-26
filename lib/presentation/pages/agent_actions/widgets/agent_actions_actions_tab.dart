@@ -6,6 +6,7 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_ui_preferences.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_list.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_confirmations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_toolbar_card.dart';
@@ -37,6 +38,9 @@ class AgentActionsActionsTab extends StatelessWidget {
           provider: provider,
           l10n: l10n,
           onCreateAction: provider.canSaveAction ? onCreateAction : null,
+          onRunSelected: provider.canRunSelected
+              ? () => unawaited(runAgentActionWithDangerousCommandCheck(context, provider, l10n))
+              : null,
         ),
         const SizedBox(height: AppSpacing.md),
         Expanded(

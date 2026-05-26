@@ -202,7 +202,8 @@ class EmailActionMailerRunner implements AgentActionLocalRunner {
         timeout: definition.policies.timeout.maxRuntime,
       );
       final finishedAt = DateTime.now();
-      final recipientCount = toResult.getOrThrow().length + ccResult.getOrThrow().length + bccResult.getOrThrow().length;
+      final recipientCount =
+          toResult.getOrThrow().length + ccResult.getOrThrow().length + bccResult.getOrThrow().length;
       final stdoutText = _redactor.redactText(
         'Email sent to $recipientCount recipient(s) via ${smtpProfile.host}:${smtpProfile.port}.',
       );
@@ -241,8 +242,7 @@ class EmailActionMailerRunner implements AgentActionLocalRunner {
             'smtp_host': smtpProfile.host,
             'smtp_port': smtpProfile.port,
             'reason': AgentActionEmailConstants.smtpSendFailedReason,
-            'user_message':
-                'Nao foi possivel enviar o e-mail. Verifique o perfil SMTP, destinatarios e conectividade.',
+            'user_message': 'Nao foi possivel enviar o e-mail. Verifique o perfil SMTP, destinatarios e conectividade.',
           },
         ),
       );

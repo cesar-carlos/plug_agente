@@ -30,6 +30,7 @@ void main() {
       final store = _FakePayloadSigningKeyStore();
       final resolver = PayloadSigningKeyResolver(
         keyStore: store,
+        persistEnvironmentKeys: true,
         environmentProvider: (key) => switch (key) {
           'PAYLOAD_SIGNING_KEY_ID' => 'key-1',
           'PAYLOAD_SIGNING_KEY' => 'secret-1',
@@ -77,6 +78,7 @@ void main() {
       );
       final resolver = PayloadSigningKeyResolver(
         keyStore: store,
+        persistEnvironmentKeys: true,
         environmentProvider: (key) => switch (key) {
           'PAYLOAD_SIGNING_KEYS_JSON' => '{"new-key":"new-secret"}',
           'PAYLOAD_SIGNING_ACTIVE_KEY_ID' => 'new-key',

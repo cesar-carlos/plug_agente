@@ -12,10 +12,8 @@ AppLocalizations _enL10n() => lookupAppLocalizations(const Locale('en'));
 
 void main() {
   test('should classify lifecycle audit outcomes', () {
-    check(isAgentActionRemoteLifecycleAuditOutcome(AgentActionRemoteAuditConstants.outcomeLifecycleEnqueued))
-        .isTrue();
-    check(isAgentActionRemoteLifecycleAuditOutcome(AgentActionRemoteAuditConstants.outcomeLifecycleFinished))
-        .isTrue();
+    check(isAgentActionRemoteLifecycleAuditOutcome(AgentActionRemoteAuditConstants.outcomeLifecycleEnqueued)).isTrue();
+    check(isAgentActionRemoteLifecycleAuditOutcome(AgentActionRemoteAuditConstants.outcomeLifecycleFinished)).isTrue();
     check(isAgentActionRemoteLifecycleAuditOutcome(AgentActionRemoteAuditConstants.outcomeSuccess)).isFalse();
     check(isAgentActionRemoteLifecycleAuditOutcome(AgentActionRemoteAuditConstants.outcomeReceived)).isFalse();
   });
@@ -49,8 +47,9 @@ void main() {
 
   test('should localize common remote audit reason codes', () {
     final l10n = _enL10n();
-    check(agentActionRemoteAuditReasonCodeLabel(l10n, RpcClientTokenConstants.missingClientTokenReason))
-        .equals(l10n.agentActionsRemoteAuditReasonMissingClientToken);
+    check(
+      agentActionRemoteAuditReasonCodeLabel(l10n, RpcClientTokenConstants.missingClientTokenReason),
+    ).equals(l10n.agentActionsRemoteAuditReasonMissingClientToken);
     check(
       agentActionRemoteAuditReasonCodeLabel(
         l10n,

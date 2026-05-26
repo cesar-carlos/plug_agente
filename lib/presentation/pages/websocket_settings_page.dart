@@ -123,9 +123,7 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
       }
     }
 
-    if (isCurrentPageConfig &&
-        currentError.isNotEmpty &&
-        currentError != _previousAuthError) {
+    if (isCurrentPageConfig && currentError.isNotEmpty && currentError != _previousAuthError) {
       _showErrorModal(currentError);
     }
 
@@ -150,9 +148,7 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
       _showConnectionSuccessModal();
     }
 
-    if (isCurrentPageConfig &&
-        currentError.isNotEmpty &&
-        currentError != _previousConnectionError) {
+    if (isCurrentPageConfig && currentError.isNotEmpty && currentError != _previousConnectionError) {
       _showConnectionErrorModal(currentError);
     }
 
@@ -295,9 +291,28 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   }
 
   Future<void> _saveCurrentConfig() async {
+    if (!mounted) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
     final configProvider = context.read<ConfigProvider>();
     _formController.updateAllFieldsToProvider(configProvider);
-    await configProvider.saveConfig();
+    final result = await configProvider.saveConfig();
+    if (!mounted) {
+      return;
+    }
+    result.fold(
+      (_) => SettingsFeedback.showSuccess(
+        context: context,
+        title: l10n.modalTitleConfigSaved,
+        message: l10n.msgConfigSavedSuccessfully,
+      ),
+      (_) => SettingsFeedback.showError(
+        context: context,
+        title: l10n.modalTitleErrorSaving,
+        message: configProvider.error,
+      ),
+    );
   }
 }
 

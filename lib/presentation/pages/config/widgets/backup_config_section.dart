@@ -283,7 +283,8 @@ class _RestoreConfirmDialogState extends State<_RestoreConfirmDialog> {
     final needsUncertain = staging.duplicateRisk == DuplicateRiskLevel.verificationImpossible;
     final canProceed = (!needsDup || _ackDuplicate) && (!needsUncertain || _ackUncertain);
 
-    final installationMismatch = staging.manifestInstallationId != null &&
+    final installationMismatch =
+        staging.manifestInstallationId != null &&
         staging.currentInstallationId != null &&
         staging.manifestInstallationId != staging.currentInstallationId;
 

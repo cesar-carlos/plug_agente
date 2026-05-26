@@ -13,7 +13,6 @@ import 'package:result_dart/result_dart.dart';
 
 /// Writes a short-lived launch plan for the elevated helper (resolved command, no secret placeholders).
 class ElevatedActionExecutionMaterializer {
-
   ElevatedActionExecutionMaterializer({
     required GlobalStorageContext storageContext,
     DeveloperData7DefinitionResolver? developerResolver,

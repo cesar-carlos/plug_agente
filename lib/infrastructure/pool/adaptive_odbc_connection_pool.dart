@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
@@ -251,6 +252,17 @@ final class AdaptiveOdbcConnectionPool
   Future<Result<void>> release(String connectionId) async {
     final owner = _connectionOwners.remove(connectionId);
     _connectionCircuitKeys.remove(connectionId);
+    if (owner == null) {
+      // Unknown ID: log a warning. Routing to lease pool on null is risky
+      // because native IDs use different release semantics (poolReleaseConnection
+      // vs disconnect). We log and proceed with lease to avoid crashing callers,
+      // but this indicates a double-release or missing owner registration.
+      developer.log(
+        'release called for connection with no tracked owner: $connectionId',
+        name: 'adaptive_odbc_connection_pool',
+        level: 900,
+      );
+    }
     return switch (owner) {
       _AdaptivePoolOwner.native => _nativePool.release(connectionId),
       _AdaptivePoolOwner.lease => _leasePool.release(connectionId),
@@ -262,6 +274,13 @@ final class AdaptiveOdbcConnectionPool
   Future<Result<void>> discard(String connectionId) async {
     final owner = _connectionOwners.remove(connectionId);
     _connectionCircuitKeys.remove(connectionId);
+    if (owner == null) {
+      developer.log(
+        'discard called for connection with no tracked owner: $connectionId',
+        name: 'adaptive_odbc_connection_pool',
+        level: 900,
+      );
+    }
     return switch (owner) {
       _AdaptivePoolOwner.native => _nativePool.discard(connectionId),
       _AdaptivePoolOwner.lease => _leasePool.discard(connectionId),
@@ -513,6 +532,9 @@ final class AdaptiveOdbcConnectionPool
       if (current != null && current.cacheKey != resolved.cacheKey) {
         _nativeCircuits.clear();
         _connectionCircuitKeys.clear();
+        // Also clear owner map so stale IDs don't keep incorrect native/lease
+        // routing after a config/driver switch.
+        _connectionOwners.clear();
         _lastCircuitKey = null;
       }
       _driverInfo = resolved;

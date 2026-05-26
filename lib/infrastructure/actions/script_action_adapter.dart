@@ -39,9 +39,7 @@ class ScriptActionAdapter implements AgentActionAdapter {
       AgentActionPreflight(
         actionType: type,
         canRun: definition.canRun,
-        safeMessage: definition.canRun
-            ? 'Script action is ready to run.'
-            : 'Script action is valid but not active.',
+        safeMessage: definition.canRun ? 'Script action is ready to run.' : 'Script action is valid but not active.',
         redactedDiagnostics: {
           'argument_count': resolved.invocation.arguments.length,
           'has_working_directory': resolved.hasWorkingDirectory,

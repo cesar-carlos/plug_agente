@@ -316,8 +316,7 @@ class _FakeAgentActionSecretStore implements IAgentActionSecretStore {
   Future<bool> exists(String secretName) async => existing.contains(secretName);
 
   @override
-  Future<String?> readSecret(String secretName) async =>
-      existing.contains(secretName) ? 'value' : null;
+  Future<String?> readSecret(String secretName) async => existing.contains(secretName) ? 'value' : null;
 
   @override
   Future<void> saveSecret(String secretName, String secretValue) async {

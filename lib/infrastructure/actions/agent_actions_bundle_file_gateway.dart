@@ -12,16 +12,12 @@ class AgentActionsBundleFileGateway implements IAgentActionsBundleFileGateway {
     try {
       await File(filePath).writeAsString(payload);
       return const Success(unit);
-    } on IOException catch (error, stackTrace) {
+    } on IOException catch (error) {
       return Failure(
         domain.ServerFailure.withContext(
           message: 'Failed to write agent actions bundle file',
           cause: error,
-          context: {
-            'operation': 'writeText',
-            'filePath': filePath,
-            'stackTrace': stackTrace.toString(),
-          },
+          context: {'operation': 'writeText', 'filePath': filePath},
         ),
       );
     }
@@ -32,16 +28,12 @@ class AgentActionsBundleFileGateway implements IAgentActionsBundleFileGateway {
     try {
       final payload = await File(filePath).readAsString();
       return Success(payload);
-    } on IOException catch (error, stackTrace) {
+    } on IOException catch (error) {
       return Failure(
         domain.ServerFailure.withContext(
           message: 'Failed to read agent actions bundle file',
           cause: error,
-          context: {
-            'operation': 'readText',
-            'filePath': filePath,
-            'stackTrace': stackTrace.toString(),
-          },
+          context: {'operation': 'readText', 'filePath': filePath},
         ),
       );
     }

@@ -1,6 +1,14 @@
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 
+/// No-op error tracking stub.
+///
+/// Currently all methods fall back to local logging only — no external service
+/// is integrated. [isEnabled] reflects whether a DSN was provided at
+/// [initialize], but even when true nothing is sent remotely.
+///
+/// To integrate a real backend (e.g. Sentry): replace the bodies of
+/// [captureException] and [captureFailure] with SDK calls.
 class ErrorTracker {
   ErrorTracker._();
 

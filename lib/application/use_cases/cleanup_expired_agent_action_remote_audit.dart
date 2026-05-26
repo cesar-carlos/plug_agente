@@ -36,15 +36,12 @@ class CleanupExpiredAgentActionRemoteAudit {
       }
       _metrics?.recordRemoteAuditPurge(total);
       return Success(total);
-    } on Object catch (error, stackTrace) {
+    } on Object catch (error) {
       return Failure(
         ServerFailure.withContext(
           message: 'Failed to purge old agent action remote audit rows',
           cause: error,
-          context: {
-            'operation': 'cleanup_expired_agent_action_remote_audit',
-            'stack_trace': stackTrace.toString(),
-          },
+          context: {'operation': 'cleanup_expired_agent_action_remote_audit'},
         ),
       );
     }

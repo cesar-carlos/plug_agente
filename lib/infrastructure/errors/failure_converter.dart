@@ -20,7 +20,9 @@ class FailureConverter {
   /// Converts an exception to an appropriate [Failure] type.
   ///
   /// Uses exception type and message content to determine the most
-  /// appropriate failure type. Captures stack trace and enriches context.
+  /// appropriate failure type. The [stackTrace] is intentionally NOT stored
+  /// in [Failure.context] to prevent traces from leaking to RPC payloads;
+  /// callers should log it separately via developer.log before calling this.
   static Failure convert(
     Object exception,
     StackTrace stackTrace, {

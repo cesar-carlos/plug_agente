@@ -22,6 +22,13 @@ class AgentActionNotificationMessages {
     failureFallbackBody: 'Execution finished with a failure.',
   );
 
+  /// Returns the notification body for [status].
+  ///
+  /// [failureMessage] is intentionally NOT surfaced in desktop notifications
+  /// because it may contain technical details (exit codes, adapter output,
+  /// redaction-pending text) that are not safe to display in the OS
+  /// notification center. [failureFallbackBody] is always used for failure
+  /// states regardless of whether a message is present.
   String? bodyFor({
     required AgentActionExecutionStatus status,
     String? failureMessage,
@@ -33,17 +40,9 @@ class AgentActionNotificationMessages {
       AgentActionExecutionStatus.killed ||
       AgentActionExecutionStatus.cancelled ||
       AgentActionExecutionStatus.interrupted ||
-      AgentActionExecutionStatus.unknown => _trimmedOrNull(failureMessage) ?? failureFallbackBody,
+      AgentActionExecutionStatus.unknown => failureFallbackBody,
       AgentActionExecutionStatus.skipped => null,
       _ => null,
     };
-  }
-
-  String? _trimmedOrNull(String? value) {
-    if (value == null) {
-      return null;
-    }
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
   }
 }

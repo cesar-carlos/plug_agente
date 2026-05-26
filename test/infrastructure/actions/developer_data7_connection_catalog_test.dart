@@ -73,7 +73,8 @@ void main() {
 
     test('should ignore Senha and Usuario when computing snapshot hash', () async {
       const connectionId = '43134396-D875-4FBB-8EA0-85B2DAFFF69C';
-      const baseXml = '''
+      const baseXml =
+          '''
 <Configuracoes>
   <Item ID="$connectionId">
     <Descricao>Data7</Descricao>
@@ -89,7 +90,8 @@ void main() {
         required String usuario,
       }) {
         final catalog = DeveloperData7ConnectionCatalog(
-          readConfig: (_) async => '''
+          readConfig: (_) async =>
+              '''
 $baseXml
       <Senha>$senha</Senha>
       <Usuario>$usuario</Usuario>

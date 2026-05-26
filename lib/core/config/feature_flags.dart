@@ -46,16 +46,20 @@ class FeatureFlags {
   static const _keyEnableElevatedAgentActions = 'feature_enable_elevated_agent_actions';
   static const _keyEnableAgentActionRemoteAudit = 'feature_enable_agent_action_remote_audit';
   static const _keyEnableAgentActionsMaintenanceMode = 'feature_enable_agent_actions_maintenance_mode';
-  static const _keyEnableAgentActionsMaintenanceStrictMode =
-      'feature_enable_agent_actions_maintenance_strict_mode';
+  static const _keyEnableAgentActionsMaintenanceStrictMode = 'feature_enable_agent_actions_maintenance_strict_mode';
   static const _keyEnableAgentActionDangerousCommandWarnMode =
       'feature_enable_agent_action_dangerous_command_warn_mode';
   static const _keyEnableParallelJsonRpcBatchDispatch = 'feature_enable_parallel_json_rpc_batch_dispatch';
 
   /// Binary PayloadFrame transport is mandatory in the current socket contract.
+  ///
+  /// The getter is hard-coded to `true` because the hub no longer supports the
+  /// legacy text framing. The setter is retained for API compatibility but
+  /// cannot meaningfully disable binary transport.
   bool get enableBinaryPayload => true;
 
   Future<void> setEnableBinaryPayload(bool value) async {
+    // Binary transport is always required; value is ignored.
     await _prefs.setBool(_keyEnableBinaryPayload, true);
   }
 

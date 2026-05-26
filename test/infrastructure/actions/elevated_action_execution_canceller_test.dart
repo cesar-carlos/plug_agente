@@ -47,9 +47,11 @@ void main() {
         isFalse,
       );
 
-      final status = jsonDecode(
-        await File(AgentActionElevatedConstants.statusFilePath(tempDir.path, 'exec-1')).readAsString(),
-      ) as Map<String, dynamic>;
+      final status =
+          jsonDecode(
+                await File(AgentActionElevatedConstants.statusFilePath(tempDir.path, 'exec-1')).readAsString(),
+              )
+              as Map<String, dynamic>;
       expect(status['status'], AgentActionExecutionStatus.killed.name);
       expect(status['failureCode'], AgentActionFailureCode.executionKilled);
     });

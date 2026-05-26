@@ -15,8 +15,7 @@ class AgentActionSecretReferenceFingerprinter {
 
   /// Sorted map of secret name → `sha256:<hex>` or [missingFingerprint].
   Future<Map<String, String>> fingerprintsFor(AgentActionDefinition definition) async {
-    final names = AgentActionSecretPlaceholderScanner.collectFromDefinition(definition).toList()
-      ..sort();
+    final names = AgentActionSecretPlaceholderScanner.collectFromDefinition(definition).toList()..sort();
     if (names.isEmpty) {
       return const <String, String>{};
     }

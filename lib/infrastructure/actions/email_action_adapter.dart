@@ -40,9 +40,7 @@ class EmailActionAdapter implements AgentActionAdapter {
       AgentActionPreflight(
         actionType: type,
         canRun: definition.canRun,
-        safeMessage: definition.canRun
-            ? 'Email action is ready to run.'
-            : 'Email action is valid but not active.',
+        safeMessage: definition.canRun ? 'Email action is ready to run.' : 'Email action is valid but not active.',
         redactedDiagnostics: {
           'recipient_count': resolved.config.to.length,
           'cc_count': resolved.config.cc.length,

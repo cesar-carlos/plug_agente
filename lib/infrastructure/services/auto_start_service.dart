@@ -65,7 +65,7 @@ class AutoStartService implements IStartupService {
       );
       return Failure(
         StartupServiceFailure(
-          message: 'Falha ao consultar inicializacao automatica global',
+          message: 'Failed to query global auto-start status',
           cause: error,
         ),
       );
@@ -124,7 +124,7 @@ class AutoStartService implements IStartupService {
       );
       return Failure(
         StartupServiceFailure(
-          message: 'Falha ao validar configuracao de inicializacao automatica',
+          message: 'Failed to validate global auto-start launch configuration',
           cause: error,
         ),
       );
@@ -136,7 +136,7 @@ class AutoStartService implements IStartupService {
     if (!Platform.isWindows) {
       return const Failure(
         StartupServiceFailure(
-          message: 'Inicializacao automatica nao suportada neste sistema.',
+          message: 'Auto-start is not supported on this platform.',
         ),
       );
     }
@@ -170,11 +170,11 @@ class AutoStartService implements IStartupService {
       return Failure(
         StartupServiceFailure(
           message: _isUacCancelled(result)
-              ? 'Autorizacao UAC cancelada.'
+              ? 'UAC authorization cancelled.'
               : _isAccessDenied(result)
-              ? 'Permissao negada para habilitar inicializacao global. '
-                    'Execute o aplicativo como administrador.'
-              : 'Falha ao habilitar inicializacao global',
+              ? 'Permission denied when enabling global auto-start. '
+                    'Run the application as administrator.'
+              : 'Failed to enable global auto-start',
         ),
       );
     } on Exception catch (error, stackTrace) {
@@ -187,7 +187,7 @@ class AutoStartService implements IStartupService {
       );
       return Failure(
         StartupServiceFailure(
-          message: 'Falha ao habilitar inicializacao automatica global',
+          message: 'Failed to enable global auto-start',
           cause: error,
         ),
       );
@@ -221,11 +221,11 @@ class AutoStartService implements IStartupService {
       return Failure(
         StartupServiceFailure(
           message: _isUacCancelled(result)
-              ? 'Autorizacao UAC cancelada.'
+              ? 'UAC authorization cancelled.'
               : _isAccessDenied(result)
-              ? 'Permissao negada para desabilitar inicializacao global. '
-                    'Execute o aplicativo como administrador.'
-              : 'Falha ao desabilitar inicializacao global',
+              ? 'Permission denied when disabling global auto-start. '
+                    'Run the application as administrator.'
+              : 'Failed to disable global auto-start',
         ),
       );
     } on Exception catch (error, stackTrace) {
@@ -238,7 +238,7 @@ class AutoStartService implements IStartupService {
       );
       return Failure(
         StartupServiceFailure(
-          message: 'Falha ao desabilitar inicializacao automatica global',
+          message: 'Failed to disable global auto-start',
           cause: error,
         ),
       );
@@ -274,7 +274,7 @@ class AutoStartService implements IStartupService {
       );
       return Failure(
         StartupServiceFailure(
-          message: 'Falha ao abrir configuracoes de inicializacao do Windows',
+          message: 'Failed to open Windows startup settings',
           cause: error,
         ),
       );

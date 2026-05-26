@@ -22,10 +22,7 @@ int _streamOffsetUtf8(
   required String cursorKey,
   int? legacyOutputOffset,
 }) {
-  return jsonNonNegativeInt(params[offsetKey]) ??
-      jsonNonNegativeInt(params[cursorKey]) ??
-      legacyOutputOffset ??
-      0;
+  return jsonNonNegativeInt(params[offsetKey]) ?? jsonNonNegativeInt(params[cursorKey]) ?? legacyOutputOffset ?? 0;
 }
 
 bool _clientRequestsOutput(Map<String, dynamic> params) {

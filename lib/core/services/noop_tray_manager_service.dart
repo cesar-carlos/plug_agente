@@ -14,6 +14,8 @@ class NoopTrayManagerService implements ITrayService {
   @override
   Future<void> initialize({
     void Function(TrayMenuAction)? onMenuAction,
+    String showWindowLabel = 'Open Plug Database',
+    String exitLabel = 'Exit',
   }) async {
     if (_isInitialized) return;
 

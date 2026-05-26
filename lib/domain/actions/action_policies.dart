@@ -357,8 +357,9 @@ class AgentActionEnvironmentPolicy {
       allowedProfiles: allowedProfiles ?? this.allowedProfiles,
       allowedVariableNames: allowedVariableNames ?? this.allowedVariableNames,
       variables: variables ?? this.variables,
-      includeParentEnvironment:
-          clearIncludeParentEnvironment ? null : (includeParentEnvironment ?? this.includeParentEnvironment),
+      includeParentEnvironment: clearIncludeParentEnvironment
+          ? null
+          : (includeParentEnvironment ?? this.includeParentEnvironment),
     );
   }
 }

@@ -91,8 +91,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
           authProvider: () => _authProvider,
           configProvider: () => _configProvider,
         );
-    _hubRecoveryAuthBridge =
-        hubRecoveryAuthBridge ?? _buildRecoveryAuthBridge(_hubSessionCoordinator, _authProvider);
+    _hubRecoveryAuthBridge = hubRecoveryAuthBridge ?? _buildRecoveryAuthBridge(_hubSessionCoordinator, _authProvider);
     _resilienceCoordinator =
         hubResilienceCoordinator ??
         HubResilienceCoordinator(
@@ -326,8 +325,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
   void _onNegotiatingWatchdogTimeoutWithoutContext({required int timeoutMs}) {
     _resilienceCoordinator.cancelNegotiatingWatchdog();
     final failure = domain_errors.ConnectionFailure.withContext(
-      message:
-          'Protocol negotiation timed out. Reconnect to the hub or verify the server is responding.',
+      message: 'Protocol negotiation timed out. Reconnect to the hub or verify the server is responding.',
       context: {
         'operation': 'negotiating_watchdog',
         'timeout_ms': timeoutMs,

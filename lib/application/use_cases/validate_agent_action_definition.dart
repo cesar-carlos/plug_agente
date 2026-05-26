@@ -140,8 +140,7 @@ class ValidateAgentActionDefinition {
           'field': 'retry.maxAttempts',
           'phase': AgentActionProcessConstants.definitionValidationPhase,
           'reason': AgentActionValidationConstants.elevatedRetryNotAllowedReason,
-          'user_message':
-              'Acoes com execucao elevada (UAC) nao podem usar mais de uma tentativa automatica.',
+          'user_message': 'Acoes com execucao elevada (UAC) nao podem usar mais de uma tentativa automatica.',
         },
       );
     }
@@ -240,8 +239,7 @@ class ValidateAgentActionDefinition {
         field: 'queue.queueTimeout',
         configured: policies.queue.queueTimeout.inSeconds,
         ceiling: queueTimeoutCeiling.inSeconds,
-        userMessage:
-            'O timeout da fila excede o teto deste agente (${queueTimeoutCeiling.inSeconds}s).',
+        userMessage: 'O timeout da fila excede o teto deste agente (${queueTimeoutCeiling.inSeconds}s).',
       );
     }
 
@@ -251,8 +249,7 @@ class ValidateAgentActionDefinition {
         field: 'timeout.maxRuntime',
         configured: policies.timeout.maxRuntime.inSeconds,
         ceiling: maxRuntimeCeiling.inSeconds,
-        userMessage:
-            'O tempo maximo de execucao excede o teto deste agente (${maxRuntimeCeiling.inSeconds}s).',
+        userMessage: 'O tempo maximo de execucao excede o teto deste agente (${maxRuntimeCeiling.inSeconds}s).',
       );
     }
 
@@ -282,8 +279,7 @@ class ValidateAgentActionDefinition {
         field: 'capture.maxCapturedOutputBytes',
         configured: policies.capture.maxCapturedOutputBytes,
         ceiling: maxCapturedOutputBytes,
-        userMessage:
-            'O limite de captura de saida excede o teto deste agente ($maxCapturedOutputBytes bytes).',
+        userMessage: 'O limite de captura de saida excede o teto deste agente ($maxCapturedOutputBytes bytes).',
       );
     }
 

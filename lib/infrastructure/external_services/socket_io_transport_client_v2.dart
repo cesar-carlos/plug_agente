@@ -948,8 +948,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
 
   void _emitAgentHeartbeat() {
     // Unique trace id per heartbeat for distributed-tracing correlation.
-    final traceId =
-        '${DateTime.now().microsecondsSinceEpoch}-${_agentId.hashCode.toUnsigned(20).toRadixString(16)}';
+    final traceId = '${DateTime.now().microsecondsSinceEpoch}-${_agentId.hashCode.toUnsigned(20).toRadixString(16)}';
     final payload = <String, dynamic>{
       'agent_id': _agentId,
       'timestamp': DateTime.now().toUtc().toIso8601String(),

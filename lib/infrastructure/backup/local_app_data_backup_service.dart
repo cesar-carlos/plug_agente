@@ -24,6 +24,12 @@ import 'package:uuid/uuid.dart';
 
 const int _backupExportIsolateMinBytes = 512 * 1024;
 
+/// Maximum allowed ZIP archive size on disk (500 MB).
+const int _backupMaxZipBytes = 500 * 1024 * 1024;
+
+/// Maximum allowed total uncompressed size across all entries (2 GB).
+const int _backupMaxUncompressedBytes = 2 * 1024 * 1024 * 1024;
+
 const int _backupManifestFormatVersion = 1;
 const String _manifestFileName = 'manifest.json';
 const String _dbFileName = 'agent_config.db';
@@ -134,7 +140,14 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       if (!parent.existsSync()) {
         await parent.create(recursive: true);
       }
-      await out.writeAsBytes(zipBytes, flush: true);
+      // Write to a temporary file first, then rename atomically so a crash
+      // mid-write never leaves a partial archive at the destination path.
+      final tmp = File('${out.path}.tmp');
+      await tmp.writeAsBytes(zipBytes, flush: true);
+      if (out.existsSync()) {
+        await out.delete();
+      }
+      await tmp.rename(out.path);
       developer.log(
         'operation=exportBackupZip outcome=success bytes=$payloadBytes zipBytes=${zipBytes.length}',
         name: 'local_app_data_backup',
@@ -182,8 +195,41 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
   Future<Result<RestoreStagingSnapshot>> stageRestoreFromZip(String zipPath) async {
     Directory? staging;
     try {
-      final bytes = await File(zipPath).readAsBytes();
+      final zipFile = File(zipPath);
+      final zipStat = zipFile.statSync();
+      if (zipStat.size > _backupMaxZipBytes) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Backup archive is too large',
+            context: {
+              'size_bytes': zipStat.size,
+              'max_bytes': _backupMaxZipBytes,
+              ..._backupErr(LocalBackupErrorCodes.invalidEntry),
+            },
+          ),
+        );
+      }
+
+      final bytes = await zipFile.readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
+
+      // Guard against zip-bomb: reject if total uncompressed size exceeds cap.
+      final totalUncompressed = archive.files.fold<int>(
+        0,
+        (sum, f) => sum + (f.isFile ? (f.size) : 0),
+      );
+      if (totalUncompressed > _backupMaxUncompressedBytes) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Backup archive uncompressed size exceeds limit',
+            context: {
+              'uncompressed_bytes': totalUncompressed,
+              'max_bytes': _backupMaxUncompressedBytes,
+              ..._backupErr(LocalBackupErrorCodes.invalidEntry),
+            },
+          ),
+        );
+      }
       staging = await Directory.systemTemp.createTemp('plug_restore_');
       final root = staging.path;
 
@@ -285,9 +331,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       final hubRow = BackupSqliteReader.readHubRow(dbStaged.path);
       final duplicateRisk = await _resolveDuplicateRisk(hubRow);
 
-      final manifestInstallationId = manifest['installationId'] is String
-          ? manifest['installationId'] as String
-          : null;
+      final manifestInstallationId = manifest['installationId'] is String ? manifest['installationId'] as String : null;
       final currentInstallationId = _settingsStore.getString(AppConstants.installationIdSettingsKey);
 
       final snapshot = RestoreStagingSnapshot(
@@ -408,15 +452,18 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       _deleteIfExists(File('${targetDb.path}-shm'));
       _deleteIfExists(File('${targetSettings.path}.tmp'));
 
-      await stagedDb.copy(targetDb.path);
+      // Copy to .new temporary files, then rename atomically so a crash
+      // mid-copy leaves the .bak files intact and the live files untouched.
+      final newDbPath = '${targetDb.path}.new';
+      await stagedDb.copy(newDbPath);
+      await File(newDbPath).rename(targetDb.path);
 
       if (staging.stagedSettingsPath != null) {
         final stagedSettings = File(staging.stagedSettingsPath!);
         if (stagedSettings.existsSync()) {
-          if (targetSettings.existsSync()) {
-            await targetSettings.delete();
-          }
-          await stagedSettings.copy(targetSettings.path);
+          final newSettingsPath = '${targetSettings.path}.new';
+          await stagedSettings.copy(newSettingsPath);
+          await File(newSettingsPath).rename(targetSettings.path);
         }
       }
 

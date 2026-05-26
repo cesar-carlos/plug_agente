@@ -23,7 +23,6 @@ import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_defi
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_details_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_remote_audit_panel.dart';
-import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
 
@@ -44,7 +43,7 @@ class AgentActionsPage extends StatefulWidget {
 }
 
 class _AgentActionsPageState extends State<AgentActionsPage> {
-  int _selectedTabIndex = 0;
+  AgentActionsTab _selectedTab = AgentActionsTab.actions;
   bool _restoredUiPreferences = false;
   bool _isActionEditorDialogPendingOrOpen = false;
   late final AgentActionsUiPreferences _uiPreferences;
@@ -53,7 +52,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
   void initState() {
     super.initState();
     _uiPreferences = AgentActionsUiPreferences(() => widget.appSettingsStore);
-    _selectedTabIndex = _uiPreferences.readSelectedTabIndex() ?? 0;
+    _selectedTab = _uiPreferences.readSelectedTab();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -137,16 +136,13 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
                               runtimeCapabilities: widget.runtimeCapabilities,
                               runtimeDiagnostics: widget.runtimeDiagnostics,
                             )
-                          : AppCard(
-                              child: Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(AppSpacing.lg),
-                                  child: Text(
-                                    l10n.agentActionsDisabledMessage,
-                                    style: context.bodyMuted,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
+                          : Padding(
+                              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                              child: InfoBar(
+                                title: Text(l10n.agentActionsDisabledTitle),
+                                content: Text(l10n.agentActionsDisabledMessage),
+                                severity: InfoBarSeverity.warning,
+                                isLong: true,
                               ),
                             ),
                     ),
@@ -209,21 +205,34 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
         AppFluentTabItem(
           icon: FluentIcons.cloud,
           text: l10n.agentActionsRemoteAuditTitle,
-          body: AgentActionsRemoteAuditPanel(provider: provider, l10n: l10n),
+          body: AgentActionsRemoteAuditPanel(
+            provider: provider,
+            l10n: l10n,
+            onShowInHistory: () => _handleTabChanged(AgentActionsTab.history),
+          ),
         ),
     ];
-    final safeIndex = _selectedTabIndex.clamp(0, items.length - 1);
+    final tabOrder = [
+      AgentActionsTab.actions,
+      AgentActionsTab.history,
+      AgentActionsTab.settings,
+      if (provider.isRemoteAuditSectionVisible) AgentActionsTab.remoteAudit,
+    ];
+    var currentIndex = tabOrder.indexOf(_selectedTab);
+    if (currentIndex < 0) {
+      currentIndex = 0;
+    }
 
     return AppFluentTabView(
-      currentIndex: safeIndex,
-      onChanged: _handleTabChanged,
+      currentIndex: currentIndex,
+      onChanged: (index) => _handleTabChanged(tabOrder[index]),
       items: items,
     );
   }
 
-  void _handleTabChanged(int index) {
-    setState(() => _selectedTabIndex = index);
-    unawaited(_uiPreferences.persistSelectedTabIndex(index));
+  void _handleTabChanged(AgentActionsTab tab) {
+    setState(() => _selectedTab = tab);
+    unawaited(_uiPreferences.persistSelectedTab(tab));
   }
 
   void _restoreProviderUiPreferences(AgentActionsProvider provider) {
@@ -235,7 +244,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
   }
 
   void _runPageShortcut(VoidCallback action) {
-    if (_isTextInputFocused()) {
+    if (_isTextInputFocused() || _isActionEditorDialogPendingOrOpen) {
       return;
     }
     action();

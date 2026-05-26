@@ -48,9 +48,7 @@ class ActiveConfigResolver {
       );
     }
 
-    final result = metadataOnly
-        ? await _repository.getByIdMetadata(normalized)
-        : await _repository.getById(normalized);
+    final result = metadataOnly ? await _repository.getByIdMetadata(normalized) : await _repository.getById(normalized);
     if (setActiveOnSuccess && result.isSuccess()) {
       await setActiveConfigId(normalized);
     }
@@ -98,18 +96,15 @@ class ActiveConfigResolver {
       return;
     }
 
-    final nextConfig = configsResult
-        .getOrThrow()
-        .where((config) => config.id != normalized)
-        .fold<Config?>(
-          null,
-          (current, config) {
-            if (current == null || config.updatedAt.isAfter(current.updatedAt)) {
-              return config;
-            }
-            return current;
-          },
-        );
+    final nextConfig = configsResult.getOrThrow().where((config) => config.id != normalized).fold<Config?>(
+      null,
+      (current, config) {
+        if (current == null || config.updatedAt.isAfter(current.updatedAt)) {
+          return config;
+        }
+        return current;
+      },
+    );
 
     if (nextConfig == null) {
       await clearActiveConfigId();

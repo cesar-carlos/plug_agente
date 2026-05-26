@@ -168,8 +168,7 @@ void main() {
 
     test('agent.action.run should reuse getExecution result schema in MVP', () {
       final run = _agentActionOpenRpcSchemaRefs[AgentActionRpcConstants.agentActionRunRpcMethodName]!;
-      final getExecution =
-          _agentActionOpenRpcSchemaRefs[AgentActionRpcConstants.agentActionGetExecutionRpcMethodName]!;
+      final getExecution = _agentActionOpenRpcSchemaRefs[AgentActionRpcConstants.agentActionGetExecutionRpcMethodName]!;
       expect(run.resultSchema, getExecution.resultSchema);
     });
 

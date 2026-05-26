@@ -104,7 +104,8 @@ class SaveAgentActionDefinition {
     final pendingSnapshotHash = _snapshotter.snapshotHash(definitionWithRemote);
     if (definitionWithRemote.state == AgentActionState.active) {
       final preflightSnapshotHash = _preflightContentSnapshotHash(persistedDefinition);
-      final recordedPreflightHash = definition.lastPreflightSnapshotHash ?? definitionWithRemote.lastPreflightSnapshotHash;
+      final recordedPreflightHash =
+          definition.lastPreflightSnapshotHash ?? definitionWithRemote.lastPreflightSnapshotHash;
       final recordedPreflightValidatedAt =
           definition.lastPreflightValidatedAt ?? definitionWithRemote.lastPreflightValidatedAt;
       if (!AgentActionPreflightValidity.isValid(
@@ -114,7 +115,8 @@ class SaveAgentActionDefinition {
         now: _now(),
         settings: _preflightSettings,
       )) {
-        final isExpired = recordedPreflightHash != null &&
+        final isExpired =
+            recordedPreflightHash != null &&
             recordedPreflightHash == preflightSnapshotHash &&
             !AgentActionPreflightValidity.isTimestampValid(
               recordedPreflightValidatedAt,

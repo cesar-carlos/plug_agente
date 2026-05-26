@@ -52,7 +52,10 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
     if (metaChanged) {
       _metadataByLowerName = _buildColumnMetadataIndex(widget.columnMetadata);
     }
-    final dataChanged = !identical(oldWidget.data, widget.data) || oldWidget.data.length != widget.data.length;
+    // Compare by identity first (fast path). Fall back to length check as
+    // a secondary signal, but always update when identity differs — an in-place
+    // replacement with the same length must not leave _rowsCache stale.
+    final dataChanged = !identical(oldWidget.data, widget.data);
     if (dataChanged) {
       _dataSource.updateData(widget.data);
     }

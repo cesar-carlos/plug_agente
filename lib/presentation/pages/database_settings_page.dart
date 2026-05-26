@@ -1,9 +1,8 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
-import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -34,18 +33,26 @@ class DatabaseSettingsPage extends StatefulWidget {
 class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
   late int _selectedTabIndex;
   late final ConfigFormController _formController;
+  ConfigProvider? _configProviderListener;
 
   @override
   void initState() {
     super.initState();
-    _selectedTabIndex = widget.initialTab == 'advanced' ? 1 : 0;
+    _selectedTabIndex = widget.initialTab == AppRouteTabs.advanced ? 1 : 0;
     _formController = ConfigFormController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _configProviderListener = context.read<ConfigProvider>()..addListener(_onConfigChanged);
       if (widget.configId != null) {
         _loadConfig(widget.configId!);
       }
       _checkAndInitializeFields();
     });
+  }
+
+  void _onConfigChanged() {
+    if (!mounted) return;
+    _checkAndInitializeFields();
   }
 
   @override
@@ -76,19 +83,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
     final configProvider = context.read<ConfigProvider>();
     if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
       _formController.initializeFromConfig(configProvider.currentConfig);
-    } else if (configProvider.isLoading) {
-      unawaited(
-        Future.delayed(
-          AppConstants.formTransitionDelay,
-          _checkAndInitializeFields,
-        ).catchError(
-          (Object e, StackTrace? s) => AppLogger.warning(
-            'Form field initialization check failed',
-            e,
-            s,
-          ),
-        ),
-      );
+      setState(() {});
     }
   }
 
@@ -159,6 +154,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
 
   @override
   void dispose() {
+    _configProviderListener?.removeListener(_onConfigChanged);
     _formController.dispose();
     super.dispose();
   }
@@ -166,7 +162,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final configProvider = context.read<ConfigProvider>();
+    final configProvider = context.watch<ConfigProvider>();
     final connectionProvider = context.read<ConnectionProvider>();
 
     return ScaffoldPage(
@@ -179,131 +175,150 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
-          child: AppFluentTabView(
-            currentIndex: _selectedTabIndex,
-            onChanged: (index) {
-              setState(() {
-                _selectedTabIndex = index;
-              });
-            },
-            items: [
-              AppFluentTabItem(
-                icon: FluentIcons.database,
-                text: l10n.dbTabDatabase,
-                body: DatabaseConfigSection(
-                  formController: _formController,
-                  configProvider: configProvider,
-                  connectionProvider: connectionProvider,
-                  onDriverChanged: (value) {
-                    setState(() {
-                      configProvider.updateDriverName(value);
-                      final currentOdbcName = _formController.odbcDriverNameController.text;
+          child: configProvider.isLoading && !_formController.fieldsInitialized
+              ? const Center(child: ProgressRing())
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (configProvider.error.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: InfoBar(
+                          title: Text(l10n.modalTitleError),
+                          content: SelectableText(configProvider.error),
+                          severity: InfoBarSeverity.error,
+                          isLong: true,
+                        ),
+                      ),
+                    Expanded(
+                      child: AppFluentTabView(
+                        currentIndex: _selectedTabIndex,
+                        onChanged: (index) {
+                          setState(() {
+                            _selectedTabIndex = index;
+                          });
+                        },
+                        items: [
+                          AppFluentTabItem(
+                            icon: FluentIcons.database,
+                            text: l10n.dbTabDatabase,
+                            body: DatabaseConfigSection(
+                              formController: _formController,
+                              configProvider: configProvider,
+                              connectionProvider: connectionProvider,
+                              onDriverChanged: (value) {
+                                setState(() {
+                                  configProvider.updateDriverName(value);
+                                  final currentOdbcName = _formController.odbcDriverNameController.text;
 
-                      if (OdbcDrivers.isDefaultSuggestion(
-                        currentOdbcName,
-                      )) {
-                        final suggestion = OdbcDrivers.getDefaultDriver(
-                          value,
-                        );
-                        if (suggestion.isNotEmpty) {
-                          _formController.odbcDriverNameController.text = suggestion;
-                          configProvider.updateOdbcDriverName(suggestion);
-                        }
-                      }
-                    });
-                  },
-                  onTestConnection: () async {
-                    final odbcDriverName = _getValidatedOdbcDriverName(l10n);
-                    if (odbcDriverName == null) {
-                      return;
-                    }
+                                  if (OdbcDrivers.isDefaultSuggestion(
+                                    currentOdbcName,
+                                  )) {
+                                    final suggestion = OdbcDrivers.getDefaultDriver(
+                                      value,
+                                    );
+                                    if (suggestion.isNotEmpty) {
+                                      _formController.odbcDriverNameController.text = suggestion;
+                                      configProvider.updateOdbcDriverName(suggestion);
+                                    }
+                                  }
+                                });
+                              },
+                              onTestConnection: () async {
+                                final odbcDriverName = _getValidatedOdbcDriverName(l10n);
+                                if (odbcDriverName == null) {
+                                  return;
+                                }
 
-                    final isInstalled = await _ensureOdbcDriverInstalled(
-                      l10n: l10n,
-                      connectionProvider: connectionProvider,
-                      odbcDriverName: odbcDriverName,
-                      notFoundMessageBuilder: l10n.odbcDriverNotFoundTest,
-                    );
-                    if (!isInstalled) {
-                      return;
-                    }
+                                final isInstalled = await _ensureOdbcDriverInstalled(
+                                  l10n: l10n,
+                                  connectionProvider: connectionProvider,
+                                  odbcDriverName: odbcDriverName,
+                                  notFoundMessageBuilder: l10n.odbcDriverNotFoundTest,
+                                );
+                                if (!isInstalled) {
+                                  return;
+                                }
 
-                    _formController.updateAllFieldsToProvider(
-                      configProvider,
-                    );
-                    final connectionString = configProvider.getConnectionString();
-                    final testResult = await connectionProvider.testDbConnection(
-                      connectionString,
-                    );
+                                _formController.updateAllFieldsToProvider(
+                                  configProvider,
+                                );
+                                final connectionString = configProvider.getConnectionString();
+                                final testResult = await connectionProvider.testDbConnection(
+                                  connectionString,
+                                );
 
-                    if (!mounted) {
-                      return;
-                    }
+                                if (!mounted) {
+                                  return;
+                                }
 
-                    testResult.fold(
-                      (connected) => _showDatabaseConnectionResult(l10n, connected),
-                      (failure) {
-                        SettingsFeedback.showError(
-                          context: context,
-                          title: l10n.modalTitleErrorTestingConnection,
-                          message: failure.toDisplayMessageWithOdbcDetailLocalized(
-                            context,
+                                testResult.fold(
+                                  (connected) => _showDatabaseConnectionResult(l10n, connected),
+                                  (failure) {
+                                    SettingsFeedback.showError(
+                                      context: context,
+                                      title: l10n.modalTitleErrorTestingConnection,
+                                      message: failure.toDisplayMessageWithOdbcDetailLocalized(
+                                        context,
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              onSaveConfig: () async {
+                                final odbcDriverName = _getValidatedOdbcDriverName(l10n);
+                                if (odbcDriverName == null) {
+                                  return;
+                                }
+
+                                final isInstalled = await _ensureOdbcDriverInstalled(
+                                  l10n: l10n,
+                                  connectionProvider: connectionProvider,
+                                  odbcDriverName: odbcDriverName,
+                                  notFoundMessageBuilder: l10n.odbcDriverNotFoundSave,
+                                );
+                                if (!isInstalled) {
+                                  return;
+                                }
+
+                                _formController.updateAllFieldsToProvider(
+                                  configProvider,
+                                );
+                                final saveResult = await configProvider.saveConfig();
+
+                                if (!mounted) {
+                                  return;
+                                }
+
+                                saveResult.fold(
+                                  (_) {
+                                    SettingsFeedback.showSuccess(
+                                      context: context,
+                                      title: l10n.modalTitleConfigSaved,
+                                      message: l10n.msgConfigSavedSuccessfully,
+                                    );
+                                  },
+                                  (failure) {
+                                    SettingsFeedback.showError(
+                                      context: context,
+                                      title: l10n.modalTitleErrorSaving,
+                                      message: failure.toDisplayMessage(),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                           ),
-                        );
-                      },
-                    );
-                  },
-                  onSaveConfig: () async {
-                    final odbcDriverName = _getValidatedOdbcDriverName(l10n);
-                    if (odbcDriverName == null) {
-                      return;
-                    }
-
-                    final isInstalled = await _ensureOdbcDriverInstalled(
-                      l10n: l10n,
-                      connectionProvider: connectionProvider,
-                      odbcDriverName: odbcDriverName,
-                      notFoundMessageBuilder: l10n.odbcDriverNotFoundSave,
-                    );
-                    if (!isInstalled) {
-                      return;
-                    }
-
-                    _formController.updateAllFieldsToProvider(
-                      configProvider,
-                    );
-                    final saveResult = await configProvider.saveConfig();
-
-                    if (!mounted) {
-                      return;
-                    }
-
-                    saveResult.fold(
-                      (_) {
-                        SettingsFeedback.showSuccess(
-                          context: context,
-                          title: l10n.modalTitleConfigSaved,
-                          message: l10n.msgConfigSavedSuccessfully,
-                        );
-                      },
-                      (failure) {
-                        SettingsFeedback.showError(
-                          context: context,
-                          title: l10n.modalTitleErrorSaving,
-                          message: failure.toDisplayMessage(),
-                        );
-                      },
-                    );
-                  },
+                          AppFluentTabItem(
+                            icon: FluentIcons.developer_tools,
+                            text: l10n.dbTabAdvanced,
+                            body: const OdbcConnectionPoolSection(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              AppFluentTabItem(
-                icon: FluentIcons.developer_tools,
-                text: l10n.dbTabAdvanced,
-                body: const OdbcConnectionPoolSection(),
-              ),
-            ],
-          ),
         ),
       ),
     );

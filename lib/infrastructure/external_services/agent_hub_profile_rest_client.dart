@@ -87,7 +87,7 @@ class AgentHubProfileRestClient implements IAgentHubProfileGateway {
       }
 
       return Failure(_failureForStatus(response.statusCode, response.data));
-    } on DioException catch (error, stackTrace) {
+    } on DioException catch (error) {
       final status = error.response?.statusCode;
       if (status != null) {
         return Failure(_failureForStatus(status, error.response?.data));
@@ -96,10 +96,7 @@ class AgentHubProfileRestClient implements IAgentHubProfileGateway {
         domain.NetworkFailure.withContext(
           message: 'Could not reach the hub to update profile',
           cause: error,
-          context: {
-            'operation': 'patchAgentProfile',
-            'stackTrace': stackTrace.toString(),
-          },
+          context: {'operation': 'patchAgentProfile'},
         ),
       );
     }

@@ -23,9 +23,7 @@ class AgentActionsRemoteCapabilityProvider implements IAgentActionsRemoteCapabil
   }) {
     final runtimeSnapshot = _runtimeStateGuard.snapshot;
     final status = runtimeSnapshot.status.name;
-    final unavailableTypes = runtimeSnapshot.unavailableActionTypes
-        .map((type) => type.name)
-        .toList(growable: false);
+    final unavailableTypes = runtimeSnapshot.unavailableActionTypes.map((type) => type.name).toList(growable: false);
 
     return AgentActionsRemoteCapabilityBuilder.build(
       supportedTypes: supportedTypes,

@@ -440,7 +440,8 @@ class RpcBatchInboundHandler {
   }
 
   int _parallelBatchDispatchConcurrency(List<RpcRequest> requests) {
-    final negotiatedMax = _negotiatedParallelBatchDispatch()?.maxConcurrency ??
+    final negotiatedMax =
+        _negotiatedParallelBatchDispatch()?.maxConcurrency ??
         RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency;
     if (requests.any((request) => request.method == RpcBatchConstants.parallelJsonRpcBatchSqlExecuteMethod)) {
       return RpcBatchConstants.parallelJsonRpcBatchSqlExecuteConcurrencyForPoolSize(

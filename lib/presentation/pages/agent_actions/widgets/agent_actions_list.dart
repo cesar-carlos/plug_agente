@@ -1,5 +1,4 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/application/actions/actions.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -116,7 +115,7 @@ class AgentActionsList extends StatelessWidget {
                   needsValidation: definition.state == AgentActionState.needsValidation,
                   secretPlaceholderNames: definition.id == provider.selectedActionId
                       ? provider.selectedSecretPlaceholderNames
-                      : AgentActionSecretPlaceholderScanner.collectFromDefinition(definition),
+                      : provider.secretPlaceholderNamesFor(definition),
                   triggers: definition.id == provider.selectedActionId
                       ? provider.triggers
                       : const <AgentActionTrigger>[],

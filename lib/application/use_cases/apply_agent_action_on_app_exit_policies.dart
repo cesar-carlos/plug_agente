@@ -77,7 +77,13 @@ class ApplyAgentActionOnAppExitPolicies {
       }
 
       if (lifecycle.onAppExit == AgentActionOnAppExitBehavior.waitThenKillMainProcess) {
-        await Future<void>.delayed(lifecycle.waitBeforeKillOnAppExit);
+        // Cap the wait so a pathological policy value does not block exit
+        // indefinitely. waitBeforeKillOnAppExit is typically a few seconds.
+        const maxWait = Duration(seconds: 30);
+        final wait = lifecycle.waitBeforeKillOnAppExit < maxWait
+            ? lifecycle.waitBeforeKillOnAppExit
+            : maxWait;
+        await Future<void>.delayed(wait);
       }
 
       final cancelResult = await _cancelExecution(execution.id);

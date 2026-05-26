@@ -29,6 +29,10 @@ class AgentActionSubsystemCoordinator {
 
   Future<void> exitMaintenanceMode() async {
     await _featureFlags.setEnableAgentActionsMaintenanceMode(false);
+    // Exit maintenance in the guard immediately so remote calls in the
+    // brief window before markReady() is called by _restoreOperationalState
+    // are not blocked with a maintenance reason.
+    _runtimeStateGuard.markReady();
     await _restoreOperationalState(resumeScheduler: true);
   }
 

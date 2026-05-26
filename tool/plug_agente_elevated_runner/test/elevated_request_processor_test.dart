@@ -12,7 +12,9 @@ void main() {
     late String dbPath;
 
     setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('elevated_helper_processor_');
+      tempDir = await Directory.systemTemp.createTemp(
+        'elevated_helper_processor_',
+      );
       dbPath = ElevatedContract.databasePath(tempDir.path);
       await _seedDatabase(
         dbPath: dbPath,
@@ -28,55 +30,78 @@ void main() {
       }
     });
 
-    test('should process valid request and write terminal status file', () async {
-      final requestsDir = Directory(ElevatedContract.requestsDirectory(tempDir.path));
-      await requestsDir.create(recursive: true);
-      const nonce = 'nonce-1';
-      final expiresAt = DateTime.utc(2026, 5, 18, 13);
-      await File(ElevatedContract.requestFilePath(tempDir.path, 'exec-1')).writeAsString(
-        jsonEncode(<String, Object?>{
-          'version': ElevatedContract.requestSchemaVersion,
-          'executionId': 'exec-1',
-          'nonce': nonce,
-          'createdAt': DateTime.utc(2026, 5, 18, 12).toIso8601String(),
-          'expiresAt': expiresAt.toIso8601String(),
-        }),
-      );
-      await File(ElevatedContract.materializedFilePath(tempDir.path, 'exec-1')).parent.create(recursive: true);
-      await File(ElevatedContract.materializedFilePath(tempDir.path, 'exec-1')).writeAsString(
-        jsonEncode(<String, Object?>{
-          'version': ElevatedContract.materializedSchemaVersion,
-          'executionId': 'exec-1',
-          'nonce': nonce,
-          'expiresAt': expiresAt.toIso8601String(),
-          'actionType': 'commandLine',
-          'launch': <String, Object?>{
-            'executable': 'cmd.exe',
-            'arguments': <String>['/c', 'echo hello'],
-            'commandPreview': 'echo hello',
-          },
-        }),
-      );
+    test(
+      'should process valid request and write terminal status file',
+      () async {
+        final requestsDir = Directory(
+          ElevatedContract.requestsDirectory(tempDir.path),
+        );
+        await requestsDir.create(recursive: true);
+        const nonce = 'nonce-1';
+        final expiresAt = DateTime.utc(2026, 5, 18, 13);
+        await File(
+          ElevatedContract.requestFilePath(tempDir.path, 'exec-1'),
+        ).writeAsString(
+          jsonEncode(<String, Object?>{
+            'version': ElevatedContract.requestSchemaVersion,
+            'executionId': 'exec-1',
+            'nonce': nonce,
+            'createdAt': DateTime.utc(2026, 5, 18, 12).toIso8601String(),
+            'expiresAt': expiresAt.toIso8601String(),
+          }),
+        );
+        await File(
+          ElevatedContract.materializedFilePath(tempDir.path, 'exec-1'),
+        ).parent.create(recursive: true);
+        await File(
+          ElevatedContract.materializedFilePath(tempDir.path, 'exec-1'),
+        ).writeAsString(
+          jsonEncode(<String, Object?>{
+            'version': ElevatedContract.materializedSchemaVersion,
+            'executionId': 'exec-1',
+            'nonce': nonce,
+            'expiresAt': expiresAt.toIso8601String(),
+            'actionType': 'commandLine',
+            'launch': <String, Object?>{
+              'executable': 'cmd.exe',
+              'arguments': <String>['/c', 'echo hello'],
+              'commandPreview': 'echo hello',
+            },
+          }),
+        );
 
-      final processor = ElevatedRequestProcessor(
-        appDirectoryPath: tempDir.path,
-        now: () => DateTime.utc(2026, 5, 18, 12, 1),
-      );
+        final processor = ElevatedRequestProcessor(
+          appDirectoryPath: tempDir.path,
+          now: () => DateTime.utc(2026, 5, 18, 12, 1),
+        );
 
-      final processed = await processor.processPendingRequests();
+        final processed = await processor.processPendingRequests();
 
-      expect(processed, 1);
-      expect(File(ElevatedContract.requestFilePath(tempDir.path, 'exec-1')).existsSync(), isFalse);
-      final statusFile = File(ElevatedContract.statusFilePath(tempDir.path, 'exec-1'));
-      expect(statusFile.existsSync(), isTrue);
-      final status = jsonDecode(await statusFile.readAsString()) as Map<String, dynamic>;
-      expect(status['status'], 'succeeded');
-      expect(status['executionId'], 'exec-1');
-    });
+        expect(processed, 1);
+        expect(
+          File(
+            ElevatedContract.requestFilePath(tempDir.path, 'exec-1'),
+          ).existsSync(),
+          isFalse,
+        );
+        final statusFile = File(
+          ElevatedContract.statusFilePath(tempDir.path, 'exec-1'),
+        );
+        expect(statusFile.existsSync(), isTrue);
+        final status =
+            jsonDecode(await statusFile.readAsString()) as Map<String, dynamic>;
+        expect(status['status'], 'succeeded');
+        expect(status['executionId'], 'exec-1');
+      },
+    );
 
     test('should reject request files with invalid createdAt', () async {
-      await Directory(ElevatedContract.requestsDirectory(tempDir.path)).create(recursive: true);
-      await File(ElevatedContract.requestFilePath(tempDir.path, 'exec-1')).writeAsString(
+      await Directory(
+        ElevatedContract.requestsDirectory(tempDir.path),
+      ).create(recursive: true);
+      await File(
+        ElevatedContract.requestFilePath(tempDir.path, 'exec-1'),
+      ).writeAsString(
         jsonEncode(<String, Object?>{
           'version': ElevatedContract.requestSchemaVersion,
           'executionId': 'exec-1',
@@ -93,15 +118,26 @@ void main() {
 
       await processor.processPendingRequests();
 
-      final status = jsonDecode(
-        await File(ElevatedContract.statusFilePath(tempDir.path, 'exec-1')).readAsString(),
-      ) as Map<String, dynamic>;
-      expect(status['failureCode'], 'ACTION_ELEVATED_REQUEST_PROTECTION_FAILED');
+      final status =
+          jsonDecode(
+                await File(
+                  ElevatedContract.statusFilePath(tempDir.path, 'exec-1'),
+                ).readAsString(),
+              )
+              as Map<String, dynamic>;
+      expect(
+        status['failureCode'],
+        'ACTION_ELEVATED_REQUEST_PROTECTION_FAILED',
+      );
     });
 
     test('should reject expired request files', () async {
-      await Directory(ElevatedContract.requestsDirectory(tempDir.path)).create(recursive: true);
-      await File(ElevatedContract.requestFilePath(tempDir.path, 'exec-1')).writeAsString(
+      await Directory(
+        ElevatedContract.requestsDirectory(tempDir.path),
+      ).create(recursive: true);
+      await File(
+        ElevatedContract.requestFilePath(tempDir.path, 'exec-1'),
+      ).writeAsString(
         jsonEncode(<String, Object?>{
           'version': ElevatedContract.requestSchemaVersion,
           'executionId': 'exec-1',
@@ -118,11 +154,18 @@ void main() {
 
       await processor.processPendingRequests();
 
-      final status = jsonDecode(
-        await File(ElevatedContract.statusFilePath(tempDir.path, 'exec-1')).readAsString(),
-      ) as Map<String, dynamic>;
+      final status =
+          jsonDecode(
+                await File(
+                  ElevatedContract.statusFilePath(tempDir.path, 'exec-1'),
+                ).readAsString(),
+              )
+              as Map<String, dynamic>;
       expect(status['status'], 'failed');
-      expect(status['failureCode'], 'ACTION_ELEVATED_REQUEST_PROTECTION_FAILED');
+      expect(
+        status['failureCode'],
+        'ACTION_ELEVATED_REQUEST_PROTECTION_FAILED',
+      );
     });
   });
 }
@@ -176,13 +219,13 @@ INSERT INTO agent_action_definition_table (
         'Test action',
         'commandLine',
         'active',
-        jsonEncode(<String, Object?>{
-          'command': command,
-        }),
+        jsonEncode(<String, Object?>{'command': command}),
         jsonEncode(<String, Object?>{
           'timeout': {'maxRuntimeMs': 60000},
           'capture': {'maxCapturedOutputBytes': 4096},
-          'exitCode': {'acceptedExitCodes': [0]},
+          'exitCode': {
+            'acceptedExitCodes': [0],
+          },
         }),
         nowMs,
         nowMs,
@@ -194,7 +237,14 @@ INSERT INTO agent_action_execution_table (
   id, action_id, action_type, status, requested_at, source
 ) VALUES (?, ?, ?, ?, ?, ?)
 ''',
-      <Object?>[executionId, actionId, 'commandLine', 'running', nowMs, 'localUi'],
+      <Object?>[
+        executionId,
+        actionId,
+        'commandLine',
+        'running',
+        nowMs,
+        'localUi',
+      ],
     );
   } finally {
     database.dispose();

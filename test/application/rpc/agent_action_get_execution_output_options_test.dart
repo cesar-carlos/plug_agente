@@ -10,9 +10,7 @@ void main() {
           'include_output': false,
           'stdout_offset': 10,
         },
-        capturePolicy: const AgentActionCapturePolicy(
-          
-        ),
+        capturePolicy: const AgentActionCapturePolicy(),
       );
 
       expect(options.exposeStdout, isFalse);

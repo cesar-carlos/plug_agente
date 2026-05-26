@@ -57,7 +57,7 @@ class AgentActionRepository implements IAgentActionRepository {
               'operation': 'getActionDefinition',
               'action_id': id,
               'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Acao nao encontrada. Atualize a lista e tente novamente.',
+              'user_message': 'Action definition not found. Refresh the list and try again.',
             },
           ),
         );
@@ -103,6 +103,11 @@ class AgentActionRepository implements IAgentActionRepository {
 
   @override
   Future<Result<void>> deleteDefinition(String id) async {
+    // By design, deleting a definition preserves its execution history and
+    // captured output chunks. These rows use action_id as a soft reference
+    // (no FK in the Drift schema) so they remain accessible for audit/history
+    // purposes even after the definition is removed. Periodic purge jobs
+    // (AgentActionExecutionPeriodicPurge, captured-output purge) handle cleanup.
     try {
       var definitionExisted = false;
       await _database.transaction(() async {
@@ -130,7 +135,7 @@ class AgentActionRepository implements IAgentActionRepository {
               'operation': 'deleteActionDefinition',
               'action_id': id,
               'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Acao nao encontrada. Atualize a lista e tente novamente.',
+              'user_message': 'Action definition not found. Refresh the list and try again.',
             },
           ),
         );
@@ -189,7 +194,7 @@ class AgentActionRepository implements IAgentActionRepository {
               'operation': 'getActionTrigger',
               'trigger_id': id,
               'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Gatilho nao encontrado. Atualize a lista e tente novamente.',
+              'user_message': 'Trigger not found. Refresh the list and try again.',
             },
           ),
         );
@@ -273,7 +278,7 @@ class AgentActionRepository implements IAgentActionRepository {
               'operation': 'deleteActionTrigger',
               'trigger_id': id,
               'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Gatilho nao encontrado. Atualize a lista e tente novamente.',
+              'user_message': 'Trigger not found. Refresh the list and try again.',
             },
           ),
         );
@@ -340,7 +345,7 @@ class AgentActionRepository implements IAgentActionRepository {
               'operation': 'getActionExecution',
               'execution_id': id,
               'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-              'user_message': 'Execucao nao encontrada. Atualize o historico e tente novamente.',
+              'user_message': 'Execution not found. Refresh the history and try again.',
             },
           ),
         );

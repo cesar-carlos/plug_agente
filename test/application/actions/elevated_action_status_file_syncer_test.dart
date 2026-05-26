@@ -108,15 +108,16 @@ void main() {
         timeout: const Duration(seconds: 2),
       );
 
-      final timeoutResult = await ElevatedActionStatusFileSyncer(
-        storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
-        metrics: metrics,
-        now: () => DateTime.utc(2026, 5, 18, 12, 30),
-      ).waitForTerminalResult(
-        executionId: 'exec-timeout',
-        processStartedAt: DateTime.utc(2026, 5, 18, 12),
-        timeout: Duration.zero,
-      );
+      final timeoutResult =
+          await ElevatedActionStatusFileSyncer(
+            storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
+            metrics: metrics,
+            now: () => DateTime.utc(2026, 5, 18, 12, 30),
+          ).waitForTerminalResult(
+            executionId: 'exec-timeout',
+            processStartedAt: DateTime.utc(2026, 5, 18, 12),
+            timeout: Duration.zero,
+          );
 
       expect(timeoutResult.isError(), isTrue);
       final snapshot = metrics.getSnapshot();

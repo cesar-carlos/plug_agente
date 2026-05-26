@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/config/app_environment.dart';
-import 'package:plug_agente/infrastructure/datasources/agent_config_data_source.dart' show AgentActionCapturedOutputChunkTable;
+import 'package:plug_agente/infrastructure/datasources/agent_config_data_source.dart'
+    show AgentActionCapturedOutputChunkTable;
 import 'package:plug_agente/infrastructure/datasources/datasources.dart' show AgentActionCapturedOutputChunkTable;
 import 'package:plug_agente/infrastructure/infrastructure.dart' show AgentActionCapturedOutputChunkTable;
 

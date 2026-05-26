@@ -24,9 +24,11 @@ class HubAvailabilityProbe implements IHubAvailabilityProbe {
     final targetUrl = joinServerUrlAndPath(serverUrl, _probePath);
     try {
       final response = await _dio.get<void>(targetUrl);
+      // Any HTTP response (including 5xx) confirms the server is reachable.
+      // Use a separate health check if you need to distinguish healthy vs degraded.
       return response.statusCode != null;
     } on DioException catch (error) {
-      // Any HTTP response means host is reachable (even 401/403/404).
+      // Any HTTP response (including 4xx/5xx) means the host is reachable.
       if (error.response != null) {
         return true;
       }

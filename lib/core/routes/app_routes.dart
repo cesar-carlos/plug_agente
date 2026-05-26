@@ -97,12 +97,22 @@ class WebSocketSettingsRoute extends GoRouteData {
   }
 }
 
+/// Route-level auth guard.
+///
+/// Currently a no-op placeholder — all routes are accessible because the app
+/// uses session/connection state managed by the presentation connection provider
+/// rather than route-level auth. The redirect target is kept so future
+/// implementations have a clear contract to fulfill.
+/// Stable tab name tokens used in route `?tab=` query params.
+abstract final class AppRouteTabs {
+  static const String database = 'database';
+  static const String advanced = 'advanced';
+}
+
 class RouteGuard {
   const RouteGuard();
 
-  Future<bool> isAuthenticated() async {
-    return true;
-  }
+  Future<bool> isAuthenticated() async => true;
 
   String get unauthenticatedRedirect => AppRoutes.dashboard;
 }

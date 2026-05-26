@@ -111,6 +111,7 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
   );
   int cleanupCount = 0;
   int installCount = 0;
+
   /// Optional hook executed just before the install result is returned, allowing
   /// tests to simulate state changes that happen during download (e.g. the user
   /// disabling silent updates while the installer is running).
@@ -1053,8 +1054,7 @@ void main() {
           'version': '99.0.0+1',
           'installerPath': r'C:\OldPath\PlugAgente\updates\PlugAgente-Setup-99.0.0.exe',
           'launcherPath': r'C:\OldPath\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
-          'launcherStatusPath':
-              r'C:\OldPath\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+          'launcherStatusPath': r'C:\OldPath\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
           'logPath': r'C:\OldPath\PlugAgente\updates\PlugAgente-Update-99.0.0+1.log',
           'installDirectory': r'C:\OldPath\PlugAgente',
           'strategy': 'currentUserThenElevated',
@@ -1571,8 +1571,7 @@ void main() {
       test('checkInBackground uses Sparkle path when silent updates are disabled', () async {
         await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
         final fakeGateway = FakeAutoUpdaterGateway();
-        final fakeCoordinator = FakeSilentUpdateCoordinator()
-          ..automaticSilentUpdatesEnabledValue = false;
+        final fakeCoordinator = FakeSilentUpdateCoordinator()..automaticSilentUpdatesEnabledValue = false;
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
           updaterGateway: fakeGateway,
@@ -1668,8 +1667,10 @@ void main() {
           silentUpdateCoordinator: fakeCoordinator,
         );
 
-        expect(orchestrator.lastAutomaticDiagnostics?.completionSource,
-            UpdateCheckCompletionSource.automaticUpdateNotAvailable);
+        expect(
+          orchestrator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticUpdateNotAvailable,
+        );
       });
     });
   });

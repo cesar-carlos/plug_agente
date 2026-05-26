@@ -27,7 +27,8 @@ import '../../../tool/agent_action_security_gate_checklist.dart';
 ({
   AgentActionAdapterRegistry adapters,
   AgentActionLocalRunnerRegistry runners,
-}) buildMvp5AgentActionRegistries() {
+})
+buildMvp5AgentActionRegistries() {
   final pathValidator = ActionPathValidator(
     fileExists: (_) async => true,
     directoryExists: (_) async => true,

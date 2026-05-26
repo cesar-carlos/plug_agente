@@ -259,17 +259,16 @@ class ProtocolNegotiator implements IProtocolNegotiator {
       return null;
     }
 
-    final maxConcurrency = _negotiateMinPositiveInt(
+    final maxConcurrency =
+        _negotiateMinPositiveInt(
           agentRaw['maxConcurrency'],
           serverRaw['maxConcurrency'],
         ) ??
         RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency;
     final mixedReadOnlyMethods =
-        (agentRaw['mixedReadOnlyMethods'] as bool? ?? false) &&
-        (serverRaw['mixedReadOnlyMethods'] as bool? ?? false);
+        (agentRaw['mixedReadOnlyMethods'] as bool? ?? false) && (serverRaw['mixedReadOnlyMethods'] as bool? ?? false);
     final selectOnlySqlExecute =
-        (agentRaw['selectOnlySqlExecute'] as bool? ?? false) &&
-        (serverRaw['selectOnlySqlExecute'] as bool? ?? false);
+        (agentRaw['selectOnlySqlExecute'] as bool? ?? false) && (serverRaw['selectOnlySqlExecute'] as bool? ?? false);
 
     return ParallelBatchDispatchNegotiation.agentAdvertisement(
       enabled: true,

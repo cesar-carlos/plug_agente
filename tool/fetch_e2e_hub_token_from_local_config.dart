@@ -60,7 +60,9 @@ Future<({String token, String source})?> _resolveFromLocalConfig(
     username: config.authUsername!.trim(),
     password: config.authPassword!.trim(),
   );
-  final loginTarget = loginServerUrl == null ? 'saved credentials in local config / secure storage' : 'saved credentials against E2E_HUB_URL';
+  final loginTarget = loginServerUrl == null
+      ? 'saved credentials in local config / secure storage'
+      : 'saved credentials against E2E_HUB_URL';
   return (token: result.accessToken, source: 'Hub login ($loginTarget)');
 }
 
@@ -99,14 +101,14 @@ void main(List<String> args) async {
     final fileEnv = loadRepoEnvFile(projectRoot);
     final envHubUrl = envValue(fileEnv, 'E2E_HUB_URL');
     final envAgentId = envValue(fileEnv, 'E2E_HUB_AGENT_ID');
-    final loginServerUrl =
-        envHubUrl != null && !isPlaceholderServerUrl(envHubUrl) ? hubHttpLoginServerUrl(envHubUrl) : null;
+    final loginServerUrl = envHubUrl != null && !isPlaceholderServerUrl(envHubUrl)
+        ? hubHttpLoginServerUrl(envHubUrl)
+        : null;
 
     final config = readLatestResolvedLocalAgentHubConfig();
     if (config != null && !isPlaceholderServerUrl(config.serverUrl)) {
       final preferLoginOverCachedToken =
-          forceToken ||
-          _envHubLoginDiffersFromConfig(envHubUrl: envHubUrl, configServerUrl: config.serverUrl);
+          forceToken || _envHubLoginDiffersFromConfig(envHubUrl: envHubUrl, configServerUrl: config.serverUrl);
       resolved = await _resolveFromLocalConfig(
         config,
         loginServerUrl: loginServerUrl,

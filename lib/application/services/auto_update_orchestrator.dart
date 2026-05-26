@@ -75,20 +75,21 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     Duration automaticFailureCooldown = SilentUpdateCoordinator.defaultAutomaticFailureCooldown,
     Duration helperWaitDuration = SilentUpdateCoordinator.defaultHelperWaitDuration,
     ISilentUpdateCoordinator? silentUpdateCoordinator,
-  })  : _updaterGateway = updaterGateway,
-        _appcastProbeService = appcastProbeService,
-        _settingsStore = settingsStore,
-        _metricsCollector = metricsCollector,
-        _allowQuitForUpdate = allowQuitForUpdate,
-        _manualTriggerTimeout = manualTriggerTimeout,
-        _manualCompletionTimeout = manualCompletionTimeout,
-        _timeoutCircuitThreshold = timeoutCircuitThreshold,
-        _timeoutCircuitCooldown = timeoutCircuitCooldown,
-        _backgroundRetryLimit = backgroundRetryLimit,
-        _backgroundRetryBaseDelay = backgroundRetryBaseDelay {
+  }) : _updaterGateway = updaterGateway,
+       _appcastProbeService = appcastProbeService,
+       _settingsStore = settingsStore,
+       _metricsCollector = metricsCollector,
+       _allowQuitForUpdate = allowQuitForUpdate,
+       _manualTriggerTimeout = manualTriggerTimeout,
+       _manualCompletionTimeout = manualCompletionTimeout,
+       _timeoutCircuitThreshold = timeoutCircuitThreshold,
+       _timeoutCircuitCooldown = timeoutCircuitCooldown,
+       _backgroundRetryLimit = backgroundRetryLimit,
+       _backgroundRetryBaseDelay = backgroundRetryBaseDelay {
     // The coordinator needs a resolver for the feed URL. Using a closure here
     // (after `this` is available) avoids the initializer-list self-reference issue.
-    _silentCoordinator = silentUpdateCoordinator ??
+    _silentCoordinator =
+        silentUpdateCoordinator ??
         SilentUpdateCoordinator(
           _capabilities,
           () => _feedUrl,
@@ -779,11 +780,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       },
     );
     final diagnostics = _activeManualDiagnostics;
-    if (diagnostics != null &&
-        diagnostics.triggerStartedAt != null &&
-        diagnostics.triggerCompletedAt != null) {
-      final triggerDuration =
-          diagnostics.triggerCompletedAt!.difference(diagnostics.triggerStartedAt!).inMilliseconds;
+    if (diagnostics != null && diagnostics.triggerStartedAt != null && diagnostics.triggerCompletedAt != null) {
+      final triggerDuration = diagnostics.triggerCompletedAt!.difference(diagnostics.triggerStartedAt!).inMilliseconds;
       final totalDuration = completedAt.difference(diagnostics.checkedAt).inMilliseconds;
       _logManualCheck(
         'Manual update check completed '
@@ -875,8 +873,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     );
     final sparkleVersion = appcastItem?.versionString;
     final probeVersion = _activeManualDiagnostics?.appcastProbeVersion;
-    final probeMatchesSparkle =
-        sparkleVersion != null && probeVersion != null ? sparkleVersion == probeVersion : null;
+    final probeMatchesSparkle = sparkleVersion != null && probeVersion != null ? sparkleVersion == probeVersion : null;
     if (probeMatchesSparkle == false) {
       _logManualCheck(
         'Probe version ($probeVersion) does not match Sparkle version ($sparkleVersion) '

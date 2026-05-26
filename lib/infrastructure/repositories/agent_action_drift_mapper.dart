@@ -316,8 +316,9 @@ class AgentActionDriftMapper {
         'injectionMode': policies.context.injectionMode.name,
       },
       'exitCode': {
+        // 'successExitCodes' is kept as a backward-compatible alias for bundles
+        // imported on older versions; new writes use 'acceptedExitCodes' only.
         'acceptedExitCodes': policies.exitCode.acceptedExitCodes.toList(growable: false),
-        'successExitCodes': policies.exitCode.acceptedExitCodes.toList(growable: false),
       },
       'lifecycle': {
         'onAppExit': policies.lifecycle.onAppExit.name,
@@ -726,9 +727,7 @@ class AgentActionDriftMapper {
       name: _readString(json, 'name'),
       description: json['description'] as String?,
       config: _configFromJson(type: type, json: _readObject(json, 'config')),
-      state: stateRaw == null
-          ? AgentActionState.needsValidation
-          : AgentActionState.values.byName(stateRaw),
+      state: stateRaw == null ? AgentActionState.needsValidation : AgentActionState.values.byName(stateRaw),
       policies: _policiesFromJson(_readObject(json, 'policies')),
       definitionVersion: json['definitionVersion'] as int? ?? 1,
       lastPreflightSnapshotHash: json['lastPreflightSnapshotHash'] as String?,

@@ -49,9 +49,7 @@ class AgentActionRemoteAuthorizationService {
       return (denied: _missingClientTokenResponse(request), policy: null);
     }
 
-    final deadline = _featureFlags.enableSocketTimeoutByStage
-        ? DateTime.now().add(_authorizationStageBudget)
-        : null;
+    final deadline = _featureFlags.enableSocketTimeoutByStage ? DateTime.now().add(_authorizationStageBudget) : null;
     final policyResult = await _getClientTokenPolicy.call(trimmed);
     if (!policyResult.isSuccess()) {
       final raw = policyResult.exceptionOrNull()!;

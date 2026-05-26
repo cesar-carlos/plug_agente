@@ -86,13 +86,12 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
       final isVisible = await windowManager.isVisible();
 
       if (!isVisible) {
-        _logger.i('Aplicativo iniciado minimizado - janela oculta');
+        _logger.i('Application started minimized - window hidden');
         return;
       }
 
       _logger.w(
-        'Janela visível ao iniciar minimizado (tentativa $attempt), '
-        'forçando hide novamente...',
+        'Window visible at minimized startup (attempt $attempt), forcing hide again...',
       );
       await windowManager.hide();
       await windowManager.setSkipTaskbar(true);
@@ -105,8 +104,8 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
     final isStillVisible = await windowManager.isVisible();
     if (isStillVisible) {
       _logger.e(
-        'Falha ao ocultar janela na inicialização minimizada após '
-        '${WindowTimings.startupHideRetryCount} tentativas',
+        'Failed to hide window at minimized startup after '
+        '${WindowTimings.startupHideRetryCount} attempts',
       );
     }
   }
@@ -124,17 +123,17 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
   @override
   void setMinimizeToTray({required bool value}) {
     _minimizeToTray = value;
-    _logger.d('Minimizar para bandeja: $value');
+    _logger.d('Minimize to tray: $value');
   }
 
   @override
   void setCloseToTray({required bool value}) {
     _closeToTray = value;
-    _logger.d('Fechar para bandeja: $value');
+    _logger.d('Close to tray: $value');
 
     unawaited(
       _updatePreventClose(value).catchError((Object e) {
-        _logger.w('Erro ao configurar preventClose: $e');
+        _logger.w('Failed to configure preventClose: $e');
       }),
     );
   }
@@ -143,20 +142,20 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
     try {
       if (closeToTray) {
         await windowManager.setPreventClose(true);
-        _logger.d('PreventClose ativado - fechar irá para bandeja');
+        _logger.d('PreventClose enabled - close will go to tray');
       } else {
         await windowManager.setPreventClose(false);
-        _logger.d('PreventClose desativado - fechar irá encerrar aplicativo');
+        _logger.d('PreventClose disabled - close will exit application');
       }
     } on Exception catch (e) {
-      _logger.w('Erro ao configurar preventClose: $e');
+      _logger.w('Failed to configure preventClose: $e');
     }
   }
 
   @override
   Future<void> show() async {
     try {
-      _logger.i('🪟 Mostrando janela...');
+      _logger.i('🪟 Showing window...');
 
       await windowManager.setSkipTaskbar(false);
       await Future<void>.delayed(WindowTimings.showInitialDelay);
@@ -165,25 +164,25 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
       final isVisible = await windowManager.isVisible();
 
       _logger.i(
-        '📊 Estado antes de mostrar - Minimizada: $isMinimized, Visível: $isVisible',
+        '📊 State before show - Minimized: $isMinimized, Visible: $isVisible',
       );
 
       if (isMinimized) {
-        _logger.i('🔄 Janela está minimizada, restaurando...');
+        _logger.i('🔄 Window is minimized, restoring...');
         await windowManager.restore();
         await Future<void>.delayed(WindowTimings.showRestoreDelay);
       }
 
-      _logger.i('👁️ Chamando show()...');
+      _logger.i('👁️ Calling show()...');
       await windowManager.show();
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       final isVisibleAfterShow = await windowManager.isVisible();
-      _logger.i('📊 Visível após show(): $isVisibleAfterShow');
+      _logger.i('📊 Visible after show(): $isVisibleAfterShow');
 
       if (!isVisibleAfterShow) {
         _logger.w(
-          '⚠️ Janela ainda não está visível após show(), tentando restaurar...',
+          '⚠️ Window not visible after show(), trying restore...',
         );
         await windowManager.restore();
         await Future<void>.delayed(WindowTimings.showRestoreDelay);
@@ -191,19 +190,19 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
         await Future<void>.delayed(WindowTimings.showRestoreDelay);
       }
 
-      _logger.i('🎯 Focando janela...');
+      _logger.i('🎯 Focusing window...');
       await windowManager.focus();
       await Future<void>.delayed(WindowTimings.showInitialDelay);
 
       final finalIsVisible = await windowManager.isVisible();
       final finalIsMinimized = await windowManager.isMinimized();
       _logger.i(
-        '✅ Janela exibida! Visível: $finalIsVisible, Minimizada: $finalIsMinimized',
+        '✅ Window shown! Visible: $finalIsVisible, Minimized: $finalIsMinimized',
       );
 
       if (!finalIsVisible) {
         _logger.e(
-          '❌ CRÍTICO: Janela ainda não está visível após todas as tentativas!',
+          '❌ CRITICAL: Window still not visible after all attempts!',
         );
         await windowManager.restore();
         await Future<void>.delayed(WindowTimings.showFinalDelay);
@@ -211,15 +210,15 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
         await windowManager.focus();
       }
     } on Exception catch (e, stackTrace) {
-      _logger.e('❌ Erro ao mostrar janela', error: e, stackTrace: stackTrace);
+      _logger.e('❌ Failed to show window', error: e, stackTrace: stackTrace);
       try {
-        _logger.i('🔄 Tentando método alternativo...');
+        _logger.i('🔄 Trying alternative method...');
         await windowManager.restore();
         await Future<void>.delayed(WindowTimings.showRestoreDelay);
         await windowManager.show();
         await windowManager.focus();
       } on Exception catch (e2) {
-        _logger.e('❌ Erro crítico ao mostrar janela', error: e2);
+        _logger.e('❌ Critical error showing window', error: e2);
         rethrow;
       }
     }
@@ -249,27 +248,19 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
 
   Future<void> close() async {
     try {
-      _logger.i('Fechando aplicativo...');
+      _logger.i('Closing application...');
 
       // Shutdown all resources before closing window
       await shutdownApp();
 
-      // Marcar como fechamento intencional
       _isClosing = true;
-
-      // Desabilitar closeToTray temporariamente para permitir fechamento real
       _closeToTray = false;
-
-      // Desabilitar preventClose para permitir fechamento
       await windowManager.setPreventClose(false);
-
-      // Fechar a janela
       await windowManager.close();
 
-      _logger.i('Aplicativo fechado');
+      _logger.i('Application closed');
     } on Exception catch (e, stackTrace) {
-      _logger.e('Erro ao fechar aplicativo', error: e, stackTrace: stackTrace);
-      // Forçar saída mesmo com erro
+      _logger.e('Failed to close application', error: e, stackTrace: stackTrace);
       exit(0);
     }
   }
@@ -302,7 +293,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
     if (_minimizeToTray) {
       unawaited(
         hide().catchError((Object e) {
-          _logger.e('Erro ao ocultar janela ao minimizar', error: e);
+          _logger.e('Failed to hide window on minimize', error: e);
         }),
       );
     }
@@ -311,22 +302,21 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
 
   @override
   Future<void> onWindowClose() async {
-    // Se já estamos fechando intencionalmente, permitir fechamento
     if (_isClosing) {
-      _logger.d('Fechamento intencional - permitindo');
+      _logger.d('Intentional close - allowing');
       return;
     }
 
-    _logger.i('Tentativa de fechar janela - closeToTray: $_closeToTray');
+    _logger.i('Window close attempt - closeToTray: $_closeToTray');
 
     try {
       final isPreventClose = await windowManager.isPreventClose();
       if (isPreventClose && !_closeToTray) {
-        _logger.d('Fechamento prevenido por outro motivo - ignorando evento');
+        _logger.d('Close prevented by another reason - ignoring event');
         return;
       }
     } on Exception catch (e) {
-      _logger.w('Erro ao verificar preventClose: $e');
+      _logger.w('Failed to check preventClose: $e');
     }
 
     if (_closeToTray) {
@@ -334,23 +324,23 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
         await windowManager.setPreventClose(true);
         await hide();
         await windowManager.setSkipTaskbar(true);
-        _logger.i('✅ Janela ocultada para a bandeja (fechamento prevenido)');
+        _logger.i('✅ Window hidden to tray (close prevented)');
       } on Exception catch (e) {
-        _logger.e('Erro ao ocultar janela para bandeja', error: e);
+        _logger.e('Failed to hide window to tray', error: e);
         try {
           await hide();
           await windowManager.setSkipTaskbar(true);
         } on Exception catch (e2) {
-          _logger.e('Erro crítico ao ocultar janela', error: e2);
+          _logger.e('Critical error hiding window', error: e2);
         }
       }
     } else {
       try {
-        _logger.i('Fechamento permitido - encerrando aplicativo');
+        _logger.i('Close allowed - exiting application');
         _onClose?.call();
         await close();
       } on Exception catch (e) {
-        _logger.e('Erro ao configurar preventClose para fechar', error: e);
+        _logger.e('Failed to configure preventClose for close', error: e);
         _onClose?.call();
         await close();
       }

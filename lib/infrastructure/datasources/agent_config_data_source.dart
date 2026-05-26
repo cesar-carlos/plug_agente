@@ -92,6 +92,12 @@ class AgentActionDefinitionTable extends Table {
 }
 
 @DataClassName('AgentActionTriggerData')
+// TODO(arch): AgentActionTriggerTable.actionId, AgentActionExecutionTable.actionId,
+// and AgentActionCapturedOutputChunkTable.executionId have no Drift foreign-key
+// constraints (REFERENCES). Orphan rows are possible after deleteDefinition.
+// Tracked in codebase-audit-round5.canvas.tsx (r5-19).
+// Remediation: add `references(AgentActionDefinitionTable, #id)` with
+// onDelete: KeyAction.setNull or cascade, or enforce cleanup in repository.
 class AgentActionTriggerTable extends Table {
   TextColumn get id => text()();
   TextColumn get actionId => text()();

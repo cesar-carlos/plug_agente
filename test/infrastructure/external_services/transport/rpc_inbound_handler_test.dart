@@ -34,21 +34,19 @@ class _MockFeatureFlags extends Mock implements FeatureFlags {}
 
 /// Fake validator that always rejects every call — used to test schema-gate paths.
 class _AlwaysRejectingValidator extends JsonSchemaContractValidator {
-  _AlwaysRejectingValidator()
-    : super(loader: TransportSchemaLoader(assetLoader: (_) async => '{}'));
+  _AlwaysRejectingValidator() : super(loader: TransportSchemaLoader(assetLoader: (_) async => '{}'));
 
   @override
   Result<void> validate({
     required String schemaId,
     required Object? payload,
     String direction = 'unknown',
-  }) =>
-      Failure(
-        domain.ValidationFailure.withContext(
-          message: 'schema_rejected_in_test',
-          context: {'schema_id': schemaId},
-        ),
-      );
+  }) => Failure(
+    domain.ValidationFailure.withContext(
+      message: 'schema_rejected_in_test',
+      context: {'schema_id': schemaId},
+    ),
+  );
 
   @override
   bool isLoaded(String schemaId) => true;
@@ -947,8 +945,18 @@ void main() {
       final h = buildHandlerWithValidator(_AlwaysRejectingValidator());
 
       final batch = [
-        {'jsonrpc': '2.0', 'id': 'first-id', 'method': 'sql.execute', 'params': {'sql': 'SELECT 1'}},
-        {'jsonrpc': '2.0', 'id': 'second-id', 'method': 'sql.execute', 'params': {'sql': 'SELECT 2'}},
+        {
+          'jsonrpc': '2.0',
+          'id': 'first-id',
+          'method': 'sql.execute',
+          'params': {'sql': 'SELECT 1'},
+        },
+        {
+          'jsonrpc': '2.0',
+          'id': 'second-id',
+          'method': 'sql.execute',
+          'params': {'sql': 'SELECT 2'},
+        },
       ];
 
       await h.handleBatchRequest(batch);

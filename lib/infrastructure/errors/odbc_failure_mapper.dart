@@ -33,68 +33,71 @@ class OdbcFailureMapper {
 
     if (error is WorkerCrashedError) {
       return ConnectionFailure.withContext(
-        message: 'Worker ODBC foi interrompido',
+        message: 'ODBC worker was interrupted',
         cause: error,
         context: {
           ...baseContext,
           'connectionFailed': true,
           'retryable': true,
           'reason': OdbcContextConstants.odbcWorkerCrashedReason,
-          'user_message': 'A conexão ODBC foi interrompida internamente. Tente executar a operação novamente.',
+          'user_message': 'The ODBC connection was interrupted internally. Try running the operation again.',
         },
       );
     }
 
     if (_isDriverMissing(sqlState, detail)) {
       return ConfigurationFailure.withContext(
-        message: 'Driver ODBC nao encontrado ou nao configurado',
+        message: 'ODBC driver not found or not configured',
         cause: error,
         context: {
           ...baseContext,
           'database': true,
           'reason': OdbcContextConstants.odbcDriverNotFoundReason,
           'user_message':
-              'O driver ODBC configurado nao foi encontrado neste computador. '
-              'Revise o driver e a fonte de dados nas configuracoes.',
+              'The configured ODBC driver was not found on this computer. '
+              'Review the driver and data source in settings.',
         },
       );
     }
 
     if (_isAuthenticationFailure(sqlState, detail)) {
       return ConnectionFailure.withContext(
-        message: 'Falha de autenticacao no banco de dados',
+        message: 'Database authentication failed',
         cause: error,
         context: {
           ...baseContext,
           'connectionFailed': true,
           'reason': OdbcContextConstants.authenticationFailedReason,
           'user_message':
-              'Nao foi possivel autenticar no banco de dados. '
-              'Verifique usuario, senha e permissoes.',
+              'Could not authenticate to the database. '
+              'Check username, password, and permissions.',
         },
       );
     }
 
     if (_isTimeout(sqlState, detail)) {
       return ConnectionFailure.withContext(
-        message: 'Tempo limite excedido ao conectar no banco de dados',
+        message: 'Connection timeout when connecting to database',
         cause: error,
         context: {
           ...baseContext,
           'connectionFailed': true,
           'timeout': true,
           'timeout_stage': 'connect',
+          // Not directly retryable at RetryManager level; the gateway handles
+          // its own reconnect logic for connection timeouts.
+          'retryable': false,
           'reason': OdbcContextConstants.connectionTimeoutReason,
           'user_message':
-              'A conexao com o banco demorou mais do que o esperado. '
-              'Confirme se o servidor esta acessivel e tente novamente.',
+              'The database connection took longer than expected. '
+              'Confirm the server is accessible and try again.',
         },
       );
     }
 
     if (_isServerUnavailable(sqlState, detail)) {
       return ConnectionFailure.withContext(
-        message: 'Nao foi possivel alcancar o servidor de banco de dados',
+        message: 'Could not reach the database server',
         cause: error,
         context: {
           ...baseContext,
@@ -102,21 +105,21 @@ class OdbcFailureMapper {
           'retryable': _isRetryableConnection(sqlState),
           'reason': OdbcContextConstants.serverUnreachableReason,
           'user_message':
-              'Nao foi possivel conectar ao servidor do banco. '
-              'Verifique host, porta, VPN e disponibilidade da rede.',
+              'Could not connect to the database server. '
+              'Check host, port, VPN, and network availability.',
         },
       );
     }
 
     return ConnectionFailure.withContext(
-      message: 'Falha ao conectar no banco de dados',
+      message: 'Failed to connect to the database',
       cause: error,
       context: {
         ...baseContext,
         'connectionFailed': true,
         'retryable': _isRetryableConnection(sqlState),
         'reason': OdbcContextConstants.databaseConnectionFailedReason,
-        'user_message': 'Nao foi possivel estabelecer conexao com o banco de dados.',
+        'user_message': 'Could not establish a connection to the database.',
       },
     );
   }
@@ -132,38 +135,38 @@ class OdbcFailureMapper {
 
     if (error is CancelledError) {
       return QueryExecutionFailure.withContext(
-        message: 'Execucao SQL cancelada',
+        message: 'SQL execution cancelled',
         cause: error,
         context: {
           ...baseContext,
           'reason': OdbcContextConstants.executionCancelledReason,
           'rpc_error_code': RpcErrorCode.executionCancelled,
-          'user_message': 'A consulta foi cancelada antes de concluir.',
+          'user_message': 'The query was cancelled before it finished.',
         },
       );
     }
 
     if (error is MalformedPayloadError) {
       return QueryExecutionFailure.withContext(
-        message: 'Resposta ODBC invalida',
+        message: 'Invalid ODBC response',
         cause: error,
         context: {
           ...baseContext,
           'reason': OdbcContextConstants.odbcMalformedPayloadReason,
-          'user_message': 'O banco retornou uma resposta que nao pode ser interpretada pelo agente.',
+          'user_message': 'The database returned a response that could not be parsed by the agent.',
         },
       );
     }
 
     if (error is RollbackFailedError) {
       return QueryExecutionFailure.withContext(
-        message: 'Falha ao desfazer transacao',
+        message: 'Failed to roll back transaction',
         cause: error,
         context: {
           ...baseContext,
           'reason': OdbcContextConstants.transactionRollbackFailedReason,
           'retryable': error.category == ErrorCategory.transient,
-          'user_message': 'A transacao falhou e o banco nao confirmou o rollback.',
+          'user_message': 'The transaction failed and the database did not confirm the rollback.',
         },
       );
     }
@@ -176,7 +179,7 @@ class OdbcFailureMapper {
           ...baseContext,
           'reason': OdbcContextConstants.odbcResourceLimitReason,
           'retryable': true,
-          'user_message': 'O limite de recursos ODBC foi atingido. Tente novamente em instantes.',
+          'user_message': 'The ODBC resource limit was reached. Try again in a moment.',
         },
       );
     }
@@ -190,7 +193,7 @@ class OdbcFailureMapper {
           'connectionFailed': true,
           'retryable': true,
           'reason': OdbcContextConstants.odbcWorkerCrashedReason,
-          'user_message': 'O worker ODBC foi interrompido durante a consulta. Tente novamente.',
+          'user_message': 'The ODBC worker was interrupted during the query. Try again.',
         },
       );
     }
@@ -203,22 +206,22 @@ class OdbcFailureMapper {
           ...baseContext,
           'reason': OdbcContextConstants.bufferTooSmallReason,
           'user_message':
-              'O resultado da consulta excede o buffer atual. '
-              'Ative o streaming ou aumente o buffer de resultados.',
+              'The query result exceeds the current buffer. '
+              'Enable streaming or increase the result buffer.',
         },
       );
     }
 
     if (_isTimeout(sqlState, detail)) {
       return QueryExecutionFailure.withContext(
-        message: 'Tempo limite excedido durante a execucao da consulta',
+        message: 'Query execution timeout exceeded',
         cause: error,
         context: {
           ...baseContext,
           'timeout': true,
           'timeout_stage': 'sql',
           'reason': RpcSqlBudgetConstants.queryTimeoutReason,
-          'user_message': 'A consulta demorou mais do que o permitido para concluir.',
+          'user_message': 'The query took longer than allowed to complete.',
         },
       );
     }
@@ -233,8 +236,8 @@ class OdbcFailureMapper {
           'retryable': _isRetryableConnection(sqlState),
           'reason': OdbcContextConstants.connectionLostDuringQueryReason,
           'user_message':
-              'A sessao com o banco de dados foi interrompida durante a consulta. '
-              'Verifique rede, servidor e tente novamente.',
+              'The database session was interrupted during the query. '
+              'Check the network, server, and try again.',
         },
       );
     }
@@ -248,8 +251,8 @@ class OdbcFailureMapper {
           'retryable': true,
           'reason': OdbcContextConstants.transientQueryFailureReason,
           'user_message':
-              'O banco retornou uma falha transitoria ao executar a consulta. '
-              'Tente novamente.',
+              'The database returned a transient failure when executing the query. '
+              'Try again.',
         },
       );
     }
@@ -260,9 +263,8 @@ class OdbcFailureMapper {
         deniedResources,
       );
       final userMessage = deniedResourcesForMessage == null
-          ? 'A consulta foi recusada por falta de permissao no banco de dados.'
-          : 'A consulta foi recusada por falta de permissao no banco de dados para os recursos: '
-                '$deniedResourcesForMessage.';
+          ? 'The query was denied due to insufficient permissions in the database.'
+          : 'The query was denied due to insufficient permissions for resources: $deniedResourcesForMessage.';
       return QueryExecutionFailure.withContext(
         message: detail,
         cause: error,
@@ -285,8 +287,8 @@ class OdbcFailureMapper {
           'operation': 'sql_validation',
           'reason': SqlPipelineContextConstants.sqlValidationFailedReason,
           'user_message':
-              'A consulta nao pode ser executada porque contem um erro de '
-              'sintaxe ou referencia invalida.',
+              'The query could not be executed because it contains a syntax error '
+              'or an invalid reference.',
         },
       );
     }
@@ -297,7 +299,7 @@ class OdbcFailureMapper {
       context: {
         ...baseContext,
         'reason': OdbcContextConstants.sqlExecutionFailedReason,
-        'user_message': 'O banco de dados retornou um erro ao executar a consulta.',
+        'user_message': 'The database returned an error when executing the query.',
       },
     );
   }
@@ -315,7 +317,7 @@ class OdbcFailureMapper {
     final contextUserMessage = context['user_message']?.toString();
 
     return ConnectionFailure.withContext(
-      message: isExhausted ? 'Pool de conexoes ODBC esgotado' : 'Falha ao obter conexao do pool ODBC',
+      message: isExhausted ? 'ODBC connection pool exhausted' : 'Failed to acquire a connection from the ODBC pool',
       cause: error,
       context: {
         ...baseContext,
@@ -327,9 +329,8 @@ class OdbcFailureMapper {
         'user_message':
             contextUserMessage ??
             (isExhausted
-                ? 'O agente esta sem conexoes livres no momento. '
-                      'Tente novamente em alguns instantes.'
-                : 'Nao foi possivel obter uma conexao ODBC disponivel.'),
+                ? 'The agent has no free connections available. Try again in a moment.'
+                : 'Could not acquire an available ODBC connection.'),
       },
     );
   }
@@ -344,13 +345,13 @@ class OdbcFailureMapper {
 
     if (cancelledByUser) {
       return QueryExecutionFailure.withContext(
-        message: 'Streaming cancelado pelo usuario',
+        message: 'Streaming query cancelled by user',
         cause: error,
         context: {
           ...baseContext,
           'reason': OdbcContextConstants.executionCancelledReason,
           'rpc_error_code': RpcErrorCode.executionCancelled,
-          'user_message': 'A consulta em streaming foi cancelada.',
+          'user_message': 'The streaming query was cancelled.',
         },
       );
     }
@@ -597,6 +598,6 @@ class OdbcFailureMapper {
     }
     final shown = resources.take(_kMaxDeniedResourcesInUserMessage).join(', ');
     final hiddenCount = resources.length - _kMaxDeniedResourcesInUserMessage;
-    return '$shown (+$hiddenCount mais)';
+    return '$shown (+$hiddenCount more)';
   }
 }

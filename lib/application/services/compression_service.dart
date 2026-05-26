@@ -22,6 +22,11 @@ class CompressionService {
       );
     }
 
+    // TODO(performance): resultSets are compressed sequentially — each await
+    // blocks for one isolate round-trip. For large multi-result responses this
+    // adds N serial delays. Consider compressing in parallel with a concurrency
+    // cap, or compressing once at the envelope level.
+    // Tracked in codebase-audit-round5.canvas.tsx (r5-20).
     final compressedResultSets = <QueryResultSet>[];
     final compressedByLogicalIndex = <int, QueryResultSet>{};
     for (final resultSet in response.resultSets) {

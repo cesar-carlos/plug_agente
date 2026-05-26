@@ -29,13 +29,21 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   bool _registered = false;
   int _sendCredit = 1;
 
+  // Serializes _flush calls so concurrent releaseChunks + emitChunk invocations
+  // cannot reorder chunk_index on the wire. Each caller chains onto the
+  // previous in-flight future; only one flush body runs at a time.
+  Future<void> _flushInFlight = Future<void>.value();
+
   void releaseChunks(int windowSize) {
     if (windowSize <= 0) return;
     _sendCredit += windowSize;
-    unawaited(_flush());
+    _flushInFlight = _flushInFlight.then((_) => _flushBody());
   }
 
-  Future<void> _flush() async {
+  Future<void> _flush() =>
+      _flushInFlight = _flushInFlight.then((_) => _flushBody());
+
+  Future<void> _flushBody() async {
     while (_sendCredit > 0 && _chunkQueue.isNotEmpty) {
       final chunk = _chunkQueue.removeFirst();
       final payload = chunk.toJson();

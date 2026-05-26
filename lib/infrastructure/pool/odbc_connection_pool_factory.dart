@@ -24,12 +24,8 @@ IConnectionPool createOdbcConnectionPool(
   FeatureFlags featureFlags,
   Object? configContext,
 ) {
-  final activeConfigResolver = configContext is ActiveConfigResolver
-      ? configContext
-      : null;
-  final configRepository = configContext is IAgentConfigRepository
-      ? configContext
-      : null;
+  final activeConfigResolver = configContext is ActiveConfigResolver ? configContext : null;
+  final configRepository = configContext is IAgentConfigRepository ? configContext : null;
   if (featureFlags.enableOdbcExperimentalDriverAdaptivePooling) {
     return AdaptiveOdbcConnectionPool(
       leasePool: OdbcConnectionPool(

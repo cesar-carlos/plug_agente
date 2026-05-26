@@ -28,7 +28,9 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     final now = _nowProvider();
     await _deleteExpired(now);
 
-    final row = await (_db.select(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).getSingleOrNull();
+    final row = await (_db.select(
+      _db.rpcIdempotencyCacheTable,
+    )..where((t) => t.cacheKey.equals(key))).getSingleOrNull();
     if (row == null) {
       return null;
     }
@@ -79,15 +81,17 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     }
 
     final jsonText = jsonEncode(response.toJson());
-    await _db.into(_db.rpcIdempotencyCacheTable).insertOnConflictUpdate(
-      RpcIdempotencyCacheTableCompanion.insert(
-        cacheKey: key,
-        responseJson: jsonText,
-        requestFingerprint: requestFingerprint == null ? const Value.absent() : Value(requestFingerprint),
-        expiresAt: expiresAt,
-        updatedAt: now,
-      ),
-    );
+    await _db
+        .into(_db.rpcIdempotencyCacheTable)
+        .insertOnConflictUpdate(
+          RpcIdempotencyCacheTableCompanion.insert(
+            cacheKey: key,
+            responseJson: jsonText,
+            requestFingerprint: requestFingerprint == null ? const Value.absent() : Value(requestFingerprint),
+            expiresAt: expiresAt,
+            updatedAt: now,
+          ),
+        );
   }
 
   Future<int> _deleteExpired(DateTime now) {
@@ -100,10 +104,12 @@ class DriftIdempotencyStore implements IIdempotencyStore {
   }
 
   Future<int> _countRows() async {
-    final row = await _db.customSelect(
-      'SELECT COUNT(*) AS c FROM rpc_idempotency_cache_table',
-      readsFrom: {_db.rpcIdempotencyCacheTable},
-    ).getSingle();
+    final row = await _db
+        .customSelect(
+          'SELECT COUNT(*) AS c FROM rpc_idempotency_cache_table',
+          readsFrom: {_db.rpcIdempotencyCacheTable},
+        )
+        .getSingle();
     return row.read<int>('c');
   }
 

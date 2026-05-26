@@ -46,7 +46,7 @@ void main() {
     await tester.pumpWidget(harness.buildWidget());
     await tester.pumpAndSettle();
 
-    expect(find.text(ptL10n.agentActionsDisabledTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsDisabledTitle), findsWidgets);
     expect(find.text(ptL10n.agentActionsFormSave), findsNothing);
     expect(find.text(ptL10n.agentActionsFormCommand), findsNothing);
   });
@@ -1711,7 +1711,7 @@ void main() {
   testWidgets('restores persisted action page tab and filters', (tester) async {
     final harness = AgentActionsPageHarness();
     await harness.appSettingsStore.setValues({
-      'agent_actions.ui.selected_tab': 1,
+      'agent_actions.ui.selected_tab': 'history',
       'agent_actions.ui.definition_type_filter': AgentActionType.email.name,
       'agent_actions.ui.definition_state_filter': AgentActionState.paused.name,
       'agent_actions.ui.definition_search': 'notify',

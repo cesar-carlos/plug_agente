@@ -50,17 +50,18 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     int automaticFailureCooldownThreshold = _defaultAutomaticFailureCooldownThreshold,
     Duration automaticFailureCooldown = _defaultAutomaticFailureCooldown,
     Duration helperWaitDuration = _defaultHelperWaitDuration,
-  })  : _appcastProbeService = appcastProbeService,
-        _silentUpdateInstaller = silentUpdateInstaller,
-        _settingsStore = settingsStore,
-        _closeApplicationForSilentUpdate = closeApplicationForSilentUpdate,
-        _automaticFailureCooldownThreshold = automaticFailureCooldownThreshold,
-        _automaticFailureCooldown = automaticFailureCooldown,
-        _helperWaitDuration = helperWaitDuration {
+  }) : _appcastProbeService = appcastProbeService,
+       _silentUpdateInstaller = silentUpdateInstaller,
+       _settingsStore = settingsStore,
+       _closeApplicationForSilentUpdate = closeApplicationForSilentUpdate,
+       _automaticFailureCooldownThreshold = automaticFailureCooldownThreshold,
+       _automaticFailureCooldown = automaticFailureCooldown,
+       _helperWaitDuration = helperWaitDuration {
     hydratePersistedDiagnostics();
   }
 
   final RuntimeCapabilities _capabilities;
+
   /// Returns the current resolved feed URL, or `null` when not configured.
   final String? Function() _feedUrlResolver;
   final IAppcastProbeService _appcastProbeService;
@@ -567,8 +568,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     }
   }
 
-  Future<({int failureCount, DateTime? cooldownUntil})>
-      _recordAutomaticFailureAndApplyCooldown() async {
+  Future<({int failureCount, DateTime? cooldownUntil})> _recordAutomaticFailureAndApplyCooldown() async {
     final settingsStore = _settingsStore;
     if (settingsStore == null) return (failureCount: 0, cooldownUntil: null);
     final nextCount = _automaticFailureCount() + 1;
@@ -613,8 +613,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       updateAvailable: false,
       automaticFailureCount: _automaticFailureCount(),
       automaticCooldownUntil: cooldownUntil,
-      errorMessage:
-          'Automatic silent updates are paused after repeated failures. Try again in about $humanRemaining.',
+      errorMessage: 'Automatic silent updates are paused after repeated failures. Try again in about $humanRemaining.',
     );
     await _persistLastAutomaticDiagnostics();
     return const Success<bool, Exception>(false);
@@ -743,8 +742,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     final launcherStatus = _readLauncherStatus(pending.launcherStatusPath);
     bool completed;
     try {
-      completed =
-          AppVersionComparator.compare(AppConstants.appVersion, pending.version) >= 0;
+      completed = AppVersionComparator.compare(AppConstants.appVersion, pending.version) >= 0;
     } on FormatException {
       completed = false;
     }
@@ -831,8 +829,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       elevatedCancelled: launcherStatus?.elevatedCancelled,
       automaticFailureCount: failureState?.failureCount,
       automaticCooldownUntil: failureState?.cooldownUntil,
-      errorMessage:
-          completed ? null : launcherStatus?.failureMessage ?? 'Pending silent update did not complete',
+      errorMessage: completed ? null : launcherStatus?.failureMessage ?? 'Pending silent update did not complete',
     );
     await _persistLastAutomaticDiagnostics();
     await _clearPendingSilentUpdate();

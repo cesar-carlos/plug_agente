@@ -47,10 +47,26 @@ class AgentActionsHistoryTab extends StatelessWidget {
               Icon(agentActionTypeIcon(selected.type), size: 18),
               const SizedBox(width: AppSpacing.sm),
               Expanded(child: Text(selected.name, style: context.sectionTitle)),
+              if (provider.isLoading)
+                const SizedBox.square(
+                  dimension: 16,
+                  child: ProgressRing(strokeWidth: 2),
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          AgentActionsHistoryFilters(provider: provider, l10n: l10n, uiPreferences: uiPreferences),
+          IgnorePointer(
+            ignoring: provider.isLoading,
+            child: AnimatedOpacity(
+              opacity: provider.isLoading ? 0.5 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              child: AgentActionsHistoryFilters(
+                provider: provider,
+                l10n: l10n,
+                uiPreferences: uiPreferences,
+              ),
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
           Expanded(
             child: AgentActionExecutionList(

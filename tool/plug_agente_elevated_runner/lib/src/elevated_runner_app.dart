@@ -10,7 +10,8 @@ class ElevatedRunnerApp {
       ..addFlag('help', abbr: 'h', negatable: false, help: 'Show usage.')
       ..addOption(
         'watch-requests',
-        help: 'Process pending elevated request files under the app data directory, then exit.',
+        help:
+            'Process pending elevated request files under the app data directory, then exit.',
       );
 
     late final ArgResults results;
@@ -40,7 +41,9 @@ class ElevatedRunnerApp {
       return 1;
     }
 
-    final processor = ElevatedRequestProcessor(appDirectoryPath: appDirectoryPath);
+    final processor = ElevatedRequestProcessor(
+      appDirectoryPath: appDirectoryPath,
+    );
     final deadline = DateTime.now().add(ElevatedContract.idleWaitBeforeExit);
 
     while (true) {

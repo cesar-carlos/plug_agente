@@ -1,3 +1,7 @@
+// TODO(arch): domain/errors imports core/logger — domain must not depend on
+// core infrastructure. Tracked in codebase-audit-round3.canvas.tsx (r3-09).
+// Remediation: move logError() to an application/presentation helper;
+// keep domain extensions limited to code/message mapping only.
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 

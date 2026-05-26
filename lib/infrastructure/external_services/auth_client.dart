@@ -120,10 +120,7 @@ class AuthClient implements IAuthClient {
           e,
           stackTrace,
           operation: 'login',
-          additionalContext: {
-            'serverUrl': serverUrl,
-            'exceptionType': e.type.toString(),
-          },
+          additionalContext: {'exceptionType': e.type.toString()},
         ),
       );
     } on Exception catch (e, stackTrace) {
@@ -139,7 +136,6 @@ class AuthClient implements IAuthClient {
           e,
           stackTrace,
           operation: 'login',
-          additionalContext: {'serverUrl': serverUrl},
         ),
       );
     }

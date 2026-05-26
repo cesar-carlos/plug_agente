@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:plug_agente/application/actions/agent_action_remote_rate_limiter.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
@@ -43,7 +43,6 @@ import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.da
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
-
 
 class DefaultRpcMethodHandlerOperations {
   DefaultRpcMethodHandlerOperations({
@@ -189,7 +188,6 @@ class DefaultRpcMethodHandlerOperations {
   static const _defaultQueryStageBudget = Duration(seconds: 30);
   static const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
 
-
   String _namespacedRpcIdempotencyStoreKey(
     RpcRequest request,
     String idempotencyKey,
@@ -206,7 +204,6 @@ class DefaultRpcMethodHandlerOperations {
     }
   }
 
-
   Future<RpcResponse> handleSqlExecute(
     RpcRequest request,
     String agentId,
@@ -214,15 +211,14 @@ class DefaultRpcMethodHandlerOperations {
     required TransportLimits limits,
     required Map<String, dynamic> negotiatedExtensions,
     IRpcStreamEmitter? streamEmitter,
-  }) =>
-      _sqlOperations.handleSqlExecute(
-        request,
-        agentId,
-        clientToken,
-        limits: limits,
-        negotiatedExtensions: negotiatedExtensions,
-        streamEmitter: streamEmitter,
-      );
+  }) => _sqlOperations.handleSqlExecute(
+    request,
+    agentId,
+    clientToken,
+    limits: limits,
+    negotiatedExtensions: negotiatedExtensions,
+    streamEmitter: streamEmitter,
+  );
 
   Future<RpcResponse> handleSqlExecuteBatch(
     RpcRequest request,
@@ -230,77 +226,66 @@ class DefaultRpcMethodHandlerOperations {
     String? clientToken, {
     required TransportLimits limits,
     required Map<String, dynamic> negotiatedExtensions,
-  }) =>
-      _sqlOperations.handleSqlExecuteBatch(
-        request,
-        agentId,
-        clientToken,
-        limits: limits,
-        negotiatedExtensions: negotiatedExtensions,
-      );
+  }) => _sqlOperations.handleSqlExecuteBatch(
+    request,
+    agentId,
+    clientToken,
+    limits: limits,
+    negotiatedExtensions: negotiatedExtensions,
+  );
 
   Future<RpcResponse> handleSqlBulkInsert(
     RpcRequest request,
     String? clientToken, {
     required TransportLimits limits,
-  }) =>
-      _sqlOperations.handleSqlBulkInsert(
-        request,
-        clientToken,
-        limits: limits,
-      );
+  }) => _sqlOperations.handleSqlBulkInsert(
+    request,
+    clientToken,
+    limits: limits,
+  );
 
   Future<RpcResponse> handleSqlCancel(RpcRequest request) => _sqlOperations.handleSqlCancel(request);
-
 
   Future<RpcResponse> handleAgentActionRun(
     RpcRequest request,
     String agentId,
     String? clientToken,
-  ) =>
-      _agentActionOperations.handleAgentActionRun(request, agentId, clientToken);
+  ) => _agentActionOperations.handleAgentActionRun(request, agentId, clientToken);
 
   Future<RpcResponse> handleAgentActionValidateRun(
     RpcRequest request,
     String agentId,
     String? clientToken,
-  ) =>
-      _agentActionOperations.handleAgentActionValidateRun(request, agentId, clientToken);
+  ) => _agentActionOperations.handleAgentActionValidateRun(request, agentId, clientToken);
 
   Future<RpcResponse> handleAgentActionCancel(
     RpcRequest request,
     String agentId,
     String? clientToken,
-  ) =>
-      _agentActionOperations.handleAgentActionCancel(request, agentId, clientToken);
+  ) => _agentActionOperations.handleAgentActionCancel(request, agentId, clientToken);
 
   Future<RpcResponse> handleAgentActionGetExecution(
     RpcRequest request,
     String agentId,
     String? clientToken,
-  ) =>
-      _agentActionOperations.handleAgentActionGetExecution(request, agentId, clientToken);
+  ) => _agentActionOperations.handleAgentActionGetExecution(request, agentId, clientToken);
 
   Future<RpcResponse> handleAgentGetProfile(
     RpcRequest request,
     String agentId,
     String? clientToken,
-  ) =>
-      _metadataOperations.handleAgentGetProfile(request, agentId, clientToken);
+  ) => _metadataOperations.handleAgentGetProfile(request, agentId, clientToken);
 
   Future<RpcResponse> handleAgentGetHealth(
     RpcRequest request,
     String? clientToken,
-  ) =>
-      _metadataOperations.handleAgentGetHealth(request, clientToken);
+  ) => _metadataOperations.handleAgentGetHealth(request, clientToken);
 
   Future<RpcResponse> handleClientTokenGetPolicy(
     RpcRequest request,
     String agentId,
     String? clientToken,
-  ) =>
-      _metadataOperations.handleClientTokenGetPolicy(request, agentId, clientToken);
-
+  ) => _metadataOperations.handleClientTokenGetPolicy(request, agentId, clientToken);
 
   Future<Result<void>> _authorizeWithBudget({
     required String token,
@@ -372,6 +357,7 @@ class DefaultRpcMethodHandlerOperations {
       );
     }
   }
+
   Duration? _effectiveStageTimeout({
     required DateTime? deadline,
     required Duration stageBudget,
@@ -385,8 +371,6 @@ class DefaultRpcMethodHandlerOperations {
     }
     return remaining < stageBudget ? remaining : stageBudget;
   }
-
-
 
   RpcResponse _executionNotFound(RpcRequest request) {
     const code = RpcErrorCode.executionNotFound;

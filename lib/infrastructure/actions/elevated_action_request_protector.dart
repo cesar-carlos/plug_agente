@@ -43,13 +43,13 @@ class ElevatedActionRequestProtector {
       try {
         await requestsDirectory.create(recursive: true);
       } on IOException catch (error) {
-      return Failure(
-        _protectionFailure(
-          message: 'Unable to create elevated request directory.',
-          executionId: trimmedId,
-          cause: error,
-        ),
-      );
+        return Failure(
+          _protectionFailure(
+            message: 'Unable to create elevated request directory.',
+            executionId: trimmedId,
+            cause: error,
+          ),
+        );
       }
     }
 

@@ -82,9 +82,7 @@ void main() {
       status: status,
       requestedAt: DateTime.utc(2026, 5, 15, 9),
       source: AgentActionRequestSource.scheduler,
-      processStartedAt: status == AgentActionExecutionStatus.running
-          ? DateTime.utc(2026, 5, 15, 9)
-          : null,
+      processStartedAt: status == AgentActionExecutionStatus.running ? DateTime.utc(2026, 5, 15, 9) : null,
       pid: pid,
       processExecutable: pid != null ? 'cmd.exe' : null,
     );

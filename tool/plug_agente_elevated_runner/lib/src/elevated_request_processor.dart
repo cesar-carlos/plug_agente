@@ -14,9 +14,14 @@ class ElevatedRequestProcessor {
     ElevatedProcessRunner? processRunner,
     ElevatedStatusWriter? statusWriter,
     DateTime Function()? now,
-  }) : _store = store ?? ElevatedSqliteStore(appDirectoryPath: appDirectoryPath),
-       _processRunner = processRunner ?? ElevatedProcessRunner(appDirectoryPath: appDirectoryPath),
-       _statusWriter = statusWriter ?? ElevatedStatusWriter(appDirectoryPath: appDirectoryPath),
+  }) : _store =
+           store ?? ElevatedSqliteStore(appDirectoryPath: appDirectoryPath),
+       _processRunner =
+           processRunner ??
+           ElevatedProcessRunner(appDirectoryPath: appDirectoryPath),
+       _statusWriter =
+           statusWriter ??
+           ElevatedStatusWriter(appDirectoryPath: appDirectoryPath),
        _now = now ?? DateTime.now;
 
   final String appDirectoryPath;
@@ -26,17 +31,20 @@ class ElevatedRequestProcessor {
   final DateTime Function() _now;
 
   Future<int> processPendingRequests() async {
-    final requestsDirectory = Directory(ElevatedContract.requestsDirectory(appDirectoryPath));
+    final requestsDirectory = Directory(
+      ElevatedContract.requestsDirectory(appDirectoryPath),
+    );
     if (!requestsDirectory.existsSync()) {
       return 0;
     }
 
-    final files = requestsDirectory
-        .listSync()
-        .whereType<File>()
-        .where((File file) => file.path.endsWith('.json'))
-        .toList()
-      ..sort((File left, File right) => left.path.compareTo(right.path));
+    final files =
+        requestsDirectory
+            .listSync()
+            .whereType<File>()
+            .where((File file) => file.path.endsWith('.json'))
+            .toList()
+          ..sort((File left, File right) => left.path.compareTo(right.path));
 
     var processed = 0;
     for (final file in files) {
@@ -80,7 +88,9 @@ class ElevatedRequestProcessor {
     }
 
     final requestNonce = (payload['nonce'] as String).trim();
-    final materializedReader = ElevatedMaterializedReader(appDirectoryPath: appDirectoryPath);
+    final materializedReader = ElevatedMaterializedReader(
+      appDirectoryPath: appDirectoryPath,
+    );
     final materialized = materializedReader.read(executionId);
     if (materialized == null) {
       await _writeFailure(
@@ -105,7 +115,8 @@ class ElevatedRequestProcessor {
       await _writeFailure(
         executionId: executionId,
         failureCode: 'ACTION_ELEVATED_REQUEST_PROTECTION_FAILED',
-        failureMessage: 'Materialized launch plan nonce does not match request.',
+        failureMessage:
+            'Materialized launch plan nonce does not match request.',
       );
       await materializedReader.delete(executionId);
       await _safeDelete(file);
@@ -117,7 +128,8 @@ class ElevatedRequestProcessor {
       await _writeFailure(
         executionId: executionId,
         failureCode: 'ACTION_NOT_FOUND',
-        failureMessage: 'Execution or action definition was not found in local storage.',
+        failureMessage:
+            'Execution or action definition was not found in local storage.',
       );
       await _safeDelete(file);
       return true;
@@ -127,7 +139,8 @@ class ElevatedRequestProcessor {
       await _writeFailure(
         executionId: executionId,
         failureCode: 'ACTION_ELEVATED_REQUEST_PROTECTION_FAILED',
-        failureMessage: 'Materialized action type does not match execution record.',
+        failureMessage:
+            'Materialized action type does not match execution record.',
       );
       await materializedReader.delete(executionId);
       await _safeDelete(file);
@@ -143,14 +156,19 @@ class ElevatedRequestProcessor {
     return true;
   }
 
-  String? _validateRequestPayload(Map<String, dynamic> payload, String executionId) {
+  String? _validateRequestPayload(
+    Map<String, dynamic> payload,
+    String executionId,
+  ) {
     final version = payload['version'];
-    if (version is! num || version.toInt() != ElevatedContract.requestSchemaVersion) {
+    if (version is! num ||
+        version.toInt() != ElevatedContract.requestSchemaVersion) {
       return 'Unsupported request schema version.';
     }
 
     final payloadExecutionId = payload['executionId'];
-    if (payloadExecutionId is! String || payloadExecutionId.trim() != executionId) {
+    if (payloadExecutionId is! String ||
+        payloadExecutionId.trim() != executionId) {
       return 'Request executionId does not match file name.';
     }
 
@@ -187,7 +205,9 @@ class ElevatedRequestProcessor {
     if (!baseName.endsWith('.json')) {
       return null;
     }
-    final executionId = baseName.substring(0, baseName.length - '.json'.length).trim();
+    final executionId = baseName
+        .substring(0, baseName.length - '.json'.length)
+        .trim();
     if (executionId.isEmpty || executionId.contains('..')) {
       return null;
     }

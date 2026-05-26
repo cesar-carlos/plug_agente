@@ -129,7 +129,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     context.read<PlaygroundProvider>().bindUiStrings(PlaygroundUiStrings.fromL10n(l10n));
   }
 
-  bool _canExecutePlaygroundQuery() => _queryController.text.trim().isNotEmpty;
+  bool _canExecutePlaygroundQuery({required bool hasConfig}) => hasConfig && _queryController.text.trim().isNotEmpty;
 
   @override
   void dispose() {
@@ -223,10 +223,11 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     final isControlPressed = HardwareKeyboard.instance.isControlPressed;
     final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
 
-    // F5 or Ctrl+Enter: Execute query
+    // F5 or Ctrl+Enter: Execute query (only when config is available)
     if (event.logicalKey == LogicalKeyboardKey.f5 ||
         (isControlPressed && event.logicalKey == LogicalKeyboardKey.enter)) {
-      if (_queryController.text.trim().isEmpty) {
+      final hasConfig = configProvider.currentConfig != null || widget.configId != null;
+      if (!_canExecutePlaygroundQuery(hasConfig: hasConfig)) {
         return KeyEventResult.handled;
       }
       _handleExecute(playgroundProvider, configProvider);
@@ -323,7 +324,10 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SqlActionBar(
-                          onExecute: _canExecutePlaygroundQuery()
+                          onExecute:
+                              _canExecutePlaygroundQuery(
+                                hasConfig: config != null || widget.configId != null,
+                              )
                               ? () => _handleExecute(
                                   playgroundProvider,
                                   configProvider,

@@ -10,8 +10,7 @@ import 'package:result_dart/result_dart.dart';
 class ActionEnvironmentResolver {
   const ActionEnvironmentResolver({
     AgentActionSecretPlaceholderResolver? secretPlaceholderResolver,
-  }) : _secretPlaceholderResolver =
-           secretPlaceholderResolver ?? const AgentActionSecretPlaceholderResolver();
+  }) : _secretPlaceholderResolver = secretPlaceholderResolver ?? const AgentActionSecretPlaceholderResolver();
 
   static final RegExp _variableNamePattern = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
 
@@ -180,8 +179,7 @@ class ActionEnvironmentResolver {
                 'phase': phase,
                 'injection_mode': AgentActionContextInjectionMode.environment.name,
                 'reason': AgentActionValidationConstants.invalidEnvironmentVariableValueReason,
-                'user_message':
-                    'Parametros runtime usados como variaveis de ambiente devem ser texto.',
+                'user_message': 'Parametros runtime usados como variaveis de ambiente devem ser texto.',
               },
             ),
           );

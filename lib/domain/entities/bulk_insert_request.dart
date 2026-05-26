@@ -20,9 +20,17 @@ class BulkInsertColumn {
     if (rawType is! String) {
       throw const FormatException('Bulk insert column type is required');
     }
+    final type = BulkInsertColumnType.values.where((t) => t.name == rawType).firstOrNull;
+    if (type == null) {
+      throw FormatException('Unknown bulk insert column type: $rawType');
+    }
+    final rawName = json['name'];
+    if (rawName is! String) {
+      throw const FormatException('Bulk insert column name is required');
+    }
     return BulkInsertColumn(
-      name: json['name'] as String,
-      type: BulkInsertColumnType.values.byName(rawType),
+      name: rawName,
+      type: type,
       nullable: json['nullable'] as bool? ?? false,
       maxLen: json['max_len'] as int? ?? json['maxLen'] as int? ?? 0,
     );

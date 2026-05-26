@@ -148,8 +148,7 @@ Future<String> buildTransportPipelineBenchmarkReport({
   int? gzipIsolateThresholdBytes,
   String path = 'async',
 }) async {
-  final effectiveGzipIsolateThreshold =
-      gzipIsolateThresholdBytes ?? ConnectionConstants.gzipIsolateThresholdBytes;
+  final effectiveGzipIsolateThreshold = gzipIsolateThresholdBytes ?? ConnectionConstants.gzipIsolateThresholdBytes;
   await _buildBenchmarkResults(
     iterations: warmupIterations.clamp(0, 1000),
     threshold: threshold,
@@ -632,8 +631,10 @@ String _buildPlainTextReport(
 }) {
   final buffer = StringBuffer()
     ..writeln('Transport pipeline benchmark')
-    ..writeln('iterations=$iterations threshold_bytes=$threshold path=$path '
-        'gzip_isolate_threshold_bytes=$gzipIsolateThresholdBytes')
+    ..writeln(
+      'iterations=$iterations threshold_bytes=$threshold path=$path '
+      'gzip_isolate_threshold_bytes=$gzipIsolateThresholdBytes',
+    )
     ..writeln()
     ..writeln(
       [

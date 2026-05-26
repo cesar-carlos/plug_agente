@@ -39,9 +39,7 @@ class JarActionAdapter implements AgentActionAdapter {
       AgentActionPreflight(
         actionType: type,
         canRun: definition.canRun,
-        safeMessage: definition.canRun
-            ? 'Jar action is ready to run.'
-            : 'Jar action is valid but not active.',
+        safeMessage: definition.canRun ? 'Jar action is ready to run.' : 'Jar action is valid but not active.',
         redactedDiagnostics: {
           'argument_count': resolved.invocation.arguments.length,
           'has_working_directory': resolved.hasWorkingDirectory,

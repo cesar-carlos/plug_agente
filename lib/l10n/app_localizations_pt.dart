@@ -27,7 +27,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get navWebSocketSettings => 'Conexão WebSocket';
 
   @override
-  String get navAgentActions => 'Acoes do Sistema';
+  String get navAgentActions => 'Ações do Sistema';
 
   @override
   String get agentActionsRefresh => 'Atualizar';

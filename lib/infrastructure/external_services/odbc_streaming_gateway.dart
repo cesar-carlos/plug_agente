@@ -188,13 +188,14 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
         ),
       );
     }
+    final streamingOptions = _buildStreamingConnectionOptions(
+      chunkSizeBytes,
+      hintedBufferBytes: hintedBufferBytes,
+      queryTimeout: queryTimeout,
+    );
     final connResult = await _service.connect(
       connectionString,
-      options: _buildStreamingConnectionOptions(
-        chunkSizeBytes,
-        hintedBufferBytes: hintedBufferBytes,
-        queryTimeout: queryTimeout,
-      ),
+      options: streamingOptions,
     );
 
     return connResult.fold(
@@ -289,16 +290,8 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
               connectionString: connectionString,
               sql: query,
               currentBufferBytes:
-                  _buildStreamingConnectionOptions(
-                    chunkSizeBytes,
-                    hintedBufferBytes: hintedBufferBytes,
-                    queryTimeout: queryTimeout,
-                  ).maxResultBufferBytes ??
-                  (OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(
-                        _settings,
-                      ) *
-                      1024 *
-                      1024),
+                  streamingOptions.maxResultBufferBytes ??
+                  (OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024),
               errorMessage: e.toString(),
             );
           }
@@ -444,11 +437,12 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     Future<void> Function(List<Map<String, dynamic>> chunk) onChunk,
   ) async {
     final safeFetchSize = fetchSize > 0 ? fetchSize : 1000;
+    final columns = result.columns;
     var chunk = <Map<String, dynamic>>[];
     for (final row in result.rows) {
       final mappedRow = <String, dynamic>{};
-      for (var i = 0; i < result.columns.length; i++) {
-        mappedRow[result.columns[i]] = row[i];
+      for (var i = 0; i < columns.length; i++) {
+        mappedRow[columns[i]] = row[i];
       }
       chunk.add(mappedRow);
       if (chunk.length >= safeFetchSize) {

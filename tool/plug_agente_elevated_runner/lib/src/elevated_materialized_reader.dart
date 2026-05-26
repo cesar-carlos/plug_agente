@@ -26,15 +26,19 @@ class ElevatedMaterializedReader {
   final String appDirectoryPath;
 
   ElevatedMaterializedPlan? read(String executionId) {
-    final file = File(ElevatedContract.materializedFilePath(appDirectoryPath, executionId));
+    final file = File(
+      ElevatedContract.materializedFilePath(appDirectoryPath, executionId),
+    );
     if (!file.existsSync()) {
       return null;
     }
 
     try {
-      final decoded = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final decoded =
+          jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
       final version = decoded['version'];
-      if (version is! num || version.toInt() != ElevatedContract.materializedSchemaVersion) {
+      if (version is! num ||
+          version.toInt() != ElevatedContract.materializedSchemaVersion) {
         return null;
       }
 
@@ -73,7 +77,9 @@ class ElevatedMaterializedReader {
   }
 
   Future<void> delete(String executionId) async {
-    final file = File(ElevatedContract.materializedFilePath(appDirectoryPath, executionId));
+    final file = File(
+      ElevatedContract.materializedFilePath(appDirectoryPath, executionId),
+    );
     try {
       if (file.existsSync()) {
         await file.delete();

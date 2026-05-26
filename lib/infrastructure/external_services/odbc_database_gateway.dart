@@ -224,7 +224,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       timeout?.inMilliseconds ?? 0,
       _settings.loginTimeoutSeconds,
       _settings.maxResultBufferMb,
-      _settings.streamingChunkSizeKb,
     ].join(':');
     return _connectionOptionsCache.putIfAbsent(
       key,
@@ -440,7 +439,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       requestId: request.id,
       agentId: request.agentId,
       data: data,
-      affectedRows: isDml ? data.length : null,
+      // rowCount carries SQLRowCount for DML (affected rows) and rows-fetched
+      // for SELECT; data.length is always 0 for plain DML without OUTPUT/RETURNING.
+      affectedRows: isDml ? queryResult.rowCount : null,
       startedAt: startedAt,
       timestamp: finishedAt,
       columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(

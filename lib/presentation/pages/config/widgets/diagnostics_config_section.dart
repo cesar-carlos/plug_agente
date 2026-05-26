@@ -254,7 +254,10 @@ class _HubRecoveryDiagnosticsCard extends StatelessWidget {
           TextSpan(
             style: style,
             children: [
-              TextSpan(text: '$label: ', style: style.copyWith(fontWeight: FontWeight.w600)),
+              TextSpan(
+                text: '$label: ',
+                style: style.copyWith(fontWeight: FontWeight.w600),
+              ),
               TextSpan(text: value.isEmpty ? '—' : value),
             ],
           ),

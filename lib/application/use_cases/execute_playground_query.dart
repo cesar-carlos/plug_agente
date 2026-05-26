@@ -16,12 +16,8 @@ class ExecutePlaygroundQuery {
     this._databaseGateway,
     Object configContext,
     this._uuid,
-  ) : _activeConfigResolver = configContext is ActiveConfigResolver
-           ? configContext
-           : null,
-       _configRepository = configContext is IAgentConfigRepository
-           ? configContext
-           : null;
+  ) : _activeConfigResolver = configContext is ActiveConfigResolver ? configContext : null,
+      _configRepository = configContext is IAgentConfigRepository ? configContext : null;
   final IDatabaseGateway _databaseGateway;
   final ActiveConfigResolver? _activeConfigResolver;
   final IAgentConfigRepository? _configRepository;

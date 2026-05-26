@@ -12,40 +12,40 @@ void main() {
     test(
       'should invoke registered handler and return succeeded process result',
       () async {
-      final runner = ComObjectActionRunner(
-        invocationRegistry: ComObjectInvocationRegistry(
-          <RegisteredComObjectInvocation>[
-            RegisteredComObjectInvocation(
+        final runner = ComObjectActionRunner(
+          invocationRegistry: ComObjectInvocationRegistry(
+            <RegisteredComObjectInvocation>[
+              RegisteredComObjectInvocation(
+                progId: 'AgentAction.Test',
+                memberName: 'Ping',
+                handler: _EchoComObjectHandler(),
+              ),
+            ],
+          ),
+        );
+
+        final result = await runner.run(
+          executionId: 'exec-1',
+          definition: const AgentActionDefinition(
+            id: 'action-1',
+            name: 'Ping COM',
+            state: AgentActionState.active,
+            config: ComObjectActionConfig(
               progId: 'AgentAction.Test',
               memberName: 'Ping',
-              handler: _EchoComObjectHandler(),
+              arguments: <String, Object?>{'message': 'hello'},
             ),
-          ],
-        ),
-      );
-
-      final result = await runner.run(
-        executionId: 'exec-1',
-        definition: const AgentActionDefinition(
-          id: 'action-1',
-          name: 'Ping COM',
-          state: AgentActionState.active,
-          config: ComObjectActionConfig(
-            progId: 'AgentAction.Test',
-            memberName: 'Ping',
-            arguments: <String, Object?>{'message': 'hello'},
           ),
-        ),
-        request: const AgentActionExecutionRequest(
-          actionId: 'action-1',
-          source: AgentActionRequestSource.localUi,
-        ),
-      );
+          request: const AgentActionExecutionRequest(
+            actionId: 'action-1',
+            source: AgentActionRequestSource.localUi,
+          ),
+        );
 
-      expect(result.isSuccess(), isTrue);
-      final output = result.getOrThrow();
-      expect(output.status, AgentActionExecutionStatus.succeeded);
-      expect(output.stdout.text, contains('pong'));
+        expect(result.isSuccess(), isTrue);
+        final output = result.getOrThrow();
+        expect(output.status, AgentActionExecutionStatus.succeeded);
+        expect(output.stdout.text, contains('pong'));
       },
       skip: Platform.isWindows ? false : 'COM object runner tests require Windows',
     );

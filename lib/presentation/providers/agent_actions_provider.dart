@@ -9,6 +9,7 @@ import 'package:plug_agente/application/actions/agent_action_preflight_validity.
 import 'package:plug_agente/application/actions/agent_action_remote_audit_support_export.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_availability_checker.dart';
+import 'package:plug_agente/application/actions/agent_action_secret_placeholder_scanner.dart';
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
@@ -173,6 +174,7 @@ class AgentActionsProvider extends ChangeNotifier {
   List<AgentActionTrigger> _triggers = <AgentActionTrigger>[];
   String? _selectedActionId;
   String? _errorMessage;
+  String? _triggerErrorMessage;
   String? _lastTestedActionId;
   bool? _lastTestCanRun;
   String? _lastTestCommandPreview;
@@ -180,7 +182,7 @@ class AgentActionsProvider extends ChangeNotifier {
   Map<String, Object?> _lastTestDiagnostics = const <String, Object?>{};
   AgentActionExecutionStatus? _historyStatusFilter;
   AgentActionRequestSource? _historySourceFilter;
-  AgentActionHistoryPeriod _historyPeriodFilter = AgentActionHistoryPeriod.all;
+  AgentActionHistoryPeriod _historyPeriodFilter = AgentActionHistoryPeriod.last3Days;
   String? _historyFailurePhaseFilter;
   String _historySearchQuery = '';
   AgentActionType? _definitionTypeFilter;
@@ -227,6 +229,7 @@ class AgentActionsProvider extends ChangeNotifier {
   bool get isTransferringBundle => _isTransferringBundle;
   List<AgentActionTrigger> get triggers => _triggersViewCache ??= UnmodifiableListView<AgentActionTrigger>(_triggers);
   String? get errorMessage => _errorMessage;
+  String? get triggerErrorMessage => _triggerErrorMessage;
   bool get isFeatureEnabled => _featureFlags.enableAgentActions;
   bool get isRemoteAgentActionsEnabled => _featureFlags.enableRemoteAgentActions;
   bool get isRemoteAdHocAgentActionsEnabled => _featureFlags.enableRemoteAdHocAgentActions;
@@ -333,8 +336,9 @@ class AgentActionsProvider extends ChangeNotifier {
     if (selectedId == null) {
       return _definitions.firstOrNull;
     }
-
-    return _definitions.where((definition) => definition.id == selectedId).firstOrNull ?? _definitions.firstOrNull;
+    // When an id is set but not found (e.g. after delete or filter), return null
+    // instead of silently showing the first item as if the user had selected it.
+    return _definitions.where((definition) => definition.id == selectedId).firstOrNull;
   }
 
   bool get canRunSelected {
@@ -584,13 +588,16 @@ class AgentActionsProvider extends ChangeNotifier {
     if (definitionsResult.isError()) {
       _isLoading = false;
       _errorMessage = _messageFor(definitionsResult.exceptionOrNull()!);
+      _executions = <AgentActionExecution>[];
+      _executionsViewCache = null;
+      _filteredSelectedExecutionsCache = null;
       notifyListeners();
       return;
     }
 
     final executionsResult = await _listExecutions(
-      requestedAfter: _now().subtract(const Duration(days: 3)),
-      limit: 50,
+      requestedAfter: _historyPeriodStart(),
+      limit: _historyPeriodFilter == AgentActionHistoryPeriod.all ? 200 : 100,
     );
     if (executionsResult.isError()) {
       _isLoading = false;
@@ -755,7 +762,40 @@ class AgentActionsProvider extends ChangeNotifier {
 
     _auditCorrelationExecutionId = null;
     _historyPeriodFilter = period;
+    _filteredSelectedExecutionsCache = null;
     notifyListeners();
+    unawaited(_reloadExecutionsForPeriod());
+  }
+
+  Future<void> _reloadExecutionsForPeriod() async {
+    if (_isLoading) {
+      return;
+    }
+
+    final result = await _listExecutions(
+      requestedAfter: _historyPeriodStart(),
+      limit: _historyPeriodFilter == AgentActionHistoryPeriod.all ? 200 : 100,
+    );
+    result.fold(
+      (executions) {
+        _executions = executions;
+        _executionsViewCache = null;
+        _filteredSelectedExecutionsCache = null;
+        notifyListeners();
+      },
+      (failure) {
+        _errorMessage = _messageFor(failure);
+        notifyListeners();
+      },
+    );
+  }
+
+  DateTime? _historyPeriodStart() {
+    return switch (_historyPeriodFilter) {
+      AgentActionHistoryPeriod.all => null,
+      AgentActionHistoryPeriod.last24Hours => _now().subtract(const Duration(hours: 24)),
+      AgentActionHistoryPeriod.last3Days => _now().subtract(const Duration(days: 3)),
+    };
   }
 
   void setHistoryFailurePhaseFilter(String? phase) {
@@ -788,6 +828,31 @@ class AgentActionsProvider extends ChangeNotifier {
   void setDefinitionSearchQuery(String query) => setDefinitionSearchQueryFor(this, query);
 
   void clearDefinitionFilters() => clearDefinitionFiltersFor(this);
+
+  /// Collects secret placeholder names from a definition's config.
+  ///
+  /// Delegates to [AgentActionSecretPlaceholderScanner] so that presentation
+  /// widgets do not need to import the application layer directly.
+  Set<String> secretPlaceholderNamesFor(AgentActionDefinition definition) =>
+      AgentActionSecretPlaceholderScanner.collectFromDefinition(definition);
+
+  bool get hasHistoryFilters =>
+      _historyStatusFilter != null ||
+      _historySourceFilter != null ||
+      _historyPeriodFilter != AgentActionHistoryPeriod.last3Days ||
+      _historyFailurePhaseFilter != null ||
+      _historySearchQuery.isNotEmpty;
+
+  void clearHistoryFilters() {
+    _auditCorrelationExecutionId = null;
+    _historyStatusFilter = null;
+    _historySourceFilter = null;
+    _historyPeriodFilter = AgentActionHistoryPeriod.last3Days;
+    _historyFailurePhaseFilter = null;
+    _historySearchQuery = '';
+    _filteredSelectedExecutionsCache = null;
+    notifyListeners();
+  }
 
   Future<void> _refreshSelectedSecretReport() async {
     final definition = selectedDefinition;
@@ -940,35 +1005,18 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) async {
-    if (!canSaveAction) {
-      return false;
-    }
-
-    _isSaving = true;
-    _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final trimmedActionId = actionId?.trim();
-    final trimmedDescription = description?.trim();
+  }) {
     final trimmedWorkingDirectory = workingDirectory?.trim();
-    final existing = _existingDefinition(trimmedActionId);
-    final definition = AgentActionDefinition(
-      id: existing?.id ?? _uuid.v4(),
-      name: name.trim(),
-      description: trimmedDescription == null || trimmedDescription.isEmpty ? null : trimmedDescription,
+    return _saveDraftDefinition(
+      name: name,
+      actionId: actionId,
+      description: description,
       state: state,
       config: CommandLineActionConfig(
         command: command.trim(),
-        workingDirectory: _optionalPathReference(
-          trimmedWorkingDirectory,
-          pathChangePolicy: pathChangePolicy,
-        ),
+        workingDirectory: _optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
       ),
-      policies: _policiesForSave(
+      buildPolicies: (existing) => _policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -985,14 +1033,7 @@ class AgentActionsProvider extends ChangeNotifier {
         queuePolicy: queuePolicy,
         pathPolicy: pathPolicy,
       ),
-      definitionVersion: existing?.definitionVersion ?? 1,
-      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
-      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
-      createdAt: existing?.createdAt ?? _now(),
-      updatedAt: _now(),
     );
-
-    return _persistDefinition(definition);
   }
 
   Future<bool> saveExecutableAction({
@@ -1018,39 +1059,19 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) async {
-    if (!canSaveAction) {
-      return false;
-    }
-
-    _isSaving = true;
-    _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final trimmedActionId = actionId?.trim();
-    final trimmedDescription = description?.trim();
+  }) {
     final trimmedWorkingDirectory = workingDirectory?.trim();
-    final existing = _existingDefinition(trimmedActionId);
-    final definition = AgentActionDefinition(
-      id: existing?.id ?? _uuid.v4(),
-      name: name.trim(),
-      description: trimmedDescription == null || trimmedDescription.isEmpty ? null : trimmedDescription,
+    return _saveDraftDefinition(
+      name: name,
+      actionId: actionId,
+      description: description,
       state: state,
       config: ExecutableActionConfig(
-        executablePath: _pathReference(
-          executablePath.trim(),
-          pathChangePolicy: pathChangePolicy,
-        ),
+        executablePath: _pathReference(executablePath.trim(), pathChangePolicy: pathChangePolicy),
         arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: _optionalPathReference(
-          trimmedWorkingDirectory,
-          pathChangePolicy: pathChangePolicy,
-        ),
+        workingDirectory: _optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
       ),
-      policies: _policiesForSave(
+      buildPolicies: (existing) => _policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1067,14 +1088,7 @@ class AgentActionsProvider extends ChangeNotifier {
         queuePolicy: queuePolicy,
         pathPolicy: pathPolicy,
       ),
-      definitionVersion: existing?.definitionVersion ?? 1,
-      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
-      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
-      createdAt: existing?.createdAt ?? _now(),
-      updatedAt: _now(),
     );
-
-    return _persistDefinition(definition);
   }
 
   Future<bool> saveScriptAction({
@@ -1101,45 +1115,21 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) async {
-    if (!canSaveAction) {
-      return false;
-    }
-
-    _isSaving = true;
-    _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final trimmedActionId = actionId?.trim();
-    final trimmedDescription = description?.trim();
+  }) {
     final trimmedInterpreterPath = interpreterPath?.trim();
     final trimmedWorkingDirectory = workingDirectory?.trim();
-    final existing = _existingDefinition(trimmedActionId);
-    final definition = AgentActionDefinition(
-      id: existing?.id ?? _uuid.v4(),
-      name: name.trim(),
-      description: trimmedDescription == null || trimmedDescription.isEmpty ? null : trimmedDescription,
+    return _saveDraftDefinition(
+      name: name,
+      actionId: actionId,
+      description: description,
       state: state,
       config: ScriptActionConfig(
-        scriptPath: AgentActionPathReference(
-          originalPath: scriptPath.trim(),
-        ),
-        interpreterPath: trimmedInterpreterPath == null || trimmedInterpreterPath.isEmpty
-            ? null
-            : AgentActionPathReference(
-                originalPath: trimmedInterpreterPath,
-              ),
+        scriptPath: _pathReference(scriptPath.trim(), pathChangePolicy: pathChangePolicy),
+        interpreterPath: _optionalPathReference(trimmedInterpreterPath, pathChangePolicy: pathChangePolicy),
         arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: trimmedWorkingDirectory == null || trimmedWorkingDirectory.isEmpty
-            ? null
-            : AgentActionPathReference(
-                originalPath: trimmedWorkingDirectory,
-              ),
+        workingDirectory: _optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
       ),
-      policies: _policiesForSave(
+      buildPolicies: (existing) => _policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1156,14 +1146,7 @@ class AgentActionsProvider extends ChangeNotifier {
         queuePolicy: queuePolicy,
         pathPolicy: pathPolicy,
       ),
-      definitionVersion: existing?.definitionVersion ?? 1,
-      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
-      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
-      createdAt: existing?.createdAt ?? _now(),
-      updatedAt: _now(),
     );
-
-    return _persistDefinition(definition);
   }
 
   Future<bool> saveJarAction({
@@ -1190,45 +1173,21 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) async {
-    if (!canSaveAction) {
-      return false;
-    }
-
-    _isSaving = true;
-    _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final trimmedActionId = actionId?.trim();
-    final trimmedDescription = description?.trim();
+  }) {
     final trimmedJavaPath = javaExecutablePath?.trim();
     final trimmedWorkingDirectory = workingDirectory?.trim();
-    final existing = _existingDefinition(trimmedActionId);
-    final definition = AgentActionDefinition(
-      id: existing?.id ?? _uuid.v4(),
-      name: name.trim(),
-      description: trimmedDescription == null || trimmedDescription.isEmpty ? null : trimmedDescription,
+    return _saveDraftDefinition(
+      name: name,
+      actionId: actionId,
+      description: description,
       state: state,
       config: JarActionConfig(
-        jarPath: AgentActionPathReference(
-          originalPath: jarPath.trim(),
-        ),
-        javaExecutablePath: trimmedJavaPath == null || trimmedJavaPath.isEmpty
-            ? null
-            : AgentActionPathReference(
-                originalPath: trimmedJavaPath,
-              ),
+        jarPath: _pathReference(jarPath.trim(), pathChangePolicy: pathChangePolicy),
+        javaExecutablePath: _optionalPathReference(trimmedJavaPath, pathChangePolicy: pathChangePolicy),
         arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: trimmedWorkingDirectory == null || trimmedWorkingDirectory.isEmpty
-            ? null
-            : AgentActionPathReference(
-                originalPath: trimmedWorkingDirectory,
-              ),
+        workingDirectory: _optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
       ),
-      policies: _policiesForSave(
+      buildPolicies: (existing) => _policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1245,14 +1204,7 @@ class AgentActionsProvider extends ChangeNotifier {
         queuePolicy: queuePolicy,
         pathPolicy: pathPolicy,
       ),
-      definitionVersion: existing?.definitionVersion ?? 1,
-      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
-      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
-      createdAt: existing?.createdAt ?? _now(),
-      updatedAt: _now(),
     );
-
-    return _persistDefinition(definition);
   }
 
   Future<bool> saveEmailAction({
@@ -1281,25 +1233,11 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathChangePolicy? pathChangePolicy,
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) async {
-    if (!canSaveAction) {
-      return false;
-    }
-
-    _isSaving = true;
-    _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final trimmedActionId = actionId?.trim();
-    final trimmedDescription = description?.trim();
-    final existing = _existingDefinition(trimmedActionId);
-    final definition = AgentActionDefinition(
-      id: existing?.id ?? _uuid.v4(),
-      name: name.trim(),
-      description: trimmedDescription == null || trimmedDescription.isEmpty ? null : trimmedDescription,
+  }) {
+    return _saveDraftDefinition(
+      name: name,
+      actionId: actionId,
+      description: description,
       state: state,
       config: EmailActionConfig(
         smtpProfileId: smtpProfileId.trim(),
@@ -1311,7 +1249,7 @@ class AgentActionsProvider extends ChangeNotifier {
         bodyTemplate: bodyTemplate.trim(),
         attachmentPaths: List<AgentActionPathReference>.unmodifiable(attachmentPaths),
       ),
-      policies: _policiesForSave(
+      buildPolicies: (existing) => _policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1326,14 +1264,7 @@ class AgentActionsProvider extends ChangeNotifier {
         queuePolicy: queuePolicy,
         pathPolicy: pathPolicy,
       ),
-      definitionVersion: existing?.definitionVersion ?? 1,
-      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
-      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
-      createdAt: existing?.createdAt ?? _now(),
-      updatedAt: _now(),
     );
-
-    return _persistDefinition(definition);
   }
 
   Future<bool> saveComObjectAction({
@@ -1357,32 +1288,18 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathChangePolicy? pathChangePolicy,
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) async {
-    if (!canSaveAction) {
-      return false;
-    }
-
-    _isSaving = true;
-    _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final trimmedActionId = actionId?.trim();
-    final trimmedDescription = description?.trim();
-    final existing = _existingDefinition(trimmedActionId);
-    final definition = AgentActionDefinition(
-      id: existing?.id ?? _uuid.v4(),
-      name: name.trim(),
-      description: trimmedDescription == null || trimmedDescription.isEmpty ? null : trimmedDescription,
+  }) {
+    return _saveDraftDefinition(
+      name: name,
+      actionId: actionId,
+      description: description,
       state: state,
       config: ComObjectActionConfig(
         progId: progId.trim(),
         memberName: memberName.trim(),
         arguments: Map<String, Object?>.unmodifiable(arguments),
       ),
-      policies: _policiesForSave(
+      buildPolicies: (existing) => _policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1397,14 +1314,7 @@ class AgentActionsProvider extends ChangeNotifier {
         queuePolicy: queuePolicy,
         pathPolicy: pathPolicy,
       ),
-      definitionVersion: existing?.definitionVersion ?? 1,
-      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
-      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
-      createdAt: existing?.createdAt ?? _now(),
-      updatedAt: _now(),
     );
-
-    return _persistDefinition(definition);
   }
 
   Future<bool> saveDeveloperData7Action({
@@ -1432,27 +1342,13 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) async {
-    if (!canSaveAction) {
-      return false;
-    }
-
-    _isSaving = true;
-    _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final trimmedActionId = actionId?.trim();
-    final trimmedDescription = description?.trim();
+  }) {
     final trimmedData7ConfigPath = data7ConfigPath?.trim() ?? '';
     final trimmedConnectionId = connectionId.trim();
-    final existing = _existingDefinition(trimmedActionId);
-    final definition = AgentActionDefinition(
-      id: existing?.id ?? _uuid.v4(),
-      name: name.trim(),
-      description: trimmedDescription == null || trimmedDescription.isEmpty ? null : trimmedDescription,
+    return _saveDraftDefinition(
+      name: name,
+      actionId: actionId,
+      description: description,
       state: state,
       config: DeveloperActionConfig.data7Executor(
         executorPath: _pathReference(executorPath.trim()),
@@ -1461,7 +1357,7 @@ class AgentActionsProvider extends ChangeNotifier {
         connectionId: trimmedConnectionId,
         connectionLabel: connectionLabel.trim().isEmpty ? trimmedConnectionId : connectionLabel.trim(),
       ),
-      policies: _policiesForSave(
+      buildPolicies: (existing) => _policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1478,20 +1374,14 @@ class AgentActionsProvider extends ChangeNotifier {
         queuePolicy: queuePolicy,
         pathPolicy: pathPolicy,
       ),
-      definitionVersion: existing?.definitionVersion ?? 1,
-      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
-      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
-      createdAt: existing?.createdAt ?? _now(),
-      updatedAt: _now(),
     );
-
-    return _persistDefinition(definition);
   }
 
-  Future<bool> exportBundleToFile(String filePath) => exportBundleToFileFor(this, filePath);
+  Future<bool> exportBundleToFile(String filePath, {required AppLocalizations l10n}) =>
+      exportBundleToFileFor(this, filePath, l10n: l10n);
 
-  Future<ImportAgentActionsBundleSummary?> importBundleFromFile(String filePath) =>
-      importBundleFromFileFor(this, filePath);
+  Future<ImportAgentActionsBundleSummary?> importBundleFromFile(String filePath, {required AppLocalizations l10n}) =>
+      importBundleFromFileFor(this, filePath, l10n: l10n);
 
   Future<void> deleteSelectedAction() async {
     final definition = selectedDefinition;
@@ -1542,11 +1432,11 @@ class AgentActionsProvider extends ChangeNotifier {
   Future<void> refreshTriggersForSelection() => _syncTriggersForSelection();
 
   void clearTriggerOperationError() {
-    if (_errorMessage == null) {
+    if (_triggerErrorMessage == null) {
       return;
     }
 
-    _errorMessage = null;
+    _triggerErrorMessage = null;
     notifyListeners();
   }
 
@@ -1556,7 +1446,7 @@ class AgentActionsProvider extends ChangeNotifier {
     }
 
     _isSavingTrigger = true;
-    _errorMessage = null;
+    _triggerErrorMessage = null;
     notifyListeners();
 
     final result = await _saveTrigger(trigger);
@@ -1566,7 +1456,7 @@ class AgentActionsProvider extends ChangeNotifier {
         ok = true;
       },
       (Exception failure) {
-        _errorMessage = _messageFor(failure);
+        _triggerErrorMessage = _messageFor(failure);
       },
     );
 
@@ -1587,14 +1477,14 @@ class AgentActionsProvider extends ChangeNotifier {
     }
 
     _deletingTriggerIds.add(trimmedId);
-    _errorMessage = null;
+    _triggerErrorMessage = null;
     notifyListeners();
 
     final result = await _deleteTrigger(trimmedId);
     result.fold(
       (_) {},
       (failure) {
-        _errorMessage = _messageFor(failure);
+        _triggerErrorMessage = _messageFor(failure);
       },
     );
 
@@ -1716,14 +1606,6 @@ class AgentActionsProvider extends ChangeNotifier {
     return _definitions.first.id;
   }
 
-  DateTime? _historyPeriodStart() {
-    return switch (_historyPeriodFilter) {
-      AgentActionHistoryPeriod.all => null,
-      AgentActionHistoryPeriod.last24Hours => _now().subtract(const Duration(hours: 24)),
-      AgentActionHistoryPeriod.last3Days => _now().subtract(const Duration(days: 3)),
-    };
-  }
-
   String _messageFor(Exception failure) {
     return AgentActionFailureDiagnosticsResolver.userMessage(failure);
   }
@@ -1801,6 +1683,49 @@ class AgentActionsProvider extends ChangeNotifier {
       queue: queuePolicy ?? existing?.policies.queue,
       path: pathPolicy ?? existing?.policies.path,
     );
+  }
+
+  /// Shared scaffold for all save*Action methods.
+  ///
+  /// Handles guard, state reset, definition assembly and persistence so that
+  /// each public save method only needs to build its specific config.
+  Future<bool> _saveDraftDefinition({
+    required String name,
+    required String? actionId,
+    required String? description,
+    required AgentActionState state,
+    required AgentActionConfig config,
+    required AgentActionDefinitionPolicies Function(AgentActionDefinition? existing) buildPolicies,
+  }) async {
+    if (!canSaveAction) {
+      return false;
+    }
+
+    _isSaving = true;
+    _errorMessage = null;
+    _lastTestedActionId = null;
+    _lastTestCanRun = null;
+    _clearLastTestPreviewState();
+    notifyListeners();
+
+    final trimmedId = actionId?.trim();
+    final trimmedDesc = description?.trim();
+    final existing = _existingDefinition(trimmedId);
+    final definition = AgentActionDefinition(
+      id: existing?.id ?? _uuid.v4(),
+      name: name.trim(),
+      description: trimmedDesc == null || trimmedDesc.isEmpty ? null : trimmedDesc,
+      state: state,
+      config: config,
+      policies: buildPolicies(existing),
+      definitionVersion: existing?.definitionVersion ?? 1,
+      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
+      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
+      createdAt: existing?.createdAt ?? _now(),
+      updatedAt: _now(),
+    );
+
+    return _persistDefinition(definition);
   }
 
   Future<bool> _persistDefinition(AgentActionDefinition definition) async {

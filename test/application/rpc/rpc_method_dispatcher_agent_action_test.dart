@@ -493,10 +493,12 @@ void main() {
         ),
       );
       verifyNever(() => mockCancel(any()));
-      verifyNever(() => mockGetExecution(
+      verifyNever(
+        () => mockGetExecution(
           any(),
           hydrateCapturedOutput: any(named: 'hydrateCapturedOutput'),
-        ));
+        ),
+      );
     });
 
     test('should record notification rejected metric without remote rpc error counter', () async {
@@ -876,10 +878,12 @@ void main() {
         finishedAt: DateTime.utc(2026, 5, 18, 14, 2),
         redactionApplied: true,
       );
-      when(() => mockGetExecution(
+      when(
+        () => mockGetExecution(
           any(),
           hydrateCapturedOutput: any(named: 'hydrateCapturedOutput'),
-        )).thenAnswer((_) async => Success(execution));
+        ),
+      ).thenAnswer((_) async => Success(execution));
 
       final response = await dispatcher.dispatch(
         const RpcRequest(
@@ -936,8 +940,9 @@ void main() {
       );
 
       check(response.error).isNull();
-      final stdout = ((response.result! as Map<String, dynamic>)['output'] as Map<String, dynamic>)['stdout']
-          as Map<String, dynamic>;
+      final stdout =
+          ((response.result! as Map<String, dynamic>)['output'] as Map<String, dynamic>)['stdout']
+              as Map<String, dynamic>;
       check(stdout['captured']).equals(false);
       check(stdout.containsKey('text')).equals(false);
     });
@@ -1956,14 +1961,14 @@ void main() {
         final data = response.error!.data as Map<String, dynamic>;
         check(data['reason']).equals(RpcClientTokenConstants.missingClientTokenReason);
         verifyNever(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      );
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        );
         verifyNever(() => mockGetPolicy(any()));
       });
 
@@ -1997,14 +2002,14 @@ void main() {
           redactionApplied: true,
         );
         when(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).thenAnswer((_) async => Success(execution));
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        ).thenAnswer((_) async => Success(execution));
 
         final response = await dispatcher.dispatch(
           const RpcRequest(
@@ -2027,14 +2032,14 @@ void main() {
         check(data['required_scope']).equals(AgentActionRpcConstants.agentActionsRunScope);
         check(data['action_id']).equals('action-1');
         verifyNever(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      );
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        );
       });
 
       test('should record authorization_denied in remote audit when client token is missing', () async {
@@ -2110,14 +2115,14 @@ void main() {
           redactionApplied: true,
         );
         when(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).thenAnswer((_) async => Success(execution));
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        ).thenAnswer((_) async => Success(execution));
 
         final dispatcherWithAudit = RpcMethodDispatcher(
           databaseGateway: mockGateway,
@@ -2247,14 +2252,14 @@ void main() {
           redactionApplied: true,
         );
         when(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).thenAnswer((_) async => Success(execution));
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        ).thenAnswer((_) async => Success(execution));
 
         final metrics = MetricsCollector();
         var rateLimitedMetricInvocations = 0;
@@ -2319,14 +2324,14 @@ void main() {
         final data = second.error!.data as Map<String, dynamic>;
         check(data['reason']).equals(AgentActionRpcConstants.agentActionRemoteRateLimitedErrorReason);
         verify(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).called(1);
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        ).called(1);
 
         final records = verify(() => mockAudit.append(captureAny())).captured.cast<AgentActionRemoteAuditRecord>();
         check(records.length).equals(4);
@@ -2429,14 +2434,14 @@ void main() {
           redactionApplied: true,
         );
         when(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).thenAnswer((_) async => Success(execution));
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        ).thenAnswer((_) async => Success(execution));
 
         final response = await dispatcher.dispatch(
           const RpcRequest(
@@ -2455,14 +2460,14 @@ void main() {
         check(response.error).isNotNull();
         check(response.error!.code).equals(RpcErrorCode.unauthorized);
         verifyNever(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      );
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        );
       });
 
       test('should call runner when token_scope grants wildcard', () async {
@@ -2493,14 +2498,14 @@ void main() {
           redactionApplied: true,
         );
         when(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).thenAnswer((_) async => Success(execution));
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        ).thenAnswer((_) async => Success(execution));
 
         final response = await dispatcher.dispatch(
           const RpcRequest(
@@ -2518,14 +2523,14 @@ void main() {
 
         check(response.error).isNull();
         verify(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).called(1);
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        ).called(1);
       });
 
       test('should call getExecution only once when client token auth is on', () async {
@@ -2540,10 +2545,12 @@ void main() {
           finishedAt: DateTime.utc(2026, 5, 18, 14, 2),
           redactionApplied: true,
         );
-        when(() => mockGetExecution(
-          any(),
-          hydrateCapturedOutput: any(named: 'hydrateCapturedOutput'),
-        )).thenAnswer((_) async => Success(execution));
+        when(
+          () => mockGetExecution(
+            any(),
+            hydrateCapturedOutput: any(named: 'hydrateCapturedOutput'),
+          ),
+        ).thenAnswer((_) async => Success(execution));
 
         final response = await dispatcher.dispatch(
           const RpcRequest(
@@ -2560,8 +2567,8 @@ void main() {
 
         check(response.error).isNull();
         verify(
-        () => mockGetExecution('exec-1', hydrateCapturedOutput: false),
-      ).called(1);
+          () => mockGetExecution('exec-1', hydrateCapturedOutput: false),
+        ).called(1);
       });
 
       test('should append remote audit with client id and token jti from resolved policy', () async {
@@ -2597,14 +2604,14 @@ void main() {
           redactionApplied: true,
         );
         when(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).thenAnswer((_) async => Success(execution));
+          () => mockRemoteRun(
+            actionId: any(named: 'actionId'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            triggerId: any(named: 'triggerId'),
+            requestedBy: any(named: 'requestedBy'),
+            traceId: any(named: 'traceId'),
+          ),
+        ).thenAnswer((_) async => Success(execution));
 
         const runtimeIdentity = AgentRuntimeIdentity(
           runtimeInstanceId: 'inst-audit-test',
@@ -2652,20 +2659,20 @@ void main() {
           clientToken: 'tok-audit',
         );
 
-      check(response.error).isNull();
-      final captured = verify(() => mockAudit.append(captureAny()));
-      captured.called(2);
-      final records = captured.captured.cast<AgentActionRemoteAuditRecord>().toList();
-      check(records.first.outcome).equals(AgentActionRemoteAuditConstants.outcomeReceived);
-      final record = records.last;
-      check(record.rpcMethod).equals(AgentActionRpcConstants.agentActionRunRpcMethodName);
-      check(record.outcome).equals(AgentActionRemoteAuditConstants.outcomeSuccess);
-      check(record.clientId).equals('audit-client-9');
-      check(record.tokenJti).equals('audit-jti-7');
-      check(record.credentialPresent).isTrue();
-      check(record.runtimeInstanceId).equals('inst-audit-test');
-      check(record.runtimeSessionId).equals('sess-audit-test');
-      check(auditCorrelatedCount).equals(1);
+        check(response.error).isNull();
+        final captured = verify(() => mockAudit.append(captureAny()));
+        captured.called(2);
+        final records = captured.captured.cast<AgentActionRemoteAuditRecord>().toList();
+        check(records.first.outcome).equals(AgentActionRemoteAuditConstants.outcomeReceived);
+        final record = records.last;
+        check(record.rpcMethod).equals(AgentActionRpcConstants.agentActionRunRpcMethodName);
+        check(record.outcome).equals(AgentActionRemoteAuditConstants.outcomeSuccess);
+        check(record.clientId).equals('audit-client-9');
+        check(record.tokenJti).equals('audit-jti-7');
+        check(record.credentialPresent).isTrue();
+        check(record.runtimeInstanceId).equals('inst-audit-test');
+        check(record.runtimeSessionId).equals('sess-audit-test');
+        check(auditCorrelatedCount).equals(1);
       });
 
       test(
@@ -2700,14 +2707,14 @@ void main() {
             redactionApplied: true,
           );
           when(
-        () => mockRemoteRun(
-          actionId: any(named: 'actionId'),
-          idempotencyKey: any(named: 'idempotencyKey'),
-          triggerId: any(named: 'triggerId'),
-          requestedBy: any(named: 'requestedBy'),
-          traceId: any(named: 'traceId'),
-        ),
-      ).thenAnswer((_) async => Success(execution));
+            () => mockRemoteRun(
+              actionId: any(named: 'actionId'),
+              idempotencyKey: any(named: 'idempotencyKey'),
+              triggerId: any(named: 'triggerId'),
+              requestedBy: any(named: 'requestedBy'),
+              traceId: any(named: 'traceId'),
+            ),
+          ).thenAnswer((_) async => Success(execution));
 
           final dispatcherWithAudit = RpcMethodDispatcher(
             databaseGateway: mockGateway,

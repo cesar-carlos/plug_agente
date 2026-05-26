@@ -29,8 +29,7 @@ class DeleteAgentActionSecret {
           message: 'Action secret store is not available.',
           context: const {
             'reason': AgentActionValidationConstants.secretStoreUnavailableReason,
-            'user_message':
-                'O armazenamento seguro de segredos nao esta disponivel neste agente.',
+            'user_message': 'O armazenamento seguro de segredos nao esta disponivel neste agente.',
           },
         ),
       );

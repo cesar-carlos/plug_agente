@@ -40,8 +40,7 @@ class _StubLocalizer implements RpcErrorUserMessageLocalizer {
   @override
   String internalError() => 'STUB_internal_error';
   @override
-  String agentActionsTemporarilyUnavailable() =>
-      'STUB_agent_actions_temporarily_unavailable';
+  String agentActionsTemporarilyUnavailable() => 'STUB_agent_actions_temporarily_unavailable';
 }
 
 void main() {

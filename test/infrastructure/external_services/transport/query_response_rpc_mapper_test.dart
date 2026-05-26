@@ -111,9 +111,11 @@ void main() {
 
     group('toRpcResponse', () {
       test('should return success RpcResponse for non-error response', () {
-        final response = buildResponse(data: [
-          {'col': 'value'},
-        ]);
+        final response = buildResponse(
+          data: [
+            {'col': 'value'},
+          ],
+        );
 
         final rpc = QueryResponseRpcMapper.toRpcResponse(response);
 

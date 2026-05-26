@@ -244,18 +244,31 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
     await _writeQueue;
   }
 
+  /// The error from the most recent write, or null if the last write succeeded.
+  ///
+  /// Callers can inspect this after `flushPendingPersistence()` to detect
+  /// silent disk-write failures.
+  Object? lastPersistError;
+
   Future<void> _persist() {
     return _writeQueue = _writeQueue
         .catchError((Object e, StackTrace stackTrace) {
+          // Swallow the previous write's error so the queue can continue with
+          // the latest in-memory snapshot. The error is tracked in
+          // [lastPersistError] for callers that need visibility.
+          lastPersistError = e;
           developer.log(
-            'Settings persist failed',
+            'Settings persist failed (previous batch)',
             name: 'app_settings_store',
             level: 900,
             error: e,
             stackTrace: stackTrace,
           );
         })
-        .then((_) => _writeSnapshot());
+        .then((_) async {
+          await _writeSnapshot();
+          lastPersistError = null; // clear on successful write
+        });
   }
 
   Future<void> _writeSnapshot() async {

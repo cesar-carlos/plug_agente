@@ -227,7 +227,7 @@ class _QueryResultsFooter extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
-        vertical: 12,
+        vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
         color: theme.resources.cardBackgroundFillColorSecondary,

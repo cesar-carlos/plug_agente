@@ -136,9 +136,7 @@ class ElevatedActionStatusFileSyncer {
     final executionId = json['executionId'];
     final statusName = json['status'];
     final finishedAtRaw = json['finishedAt'];
-    if (executionId is! String ||
-        statusName is! String ||
-        finishedAtRaw is! String) {
+    if (executionId is! String || statusName is! String || finishedAtRaw is! String) {
       return null;
     }
 

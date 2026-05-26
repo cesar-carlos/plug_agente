@@ -17,15 +17,12 @@ class CleanupExpiredRpcIdempotencyCache {
       final removed = await _store.purgeExpiredEntries(referenceTime: referenceTime);
       _metrics?.recordRpcIdempotencyCachePurge(removed);
       return Success(removed);
-    } on Object catch (error, stackTrace) {
+    } on Object catch (error) {
       return Failure(
         ServerFailure.withContext(
           message: 'Failed to purge expired RPC idempotency cache entries',
           cause: error,
-          context: {
-            'operation': 'cleanup_expired_rpc_idempotency_cache',
-            'stack_trace': stackTrace.toString(),
-          },
+          context: {'operation': 'cleanup_expired_rpc_idempotency_cache'},
         ),
       );
     }

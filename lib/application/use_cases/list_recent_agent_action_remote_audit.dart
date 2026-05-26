@@ -15,15 +15,12 @@ class ListRecentAgentActionRemoteAudit {
     try {
       final rows = await _store.listRecent(limit: limit);
       return Success(rows);
-    } on Object catch (error, stackTrace) {
+    } on Object catch (error) {
       return Failure(
         ServerFailure.withContext(
           message: 'Failed to list agent action remote audit rows',
           cause: error,
-          context: {
-            'operation': 'list_recent_agent_action_remote_audit',
-            'stack_trace': stackTrace.toString(),
-          },
+          context: {'operation': 'list_recent_agent_action_remote_audit'},
         ),
       );
     }

@@ -78,8 +78,20 @@ class RetryManager implements IRetryManager {
       delayMs = (delayMs * backoffMultiplier).toInt();
     }
 
-    // Todas as tentativas falharam
-    return Failure(lastException!);
+    // All attempts failed — normalize to a typed domain Failure so callers
+    // receive a consistent Result<T> type regardless of whether the operation
+    // threw an Exception or returned a Failure Result.
+    final last = lastException!;
+    if (last is domain.Failure) {
+      return Failure(last);
+    }
+    return Failure(
+      domain.ServerFailure.withContext(
+        message: last.toString(),
+        cause: last,
+        context: {'operation': 'retry_manager.execute'},
+      ),
+    );
   }
 
   @override
@@ -99,8 +111,13 @@ class RetryManager implements IRetryManager {
         return true;
       }
 
-      // Erros de conexão podem ser transientes
       if (exception is domain.ConnectionFailure) {
+        // Explicit retryable flag in context takes precedence over message heuristics.
+        // This prevents English message translations from accidentally changing
+        // retry behavior when the mapper sets 'retryable': false.
+        if (exception.context.containsKey('retryable')) {
+          return exception.context['retryable'] == true;
+        }
         final message = exception.message.toLowerCase();
         return message.contains('timeout') ||
             message.contains('connection') ||

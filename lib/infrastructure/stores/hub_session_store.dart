@@ -319,15 +319,11 @@ class HubSessionStore implements IHubSessionStore {
       return false;
     }
 
-    final needsAuthToken =
-        _normalize(legacySecrets.authToken) != null &&
-        _normalize(storedSecrets.authToken) == null;
+    final needsAuthToken = _normalize(legacySecrets.authToken) != null && _normalize(storedSecrets.authToken) == null;
     final needsRefreshToken =
-        _normalize(legacySecrets.refreshToken) != null &&
-        _normalize(storedSecrets.refreshToken) == null;
+        _normalize(legacySecrets.refreshToken) != null && _normalize(storedSecrets.refreshToken) == null;
     final needsPassword =
-        _normalize(legacySecrets.authPassword) != null &&
-        _normalize(storedSecrets.authPassword) == null;
+        _normalize(legacySecrets.authPassword) != null && _normalize(storedSecrets.authPassword) == null;
     return needsAuthToken || needsRefreshToken || needsPassword;
   }
 

@@ -69,24 +69,30 @@ void main() {
       const validator = ActionCommandSafetyValidator();
 
       expect(
-        validator.assessForLocalRun(
-          command: 'format C: /Y',
-          warnModeEnabled: false,
-        ).isBlocked,
+        validator
+            .assessForLocalRun(
+              command: 'format C: /Y',
+              warnModeEnabled: false,
+            )
+            .isBlocked,
         isTrue,
       );
       expect(
-        validator.assessForLocalRun(
-          command: 'format C: /Y',
-          warnModeEnabled: true,
-        ).requiresConfirmation,
+        validator
+            .assessForLocalRun(
+              command: 'format C: /Y',
+              warnModeEnabled: true,
+            )
+            .requiresConfirmation,
         isTrue,
       );
       expect(
-        validator.assessForLocalRun(
-          command: 'echo ok',
-          warnModeEnabled: true,
-        ).policy,
+        validator
+            .assessForLocalRun(
+              command: 'echo ok',
+              warnModeEnabled: true,
+            )
+            .policy,
         AgentActionDangerousCommandRunPolicy.allow,
       );
     });

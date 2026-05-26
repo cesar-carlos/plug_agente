@@ -188,8 +188,7 @@ class AgentActionFailureDiagnosticsResolver {
     return switch (failurePhase) {
       'definition_validation' => AgentActionCorrectiveActionKind.reviewDefinitionValidation,
       'validation' => AgentActionCorrectiveActionKind.reviewDefinitionValidation,
-      AgentActionProcessConstants.bootstrapReconciliationPhase =>
-        AgentActionCorrectiveActionKind.reviewRuntime,
+      AgentActionProcessConstants.bootstrapReconciliationPhase => AgentActionCorrectiveActionKind.reviewRuntime,
       'execution_preflight' => AgentActionCorrectiveActionKind.reviewPreflight,
       'start_process' => AgentActionCorrectiveActionKind.reviewStartProcess,
       'stdin_setup' => AgentActionCorrectiveActionKind.reviewStartProcess,

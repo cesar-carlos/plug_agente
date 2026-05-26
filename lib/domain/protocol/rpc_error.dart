@@ -9,9 +9,25 @@ class RpcError {
   });
 
   factory RpcError.fromJson(Map<String, dynamic> json) {
+    final rawCode = json['code'];
+    final rawMessage = json['message'];
+
+    final int code;
+    if (rawCode is int) {
+      code = rawCode;
+    } else if (rawCode is num) {
+      code = rawCode.toInt();
+    } else {
+      throw FormatException('RpcError.code must be an integer, got ${rawCode.runtimeType}');
+    }
+
+    if (rawMessage is! String) {
+      throw FormatException('RpcError.message must be a string, got ${rawMessage.runtimeType}');
+    }
+
     return RpcError(
-      code: json['code'] as int,
-      message: json['message'] as String,
+      code: code,
+      message: rawMessage,
       data: json['data'],
     );
   }
@@ -61,12 +77,22 @@ class ProblemDetails {
       }
     }
 
+    final rawStatus = json['status'];
+    final int status;
+    if (rawStatus is int) {
+      status = rawStatus;
+    } else if (rawStatus is num) {
+      status = rawStatus.toInt();
+    } else {
+      throw FormatException('ProblemDetails.status must be an integer, got ${rawStatus.runtimeType}');
+    }
+
     return ProblemDetails(
-      type: json['type'] as String,
-      title: json['title'] as String,
-      status: json['status'] as int,
-      detail: json['detail'] as String?,
-      instance: json['instance'] as String?,
+      type: json['type'] is String ? json['type'] as String : '',
+      title: json['title'] is String ? json['title'] as String : '',
+      status: status,
+      detail: json['detail'] is String ? json['detail'] as String : null,
+      instance: json['instance'] is String ? json['instance'] as String : null,
       extensions: extensions,
     );
   }

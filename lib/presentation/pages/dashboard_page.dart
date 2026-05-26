@@ -12,6 +12,7 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/presentation/widgets/websocket_log_viewer.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
+
 enum _MetricsPeriod { last1h, last24h, all }
 
 const _dashboardMetricsPeriodKey = 'dashboard_metrics_period';

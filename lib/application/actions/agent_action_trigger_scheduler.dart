@@ -515,8 +515,7 @@ class AgentActionTriggerScheduler {
             'trigger_id': trigger.id,
             'action_id': actionId,
             'reason': AgentActionTriggerConstants.appCloseElevatedActionBlockedReason,
-            'user_message':
-                'A acao nao foi executada no fechamento porque ela exige execucao elevada (UAC).',
+            'user_message': 'A acao nao foi executada no fechamento porque ela exige execucao elevada (UAC).',
           },
         ),
       );

@@ -23,7 +23,8 @@ void main() {
     expect(
       AppConstants.appVersion,
       pubspecVersion,
-      reason: 'AppConstants.appVersion ("${AppConstants.appVersion}") does not match '
+      reason:
+          'AppConstants.appVersion ("${AppConstants.appVersion}") does not match '
           'pubspec.yaml version ("$pubspecVersion"). '
           'Re-run the version bump script to regenerate app_version.g.dart.',
     );

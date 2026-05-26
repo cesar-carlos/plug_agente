@@ -168,6 +168,24 @@ class AgentActionsHistoryFiltersState extends State<AgentActionsHistoryFilters> 
             textInputAction: TextInputAction.search,
           ),
         ),
+        Button(
+          onPressed: provider.hasHistoryFilters
+              ? () {
+                  _searchController.clear();
+                  provider.clearHistoryFilters();
+                  unawaited(
+                    widget.uiPreferences.removeKeys([
+                      AgentActionsUiPreferenceKeys.historyStatusFilter,
+                      AgentActionsUiPreferenceKeys.historySourceFilter,
+                      AgentActionsUiPreferenceKeys.historyPeriodFilter,
+                      AgentActionsUiPreferenceKeys.historyFailurePhaseFilter,
+                      AgentActionsUiPreferenceKeys.historySearch,
+                    ]),
+                  );
+                }
+              : null,
+          child: Text(l10n.ctButtonClearFilters),
+        ),
       ],
     );
   }

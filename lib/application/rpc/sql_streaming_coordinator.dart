@@ -1,5 +1,4 @@
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
@@ -42,7 +41,10 @@ class SqlStreamingCoordinator {
     _activeByExecutionId[executionId] = execution;
     final normalizedRequestId = requestId?.trim();
     if (normalizedRequestId != null && normalizedRequestId.isNotEmpty) {
-      _activeByRequestId[normalizedRequestId] = execution;
+      // Do not overwrite an existing entry: two concurrent streams sharing the
+      // same hub request_id would cause cancel-by-requestId to target the
+      // wrong execution. New entries are registered only when the slot is free.
+      _activeByRequestId.putIfAbsent(normalizedRequestId, () => execution);
     }
     return execution;
   }
@@ -87,15 +89,12 @@ class SqlStreamingCoordinator {
     execution.cancel(reason);
     final gateway = _gateway;
     if (gateway == null) {
-      return Failure(
-        domain.NotFoundFailure.withContext(
-          message: 'Active SQL stream not found',
-          context: <String, Object?>{
-            'execution_id': execution.executionId,
-            'request_id': execution.requestId,
-          },
-        ),
-      );
+      // Local cancellation already happened above. When no gateway is present
+      // (passthrough path), there is no remote stream to cancel — return
+      // Success instead of a misleading NotFoundFailure.
+      markFinished(execution);
+      _metrics?.recordSqlStreamCancelled(reason.name);
+      return const Success(unit);
     }
 
     if (!gateway.hasActiveStream) {

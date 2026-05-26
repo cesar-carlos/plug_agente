@@ -49,7 +49,7 @@ void main() async {
         if (hubUrl == null || hubUrl.isEmpty || hubToken == null || hubToken.isEmpty) {
           fail('E2E_HUB_URL and E2E_HUB_TOKEN must be set when this test is not skipped');
         }
-final ds = SocketDataSource();
+        final ds = SocketDataSource();
         final socket = ds.createSocket(hubUrl, authToken: hubToken);
         final completer = Completer<void>();
 
@@ -101,7 +101,7 @@ final ds = SocketDataSource();
             key.isEmpty) {
           fail('E2E hub URL, token, and signing key env vars must be set when this test is not skipped');
         }
-final signer = PayloadSigner(keys: <String, String>{keyId: key}, activeKeyId: keyId);
+        final signer = PayloadSigner(keys: <String, String>{keyId: key}, activeKeyId: keyId);
         final pipeline = TransportPipeline(
           encoding: 'json',
           compression: 'auto',

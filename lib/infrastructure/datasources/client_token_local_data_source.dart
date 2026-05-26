@@ -108,8 +108,12 @@ class ClientTokenLocalDataSource {
 
     final normalizedClientFilter = effectiveQuery.clientIdContains.trim();
     if (normalizedClientFilter.isNotEmpty) {
+      // Escape SQLite LIKE wildcards before embedding in the pattern so that
+      // user input containing % or _ is treated as literal characters.
+      final escaped = normalizedClientFilter.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_');
       statement.where(
-        (table) => table.clientId.like('%$normalizedClientFilter%') | table.name.like('%$normalizedClientFilter%'),
+        (table) =>
+            table.clientId.like('%$escaped%', escapeChar: r'\') | table.name.like('%$escaped%', escapeChar: r'\'),
       );
     }
 

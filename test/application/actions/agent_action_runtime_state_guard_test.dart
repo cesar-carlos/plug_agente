@@ -130,7 +130,7 @@ void main() {
       expect(failure.code, AgentActionFailureCode.maintenanceMode);
       expect(
         failure.context['user_message'],
-        'Todas as execucoes estao bloqueadas pelo modo de manutencao, incluindo execucao manual.',
+        'All executions are blocked by maintenance mode, including manual execution.',
       );
     });
 

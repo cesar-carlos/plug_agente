@@ -29,11 +29,16 @@ class PayloadSigningKeyResolver {
   PayloadSigningKeyResolver({
     required PayloadSigningKeyStore keyStore,
     String? Function(String key)? environmentProvider,
+    // Defaults to false so ephemeral CI/env secrets are never auto-persisted.
+    // Set to true only when the operator explicitly imports keys via the UI.
+    bool persistEnvironmentKeys = false,
   }) : _keyStore = keyStore,
-       _environmentProvider = environmentProvider ?? AppEnvironment.get;
+       _environmentProvider = environmentProvider ?? AppEnvironment.get,
+       _persistEnvironmentKeys = persistEnvironmentKeys;
 
   final PayloadSigningKeyStore _keyStore;
   final String? Function(String key) _environmentProvider;
+  final bool _persistEnvironmentKeys;
 
   Future<PayloadSigningConfig> resolve() async {
     final stored = await _readStoredConfig();
@@ -59,7 +64,15 @@ class PayloadSigningKeyResolver {
         secureStorageAvailable: _keyStore.isAvailable,
         warnings: warnings,
       );
-      await _persistEnvironmentKeys(resolved);
+      if (_persistEnvironmentKeys) {
+        await _saveEnvironmentKeys(resolved);
+      } else {
+        developer.log(
+          'Environment signing keys loaded but not persisted (persistEnvironmentKeys=false).',
+          name: 'payload_signing_key_resolver',
+          level: 800,
+        );
+      }
       return resolved;
     }
 
@@ -98,7 +111,7 @@ class PayloadSigningKeyResolver {
     }
   }
 
-  Future<void> _persistEnvironmentKeys(PayloadSigningConfig config) async {
+  Future<void> _saveEnvironmentKeys(PayloadSigningConfig config) async {
     if (!_keyStore.isAvailable || !config.hasConfiguredSigner) {
       return;
     }

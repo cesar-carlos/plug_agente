@@ -57,7 +57,7 @@ class ActionExecutionQueue {
           executionId: trimmedExecutionId,
           status: AgentActionExecutionStatus.cancelled,
           killed: false,
-          message: 'Execucao cancelada antes de iniciar.',
+          message: 'Execution cancelled before starting.',
         ),
       );
     }
@@ -69,7 +69,7 @@ class ActionExecutionQueue {
         context: {
           'execution_id': trimmedExecutionId,
           'reason': AgentActionQueueConstants.queuedExecutionNotFoundReason,
-          'user_message': 'Execucao nao encontrada na fila de acoes.',
+          'user_message': 'Execution not found in the action queue.',
         },
       ),
     );
@@ -99,7 +99,7 @@ class ActionExecutionQueue {
             context: {
               'action_id': actionId,
               'reason': AgentActionQueueConstants.concurrencyLimitReachedReason,
-              'user_message': 'A acao ja esta em execucao e a politica atual rejeita novas execucoes simultaneas.',
+              'user_message': 'The action is already running and the current policy rejects simultaneous executions.',
             },
           ),
         );
@@ -113,7 +113,8 @@ class ActionExecutionQueue {
             context: {
               'action_id': actionId,
               'reason': AgentActionQueueConstants.concurrencyIgnoreReason,
-              'user_message': 'A acao ja esta em execucao e esta solicitacao seria ignorada pela politica configurada.',
+              'user_message':
+                  'The action is already running and this request would be ignored by the configured policy.',
             },
           ),
         );
@@ -136,7 +137,7 @@ class ActionExecutionQueue {
             'action_id': actionId,
             'max_queued': maxQueued,
             'reason': AgentActionQueueConstants.queueFullReason,
-            'user_message': 'A fila desta acao esta cheia. Aguarde uma execucao terminar e tente novamente.',
+            'user_message': 'The action queue is full. Wait for a running execution to finish and try again.',
           },
         ),
       );
@@ -162,9 +163,13 @@ class ActionExecutionQueue {
 
     final scheduled = _schedule(request);
     if (idempotencyKey != null) {
-      _idempotentResults[idempotencyKey] = scheduled.then<Result<Object>>(
+      final stored = scheduled.then<Result<Object>>(
         (result) => result.fold<Result<Object>>(Success.new, Failure.new),
       );
+      _idempotentResults[idempotencyKey] = stored;
+      // Evict after completion so the map does not grow without bound over the
+      // lifetime of a long-running desktop agent.
+      unawaited(stored.whenComplete(() => _idempotentResults.remove(idempotencyKey)));
     }
 
     return scheduled;
@@ -190,7 +195,7 @@ class ActionExecutionQueue {
               context: {
                 'action_id': request.actionId,
                 'reason': AgentActionQueueConstants.concurrencyLimitReachedReason,
-                'user_message': 'A acao ja esta em execucao e a politica atual rejeita novas execucoes simultaneas.',
+                'user_message': 'The action is already running and the current policy rejects simultaneous executions.',
               },
             ),
           ),
@@ -205,7 +210,7 @@ class ActionExecutionQueue {
               context: {
                 'action_id': request.actionId,
                 'reason': AgentActionQueueConstants.concurrencyIgnoreReason,
-                'user_message': 'A acao ja esta em execucao e esta solicitacao foi ignorada pela politica configurada.',
+                'user_message': 'The action is already running and this request was ignored by the configured policy.',
               },
             ),
           ),
@@ -232,7 +237,7 @@ class ActionExecutionQueue {
               'action_id': request.actionId,
               'max_queued': request.policies.queue.maxQueued,
               'reason': AgentActionQueueConstants.queueFullReason,
-              'user_message': 'A fila desta acao esta cheia. Aguarde uma execucao terminar e tente novamente.',
+              'user_message': 'The action queue is full. Wait for a running execution to finish and try again.',
             },
           ),
         ),
@@ -290,6 +295,27 @@ class ActionExecutionQueue {
       if (pending.isCompleted) {
         continue;
       }
+
+      // Increment running count BEFORE starting the task so _canRunNow reflects
+      // reality for subsequent loop iterations. Without this, multiple slots can
+      // be granted incorrectly when maxConcurrent > 1, because _PendingActionTask
+      // does not update _runningByActionId on its own.
+      _runningByActionId[actionId] = (_runningByActionId[actionId] ?? 0) + 1;
+
+      // Decrement and drain again when the dequeued task finishes (success,
+      // failure, timeout, or cancellation all resolve pending.future).
+      unawaited(
+        pending.future.whenComplete(() {
+          final current = (_runningByActionId[actionId] ?? 1) - 1;
+          if (current <= 0) {
+            _runningByActionId.remove(actionId);
+          } else {
+            _runningByActionId[actionId] = current;
+          }
+          _drain(actionId);
+        }),
+      );
+
       pending.start();
     }
 
@@ -391,7 +417,7 @@ class _PendingActionTask<T extends Object> {
             'action_id': request.actionId,
             'queue_timeout_ms': request.policies.queue.queueTimeout.inMilliseconds,
             'reason': AgentActionQueueConstants.queueTimeoutReason,
-            'user_message': 'A acao ficou tempo demais aguardando na fila e nao foi iniciada.',
+            'user_message': 'The action waited too long in the queue and was not started.',
           },
         ),
       ),
@@ -414,7 +440,7 @@ class _PendingActionTask<T extends Object> {
             'action_id': request.actionId,
             'execution_id': request.executionId,
             'reason': AgentActionQueueConstants.queueCancelledReason,
-            'user_message': 'Execucao cancelada antes de iniciar.',
+            'user_message': 'Execution cancelled before starting.',
           },
         ),
       ),
