@@ -253,7 +253,18 @@ class AgentActionsToolbarCard extends StatelessWidget {
         allowedExtensions: ['json'],
         dialogTitle: l10n.agentActionsImportBundle,
       );
-      final path = picked?.files.singleOrNull?.path;
+      if (picked == null || picked.files.isEmpty || !context.mounted) {
+        return;
+      }
+      if (picked.files.length > 1) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.agentActionsBundleTransferFailedTitle,
+          message: l10n.agentActionsBundlePickerError,
+        );
+        return;
+      }
+      final path = picked.files.single.path;
       if (path == null || !context.mounted) {
         return;
       }

@@ -19,10 +19,11 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actio
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_settings_tab.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_status_strip.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_definition_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_details_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_remote_audit_panel.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_confirm_dialog.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_content_dialog.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
 
@@ -79,30 +80,31 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
           return widgets.CallbackShortcuts(
             bindings: <widgets.ShortcutActivator, VoidCallback>{
               const widgets.SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
-                _runPageShortcut(() {
+                _runActionsTabShortcut(() {
                   if (provider.canSaveAction) {
                     _scheduleActionEditorDialog(context, provider, l10n);
                   }
                 });
               },
               const widgets.SingleActivator(LogicalKeyboardKey.enter): () {
-                _runPageShortcut(() => _editSelectedAction(context, provider, l10n));
+                _runActionsTabShortcut(() => _editSelectedAction(context, provider, l10n));
               },
               const widgets.SingleActivator(LogicalKeyboardKey.delete): () {
-                _runPageShortcut(() => _deleteSelectedAction(context, provider, l10n));
+                _runActionsTabShortcut(() => _deleteSelectedAction(context, provider, l10n));
               },
               const widgets.SingleActivator(LogicalKeyboardKey.f5): () {
+                // F5 reloads the entire provider state, so it applies to any tab.
                 _runPageShortcut(() => unawaited(provider.load()));
               },
               const widgets.SingleActivator(LogicalKeyboardKey.keyT, control: true): () {
-                _runPageShortcut(() {
+                _runActionsTabShortcut(() {
                   if (provider.canTestSelected) {
                     unawaited(provider.testSelectedAction());
                   }
                 });
               },
               const widgets.SingleActivator(LogicalKeyboardKey.keyR, control: true): () {
-                _runPageShortcut(() {
+                _runActionsTabShortcut(() {
                   if (provider.canRunSelected) {
                     unawaited(
                       runAgentActionWithDangerousCommandCheck(
@@ -250,6 +252,16 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
     action();
   }
 
+  /// Shortcut that only fires when the user is on the actions tab, to avoid
+  /// accidentally editing or deleting an action while looking at history or
+  /// settings.
+  void _runActionsTabShortcut(VoidCallback action) {
+    if (_selectedTab != AgentActionsTab.actions) {
+      return;
+    }
+    _runPageShortcut(action);
+  }
+
   bool _isTextInputFocused() {
     final focusedContext = widgets.FocusManager.instance.primaryFocus?.context;
     if (focusedContext == null) {
@@ -289,21 +301,32 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
     AppLocalizations l10n, {
     AgentActionDefinition? definition,
   }) async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AgentActionDefinitionDialog(
-          child: DeferredAgentActionEditor(
-            provider: provider,
-            definition: definition,
+    final dirtyNotifier = ValueNotifier<bool>(false);
+    try {
+      // Fluent's showDialog already defaults to barrierDismissible: false,
+      // so accidental clicks outside the editor do not drop the draft.
+      // The close button and Esc go through _confirmEditorClose below.
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return _AgentActionEditorDialogShell(
             l10n: l10n,
-            onSaved: () {
-              Navigator.pop(dialogContext);
-            },
-          ),
-        );
-      },
-    );
+            dirtyNotifier: dirtyNotifier,
+            child: DeferredAgentActionEditor(
+              provider: provider,
+              definition: definition,
+              l10n: l10n,
+              dirtyNotifier: dirtyNotifier,
+              onSaved: () {
+                Navigator.pop(dialogContext);
+              },
+            ),
+          );
+        },
+      );
+    } finally {
+      dirtyNotifier.dispose();
+    }
   }
 
   void _scheduleActionEditorDialog(
@@ -388,6 +411,73 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
                 ],
               );
             },
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Wraps the action editor dialog with a discard-confirmation guard.
+///
+/// Without this, closing the dialog (Esc, close button) when the form has
+/// unsaved changes would silently drop everything the user typed.
+class _AgentActionEditorDialogShell extends StatelessWidget {
+  const _AgentActionEditorDialogShell({
+    required this.l10n,
+    required this.dirtyNotifier,
+    required this.child,
+  });
+
+  final AppLocalizations l10n;
+  final ValueNotifier<bool> dirtyNotifier;
+  final Widget child;
+
+  Future<bool> _confirmClose(BuildContext context) async {
+    if (!dirtyNotifier.value) {
+      return true;
+    }
+    return AppConfirmDialog.show(
+      context: context,
+      title: l10n.agentActionsEditorDiscardConfirmTitle,
+      message: l10n.agentActionsEditorDiscardConfirmMessage,
+      confirmLabel: l10n.agentActionsEditorDiscardConfirm,
+      cancelLabel: l10n.agentActionsEditorKeepEditing,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: dirtyNotifier,
+      builder: (_, isDirty, _) {
+        return widgets.PopScope<Object?>(
+          canPop: !isDirty,
+          onPopInvokedWithResult: (didPop, _) async {
+            if (didPop) {
+              return;
+            }
+            final navigator = Navigator.of(context);
+            final confirmed = await _confirmClose(context);
+            if (confirmed && navigator.mounted) {
+              navigator.pop();
+            }
+          },
+          child: AppContentDialog(
+            maxWidth: 980,
+            maxHeight: 760,
+            contentWidth: 920,
+            contentHeight: 680,
+            closeTooltip: l10n.btnClose,
+            title: const SizedBox.shrink(),
+            onClose: () async {
+              final navigator = Navigator.of(context);
+              final confirmed = await _confirmClose(context);
+              if (confirmed && navigator.mounted) {
+                navigator.pop();
+              }
+            },
+            content: child,
           ),
         );
       },

@@ -188,6 +188,30 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get agentActionsDeleteCancel;
 
+  /// No description provided for @agentActionsEditorDiscardConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard unsaved changes?'**
+  String get agentActionsEditorDiscardConfirmTitle;
+
+  /// No description provided for @agentActionsEditorDiscardConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You have unsaved changes in this action. Closing now will discard them.'**
+  String get agentActionsEditorDiscardConfirmMessage;
+
+  /// No description provided for @agentActionsEditorDiscardConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get agentActionsEditorDiscardConfirm;
+
+  /// No description provided for @agentActionsEditorKeepEditing.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get agentActionsEditorKeepEditing;
+
   /// No description provided for @agentActionsExportBundle.
   ///
   /// In en, this message translates to:

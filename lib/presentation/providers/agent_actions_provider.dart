@@ -174,6 +174,7 @@ class AgentActionsProvider extends ChangeNotifier {
   List<AgentActionTrigger> _triggers = <AgentActionTrigger>[];
   String? _selectedActionId;
   int _loadGeneration = 0;
+  int _periodReloadGeneration = 0;
   String? _errorMessage;
   String? _triggerErrorMessage;
   String? _lastTestedActionId;
@@ -782,10 +783,16 @@ class AgentActionsProvider extends ChangeNotifier {
       return;
     }
 
+    // Guard against rapid period switches landing out-of-order.
+    final generation = ++_periodReloadGeneration;
     final result = await _listExecutions(
       requestedAfter: _historyPeriodStart(),
       limit: _historyPeriodFilter == AgentActionHistoryPeriod.all ? 200 : 100,
     );
+    // A newer reload (or a full load()) already raced past us; discard.
+    if (generation != _periodReloadGeneration || _isLoading) {
+      return;
+    }
     result.fold(
       (executions) {
         _executions = executions;
@@ -838,6 +845,70 @@ class AgentActionsProvider extends ChangeNotifier {
   void setDefinitionSearchQuery(String query) => setDefinitionSearchQueryFor(this, query);
 
   void clearDefinitionFilters() => clearDefinitionFiltersFor(this);
+
+  /// Applies persisted UI preferences in a single transaction.
+  ///
+  /// Each individual setter normally emits its own [notifyListeners] call;
+  /// restoring 5+ filters on page mount triggered a rebuild storm and even
+  /// duplicated the executions fetch (period setter -> reload + load()).
+  /// This method batches the mutation and emits a single notification.
+  void applyRestoredPreferences({
+    required AgentActionType? definitionType,
+    required AgentActionState? definitionState,
+    required String definitionSearch,
+    required AgentActionExecutionStatus? historyStatus,
+    required AgentActionRequestSource? historySource,
+    required AgentActionHistoryPeriod historyPeriod,
+    required String? historyFailurePhase,
+    required String historySearch,
+  }) {
+    final normalizedDefinitionSearch = definitionSearch.trim();
+    final normalizedHistorySearch = historySearch.trim();
+    final normalizedFailurePhase = historyFailurePhase?.trim();
+    final resolvedFailurePhase = normalizedFailurePhase == null || normalizedFailurePhase.isEmpty
+        ? null
+        : normalizedFailurePhase;
+
+    final didChange =
+        _definitionTypeFilter != definitionType ||
+        _definitionStateFilter != definitionState ||
+        _definitionSearchQuery != normalizedDefinitionSearch ||
+        _historyStatusFilter != historyStatus ||
+        _historySourceFilter != historySource ||
+        _historyPeriodFilter != historyPeriod ||
+        _historyFailurePhaseFilter != resolvedFailurePhase ||
+        _historySearchQuery != normalizedHistorySearch;
+
+    if (!didChange) {
+      return;
+    }
+
+    final periodChanged = _historyPeriodFilter != historyPeriod;
+
+    _definitionTypeFilter = definitionType;
+    _definitionStateFilter = definitionState;
+    _definitionSearchQuery = normalizedDefinitionSearch;
+    _historyStatusFilter = historyStatus;
+    _historySourceFilter = historySource;
+    _historyPeriodFilter = historyPeriod;
+    _historyFailurePhaseFilter = resolvedFailurePhase;
+    _historySearchQuery = normalizedHistorySearch;
+    _auditCorrelationExecutionId = null;
+    _filteredSelectedExecutionsCache = null;
+
+    notifyListeners();
+
+    // The page calls load() right after restoring preferences, so reloading
+    // executions here would duplicate the fetch. Only trigger an extra reload
+    // when the caller wires us up without a follow-up load (rare); the period
+    // change is recorded but the data refresh is deferred to load().
+    if (periodChanged && !_isLoading) {
+      // No-op intentionally: load() called by the page right after restore
+      // will fetch with the new period. We avoid the previous race where
+      // setHistoryPeriodFilter fired _reloadExecutionsForPeriod in parallel
+      // with load().
+    }
+  }
 
   /// Collects secret placeholder names from a definition's config.
   ///
@@ -1434,6 +1505,15 @@ class AgentActionsProvider extends ChangeNotifier {
 
     _auditCorrelationExecutionId = null;
     _selectedActionId = actionId;
+    // Stale per-action test results must not bleed into the newly selected
+    // action. Consumers rely on (lastTestedActionId == definition.id) to
+    // gate the test InfoBar / preview, but resetting here keeps the public
+    // state honest for any future consumer that forgets the guard.
+    if (_lastTestedActionId != actionId) {
+      _lastTestedActionId = null;
+      _lastTestCanRun = null;
+      _clearLastTestPreviewState();
+    }
     notifyListeners();
     unawaited(_syncTriggersForSelection());
     unawaited(_refreshSelectedSecretReport());
@@ -1519,14 +1599,15 @@ class AgentActionsProvider extends ChangeNotifier {
       ),
     );
 
-    result.fold(
-      (_) {},
-      (failure) {
-        _errorMessage = _messageFor(failure);
-      },
-    );
-
     _isRunning = false;
+    if (result.isError()) {
+      // Surface the failure to the user. load() would clear _errorMessage
+      // before the InfoBar had a chance to render.
+      _errorMessage = _messageFor(result.exceptionOrNull()!);
+      notifyListeners();
+      return;
+    }
+
     await load();
   }
 
@@ -1593,14 +1674,15 @@ class AgentActionsProvider extends ChangeNotifier {
     notifyListeners();
 
     final result = await _cancelExecution(execution.id);
-    result.fold(
-      (_) {},
-      (failure) {
-        _errorMessage = _messageFor(failure);
-      },
-    );
 
     _cancellingExecutionIds.remove(execution.id);
+    if (result.isError()) {
+      // Preserve the failure message; load() would zero it out.
+      _errorMessage = _messageFor(result.exceptionOrNull()!);
+      notifyListeners();
+      return;
+    }
+
     await load();
   }
 

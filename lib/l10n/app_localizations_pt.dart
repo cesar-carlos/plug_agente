@@ -59,6 +59,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsDeleteCancel => 'Cancelar';
 
   @override
+  String get agentActionsEditorDiscardConfirmTitle => 'Descartar alteracoes nao salvas?';
+
+  @override
+  String get agentActionsEditorDiscardConfirmMessage =>
+      'Existem alteracoes nao salvas nesta acao. Fechar agora vai descarta-las.';
+
+  @override
+  String get agentActionsEditorDiscardConfirm => 'Descartar';
+
+  @override
+  String get agentActionsEditorKeepEditing => 'Continuar editando';
+
+  @override
   String get agentActionsExportBundle => 'Exportar acoes…';
 
   @override

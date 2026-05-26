@@ -59,6 +59,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsDeleteCancel => 'Cancel';
 
   @override
+  String get agentActionsEditorDiscardConfirmTitle => 'Discard unsaved changes?';
+
+  @override
+  String get agentActionsEditorDiscardConfirmMessage =>
+      'You have unsaved changes in this action. Closing now will discard them.';
+
+  @override
+  String get agentActionsEditorDiscardConfirm => 'Discard';
+
+  @override
+  String get agentActionsEditorKeepEditing => 'Keep editing';
+
+  @override
   String get agentActionsExportBundle => 'Export actions…';
 
   @override

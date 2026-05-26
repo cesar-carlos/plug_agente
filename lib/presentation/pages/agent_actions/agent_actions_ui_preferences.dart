@@ -49,35 +49,33 @@ class AgentActionsUiPreferences {
       return;
     }
 
-    provider
-      ..setDefinitionTypeFilter(
-        _enumByName(AgentActionType.values, store.getString(AgentActionsUiPreferenceKeys.definitionTypeFilter)),
-      )
-      ..setDefinitionStateFilter(
-        _enumByName(AgentActionState.values, store.getString(AgentActionsUiPreferenceKeys.definitionStateFilter)),
-      )
-      ..setDefinitionSearchQuery(store.getString(AgentActionsUiPreferenceKeys.definitionSearch) ?? '')
-      ..setHistoryStatusFilter(
-        _enumByName(
-          AgentActionExecutionStatus.values,
-          store.getString(AgentActionsUiPreferenceKeys.historyStatusFilter),
-        ),
-      )
-      ..setHistorySourceFilter(
-        _enumByName(
-          AgentActionRequestSource.values,
-          store.getString(AgentActionsUiPreferenceKeys.historySourceFilter),
-        ),
-      )
-      ..setHistoryPeriodFilter(
-        _enumByName(
-              AgentActionHistoryPeriod.values,
-              store.getString(AgentActionsUiPreferenceKeys.historyPeriodFilter),
-            ) ??
-            AgentActionHistoryPeriod.last3Days,
-      )
-      ..setHistoryFailurePhaseFilter(store.getString(AgentActionsUiPreferenceKeys.historyFailurePhaseFilter))
-      ..setHistorySearchQuery(store.getString(AgentActionsUiPreferenceKeys.historySearch) ?? '');
+    provider.applyRestoredPreferences(
+      definitionType: _enumByName(
+        AgentActionType.values,
+        store.getString(AgentActionsUiPreferenceKeys.definitionTypeFilter),
+      ),
+      definitionState: _enumByName(
+        AgentActionState.values,
+        store.getString(AgentActionsUiPreferenceKeys.definitionStateFilter),
+      ),
+      definitionSearch: store.getString(AgentActionsUiPreferenceKeys.definitionSearch) ?? '',
+      historyStatus: _enumByName(
+        AgentActionExecutionStatus.values,
+        store.getString(AgentActionsUiPreferenceKeys.historyStatusFilter),
+      ),
+      historySource: _enumByName(
+        AgentActionRequestSource.values,
+        store.getString(AgentActionsUiPreferenceKeys.historySourceFilter),
+      ),
+      historyPeriod:
+          _enumByName(
+            AgentActionHistoryPeriod.values,
+            store.getString(AgentActionsUiPreferenceKeys.historyPeriodFilter),
+          ) ??
+          AgentActionHistoryPeriod.last3Days,
+      historyFailurePhase: store.getString(AgentActionsUiPreferenceKeys.historyFailurePhaseFilter),
+      historySearch: store.getString(AgentActionsUiPreferenceKeys.historySearch) ?? '',
+    );
   }
 
   Future<void> persistString(String key, String? value) async {

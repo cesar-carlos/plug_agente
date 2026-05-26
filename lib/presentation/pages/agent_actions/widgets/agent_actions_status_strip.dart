@@ -15,6 +15,13 @@ class AgentActionsStatusStrip extends StatelessWidget {
     super.key,
   });
 
+  /// Caps the strip height so a burst of InfoBars never pushes the actions
+  /// grid off-screen. The strip becomes scrollable above this threshold.
+  ///
+  /// Sized to fit roughly two stacked InfoBars at the default Fluent
+  /// typography; revisit if InfoBar paddings change in fluent_ui.
+  static const double maxHeight = 170;
+
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
 
@@ -45,7 +52,7 @@ class AgentActionsStatusStrip extends StatelessWidget {
     }
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 170),
+      constraints: const BoxConstraints(maxHeight: maxHeight),
       child: ListView.separated(
         shrinkWrap: true,
         itemCount: statusWidgets.length,

@@ -68,6 +68,7 @@ class AgentActionEditor extends StatefulWidget {
     this.definition,
     this.showChrome = true,
     this.onSaved,
+    this.dirtyNotifier,
     super.key,
   });
 
@@ -76,6 +77,11 @@ class AgentActionEditor extends StatefulWidget {
   final AppLocalizations l10n;
   final bool showChrome;
   final VoidCallback? onSaved;
+
+  /// Optional external notifier that mirrors the editor's unsaved-changes
+  /// state. The dialog wrapper uses this to prompt before discarding the
+  /// draft when the user closes/dismisses the dialog.
+  final ValueNotifier<bool>? dirtyNotifier;
 
   @override
   State<AgentActionEditor> createState() => _AgentActionEditorState();
@@ -313,6 +319,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
         _state = AgentActionState.needsValidation;
       }
     });
+    widget.dirtyNotifier?.value = true;
   }
 
   void _resetVisibleDialogSections() {
@@ -459,6 +466,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   void _loadDefinition(AgentActionDefinition? definition) {
     _validationMessage = null;
     _isDraftModifiedSinceLoad = false;
+    widget.dirtyNotifier?.value = false;
     _applyingLoadedDefinition = true;
     try {
       if (definition == null) {
@@ -762,6 +770,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     _connectionLabelController.clear();
     _state = AgentActionState.needsValidation;
     _isDraftModifiedSinceLoad = false;
+    widget.dirtyNotifier?.value = false;
     _notifyOnSuccess = false;
     _notifyOnFailure = false;
     _notifyOnTimeout = false;
@@ -1264,6 +1273,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       _validationMessage = null;
       _isDraftModifiedSinceLoad = false;
     });
+    widget.dirtyNotifier?.value = false;
     widget.onSaved?.call();
     return true;
   }
@@ -4072,6 +4082,7 @@ class DeferredAgentActionEditor extends StatefulWidget {
     required this.l10n,
     required this.onSaved,
     this.definition,
+    this.dirtyNotifier,
     super.key,
   });
 
@@ -4079,6 +4090,7 @@ class DeferredAgentActionEditor extends StatefulWidget {
   final AgentActionDefinition? definition;
   final AppLocalizations l10n;
   final VoidCallback onSaved;
+  final ValueNotifier<bool>? dirtyNotifier;
 
   @override
   State<DeferredAgentActionEditor> createState() => _DeferredAgentActionEditorState();
@@ -4112,6 +4124,7 @@ class _DeferredAgentActionEditorState extends State<DeferredAgentActionEditor> {
       l10n: widget.l10n,
       showChrome: false,
       onSaved: widget.onSaved,
+      dirtyNotifier: widget.dirtyNotifier,
     );
   }
 }

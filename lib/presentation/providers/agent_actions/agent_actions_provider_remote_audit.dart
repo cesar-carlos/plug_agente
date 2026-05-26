@@ -64,13 +64,23 @@ Future<AgentActionRemoteAuditFocusResult> focusExecutionFromRemoteAuditFor(
   provider._historySourceFilter = null;
   provider._historyPeriodFilter = AgentActionHistoryPeriod.all;
   provider._historyFailurePhaseFilter = null;
+  // Clear the textual search too, otherwise a stale needle could hide the
+  // execution the user is focusing on and force the misleading
+  // `executionNotResolvable` branch below.
+  provider._historySearchQuery = '';
 
   final executionId = record.executionId?.trim();
+  final selectionChanged = provider._selectedActionId != actionId;
   provider._selectedActionId = actionId;
   provider._auditCorrelationExecutionId = executionId != null && executionId.isNotEmpty ? executionId : null;
 
   provider.notifyListeners();
   unawaited(provider._syncTriggersForSelection());
+  if (selectionChanged) {
+    // Mirror selectAction() behaviour so the secrets panel reflects the
+    // newly focused action instead of lingering on the previous selection.
+    unawaited(provider._refreshSelectedSecretReport());
+  }
 
   if (executionId == null || executionId.isEmpty) {
     return AgentActionRemoteAuditFocusResult.succeeded;

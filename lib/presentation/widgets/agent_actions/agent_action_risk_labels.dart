@@ -3,14 +3,22 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 
+/// Whether the in-app editor can fully model a given action type.
+///
+/// Returning `false` here is what surfaces the "unsupported type" risk and
+/// disables the edit affordance in the list. Use an exhaustive switch so that
+/// adding a new [AgentActionType] forces a compile-time decision instead of
+/// silently being treated as non-editable.
 bool isAgentActionTypeEditableInUi(AgentActionType type) {
-  return type == AgentActionType.commandLine ||
-      type == AgentActionType.executable ||
-      type == AgentActionType.script ||
-      type == AgentActionType.jar ||
-      type == AgentActionType.email ||
-      type == AgentActionType.comObject ||
-      type == AgentActionType.developer;
+  return switch (type) {
+    AgentActionType.commandLine ||
+    AgentActionType.executable ||
+    AgentActionType.script ||
+    AgentActionType.jar ||
+    AgentActionType.email ||
+    AgentActionType.comObject ||
+    AgentActionType.developer => true,
+  };
 }
 
 class AgentActionRiskDescriptor {

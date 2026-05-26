@@ -39,7 +39,11 @@ class AgentActionsDefinitionFiltersState extends State<AgentActionsDefinitionFil
   void didUpdateWidget(covariant AgentActionsDefinitionFilters oldWidget) {
     super.didUpdateWidget(oldWidget);
     final query = widget.provider.definitionSearchQuery;
-    if (query != _searchController.text) {
+    // Compare against the trimmed controller text because the provider
+    // normalizes via trim(). Without this, typing a trailing or interior
+    // space would be undone on every keystroke (notify -> rebuild ->
+    // controller reset), making multi-word search impossible.
+    if (query != _searchController.text.trim()) {
       _searchController.text = query;
     }
   }

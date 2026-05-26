@@ -9,14 +9,14 @@ Future<bool> exportBundleToFileFor(
     return false;
   }
 
-  final selectedId = provider._selectedActionId;
-  final actionIds = selectedId == null ? null : <String>[selectedId];
-
   provider._isTransferringBundle = true;
   provider._errorMessage = null;
   provider.notifyListeners();
 
-  final result = await provider._exportBundle(actionIds: actionIds);
+  // The toolbar button is labeled "Export actions" (plural). Export the full
+  // bundle by default. A future entry point can pass specific ids when a
+  // selective export UI is introduced.
+  final result = await provider._exportBundle();
   if (result.isError()) {
     provider._isTransferringBundle = false;
     provider._errorMessage = provider._messageFor(result.exceptionOrNull()!);

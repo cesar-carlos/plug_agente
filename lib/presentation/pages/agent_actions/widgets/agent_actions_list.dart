@@ -113,9 +113,11 @@ class AgentActionsList extends StatelessWidget {
                   runnerUnavailable: provider.isActionTypeUnavailable(definition.type),
                   editorUnsupported: !isAgentActionTypeEditableInUi(definition.type),
                   needsValidation: definition.state == AgentActionState.needsValidation,
-                  secretPlaceholderNames: definition.id == provider.selectedActionId
-                      ? provider.selectedSecretPlaceholderNames
-                      : provider.secretPlaceholderNamesFor(definition),
+                  // Always use the synchronous scan so the selected row does
+                  // not flicker between empty and populated while the async
+                  // secret report loads. The missing-secret resolution from
+                  // the report is reserved for the details panel.
+                  secretPlaceholderNames: provider.secretPlaceholderNamesFor(definition),
                   triggers: definition.id == provider.selectedActionId
                       ? provider.triggers
                       : const <AgentActionTrigger>[],

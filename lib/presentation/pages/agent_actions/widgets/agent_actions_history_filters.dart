@@ -40,7 +40,10 @@ class AgentActionsHistoryFiltersState extends State<AgentActionsHistoryFilters> 
   void didUpdateWidget(covariant AgentActionsHistoryFilters oldWidget) {
     super.didUpdateWidget(oldWidget);
     final query = widget.provider.historySearchQuery;
-    if (query != _searchController.text) {
+    // Compare against the trimmed controller text because the provider
+    // normalizes via trim(). Without this, typing a trailing or interior
+    // space would be undone on every keystroke.
+    if (query != _searchController.text.trim()) {
       _searchController.text = query;
     }
   }
