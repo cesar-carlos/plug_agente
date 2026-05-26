@@ -32,6 +32,13 @@ class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache 
   }
 
   void _evictExcess() {
+    // First pass: remove expired entries so they don't count toward the cap
+    // or occupy slots that could hold live decisions. The LRU get() removes
+    // expired entries on access, but entries that are never re-read would
+    // otherwise stay until count-based eviction.
+    if (_entries.length > maxEntries) {
+      _entries.removeWhere((_, e) => e.isExpired);
+    }
     while (_entries.length > maxEntries) {
       _entries.remove(_entries.keys.first);
     }

@@ -236,6 +236,14 @@ class RunAgentActionLocally {
     final startedExecution = startResult.getOrThrow();
     if (idempotencyKey != null) {
       _idempotentExecutions[idempotencyKey] = startedExecution.completion;
+      // Remove after completion: post-execution retries are handled by DB-level
+      // idempotency (listExecutions with idempotencyKey filter). Keeping
+      // completed futures indefinitely leaks memory on long-running agents.
+      unawaited(
+        startedExecution.completion.whenComplete(
+          () => _idempotentExecutions.remove(idempotencyKey),
+        ),
+      );
     }
 
     if (request.returnWhenQueued) {
@@ -909,6 +917,16 @@ class RunAgentActionLocally {
       if (attempt > 1) {
         if (retryPolicy.delayBetweenAttempts > Duration.zero) {
           await Future<void>.delayed(retryPolicy.delayBetweenAttempts);
+        }
+        // Re-validate the subsystem guard before each retry attempt. The guard
+        // may have transitioned to draining or maintenance while the previous
+        // attempt was running (e.g. app-close or feature rollback).
+        final guardCheck = _ensureRuntimeStateAllows(
+          definition: definition,
+          request: request,
+        );
+        if (guardCheck.isError()) {
+          return Failure(guardCheck.exceptionOrNull()!);
         }
         runningExecution = runningExecution.copyWith(
           status: AgentActionExecutionStatus.running,

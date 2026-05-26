@@ -25,9 +25,15 @@ class ReconcileAgentActionExecutions {
   final DateTime Function() _now;
   final IAgentActionOrphanProcessTerminator _orphanProcessTerminator;
 
+  // Defensive cap: reconcile only the first 500 active rows on bootstrap.
+  // In normal operation this is 0–poolSize. A higher count indicates corrupted
+  // status data; loading without a limit could spike RAM on boot.
+  static const int _bootstrapReconcileLimit = 500;
+
   Future<Result<int>> call() async {
     final executionsResult = await _repository.listExecutions(
       statuses: activeBootstrapStatuses,
+      limit: _bootstrapReconcileLimit,
     );
     if (executionsResult.isError()) {
       return Failure(executionsResult.exceptionOrNull()!);

@@ -497,6 +497,9 @@ class _QueuedRequest<T extends Object> {
 }
 
 enum SqlExecutionKind {
+  /// Generic kind — treated identically to `shortQuery`. Used as the default
+  /// for callers that do not classify the request (e.g. direct
+  /// [SqlExecutionQueue.submit] calls outside `QueuedDatabaseGateway`).
   query,
   shortQuery,
   longQuery,

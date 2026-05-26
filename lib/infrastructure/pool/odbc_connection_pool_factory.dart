@@ -11,12 +11,20 @@ import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart
 
 /// Builds the ODBC pool implementation for the current persisted settings.
 ///
-/// Default is lease-based [OdbcConnectionPool] (correct `ConnectionOptions` per
-/// connection). Native ODBC pooling is disabled here because persisted settings
-/// can otherwise reactivate the native pool, which returns invalid handles with
-/// some SQL Anywhere drivers and causes worker timeouts under concurrent load.
-/// Legacy `useNativeOdbcPool` settings remain readable for compatibility, but
-/// are intentionally ignored by this production factory.
+/// Default behaviour (feature flag default = `true`):
+/// - SQL Server and PostgreSQL → [AdaptiveOdbcConnectionPool] routes them to the
+///   native pool ([OdbcNativeConnectionPool] via `poolGetConnection`), which
+///   reuses open connections and avoids an ODBC handshake on every query.
+/// - SQL Anywhere → [AdaptiveOdbcConnectionPool] falls back to the lease pool
+///   because some SQL Anywhere ODBC drivers return invalid handles under the
+///   native pool and cause worker timeouts under concurrent load.
+/// - Queries that supply [ConnectionAcquireOptions] (e.g. buffer hints) always
+///   route to the lease pool regardless of driver; the native pool does not
+///   accept per-connection options.
+///
+/// When the feature flag is disabled, [OdbcConnectionPool] (lease-based) is
+/// always used: every query calls `connect`/`disconnect`, paying the full
+/// ODBC handshake cost but applying exact `ConnectionOptions` per request.
 IConnectionPool createOdbcConnectionPool(
   OdbcService service,
   IOdbcConnectionSettings settings,

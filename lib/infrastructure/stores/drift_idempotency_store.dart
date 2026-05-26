@@ -26,7 +26,9 @@ class DriftIdempotencyStore implements IIdempotencyStore {
   @override
   Future<IdempotencyRecord?> getRecord(String key) async {
     final now = _nowProvider();
-    await _deleteExpired(now);
+    // No bulk delete here: the per-row TTL check below handles the requested
+    // key, and the periodic purge (every 15 min) handles the rest. Running a
+    // DELETE on every read adds unnecessary write I/O on the hot path.
 
     final row = await (_db.select(
       _db.rpcIdempotencyCacheTable,

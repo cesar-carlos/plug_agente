@@ -118,7 +118,13 @@ class ConnectionConstants {
       return override;
     }
     final effectivePoolSize = poolSize > 0 ? poolSize : 1;
-    return effectivePoolSize * 4;
+    // Must cover at least as many slots as the SQL queue dispatches concurrently.
+    // If SQL_QUEUE_MAX_WORKERS is raised above the default (poolSize), the ODBC
+    // pending limit must keep up or failFast will reject dispatched requests.
+    return math.max(
+      effectivePoolSize * 4,
+      sqlQueueMaxWorkersForPoolSize(effectivePoolSize),
+    );
   }
 
   /// SQL execution queue maximum size (configurable via SQL_QUEUE_MAX_SIZE env var).

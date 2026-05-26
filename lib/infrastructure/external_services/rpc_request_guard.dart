@@ -69,4 +69,15 @@ class RpcRequestGuard {
     final cutoff = now.subtract(_replayWindow);
     _recentRpcRequestIds.removeWhere((_, time) => time.isBefore(cutoff));
   }
+
+  /// Clears the replay-detection window.
+  ///
+  /// Must be called on socket disconnect/reconnect so that legitimate hub
+  /// at-least-once retries arriving on a new connection are not blocked by
+  /// IDs seen on the previous session. Cross-session double-execution is
+  /// prevented by the idempotency cache (`DriftIdempotencyStore`) when
+  /// `enableSocketIdempotency` is on.
+  void clearReplayCache() {
+    _recentRpcRequestIds.clear();
+  }
 }

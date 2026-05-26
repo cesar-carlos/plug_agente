@@ -893,6 +893,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _capabilitiesNegotiator.reset();
     _pipelineCache.reset();
     _cachedLocalCapabilities = null;
+    // Clear replay cache so hub retries on a new connection (at-least-once
+    // delivery) are not blocked by IDs seen on the previous session.
+    // Cross-session double-execution is mitigated by the idempotency cache.
+    _rpcRequestGuard.clearReplayCache();
     unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
     final socket = _socket;
     _socket = null;

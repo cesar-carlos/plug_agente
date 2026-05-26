@@ -353,12 +353,16 @@ void _logOdbcRuntimeTuningWarnings(OdbcRuntimeTuning tuning) {
     );
   }
 
-  final sqlQueueMaxSize = ConnectionConstants.sqlQueueMaxSize;
-  if (tuning.asyncMaxPendingRequests < sqlQueueMaxSize) {
+  // Warn only when pending slots are fewer than the concurrent dispatch count.
+  // Comparing against sqlQueueMaxSize (queue depth) is misleading: the queue
+  // dispatches at most sqlQueueMaxWorkers requests concurrently, not the full
+  // queue depth, so the relevant bound is the worker count, not the queue size.
+  if (tuning.asyncMaxPendingRequests < sqlQueueMaxWorkers) {
     developer.log(
-      'ODBC async pending limit is lower than SQL queue size '
+      'ODBC async pending limit is lower than SQL queue worker count — '
+      'failFast may reject dispatched requests '
       '(asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests}, '
-      'sqlQueueMaxSize: $sqlQueueMaxSize)',
+      'sqlQueueMaxWorkers: $sqlQueueMaxWorkers)',
       name: 'service_locator',
       level: 900,
     );

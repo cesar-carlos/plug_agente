@@ -36,9 +36,14 @@ class ApplyAgentActionOnAppExitPolicies {
     );
   }
 
+  // Defensive cap for shutdown: limits DB load when status data is corrupted.
+  // In normal operation there are at most poolSize active executions.
+  static const int _shutdownActiveExecutionLimit = 200;
+
   Future<Result<int>> _cancelQueuedExecutions() async {
     final queuedResult = await _repository.listExecutions(
       statuses: const {AgentActionExecutionStatus.queued},
+      limit: _shutdownActiveExecutionLimit,
     );
     if (queuedResult.isError()) {
       return Failure(queuedResult.exceptionOrNull()!);
@@ -59,6 +64,7 @@ class ApplyAgentActionOnAppExitPolicies {
   Future<Result<int>> _handleRunningExecutions() async {
     final runningResult = await _repository.listExecutions(
       statuses: const {AgentActionExecutionStatus.running},
+      limit: _shutdownActiveExecutionLimit,
     );
     if (runningResult.isError()) {
       return Failure(runningResult.exceptionOrNull()!);

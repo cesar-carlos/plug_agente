@@ -89,9 +89,12 @@ final class AgentActionCapturedOutputChunkStore {
       return null;
     }
 
+    // Encode each chunk payload once; reuse the same Uint8List for both the
+    // totalBytes calculation and the actual slice copy below.
+    final rowBytes = rows.map((row) => utf8.encode(row.payload)).toList(growable: false);
     var totalBytes = 0;
-    for (final row in rows) {
-      totalBytes += utf8.encode(row.payload).length;
+    for (final bytes in rowBytes) {
+      totalBytes += bytes.length;
     }
 
     final safeOffset = offsetUtf8.clamp(0, totalBytes);
@@ -108,8 +111,8 @@ final class AgentActionCapturedOutputChunkStore {
     final targetEnd = math.min(safeOffset + maxBytes, totalBytes);
     final bytesBuilder = BytesBuilder(copy: false);
     var cursor = 0;
-    for (var index = 0; index < rows.length; index++) {
-      final chunkBytes = utf8.encode(rows[index].payload);
+    for (var index = 0; index < rowBytes.length; index++) {
+      final chunkBytes = rowBytes[index];
       final chunkStart = cursor;
       final chunkEnd = cursor + chunkBytes.length;
       if (chunkEnd > safeOffset && chunkStart < targetEnd) {

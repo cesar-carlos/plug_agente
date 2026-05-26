@@ -127,6 +127,11 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     );
   }
 
+  static final RegExp _longQueryPattern = RegExp(
+    r'\b(join|union|group\s+by|order\s+by)\b',
+    caseSensitive: false,
+  );
+
   SqlExecutionKind _classifyQuery(
     QueryRequest request,
     Duration? timeout,
@@ -136,7 +141,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     if (request.expectMultipleResults ||
         normalizedSql.length > 1200 ||
         timeoutMs > 15000 ||
-        RegExp(r'\b(join|union|group\s+by|order\s+by)\b', caseSensitive: false).hasMatch(normalizedSql)) {
+        _longQueryPattern.hasMatch(normalizedSql)) {
       return SqlExecutionKind.longQuery;
     }
     return SqlExecutionKind.shortQuery;

@@ -332,6 +332,28 @@ class OdbcConnectionPool
 
   @override
   Future<Result<void>> healthCheckAll() async {
+    // The lease pool creates connections on-demand (connect per query, disconnect
+    // on release), so there are no persistent handles to ping. Validate the
+    // internal lease accounting as a sanity check: active leases must never
+    // exceed pool size, which would indicate a semaphore tracking bug.
+    final active = _leasedIds.length;
+    final capacity = _settings.poolSize;
+    if (active > capacity) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError(
+            'Lease pool accounting mismatch: $active active leases exceed '
+            'pool size $capacity — possible semaphore tracking bug',
+          ),
+          operation: 'pool_health_check',
+          context: {
+            'active_leases': active,
+            'pool_size': capacity,
+            'reason': 'lease_count_exceeds_pool_size',
+          },
+        ),
+      );
+    }
     return const Success(unit);
   }
 
