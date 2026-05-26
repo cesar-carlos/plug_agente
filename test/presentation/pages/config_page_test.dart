@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -51,7 +52,7 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   UpdateCheckDiagnostics? lastAutomaticDiagnostics;
 
   Future<Result<bool>> Function()? onCheckManual;
-  Future<Result<bool>> Function()? onCheckSilently;
+  Future<Result<SilentUpdateOutcome>> Function()? onCheckSilently;
   Future<Result<void>> Function(bool value)? onSetAutomaticSilentUpdatesEnabled;
   int silentCheckCount = 0;
 
@@ -67,12 +68,12 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   Future<void> checkInBackground() async {}
 
   @override
-  Future<Result<bool>> checkSilently() async {
+  Future<Result<SilentUpdateOutcome>> checkSilently() async {
     silentCheckCount += 1;
     if (onCheckSilently != null) {
       return onCheckSilently!.call();
     }
-    return const Success(false);
+    return const Success(SilentUpdateOutcome.noNewVersion);
   }
 
   @override
@@ -325,7 +326,7 @@ void main() {
     final orchestrator = FakeAutoUpdateOrchestrator(
       isAvailable: true,
       onCheckSilently: () async {
-        return const Success(false);
+        return const Success(SilentUpdateOutcome.noNewVersion);
       },
     );
 

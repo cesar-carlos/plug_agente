@@ -71,29 +71,33 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     String? requestFingerprint,
   }) async {
     final now = _nowProvider();
-    await _deleteExpired(now);
-
     final effectiveTtl = ttl <= Duration.zero ? ConnectionConstants.rpcIdempotencyEntryTtl : ttl;
     final expiresAt = now.add(effectiveTtl);
-
-    final count = await _countRows();
-    if (count >= _maxEntries) {
-      final excess = count - _maxEntries + 1;
-      await _evictOldest(excess);
-    }
-
     final jsonText = jsonEncode(response.toJson());
-    await _db
-        .into(_db.rpcIdempotencyCacheTable)
-        .insertOnConflictUpdate(
-          RpcIdempotencyCacheTableCompanion.insert(
-            cacheKey: key,
-            responseJson: jsonText,
-            requestFingerprint: requestFingerprint == null ? const Value.absent() : Value(requestFingerprint),
-            expiresAt: expiresAt,
-            updatedAt: now,
-          ),
-        );
+
+    // Wrap the four-step write in a transaction: expire-purge, count, evict
+    // and insert must succeed or fail atomically. Without it, a crash between
+    // eviction and insert would leave the cache below capacity but missing
+    // the entry the caller intended to persist.
+    await _db.transaction(() async {
+      await _deleteExpired(now);
+      final count = await _countRows();
+      if (count >= _maxEntries) {
+        final excess = count - _maxEntries + 1;
+        await _evictOldest(excess);
+      }
+      await _db
+          .into(_db.rpcIdempotencyCacheTable)
+          .insertOnConflictUpdate(
+            RpcIdempotencyCacheTableCompanion.insert(
+              cacheKey: key,
+              responseJson: jsonText,
+              requestFingerprint: requestFingerprint == null ? const Value.absent() : Value(requestFingerprint),
+              expiresAt: expiresAt,
+              updatedAt: now,
+            ),
+          );
+    });
   }
 
   Future<int> _deleteExpired(DateTime now) {

@@ -184,6 +184,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   static const Duration _asyncRequestPollInterval = Duration(milliseconds: 20);
   static const String _nativeCompatibleSqlAllowlistEnv = 'ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST';
   static const Duration _nativeCompatibleSqlAllowlistCacheTtl = Duration(seconds: 10);
+  static const Duration _transactionRollbackTimeout = Duration(seconds: 15);
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
   static final List<RegExp> _connectionStringDatabasePatterns = [
     RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
@@ -236,6 +237,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           queryTimeout: timeout,
         );
       },
+    );
+  }
+
+  /// Options for transactional batch connections.
+  ///
+  /// Uses [OdbcConnectionOptionsBuilder.forTransactionalBatch] which sets
+  /// `autoReconnectOnConnectionLost` to false, preventing silent transaction
+  /// loss if the connection drops mid-transaction.
+  ConnectionAcquireOptions _transactionalConnectionOptionsForTimeout(Duration? timeout) {
+    return OdbcConnectionOptionsBuilder.forTransactionalBatch(
+      _settings,
+      queryTimeout: timeout,
     );
   }
 
@@ -1372,6 +1385,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             final commitResult = await _commitBatchTransaction(
               connectionId: connectionState.connectionId!,
               transaction: transaction,
+              deadline: context.deadline,
             );
             if (commitResult.isError()) {
               final commitFailure = commitResult.exceptionOrNull()!;
@@ -1395,6 +1409,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       } on Object catch (error, stackTrace) {
         final activeConnectionId = connectionState.connectionId;
         if (options.transaction) {
+          final rollbackTimeout = _rollbackTimeoutFromDeadline(context.deadline);
           await transaction?.rollback(
             (transactionId) async {
               if (activeConnectionId == null) {
@@ -1403,6 +1418,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               await _rollbackTransactionIfNeeded(
                 activeConnectionId,
                 transactionId,
+                timeout: rollbackTimeout,
               );
             },
           );
@@ -1756,6 +1772,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           commands: commands,
         );
 
+    final isTransactional = useOwnedConnection || allowNativeCompatibleTransaction;
     if (useOwnedConnection || (allowNativeCompatibleTransaction && !useNativeCompatibleTransaction)) {
       final leaseResult = await _connectionManager.acquireDirectLease(
         operation: 'batch_transaction',
@@ -1771,11 +1788,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         return Failure(err);
       }
       final directLease = leaseResult.getOrThrow();
+      final remainingTimeout = _remainingTimeoutFromDeadline(deadline) ?? timeout;
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
-        options: _connectionOptionsForTimeout(
-          _remainingTimeoutFromDeadline(deadline) ?? timeout,
-        ).toOdbcConnectionOptions(),
+        options: isTransactional
+            ? _transactionalConnectionOptionsForTimeout(remainingTimeout).toOdbcConnectionOptions()
+            : _connectionOptionsForTimeout(remainingTimeout).toOdbcConnectionOptions(),
       );
       return connectResult.fold(
         (connection) {
@@ -1810,9 +1828,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       );
     }
 
-    final connectionOptions = _connectionOptionsForTimeout(
-      _remainingTimeoutFromDeadline(deadline) ?? timeout,
-    );
+    final remainingTimeout = _remainingTimeoutFromDeadline(deadline) ?? timeout;
+    final connectionOptions = isTransactional
+        ? _transactionalConnectionOptionsForTimeout(remainingTimeout)
+        : _connectionOptionsForTimeout(remainingTimeout);
     final poolResult = useNativeCompatibleTransaction
         ? await _connectionManager.acquireNativeCompatiblePooledConnection(
             connectionString,
@@ -1891,6 +1910,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   Future<Result<void>> _commitBatchTransaction({
     required String connectionId,
     required _BatchTransactionGuard transaction,
+    DateTime? deadline,
   }) async {
     final transactionId = transaction.transactionId;
     if (transactionId == null) {
@@ -1903,8 +1923,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
     if (commitResult.isError()) {
       final error = commitResult.exceptionOrNull()!;
+      final rollbackTimeout = _rollbackTimeoutFromDeadline(deadline);
       await transaction.rollback(
-        (id) => _rollbackTransactionIfNeeded(connectionId, id),
+        (id) => _rollbackTransactionIfNeeded(connectionId, id, timeout: rollbackTimeout),
       );
       return Failure(
         domain.QueryExecutionFailure.withContext(
@@ -1943,10 +1964,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         if (validation.isError()) {
           final failure = validation.exceptionOrNull()! as domain.Failure;
           if (options.transaction) {
+            final rollbackTimeout = _rollbackTimeoutFromDeadline(context.deadline);
             await transaction.rollback(
               (transactionId) => _rollbackTransactionIfNeeded(
                 context.connectionId,
                 transactionId,
+                timeout: rollbackTimeout,
               ),
             );
             return Failure(
@@ -2025,11 +2048,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             );
 
             if (options.transaction) {
+              final rollbackTimeout = _rollbackTimeoutFromDeadline(context.deadline);
               await transaction.rollback(
-                (transactionId) => _rollbackTransactionIfNeeded(
-                  connectionState.connectionId!,
-                  transactionId,
-                ),
+                (transactionId) async {
+                  final activeConnId = connectionState.connectionId;
+                  if (activeConnId == null) return;
+                  await _rollbackTransactionIfNeeded(
+                    activeConnId,
+                    transactionId,
+                    timeout: rollbackTimeout,
+                  );
+                },
               );
               _recordSqlInvestigationExecutionFailure(
                 request: commandRequest,
@@ -2119,11 +2148,17 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           );
         } on TimeoutException catch (error) {
           if (options.transaction) {
+            final rollbackTimeout = _rollbackTimeoutFromDeadline(context.deadline);
             await transaction.rollback(
-              (transactionId) => _rollbackTransactionIfNeeded(
-                connectionState.connectionId!,
-                transactionId,
-              ),
+              (transactionId) async {
+                final activeConnId = connectionState.connectionId;
+                if (activeConnId == null) return;
+                await _rollbackTransactionIfNeeded(
+                  activeConnId,
+                  transactionId,
+                  timeout: rollbackTimeout,
+                );
+              },
             );
             return Failure(
               domain.QueryExecutionFailure.withContext(
@@ -3218,23 +3253,31 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   Future<void> _rollbackTransactionIfNeeded(
     String connectionId,
-    int? transactionId,
-  ) async {
+    int? transactionId, {
+    Duration timeout = _transactionRollbackTimeout,
+  }) async {
     if (transactionId == null) {
       return;
     }
     _metrics.recordTransactionRollbackAttempt();
-    final rollback = await _service.rollbackTransaction(
-      connectionId,
-      transactionId,
-    );
-    if (rollback.isError()) {
+    try {
+      final rollback = await _service.rollbackTransaction(connectionId, transactionId).timeout(timeout);
+      if (rollback.isError()) {
+        _metrics.recordTransactionRollbackFailure();
+        developer.log(
+          'Failed to rollback transaction',
+          name: 'database_gateway',
+          level: 900,
+          error: rollback.exceptionOrNull(),
+        );
+      }
+    } on TimeoutException catch (error) {
       _metrics.recordTransactionRollbackFailure();
       developer.log(
-        'Failed to rollback transaction',
+        'Rollback timed out after ${timeout.inSeconds}s; connection will be discarded',
         name: 'database_gateway',
         level: 900,
-        error: rollback.exceptionOrNull(),
+        error: error,
       );
     }
   }
@@ -3685,6 +3728,20 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   bool _isInvalidConnectionIdError(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
+
+  /// Returns the remaining time from [deadline] clamped to [_transactionRollbackTimeout].
+  ///
+  /// If no deadline is set, falls back to [_transactionRollbackTimeout].
+  Duration _rollbackTimeoutFromDeadline(DateTime? deadline) {
+    if (deadline == null) {
+      return _transactionRollbackTimeout;
+    }
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      return _transactionRollbackTimeout;
+    }
+    return remaining < _transactionRollbackTimeout ? remaining : _transactionRollbackTimeout;
+  }
 
   DatabaseType _mapDriverNameToDatabaseType(String driverName) {
     return switch (driverName) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -5,10 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
+import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
 // Minimal fakes reused from orchestrator tests.
@@ -125,7 +128,10 @@ void main() {
         final result = await coordinator.checkSilently();
 
         expect(result.isSuccess(), isTrue);
-        result.fold((v) => expect(v, isFalse), (_) => fail('Expected success'));
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.silentDisabled),
+          (_) => fail('Expected success'),
+        );
         expect(installer.installCount, 0);
         expect(
           coordinator.lastAutomaticDiagnostics?.completionSource,
@@ -147,7 +153,13 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         expect(result.isSuccess(), isTrue);
-        result.fold((v) => expect(v, isTrue), (_) => fail('Expected success'));
+        result.fold(
+          (outcome) {
+            expect(outcome, SilentUpdateOutcome.installerStarted);
+            expect(outcome.isInstallerLaunched, isTrue);
+          },
+          (_) => fail('Expected success'),
+        );
         expect(installer.installCount, 1);
         expect(closeCalled, isTrue);
         expect(
@@ -220,7 +232,10 @@ void main() {
         final thirdResult = await coordinator.checkSilently();
 
         expect(thirdResult.isSuccess(), isTrue);
-        thirdResult.fold((v) => expect(v, isFalse), (_) => fail('Expected success'));
+        thirdResult.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.cooldownActive),
+          (_) => fail('Expected success'),
+        );
         expect(
           coordinator.lastAutomaticDiagnostics?.completionSource,
           UpdateCheckCompletionSource.automaticCooldown,
@@ -276,7 +291,10 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         expect(result.isSuccess(), isTrue);
-        result.fold((v) => expect(v, isFalse), (_) => fail('Expected success'));
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.silentDisabled),
+          (_) => fail('Expected success'),
+        );
         expect(closeCalled, isFalse);
         expect(
           coordinator.lastAutomaticDiagnostics?.completionSource,
@@ -309,6 +327,64 @@ void main() {
       });
     });
 
+    group('cancellation', () {
+      test('requestCancellation while download is in flight surfaces cancelled outcome', () async {
+        final store = InMemoryAppSettingsStore();
+        final cancellableInstaller = _CancellableInstaller();
+        late SilentUpdateCoordinator coordinator;
+        var closeCalled = false;
+        coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: _FakeProbe(),
+          silentUpdateInstaller: cancellableInstaller,
+          settingsStore: store,
+          closeApplicationForSilentUpdate: () async {
+            closeCalled = true;
+          },
+        );
+
+        final checkFuture = coordinator.checkSilently();
+        await cancellableInstaller.entered.future;
+        coordinator.requestCancellation();
+        cancellableInstaller.release();
+
+        final result = await checkFuture;
+
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.cancelled),
+          (_) => fail('Expected success'),
+        );
+        expect(closeCalled, isFalse, reason: 'cancelled flow must not close the app');
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticCancelled,
+        );
+        expect(
+          store.getString('auto_update.pending_silent_update'),
+          isNull,
+          reason: 'cancellation must clear pending so the next check can run',
+        );
+        expect(
+          store.getInt('auto_update.automatic_failure_count'),
+          isNull,
+          reason: 'cancellation is user-driven and must not feed the cooldown',
+        );
+      });
+
+      test('requestCancellation is a no-op when no check is in progress', () async {
+        final coordinator = _makeCoordinator();
+        coordinator.requestCancellation();
+        final result = await coordinator.checkSilently();
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, isNot(SilentUpdateOutcome.cancelled)),
+          (_) => fail('Expected success'),
+        );
+      });
+    });
+
     group('reconcilePendingAndSchedule', () {
       test('clears stale pending record without incrementing failure count', () async {
         final store = InMemoryAppSettingsStore();
@@ -334,6 +410,105 @@ void main() {
 
         expect(store.getInt('auto_update.automatic_failure_count'), isNull);
         expect(store.getString('auto_update.pending_silent_update'), isNull);
+      });
+
+      test('clears stale pending with null paths from a pre-download crash', () async {
+        // Reproduces the window where the coordinator persisted the pending
+        // record (before install) and the process crashed before paths were
+        // populated. Next boot must clear it instead of blocking checks
+        // forever.
+        final store = InMemoryAppSettingsStore();
+        final stalePending = <String, Object?>{
+          'version': '99.0.0+1',
+          'installerPath': null,
+          'launcherPath': null,
+          'launcherStatusPath': null,
+          'logPath': null,
+          'installDirectory': null,
+          'strategy': null,
+          'appPid': null,
+          'updateDirectorySecurityStatus': null,
+          'startedAt': DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String(),
+        };
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(stalePending),
+        );
+
+        final coordinator = _makeCoordinator(store: store);
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(
+          store.getString('auto_update.pending_silent_update'),
+          isNull,
+          reason: 'pending record without paths must be considered stale and cleared',
+        );
+        expect(
+          store.getInt('auto_update.automatic_failure_count'),
+          isNull,
+          reason: 'pre-download crash recovery must not increment failure counter',
+        );
+      });
+    });
+
+    group('scheduleAndStart boot jitter', () {
+      test('bootJitterProvider defers the immediate boot check', () async {
+        final probe = _FakeProbe();
+        final coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: probe,
+          silentUpdateInstaller: _FakeInstaller(),
+          settingsStore: InMemoryAppSettingsStore(),
+          bootJitterProvider: () => const Duration(seconds: 30),
+        );
+
+        coordinator.scheduleAndStart();
+        // Pump microtask queue several times — the jitter timer must hold
+        // the immediate probe off until the configured delay elapses.
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(probe.callCount, 0);
+        coordinator.stop();
+      });
+
+      test('null jitter provider preserves immediate boot check (backward compat)', () async {
+        final probe = _FakeProbe();
+        final coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: probe,
+          silentUpdateInstaller: _FakeInstaller(),
+          settingsStore: InMemoryAppSettingsStore(),
+        );
+
+        coordinator.scheduleAndStart();
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(probe.callCount, 1);
+        coordinator.stop();
+      });
+
+      test('zero jitter behaves like no jitter (runs immediately)', () async {
+        final probe = _FakeProbe();
+        final coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: probe,
+          silentUpdateInstaller: _FakeInstaller(),
+          settingsStore: InMemoryAppSettingsStore(),
+          bootJitterProvider: () => Duration.zero,
+        );
+
+        coordinator.scheduleAndStart();
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(probe.callCount, 1);
+        coordinator.stop();
       });
     });
 
@@ -368,6 +543,54 @@ class _InstallerWithHook implements ISilentUpdateInstaller {
 
   @override
   Future<Result<void>> cleanupObsoleteArtifacts() => delegate.cleanupObsoleteArtifacts();
+}
+
+// Helper: installer that suspends inside install() until released, allowing
+// the test to call coordinator.requestCancellation() mid-flight and observe
+// the cancellation contract.
+class _CancellableInstaller implements ISilentUpdateInstaller {
+  final Completer<void> entered = Completer<void>();
+  final Completer<void> _release = Completer<void>();
+  SilentUpdateInstallRequest? lastRequest;
+
+  void release() {
+    if (!_release.isCompleted) _release.complete();
+  }
+
+  @override
+  Future<Result<SilentUpdateInstallResult>> install(SilentUpdateInstallRequest request) async {
+    lastRequest = request;
+    if (!entered.isCompleted) entered.complete();
+    await _release.future;
+    if (request.cancelRequested?.call() ?? false) {
+      return Failure<SilentUpdateInstallResult, Exception>(
+        domain.ConfigurationFailure.withContext(
+          message: 'Silent update cancelled before completion',
+          context: <String, dynamic>{
+            'operation': 'silentUpdateInstall',
+            SilentUpdateInstallRequest.cancellationContextKey: true,
+            'version': request.version,
+          },
+        ),
+      );
+    }
+    return const Success(
+      SilentUpdateInstallResult(
+        installerPath: r'C:\App\updates\PlugAgente-Setup-99.0.0.exe',
+        logPath: r'C:\App\updates\PlugAgente-Update-99.0.0+1.log',
+        launcherPath: r'C:\App\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+        launcherStatusPath: r'C:\App\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+        installDirectory: r'C:\App',
+        strategy: SilentUpdateInstallStrategy.currentUserThenElevated,
+        installDirectoryWritable: true,
+        appPid: 9876,
+        updateDirectorySecurityStatus: 'restricted',
+      ),
+    );
+  }
+
+  @override
+  Future<Result<void>> cleanupObsoleteArtifacts() async => const Success(unit);
 }
 
 // Helper: probe that captures whether coordinator.isSilentCheckInProgress during probe.

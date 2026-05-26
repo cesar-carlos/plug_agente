@@ -168,3 +168,41 @@ bool resolveAutoUpdateRequireValidSignature({
     _ => true,
   };
 }
+
+/// Base64-encoded Ed25519 public key used to verify the optional
+/// `plug:edSignature` attribute on the appcast feed. Returns `null` when the
+/// operator has not configured a key (typical for builds where feed signing
+/// is not yet rolled out).
+///
+/// Resolution order: `--dart-define=AUTO_UPDATE_FEED_PUBLIC_KEY=...` first,
+/// then `.env`, then `null` (no verification).
+String? resolveAutoUpdateFeedPublicKey({
+  required Map<String, String> environment,
+  String? fromDefine,
+}) {
+  final raw = (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_FEED_PUBLIC_KEY')).trim();
+  if (raw.isNotEmpty) return raw;
+  final fromEnv = environment['AUTO_UPDATE_FEED_PUBLIC_KEY']?.trim() ?? '';
+  return fromEnv.isEmpty ? null : fromEnv;
+}
+
+/// When `true`, the silent update flow rejects appcast items whose
+/// Ed25519 signature does not verify against
+/// [resolveAutoUpdateFeedPublicKey]. Defaults to `false` so existing
+/// (unsigned) releases continue to work until the signing pipeline is
+/// rolled out end-to-end.
+///
+/// Setting this to `true` without configuring
+/// [resolveAutoUpdateFeedPublicKey] will block every silent check
+/// (`publicKeyUnavailable`); operators must ship both env vars together.
+bool resolveAutoUpdateRequireFeedSignature({
+  required Map<String, String> environment,
+  String? fromDefine,
+}) {
+  final raw = (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_REQUIRE_FEED_SIGNATURE')).trim();
+  final value = raw.isNotEmpty ? raw : environment['AUTO_UPDATE_REQUIRE_FEED_SIGNATURE']?.trim() ?? '';
+  return switch (value.toLowerCase()) {
+    '1' || 'true' || 'yes' || 'sim' => true,
+    _ => false,
+  };
+}

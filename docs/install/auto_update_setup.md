@@ -40,18 +40,74 @@ O `.env.example` versionado deve refletir os defaults de producao:
 AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
 AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600
 AUTO_UPDATE_CHANNEL=stable
-AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false
+AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 ```
 
-`AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false` e intencional nesta etapa:
-assinatura Authenticode e registrada em diagnostico, mas nao bloqueia a
-instalacao. A protecao obrigatoria do fluxo silencioso e o `plug:sha256` do
-appcast.
+O default seguro em `resolveAutoUpdateRequireValidSignature` e `true`. Quando
+ligado, o helper nativo bloqueia a instalacao silenciosa se a assinatura
+Authenticode do instalador nao for `valid`. A protecao em camadas inclui
+ainda o `plug:sha256` validado em Dart durante o download e novamente no
+helper antes de elevar privilegios.
 
-Para validar a politica futura de assinatura obrigatoria, gere um build de
-staging com assinatura configurada e `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true`.
-Nao use esse valor em producao enquanto o pipeline de assinatura e a publicacao
-de assets assinados nao estiverem verificados ponta a ponta.
+Use `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false` apenas em ambientes onde
+ainda nao ha pipeline de Authenticode configurado (por exemplo, builds locais
+de desenvolvedor). Nesse modo a assinatura ainda e verificada e registrada em
+`signatureStatus`, mas nao bloqueia a instalacao. Nunca distribua builds com
+esse valor para usuarios finais.
+
+## Assinatura Ed25519 do Feed (opt-in)
+
+Alem do `plug:sha256` por asset, o feed pode trazer assinatura Ed25519 por
+item via atributo `plug:edSignature`. O cliente verifica a assinatura sobre a
+representacao canonica dos campos da enclosure (`asset_size`, `asset_url`,
+`channel`, `os`, `rollout_percentage`, `sha256`, `version`) usando a chave
+publica em `AUTO_UPDATE_FEED_PUBLIC_KEY`. Quando
+`AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true`, items sem assinatura valida sao
+rejeitados pelo fluxo silencioso.
+
+Estado:
+
+- `valid` — assinatura confere com a chave publica configurada.
+- `invalid` — bytes nao batem (item adulterado ou chave rodada).
+- `missing` — `plug:edSignature` ausente no item.
+- `publicKeyUnavailable` — `AUTO_UPDATE_FEED_PUBLIC_KEY` nao configurado.
+- `malformed` — `plug:edSignature` ou chave publica em formato invalido.
+
+Geracao de keypair:
+
+```bash
+pip install cryptography>=42.0.0
+python tool/generate_appcast_signing_key.py
+```
+
+A saida traz `APPCAST_SIGNING_PRIVATE_KEY` (guarde em GitHub Actions
+Secrets) e `AUTO_UPDATE_FEED_PUBLIC_KEY` (distribua nos builds de release
+via `--dart-define` ou `.env`).
+
+Assinatura durante a publicacao:
+
+```bash
+python tool/appcast_manager.py update \
+  --appcast appcast.xml \
+  --version-short 1.7.0 \
+  --full-version 1.7.0+1 \
+  --asset-url https://github.com/.../PlugAgente-Setup-1.7.0.exe \
+  --asset-size 21173534 \
+  --asset-sha256 <sha> \
+  --signing-private-key "$APPCAST_SIGNING_PRIVATE_KEY"
+```
+
+A flag `--signing-private-key` e opcional. Quando ausente, o item e
+publicado sem `plug:edSignature` (compatibilidade com o pipeline atual). Ao
+ativar `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true` no cliente, exiga assinatura
+em todos os pipelines de release antes de promover a uma proxima versao
+publica para evitar bloqueio do fluxo silencioso.
+
+Rotacao de chaves: gere um novo keypair, assine os proximos items com a
+chave nova e atualize `AUTO_UPDATE_FEED_PUBLIC_KEY` no proximo release. O
+cliente passa a aceitar somente items assinados pela chave nova; items
+antigos assinados com a chave anterior viram `invalid` na proxima validacao
+(`automaticValidationFailure` com codigo `feed_signature_invalid`).
 
 ## Feed Oficial via GitHub Pages
 

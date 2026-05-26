@@ -12,6 +12,7 @@ import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
@@ -64,9 +65,20 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   final MetricsCollector? _metrics;
   final Duration _cancelDisconnectTimeout;
   final Map<String, _ActiveStreamingConnection> _activeStreams = <String, _ActiveStreamingConnection>{};
+  final Map<String, ConnectionCircuitBreaker> _circuitBreakers = <String, ConnectionCircuitBreaker>{};
   bool _initialized = false;
   static const Duration _defaultCancelDisconnectTimeout = Duration(seconds: 8);
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
+
+  ConnectionCircuitBreaker _getCircuitBreaker(String connectionString) {
+    return _circuitBreakers.putIfAbsent(
+      connectionString,
+      () => ConnectionCircuitBreaker(
+        failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
+        resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
+      ),
+    );
+  }
 
   @override
   bool get hasActiveStream => _activeStreams.isNotEmpty;
@@ -193,139 +205,190 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       hintedBufferBytes: hintedBufferBytes,
       queryTimeout: queryTimeout,
     );
-    final connResult = await _service.connect(
+
+    final circuitBreaker = _getCircuitBreaker(connectionString);
+    final connResult = await circuitBreaker.execute<Connection>(
       connectionString,
-      options: streamingOptions,
-    );
-
-    return connResult.fold(
-      (connection) async {
-        final streamExecutionId = executionId ?? connection.id;
-        if (cancellationToken?.isCancelled ?? false) {
-          await _service.disconnect(connection.id);
-          directLease.release();
-          return Failure(
-            _streamCancelledFailure(
-              executionId: streamExecutionId,
-              connectionId: connection.id,
-              reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
-            ),
-          );
+      () async {
+        final raw = await _service.connect(connectionString, options: streamingOptions);
+        if (raw.isSuccess()) {
+          return Success(raw.getOrThrow());
         }
-        final activeStream = _ActiveStreamingConnection(
-          executionId: streamExecutionId,
-          connectionId: connection.id,
-          lease: directLease,
-        );
-        _activeStreams[streamExecutionId] = activeStream;
-        try {
-          // Usar streaming real para processar chunks incrementalmente
-          await for (final chunkResult in _service.streamQuery(
-            connection.id,
-            query,
-          )) {
-            if ((cancellationToken?.isCancelled ?? false) && !activeStream.isCancelRequested) {
-              activeStream.isCancelRequested = true;
-              activeStream.cancelReason = cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect;
-            }
-            if (activeStream.isCancelRequested) {
-              if (activeStream.cancelReason == StreamingCancelReason.playgroundRowCap) {
-                return const Success(unit);
-              }
-              if (activeStream.cancelReason == StreamingCancelReason.backpressureOverflow) {
-                _metrics?.recordStreamCancelBackpressure();
-                return Failure(
-                  OdbcFailureMapper.mapStreamingError(
-                    StateError('stream_cancelled_backpressure_overflow'),
-                    operation: 'executeQueryStream',
-                    context: {
-                      'connectionId': connection.id,
-                      'rpc_error_code': RpcErrorCode.resultTooLarge,
-                      'reason': RpcStreamingConstants.backpressureOverflowReason,
-                    },
-                  ),
-                );
-              }
-              if (activeStream.cancelReason == StreamingCancelReason.socketDisconnect) {
-                app_log.AppLogger.info(
-                  'resilience: stream_cancelled_on_disconnect connection_id=${connection.id}',
-                );
-                return Failure(
-                  OdbcFailureMapper.mapStreamingError(
-                    StateError('stream_cancelled_on_disconnect'),
-                    operation: 'executeQueryStream',
-                    context: {
-                      'connectionId': connection.id,
-                      'reason': OdbcContextConstants.socketDisconnectReason,
-                    },
-                  ),
-                );
-              }
-              return Failure(
-                OdbcFailureMapper.mapStreamingError(
-                  StateError('stream_cancelled'),
-                  operation: 'executeQueryStream',
-                  context: {'connectionId': connection.id},
-                  cancelledByUser: true,
-                ),
-              );
-            }
-
-            await chunkResult.fold(
-              (queryResult) async {
-                await _emitQueryResultRows(queryResult, fetchSize, onChunk);
-              },
-              (error) {
-                throw error;
-              },
-            );
-          }
-
-          return const Success(unit);
-        } on Object catch (e) {
-          if (OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
-            e.toString(),
-          )) {
-            _adaptiveBufferCache.rememberExpandedBuffer(
-              connectionString: connectionString,
-              sql: query,
-              currentBufferBytes:
-                  streamingOptions.maxResultBufferBytes ??
-                  (OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024),
-              errorMessage: e.toString(),
-            );
-          }
-          final context = <String, dynamic>{
-            'connectionId': connection.id,
-            'executionId': streamExecutionId,
-          };
-          if (activeStream.cancelReason == StreamingCancelReason.backpressureOverflow) {
-            context['rpc_error_code'] = RpcErrorCode.resultTooLarge;
-            context['reason'] = RpcStreamingConstants.backpressureOverflowReason;
-          }
-          return Failure(
-            OdbcFailureMapper.mapStreamingError(
-              e,
-              operation: 'executeQueryStream',
-              context: context,
-            ),
-          );
-        } finally {
-          await _disconnectActiveStream(activeStream);
-          activeStream.lease.release();
-          _activeStreams.remove(streamExecutionId);
-        }
-      },
-      (error) {
-        directLease.release();
         return Failure(
           OdbcFailureMapper.mapConnectionError(
-            error,
+            raw.exceptionOrNull()!,
             operation: 'connect_streaming',
           ),
         );
       },
     );
+    if (connResult.isError()) {
+      directLease.release();
+      return Failure(connResult.exceptionOrNull()!);
+    }
+    final connection = connResult.getOrThrow();
+
+    final streamExecutionId = executionId ?? connection.id;
+    if (cancellationToken?.isCancelled ?? false) {
+      await _safeDisconnect(connection.id);
+      directLease.release();
+      return Failure(
+        _streamCancelledFailure(
+          executionId: streamExecutionId,
+          connectionId: connection.id,
+          reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
+        ),
+      );
+    }
+    if (_activeStreams.containsKey(streamExecutionId)) {
+      // Two concurrent streams sharing an executionId would let the first one
+      // overwrite the second's tracking entry, breaking cancel routing and
+      // causing the first to drop the second's lease on its finally block.
+      // Reject the duplicate; callers must use unique IDs per execution.
+      await _safeDisconnect(connection.id);
+      directLease.release();
+      app_log.AppLogger.warning(
+        'executeQueryStream: duplicate executionId rejected ($streamExecutionId)',
+      );
+      return Failure(
+        OdbcFailureMapper.mapStreamingError(
+          StateError('stream_duplicate_execution_id'),
+          operation: 'executeQueryStream',
+          context: {
+            'executionId': streamExecutionId,
+            'reason': OdbcContextConstants.streamDuplicateExecutionIdReason,
+            'user_message':
+                'Já existe uma consulta de streaming em andamento com este identificador. '
+                'Aguarde a finalização ou use um identificador diferente.',
+          },
+        ),
+      );
+    }
+    final activeStream = _ActiveStreamingConnection(
+      executionId: streamExecutionId,
+      connectionId: connection.id,
+      lease: directLease,
+    );
+    _activeStreams[streamExecutionId] = activeStream;
+    try {
+      // Usar streaming real para processar chunks incrementalmente
+      await for (final chunkResult in _service.streamQuery(
+        connection.id,
+        query,
+      )) {
+        if ((cancellationToken?.isCancelled ?? false) && !activeStream.isCancelRequested) {
+          activeStream.isCancelRequested = true;
+          activeStream.cancelReason = cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect;
+        }
+        if (activeStream.isCancelRequested) {
+          if (activeStream.cancelReason == StreamingCancelReason.playgroundRowCap) {
+            return const Success(unit);
+          }
+          if (activeStream.cancelReason == StreamingCancelReason.backpressureOverflow) {
+            _metrics?.recordStreamCancelBackpressure();
+            return Failure(
+              OdbcFailureMapper.mapStreamingError(
+                StateError('stream_cancelled_backpressure_overflow'),
+                operation: 'executeQueryStream',
+                context: {
+                  'connectionId': connection.id,
+                  'rpc_error_code': RpcErrorCode.resultTooLarge,
+                  'reason': RpcStreamingConstants.backpressureOverflowReason,
+                },
+              ),
+            );
+          }
+          if (activeStream.cancelReason == StreamingCancelReason.socketDisconnect) {
+            app_log.AppLogger.info(
+              'resilience: stream_cancelled_on_disconnect connection_id=${connection.id}',
+            );
+            return Failure(
+              OdbcFailureMapper.mapStreamingError(
+                StateError('stream_cancelled_on_disconnect'),
+                operation: 'executeQueryStream',
+                context: {
+                  'connectionId': connection.id,
+                  'reason': OdbcContextConstants.socketDisconnectReason,
+                },
+              ),
+            );
+          }
+          return Failure(
+            OdbcFailureMapper.mapStreamingError(
+              StateError('stream_cancelled'),
+              operation: 'executeQueryStream',
+              context: {'connectionId': connection.id},
+              cancelledByUser: true,
+            ),
+          );
+        }
+
+        await chunkResult.fold(
+          (queryResult) async {
+            await _emitQueryResultRows(queryResult, fetchSize, onChunk, activeStream: activeStream);
+          },
+          (error) {
+            throw error;
+          },
+        );
+      }
+
+      return const Success(unit);
+    } on Object catch (e) {
+      if (OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
+        e.toString(),
+      )) {
+        _adaptiveBufferCache.rememberExpandedBuffer(
+          connectionString: connectionString,
+          sql: query,
+          currentBufferBytes:
+              streamingOptions.maxResultBufferBytes ??
+              (OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024),
+          errorMessage: e.toString(),
+        );
+      }
+      final context = <String, dynamic>{
+        'connectionId': connection.id,
+        'executionId': streamExecutionId,
+      };
+      if (activeStream.cancelReason == StreamingCancelReason.backpressureOverflow) {
+        context['rpc_error_code'] = RpcErrorCode.resultTooLarge;
+        context['reason'] = RpcStreamingConstants.backpressureOverflowReason;
+      }
+      return Failure(
+        OdbcFailureMapper.mapStreamingError(
+          e,
+          operation: 'executeQueryStream',
+          context: context,
+        ),
+      );
+    } finally {
+      await _disconnectActiveStream(activeStream);
+      activeStream.lease.release();
+      _activeStreams.remove(streamExecutionId);
+    }
+  }
+
+  /// Resets the circuit breaker for a specific connection string.
+  ///
+  /// Useful after configuration changes or manual recovery.
+  void resetCircuitBreaker(String connectionString) {
+    _circuitBreakers[connectionString]?.reset();
+  }
+
+  /// Best-effort disconnect with a bounded timeout. Used on cleanup paths
+  /// (early cancellation, duplicate executionId rejection) where we cannot
+  /// afford to block forever waiting for the driver.
+  Future<void> _safeDisconnect(String connectionId) async {
+    try {
+      await _service.disconnect(connectionId).timeout(_cancelDisconnectTimeout);
+    } on TimeoutException {
+      _metrics?.recordStreamCancelDisconnectTimeout();
+    } on Object {
+      // Swallow: caller has already decided to abort the stream; logging
+      // happens in the disconnect path when the gateway is asked to cancel
+      // an active stream via cancelActiveStream.
+    }
   }
 
   domain.Failure _streamCancelledFailure({
@@ -434,8 +497,9 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   Future<void> _emitQueryResultRows(
     QueryResult result,
     int fetchSize,
-    Future<void> Function(List<Map<String, dynamic>> chunk) onChunk,
-  ) async {
+    Future<void> Function(List<Map<String, dynamic>> chunk) onChunk, {
+    _ActiveStreamingConnection? activeStream,
+  }) async {
     final safeFetchSize = fetchSize > 0 ? fetchSize : 1000;
     final columns = result.columns;
     var chunk = <Map<String, dynamic>>[];
@@ -448,10 +512,18 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       if (chunk.length >= safeFetchSize) {
         await onChunk(chunk);
         chunk = <Map<String, dynamic>>[];
+        // If a single QueryResult contains many rows (driver delivered the
+        // whole resultset in one event), the outer loop's cancel check would
+        // not run until this method returns. Stop emitting chunks as soon as
+        // cancellation is requested so cancel latency stays bounded by chunk
+        // size, not result size.
+        if (activeStream?.isCancelRequested ?? false) {
+          return;
+        }
       }
     }
 
-    if (chunk.isNotEmpty) {
+    if (chunk.isNotEmpty && !(activeStream?.isCancelRequested ?? false)) {
       await onChunk(chunk);
     }
   }

@@ -32,6 +32,22 @@ class SqlStreamingCoordinator {
     required String? requestId,
     String? clientToken,
   }) {
+    // Reject duplicate streamId/executionId so that two concurrent calls
+    // sharing the same key do not silently orphan the first registration.
+    // Without this guard, the second `_activeByStreamId[streamId] = ...`
+    // would overwrite the first, breaking cancel routing for the original
+    // execution and causing markFinished from the second to remove the wrong
+    // entry.
+    if (_activeByStreamId.containsKey(streamId)) {
+      throw StateError(
+        'Duplicate streamId in SqlStreamingCoordinator: $streamId is already tracked',
+      );
+    }
+    if (_activeByExecutionId.containsKey(executionId)) {
+      throw StateError(
+        'Duplicate executionId in SqlStreamingCoordinator: $executionId is already tracked',
+      );
+    }
     final owner = clientToken?.trim();
     final execution = ActiveSqlStreamExecution(
       streamId: streamId,

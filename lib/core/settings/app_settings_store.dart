@@ -43,8 +43,15 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
       await parentDir.create(recursive: true);
     }
 
+    // Recover from a crash mid-write. The atomic write strategy below leaves
+    // either `<file>` (steady state) or one of `<file>.bak` / `<file>.tmp`
+    // (intermediate). When `<file>` is missing but a sibling exists, restore
+    // it before reading so the next launch sees the latest persisted data.
     if (!file.existsSync()) {
-      return;
+      final restored = await _restoreSettingsFromSiblings(file);
+      if (!restored) {
+        return;
+      }
     }
 
     final raw = await file.readAsString();
@@ -281,12 +288,96 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
 
     final sortedMap = SplayTreeMap<String, Object>.from(_cache);
     final tmpFile = File('$filePath.tmp');
+    final bakFile = File('$filePath.bak');
+
+    // Always write the new snapshot to a temp file first. If the process
+    // crashes mid-write, the original file is still intact.
     await tmpFile.writeAsString(jsonEncode(sortedMap));
 
+    // Move the previous snapshot to a backup before overwriting. This avoids
+    // the Windows crash window where `delete + rename` would leave neither
+    // file present: while `<file>.bak` exists, `initialize()` can recover.
     if (file.existsSync()) {
-      await file.delete();
+      if (bakFile.existsSync()) {
+        await bakFile.delete();
+      }
+      await file.rename(bakFile.path);
     }
-    await tmpFile.rename(file.path);
+
+    // Promote the temp file to the canonical name.
+    try {
+      await tmpFile.rename(file.path);
+    } on FileSystemException {
+      // Best-effort restore: if rename failed and we still have the bak,
+      // put it back so the user does not lose state.
+      if (bakFile.existsSync() && !file.existsSync()) {
+        await bakFile.rename(file.path);
+      }
+      rethrow;
+    }
+
+    // Clean up the backup once the new file is in place.
+    if (bakFile.existsSync()) {
+      try {
+        await bakFile.delete();
+      } on FileSystemException {
+        // Non-fatal: an orphan .bak will be cleaned up on next successful
+        // write or restored on next launch if the canonical file disappears.
+      }
+    }
+  }
+
+  /// Restores the canonical settings file when only siblings (`.tmp` / `.bak`)
+  /// exist after a crash mid-write. Returns true if a sibling was promoted to
+  /// the canonical name and the caller should proceed with reading.
+  Future<bool> _restoreSettingsFromSiblings(File file) async {
+    final tmpFile = File('${file.path}.tmp');
+    final bakFile = File('${file.path}.bak');
+
+    // Prefer the backup: it is the most recent successfully closed snapshot.
+    // The temp file may be partially written if the crash happened during
+    // `writeAsString`, so it is treated as a fallback only.
+    if (bakFile.existsSync()) {
+      try {
+        await bakFile.rename(file.path);
+      } on FileSystemException catch (error, stackTrace) {
+        developer.log(
+          'Failed to restore settings from .bak; trying .tmp',
+          name: 'app_settings_store',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    if (file.existsSync()) {
+      // Drop a stale tmp from the same crash to avoid confusing future runs.
+      if (tmpFile.existsSync()) {
+        try {
+          await tmpFile.delete();
+        } on FileSystemException {
+          // ignore: stale tmp will be overwritten on next persist
+        }
+      }
+      return true;
+    }
+
+    if (tmpFile.existsSync()) {
+      try {
+        await tmpFile.rename(file.path);
+        return true;
+      } on FileSystemException catch (error, stackTrace) {
+        developer.log(
+          'Failed to restore settings from .tmp',
+          name: 'app_settings_store',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
+    return false;
   }
 
   Future<String> _resolveDefaultFilePath() async {

@@ -51,4 +51,31 @@ class OdbcConnectionOptionsBuilder {
       reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
     );
   }
+
+  /// Options for transactional batch execution.
+  ///
+  /// Disables auto-reconnect to prevent silent transaction loss: if the
+  /// connection drops mid-transaction and the driver auto-reconnects, the
+  /// active transaction is gone but the calling code would continue with a
+  /// stale transaction ID, leading to data integrity issues on commit.
+  static ConnectionAcquireOptions forTransactionalBatch(
+    IOdbcConnectionSettings settings, {
+    Duration? queryTimeout,
+  }) {
+    final mb = clampedMaxResultBufferMb(settings);
+    final maxBytes = mb * 1024 * 1024;
+    final initialBytes = min(
+      ConnectionConstants.defaultInitialResultBufferBytes,
+      maxBytes,
+    );
+    return ConnectionAcquireOptions(
+      loginTimeout: Duration(seconds: settings.loginTimeoutSeconds),
+      queryTimeout: queryTimeout ?? ConnectionConstants.defaultTransactionalBatchTimeout,
+      maxResultBufferBytes: maxBytes,
+      initialResultBufferBytes: initialBytes,
+      autoReconnectOnConnectionLost: false,
+      maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
+      reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
+    );
+  }
 }

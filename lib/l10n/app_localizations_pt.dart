@@ -3106,6 +3106,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configUpdateTechnicalSignatureRequired => 'Assinatura obrigatória';
 
   @override
+  String get configUpdateTechnicalHelperSha256 => 'SHA-256 do helper';
+
+  @override
+  String get configUpdateTechnicalFeedSignatureStatus => 'Assinatura do feed';
+
+  @override
+  String get configUpdateTechnicalFeedSignatureRequired => 'Assinatura do feed obrigatória';
+
+  @override
   String get configUpdateTechnicalWaitForAppExitDurationMs => 'Espera pelo fechamento do app (ms)';
 
   @override
@@ -3191,6 +3200,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configUpdateCompletionSourceAutomaticRolloutSkipped => 'Atualização automática ignorada pelo rollout';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticCancelled => 'Atualização automática cancelada';
 
   @override
   String get configCopyUpdateDiagnostics => 'Copiar diagnóstico de update';
@@ -3693,10 +3705,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctButtonRefreshList => 'Atualizar lista';
 
   @override
-  String get ctButtonAutoRefreshOn => 'Auto refresh: ligado';
+  String get ctButtonAutoRefreshOn => 'Atualização automática: ligada';
 
   @override
-  String get ctButtonAutoRefreshOff => 'Auto refresh: desligado';
+  String get ctButtonAutoRefreshOff => 'Atualização automática: desligada';
 
   @override
   String get ctButtonViewDetails => 'Ver detalhes';

@@ -6,6 +6,7 @@ import 'package:auto_updater/auto_updater.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
+import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -74,6 +75,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     int automaticFailureCooldownThreshold = SilentUpdateCoordinator.defaultAutomaticFailureCooldownThreshold,
     Duration automaticFailureCooldown = SilentUpdateCoordinator.defaultAutomaticFailureCooldown,
     Duration helperWaitDuration = SilentUpdateCoordinator.defaultHelperWaitDuration,
+    Duration Function()? automaticBootJitterProvider,
+    Duration lateCallbackDrainWindow = _defaultLateCallbackDrainWindow,
     ISilentUpdateCoordinator? silentUpdateCoordinator,
   }) : _updaterGateway = updaterGateway,
        _appcastProbeService = appcastProbeService,
@@ -85,7 +88,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
        _timeoutCircuitThreshold = timeoutCircuitThreshold,
        _timeoutCircuitCooldown = timeoutCircuitCooldown,
        _backgroundRetryLimit = backgroundRetryLimit,
-       _backgroundRetryBaseDelay = backgroundRetryBaseDelay {
+       _backgroundRetryBaseDelay = backgroundRetryBaseDelay,
+       _lateCallbackDrainWindow = lateCallbackDrainWindow {
     // The coordinator needs a resolver for the feed URL. Using a closure here
     // (after `this` is available) avoids the initializer-list self-reference issue.
     _silentCoordinator =
@@ -100,6 +104,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           automaticFailureCooldownThreshold: automaticFailureCooldownThreshold,
           automaticFailureCooldown: automaticFailureCooldown,
           helperWaitDuration: helperWaitDuration,
+          bootJitterProvider: automaticBootJitterProvider,
         );
     _hydratePersistedDiagnostics();
   }
@@ -116,15 +121,18 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   final Duration _timeoutCircuitCooldown;
   final int _backgroundRetryLimit;
   final Duration _backgroundRetryBaseDelay;
+  final Duration _lateCallbackDrainWindow;
   late final ISilentUpdateCoordinator _silentCoordinator;
 
   bool _isInitialized = false;
   Completer<Result<bool>>? _manualCheckCompleter;
   bool _isManualCheck = false;
+  bool _isBackgroundCheckInProgress = false;
   UpdateCheckDiagnostics? _activeManualDiagnostics;
   UpdateCheckDiagnostics? _lastManualDiagnostics;
   UpdateCheckDiagnostics? _lastBackgroundDiagnostics;
   String? _activeCheckId;
+  DateTime? _lastManualCheckEndedAt;
 
   static const String _lastDiagnosticsKey = 'auto_update.last_manual_diagnostics';
   static const String _lastBackgroundDiagnosticsKey = 'auto_update.last_background_diagnostics';
@@ -137,6 +145,11 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   static const Duration _defaultBackgroundRetryBaseDelay = Duration(seconds: 30);
   static const Duration _defaultManualTriggerTimeout = Duration(seconds: 15);
   static const Duration _defaultManualCompletionTimeout = Duration(seconds: 60);
+
+  /// Window during which WinSparkle callbacks arriving without `_isManualCheck`
+  /// are treated as late echoes of a manual check that already timed out
+  /// instead of polluting background diagnostics.
+  static const Duration _defaultLateCallbackDrainWindow = Duration(seconds: 30);
 
   String? get _feedUrl {
     final url = resolveAutoUpdateFeedUrl(environment: AppEnvironment.snapshot());
@@ -432,6 +445,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       case UpdateCheckCompletionSource.automaticInstallFailure:
       case UpdateCheckCompletionSource.automaticCooldown:
       case UpdateCheckCompletionSource.automaticRolloutSkipped:
+      case UpdateCheckCompletionSource.automaticCancelled:
         break;
     }
   }
@@ -526,6 +540,10 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         await _updaterGateway.setScheduledCheckInterval(intervalSeconds);
       }
       if (!enabled) {
+        // Signal in-flight check (if any) to bail out at the next safe
+        // checkpoint before tearing down the periodic timer; cancellation is
+        // a no-op when no check is running.
+        _silentCoordinator.requestCancellation();
         _silentCoordinator.stop();
       } else {
         _silentCoordinator.scheduleAndStart();
@@ -560,7 +578,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   // ---------------------------------------------------------------------------
 
   @override
-  Future<Result<bool>> checkSilently() => _silentCoordinator.checkSilently();
+  Future<Result<SilentUpdateOutcome>> checkSilently() => _silentCoordinator.checkSilently();
 
   @override
   Future<void> checkInBackground() async {
@@ -569,40 +587,53 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       await _silentCoordinator.checkSilently();
       return;
     }
+    if (_isBackgroundCheckInProgress) {
+      developer.log(
+        'Background update check skipped: another background check is already running',
+        name: 'auto_update_orchestrator',
+        level: 800,
+      );
+      return;
+    }
     final feedUrl = _feedUrl;
     if (feedUrl == null) return;
-    for (var attempt = 1; attempt <= _backgroundRetryLimit; attempt++) {
-      _lastBackgroundDiagnostics = _buildBackgroundDiagnostics(feedUrl);
-      try {
-        await _updaterGateway.checkForUpdates(inBackground: true);
-        _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
-          triggerCompletedAt: DateTime.now(),
-        );
-        unawaited(_persistLastBackgroundDiagnostics());
-        return;
-      } on Exception catch (e, s) {
-        final completedAt = DateTime.now();
-        _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
-          triggerCompletedAt: completedAt,
-          completedAt: completedAt,
-          completionSource: UpdateCheckCompletionSource.triggerFailure,
-          errorMessage: e.toString(),
-        );
-        _metricsCollector?.recordAutoUpdateBackgroundCheckTriggerFailure();
-        unawaited(_persistLastBackgroundDiagnostics());
-        developer.log(
-          'Background update check failed (attempt $attempt/$_backgroundRetryLimit)',
-          name: 'auto_update_orchestrator',
-          level: 900,
-          error: e,
-          stackTrace: s,
-        );
-        if (attempt < _backgroundRetryLimit) {
-          final delay = _backgroundRetryBaseDelay * attempt;
-          developer.log('Retrying in ${delay.inSeconds}s', name: 'auto_update_orchestrator', level: 800);
-          await Future<void>.delayed(delay);
+    _isBackgroundCheckInProgress = true;
+    try {
+      for (var attempt = 1; attempt <= _backgroundRetryLimit; attempt++) {
+        _lastBackgroundDiagnostics = _buildBackgroundDiagnostics(feedUrl);
+        try {
+          await _updaterGateway.checkForUpdates(inBackground: true);
+          _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
+            triggerCompletedAt: DateTime.now(),
+          );
+          unawaited(_persistLastBackgroundDiagnostics());
+          return;
+        } on Exception catch (e, s) {
+          final completedAt = DateTime.now();
+          _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
+            triggerCompletedAt: completedAt,
+            completedAt: completedAt,
+            completionSource: UpdateCheckCompletionSource.triggerFailure,
+            errorMessage: e.toString(),
+          );
+          _metricsCollector?.recordAutoUpdateBackgroundCheckTriggerFailure();
+          unawaited(_persistLastBackgroundDiagnostics());
+          developer.log(
+            'Background update check failed (attempt $attempt/$_backgroundRetryLimit)',
+            name: 'auto_update_orchestrator',
+            level: 900,
+            error: e,
+            stackTrace: s,
+          );
+          if (attempt < _backgroundRetryLimit) {
+            final delay = _backgroundRetryBaseDelay * attempt;
+            developer.log('Retrying in ${delay.inSeconds}s', name: 'auto_update_orchestrator', level: 800);
+            await Future<void>.delayed(delay);
+          }
         }
       }
+    } finally {
+      _isBackgroundCheckInProgress = false;
     }
   }
 
@@ -746,7 +777,18 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       _isManualCheck = false;
       _manualCheckCompleter = null;
       _activeCheckId = null;
+      _lastManualCheckEndedAt = DateTime.now();
     }
+  }
+
+  /// True when a callback from WinSparkle arrived after `checkManual` already
+  /// ended (typically via [_manualCompletionTimeout]) and within
+  /// [_lateCallbackDrainWindow]. These callbacks must not be persisted as
+  /// background diagnostics or count as background failures.
+  bool _isLateManualCallback() {
+    final lastEndedAt = _lastManualCheckEndedAt;
+    if (lastEndedAt == null) return false;
+    return DateTime.now().difference(lastEndedAt) <= _lateCallbackDrainWindow;
   }
 
   void _completeManualCheck(
@@ -803,6 +845,14 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   @override
   void onUpdaterError(UpdaterError? error) {
     if (!_isManualCheck) {
+      if (_isLateManualCallback()) {
+        developer.log(
+          'Ignoring late auto-updater error from a previously timed-out manual check: $error',
+          name: 'auto_update_orchestrator',
+          level: 800,
+        );
+        return;
+      }
       _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
         completedAt: DateTime.now(),
         completionSource: UpdateCheckCompletionSource.updaterError,
@@ -829,6 +879,14 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   @override
   void onUpdaterCheckingForUpdate(Appcast? appcast) {
     if (!_isManualCheck) {
+      if (_isLateManualCallback()) {
+        developer.log(
+          'Ignoring late checking-for-update from a previously timed-out manual check',
+          name: 'auto_update_orchestrator',
+          level: 800,
+        );
+        return;
+      }
       final diagnostics = _backgroundDiagnosticsOrDefault();
       _lastBackgroundDiagnostics = diagnostics.copyWith(
         triggerStartedAt: diagnostics.triggerStartedAt ?? DateTime.now(),
@@ -850,6 +908,15 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   @override
   void onUpdaterUpdateAvailable(AppcastItem? appcastItem) {
     if (!_isManualCheck) {
+      if (_isLateManualCallback()) {
+        developer.log(
+          'Ignoring late update-available from a previously timed-out manual check: '
+          '${appcastItem?.versionString}',
+          name: 'auto_update_orchestrator',
+          level: 800,
+        );
+        return;
+      }
       _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
         completedAt: DateTime.now(),
         completionSource: UpdateCheckCompletionSource.updateAvailable,
@@ -896,6 +963,14 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   @override
   void onUpdaterUpdateNotAvailable(UpdaterError? error) {
     if (!_isManualCheck) {
+      if (_isLateManualCallback()) {
+        developer.log(
+          'Ignoring late update-not-available from a previously timed-out manual check',
+          name: 'auto_update_orchestrator',
+          level: 800,
+        );
+        return;
+      }
       _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
         completedAt: DateTime.now(),
         completionSource: UpdateCheckCompletionSource.updateNotAvailable,

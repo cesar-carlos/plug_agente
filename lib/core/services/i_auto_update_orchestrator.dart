@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -20,7 +21,14 @@ abstract class IAutoUpdateOrchestrator {
 
   Future<void> checkInBackground();
 
-  Future<Result<bool>> checkSilently();
+  /// Triggers a silent update cycle. The success bucket carries the
+  /// [SilentUpdateOutcome] discriminator so callers can distinguish
+  /// "installer launched" from "no new version", "rollout skipped",
+  /// "cooldown active", "cancelled", etc.
+  Future<Result<SilentUpdateOutcome>> checkSilently();
 
+  /// Triggers a WinSparkle-driven manual check. The success bucket reports
+  /// `true` when WinSparkle found an update and `false` when the remote
+  /// reports up-to-date.
   Future<Result<bool>> checkManual();
 }

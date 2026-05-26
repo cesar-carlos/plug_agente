@@ -56,6 +56,8 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
   static final RegExp _sha256Pattern = RegExp(r'^[0-9a-f]{64}$');
   static const int _waitPidTimeoutSeconds = 45;
   static const Duration _defaultDownloadTimeout = Duration(minutes: 5);
+  static const Duration _icaclsTimeout = Duration(seconds: 30);
+  static const Duration _cancelPollInterval = Duration(milliseconds: 100);
 
   @override
   Future<Result<SilentUpdateInstallResult>> install(
@@ -86,6 +88,10 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
           },
         ),
       );
+    }
+
+    if (request.cancelRequested?.call() ?? false) {
+      return _cancelledFailure(request.version);
     }
 
     final downloadDirectoryPath = await _downloadDirectoryResolver();
@@ -122,6 +128,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         partFile,
         expectedSize: request.assetSize,
         version: request.version,
+        cancelRequested: request.cancelRequested,
       );
       Exception? downloadError;
       downloadResult.fold(
@@ -130,6 +137,11 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       );
       if (downloadError != null) {
         return Failure<SilentUpdateInstallResult, Exception>(downloadError!);
+      }
+
+      if (request.cancelRequested?.call() ?? false) {
+        _deleteIfExists(partFile);
+        return _cancelledFailure(request.version);
       }
 
       final actualSize = partFile.lengthSync();
@@ -170,6 +182,11 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       }
       partFile.renameSync(installerPath);
 
+      if (request.cancelRequested?.call() ?? false) {
+        _deleteIfExists(installerFile);
+        return _cancelledFailure(request.version);
+      }
+
       final installDirectory = await _installDirectoryResolver();
       final installDirectoryWritable = await _installDirectoryWritableProbe(installDirectory);
       final strategy = installDirectoryWritable
@@ -195,6 +212,13 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       }
       installedHelperFile.copySync(launcherPath);
       final appPid = _currentProcessIdResolver();
+      final helperSha256 = _sha256OfFileBestEffort(installedHelperFile);
+
+      if (request.cancelRequested?.call() ?? false) {
+        _deleteIfExists(launcherFile);
+        _deleteIfExists(installerFile);
+        return _cancelledFailure(request.version);
+      }
 
       await _processStarter(
         launcherPath,
@@ -234,6 +258,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
           installDirectoryWritable: installDirectoryWritable,
           appPid: appPid,
           updateDirectorySecurityStatus: updateDirectorySecurityStatus,
+          helperSha256: helperSha256,
         ),
       );
     } on Exception catch (error) {
@@ -260,18 +285,40 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     File destination, {
     required int expectedSize,
     required String version,
+    bool Function()? cancelRequested,
   }) async {
+    if (cancelRequested?.call() ?? false) {
+      return _cancelledDownloadFailure(assetUri, version);
+    }
     final client = _httpClientFactory();
     client.connectionTimeout = _downloadTimeout;
     var didTimeOut = false;
+    var didCancel = false;
     final timeoutTimer = Timer(_downloadTimeout, () {
       didTimeOut = true;
       client.close(force: true);
     });
+    // Poll the cancel token even when the response stream is blocked waiting
+    // for more bytes. Without this, a slow server keeps `await for` parked
+    // and cancellation only triggers between chunks.
+    Timer? cancelPollTimer;
+    if (cancelRequested != null) {
+      cancelPollTimer = Timer.periodic(_cancelPollInterval, (_) {
+        if (cancelRequested.call()) {
+          didCancel = true;
+          client.close(force: true);
+        }
+      });
+    }
     try {
       final request = await client.getUrl(assetUri).timeout(_downloadTimeout);
       request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
       final response = await request.close().timeout(_downloadTimeout);
+      if (cancelRequested?.call() ?? false) {
+        didCancel = true;
+        client.close(force: true);
+        return _cancelledDownloadFailure(assetUri, version);
+      }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return Failure(
           domain.NetworkFailure.withContext(
@@ -304,6 +351,11 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       try {
         var downloadedBytes = 0;
         await for (final chunk in response) {
+          if (cancelRequested?.call() ?? false) {
+            didCancel = true;
+            client.close(force: true);
+            break;
+          }
           downloadedBytes += chunk.length;
           if (downloadedBytes > expectedSize) {
             return Failure(
@@ -324,12 +376,18 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       } finally {
         await sink.close();
       }
+      if (didCancel) {
+        return _cancelledDownloadFailure(assetUri, version);
+      }
       return const Success(unit);
     } on TimeoutException catch (error) {
       didTimeOut = true;
       client.close(force: true);
       return _downloadTimeoutFailure(assetUri, error);
     } on Exception catch (error) {
+      if (didCancel) {
+        return _cancelledDownloadFailure(assetUri, version);
+      }
       if (didTimeOut) {
         return _downloadTimeoutFailure(assetUri, error);
       }
@@ -345,8 +403,36 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       );
     } finally {
       timeoutTimer.cancel();
+      cancelPollTimer?.cancel();
       client.close(force: true);
     }
+  }
+
+  Result<SilentUpdateInstallResult> _cancelledFailure(String version) {
+    return Failure<SilentUpdateInstallResult, Exception>(
+      domain.ConfigurationFailure.withContext(
+        message: 'Silent update cancelled before completion',
+        context: <String, dynamic>{
+          'operation': 'silentUpdateInstall',
+          SilentUpdateInstallRequest.cancellationContextKey: true,
+          'version': version,
+        },
+      ),
+    );
+  }
+
+  Result<void> _cancelledDownloadFailure(Uri assetUri, String version) {
+    return Failure(
+      domain.ConfigurationFailure.withContext(
+        message: 'Silent update download cancelled before completion',
+        context: <String, dynamic>{
+          'operation': 'silentUpdateDownload',
+          SilentUpdateInstallRequest.cancellationContextKey: true,
+          'asset_url': assetUri.toString(),
+          'version': version,
+        },
+      ),
+    );
   }
 
   Result<void> _downloadTimeoutFailure(
@@ -415,8 +501,10 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
           '*S-1-5-32-544:(OI)(CI)F',
           '$account:(OI)(CI)M',
         ],
-      );
+      ).timeout(_icaclsTimeout);
       return result.exitCode == 0 ? 'restricted' : 'failed:${result.exitCode}';
+    } on TimeoutException {
+      return 'failedTimeout';
     } on ProcessException {
       return 'failedToStart';
     }
@@ -508,6 +596,18 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
   static String _sha256Of(File file) {
     final bytes = file.readAsBytesSync();
     return sha256.convert(bytes).toString();
+  }
+
+  /// Same as [_sha256Of] but never throws — used for diagnostic fingerprints
+  /// where measurement failure must not abort the install pipeline.
+  static String? _sha256OfFileBestEffort(File file) {
+    try {
+      return _sha256Of(file);
+    } on FileSystemException {
+      return null;
+    } on Exception {
+      return null;
+    }
   }
 
   static void _deleteIfExists(File file) {

@@ -9,6 +9,7 @@ import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
+import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -148,7 +149,7 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   int resetFailureCooldownCallCount = 0;
   int hydrateCallCount = 0;
 
-  Result<bool> checkSilentlyResult = const Success(false);
+  Result<SilentUpdateOutcome> checkSilentlyResult = const Success(SilentUpdateOutcome.noNewVersion);
 
   void setInProgress(bool value) => _isSilentCheckInProgress = value;
 
@@ -168,7 +169,7 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   Future<void> reconcilePendingAndSchedule() async => reconcilePendingAndScheduleCallCount++;
 
   @override
-  Future<Result<bool>> checkSilently() async {
+  Future<Result<SilentUpdateOutcome>> checkSilently() async {
     checkSilentlyCallCount++;
     return checkSilentlyResult;
   }
@@ -178,6 +179,11 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
 
   @override
   void stop() => stopCallCount++;
+
+  @override
+  void requestCancellation() => requestCancellationCallCount++;
+
+  int requestCancellationCallCount = 0;
 
   @override
   Future<void> resetFailureCooldownIfNeeded() async => resetFailureCooldownCallCount++;
@@ -303,7 +309,7 @@ void main() {
 
         expect(result.isSuccess(), isTrue);
         result.fold(
-          (started) => expect(started, isFalse),
+          (outcome) => expect(outcome, SilentUpdateOutcome.noNewVersion),
           (_) => fail('Expected success'),
         );
         expect(fakeInstaller.request, isNull);
@@ -344,7 +350,10 @@ void main() {
 
         expect(result.isSuccess(), isTrue);
         result.fold(
-          (started) => expect(started, isTrue),
+          (outcome) {
+            expect(outcome, SilentUpdateOutcome.installerStarted);
+            expect(outcome.isInstallerLaunched, isTrue);
+          },
           (_) => fail('Expected success'),
         );
         expect(fakeInstaller.request?.version, '99.0.0+1');
@@ -410,13 +419,13 @@ void main() {
 
         expect(result.isSuccess(), isTrue);
         result.fold(
-          (started) => expect(started, isFalse),
+          (outcome) => expect(outcome, SilentUpdateOutcome.cancelled),
           (_) => fail('Expected success'),
         );
         expect(closeCalled, isFalse);
         expect(
           orchestrator.lastAutomaticDiagnostics?.completionSource,
-          UpdateCheckCompletionSource.automaticDisabled,
+          UpdateCheckCompletionSource.automaticCancelled,
         );
         // Pending install record should have been cleared.
         expect(settingsStore.getString('auto_update.pending_silent_update'), isNull);
@@ -445,22 +454,22 @@ void main() {
 
         final firstFuture = orchestrator.checkSilently();
         final secondFuture = orchestrator.checkSilently();
-        final results = await Future.wait(<Future<Result<bool>>>[
+        final results = await Future.wait(<Future<Result<SilentUpdateOutcome>>>[
           firstFuture,
           secondFuture,
         ]);
 
         expect(fakeProbe.callCount, 1);
         expect(fakeInstaller.installCount, 1);
-        final startedValues = <bool>[];
+        final outcomes = <SilentUpdateOutcome>[];
         for (final result in results) {
           result.fold(
-            startedValues.add,
+            outcomes.add,
             (_) => fail('Expected success'),
           );
         }
-        expect(startedValues.where((started) => started).length, 1);
-        expect(startedValues.where((started) => !started).length, 1);
+        expect(outcomes.where((o) => o == SilentUpdateOutcome.installerStarted).length, 1);
+        expect(outcomes.where((o) => o == SilentUpdateOutcome.alreadyInProgress).length, 1);
       });
 
       test('rejects appcast with external HTTP installer URL before starting installer', () async {
@@ -729,7 +738,7 @@ void main() {
 
         expect(result.isSuccess(), isTrue);
         result.fold(
-          (started) => expect(started, isFalse),
+          (outcome) => expect(outcome, SilentUpdateOutcome.rolloutSkipped),
           (_) => fail('Expected success'),
         );
         expect(fakeInstaller.request, isNull);
@@ -875,7 +884,7 @@ void main() {
         expect(second.isError(), isTrue);
         expect(blocked.isSuccess(), isTrue);
         blocked.fold(
-          (started) => expect(started, isFalse),
+          (outcome) => expect(outcome, SilentUpdateOutcome.cooldownActive),
           (_) => fail('Expected success'),
         );
         expect(fakeProbe.callCount, probeCallsAfterFailures);
@@ -1548,6 +1557,101 @@ void main() {
           UpdateCheckCompletionSource.updaterError,
         );
         expect(metricsCollector.autoUpdateBackgroundCheckUpdaterErrorCount, 1);
+      });
+
+      test('skips reentrant background check while another is in progress', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        final pendingTrigger = Completer<void>();
+        var triggerCount = 0;
+        final fakeGateway = FakeAutoUpdaterGateway()
+          ..onCheckForUpdates = () async {
+            triggerCount++;
+            await pendingTrigger.future;
+          };
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.initialize();
+
+        final firstCall = orchestrator.checkInBackground();
+        await Future<void>.delayed(Duration.zero);
+        final secondCall = orchestrator.checkInBackground();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(triggerCount, 1, reason: 'second call must short-circuit while first is in flight');
+
+        pendingTrigger.complete();
+        await Future.wait(<Future<void>>[firstCall, secondCall]);
+
+        final thirdCall = orchestrator.checkInBackground();
+        await Future<void>.delayed(Duration.zero);
+        await thirdCall;
+        expect(triggerCount, 2, reason: 'guard must release after the first call completes');
+      });
+    });
+
+    group('late WinSparkle callbacks', () {
+      test('does not persist background diagnostics after manual check timed out', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          manualTriggerTimeout: const Duration(milliseconds: 50),
+          manualCompletionTimeout: const Duration(milliseconds: 50),
+        );
+
+        await orchestrator.initialize();
+        final result = await orchestrator.checkManual();
+        expect(result.isError(), isTrue);
+        final backgroundBefore = orchestrator.lastBackgroundDiagnostics;
+
+        // A late onUpdaterUpdateAvailable arrives after the manual check
+        // already finished by timeout. The drain window must absorb it.
+        fakeGateway.listener?.onUpdaterUpdateAvailable(null);
+        fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+        fakeGateway.listener?.onUpdaterError(null);
+        fakeGateway.listener?.onUpdaterCheckingForUpdate(null);
+
+        expect(
+          orchestrator.lastBackgroundDiagnostics,
+          backgroundBefore,
+          reason: 'late callbacks must not pollute background diagnostics',
+        );
+        expect(metricsCollector.autoUpdateBackgroundCheckUpdaterErrorCount, 0);
+      });
+
+      test('drain window expires so genuine background callbacks resume tracking', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          manualTriggerTimeout: const Duration(milliseconds: 20),
+          manualCompletionTimeout: const Duration(milliseconds: 20),
+          lateCallbackDrainWindow: const Duration(milliseconds: 50),
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.checkManual();
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+
+        fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+
+        expect(
+          orchestrator.lastBackgroundDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.updateNotAvailable,
+        );
       });
     });
 

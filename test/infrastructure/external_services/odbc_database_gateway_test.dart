@@ -1339,9 +1339,12 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
     });
 
     test(
-      'should allow PostgreSQL pagination without explicit order by terms',
+      'should reject PostgreSQL pagination without explicit order by terms',
       () async {
-        const pooledConnectionId = 'pool-pg-no-order';
+        // Page-offset pagination without ORDER BY is unsafe in PostgreSQL:
+        // the planner can pick a different scan order between pages, causing
+        // rows to be skipped or duplicated. The gateway now rejects all
+        // engines (including PostgreSQL) with a ValidationFailure.
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         final config = _buildConfig(
           connectionString,
@@ -1367,44 +1370,17 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         ) async {
           return Success(config);
         });
-        when(() => mockConnectionPool.acquire(any(), options: any(named: 'options'))).thenAnswer((_) async {
-          return const Success(pooledConnectionId);
-        });
-        when(
-          () => mockService.executeQuery(
-            any(),
-            connectionId: pooledConnectionId,
-          ),
-        ).thenAnswer((_) async {
-          return const Success(
-            QueryResult(
-              columns: ['id'],
-              rows: [
-                [1],
-              ],
-              rowCount: 1,
-            ),
-          );
-        });
-        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
-          _,
-        ) async {
-          return const Success(unit);
-        });
 
         final result = await gateway.executeQuery(request);
 
-        expect(result.isSuccess(), isTrue);
-        final capturedSql =
-            verify(
-                  () => mockService.executeQuery(
-                    captureAny(),
-                    connectionId: pooledConnectionId,
-                  ),
-                ).captured.single
-                as String;
-        expect(capturedSql, contains('LIMIT 11 OFFSET 0'));
-        expect(capturedSql, isNot(contains('ORDER BY')));
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()!;
+        expect(failure, isA<domain.ValidationFailure>());
+        expect(
+          (failure as domain.ValidationFailure).message,
+          contains('PostgreSQL'),
+        );
+        verifyNever(() => mockConnectionPool.acquire(any(), options: any(named: 'options')));
       },
     );
 

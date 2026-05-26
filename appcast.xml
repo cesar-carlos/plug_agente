@@ -27,47 +27,5 @@ Highlights:
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.6...v1.6.7</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.7/PlugAgente-Setup-1.6.7.exe" sparkle:version="1.6.7+1" sparkle:os="windows" plug:sha256="e985accfff38d309501f3f276d25a7e240f60b51ce05aad519d73827022f403b" plug:channel="stable" plug:rolloutPercentage="100" length="17983164" type="application/octet-stream" />
   </item>
-  <item>
-   <title>Version 1.6.6+1</title>
-   <pubDate>Tue, 12 May 2026 14:13:52 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.5...v1.6.6</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.6/PlugAgente-Setup-1.6.6.exe" sparkle:version="1.6.6+1" sparkle:os="windows" length="36932386" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.6.5+1</title>
-   <pubDate>Tue, 12 May 2026 13:00:24 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.4...v1.6.5</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.5/PlugAgente-Setup-1.6.5.exe" sparkle:version="1.6.5+1" sparkle:os="windows" length="36926319" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.6.4+1</title>
-   <pubDate>Fri, 08 May 2026 20:47:02 +0000</pubDate>
-   <description>Nova Versao 1.6.4+1 - Atualizacao automatica via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.4/PlugAgente-Setup-1.6.4.exe" sparkle:version="1.6.4+1" sparkle:os="windows" length="36869836" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.6.3+1</title>
-   <pubDate>Fri, 08 May 2026 17:24:38 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.3...v1.6.3</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.3/PlugAgente-Setup-1.6.3.exe" sparkle:version="1.6.3+1" sparkle:os="windows" length="36862787" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.6.2+1</title>
-   <pubDate>Fri, 08 May 2026 15:43:48 +0000</pubDate>
-   <description>Nova Versao 1.6.2+1 - Atualizacao automatica via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.2/PlugAgente-Setup-1.6.2.exe" sparkle:version="1.6.2+1" sparkle:os="windows" length="36861920" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.6.1+1</title>
-   <pubDate>Fri, 08 May 2026 15:29:43 +0000</pubDate>
-   <description>Nova Versao 1.6.1+1 - Atualizacao automatica via GitHub Release.</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.1/PlugAgente-Setup-1.6.1.exe" sparkle:version="1.6.1+1" sparkle:os="windows" length="36863677" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.6.0+1</title>
-   <pubDate>Thu, 07 May 2026 20:48:17 +0000</pubDate>
-   <description>See appcast.xml and merged PR #1. Windows installer: PlugAgente-Setup-1.6.0.exe (sparkle:version 1.6.0+1).</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.0/PlugAgente-Setup-1.6.0.exe" sparkle:version="1.6.0+1" sparkle:os="windows" length="36766313" type="application/octet-stream" />
-  </item>
  </channel>
 </rss>

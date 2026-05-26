@@ -17,6 +17,11 @@ enum UpdateCheckCompletionSource {
   automaticInstallFailure,
   automaticCooldown,
   automaticRolloutSkipped,
+
+  /// The user disabled automatic silent updates while a check was already in
+  /// flight (probe or download). The coordinator honored the cancellation
+  /// instead of letting the installer run to completion.
+  automaticCancelled,
 }
 
 class UpdateCheckDiagnostics {
@@ -63,6 +68,9 @@ class UpdateCheckDiagnostics {
     this.updateDirectorySecurityStatus,
     this.installDirectoryWritable,
     this.elevatedCancelled,
+    this.helperSha256,
+    this.feedSignatureStatus,
+    this.feedSignatureRequired,
     this.rolloutChannel,
     this.rolloutPercentage,
     this.rolloutBucket,
@@ -117,6 +125,25 @@ class UpdateCheckDiagnostics {
   final String? updateDirectorySecurityStatus;
   final bool? installDirectoryWritable;
   final bool? elevatedCancelled;
+
+  /// SHA-256 fingerprint of the source `plug_update_helper.exe` that was
+  /// copied and launched for this silent update. Diagnostic-only signal that
+  /// lets operators compare across installs / detect tampering between
+  /// releases. `null` when not measured (e.g., the launcher path was missing
+  /// or the install pipeline aborted before the helper copy).
+  final String? helperSha256;
+
+  /// Outcome of the Ed25519 `plug:edSignature` verification on the appcast
+  /// enclosure. Mirrors `AppcastSignatureVerificationStatus.name` (`missing`,
+  /// `publicKeyUnavailable`, `malformed`, `valid`, `invalid`). `null` when
+  /// the probe did not reach the signature step (e.g., probe failed earlier).
+  final String? feedSignatureStatus;
+
+  /// Whether the running build requires a valid feed signature for the
+  /// silent flow to proceed. Mirrors
+  /// `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE`. `null` when the field was
+  /// captured before the requirement check ran.
+  final bool? feedSignatureRequired;
   final String? rolloutChannel;
   final int? rolloutPercentage;
   final int? rolloutBucket;
@@ -176,6 +203,9 @@ class UpdateCheckDiagnostics {
       'updateDirectorySecurityStatus': updateDirectorySecurityStatus,
       'installDirectoryWritable': installDirectoryWritable,
       'elevatedCancelled': elevatedCancelled,
+      'helperSha256': helperSha256,
+      'feedSignatureStatus': feedSignatureStatus,
+      'feedSignatureRequired': feedSignatureRequired,
       'rolloutChannel': rolloutChannel,
       'rolloutPercentage': rolloutPercentage,
       'rolloutBucket': rolloutBucket,
@@ -245,6 +275,9 @@ class UpdateCheckDiagnostics {
       updateDirectorySecurityStatus: json['updateDirectorySecurityStatus'] as String?,
       installDirectoryWritable: json['installDirectoryWritable'] as bool?,
       elevatedCancelled: json['elevatedCancelled'] as bool?,
+      helperSha256: json['helperSha256'] as String?,
+      feedSignatureStatus: json['feedSignatureStatus'] as String?,
+      feedSignatureRequired: json['feedSignatureRequired'] as bool?,
       rolloutChannel: json['rolloutChannel'] as String?,
       rolloutPercentage: _parseInt(json['rolloutPercentage']),
       rolloutBucket: _parseInt(json['rolloutBucket']),
@@ -301,6 +334,9 @@ class UpdateCheckDiagnostics {
     String? updateDirectorySecurityStatus,
     bool? installDirectoryWritable,
     bool? elevatedCancelled,
+    String? helperSha256,
+    String? feedSignatureStatus,
+    bool? feedSignatureRequired,
     String? rolloutChannel,
     int? rolloutPercentage,
     int? rolloutBucket,
@@ -355,6 +391,9 @@ class UpdateCheckDiagnostics {
       updateDirectorySecurityStatus: updateDirectorySecurityStatus ?? this.updateDirectorySecurityStatus,
       installDirectoryWritable: installDirectoryWritable ?? this.installDirectoryWritable,
       elevatedCancelled: elevatedCancelled ?? this.elevatedCancelled,
+      helperSha256: helperSha256 ?? this.helperSha256,
+      feedSignatureStatus: feedSignatureStatus ?? this.feedSignatureStatus,
+      feedSignatureRequired: feedSignatureRequired ?? this.feedSignatureRequired,
       rolloutChannel: rolloutChannel ?? this.rolloutChannel,
       rolloutPercentage: rolloutPercentage ?? this.rolloutPercentage,
       rolloutBucket: rolloutBucket ?? this.rolloutBucket,

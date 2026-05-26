@@ -82,6 +82,27 @@ class OdbcNativeConnectionPool
     _poolCreationFutures[connectionString] = creationFuture;
     final result = await creationFuture;
     _poolCreationFutures.remove(connectionString);
+
+    // If recycle() ran while creation was in-flight, _pools no longer contains
+    // this connection string even though _createPool registered the new pool.
+    // Close the orphaned pool immediately to avoid a resource leak.
+    if (result.isSuccess() && !_pools.containsKey(connectionString)) {
+      final orphanId = result.getOrThrow();
+      developer.log(
+        'Closing orphaned native pool $orphanId: recycle ran during creation',
+        name: 'connection_pool',
+        level: 900,
+      );
+      await _service.poolClose(orphanId);
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError('Pool was recycled during creation; retry to get a fresh pool.'),
+          operation: 'pool_acquire',
+          context: {'reason': OdbcContextConstants.poolNotCreatedReason, 'retryable': true},
+        ),
+      );
+    }
+
     return result;
   }
 

@@ -124,7 +124,12 @@ class RpcInboundHandler {
   late final RpcBatchInboundHandler _batchHandler;
 
   int _activeRpcHandlers = 0;
-  bool _deferInboundSlotRelease = false;
+  // Per-call slot-release state, set when [handleRequestWithRelease] runs and
+  // looked up via [Zone.current] inside [_emitInboundRpcResponse]. Using an
+  // instance bool would race across concurrent inbound requests: the first
+  // call to finish would read the second call's `true` and release its slot,
+  // leaving the second call's slot orphaned for the lifetime of the socket.
+  static const _slotReleaseZoneKey = #rpcInboundHandlerSlotRelease;
 
   /// Returns `true` if a slot was acquired (caller must call [releaseSlot]
   /// after dispatch completes, before outbound encode/emit). Returns `false`
@@ -139,14 +144,17 @@ class RpcInboundHandler {
   }
 
   void releaseSlot() {
-    _activeRpcHandlers--;
+    if (_activeRpcHandlers > 0) {
+      _activeRpcHandlers--;
+    }
   }
 
   void _releaseInboundSlotIfDeferred() {
-    if (!_deferInboundSlotRelease) {
+    final state = Zone.current[_slotReleaseZoneKey];
+    if (state is! _SlotReleaseState || state.released) {
       return;
     }
-    _deferInboundSlotRelease = false;
+    state.released = true;
     releaseSlot();
   }
 
@@ -172,12 +180,17 @@ class RpcInboundHandler {
   }
 
   Future<void> handleRequestWithRelease(dynamic data) async {
-    _deferInboundSlotRelease = true;
-    try {
-      await handleRequest(data);
-    } finally {
-      _releaseInboundSlotIfDeferred();
-    }
+    final state = _SlotReleaseState();
+    return runZoned(
+      () async {
+        try {
+          await handleRequest(data);
+        } finally {
+          _releaseInboundSlotIfDeferred();
+        }
+      },
+      zoneValues: <Object, Object?>{_slotReleaseZoneKey: state},
+    );
   }
 
   /// Builds and emits a `rateLimited` error response for a request that was
@@ -607,4 +620,10 @@ class _WirePayloadWithAck {
 
   final dynamic payload;
   final void Function()? socketAck;
+}
+
+/// Per-call slot-release flag carried in a Zone so concurrent invocations of
+/// [RpcInboundHandler.handleRequestWithRelease] do not stomp on each other.
+class _SlotReleaseState {
+  bool released = false;
 }

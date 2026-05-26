@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:math';
 
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
@@ -1295,14 +1297,8 @@ void registerPlugDependencyGraph(
             environment: AppEnvironment.snapshot(),
           ),
         ),
-        closeApplicationForSilentUpdate: () async {
-          if (getIt.isRegistered<WindowManagerService>()) {
-            await getIt<WindowManagerService>().close();
-            return;
-          }
-          await shutdownApp();
-          exit(0);
-        },
+        automaticBootJitterProvider: _autoUpdateBootJitter,
+        closeApplicationForSilentUpdate: _closeApplicationForSilentUpdate,
         allowQuitForUpdate: () async {
           if (getIt.isRegistered<WindowManagerService>()) {
             await getIt<WindowManagerService>().allowQuitForUpdate();
@@ -1425,4 +1421,46 @@ void registerPlugCapabilityServices(
     ..registerLazySingleton(
       () => CancelAllNotifications(getIt<INotificationService>()),
     );
+}
+
+/// Jitter applied before the first automatic silent update check after boot.
+///
+/// Spreads the initial probe across the fleet between 30s and 120s, mitigating
+/// the thundering herd that would otherwise hit the appcast feed when many
+/// clients restart at the same time.
+Duration _autoUpdateBootJitter() {
+  const minSeconds = 30;
+  const rangeSeconds = 90;
+  return Duration(seconds: minSeconds + Random.secure().nextInt(rangeSeconds + 1));
+}
+
+/// Forces the app to terminate so the silent update helper can replace the
+/// running executable. Goes through [WindowManagerService] when available
+/// (which already runs [shutdownApp]), then falls back to a hard exit if the
+/// process is still alive after [_silentUpdateExitGraceWindow].
+Future<void> _closeApplicationForSilentUpdate() async {
+  if (getIt.isRegistered<WindowManagerService>()) {
+    final service = getIt<WindowManagerService>();
+    // Flip preventClose/closeToTray off so the close request actually exits
+    // the window instead of hiding it to the tray.
+    await service.allowQuitForUpdate();
+    unawaited(_scheduleSilentUpdateHardExitFallback());
+    await service.close();
+    return;
+  }
+  await shutdownApp();
+  exit(0);
+}
+
+const Duration _silentUpdateExitGraceWindow = Duration(seconds: 5);
+
+Future<void> _scheduleSilentUpdateHardExitFallback() async {
+  await Future<void>.delayed(_silentUpdateExitGraceWindow);
+  developer.log(
+    'Silent update close did not terminate the process within '
+    '${_silentUpdateExitGraceWindow.inSeconds}s; forcing exit(0)',
+    name: 'plug_dependency_registrar',
+    level: 900,
+  );
+  exit(0);
 }

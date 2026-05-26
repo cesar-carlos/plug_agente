@@ -253,20 +253,22 @@ final class AdaptiveOdbcConnectionPool
     final owner = _connectionOwners.remove(connectionId);
     _connectionCircuitKeys.remove(connectionId);
     if (owner == null) {
-      // Unknown ID: log a warning. Routing to lease pool on null is risky
-      // because native IDs use different release semantics (poolReleaseConnection
-      // vs disconnect). We log and proceed with lease to avoid crashing callers,
-      // but this indicates a double-release or missing owner registration.
+      // Unknown owner: the ID may belong to the native pool if owner tracking
+      // was lost (e.g. double-release). Routing blindly to the lease pool would
+      // call disconnect() instead of poolReleaseConnection(), leaving the native
+      // pool slot permanently occupied. Route by checking lease-pool tracking.
       developer.log(
         'release called for connection with no tracked owner: $connectionId',
         name: 'adaptive_odbc_connection_pool',
         level: 900,
       );
+      final activeCountResult = await _leasePool.getActiveCount();
+      final knownToLeasePool = activeCountResult.isSuccess() && _leasePool.isTracked(connectionId);
+      return knownToLeasePool ? _leasePool.release(connectionId) : _nativePool.release(connectionId);
     }
     return switch (owner) {
       _AdaptivePoolOwner.native => _nativePool.release(connectionId),
       _AdaptivePoolOwner.lease => _leasePool.release(connectionId),
-      null => _leasePool.release(connectionId),
     };
   }
 
@@ -280,11 +282,11 @@ final class AdaptiveOdbcConnectionPool
         name: 'adaptive_odbc_connection_pool',
         level: 900,
       );
+      return _leasePool.isTracked(connectionId) ? _leasePool.discard(connectionId) : _nativePool.discard(connectionId);
     }
     return switch (owner) {
       _AdaptivePoolOwner.native => _nativePool.discard(connectionId),
       _AdaptivePoolOwner.lease => _leasePool.discard(connectionId),
-      null => _leasePool.discard(connectionId),
     };
   }
 

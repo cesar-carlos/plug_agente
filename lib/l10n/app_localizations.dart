@@ -5804,6 +5804,24 @@ abstract class AppLocalizations {
   /// **'Signature required'**
   String get configUpdateTechnicalSignatureRequired;
 
+  /// No description provided for @configUpdateTechnicalHelperSha256.
+  ///
+  /// In en, this message translates to:
+  /// **'Helper SHA-256'**
+  String get configUpdateTechnicalHelperSha256;
+
+  /// No description provided for @configUpdateTechnicalFeedSignatureStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Feed signature'**
+  String get configUpdateTechnicalFeedSignatureStatus;
+
+  /// No description provided for @configUpdateTechnicalFeedSignatureRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Feed signature required'**
+  String get configUpdateTechnicalFeedSignatureRequired;
+
   /// No description provided for @configUpdateTechnicalWaitForAppExitDurationMs.
   ///
   /// In en, this message translates to:
@@ -5977,6 +5995,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Automatic update skipped by rollout'**
   String get configUpdateCompletionSourceAutomaticRolloutSkipped;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update cancelled'**
+  String get configUpdateCompletionSourceAutomaticCancelled;
 
   /// No description provided for @configCopyUpdateDiagnostics.
   ///

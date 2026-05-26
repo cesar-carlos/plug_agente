@@ -69,6 +69,11 @@ void main() {
       expect(File(success!.installerPath).readAsStringSync(), 'hello');
       expect(File('${success!.installerPath}.part').existsSync(), isFalse);
       expect(File(success!.launcherPath).readAsStringSync(), 'helper');
+      // Helper SHA-256 fingerprint is captured for diagnostics; the exact
+      // digest depends on the synthetic helper bytes, so we only validate the
+      // shape (lowercase 64-char hex) here.
+      expect(success!.helperSha256, isNotNull);
+      expect(success!.helperSha256, matches(RegExp(r'^[0-9a-f]{64}$')));
       expect(
         arguments,
         <String>[
@@ -373,6 +378,151 @@ void main() {
       result.fold(
         (_) => fail('Expected failure'),
         (failure) => expect(failure, isA<domain.ServerFailure>()),
+      );
+    });
+
+    test('aborts before download when cancellation is requested up front', () async {
+      var processStarted = false;
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        processStarter: (path, args, {mode = ProcessStartMode.normal}) async {
+          processStarted = true;
+          return _FakeProcess();
+        },
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:9/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+          cancelRequested: () => true,
+        ),
+      );
+
+      expect(processStarted, isFalse);
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('Expected failure when cancellation is requested'),
+        (failure) {
+          expect(failure, isA<domain.ConfigurationFailure>());
+          final context = (failure as domain.Failure).context;
+          expect(context[SilentUpdateInstallRequest.cancellationContextKey], isTrue);
+        },
+      );
+    });
+
+    test('aborts download mid-stream when cancellation flips true', () async {
+      // Server slow-drips bytes so we can observe the cancellation reaching the
+      // download loop between chunks rather than after completion.
+      final body = utf8.encode('hello');
+      final server = await HttpServer.bind('127.0.0.1', 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((HttpRequest request) async {
+        request.response.contentLength = body.length;
+        request.response.add(body.sublist(0, 2));
+        await request.response.flush();
+        // Hang the rest of the body so the cancellation flag has time to flip
+        // mid-stream. The installer must break out of the await-for loop.
+        await Future<void>.delayed(const Duration(seconds: 5));
+        await request.response.close();
+      });
+
+      var processStarted = false;
+      var cancelFlag = false;
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        processStarter: (path, args, {mode = ProcessStartMode.normal}) async {
+          processStarted = true;
+          return _FakeProcess();
+        },
+      );
+
+      final installFuture = installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: body.length,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+          cancelRequested: () => cancelFlag,
+        ),
+      );
+
+      // Wait for the first chunk to arrive, then trip cancellation.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      cancelFlag = true;
+
+      final result = await installFuture;
+
+      expect(processStarted, isFalse, reason: 'cancelled download must not spawn helper');
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('Expected cancellation failure'),
+        (failure) {
+          final context = (failure as domain.Failure).context;
+          expect(context[SilentUpdateInstallRequest.cancellationContextKey], isTrue);
+        },
+      );
+      // The partial download must be cleaned up by the installer.
+      final partFile = File(p.join(tempDir.path, 'PlugAgente-Setup-99.0.0.exe.part'));
+      expect(partFile.existsSync(), isFalse);
+    });
+
+    test('proceeds with install when directory hardener reports failedTimeout', () async {
+      final server = await _serveBytes(utf8.encode('hello'));
+      addTearDown(() => server.close(force: true));
+      final helperFile = _createHelper(tempDir);
+      String? hardenedDirectory;
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 4321,
+        updateDirectorySecurityHardener: (dir) async {
+          hardenedDirectory = dir;
+          // The production hardener swallows TimeoutException and returns
+          // 'failedTimeout' instead of hanging the install pipeline.
+          return 'failedTimeout';
+        },
+        processStarter: (path, args, {mode = ProcessStartMode.normal}) async {
+          return _FakeProcess();
+        },
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(hardenedDirectory, tempDir.path);
+      expect(result.isSuccess(), isTrue);
+      result.fold(
+        (success) => expect(success.updateDirectorySecurityStatus, 'failedTimeout'),
+        (_) => fail('Expected install to succeed despite hardener timeout'),
       );
     });
 

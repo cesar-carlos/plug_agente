@@ -156,6 +156,10 @@ void main() {
     });
 
     test('should save, list and delete action triggers', () async {
+      // Trigger.actionId now has an FK to agent_action_definition_table; the
+      // parent row must exist before the trigger can be inserted.
+      await repository.saveDefinition(_buildMinimalDefinition('action-1'));
+
       const trigger = AgentActionTrigger(
         id: 'trigger-1',
         actionId: 'action-1',
@@ -683,4 +687,24 @@ void main() {
       expect(roundTripped.policies.encoding.stderr, AgentActionOutputEncodingMode.utf8);
     });
   });
+}
+
+/// Creates a minimal command-line action definition. Useful for tests that
+/// need a parent row to satisfy FK constraints from triggers or chunk-store
+/// rows but do not assert on definition content.
+AgentActionDefinition _buildMinimalDefinition(
+  String id, {
+  DateTime? now,
+}) {
+  final timestamp = now ?? DateTime.utc(2026);
+  return AgentActionDefinition(
+    id: id,
+    name: 'Test action $id',
+    description: 'Auto-generated test action',
+    state: AgentActionState.active,
+    config: const CommandLineActionConfig(command: 'echo test'),
+    definitionSnapshotHash: 'test-hash-$id'.padRight(20, '0'),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  );
 }

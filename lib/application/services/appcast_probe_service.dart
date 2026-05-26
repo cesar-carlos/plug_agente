@@ -19,6 +19,7 @@ class AppcastProbeResult {
     this.rolloutPercentage,
     this.itemCount,
     this.errorMessage,
+    this.edSignature,
   });
 
   final String requestUrl;
@@ -32,6 +33,12 @@ class AppcastProbeResult {
   final int? rolloutPercentage;
   final int? itemCount;
   final String? errorMessage;
+
+  /// Base64-encoded Ed25519 signature taken from the `plug:edSignature`
+  /// attribute of the enclosure. `null` when the publisher has not signed
+  /// this item yet. Verification happens in the coordinator using the
+  /// configured public key, so this field is just the raw transport value.
+  final String? edSignature;
 }
 
 abstract interface class IAppcastProbeService {
@@ -222,6 +229,17 @@ class AppcastProbeService implements IAppcastProbeService {
       channel: _plugChannelFromEnclosure(enclosure),
       rolloutPercentage: _plugRolloutPercentageFromEnclosure(enclosure),
       itemCount: itemCount,
+      edSignature: _plugEdSignatureFromEnclosure(enclosure),
+    );
+  }
+
+  static String? _plugEdSignatureFromEnclosure(XmlElement enclosure) {
+    return _namespacedAttributeValue(
+      enclosure,
+      localName: 'edSignature',
+      prefix: 'plug',
+      namespaceUri: _plugNamespace,
+      qualifiedName: 'plug:edSignature',
     );
   }
 

@@ -70,8 +70,12 @@ void main() {
     test(
       'should open JWKS circuit breaker after consecutive failures',
       () async {
+        // Only infrastructure failures (JWKS network/crypto errors) count
+        // toward the circuit breaker. Use a valid alg so the verifier reaches
+        // the JWKS fetch path; the unreachable example.com URL guarantees an
+        // infra failure on each attempt.
         final now = DateTime.utc(2026, 3, 17, 12);
-        final token = _buildTokenWithAlg('none');
+        final token = _buildTokenWithAlg('RS256');
         final verifier = JwtJwksVerifier(
           () async => const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
           failureThreshold: 2,
@@ -94,7 +98,7 @@ void main() {
       'should close JWKS circuit breaker after open duration expires',
       () async {
         var now = DateTime.utc(2026, 3, 17, 12);
-        final token = _buildTokenWithAlg('none');
+        final token = _buildTokenWithAlg('RS256');
         final verifier = JwtJwksVerifier(
           () async => const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
           failureThreshold: 1,

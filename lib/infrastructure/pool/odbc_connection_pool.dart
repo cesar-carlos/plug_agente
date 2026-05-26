@@ -188,10 +188,11 @@ class OdbcConnectionPool
       level: 500,
     );
 
-    final errors = <String>[];
     final ids = _leasedIds.toList(growable: false);
-    for (final id in ids) {
-      final result = await release(id);
+    final results = await Future.wait(ids.map(release));
+
+    final errors = <String>[];
+    for (final result in results) {
       if (result.isError()) {
         final err = result.exceptionOrNull();
         errors.add(err?.toString() ?? 'release failed');
@@ -318,6 +319,9 @@ class OdbcConnectionPool
     }
     return const Success(unit);
   }
+
+  /// Returns true if [connectionId] is currently tracked as an active lease.
+  bool isTracked(String connectionId) => _leasedIds.contains(connectionId);
 
   @override
   Future<Result<int>> getActiveCount({String? connectionString}) async {

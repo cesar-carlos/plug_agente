@@ -180,6 +180,7 @@ def _build_appcast_item(
     context: AppcastContext,
     *,
     pub_date: str,
+    signing_private_key_b64: str | None = None,
 ) -> et.Element:
     item = et.Element("item")
     et.SubElement(item, "title").text = context.expected_title
@@ -194,6 +195,19 @@ def _build_appcast_item(
     enclosure.set(_plug_attr("rolloutPercentage"), str(context.expected_rollout_percentage))
     enclosure.set("length", str(context.asset_size))
     enclosure.set("type", ENCLOSURE_MIME_TYPE)
+    if signing_private_key_b64:
+        from tool.appcast_signing import EnclosureSignaturePayload, sign_payload
+
+        payload = EnclosureSignaturePayload(
+            version=context.version,
+            os=WINDOWS_OS_NAME,
+            sha256=context.expected_asset_sha256,
+            channel=context.expected_channel,
+            rollout_percentage=context.expected_rollout_percentage,
+            asset_url=context.asset_url,
+            asset_size=int(context.asset_size),
+        )
+        enclosure.set(_plug_attr("edSignature"), sign_payload(payload, signing_private_key_b64))
     return item
 
 
@@ -213,6 +227,8 @@ def update_appcast_tree(
     tree: et.ElementTree,
     context: AppcastContext,
     published_at: datetime | None = None,
+    *,
+    signing_private_key_b64: str | None = None,
 ) -> et.ElementTree:
     published_at = published_at or datetime.now(timezone.utc)
     root = tree.getroot()
@@ -234,6 +250,7 @@ def update_appcast_tree(
         item = _build_appcast_item(
             context,
             pub_date=existing_pub_date or published_at.strftime("%a, %d %b %Y %H:%M:%S +0000"),
+            signing_private_key_b64=signing_private_key_b64,
         )
     channel.insert(0, item)
 
@@ -471,9 +488,11 @@ def build_context_from_args(args: argparse.Namespace) -> AppcastContext:
 def command_update(args: argparse.Namespace) -> int:
     context = build_context_from_args(args)
     tree = load_or_create_tree(args.appcast)
-    update_appcast_tree(tree, context)
+    signing_key = getattr(args, "signing_private_key", None) or None
+    update_appcast_tree(tree, context, signing_private_key_b64=signing_key)
     write_appcast_tree(tree, args.appcast)
-    print(f"Successfully updated {args.appcast} with version {context.version}")
+    signed = " (signed)" if signing_key else ""
+    print(f"Successfully updated {args.appcast} with version {context.version}{signed}")
     return 0
 
 
@@ -537,6 +556,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     update_parser = subparsers.add_parser("update")
     update_parser.add_argument("--appcast", type=Path, required=True)
+    update_parser.add_argument(
+        "--signing-private-key",
+        default="",
+        help=(
+            "Optional base64-encoded Ed25519 private key. When provided, the new "
+            "enclosure receives a plug:edSignature attribute. Pair with "
+            "AUTO_UPDATE_FEED_PUBLIC_KEY on consumer builds."
+        ),
+    )
     add_shared_arguments(update_parser)
     update_parser.set_defaults(func=command_update)
 

@@ -162,10 +162,15 @@ class ConnectionConstants {
     // The ODBC async worker stays more reliable when connect/disconnect
     // handshakes are bounded to a small fan-out instead of matching the full
     // app-level pool concurrency.
+    // Formula: min(max(2, poolSize ~/ 5), 4) — scales gently with pool size:
+    //   pool  1-9  → 2  (same as before)
+    //   pool 10-14 → 2
+    //   pool 15-19 → 3
+    //   pool 20    → 4
     if (poolSize < 1) {
       return 1;
     }
-    return poolSize > 2 ? 2 : poolSize;
+    return math.min(math.max(2, poolSize ~/ 5), 4);
   }
 
   static int directOdbcConnectionConcurrency(int poolSize) {

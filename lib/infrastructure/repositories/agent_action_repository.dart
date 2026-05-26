@@ -304,12 +304,22 @@ class AgentActionRepository implements IAgentActionRepository {
     AgentActionExecution execution,
   ) async {
     try {
-      final persisted = await _persistExecutionCapturedOutput(execution);
-      final row = _mapper.executionToData(persisted);
-      await _database.into(_database.agentActionExecutionTable).insertOnConflictUpdate(row);
+      // Wrap insert + chunk persistence in a transaction so a chunk-write
+      // failure rolls back the execution row. The execution row must be
+      // inserted first because the chunk table holds an FK to execution.id;
+      // attempting to write chunks before the parent execution row violates
+      // the FK constraint when PRAGMA foreign_keys=ON.
+      late AgentActionExecution finalState;
+      await _database.transaction(() async {
+        final preparedState = _prepareExecutionCapturedOutputState(execution);
+        final row = _mapper.executionToData(preparedState);
+        await _database.into(_database.agentActionExecutionTable).insertOnConflictUpdate(row);
+        await _persistExecutionCapturedOutputChunks(execution);
+        finalState = _mapper.executionFromData(row);
+      });
       return Success(
         await _hydrateExecutionCapturedOutput(
-          _mapper.executionFromData(row),
+          finalState,
           loadChunkedBodies: true,
         ),
       );
@@ -509,20 +519,44 @@ class AgentActionRepository implements IAgentActionRepository {
     }
   }
 
-  Future<AgentActionExecution> _persistExecutionCapturedOutput(
+  /// Returns the execution with stdout/stderr blobs cleared and the
+  /// `*StoredInChunks` flags raised when the captured output is large enough
+  /// to spill into the chunk store. No chunk rows are written here — call
+  /// [_persistExecutionCapturedOutputChunks] only after the parent execution
+  /// row exists, since chunks hold an FK to the execution.
+  AgentActionExecution _prepareExecutionCapturedOutputState(
+    AgentActionExecution execution,
+  ) {
+    var persisted = execution;
+    final stdout = execution.stdoutText;
+    if (stdout != null && AgentActionCapturedOutputChunker.shouldSpillToChunks(stdout)) {
+      persisted = persisted.copyWith(
+        clearStdoutText: true,
+        stdoutStoredInChunks: true,
+      );
+    }
+    final stderr = execution.stderrText;
+    if (stderr != null && AgentActionCapturedOutputChunker.shouldSpillToChunks(stderr)) {
+      persisted = persisted.copyWith(
+        clearStderrText: true,
+        stderrStoredInChunks: true,
+      );
+    }
+    return persisted;
+  }
+
+  /// Writes spilled stdout/stderr chunks. Caller must guarantee the parent
+  /// execution row already exists and that this runs inside the same
+  /// transaction as the execution insert.
+  Future<void> _persistExecutionCapturedOutputChunks(
     AgentActionExecution execution,
   ) async {
-    var persisted = execution;
     final stdout = execution.stdoutText;
     if (stdout != null && AgentActionCapturedOutputChunker.shouldSpillToChunks(stdout)) {
       await _capturedOutputChunks.replaceStream(
         executionId: execution.id,
         stream: AgentActionCapturedOutputChunkStore.streamNameForStdout(),
         text: stdout,
-      );
-      persisted = persisted.copyWith(
-        clearStdoutText: true,
-        stdoutStoredInChunks: true,
       );
     }
     final stderr = execution.stderrText;
@@ -532,12 +566,7 @@ class AgentActionRepository implements IAgentActionRepository {
         stream: AgentActionCapturedOutputChunkStore.streamNameForStderr(),
         text: stderr,
       );
-      persisted = persisted.copyWith(
-        clearStderrText: true,
-        stderrStoredInChunks: true,
-      );
     }
-    return persisted;
   }
 
   @override

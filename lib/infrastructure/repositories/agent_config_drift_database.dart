@@ -221,6 +221,24 @@ class AppDatabase extends _$AppDatabase implements AgentConfigDataSource {
         // AgentActionExecutionTable.actionId is intentionally left without a FK
         // to preserve execution history after definition deletion (enforced at
         // the repository level in deleteDefinition).
+        //
+        // Pre-clean orphan rows before introducing FKs: rows whose parent has
+        // already been deleted would fail the FK check during table copy and
+        // could fail the migration entirely. The repository-level cascade was
+        // best-effort; pre-existing orphans (e.g. from before this rule) are
+        // resolved by deleting them here so the migration is idempotent.
+        await customStatement(
+          '''
+          DELETE FROM agent_action_trigger_table
+          WHERE action_id NOT IN (SELECT id FROM agent_action_definition_table)
+          ''',
+        );
+        await customStatement(
+          '''
+          DELETE FROM agent_action_captured_output_chunk_table
+          WHERE execution_id NOT IN (SELECT id FROM agent_action_execution_table)
+          ''',
+        );
         // ignore: experimental_member_use - TableMigration is Drift's API for table recreation
         await m.alterTable(TableMigration(agentActionTriggerTable));
         // ignore: experimental_member_use

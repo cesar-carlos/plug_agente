@@ -281,8 +281,10 @@ void main() {
     });
 
     test('discard treats invalid connection id as success', () async {
+      // odbc_fast 3.9.0: pool-owned handles must be returned via
+      // poolReleaseConnection, which the implementation calls in discard().
       when(
-        () => mockService.disconnect('cid'),
+        () => mockService.poolReleaseConnection('cid'),
       ).thenAnswer(
         (_) async => const Failure(
           ConnectionError(message: 'Invalid connection ID: 1000000'),
@@ -293,7 +295,7 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
       expect(metrics.poolReleaseFailureCount, 0);
-      verify(() => mockService.disconnect('cid')).called(1);
+      verify(() => mockService.poolReleaseConnection('cid')).called(1);
     });
 
     test('recycle with unknown connection string succeeds without close', () async {
@@ -506,9 +508,15 @@ void main() {
           ),
         ),
       );
+      // odbc_fast 3.9.0: poolHealthCheck returns Failure(ConnectionError) for
+      // unhealthy pools; Success(false) is no longer emitted by the runtime.
       when(
         () => mockService.poolHealthCheck(31),
-      ).thenAnswer((_) async => const Success(false));
+      ).thenAnswer(
+        (_) async => const Failure(
+          ConnectionError(message: 'Pool is unhealthy'),
+        ),
+      );
 
       await pool.acquire('DSN=Health');
       final health = await pool.healthCheckAll();

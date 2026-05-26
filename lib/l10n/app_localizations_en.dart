@@ -3100,6 +3100,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configUpdateTechnicalSignatureRequired => 'Signature required';
 
   @override
+  String get configUpdateTechnicalHelperSha256 => 'Helper SHA-256';
+
+  @override
+  String get configUpdateTechnicalFeedSignatureStatus => 'Feed signature';
+
+  @override
+  String get configUpdateTechnicalFeedSignatureRequired => 'Feed signature required';
+
+  @override
   String get configUpdateTechnicalWaitForAppExitDurationMs => 'Wait for app exit (ms)';
 
   @override
@@ -3185,6 +3194,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get configUpdateCompletionSourceAutomaticRolloutSkipped => 'Automatic update skipped by rollout';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticCancelled => 'Automatic update cancelled';
 
   @override
   String get configCopyUpdateDiagnostics => 'Copy update diagnostics';
