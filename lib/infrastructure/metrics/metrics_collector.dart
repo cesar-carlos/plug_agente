@@ -194,17 +194,19 @@ class MetricsCollector
   int _maxQueueSize = 0;
   int _currentActiveWorkers = 0;
   int _maxActiveWorkers = 0;
-  final List<Duration> _queueWaitTimes = [];
-  final List<Duration> _agentActionQueueWaitTimes = [];
-  final List<Duration> _agentActionExecutionDurations = [];
-  final List<Duration> _poolWaitTimes = [];
-  final List<Duration> _directConnectionWaitTimes = [];
-  final List<Duration> _readOnlyBatchParallelWaitTimes = [];
-  final List<Duration> _connectTimes = [];
-  final List<Duration> _sqlExecutionTimes = [];
-  final Map<String, List<Duration>> _sqlExecutionTimesByMode = <String, List<Duration>>{};
-  final Map<String, List<DateTime>> _sqlExecutionTimestampsByMode = <String, List<DateTime>>{};
-  final List<Duration> _preparedPrepareTimes = [];
+  // ListQueue gives O(1) addLast + removeFirst vs O(n) List.removeAt(0)
+  // when the ring-buffer cap (_maxWaitTimeSamples) is reached.
+  final ListQueue<Duration> _queueWaitTimes = ListQueue<Duration>();
+  final ListQueue<Duration> _agentActionQueueWaitTimes = ListQueue<Duration>();
+  final ListQueue<Duration> _agentActionExecutionDurations = ListQueue<Duration>();
+  final ListQueue<Duration> _poolWaitTimes = ListQueue<Duration>();
+  final ListQueue<Duration> _directConnectionWaitTimes = ListQueue<Duration>();
+  final ListQueue<Duration> _readOnlyBatchParallelWaitTimes = ListQueue<Duration>();
+  final ListQueue<Duration> _connectTimes = ListQueue<Duration>();
+  final ListQueue<Duration> _sqlExecutionTimes = ListQueue<Duration>();
+  final Map<String, ListQueue<Duration>> _sqlExecutionTimesByMode = <String, ListQueue<Duration>>{};
+  final Map<String, ListQueue<DateTime>> _sqlExecutionTimestampsByMode = <String, ListQueue<DateTime>>{};
+  final ListQueue<Duration> _preparedPrepareTimes = ListQueue<Duration>();
   final Map<String, int> _streamingSkipReasons = <String, int>{};
   final Map<String, int> _odbcNativeFallbackReasons = <String, int>{};
   final Map<String, int> _odbcQueryTimeoutByStage = <String, int>{};
@@ -600,9 +602,9 @@ class MetricsCollector
     String mode = 'unknown',
   }) {
     _recordDurationSample(_sqlExecutionTimes, executionTime);
-    final samples = _sqlExecutionTimesByMode.putIfAbsent(mode, () => <Duration>[]);
+    final samples = _sqlExecutionTimesByMode.putIfAbsent(mode, ListQueue<Duration>.new);
     _recordDurationSample(samples, executionTime);
-    final timestamps = _sqlExecutionTimestampsByMode.putIfAbsent(mode, () => <DateTime>[]);
+    final timestamps = _sqlExecutionTimestampsByMode.putIfAbsent(mode, ListQueue<DateTime>.new);
     _recordTimestampSample(timestamps, DateTime.now());
   }
 
@@ -1169,23 +1171,23 @@ class MetricsCollector
     return _queueWaitTimes.map((d) => d.inMilliseconds).toList()..sort();
   }
 
-  void _recordDurationSample(List<Duration> samples, Duration value) {
-    samples.add(value);
+  void _recordDurationSample(ListQueue<Duration> samples, Duration value) {
+    samples.addLast(value);
     if (samples.length > _maxWaitTimeSamples) {
-      samples.removeAt(0);
+      samples.removeFirst();
     }
   }
 
-  void _recordTimestampSample(List<DateTime> samples, DateTime value) {
-    samples.add(value);
+  void _recordTimestampSample(ListQueue<DateTime> samples, DateTime value) {
+    samples.addLast(value);
     if (samples.length > _maxWaitTimeSamples) {
-      samples.removeAt(0);
+      samples.removeFirst();
     }
   }
 
   Map<String, Object> _durationStatsSnapshot(
     String prefix,
-    List<Duration> samples,
+    Iterable<Duration> samples,
   ) {
     if (samples.isEmpty) {
       return {

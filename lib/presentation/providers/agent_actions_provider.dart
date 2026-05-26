@@ -173,6 +173,7 @@ class AgentActionsProvider extends ChangeNotifier {
   final Set<String> _deletingTriggerIds = <String>{};
   List<AgentActionTrigger> _triggers = <AgentActionTrigger>[];
   String? _selectedActionId;
+  int _loadGeneration = 0;
   String? _errorMessage;
   String? _triggerErrorMessage;
   String? _lastTestedActionId;
@@ -579,12 +580,18 @@ class AgentActionsProvider extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    // Generation guard: if a newer load() starts while this one is awaiting,
+    // discard the stale result to prevent out-of-order state overwrites.
+    final generation = ++_loadGeneration;
+
     _isLoading = true;
     _errorMessage = null;
     _auditCorrelationExecutionId = null;
     notifyListeners();
 
     final definitionsResult = await _listDefinitions();
+    if (generation != _loadGeneration) return;
+
     if (definitionsResult.isError()) {
       _isLoading = false;
       _errorMessage = _messageFor(definitionsResult.exceptionOrNull()!);
@@ -599,6 +606,8 @@ class AgentActionsProvider extends ChangeNotifier {
       requestedAfter: _historyPeriodStart(),
       limit: _historyPeriodFilter == AgentActionHistoryPeriod.all ? 200 : 100,
     );
+    if (generation != _loadGeneration) return;
+
     if (executionsResult.isError()) {
       _isLoading = false;
       _errorMessage = _messageFor(executionsResult.exceptionOrNull()!);
@@ -612,6 +621,7 @@ class AgentActionsProvider extends ChangeNotifier {
     _selectedActionId = _resolveSelectedActionId();
 
     await loadRemoteAuditDuringLoadFor(this);
+    if (generation != _loadGeneration) return;
 
     _refreshElevatedRunnerReadiness();
     _isLoading = false;
@@ -1835,10 +1845,17 @@ class AgentActionsProvider extends ChangeNotifier {
       return;
     }
 
+    // Capture the action id before the await so we can detect a selection
+    // change that arrived while the DB query was in flight.
+    final expectedActionId = definition.id;
     _isLoadingTriggers = true;
     notifyListeners();
 
     final result = await _listTriggers(actionId: definition.id);
+
+    // Discard stale result if the user switched to a different action.
+    if (_selectedActionId != expectedActionId) return;
+
     if (result.isError()) {
       _isLoadingTriggers = false;
       _errorMessage = _messageFor(result.exceptionOrNull()!);

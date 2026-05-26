@@ -229,6 +229,11 @@ class PlaygroundProvider extends ChangeNotifier {
     bool resetPagination = false,
     String? configId,
   }) async {
+    // Reject concurrent executions: a second call while loading would race
+    // on shared state (_results, _executionDuration, etc.) and the last
+    // response to arrive would overwrite the most recent result.
+    if (_isLoading) return;
+
     final effectiveConfigId = configId ?? _currentConfigId;
     _currentConfigId = effectiveConfigId;
     if (resetPagination) {

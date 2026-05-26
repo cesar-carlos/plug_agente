@@ -195,8 +195,21 @@ class CapabilitiesNegotiator {
       }
 
       final agentCapabilities = _localCapabilitiesProvider();
-      final serverCapabilities = payload['capabilities'] != null
-          ? ProtocolCapabilities.fromJson(payload['capabilities'] as Map<String, dynamic>)
+      final rawServerCapabilities = payload['capabilities'];
+      if (rawServerCapabilities == null) {
+        // Hub did not send a capabilities envelope. Falling back to the agent's
+        // own capabilities means the agent will assume the hub supports every
+        // extension it advertises (binary payload, compression, etc.), which may
+        // not be true for legacy hubs. If this causes problems, investigate
+        // whether the hub needs to be updated to send `capabilities`.
+        AppLogger.warning(
+          'agent:capabilities payload missing "capabilities" field — '
+          'negotiating as if server matches agent capabilities. '
+          'Update the hub to include capabilities for accurate negotiation.',
+        );
+      }
+      final serverCapabilities = rawServerCapabilities != null
+          ? ProtocolCapabilities.fromJson(rawServerCapabilities as Map<String, dynamic>)
           : agentCapabilities;
 
       // negotiate() throws StateError when no common protocols exist.

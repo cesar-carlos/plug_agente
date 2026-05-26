@@ -53,6 +53,10 @@ class PrepareElevatedActionRunner {
       );
     }
 
+    // Clear the degraded flag after a successful install so the UI reflects
+    // the new ready state immediately without waiting for a manual refresh.
+    _readiness.refresh(_storageContext);
+    _readiness.clearDegraded();
     return Success(after);
   }
 }

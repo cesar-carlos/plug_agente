@@ -243,6 +243,30 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
     await _resetLazySingletonIfRegistered<IDatabaseGateway>();
     await _resetLazySingletonIfRegistered<DirectOdbcConnectionLimiter>();
     await _resetLazySingletonIfRegistered<IConnectionPool>();
+
+    // Reload persisted ODBC settings so the new pool size / tuning take effect
+    // before priming the singletons that depend on them.
+    final odbcSettings = getIt<IOdbcConnectionSettings>();
+    await odbcSettings.load();
+
+    // Recalculate and replace the OdbcRuntimeTuning singleton so components
+    // reading asyncWorkerCount / asyncMaxPendingRequests see the updated values.
+    final newTuning = resolveOdbcRuntimeTuning(settings: odbcSettings);
+    if (getIt.isRegistered<OdbcRuntimeTuning>()) {
+      getIt.unregister<OdbcRuntimeTuning>();
+    }
+    getIt.registerSingleton<OdbcRuntimeTuning>(newTuning);
+    _logOdbcRuntimeTuningWarnings(newTuning);
+
+    // Re-initialize the ODBC worker pool with the updated tuning.
+    _odbcLocator.shutdown();
+    _odbcLocator.initialize(
+      useAsync: true,
+      asyncWorkerCount: newTuning.asyncWorkerCount,
+      asyncMaxPendingRequests: newTuning.asyncMaxPendingRequests,
+      asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
+    );
+
     await _primeReloadedOdbcRuntimeDependencies();
     return true;
   } on Object catch (error, stackTrace) {

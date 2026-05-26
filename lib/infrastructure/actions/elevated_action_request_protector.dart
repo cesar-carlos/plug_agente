@@ -90,6 +90,30 @@ class ElevatedActionRequestProtector {
     }
   }
 
+  /// Best-effort deletion of the request and materialized files for [executionId].
+  ///
+  /// Called by the bridge after a `schtasks /Run` failure to prevent orphaned
+  /// artifacts that would otherwise linger until the periodic purge.
+  void deleteArtifactsForExecution(String executionId) {
+    final trimmedId = executionId.trim();
+    if (trimmedId.isEmpty) return;
+    final appDir = _storageContext.appDirectoryPath;
+    final requestPath = AgentActionElevatedConstants.requestFilePath(appDir, trimmedId);
+    final materializedPath = AgentActionElevatedConstants.materializedFilePath(appDir, trimmedId);
+    try {
+      final requestFile = File(requestPath);
+      if (requestFile.existsSync()) requestFile.deleteSync();
+    } on IOException {
+      // Best effort — the periodic purge will handle lingering files.
+    }
+    try {
+      final materializedFile = File(materializedPath);
+      if (materializedFile.existsSync()) materializedFile.deleteSync();
+    } on IOException {
+      // Best effort — the periodic purge will handle lingering files.
+    }
+  }
+
   Result<void> _validateExecutionId(String executionId) {
     final trimmed = executionId.trim();
     if (trimmed.isEmpty) {

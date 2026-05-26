@@ -14,6 +14,21 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   OdbcConnectionSettings(this._prefs);
   final IAppSettingsStore _prefs;
 
+  // Allowed ranges (mirror the UI constraints in odbc_connection_pool_section).
+  static const int _minPoolSize = 1;
+  static const int _maxPoolSize = 20;
+  static const int _minLoginTimeoutSeconds = 1;
+  static const int _maxLoginTimeoutSeconds = 120;
+  static const int _minMaxResultBufferMb = 8;
+  static const int _maxMaxResultBufferMb = 128;
+  static const int _minStreamingChunkSizeKb = 64;
+  static const int _maxStreamingChunkSizeKb = 32 * 1024;
+
+  static int _clampPoolSize(int v) => v.clamp(_minPoolSize, _maxPoolSize);
+  static int _clampLoginTimeout(int v) => v.clamp(_minLoginTimeoutSeconds, _maxLoginTimeoutSeconds);
+  static int _clampMaxResultBuffer(int v) => v.clamp(_minMaxResultBufferMb, _maxMaxResultBufferMb);
+  static int _clampStreamingChunk(int v) => v.clamp(_minStreamingChunkSizeKb, _maxStreamingChunkSizeKb);
+
   int _poolSize = ConnectionConstants.defaultPoolSize;
   int _loginTimeoutSeconds = ConnectionConstants.defaultLoginTimeout.inSeconds;
   int _maxResultBufferMb = ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024);
@@ -41,37 +56,50 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
 
   @override
   Future<void> load() async {
-    _poolSize = _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize;
-    _loginTimeoutSeconds = _prefs.getInt(_keyLoginTimeoutSeconds) ?? ConnectionConstants.defaultLoginTimeout.inSeconds;
-    _maxResultBufferMb =
-        _prefs.getInt(_keyMaxResultBufferMb) ?? (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024));
-    _streamingChunkSizeKb = _prefs.getInt(_keyStreamingChunkSizeKb) ?? ConnectionConstants.defaultStreamingChunkSizeKb;
+    // Clamp values on load so manually edited settings.json or legacy imports
+    // can never drive the pool semaphore or connection options out of range.
+    _poolSize = _clampPoolSize(
+      _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize,
+    );
+    _loginTimeoutSeconds = _clampLoginTimeout(
+      _prefs.getInt(_keyLoginTimeoutSeconds) ?? ConnectionConstants.defaultLoginTimeout.inSeconds,
+    );
+    _maxResultBufferMb = _clampMaxResultBuffer(
+      _prefs.getInt(_keyMaxResultBufferMb) ?? (ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024)),
+    );
+    _streamingChunkSizeKb = _clampStreamingChunk(
+      _prefs.getInt(_keyStreamingChunkSizeKb) ?? ConnectionConstants.defaultStreamingChunkSizeKb,
+    );
     _useNativeOdbcPool = _prefs.getBool(_keyUseNativeOdbcPool) ?? false;
     _nativePoolTestOnCheckout = _prefs.getBool(_keyNativePoolTestOnCheckout) ?? true;
   }
 
   @override
   Future<void> setPoolSize(int value) async {
-    await _prefs.setInt(_keyPoolSize, value);
-    _poolSize = value;
+    final clamped = _clampPoolSize(value);
+    await _prefs.setInt(_keyPoolSize, clamped);
+    _poolSize = clamped;
   }
 
   @override
   Future<void> setLoginTimeoutSeconds(int value) async {
-    await _prefs.setInt(_keyLoginTimeoutSeconds, value);
-    _loginTimeoutSeconds = value;
+    final clamped = _clampLoginTimeout(value);
+    await _prefs.setInt(_keyLoginTimeoutSeconds, clamped);
+    _loginTimeoutSeconds = clamped;
   }
 
   @override
   Future<void> setMaxResultBufferMb(int value) async {
-    await _prefs.setInt(_keyMaxResultBufferMb, value);
-    _maxResultBufferMb = value;
+    final clamped = _clampMaxResultBuffer(value);
+    await _prefs.setInt(_keyMaxResultBufferMb, clamped);
+    _maxResultBufferMb = clamped;
   }
 
   @override
   Future<void> setStreamingChunkSizeKb(int value) async {
-    await _prefs.setInt(_keyStreamingChunkSizeKb, value);
-    _streamingChunkSizeKb = value;
+    final clamped = _clampStreamingChunk(value);
+    await _prefs.setInt(_keyStreamingChunkSizeKb, clamped);
+    _streamingChunkSizeKb = clamped;
   }
 
   @override

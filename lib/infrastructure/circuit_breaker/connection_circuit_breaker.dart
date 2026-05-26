@@ -49,6 +49,9 @@ class ConnectionCircuitBreaker {
   CircuitState _state = CircuitState.closed;
   int _consecutiveFailures = 0;
   DateTime? _openedAt;
+  // Ensures only one concurrent probe executes in half-open state; all other
+  // callers fast-fail to prevent a thundering herd when the circuit reopens.
+  bool _halfOpenProbeInProgress = false;
 
   /// Current circuit breaker state.
   CircuitState get state => _state;
@@ -97,7 +100,7 @@ class ConnectionCircuitBreaker {
         );
       }
 
-      // Try half-open
+      // Try half-open — but only one probe at a time.
       _state = CircuitState.halfOpen;
       developer.log(
         'Circuit breaker entering HALF-OPEN state',
@@ -109,15 +112,34 @@ class ConnectionCircuitBreaker {
       );
     }
 
+    // In half-open: allow exactly one probe; concurrent callers fast-fail so
+    // a thundering herd does not overwhelm a recovering database.
+    if (_state == CircuitState.halfOpen) {
+      if (_halfOpenProbeInProgress) {
+        return Failure(
+          domain.ConnectionFailure.withContext(
+            message: 'Circuit breaker half-open probe already in progress',
+            context: {
+              'reason': OdbcContextConstants.circuitBreakerOpenReason,
+              'consecutive_failures': _consecutiveFailures,
+            },
+          ),
+        );
+      }
+      _halfOpenProbeInProgress = true;
+    }
+
     // Execute operation
     final result = await operation();
 
     return result.fold(
       (success) {
+        _halfOpenProbeInProgress = false;
         _onSuccess(connectionString);
         return Success(success);
       },
       (failure) {
+        _halfOpenProbeInProgress = false;
         if (failure is domain.Failure && _shouldRecordFailure(failure)) {
           _onFailure(connectionString, failure);
         }
@@ -224,6 +246,7 @@ class ConnectionCircuitBreaker {
     _state = CircuitState.closed;
     _consecutiveFailures = 0;
     _openedAt = null;
+    _halfOpenProbeInProgress = false;
 
     developer.log(
       'Circuit breaker manually reset',

@@ -96,73 +96,44 @@ class RetryManager implements IRetryManager {
 
   @override
   bool isTransientFailure(Exception exception) {
-    // Verificar se é um Failure do domínio com mensagem transitória
     if (exception is domain.Failure) {
-      // Query execution may have reached the database already. Retrying it here
-      // can duplicate non-idempotent statements such as INSERT/UPDATE/DELETE.
+      // Query execution may have reached the database already. Retrying
+      // can duplicate non-idempotent DML — never retry regardless of isTransient.
       if (exception is domain.QueryExecutionFailure) {
         return false;
       }
 
-      if (exception.context['poolExhausted'] == true) {
-        return true;
-      }
-      if (exception.context['retryable'] == true) {
-        return true;
-      }
+      // Explicit context flags from the mapper take precedence over type-level
+      // defaults for all failure subtypes.
+      if (exception.context['retryable'] == true) return true;
+      if (exception.context['retryable'] == false) return false;
+      if (exception.context['poolExhausted'] == true) return true;
 
+      // ConnectionFailure: context 'retryable' already checked above. Fall back
+      // to the type-level isTransient (true by definition) when not overridden.
+      // Auth/driver-not-found failures carry 'retryable': false from the mapper.
       if (exception is domain.ConnectionFailure) {
-        // Explicit retryable flag in context takes precedence over message heuristics.
-        // This prevents English message translations from accidentally changing
-        // retry behavior when the mapper sets 'retryable': false.
-        if (exception.context.containsKey('retryable')) {
-          return exception.context['retryable'] == true;
-        }
-        final message = exception.message.toLowerCase();
-        return message.contains('timeout') ||
-            message.contains('connection') ||
-            message.contains('network') ||
-            message.contains('temporarily');
+        return exception.isTransient; // true unless mapper set retryable:false
       }
 
-      // NetworkFailure: transiente quando timeout ou retryable; não retry em auth
+      // NetworkFailure.isTransient is always true by domain definition; honour
+      // explicit auth-failure messages as a content-level override.
       if (exception is domain.NetworkFailure) {
-        if (exception.context['timeout'] == true || exception.context['retryable'] == true) {
-          return true;
-        }
         final message = exception.message.toLowerCase();
-        if (message.contains('authentication') || message.contains('invalid token') || message.contains('401')) {
+        if (message.contains('authentication') ||
+            message.contains('invalid token') ||
+            message.contains('401')) {
           return false;
         }
-        if (message.contains('timeout') || message.contains('connection') || message.contains('network')) {
-          return true;
-        }
-        return false;
+        return exception.isTransient; // always true
       }
 
-      // Erros de validação NÃO são transientes
-      if (exception is domain.ValidationFailure) {
-        return false;
-      }
-
-      // Configuration failure NÃO é transiente
-      if (exception is domain.ConfigurationFailure) {
-        return false;
-      }
-
-      if (exception is domain.ServerFailure ||
-          exception is domain.DatabaseFailure ||
-          exception is domain.NotFoundFailure ||
-          exception is domain.CompressionFailure ||
-          exception is domain.NotificationFailure) {
-        return false;
-      }
-
-      // Outros erros: não fazer retry por segurança
-      return false;
+      // Delegate to the domain model for all other subtypes. Validation,
+      // Configuration, Database, Server, Not-found, Compression, Notification.
+      return exception.isTransient;
     }
 
-    // Para exceções genéricas, verificar a mensagem
+    // For generic exceptions fall back to message heuristics.
     final message = exception.toString().toLowerCase();
     return message.contains('timeout') ||
         message.contains('connection') ||

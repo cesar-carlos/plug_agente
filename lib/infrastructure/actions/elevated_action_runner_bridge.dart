@@ -65,6 +65,9 @@ class ElevatedActionRunnerBridge implements IElevatedActionRunnerBridge {
     try {
       final processResult = await _scheduledTaskRunner(AgentActionElevatedConstants.scheduledTaskName);
       if (processResult.exitCode != 0) {
+        // Remove request/materialized artifacts so they don't linger until
+        // the periodic purge when schtasks rejects the task immediately.
+        _requestProtector.deleteArtifactsForExecution(executionId);
         return Failure(
           ActionRuntimeFailure.withContext(
             message: 'Elevated scheduled task failed to start.',
@@ -81,6 +84,7 @@ class ElevatedActionRunnerBridge implements IElevatedActionRunnerBridge {
       }
       return const Success(unit);
     } on Exception catch (error) {
+      _requestProtector.deleteArtifactsForExecution(executionId);
       return Failure(
         ActionRuntimeFailure.withContext(
           message: 'Elevated scheduled task could not be started.',
