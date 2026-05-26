@@ -5,11 +5,11 @@
 As quick wins deste eixo ja estao implementadas no codigo. O restante deste
 guia cobre tuning opcional e validacao operacional apos deploy.
 
-## 🚀 Ativação Imediata
+## Ativacao imediata
 
 As melhorias estão **ativas por padrão** após merge/pull. Não é necessário configuração adicional para funcionamento básico.
 
-## ⚙️ Tuning Opcional
+## Tuning opcional
 
 ### 1. Criar arquivo `.env` (se não existir)
 ```bash
@@ -38,7 +38,7 @@ flutter run
 # ou rebuild do executável
 ```
 
-## 📊 Verificar que Está Funcionando
+## Verificar que esta funcionando
 
 ### Logs de Startup
 Procure por:
@@ -61,7 +61,7 @@ Circuit breaker (apenas se houver falhas):
 [circuit_breaker] Circuit breaker OPENED after 5 failures
 ```
 
-## 🔍 Monitoramento
+## Monitoramento
 
 ### Via HealthService
 O serviço está registrado no DI e pode ser acessado:
@@ -119,7 +119,7 @@ Output esperado:
 }
 ```
 
-## ⚠️ Sinais de Alerta
+## Sinais de alerta
 
 ### 1. Queue Rejections Alto
 **Sintoma**:
@@ -191,7 +191,7 @@ SQL_QUEUE_MAX_WORKERS=16
 2. **Médio prazo**: Otimizar queries lentas
 3. **Longo prazo**: Escalar banco horizontalmente
 
-## 🧪 Testes de Carga
+## Testes de carga
 
 ### Quick Smoke Test
 ```dart
@@ -235,19 +235,12 @@ Para executar smoke, burst e benchmark em sequencia:
 .\tool\run_odbc_operational_validation.ps1 -All
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Problema: "Circuit breaker open" mas banco está UP
 **Causa**: Circuit breaker ainda em timeout de reset
 
-**Solução**: Aguardar 30s (ou o valor de `CIRCUIT_BREAKER_RESET_SEC`)
-
-**Solução Imediata** (apenas desenvolvimento):
-```dart
-// Resetar manualmente (não fazer em produção!)
-// Nao ha reset publico suportado.
-// Aguarde o reset timeout ou reinicie o app em desenvolvimento.
-```
+**Solução**: Aguardar `CIRCUIT_BREAKER_RESET_SEC` (default 30s) para a transição half-open. Não há API pública de reset; em desenvolvimento, reinicie o app.
 
 ### Problema: Pool warm-up falhando
 **Sintoma**:
@@ -268,7 +261,7 @@ Para executar smoke, burst e benchmark em sequencia:
 **Normal**: Esperado durante encerramento do app
 **Anormal**: Se ocorrer durante operação normal → bug no lifecycle
 
-## 📞 Suporte
+## Suporte
 
 ### Logs Importantes para Debug
 1. Startup:
@@ -294,7 +287,7 @@ Nenhum no momento. Ver [GitHub Issues](https://github.com/cesar-carlos/plug_agen
 
 ---
 
-## ✅ Checklist Pós-Deploy
+## Checklist pos-deploy
 
 Após deploy em produção:
 

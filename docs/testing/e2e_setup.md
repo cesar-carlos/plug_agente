@@ -1,8 +1,10 @@
-# Configuração de Testes E2E
+# Configuracao de Testes E2E
 
-Testes end-to-end e de integração que usam recursos reais (API, ODBC) dependem de variáveis de ambiente definidas no `.env`.
+Indice central dos testes E2E e de integracao do agente. Os detalhes por
+familia de teste estao em subdocs dedicados; este arquivo concentra
+pre-requisitos, preflight e como rodar.
 
-## Pré-requisitos
+## Pre-requisitos
 
 1. Copie `.env.example` para `.env`:
 
@@ -14,539 +16,82 @@ Testes end-to-end e de integração que usam recursos reais (API, ODBC) dependem
    cp .env.example .env
    ```
 
-2. Edite `.env` e defina as variáveis necessárias para os testes que deseja rodar.
-
-## Variáveis de Ambiente
-
-### API (api_test.dart)
-
-| Variável               | Obrigatória | Descrição                                            |
-| ---------------------- | ----------- | ---------------------------------------------------- |
-| `RUN_LIVE_API_TESTS`   | Sim         | `true` para executar testes de API                   |
-| `API_TEST_BASE_URL`    | Não         | URL base (default: `http://31.97.29.223:3000/`)      |
-| `API_TEST_TIMEOUT_URL` | Não         | URL para teste de timeout (default: IP não roteável) |
-
-### Hub Socket.IO (`hub_socket_live_e2e_test.dart`)
-
-Smoke: abre WebSocket via `SocketDataSource` (mesmo código que o transporte), namespace `/agents`, handshake com token, depois `disconnect`.
-
-| Variável             | Obrigatória | Descrição                                                |
-| -------------------- | ----------- | -------------------------------------------------------- |
-| `RUN_LIVE_HUB_TESTS` | Sim         | `true` para executar este teste                          |
-| `E2E_HUB_URL`        | Sim         | URL base do hub (como na app; `ensureAgentsNamespaceUrl` acrescenta `/agents` se faltar) |
-| `E2E_HUB_TOKEN`      | Sim         | Token de agente enviado no auth do handshake Socket.IO  |
-| `E2E_HUB_AGENT_ID`   | Nao         | Agent id usado no teste de register/capabilities assinado (default: `codex-live-agent`) |
-
-O mesmo arquivo tambem contem um teste opt-in de `PayloadFrame` assinado. Ele
-faz `agent:register` com frame HMAC e exige `agent:capabilities` assinado pelo
-hub:
-
-| Variavel                         | Obrigatoria | Descricao |
-| -------------------------------- | ----------- | --------- |
-| `RUN_LIVE_HUB_SIGNING_TESTS`      | Sim         | `true` para executar o handshake assinado |
-| `PAYLOAD_SIGNING_KEY_ID`          | Sim*        | `key_id` ativo compartilhado com o hub |
-| `PAYLOAD_SIGNING_ACTIVE_KEY_ID`   | Sim*        | Alternativa para selecionar o `key_id` ativo |
-| `PAYLOAD_SIGNING_KEY`             | Sim         | Segredo HMAC compartilhado com o hub |
-
-\* Defina `PAYLOAD_SIGNING_ACTIVE_KEY_ID` ou `PAYLOAD_SIGNING_KEY_ID`.
-
-| `E2E_HUB_IS_LOCAL` | Não | `true`: trata a URL como Hub local no preflight de assinatura (ex.: staging em LAN sem `localhost` no hostname). |
-| `E2E_HUB_ALLOW_E2E_DEV_ON_REMOTE` | Não | `true`: desliga o bloqueio `e2e-dev` vs Hub remoto (**só diagnóstico**; não usar em CI). |
-
-#### Exit codes: `dart run tool/validate_live_hub_agent_actions_env.dart`
-
-| Código | Significado |
-| ------ | ------------- |
-| `0` | Variáveis obrigatórias presentes e sem bloqueios nem avisos (pronto para live). |
-| `1` | Variáveis em falta **ou** preflight bloqueante (JWT expirado; `e2e-dev` + Hub remoto com `RUN_LIVE_HUB_SIGNING_TESTS=true`; etc.). |
-| `2` | Variáveis ok; há avisos não bloqueantes (ex.: JWT expira em breve; ou `e2e-dev` + remoto quando assinatura live está desligada — o aviso ainda aparece em `liveHubEnvWarnings`). |
-
-O job principal de CI (`flutter_ci.yml`, `release-preflight.yml`, `release.yml`) executa `flutter test --exclude-tags "live || slow || perf"` na suíte ampla; o job opcional `live-hub-e2e` continua a correr testes live com secrets.
-
-Não coloque o token em logs. Em CI, use *secrets* do repositório (ver job opcional `live-hub-e2e` no workflow Flutter).
-
-#### Onde obter os valores (desenvolvimento local)
-
-| Variável | Fonte usual |
-| -------- | ----------- |
-| `E2E_HUB_URL` | Mesma URL do Hub que o Plug Agente usa na UI (Socket.IO); o teste acrescenta `/agents` se faltar. Ex.: `wss://host/hub` ou `https://host:port`. |
-| `E2E_HUB_TOKEN` | Token do agente no Hub (login/registro do agente no painel ou API de agente do Hub). |
-| `PAYLOAD_SIGNING_KEY_ID` / `PAYLOAD_SIGNING_ACTIVE_KEY_ID` | `key_id` ativo configurado no **servidor Hub** para `PayloadFrame`. |
-| `PAYLOAD_SIGNING_KEY` | Segredo HMAC correspondente no Hub (deve ser **idêntico** no agente e no Hub). |
-
-Se desenvolves o monorepo local, podes alinhar a partir de `../plug_server/.env` (mesmos valores do deployment Hub):
-
-```bash
-dart run tool/promote_e2e_signing_from_monorepo_env.dart
-```
-
-Se o Hub ainda não tiver chaves HMAC (desenvolvimento local), gere um par de teste e replique no `plug_server/.env`:
-
-```bash
-dart run tool/generate_dev_e2e_signing.dart
-dart run tool/generate_dev_e2e_signing.dart --write
-```
-
-Com `--write`, preenche chaves **vazias** em `plug_agente/.env` e, se existir no monorepo,
-em `../plug_server/.env` (mesmo par nos dois). **Não use `e2e-dev` contra um Hub remoto
-de produção** — o connect Socket.IO pode passar, mas `agent:capabilities` assinado
-estoura timeout até o par HMAC coincidir com o servidor.
-
-Se `validate_live_hub_agent_actions_env.dart` terminar com código `1` por `e2e-dev` + URL remota com assinatura ligada,
-copie `PAYLOAD_SIGNING_*` do `.env` do Hub em deploy (`promote_e2e_signing_from_monorepo_env.dart`
-ou painel **Config → WebSocket** + `export_e2e_secrets_from_local.dart`). Com código `2`, corrija avisos (ex.: renove o JWT) antes de uma corrida longa.
-
-Depois de preencher o `.env`, rode `dart run tool/validate_live_hub_agent_actions_env.dart` (checklist `[ok]`/`[ ]`, sem imprimir segredos; ver tabela de exit codes acima).
-
-Smoke Socket.IO (só URL + token, sem assinatura PayloadFrame):  
-`flutter test test/integration/hub_socket_live_e2e_test.dart --name "should connect to agents namespace"`
-
-Smoke assinatura (`agent:register` → `agent:capabilities` — exige HMAC igual ao Hub):  
-`flutter test test/integration/hub_socket_live_e2e_test.dart --name "signed PayloadFrame"`
-
-Alinhe o agent id do register assinado com o agente do token:
-
-```bash
-dart run tool/suggest_e2e_hub_from_local_config.dart --apply-agent-id
-```
-
-Se o smoke Socket.IO falhar com `jwt expired`, renove `E2E_HUB_TOKEN` (login no app em **Config** ou token do admin do Hub). O preflight `validate_live_hub_agent_actions_env.dart` também avisa quando o JWT em `.env` já expirou.
-
-```bash
-dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
-```
-
-Alternativa sem abrir o app (credenciais de agente no `.env`):
-
-```bash
-# E2E_HUB_URL, E2E_HUB_AGENT_ID, E2E_HUB_USERNAME, E2E_HUB_PASSWORD
-dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
-```
-
-`sync_e2e_hub_env_from_local.dart` passa `--force` automaticamente para `export_e2e_secrets_from_local.dart` quando o JWT em `.env` já expirou ou quando o preflight deteta `e2e-dev` + Hub remoto (para tentar sobrescrever signing a partir do secure storage).
-
-No Windows, se o Plug Agente já estiver configurado na UI (**Config** → URL do servidor + login), rode:
-
-```bash
-dart run tool/suggest_e2e_hub_from_local_config.dart
-dart run tool/suggest_e2e_hub_from_local_config.dart --apply-url
-```
-
-Isso lê `agent_config.db` em `PlugAgente` e sugere `E2E_HUB_URL` (com `/agents` quando necessário). Com `--apply-url`, grava só `E2E_HUB_URL` no `.env` se a linha estiver vazia. Indica se há `auth_token` ou credenciais salvas, mas **não** imprime token nem chaves HMAC.
-
-Para preencher `E2E_HUB_TOKEN` sem copiar manualmente (usa `auth_token` no DB ou login HTTP com usuário/senha salvos na config):
-
-```bash
-dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token
-```
-
-O token **não** é impresso no terminal; só é gravado no `.env` quando a linha está vazia.
-
-Atalho (aplica URL + tenta token + roda validate):
-
-```bash
-dart run tool/sync_e2e_hub_env_from_local.dart
-```
-
-`PAYLOAD_SIGNING_KEY_ID` e `PAYLOAD_SIGNING_KEY` ainda precisam vir do Hub (ou da secção de signing na UI), salvo export opt-in:
-
-```bash
-dart run tool/sync_e2e_hub_env_from_local.dart --export-secure
-```
-
-Requer login e signing configurados no app instalado (`plug_agente.exe`, Windows). Lê `%APPDATA%\com.se7esistemas\plug_agente\flutter_secure_storage.dat`; **não** imprime segredos. O script roda com `dart run` (sem Flutter UI); se `payload_signing_keys_json` não existir no storage, configure signing na UI **Config** (WebSocket) ou copie `PAYLOAD_SIGNING_*` do `.env` do Hub (`plug_server`).
-
-Homologação:
-
-```powershell
-.\tool\homologate_hub_agent_actions.ps1 -PrepareLiveEnv -ValidateLiveEnv -RunContractTests -RunLiveTests
-```
-
-`-PrepareLiveEnv` executa, em sequência: `sync_e2e_hub_env_from_local.dart --export-secure`, `promote_e2e_signing_from_monorepo_env.dart --force` (ou `generate_dev_e2e_signing.dart --write`), e `fetch_e2e_hub_token_from_local_config.dart --apply-token --force` (JWT expirado exige login na Config, credenciais salvas ou `E2E_HUB_USERNAME`/`E2E_HUB_PASSWORD` no `.env`).
-
-### Hub `agent.action.*` (`hub_agent_action_rpc_live_e2e_test.dart`)
-
-Homologação opt-in do contrato remoto de ações após handshake assinado (`agent:register` → `agent:capabilities` → `agent:ready`). Não executa SQL nem dispara execução real no agente além do que o Hub enviar quando `E2E_HUB_EXPECT_AGENT_ACTION_RPC` estiver ligado.
-
-| Variável | Obrigatória | Descrição |
-| -------- | ----------- | --------- |
-| `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS` | Sim | `true` para não ignorar este ficheiro (tag `live`) |
-| `RUN_LIVE_HUB_TESTS` | Sim | Mesmo requisito da secção Hub acima |
-| `RUN_LIVE_HUB_SIGNING_TESTS` | Sim | Handshake com `PayloadFrame` assinado |
-| `E2E_HUB_URL` / `E2E_HUB_TOKEN` | Sim | URL e token do agente no hub |
-| `PAYLOAD_SIGNING_KEY_ID` / `PAYLOAD_SIGNING_KEY` | Sim* | Chaves HMAC partilhadas com o hub (ver secção Hub) |
-| `E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY` | Não | `true`: exige `extensions.agentActions` em `agent:capabilities` (`supportsContext: false`, `requiresIdempotencyKey`, `methods`, `limits`, `batchPolicy`) |
-| `E2E_HUB_EXPECT_AGENT_ACTION_RPC` | Não | `true`: após `agent:ready`, aguarda até 25s por um `rpc:request` com método `agent.action.*` (o hub de teste precisa emitir tráfego) |
-
-```bash
-flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags live
-```
-
-Runner PowerShell (verifica `.env`, testes de contrato opcionais e live opt-in):
-
-```powershell
-.\tool\run_agent_actions_operational_gate.ps1
-.\tool\preflight_agent_actions_production.ps1
-.\tool\preflight_agent_actions_production.ps1 -RunContractTests
-.\tool\homologate_hub_agent_actions.ps1 -RunContractTests
-.\tool\homologate_hub_agent_actions.ps1 -ValidateLiveEnv
-.\tool\homologate_hub_agent_actions.ps1 -RunContractTests -RunLiveTests
-```
-
-`preflight_agent_actions_production.ps1` runs static production checks (COM handler registry, live `.env` consistency when `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true`) and can chain `-RunContractTests` / `-ValidateLiveEnv`. Use `-StrictCom` before production deploy when `comObject` actions must not rely on the homologation stub.
-
-`-RunContractTests` runs the contract manifest (`tool/agent_actions_contract_test_paths.txt`) and UI manifest (`tool/agent_actions_ui_test_paths.txt`) without a live Hub. GitHub Actions and `homologate_hub_agent_actions.ps1` read the same lists (validated by `agent_action_test_manifest_test.dart` and `agent_actions_ci_gate_paths_sync_test.dart`). `run_agent_actions_operational_gate.ps1` chains preflight + homologate with `-RunContractTests` (PowerShell switches via hashtable, not string arrays). Preflight static checks run before the contract bundle.
-
-**Operational rollback (agent only, not `.env`):** disable remote rollout via app `FeatureFlags` (`disableAgentActionsRemoteRollout()` in code, or UI toggles when exposed), then maintenance mode, then `enableAgentActions=false`. See `docs/implemente/plano_acoes_agendadas_execucoes.md` (gate §4195, **Riscos aceitos** RA-01..RA-08, **Roteiro operacional pos-MVP**).
-
-**PR security checklist per action type:** `dart run tool/agent_action_security_gate_checklist.dart` or `dart run tool/agent_action_security_gate_checklist.dart commandLine`.
-
-`-ValidateLiveEnv` runs `dart run tool/validate_live_hub_agent_actions_env.dart` (same rules as `E2EEnv` / `hub_agent_action_rpc_live_e2e_test.dart`) before `-RunLiveTests`. The tool prints a per-variable checklist (`[ok]` / `[ ]`) without exposing secret values. Run it alone without the full homologation script.
-
-CI runs the same file set on every push/PR in the **Agent actions homologation gate** job (`.github/workflows/flutter_ci.yml`). Live Hub `agent.action.*` tests run only on manual **workflow_dispatch** of `live-hub-e2e` when repository secrets are configured.
-
-### COM actions (homologation stub)
-
-Local COM execution requires handlers in `ComObjectInvocationRegistry`. Without production handlers, use the opt-in stub (also reflected in `agent.getHealth` → `com_object_invocation_ready` and the **Ações** warning when count is zero). `dart run tool/check_e2e_env.dart` prints whether stub variables are complete.
-
-| Variável | Obrigatória | Descrição |
-| -------- | ----------- | --------- |
-| `AGENT_ACTION_COM_STUB_ENABLED` | Sim | `true` to register `ComObjectStubInvocationHandler` at startup |
-| `AGENT_ACTION_COM_STUB_PROG_ID` | Sim | ProgID allowed by stub (e.g. `AgentAction.Test`) |
-| `AGENT_ACTION_COM_STUB_MEMBER_NAME` | Sim | Member name (e.g. `Ping`) |
-
-Restart the agent after changing these values. The UI InfoBar clears when `com_object_handlers_registered_count` is greater than zero.
-
-### Retenção de ações (purge local)
-
-Os timers de purge no bootstrap usam `AgentActionRetentionSettings` (precedência: valores salvos na UI **Ações → Retenção de dados** > variáveis de ambiente > defaults).
-
-| Variável | Default | Descrição |
-| -------- | ------- | --------- |
-| `AGENT_ACTION_EXECUTION_RETENTION_DAYS` | `3` | Histórico de execuções terminais (`CleanupAgentActionExecutions`) |
-| `AGENT_ACTION_REMOTE_AUDIT_RETENTION_DAYS` | `90` | Auditoria remota append-only (`CleanupExpiredAgentActionRemoteAudit`) |
-| `AGENT_ACTION_CAPTURED_OUTPUT_RETENTION_HOURS` | `24` | Limpeza de stdout/stderr em linhas antigas (`CleanupAgentActionCapturedOutput`; máximo = retenção de execução em horas) |
-| `AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS` | `min(execução, 24h)` | TTL do cache Drift para `agent.action.run` / `validateRun` |
-
-Chaves persistidas na instalação (via `IAppSettingsStore`): `agent_action_execution_retention_days`, `agent_action_remote_audit_retention_days`, `agent_action_captured_output_retention_hours`.
-
-**Timestamps (wire):** `agent.action.getExecution` expõe `requested_at`, `trigger.scheduled_at` / `triggered_at` e `timestamps.*` em UTC (`…Z`). A UI local formata com `toLocal()`.
-
-### Elevated action runner (Windows, homologação manual)
-
-O helper elevado **não** usa `E2EEnv` nem testes `live` automatizados neste ciclo. Valide em máquina Windows com UAC.
-
-| Passo | Comando / configuração |
-| ----- | ---------------------- |
-| Pre-flight (script) | `.\tool\homologate_elevated_runner.ps1 -Build` (opcional: `-RunUnitTests` para testes Dart sem UAC) |
-| Build do helper | `.\tool\build_elevated_runner.ps1` → `build\elevated_runner\plug_agente_elevated_runner.exe` (copia também para `build\windows\x64\runner\Release` se existir) |
-| Path opcional | `ELEVATED_ACTION_RUNNER_EXE=C:\caminho\plug_agente_elevated_runner.exe` no `.env` quando o exe não estiver ao lado do `plug_agente.exe` |
-| Habilitar na app | Feature flag **Elevated agent actions** (`FeatureFlags.enableElevatedAgentActions` / preferências) |
-| Preparar na UI | Página **Ações** → InfoBar “Preparar executor elevado” (registra tarefa `PlugAgente\ElevatedActionRunner`) |
-| Teste unitário (sem UAC) | `flutter test test/infrastructure/actions/elevated_action_runner_installer_test.dart test/application/actions/elevated_agent_action_execution_service_test.dart` |
-
-Artefatos bridge sob o diretório de dados do app: `agent_actions/elevated/{requests,status,cancel,materialized}`.
-
-### ODBC (odbc_streaming_live_integration_test.dart)
-
-| Variável                                            | Obrigatória  | Descrição                                                                     |
-| --------------------------------------------------- | ------------ | ----------------------------------------------------------------------------- |
-| `ODBC_TEST_DSN` ou `ODBC_DSN`                       | SQL Anywhere | Connection string SQL Anywhere/Sybase                                         |
-| `ODBC_TEST_DSN_SQL_SERVER` ou `ODBC_DSN_SQL_SERVER` | SQL Server   | Connection string SQL Server                                                  |
-| `ODBC_TEST_DSN_POSTGRESQL` ou `ODBC_DSN_POSTGRESQL` | PostgreSQL   | Connection string PostgreSQL                                                  |
-| `ODBC_INTEGRATION_SMOKE_QUERY`                      | Não          | Query smoke (default: `SELECT 1`)                                             |
-| `ODBC_INTEGRATION_LONG_QUERY`                       | Cancelamento | Query longa para teste de cancelamento                                        |
-| `ODBC_INTEGRATION_LONG_QUERY_SQL_ANYWHERE`          | Não          | Query longa específica SQL Anywhere (ex.: `SELECT * FROM sys.systab`)         |
-| `ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY`              | Não          | Query opcional para `odbc_sql_anywhere_top_start_at_live_test` (TOP/START AT) |
-| `ODBC_INTEGRATION_LONG_QUERY_SQL_SERVER`            | Não          | Query longa específica SQL Server (ex.: `SELECT * FROM sys.tables`)           |
-| `ODBC_INTEGRATION_LONG_QUERY_POSTGRESQL`            | Não          | Query longa específica PostgreSQL (ex.: `SELECT * FROM pg_tables`)            |
-
-O `E2EEnv.odbcLongQuery` escolhe a variável consoante o DSN que o streaming está a usar: específica do motor, senão cai em `ODBC_INTEGRATION_LONG_QUERY` se existir.
-
-Pelo menos um DSN deve estar definido para rodar os testes ODBC. O teste usa o primeiro disponível na ordem: SQL Anywhere → SQL Server → PostgreSQL.
-
-### ODBC runtime tuning (`odbc_fast 3.8.1`)
-
-Os harnesses E2E que inicializam `odbc.ServiceLocator` usam os mesmos calculos
-do runtime da app:
-
-| Variavel | Obrigatoria | Descricao |
-| -------- | ----------- | --------- |
-| `ODBC_ASYNC_WORKER_COUNT` | Nao | Override positivo para workers assincronos; limitado a `min(poolSize, CPU cores)`. |
-| `ODBC_ASYNC_MAX_PENDING_REQUESTS` | Nao | Override positivo para requests pendentes no worker pool interno; default `poolSize * 4`. |
-| `ODBC_RESULT_ENCODING` | Nao | Opt-in para `rowMajor`, `columnar` ou `columnarCompressed` em queries parametrizadas; default `rowMajor`. |
-
-O app mantem `asyncBackpressureMode=failFast` de forma explicita porque a
-fila `SqlExecutionQueue` ja controla backpressure antes do worker pool interno
-do `odbc_fast`.
-
-O pool adaptativo ODBC fica habilitado por default para drivers elegiveis
-(SQL Server/PostgreSQL), mas continua bloqueado para SQL Anywhere. Um valor
-persistido `feature_enable_odbc_experimental_driver_adaptive_pooling=false`
-continua funcionando como opt-out operacional.
-
-Para benchmark manual do pacote, use DSN representativo e rode:
-
-```powershell
-dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
-```
-
-Ou use o wrapper local, que imprime as variaveis de tuning antes de iniciar:
-
-```powershell
-.\tool\odbc_async_benchmark.ps1
-```
-
-Para validar apenas o runtime local do pacote, sem DSN, rode:
-
-```powershell
-dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
-```
-
-Esse smoke inicializa o worker async e verifica exports nativos usados pelo
-modo `columnarCompressed`. O fluxo operacional consolidado executa essa etapa
-antes dos testes com DSN.
-
-Para comparar streaming legado e batched streaming do pacote (`streamQuery`
-versus `streamQueryBatched`):
-
-```powershell
-dart run D:\Developer\dart_odbc_fast\example\streaming_performance_benchmark.dart
-.\tool\odbc_streaming_benchmark.ps1
-```
-
-O wrapper `odbc_streaming_benchmark.ps1` usa `ODBC_STREAM_BENCH_QUERY` quando
-definido; caso contrario, reaproveita a query longa do driver
-(`ODBC_INTEGRATION_LONG_QUERY_*` ou `ODBC_INTEGRATION_LONG_QUERY`). Isso evita
-benchmark acidental com `SELECT 1`.
-
-Para comparar drivers configurados separadamente:
-
-```powershell
-.\tool\odbc_driver_matrix_benchmark.ps1
-```
-
-Para o fluxo operacional completo no Windows (preflight + worksheet Markdown,
-e opcionalmente smoke/burst/benchmark), use:
-
-```powershell
-.\tool\run_odbc_operational_validation.ps1
-.\tool\run_odbc_operational_validation.ps1 -All
-```
-
-O relatorio gerado fica em `artifacts/odbc_validation/` e complementa
-`docs/architecture/odbc_operational_validation_runbook.md`.
-Cada execucao cria uma subpasta timestampada com o Markdown e logs por etapa.
-Com `-All`, o fluxo tambem grava `streaming_benchmark.log`, logs
-`driver_matrix_*` por driver configurado e snapshots
-`health_burst_*_before/after.json` gerados pelo teste de burst.
-
-### ODBC RPC (`odbc_rpc_execute_coverage_live_e2e_test.dart`)
-
-Requer **pelo menos um** DSN ODBC (ou um override explícito):
-
-| Variável            | Obrigatória | Descrição                                                                                      |
-| ------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
-| `ODBC_E2E_RPC_DSN`  | Não         | Se definido e não vazio, usa **só** esta connection string no E2E RPC (ignora os DSNs abaixo). |
-| DSNs padrão         | Um deles*   | Se `ODBC_E2E_RPC_DSN` estiver vazio, usa a mesma prioridade que streaming: `ODBC_TEST_DSN` / `ODBC_DSN` → `ODBC_TEST_DSN_SQL_SERVER` → `ODBC_TEST_DSN_POSTGRESQL`. |
-
-\* Mesma prioridade de DSN que a secção **ODBC** (`odbc_streaming_live_integration_test.dart`) acima.
-
-| Variável                        | Obrigatória | Descrição                                                                                      |
-| ------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
-| `ODBC_E2E_REQUIRE_MULTI_RESULT` | Não         | `true`: falha se `multi_result` não devolver `result_sets`/linhas (sem fallback RPC no teste). |
-| `ODBC_E2E_TRANSACTIONAL_BATCH`  | Não         | `true`: habilita o terceiro teste do ficheiro (`sql.executeBatch` com `transaction: true`).    |
-
-**Multi-result e pool:** o `OdbcDatabaseGateway` tenta `executeQueryMultiFull` na conexão do pool; se o payload vier vazio com sucesso, repete a mesma execução numa **conexão direta** e incrementa o contador de métricas `multi_result_pool_vacuous_fallback` no `MetricsCollector`. Se ainda assim vier vazio, regista `multi_result_direct_still_vacuous`. Os contadores de evento são chaves estáveis para exportação (ex.: OpenTelemetry).
-
-**Batch transacional:** `executeBatch` com `transaction: true` usa fast path pooled/native-compatible para DML-only em SQL Server/PostgreSQL quando elegivel e continua em conexao direta para SQL Anywhere, batches com leitura/`RETURNING`/`OUTPUT`, options incompativeis ou fallback. Os contadores estaveis sao `transactional_batch_native_pool_path`, `transactional_batch_native_pool_fallback` e `transactional_batch_direct_path`. O 3.o teste E2E continua **opcional** via `ODBC_E2E_TRANSACTIONAL_BATCH` (desligado por omissao no `.env.example` para `flutter test` verde).
-
-### ODBC DML performance (`odbc_dml_perf_live_e2e_test.dart`)
-
-Mede o tempo de parede (cliente) para: **lote de INSERTs** (`sql.executeBatch` com N comandos), **UPDATE** em todas as linhas, **DELETE** de todas as linhas. Usa o mesmo DSN que o E2E RPC (`E2EEnv.odbcE2eRpcConnectionString`). **Opt-in** — desligado por omissão.
-
-| Variável | Obrigatória | Descrição |
-| -------- | ----------- | --------- |
-| `ODBC_E2E_DML_PERF_TESTS` | Sim | `true` para executar este ficheiro |
-| `ODBC_E2E_DML_PERF_ROW_COUNT` | Não | Número de linhas no lote de insert (default 100, limite 10–10000) |
-| `ODBC_E2E_DML_PERF_MAX_MS_INSERT` | Não | Se definido, falha o teste se a fase de insert exceder estes ms |
-| `ODBC_E2E_DML_PERF_MAX_MS_UPDATE` | Não | Idem para UPDATE em massa |
-| `ODBC_E2E_DML_PERF_MAX_MS_DELETE` | Não | Idem para DELETE em massa |
-
-Os limites de ms são opcionais (úteis em máquinas conhecidas ou CI com DSN estável); sem eles o teste só verifica sucesso e regista tempos no log (`e2e.odbc_dml_perf`).
-
-### ODBC DML carga em massa (`odbc_dml_bulk_load_live_e2e_test.dart`)
-
-Cria tabela, insere muitas linhas (default **50 000**) via `sql.bulkInsert`
-(bulk insert nativo do `odbc_fast`), depois: `SELECT COUNT(*)`; **UPDATE** em
-todas as linhas; **DELETE** de todas; **DROP** da tabela. **Opt-in**.
-
-| Variável | Obrigatória | Descrição |
-| -------- | ----------- | --------- |
-| `ODBC_E2E_DML_BULK_TESTS` | Sim | `true` para correr |
-| `ODBC_E2E_DML_BULK_ROW_COUNT` | Não | Total de linhas (default 50000, limite 10k–200k) |
-| `ODBC_E2E_DML_BULK_MAX_MS_CREATE` | Não | Teto (ms) para CREATE (opcional) |
-| `ODBC_E2E_DML_BULK_MAX_MS_INSERT` | Não | Teto (ms) para toda a fase de insert (default interno: 30000) |
-| `ODBC_E2E_DML_BULK_MAX_MS_UPDATE` | Não | Teto (ms) para UPDATE em massa |
-| `ODBC_E2E_DML_BULK_MAX_MS_DELETE` | Não | Teto (ms) para DELETE em massa |
-| `ODBC_E2E_DML_BULK_MAX_MS_DROP` | Não | Teto (ms) para DROP no fim do teste |
-
-Tempos tambem sao emitidos no log `e2e.odbc_dml_bulk` como
-`E2E_DML_BULK_PHASE_TIMINGS` com JSON estruturado por fase. O teste utiliza
-`timeout` de 30 minutos; aumente o
-timeout do runner se 200k linhas for insuficiente.
-
-### SQL queue burst (`sql_queue_burst_test.dart`)
-
-Dispara pedidos `executeQuery` em paralelo (`Future.wait`) contra um
-`QueuedDatabaseGateway` com fila pequena e query lenta para saturar a fila
-(rejeições `sql_queue_full`) e validar recuperação sem fugas de leases no pool.
-Usa o mesmo DSN que o E2E RPC (`E2EEnv.odbcE2eRpcConnectionString`). **Opt-in.**
-
-| Variável | Obrigatória | Descrição |
-| -------- | ----------- | --------- |
-| `RUN_ODBC_BURST_TESTS` | Sim | `true` para não ignorar este ficheiro |
-| DSN RPC | Sim | `ODBC_E2E_RPC_DSN` ou fallback na ordem habitual (Anywhere → SQL Server → PostgreSQL) |
-| Query longa | Sim | `E2EEnv.odbcLongQuery` deve estar definido (variáveis por motor em **ODBC** acima, ou `ODBC_INTEGRATION_LONG_QUERY`) — o teste precisa de SQL que demore o suficiente para encher a fila de propósito |
-| `ODBC_BURST_REQUEST_COUNT` | Não | Total de requests no burst (default 24, limite 8–200) |
-| `ODBC_BURST_QUEUE_SIZE` | Não | Tamanho da fila (default 8, limite 4–100) |
-| `ODBC_BURST_WORKERS` | Não | Workers concorrentes (default 4, limite 1–32) |
-| `ODBC_BURST_ENQUEUE_TIMEOUT_MS` | Não | Timeout de enfileiramento (default 5000ms) |
-| `ODBC_BURST_MAX_MS_PER_TEST` | Não | Teto por caso de burst (default 45000ms) |
-
-### ODBC lock contention (`odbc_lock_contention_live_integration_test.dart`)
-
-Cenário com **concorrência real** (pode ser lento ou sensível ao ambiente). Requer o mesmo DSN que os testes ODBC genéricos (`odbcConnectionStringAny`: SQL Anywhere → SQL Server → PostgreSQL).
-
-| Variável                          | Obrigatória | Descrição                                                         |
-| --------------------------------- | ----------- | ----------------------------------------------------------------- |
-| `ODBC_RUN_LOCK_CONTENTION_TESTS`  | Sim         | `true` para não ignorar este ficheiro (sem isto, os testes dão `skip`). |
-
-## Verificar Configuração
-
-Antes de rodar os testes, verifique se as variáveis estão corretas:
+2. Edite `.env` com as variaveis das familias que voce vai rodar. Cada
+   subdoc abaixo lista as variaveis especificas.
+
+## Subdocs por familia
+
+| Familia | Subdoc | Quando consultar |
+| --- | --- | --- |
+| API HTTP | [e2e_api.md](e2e_api.md) | Login/refresh contra hub real |
+| Hub Socket.IO | [e2e_hub.md](e2e_hub.md) | Smoke do canal, `PayloadFrame` assinado, contrato `agent.action.*` live |
+| Acoes (`agent.action.*`) | [e2e_actions.md](e2e_actions.md) | Stub COM, retencao de acoes, runner elevado Windows |
+| ODBC | [e2e_odbc.md](e2e_odbc.md) | Streaming, RPC, DML perf, bulk load, queue burst, lock contention |
+| Concorrencia da fila SQL | [sql_queue_concurrency_tests.md](sql_queue_concurrency_tests.md) | Estrategia de testes da `SqlExecutionQueue` |
+| Single instance Windows | [single_instance_multiuser.md](single_instance_multiuser.md) | Cenarios manuais multi-usuario |
+
+## Verificar configuracao
+
+Antes de rodar os testes, valide o `.env`:
 
 ```bash
 dart run tool/check_e2e_env.dart
 ```
 
-O script exibe quais variáveis estão definidas e quais testes serão executados ou ignorados. Pode ser executado de qualquer diretório; localiza a raiz do projeto automaticamente. Inclui também `RUN_ODBC_BURST_TESTS` e o estado de `sql_queue_burst_test` (DSN RPC + query longa).
+O script exibe quais variaveis estao definidas e quais testes serao
+executados ou ignorados. Pode ser executado de qualquer diretorio. Inclui
+`RUN_ODBC_BURST_TESTS` e o estado do `sql_queue_burst_test`.
 
-No Windows, o wrapper abaixo tambem roda esse preflight e ja gera uma
-worksheet operacional:
+No Windows, o wrapper consolidado roda preflight e gera worksheet
+operacional:
 
 ```powershell
 .\tool\run_odbc_operational_validation.ps1
+.\tool\run_odbc_operational_validation.ps1 -All
 ```
 
-## Executar Testes
+Para preflight especifico do Hub `agent.action.*` live, ver
+[e2e_hub.md](e2e_hub.md).
+
+## Executar
 
 ```bash
-# Suíte rápida: exclui testes marcados como live/slow/perf
+# Suite rapida: exclui testes marcados como live/slow/perf
 flutter test --exclude-tags "live || slow || perf"
 
-# Suíte completa, incluindo testes marcados (pode falhar se RUN_LIVE_HUB_* / ODBC opt-in estiverem ligados sem `.env` adequado)
+# Suite completa, incluindo marcados (pode falhar se opt-ins estiverem ligados sem .env adequado)
 flutter test
 
-# Todos os testes de integração
+# Todos os testes de integracao
 flutter test --tags live test/integration/
-
-# API tests
-flutter test test/infrastructure/external_services/api_test.dart
-
-# Hub Socket.IO smoke (RUN_LIVE_HUB_TESTS, E2E_HUB_URL, E2E_HUB_TOKEN)
-flutter test test/integration/hub_socket_live_e2e_test.dart
-
-# Hub Socket.IO + PayloadFrame assinado (RUN_LIVE_HUB_SIGNING_TESTS + PAYLOAD_SIGNING_*)
-flutter test test/integration/hub_socket_live_e2e_test.dart
-
-# ODBC streaming
-flutter test test/integration/odbc_streaming_live_integration_test.dart
-
-# ODBC SQL Anywhere TOP/START AT (DSN deve parecer SQL Anywhere)
-flutter test test/integration/odbc_sql_anywhere_top_start_at_live_test.dart
-
-# ODBC RPC sql.execute / sql.executeBatch (DSN: ODBC_E2E_RPC_DSN ou fallback Anywhere → SQL Server → PostgreSQL)
-flutter test test/integration/odbc_rpc_execute_coverage_live_e2e_test.dart
-
-# ODBC DML performance — insert/update/delete em lote (opt-in: ODBC_E2E_DML_PERF_TESTS=true e DSN RPC)
-flutter test test/integration/odbc_dml_perf_live_e2e_test.dart
-
-# ODBC DML carga massiva (~50k via sql.bulkInsert; opt-in: ODBC_E2E_DML_BULK_TESTS=true)
-flutter test --tags perf test/integration/odbc_dml_bulk_load_live_e2e_test.dart
-
-# Fila SQL: burst paralelo + saturação (opt-in: RUN_ODBC_BURST_TESTS=true, DSN RPC e query longa)
-flutter test test/integration/sql_queue_burst_test.dart
-
-# Benchmark manual do worker pool interno do odbc_fast 3.8.1
-dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
-
-# Smoke do runtime local do odbc_fast, sem DSN
-dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
-
-# Mesmo benchmark via wrapper local
-.\tool\odbc_async_benchmark.ps1
-
-# Benchmark de streaming do odbc_fast 3.8.1
-.\tool\odbc_streaming_benchmark.ps1
-
-# Fluxo operacional completo + worksheet Markdown
-.\tool\run_odbc_operational_validation.ps1
-.\tool\run_odbc_operational_validation.ps1 -All
-
-# Lock / concorrência (opt-in: ODBC_RUN_LOCK_CONTENTION_TESTS=true e DSN)
-flutter test test/integration/odbc_lock_contention_live_integration_test.dart
-
-# Recuperação de conexão (quando aplicável ao ambiente)
-flutter test test/integration/connection_recovery_integration_test.dart
 ```
 
-Testes que dependem de variáveis não definidas são **ignorados** (skip) com mensagem explicativa.
+Comandos por familia ficam nos subdocs correspondentes. Testes que dependem
+de variaveis nao definidas sao **ignorados** (skip) com mensagem
+explicativa.
 
-## Testar Conectividade via CMD
+## Referencias do harness
 
-### SQL Anywhere
-
-Use os scripts em `tool/`:
-
-- `tool/test_db_cmd.bat` – teste de conectividade (dbping)
-- `tool/test_select1_cmd.bat` – executa `SELECT 1` (dbisql)
-
-Edite as variáveis no início de cada script. Consulte `docs/database/sql_anywhere_connection.md`.
-
-### SQL Server
-
-1. Instale [SQL Server Command Line Utilities](https://go.microsoft.com/fwlink/?linkid=2230791)
-2. Adicione ao PATH (ex.: `C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn`)
-3. Teste:
-   ```bash
-   sqlcmd -S localhost,1433 -U sa -P YourPassword -Q "SELECT 1"
-   ```
-
-### PostgreSQL
-
-1. Instale o cliente `psql` (incluído no PostgreSQL ou via [EDB](https://www.enterprisedb.com/downloads/postgres-postgresql-downloads))
-2. Teste:
-   ```bash
-   psql -h localhost -p 5432 -U postgres -d postgres -c "SELECT 1"
-   ```
-
-## Referências
-
-- `test/helpers/e2e_env.dart` – helper `E2EEnv` para acesso às variáveis
-- `test/helpers/odbc_e2e_coverage_sql.dart` – DDL/DML por dialeto para E2E ODBC
-- `test/helpers/odbc_e2e_row_assertions.dart` – leitura de colunas ODBC case-insensitive nos testes
-- `test/helpers/odbc_e2e_rpc_harness.dart` – gateway real + `RpcMethodDispatcher` para E2E RPC
-- `test/integration/hub_socket_live_e2e_test.dart` – smoke Socket.IO com `SocketDataSource` (opt-in)
-- `test/integration/odbc_dml_perf_live_e2e_test.dart` – desempenho DML em lote (opt-in)
-- `test/integration/odbc_dml_bulk_load_live_e2e_test.dart` – carga massiva (ex.: 50k linhas, opt-in)
-- `test/integration/sql_queue_burst_test.dart` – burst paralelo na fila ODBC (opt-in: `RUN_ODBC_BURST_TESTS`)
-- `tool/run_odbc_operational_validation.ps1` – wrapper operacional Windows para preflight/smoke/burst/benchmark + worksheet Markdown
-- `.env.example` – template das variáveis E2E/integração (benchmarks podem acrescentar muitas chaves no `.env` local)
-- `docs/database/sql_anywhere_connection.md` – formato de connection string SQL Anywhere
+- `test/helpers/e2e_env.dart` — helper `E2EEnv` para acesso as variaveis
+- `test/helpers/odbc_e2e_coverage_sql.dart` — DDL/DML por dialeto para E2E ODBC
+- `test/helpers/odbc_e2e_row_assertions.dart` — leitura de colunas ODBC case-insensitive nos testes
+- `test/helpers/odbc_e2e_rpc_harness.dart` — gateway real + `RpcMethodDispatcher` para E2E RPC
+- `tool/run_odbc_operational_validation.ps1` — wrapper operacional Windows
+- `.env.example` — template das variaveis E2E/integracao
 
 ## Notas
 
-- **`.env` nos testes Flutter:** O `E2EEnv` localiza a raiz do projeto (sobe diretórios até achar `pubspec.yaml`) e lê `.env` via sistema de arquivos + `flutter_dotenv.loadFromString` (não usa assets do `pubspec.yaml`).
-- **check_e2e_env vs E2EEnv:** O script `tool/check_e2e_env.dart` roda com `dart run` (sem `dart:ui`) e usa um parser de linhas equivalente ao caso comum `chave=valor` (primeiro `=` separa chave e valor). Para entradas muito exóticas, a fonte de verdade nos testes é o `E2EEnv`.
-- **Benchmarks (fora do E2EEnv):** variáveis como `ODBC_E2E_BENCHMARK_*`, `SOCKET_TRANSPORT_BENCHMARK_*`, `PAYLOAD_FRAME_BENCHMARK_*`, etc., são usadas por testes de performance/regressão (por exemplo em `test/live/` e ficheiros `*benchmark*`). Não entram no `E2EEnv` nem no `check_e2e_env.dart`; o contrato fica no próprio teste. Podes mantê-las no `.env` local com uma lista longa; o `.env.example` cobre o conjunto **E2E/integração**; um `.env` de dev pode alargar isso.
+- **`.env` nos testes Flutter:** o `E2EEnv` localiza a raiz do projeto
+  (sobe diretorios ate achar `pubspec.yaml`) e le `.env` via sistema de
+  arquivos + `flutter_dotenv.loadFromString` (nao usa assets do
+  `pubspec.yaml`).
+- **`check_e2e_env` vs `E2EEnv`:** o script `tool/check_e2e_env.dart` roda
+  com `dart run` (sem `dart:ui`) e usa um parser de linhas equivalente ao
+  caso comum `chave=valor` (primeiro `=` separa chave e valor). Para
+  entradas exoticas, a fonte de verdade nos testes e o `E2EEnv`.
+- **Benchmarks (fora do `E2EEnv`):** variaveis como `ODBC_E2E_BENCHMARK_*`,
+  `SOCKET_TRANSPORT_BENCHMARK_*`, `PAYLOAD_FRAME_BENCHMARK_*`, etc., sao
+  usadas por testes de performance/regressao (`test/live/`, ficheiros
+  `*benchmark*`). Nao entram no `E2EEnv` nem no `check_e2e_env.dart`; o
+  contrato fica no proprio teste. Podem viver no `.env` local com lista
+  longa; o `.env.example` cobre o conjunto E2E/integracao.

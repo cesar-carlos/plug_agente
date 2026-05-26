@@ -1,7 +1,5 @@
 # ODBC Worker Evaluation Criteria
 
-Atualizado: 2026-05-14
-
 Este documento separa dois assuntos que nao devem ser misturados:
 
 - **Worker pool interno do `odbc_fast`**: suporte oficial do pacote 3.8.1.

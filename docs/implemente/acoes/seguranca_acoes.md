@@ -45,8 +45,9 @@ dart run tool/agent_action_security_gate_checklist.dart
 dart run tool/agent_action_security_gate_checklist.dart commandLine
 ```
 
-Nao substitui revisao humana da matriz **Threat model baseline por adapter** no
-plano mestre (~L680).
+Nao substitui revisao humana da matriz
+[Threat model baseline por adapter](../plano_acoes_agendadas_execucoes.md#threat-model-baseline-por-adapter-agente-2026-05-20)
+no plano mestre.
 
 ## Controles no agente
 

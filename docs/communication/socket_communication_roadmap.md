@@ -1,26 +1,17 @@
-# Socket Communication Roadmap (Planned Improvements)
+# Socket Communication Roadmap (Delivered History)
 
 ## Objetivo
 
-Este roadmap lista apenas evolucoes ainda pendentes.
-Itens concluidos foram removidos para evitar ruido.
+Este arquivo concentra o registro historico do que ja foi entregue no protocolo
+Socket.IO / Plug JSON-RPC, alem dos criterios de rollout aplicaveis a novos
+itens.
 
-Estado implementado atual:
-`docs/communication/socket_communication_standard.md`.
+- Estado implementado atual:
+  `docs/communication/socket_communication_standard.md`
+- Itens pendentes (backlog ativo):
+  `docs/communication/socket_communication_backlog.md`
 
-## Itens planejados (pendentes)
-
-
-| Item                                                    | Status  | Fase alvo |
-| ------------------------------------------------------- | ------- | --------- |
-| Testes de integracao end-to-end para limites negociados | planned | Fase 6    |
-| Rotacao automatica de chaves de assinatura              | planned | Fase 6    |
-| Monitoramento/alertas de payload signing failures       | planned | Fase 6    |
-| Homologacao E2E hub-agente para `client_token.getPolicy` (rate limit, retry_after_ms / reset_at) | planned | Fase 6 |
-
-
-## Itens concluidos (removidos do backlog)
-
+## Itens concluidos
 
 | Item                                                              | Concluido em |
 | ----------------------------------------------------------------- | ------------ |
@@ -43,25 +34,6 @@ Estado implementado atual:
 | `trace_id` em `agent:heartbeat` para correlacao de rastreamento distribuido | pos-v2.11 |
 | `rpc:stream.pull` registrado para qualquer flag de streaming ativa (nao so backpressure) | pos-v2.11 |
 | Codigos terminais vs recuperaveis de `agent:register_error` documentados e implementados | pos-v2.11 |
-
-
-## Fase 5 - Hardening residual (concluida)
-
-Todos os itens da Fase 5 foram implementados:
-
-- Negociacao real de limites via `TransportLimits` em `ProtocolCapabilities`.
-- `PayloadSigner` com HMAC-SHA256, verificacao constant-time, feature flag `enablePayloadSigning` (default **off**).
-- Feature flags promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
-
-## Fase 6 - Observabilidade e operacao
-
-Objetivo:
-
-- Homologar clientes no fluxo encode/compress/decode/decompress.
-- Testes de integracao de ponta a ponta para limites negociados e delivery guarantees.
-- Automatizar rotacao de chaves de assinatura sem downtime.
-- Alertas operacionais para falhas de assinatura.
-- Homologar `client_token.getPolicy` E2E com hub real (rate limit, `retry_after_ms`).
 
 ## Criterio de rollout
 

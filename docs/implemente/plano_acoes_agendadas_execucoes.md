@@ -25,21 +25,23 @@ secoes linkadas.
 
 **Status oficial (2026-05-21):** implementacao obrigatoria no `plug_agente`
 para acoes agendadas/execucoes esta **fechada** para CI/local. Ver
-**Encerramento MVP agente** (~L1041) e gate
+[Encerramento MVP agente](#encerramento-mvp-agente-2026-05-20) e gate
 `run_agent_actions_operational_gate.ps1`. Rollout de producao segue bloqueado
 ate fechar `COM` real aprovado (RA-01), policy fina no Hub (RA-02) e live E2E
 assinado contra Hub real (RA-05). Nao reabrir checklist de codigo no agente ate
-nova decisao registrada (**Processo ao desbloquear TODO bloqueado**) ou item em
-**Backlog pos-MVP** abaixo.
+nova decisao registrada
+([Processo ao desbloquear TODO bloqueado](#processo-ao-desbloquear-todo-bloqueado-futuro))
+ou item em **Backlog pos-MVP** abaixo.
 
 Codigo atual do dominio vive em `lib/domain/actions/` (e espelhos em
-`application`/`infrastructure`), nao em `lib/domain/agent_actions/` — o checklist
-de arquivos provaveis (~L1885) e aspiracional.
+`application`/`infrastructure`), nao em `lib/domain/agent_actions/` — o
+[checklist de arquivos provaveis](#checklist-de-arquivos-provaveis-por-camada)
+e aspiracional.
 
 ### Backlog pos-MVP (trabalho restante)
 
-Ordem sugerida alinhada a **Roteiro operacional pos-MVP** (~L1080) e
-**Riscos aceitos** (~L5092).
+Ordem sugerida alinhada a [Roteiro operacional pos-MVP](#roteiro-operacional-pos-mvp-agente)
+e [Riscos aceitos (MVP agente)](#riscos-aceitos-mvp-agente).
 
 | Prioridade | ID | Entrega | Dono | Gate / referencia |
 | --- | --- | --- | --- | --- |
@@ -48,10 +50,10 @@ Ordem sugerida alinhada a **Roteiro operacional pos-MVP** (~L1080) e
 | P1 | RA-01 | Handlers **COM** de producao | agente | `com_object_production_registrations.dart`; ou manter stub + RA-01 documentado |
 | P1 | RA-06 | Elevado em campo (UAC, distribuicao assinada) | ops | `homologate_elevated_runner.ps1`; helper instalado |
 | P1 | RA-04 | Threat model + sign-off por tipo | PR humano | `agent_action_security_gate_checklist.dart <tipo>` |
-| P2 | RA-03 | Contexto remoto inline no RPC | agente + Hub | **Fase 6** TODOs ~L3377; decisao MVP 3 contexto |
+| P2 | RA-03 | Contexto remoto inline no RPC | agente + Hub | TODOs em [Fase 6 - Socket.IO e JSON-RPC](#fase-6---socketio-e-json-rpc); decisao MVP 3 contexto |
 | P2 | — | Homologacao **developer**/Data7 em campo | ops | Matriz MVP 5; sem override remoto de paths |
-| P3 | — | Refino kill/`replaceRunning`, dialogo app-close | agente | Kill TODO ~L1004; DECISAO MVP 2 app-close |
-| P3 | MVP 0 | Subdocs por contexto (opcional) | doc | `acoes/contrato_remoto`, `ui_acoes`, `seguranca_acoes` criados; runners ~L920 |
+| P3 | — | Refino kill/`replaceRunning`, dialogo app-close | agente | Kill TODO em [Regra para Bifurcacoes](#regra-para-bifurcacoes-durante-a-implementacao); DECISAO MVP 2 app-close |
+| P3 | — | Subdocs por contexto remanescentes (opcional) | doc | `runner_local`, `runner_elevado`, `tipos_de_acao` ainda planejados; entry-point (`contrato_remoto`, `ui_acoes`, `seguranca_acoes`) entregue |
 
 Refino agente opcional (nao bloqueia CI): crash/kill forcado sem restart;
 `replaceRunning` na fila; validacao de contexto remoto quando RA-03 for aceito.
@@ -108,7 +110,11 @@ topo e RA-01..RA-08 em **Riscos aceitos (MVP agente)**.
 - Elevado: validacao em campo com UAC e distribuicao assinada (RA-06).
 - Endurecimento por tipo: threat model recorrente e sign-off humano (RA-04).
 - Contexto remoto inline no wire quando produto aceitar (RA-03).
-- Governanca documental: subdocs opcionais (~L916) se o arquivo passar de ~5k linhas.
+- Governanca documental: subdocs entry-point (`contrato_remoto`, `ui_acoes`,
+  `seguranca_acoes`) ja entregues; subdocs remanescentes (`runner_local`,
+  `runner_elevado`, `tipos_de_acao`) ficam opcionais ate o arquivo passar de
+  ~5k linhas (ver politica de subdocs em "Politica para quebrar em
+  subdocumentos").
 
 **Ja entregue no agente (nao repetir no backlog):** lock do scheduler
 (`AgentActionSchedulerInstanceLock`, 2026-05-19); sete tipos MVP 5 no DI;
@@ -156,7 +162,8 @@ tecnico abaixo mantido desde **2026-05-18** com atualizacoes pontuais.
 - **Marcador `NOTA "Fase 6"`:** historicamente apontava para o gap do `switch` no
   dispatcher (fechado). **Varredura (2026-05-20):** menções no corpo foram
   removidas ou substituidas por "apos roteamento em `RpcMethodDispatcher`"; so
-  permanecem referencias meta neste checkpoint e na secao de contrato (~L732).
+  permanecem referencias meta neste checkpoint e na
+  [secao de contrato](#padrao-de-comunicacao-remota-a-seguir).
 - **MVP 3 no agente (implementacao):** considerado **fechado** para o escopo
   deste repositorio: roteamento `agent.action.*`, gates (`remote_disabled`,
   `feature_disabled`, `maintenance`, `draining`), scopes/allowlist via token,
@@ -904,7 +911,8 @@ Regras gerais:
 - [x] TODO: Quando um novo tipo de acao for adicionado, atualizar a matriz de
   riscos, o checklist "Como adicionar uma nova acao", a capability remota se
   aplicavel e o test plan.
-  **Parcial (2026-05-19):** matriz MVP 5 e checklist reestruturado (~L2394); repetir
+  **Parcial (2026-05-19):** matriz MVP 5 e checklist reestruturado
+  (ver [Definition of Done por MVP](#definition-of-done-por-mvp)); repetir
   ao adicionar tipo 8+ ou mudar wire/capability.
 - [~] **Regra continua (nao e backlog de implementacao):** quando uma feature flag
   mudar de experimental para default, atualizar rollback/desativacao e docs de
@@ -966,7 +974,7 @@ de implementacao — usar ao reabrir trabalho sensivel):
 6. Se alterar comportamento documentado, atualizar criterios de aceite, Test
    Plan, rollback e docs de comunicacao no mesmo ciclo.
 
-Ver tambem **Processo ao desbloquear TODO bloqueado** (~L1026).
+Ver tambem [Processo ao desbloquear TODO bloqueado](#processo-ao-desbloquear-todo-bloqueado-futuro).
 
 Niveis de autonomia:
 
@@ -1025,7 +1033,8 @@ alterar comportamento, contrato ou dados persistidos:
   **Baseline (2026-05-19):** sete tipos em `AgentActionAdapterRegistry` +
   `AgentActionLocalRunnerRegistry` (DI); contrato
   `agent_action_type_registry_contract_test.dart`; gates de producao/threat model
-  por PR permanecem antes de anunciar tipo como fechado (ver checklist ~L2386).
+  por PR permanecem antes de anunciar tipo como fechado (ver
+  [Definition of Done por MVP](#definition-of-done-por-mvp)).
 - [x] TODO: UI operacional — revisar l10n/fluxos quando mudar confirmacoes, diagnostico
   ou superficies visiveis.
   **Baseline (2026-05-19):** pagina **Acoes** com formularios por tipo (`commandLine`,
@@ -2510,7 +2519,8 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
 12. [x] TODO: Implementar tipos adicionais um por vez.
    **Parcial (2026-05-19):** MVP 5 com adapter+runner+UI para `executable`, `script`,
    `jar`, `email`, `comObject`; `developer`/Data7 operacional; producao por tipo
-   segue checklist ~L2394 (threat model, COM handlers, homologacao elevada/campo).
+   segue [Definition of Done por MVP](#definition-of-done-por-mvp)
+   (threat model, COM handlers, homologacao elevada/campo).
 
 ### Checklist de arquivos provaveis por camada
 
@@ -4947,7 +4957,8 @@ assumir detalhes tecnicos sem validacao no codigo real.
   resolvem para string vazia.
 - [~] DECISAO MVP 0: ponto em que o plano sera quebrado em subdocs menores.
   **Parcial (2026-05-20):** indices em `docs/implemente/acoes/` (contrato, UI,
-  seguranca); plano mestre permanece canonico; runners/tipos sob demanda (~L920).
+  seguranca); plano mestre permanece canonico; runners/tipos sob demanda
+  (ver [Politica de Atualizacao de Documentacao](#politica-de-atualizacao-de-documentacao)).
 - [x] DECISAO MVP 1: pacote principal para processo mockavel: `process`, API
   Dart nativa encapsulada, ou outro wrapper local.
   **Implementado:** `package:process` em `CommandLineActionProcessRunner` e

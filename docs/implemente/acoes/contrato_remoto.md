@@ -114,7 +114,13 @@ Ver tambem [`seguranca_acoes.md`](seguranca_acoes.md) (live Hub, flags, RA).
 | RA-03 | Contexto remoto inline no RPC (quando produto aceitar) |
 | RA-05 | Homologacao live com Hub real emitindo `agent.action.*` apos ready |
 
-## Subdocs relacionados (planejados)
+## Subdocs relacionados
 
-- `runner_local.md`, `runner_elevado.md`, `ui_acoes.md`, `seguranca_acoes.md`,
-  `tipos_de_acao.md` — ainda no plano mestre ate necessidade de fatiar.
+Entregues:
+
+- [`ui_acoes.md`](ui_acoes.md)
+- [`seguranca_acoes.md`](seguranca_acoes.md)
+
+Planejados (no plano mestre ate necessidade de fatiar):
+
+- `runner_local.md`, `runner_elevado.md`, `tipos_de_acao.md`.

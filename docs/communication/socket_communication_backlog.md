@@ -2,21 +2,13 @@
 
 ## Objetivo
 
-Este backlog agora lista apenas itens pendentes de evolucao.
-Itens concluidos foram removidos para manter foco no trabalho restante.
+Este backlog lista apenas itens pendentes de evolucao do protocolo Socket.IO /
+Plug JSON-RPC.
 
-Referencia de implementacao atual:
-`docs/communication/socket_communication_standard.md`.
-
-## Status atual
-
-- Todos os tickets do plano incremental original (`01` a `06`) foram concluidos.
-- Contratos formais (notifications, batch, api_version/meta, schemas, versionamento) publicados.
-- Limites de transporte negociados via `TransportLimits` no handshake.
-- Assinatura de payload implementada (`PayloadSigner`, HMAC-SHA256) com feature flag `enablePayloadSigning` (default **off**).
-- Feature flags estaveis promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
-- Transporte binario com `PayloadFrame` implementado para todos os eventos de aplicacao.
-- Compressao GZIP movida para a borda de transporte com fallback por threshold.
+- Estado implementado atual:
+  `docs/communication/socket_communication_standard.md`
+- Historico de itens entregues:
+  `docs/communication/socket_communication_roadmap.md`
 
 ## Politica futura: execution_mode em sql.executeBatch
 
@@ -40,6 +32,5 @@ comando.
 ## Regra de manutencao deste backlog
 
 - Registrar apenas itens ainda pendentes.
-- Nao reintroduzir itens concluidos.
-- Promover um item para `standard` assim que estiver implementado.
-
+- Nao reintroduzir itens concluidos; ao concluir, mover para o roadmap historico
+  e atualizar `socket_communication_standard.md`.

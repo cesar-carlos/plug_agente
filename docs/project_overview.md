@@ -1,280 +1,142 @@
-﻿# Plug Server - Visao Geral do Projeto
+﻿# Plug Agente - Visao Geral do Projeto
 
 ## Objetivo
 
-O `plug_server` e o servidor central online responsavel por orquestrar a comunicacao
-entre os `plug_agente` e os `consumers`.
+O `plug_agente` e uma aplicacao desktop Windows que executa operacoes locais
+(SQL via ODBC, acoes agendadas, comandos do sistema) em nome de consumidores
+remotos, sem que esses consumidores precisem alcancar o ambiente local
+diretamente.
 
-O principal objetivo do projeto e permitir que agentes locais possam atender
-clientes externos sem exigir abertura de porta no modem, redirecionamento de
-porta ou exposicao direta do ambiente local na internet.
+O agente nao escuta porta publica nem expoe servico ao exterior. Em vez disso,
+ele inicia uma conexao Socket.IO **de saida** para um hub central
+(`plug_server`), recebe requisicoes JSON-RPC autenticadas pelo hub, executa
+localmente e devolve a resposta pelo mesmo canal.
 
-Em vez de o cliente se conectar diretamente ao agente, ambos se conectam ao
-`plug_server`. O servidor passa a funcionar como um hub de confianca para:
+## Papel no ecossistema
 
-- autenticacao
-- autorizacao
-- roteamento de comandos
-- correlacao de requests e responses
-- gerenciamento de conexoes em tempo real
+```text
+[ consumer ] --REST/Socket.IO--> [ plug_server (hub) ] --Socket.IO--> [ plug_agente ]
+                                                                          |
+                                                                          v
+                                                                    [ ODBC / OS ]
+```
 
-## Problema que o projeto resolve
+- O **consumer** (web app, painel, sistema interno) fala com o hub.
+- O **hub** autentica, autoriza, roteia, correlaciona request/response e
+  registra observabilidade.
+- O **agente** executa o trabalho real: queries ODBC, acoes agendadas,
+  comandos locais. Mantem conexao persistente, heartbeat e reconexao
+  automatica.
 
-Sem um hub central, cada `plug_agente` precisaria ser exposto diretamente para
-consumo remoto. Isso aumenta complexidade operacional e risco de seguranca.
+Detalhes do hub (autenticacao, namespaces, persistencia central) ficam fora do
+escopo deste repositorio. Esta visao geral cobre o que o `plug_agente` faz e
+quais contratos ele honra.
 
-O Socket.IO usa dois namespaces isolados (`/agents` e `/consumers`) para evitar
-acoplamento entre papeis e tratamento acidental de eventos entre agentes e consumers.
+## Responsabilidades do agente
 
-Com o `plug_server`:
+- Conectar ao hub via Socket.IO no namespace `/agents`, normalizando a URL
+  base se necessario.
+- Autenticar no handshake com JWT (`role: agent`, claim `agent_id`).
+- Registrar identidade e capacidades (`agent:register`, `agent:capabilities`).
+- Sinalizar prontidao (`agent:ready`) apos o protocolo efetivo.
+- Manter heartbeat de sessao (`agent:heartbeat` / `hub:heartbeat_ack`).
+- Receber `rpc:request` e responder com `rpc:response` em `PayloadFrame`.
+- Suportar streaming chunked, backpressure e ack de entrega quando o hub
+  habilitar.
+- Executar SQL via ODBC com fila bounded, pool, circuit breaker e
+  cancelamento.
+- Executar acoes agendadas locais (`agent.action.*`) com auditoria, retencao
+  e isolamento (commandLine, executable, script, jar, email, comObject,
+  developer Data7).
+- Auto-update silencioso assinado com appcast.
 
-- o `plug_agente` inicia a conexao de saida para o servidor central
-- o `consumer` tambem se conecta ao servidor central
-- o servidor controla quem pode se conectar e o que pode ser executado
-- o comando sai do `consumer`, passa pelo hub e chega ao agente correto
-- a resposta volta pelo mesmo caminho, com rastreabilidade
+## Metodos JSON-RPC publicados
 
-## Papeis do ecossistema
+| Metodo | Side effect | Observacao |
+| --- | --- | --- |
+| `sql.execute` | Sim | Query parametrizada, paginacao por page/cursor |
+| `sql.executeBatch` | Sim | Multiplos comandos, opcionalmente transacional |
+| `sql.bulkInsert` | Sim | Bulk insert nativo do `odbc_fast` |
+| `sql.cancel` | Sim | Cancela request em execucao (feature flag) |
+| `agent.getProfile` | Nao | Profile do agente |
+| `agent.getHealth` | Nao | Pool, fila, runtime tuning, scheduler, retention |
+| `agent.action.run` | Sim | Enfileira acao salva e aprovada (idempotency_key obrigatorio) |
+| `agent.action.validateRun` | Nao | Preflight remoto (sem persistir nem iniciar) |
+| `agent.action.cancel` | Sim | Cancela fila ou processo principal |
+| `agent.action.getExecution` | Nao | Leitura redigida da execucao |
+| `client_token.getPolicy` | Nao | Politica de autorizacao do token |
+| `rpc.discover` | Nao | OpenRPC do agente |
 
-### Plug Server
+Contrato canonico em `docs/communication/socket_communication_standard.md`.
+OpenRPC em `docs/communication/openrpc.json`. Schemas em
+`docs/communication/schemas/`.
 
-O `plug_server` e o ponto central de coordenacao do sistema.
+## Camadas
 
-Responsabilidades:
+```text
+lib/
+|- domain/         # entidades, contratos, failures, protocolo
+|- application/    # use cases, fila SQL, agendador, mapeamentos
+|- infrastructure/ # ODBC, transporte, datasources, repositories, codecs
+|- presentation/   # boot, pages, providers, controllers, widgets
+|- core/           # config, DI, routes, theme, logger, runtime, utils
+|- l10n/           # localizacao gerada (en/pt) e ARB
+\- shared/         # componentes e widgets compartilhados
+```
 
-- receber conexoes HTTP e Socket.IO
-- autenticar usuarios, clientes e agentes
-- emitir e validar tokens
-- manter o mapa de agentes conectados
-- conhecer as capacidades anunciadas pelos agentes
-- receber comandos dos consumers
-- encaminhar comandos ao agente correto
-- receber respostas do agente
-- devolver respostas ao consumer solicitante
-- aplicar controles de seguranca, validacao e observabilidade
+Direcao de dependencias: `presentation -> application -> domain`,
+`infrastructure` implementa contratos do `domain`. Detalhes em
+`.cursor/rules/clean_architecture.mdc`.
 
-### Plug Agente
+## Persistencia e estado
 
-O `plug_agente` e o executador remoto das operacoes de negocio.
-
-No modelo arquitetural deste ecossistema, o agente:
-
-- conecta-se ao `plug_server` via Socket.IO no namespace `/agents` (o `plug_agente` deve usar `io("/agents")` ao conectar)
-  - no cliente atual, a URL base informada pelo usuario e normalizada automaticamente para o namespace `/agents`
-- autentica-se no handshake
-- registra sua identidade e capacidades
-- mantem uma conexao persistente com heartbeat e reconexao
-- recebe comandos roteados pelo hub
-- executa a operacao localmente
-- devolve response, erro ou stream de resultado
-
-O agente nao deve ser exposto diretamente para a internet. Ele atua por meio do
-hub central.
-
-### Consumer
-
-O `consumer` e qualquer cliente que deseja utilizar um `plug_agente`. Conecta-se
-ao namespace `/consumers` via Socket.IO ou usa a API REST para enviar comandos.
-
-Exemplos:
-
-- aplicacoes web
-- paineis administrativos
-- sistemas internos
-- outros servicos que desejam consumir agentes
-
-O consumer nao fala diretamente com o agente. Ele fala com o `plug_server`, que
-valida a requisicao, decide o roteamento e encaminha a mensagem.
-
-## Modelo de comunicacao
-
-O ecossistema usa dois estilos de comunicacao complementares:
-
-- HTTP/REST para autenticacao, health checks e operacoes administrativas
-- Socket.IO com namespaces separados:
-  - `/agents` — agentes conectam aqui; ciclo de vida (register, heartbeat, rpc response/ack)
-  - `/consumers` — consumers conectam aqui; enviam `agents:command` e recebem `agents:command_response`
-
-No projeto atual, a base HTTP inclui:
-
-- `POST /auth/login` (compatibilidade com cliente atual)
-- `POST /auth/refresh` (compatibilidade com cliente atual)
-- `POST /auth/agent-login` (quando habilitado no servidor)
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/agent-login` - login para agentes (emite JWT com `role: agent` e `agent_id`)
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `GET /api/v1/auth/me`
-- `GET /api/v1/ping`
-- `GET /api/v1/health`
-- `GET /api/v1/health/live`
-- `GET /api/v1/health/ready`
-- `GET /api/v1/agents` - lista agentes conectados no namespace `/agents`
-- `POST /api/v1/agents/commands` - proxy de comandos JSON-RPC ao agente
-
-Canal Socket para consumers (namespace `/consumers`):
-
-- `agents:command` — envia comando ao agente (payload equivalente ao body da REST)
-- `agents:command_response` — resposta normalizada ou erro
-
-## Fluxo macro do sistema
-
-### 1. Conexao do agente
-
-1. O `plug_agente` abre uma conexao Socket.IO com o `plug_server` no namespace `/agents`.
-2. O agente envia credenciais de autenticacao no handshake.
-3. O servidor valida o token recebido.
-4. Apos autenticacao, o agente registra sua identidade e suas capacidades.
-5. O servidor marca o agente como disponivel para roteamento.
-
-### 2. Conexao do consumer
-
-1. O `consumer` autentica-se via API HTTP.
-2. O servidor emite tokens de acesso e refresh.
-3. O consumer passa a operar autenticado.
-4. Para fluxos em tempo real, o consumer conecta ao namespace `/consumers` com JWT no handshake.
-
-### 3. Envio de comando
-
-1. O `consumer` solicita uma operacao (via REST ou Socket `agents:command`).
-2. O `plug_server` valida autenticacao, autorizacao e formato do payload.
-3. O servidor identifica qual agente deve processar aquele comando.
-4. O comando e encaminhado ao `plug_agente` no namespace `/agents`.
-5. O agente executa a operacao localmente.
-6. O agente devolve uma resposta ao servidor.
-7. O servidor correlaciona a resposta com a requisicao original.
-8. O resultado e entregue ao `consumer`.
-
-## Funcionamento esperado do Plug Agente
-
-O agente opera exclusivamente no namespace `/agents`. Pela arquitetura e pela
-documentacao analisada no `plug_agente`, o comportamento esperado e:
-
-- usar `Socket.IO` como transporte principal
-- preferir transporte `websocket`
-- autenticar no handshake com token
-- anunciar capacidades ao conectar
-- negociar detalhes do protocolo com o hub
-- receber eventos de request e responder com envelopes padronizados
-- suportar heartbeat para detectar conexoes stale
-- suportar reconexao automatica
-- suportar respostas de erro estruturadas
-- suportar streaming em cenarios de carga maior
-
-O protocolo documentado no agente utiliza eventos como:
-
-- `agent:register`
-- `agent:capabilities`
-- `agent:heartbeat`
-- `hub:heartbeat_ack`
-- `rpc:request`
-- `rpc:response`
-- `rpc:request_ack`
-- `rpc:batch_ack`
-- `rpc:chunk`
-- `rpc:complete`
-- `rpc:stream.pull`
-
-## Protocolo e decisao tecnica
-
-O `plug_agente` ja trabalha com `Socket.IO`, nao com WebSocket cru como contrato
-principal de aplicacao. Por isso, a direcao tecnica correta para este projeto e
-evoluir o `plug_server` para ser compativel com esse protocolo.
-
-Isso significa que o `plug_server` deve atuar como hub para:
-
-- handshake autenticado
-- registro de agentes
-- negociacao de capacidades
-- roteamento de eventos RPC
-- controle de correlacao entre request e response
-- suporte futuro a streaming e backpressure
-
-## Funcionalidades principais do projeto
-
-As funcionalidades-alvo do `plug_server` sao:
-
-- autenticacao de agentes
-- autenticacao de consumers
-- emissao e rotacao de JWT access/refresh token
-- conexoes Socket.IO autenticadas
-- registro de agentes online
-- descoberta de capacidades dos agentes
-- roteamento de comandos por agente
-- tratamento padronizado de erros
-- validacao forte de payloads
-- observabilidade com request id e logs
-- health checks para operacao e monitoramento
-- base inicial em memoria, sem persistencia obrigatoria
-
-## Estado de persistencia
-
-Nesta fase do projeto, a persistencia pode permanecer em memoria.
-
-Isso significa que estruturas como as abaixo podem existir inicialmente apenas
-em runtime:
-
-- agentes conectados
-- sessoes ativas
-- capacidades registradas
-- correlacao de requests pendentes
-- caches temporarios de autenticacao e roteamento
-
-No futuro, o projeto pode evoluir para persistencia em banco de dados sem mudar
-o papel central do `plug_server` na arquitetura.
+- `drift` para historico de execucoes, auditoria de RPC, idempotencia, cache
+  de tokens, `agent_action_remote_audit`.
+- `flutter_secure_storage` para tokens, segredos e chaves HMAC.
+- `shared_preferences` para flags leves.
 
 ## Seguranca
 
-O projeto exige autenticacao tanto para o `plug_agente` quanto para o `consumer`.
+- JWT obrigatorio no handshake (`role: agent`).
+- Token claim `agent_id` validado contra o `agentId` do payload de register.
+- `PayloadFrame` opcional com HMAC-SHA256; ativado por `enablePayloadSigning`.
+- Auditoria append-only para RPC remoto (`agent_action_remote_audit`).
+- Allowlist por escopo + `action_ids` para `agent.action.*`.
+- Threat model do auto-update em `docs/security/auto_update_threat_model.md`.
 
-Cada namespace aplica autenticacao no handshake e valida o `role` do JWT:
+## Runtime desktop
 
-- `/agents`: apenas roles em `SOCKET_AGENT_ROLES` (default: `agent`)
-- `/consumers`: apenas roles em `SOCKET_CONSUMER_ROLES` (default: `user`, `admin`), excluindo roles de agente
+- Janela controlada por `window_manager`; tray por `tray_manager`.
+- Single-instance por mutex global (uma instancia por maquina).
+- Auto-update silencioso com helper assinado.
 
-Quando o token possui claim `agent_id`, o `agent:register` so e aceito se o `agentId` do payload coincidir.
+## Funcionalidades alvo
 
-Nao ha tratamento de eventos entre namespaces; o hub realiza roteamento explicito entre canais.
+- Execucao remota de SQL (com pool ODBC, fila bounded e circuit breaker).
+- Execucao agendada e remota de acoes locais.
+- Streaming chunked com backpressure.
+- Auto-update assinado com appcast.
+- Observabilidade via `agent.getHealth`.
 
-Diretrizes principais:
+## Estado atual
 
-- nenhum agente deve operar anonimamente
-- nenhum consumer deve consumir agentes sem autenticacao
-- o servidor deve validar token, contexto e permissao antes de encaminhar comandos
-- a exposicao direta do agente deve ser evitada
-- mensagens devem ser validadas antes de serem processadas
+Implementado e em homologacao:
 
-## Estado atual da implementacao
+- API HTTP do hub consumida (auth, refresh).
+- Socket.IO `/agents` com handshake, register, capabilities, ready, heartbeat.
+- JSON-RPC com `PayloadFrame` binario obrigatorio (compressao GZIP por
+  threshold).
+- Pool ODBC lease-based + adaptativo (drivers elegiveis), circuit breaker,
+  warm-up, fila SQL com backpressure.
+- `agent.action.*` com auditoria, idempotencia, fila, scheduler IANA.
+- Auto-update silencioso (`Sparkle`-like) com assinatura Ed25519 do feed em
+  rollout.
 
-O projeto ja possui:
+Detalhes vivos em:
 
-- API HTTP com autenticacao
-- JWT access e refresh token
-- validacao com Zod
-- middlewares de seguranca
-- health checks
-- Socket.IO com namespaces `/agents` e `/consumers`
-- registro de agentes em tempo real no namespace `/agents` (`agent:register`, `agent:capabilities`)
-- negociacao de capacidades com o agente
-- roteamento RPC via REST (`POST /api/v1/agents/commands`) para namespace `/agents`
-- roteamento RPC via Socket (`agents:command` no namespace `/consumers`)
-- mapa de correlacao entre request e response (pending requests no bridge)
-- handlers para `rpc:request_ack` e `rpc:batch_ack` (delivery guarantee)
-- PayloadFrame binario com compressao GZIP e assinatura opcional
-
-Evolucoes futuras:
-
-- suportar streaming via REST (acumular chunks ou SSE)
-- suportar notification JSON-RPC (fire-and-forget) via REST
-
-## Resumo
-
-O `plug_server` nao e apenas uma API REST tradicional. Ele e o nucleo de
-orquestracao do ecossistema Plug.
-
-Seu papel e servir como um hub central confiavel entre agentes e consumers,
-concentrando autenticacao, seguranca, comunicacao em tempo real e roteamento de
-comandos. O modelo de namespaces (`/agents` e `/consumers`) isola responsabilidades
-e evita acoplamento entre papeis. O `plug_agente` permanece como executador
-especializado das operacoes remotas.
+- `docs/communication/socket_communication_standard.md`
+- `docs/communication/socket_communication_roadmap.md` (changelog)
+- `docs/communication/socket_communication_backlog.md` (pendencias)
+- `docs/architecture/performance_reliability_improvements.md`
+- `docs/implemente/plano_acoes_agendadas_execucoes.md`
+- `docs/implemente/plano_auto_update_evolution.md`

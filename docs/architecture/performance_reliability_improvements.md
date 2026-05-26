@@ -1,7 +1,5 @@
 # Performance and Reliability Improvements
 
-Atualizado: 2026-05-14
-
 Este documento registra o estado atual das melhorias de performance e
 confiabilidade do caminho ODBC. O foco atual e `odbc_fast 3.8.1`: usar o
 worker pool assincrono interno do pacote por padrao e habilitar o pool

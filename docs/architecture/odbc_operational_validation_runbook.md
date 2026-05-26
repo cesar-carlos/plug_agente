@@ -1,375 +1,151 @@
 # ODBC Operational Validation Runbook
 
-Data de referencia: 2026-05-21
+Este runbook descreve **como validar** o eixo ODBC/performance apos rollout.
+Nao guarde resultados aqui — o wrapper PowerShell ja gera uma worksheet
+timestampada e versionada por execucao em `artifacts/odbc_validation/`.
 
-Este runbook registra a validacao operacional do eixo ODBC/performance apos o
-rollout das quick wins. Use este arquivo para anotar resultados reais de smoke,
-burst e benchmark antes de ajustar tuning em producao ou homologacao.
+## Quando rodar
 
-## Objetivo
+- Apos mudanca em `odbc_fast`, `OdbcConnectionPool`, `SqlExecutionQueue`,
+  `OdbcDatabaseGateway` ou tuning de runtime.
+- Antes de aumentar pool/workers em producao.
+- Quando snapshots de `agent.getHealth` mostrarem `pending_saturation_percent`
+  alto, `sql_queue.rejections_total` crescente ou `pool.fallbacks_total`
+  inesperado.
+- Apos habilitar `ODBC_RESULT_ENCODING=columnar*` em qualquer ambiente.
 
-Responder, com dados, a estas perguntas:
+## Perguntas que a validacao deve responder
 
 - O app continua saudavel sob carga normal?
 - A fila SQL rejeita de forma controlada quando saturada?
-- O worker pool async do `odbc_fast` esta subdimensionado, equilibrado ou
-  superdimensionado?
-- O pool adaptativo esta usando o caminho nativo somente em drivers elegiveis?
+- O worker pool async do `odbc_fast` esta sub/equilibrado/superdimensionado?
+- O pool adaptativo esta usando o caminho nativo somente em drivers elegiveis
+  (SQL Server, PostgreSQL)?
 - `service.streamQuery` continua usando o caminho batched-first do
-  `odbc_fast 3.8.1` sem regressao no workload local?
+  `odbc_fast` sem regressao no workload local?
 - O runtime local do `odbc_fast` expoe os simbolos necessarios para
-  `columnarCompressed` antes de qualquer opt-in?
+  `columnarCompressed`?
 - Ha sinais de gargalo no banco/driver em vez do app?
 
-## Ambiente Validado
+## Wrapper unico (recomendado)
 
-Preencha antes de rodar:
-
-| Campo | Valor |
-| --- | --- |
-| Data/hora | |
-| Ambiente | |
-| Operador | |
-| Driver / banco | |
-| DSN usado | |
-| Query smoke | |
-| Query longa | |
-| Build / commit | |
-
-## Configuracao Efetiva
-
-Anote os valores vigentes:
-
-```env
-ODBC_POOL_SIZE=
-ODBC_ASYNC_WORKER_COUNT=
-ODBC_ASYNC_MAX_PENDING_REQUESTS=
-ODBC_RESULT_ENCODING=
-SQL_QUEUE_MAX_SIZE=
-SQL_QUEUE_MAX_WORKERS=
-SQL_QUEUE_TIMEOUT_SEC=
-CIRCUIT_BREAKER_FAILURE_THRESHOLD=
-CIRCUIT_BREAKER_RESET_SEC=
-```
-
-## Sequencia Recomendada
-
-0. Rodar smoke do runtime `odbc_fast`, sem DSN.
-1. Rodar preflight de ambiente e confirmar DSN/query longa.
-2. Rodar smoke test com query simples.
-3. Coletar um snapshot de `agent.getHealth`.
-4. Rodar burst test opt-in.
-5. Coletar novo snapshot de `agent.getHealth`.
-6. Rodar benchmark async ODBC.
-7. Rodar benchmark de streaming ODBC.
-8. Comparar resultados e decidir tuning.
-
-Atalho opcional no Windows:
+No Windows:
 
 ```powershell
 .\tool\run_odbc_operational_validation.ps1
-```
-
-O script gera uma worksheet Markdown em `artifacts/odbc_validation/` com
-ambiente, tuning efetivo e placeholders para snapshots/resultados. Para
-executar tudo em sequencia:
-
-```powershell
 .\tool\run_odbc_operational_validation.ps1 -All
 ```
 
-Cada execucao cria uma subpasta timestampada com:
+Cada execucao gera uma subpasta timestampada em `artifacts/odbc_validation/`
+contendo:
 
-- `odbc_operational_validation_report.md`
-- `health_snapshot_template.json`
-- `odbc_runtime.log`
-- `preflight.log`
-- `smoke.log`
-- `burst.log`
-- `benchmark.log`
-- `streaming_benchmark.log`
-
-Os arquivos de log so aparecem para as etapas realmente executadas.
-O template JSON e um baseline local do shape atual de `agent.getHealth`; ainda
-vale coletar snapshots reais antes/depois do burst quando o app estiver em
-execucao.
-
-## 0. ODBC Runtime
-
-Comando:
-
-```powershell
-dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
-```
-
-Confirmar no output:
-
-- Inicializacao do `odbc_fast` passou
-- Worker async foi criado
-- `native_exports.result_encoding_options=true`
-- `native_exports.columnar_decompress=true`
-
-Registrar:
-
-| Item | Valor |
+| Arquivo | Conteudo |
 | --- | --- |
-| Runtime passou? | |
-| Version map | |
-| Result encoding options disponivel? | |
-| Columnar decompress disponivel? | |
-| Observacoes | |
+| `odbc_operational_validation_report.md` | Worksheet em Markdown com ambiente, tuning efetivo e placeholders para preenchimento |
+| `health_snapshot_template.json` | Baseline do shape atual de `agent.getHealth` |
+| `odbc_runtime.log` | Smoke do runtime `odbc_fast` (sem DSN) |
+| `preflight.log` | Resultado de `tool/check_e2e_env.dart` |
+| `smoke.log` | Smoke ODBC (`odbc_queued_gateway_smoke_live_e2e_test.dart`) |
+| `burst.log` | Burst da fila SQL (`sql_queue_burst_test.dart`, opt-in `RUN_ODBC_BURST_TESTS=true`) |
+| `benchmark.log` | `async_concurrency_benchmark.dart` |
+| `streaming_benchmark.log` | `streaming_performance_benchmark.dart` |
+| `driver_matrix_*.log` | Benchmark async + streaming por driver configurado |
+| `health_burst_*_before/after.json` | Snapshots reais de `agent.getHealth` antes/depois do burst |
 
-## 1. Preflight
+Sem `-All`, o wrapper executa preflight e gera o template; voce decide quais
+etapas rodar.
 
-Comando:
+## Passos manuais (apenas se o wrapper nao for opcao)
 
-```powershell
-dart run tool/check_e2e_env.dart
-```
+1. Smoke runtime `odbc_fast` (sem DSN):
 
-Confirmar no output:
+   ```powershell
+   dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
+   ```
 
-- `ODBC_E2E_RPC_DSN` ou fallback ODBC valido
-- `ODBC_INTEGRATION_LONG_QUERY*` definido
-- `RUN_ODBC_BURST_TESTS=true` quando for rodar burst
+2. Preflight de variaveis E2E:
 
-Registrar:
+   ```powershell
+   dart run tool/check_e2e_env.dart
+   ```
 
-| Item | Valor |
-| --- | --- |
-| Preflight passou? | |
-| DSN efetivo resolvido | |
-| Query longa efetiva | |
-| Observacoes | |
+3. Smoke com query simples:
 
-## 2. Smoke
+   ```powershell
+   flutter test test/integration/odbc_queued_gateway_smoke_live_e2e_test.dart
+   ```
 
-Referencias:
+4. Coletar snapshot de `agent.getHealth` antes/depois do burst.
 
-- `docs/testing/e2e_setup.md`
-- `docs/testing/sql_queue_concurrency_tests.md`
+5. Burst opt-in:
 
-Comandos:
+   ```powershell
+   $env:RUN_ODBC_BURST_TESTS='true'
+   flutter test test/integration/sql_queue_burst_test.dart
+   ```
 
-```powershell
-# Ajuste o DSN/query no .env local antes de executar
-flutter test test/integration/odbc_queued_gateway_smoke_live_e2e_test.dart
-```
+6. Benchmark async ODBC:
 
-Registrar:
+   ```powershell
+   .\tool\odbc_async_benchmark.ps1
+   ```
 
-| Medida | Valor |
-| --- | --- |
-| Passou? | |
-| Latencia observada | |
-| Erros | |
-| Observacoes | |
+7. Benchmark streaming:
 
-## 3. Burst
+   ```powershell
+   .\tool\odbc_streaming_benchmark.ps1
+   ```
 
-Comandos:
+8. Driver matrix (se houver mais de um DSN configurado):
 
-```powershell
-$env:RUN_ODBC_BURST_TESTS='true'
-flutter test test/integration/sql_queue_burst_test.dart
-```
+   ```powershell
+   .\tool\odbc_driver_matrix_benchmark.ps1
+   ```
 
-Registrar:
+## Como ler o snapshot de health
 
-| Medida | Valor |
-| --- | --- |
-| Passou? | |
-| Requests totais | |
-| Rejections | |
-| Timeouts | |
-| Recuperou para fila/pool zerados? | |
-| Observacoes | |
-
-## 4. Benchmark Async ODBC
-
-Comandos:
-
-```powershell
-dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
-```
-
-Ou via wrapper do repo:
-
-```powershell
-.\tool\odbc_async_benchmark.ps1
-```
-
-Registrar:
-
-| Medida | Valor |
-| --- | --- |
-| Throughput | |
-| P95 | |
-| P99 | |
-| Pending requests max | |
-| Near pending limit? | |
-| Timeouts | |
-| Observacoes | |
-
-## 5. Benchmark Streaming ODBC
-
-O app chama `service.streamQuery`; no `odbc_fast 3.8.1`, esse caminho tenta
-`streamQueryBatched` primeiro e usa o streaming legado apenas como fallback.
-Use o benchmark abaixo para comparar `streamQuery` e `streamQueryBatched` com
-o mesmo DSN/query.
-
-Comandos:
-
-```powershell
-dart run D:\Developer\dart_odbc_fast\example\streaming_performance_benchmark.dart
-```
-
-Ou via wrapper do repo:
-
-```powershell
-.\tool\odbc_streaming_benchmark.ps1
-```
-
-O wrapper usa `ODBC_STREAM_BENCH_QUERY` quando definido. Sem esse override, ele
-usa a query longa especifica do driver (`ODBC_INTEGRATION_LONG_QUERY_*`) ou a
-query longa generica. Nao valide streaming com resultado de 1 linha.
-
-Variaveis uteis:
-
-```env
-ODBC_STREAM_BENCH_QUERY=
-ODBC_STREAM_BENCH_FETCH_SIZE=1000
-ODBC_STREAM_BENCH_CHUNK_SIZE=65536
-ODBC_STREAM_BENCH_OUTPUT=text
-```
-
-Registrar:
-
-| Medida | Valor |
-| --- | --- |
-| `streamQuery` ms / rows/s | |
-| `streamQueryBatched` ms / rows/s | |
-| Fetch size | |
-| Chunk size | |
-| Observacoes | |
-
-## 5. Benchmark Por Driver
-
-Use a matriz quando houver mais de um DSN configurado ou quando a decisao de
-tuning envolver pool nativo/adaptativo:
-
-```powershell
-.\tool\odbc_driver_matrix_benchmark.ps1
-```
-
-O script roda async e streaming benchmarks para:
-
-- SQL Anywhere: `ODBC_TEST_DSN` / `ODBC_DSN`
-- SQL Server: `ODBC_TEST_DSN_SQL_SERVER` / `ODBC_DSN_SQL_SERVER`
-- PostgreSQL: `ODBC_TEST_DSN_POSTGRESQL` / `ODBC_DSN_POSTGRESQL`
-
-Leitura esperada:
-
-- SQL Anywhere deve permanecer no lease/direct path.
-- SQL Server/PostgreSQL podem justificar aumento de pool/workers se p95/p99 nao
-  piorarem e `transactional_native_pool_fallback_total` continuar baixo.
-- Driver sem DSN configurado e pulado, nao falha a validacao.
-
-## Snapshot de Health
-
-O fluxo `.\tool\run_odbc_operational_validation.ps1 -All` define
-`ODBC_BURST_HEALTH_SNAPSHOT_DIR` para o teste de burst e grava snapshots reais:
-
-```text
-health_burst_overflow_before.json
-health_burst_overflow_after.json
-health_burst_recovery_before.json
-health_burst_recovery_after.json
-```
-
-Se o burst nao for executado, colete manualmente um snapshot representativo:
-
-```dart
-final health = await getIt<HealthService>().getHealthStatusAsync();
-print(JsonEncoder.withIndent('  ').convert(health));
-```
-
-Campos mais importantes:
+Campos mais relevantes:
 
 - `odbc_runtime_tuning.async_worker_count`
 - `odbc_runtime_tuning.async_max_pending_requests`
-- `pool.effective_strategy`
-- `pool.native_eligible`
+- `odbc_runtime_tuning.result_encoding`
+- `pool.effective_strategy`, `pool.native_eligible`, `pool.active_count`,
+  `pool.fallbacks_total`
 - `pool.native_compatible_acquire_success_total`
-- `batch.transactional_native_pool_total`
-- `batch.transactional_native_pool_fallback_total`
+- `batch.transactional_native_pool_total`,
+  `batch.transactional_native_pool_fallback_total`
 - `batch.bulk_insert_recommended_total`
-- `pool.active_count`
-- `pool.fallbacks_total`
-- `sql_queue.current_size`
-- `sql_queue.rejections_total`
-- `sql_queue.timeouts_total`
-- `sql_queue.p95_wait_time_ms`
-- `queries.p95_latency_ms`
-- `queries.p99_latency_ms`
+- `sql_queue.current_size`, `sql_queue.rejections_total`,
+  `sql_queue.timeouts_total`, `sql_queue.p95_wait_time_ms`
+- `queries.p95_latency_ms`, `queries.p99_latency_ms`
 - `timeouts.pool_total`
 
-### Snapshot Antes do Burst
+`async_worker_pool.near_pending_limit=true` indica que o worker pool interno
+esta proximo do teto configurado.
 
-```json
-{}
-```
+## Decisao de tuning
 
-### Snapshot Depois do Burst
-
-```json
-{}
-```
-
-### Leitura Rapida
-
-| Campo | Antes | Depois | Observacao |
-| --- | --- | --- | --- |
-| `odbc_runtime_tuning.async_worker_count` | | | |
-| `odbc_runtime_tuning.async_max_pending_requests` | | | |
-| `odbc_runtime_tuning.result_encoding` | | | |
-| `pool.effective_strategy` | | | |
-| `pool.native_eligible` | | | |
-| `pool.active_count` | | | |
-| `pool.fallbacks_total` | | | |
-| `batch.transactional_native_pool_total` | | | |
-| `batch.transactional_native_pool_fallback_total` | | | |
-| `batch.bulk_insert_recommended_total` | | | |
-| `sql_queue.rejections_total` | | | |
-| `sql_queue.timeouts_total` | | | |
-| `sql_queue.p95_wait_time_ms` | | | |
-| `queries.p95_latency_ms` | | | |
-| `queries.p99_latency_ms` | | | |
-| `timeouts.pool_total` | | | |
-
-## Decisao de Tuning
-
-Use esta regra pratica:
+Regras praticas:
 
 - Aumente `ODBC_ASYNC_MAX_PENDING_REQUESTS` se `pending_requests` saturar e o
   banco ainda tiver folga.
 - Aumente `SQL_QUEUE_MAX_SIZE` se a fila rejeitar cedo demais em bursts
   esperados, sem sinal de gargalo no banco.
-- Aumente `ODBC_POOL_SIZE` e `SQL_QUEUE_MAX_WORKERS` apenas se houver beneficio
-  real em throughput e sem piorar p95/p99.
-- Nao habilite `ResultEncoding.columnar`/`columnarCompressed` sem benchmark
-  dedicado e smoke de runtime passando.
+- Aumente `ODBC_POOL_SIZE` e `SQL_QUEUE_MAX_WORKERS` apenas se houver
+  beneficio real em throughput **e** sem piorar p95/p99.
+- Use `batch.bulk_insert_recommended_total` para identificar batches grandes
+  de `INSERT` que devem migrar para `sql.bulkInsert` antes de aumentar
+  concorrencia.
+- Nao habilite `ResultEncoding.columnar` ou `columnarCompressed` sem
+  benchmark dedicado e smoke de runtime passando.
 - Nao introduza multi-`ServiceLocator` ou pools customizados sem evidencia
-  forte de que o worker pool suportado foi esgotado.
+  forte de que o worker pool suportado foi esgotado (ver
+  `odbc_worker_evaluation_criteria.md`).
 
-## Resultado Final
+## Cross-references
 
-Preencha ao concluir:
-
-| Item | Resultado |
-| --- | --- |
-| Status final | |
-| Mudancas de tuning aprovadas | |
-| Mudancas rejeitadas | |
-| Riscos observados | |
-| Proxima revisao | |
+- Tuning vigente: `performance_reliability_improvements.md`
+- Criterios de avaliacao do worker pool: `odbc_worker_evaluation_criteria.md`
+- Quick start operacional: `QUICKSTART.md`
+- Concorrencia da fila SQL: `docs/testing/sql_queue_concurrency_tests.md`
+- Variaveis E2E: `docs/testing/e2e_setup.md`
