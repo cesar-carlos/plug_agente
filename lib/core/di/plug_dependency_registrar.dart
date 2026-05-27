@@ -1438,7 +1438,13 @@ Duration _autoUpdateBootJitter() {
 /// running executable. Goes through [WindowManagerService] when available
 /// (which already runs [shutdownApp]), then falls back to a hard exit if the
 /// process is still alive after [_silentUpdateExitGraceWindow].
+///
+/// When [INotificationService] is supported, posts a "Plug Agente will close
+/// in Ns" toast and waits up to [resolveAutoUpdatePreCloseDelaySeconds] before
+/// proceeding. The wait is best-effort and capped, so a desktop running 24/7
+/// still resumes the close even if the user did not see the toast.
 Future<void> _closeApplicationForSilentUpdate() async {
+  await _emitPreCloseNotice();
   if (getIt.isRegistered<WindowManagerService>()) {
     final service = getIt<WindowManagerService>();
     // Flip preventClose/closeToTray off so the close request actually exits
@@ -1450,6 +1456,45 @@ Future<void> _closeApplicationForSilentUpdate() async {
   }
   await shutdownApp();
   exit(0);
+}
+
+Future<void> _emitPreCloseNotice() async {
+  final delaySeconds = resolveAutoUpdatePreCloseDelaySeconds(
+    environment: AppEnvironment.snapshot(),
+  );
+  if (delaySeconds <= 0) return;
+
+  if (getIt.isRegistered<INotificationService>()) {
+    final notificationService = getIt<INotificationService>();
+    try {
+      final result = await notificationService.show(
+        title: 'Plug Agente: update ready',
+        body: 'Closing in ${delaySeconds}s to install the update.',
+      );
+      result.fold(
+        (_) {},
+        (failure) => developer.log(
+          'Failed to post pre-close notification (continuing)',
+          name: 'plug_dependency_registrar',
+          level: 800,
+          error: failure,
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Pre-close notification threw (continuing)',
+        name: 'plug_dependency_registrar',
+        level: 800,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  // Wait the configured grace period so the operator sees the notice before
+  // the app actually closes. Capped by `_maxPreCloseDelaySeconds` in the
+  // config helper to bound this delay.
+  await Future<void>.delayed(Duration(seconds: delaySeconds));
 }
 
 const Duration _silentUpdateExitGraceWindow = Duration(seconds: 5);

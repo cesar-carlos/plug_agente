@@ -319,4 +319,77 @@ void main() {
       }
     });
   });
+
+  group('Quiet hours', () {
+    test('parseQuietHourMinute returns null for empty or malformed input', () {
+      expect(parseQuietHourMinute(null), isNull);
+      expect(parseQuietHourMinute(''), isNull);
+      expect(parseQuietHourMinute('   '), isNull);
+      expect(parseQuietHourMinute('22-00'), isNull);
+      expect(parseQuietHourMinute('25:00'), isNull);
+      expect(parseQuietHourMinute('22:60'), isNull);
+    });
+
+    test('parseQuietHourMinute parses HH:MM into minutes since midnight', () {
+      expect(parseQuietHourMinute('22:00'), 22 * 60);
+      expect(parseQuietHourMinute('06:30'), 6 * 60 + 30);
+      expect(parseQuietHourMinute(' 0:0 '), 0);
+    });
+
+    test('isWithinQuietHoursWindow returns false when bounds are null', () {
+      expect(
+        isWithinQuietHoursWindow(nowMinutes: 120, startMinute: null, endMinute: 360),
+        isFalse,
+      );
+      expect(
+        isWithinQuietHoursWindow(nowMinutes: 120, startMinute: 60, endMinute: null),
+        isFalse,
+      );
+    });
+
+    test('isWithinQuietHoursWindow handles a normal daytime window', () {
+      // Window 22:00..23:30; now=22:30 -> inside, now=23:30 -> outside (end excl.).
+      expect(
+        isWithinQuietHoursWindow(
+          nowMinutes: 22 * 60 + 30,
+          startMinute: 22 * 60,
+          endMinute: 23 * 60 + 30,
+        ),
+        isTrue,
+      );
+      expect(
+        isWithinQuietHoursWindow(
+          nowMinutes: 23 * 60 + 30,
+          startMinute: 22 * 60,
+          endMinute: 23 * 60 + 30,
+        ),
+        isFalse,
+      );
+    });
+
+    test('isWithinQuietHoursWindow supports overnight (wrap-around) windows', () {
+      const start = 22 * 60;
+      const end = 6 * 60;
+      // 23:00 -> inside, 05:00 -> inside, 06:00 -> outside, 10:00 -> outside.
+      expect(isWithinQuietHoursWindow(nowMinutes: 23 * 60, startMinute: start, endMinute: end), isTrue);
+      expect(isWithinQuietHoursWindow(nowMinutes: 5 * 60, startMinute: start, endMinute: end), isTrue);
+      expect(isWithinQuietHoursWindow(nowMinutes: 6 * 60, startMinute: start, endMinute: end), isFalse);
+      expect(isWithinQuietHoursWindow(nowMinutes: 10 * 60, startMinute: start, endMinute: end), isFalse);
+    });
+
+    test('resolveAutoUpdateQuietHoursStart/End reads env vars', () {
+      expect(
+        resolveAutoUpdateQuietHoursStartMinute(
+          environment: const {'AUTO_UPDATE_QUIET_HOURS_START': '22:00'},
+        ),
+        22 * 60,
+      );
+      expect(
+        resolveAutoUpdateQuietHoursEndMinute(
+          environment: const {'AUTO_UPDATE_QUIET_HOURS_END': '06:30'},
+        ),
+        6 * 60 + 30,
+      );
+    });
+  });
 }

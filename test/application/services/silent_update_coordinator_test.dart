@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
@@ -452,63 +453,75 @@ void main() {
     });
 
     group('scheduleAndStart boot jitter', () {
-      test('bootJitterProvider defers the immediate boot check', () async {
-        final probe = _FakeProbe();
-        final coordinator = SilentUpdateCoordinator(
-          RuntimeCapabilities.full(),
-          () => 'https://example.com/appcast.xml',
-          appcastProbeService: probe,
-          silentUpdateInstaller: _FakeInstaller(),
-          settingsStore: InMemoryAppSettingsStore(),
-          bootJitterProvider: () => const Duration(seconds: 30),
-        );
+      // Drive these tests with FakeAsync so we exercise the timer logic
+      // deterministically without sleeping real wall-clock seconds; the
+      // legacy version pumped microtasks repeatedly which was flaky on
+      // slow CI runners.
+      test('bootJitterProvider defers the immediate boot check', () {
+        FakeAsync().run((async) {
+          final probe = _FakeProbe();
+          final coordinator = SilentUpdateCoordinator(
+            RuntimeCapabilities.full(),
+            () => 'https://example.com/appcast.xml',
+            appcastProbeService: probe,
+            silentUpdateInstaller: _FakeInstaller(),
+            settingsStore: InMemoryAppSettingsStore(),
+            bootJitterProvider: () => const Duration(seconds: 30),
+          );
 
-        coordinator.scheduleAndStart();
-        // Pump microtask queue several times — the jitter timer must hold
-        // the immediate probe off until the configured delay elapses.
-        await Future<void>.delayed(Duration.zero);
-        await Future<void>.delayed(Duration.zero);
-        await Future<void>.delayed(Duration.zero);
+          coordinator.scheduleAndStart();
 
-        expect(probe.callCount, 0);
-        coordinator.stop();
+          // Before the jitter elapses the probe must remain untouched.
+          async.elapse(const Duration(seconds: 29));
+          expect(probe.callCount, 0);
+
+          // Once the jitter elapses the immediate check fires.
+          async.elapse(const Duration(seconds: 2));
+          expect(probe.callCount, 1);
+          coordinator.stop();
+        });
       });
 
-      test('null jitter provider preserves immediate boot check (backward compat)', () async {
-        final probe = _FakeProbe();
-        final coordinator = SilentUpdateCoordinator(
-          RuntimeCapabilities.full(),
-          () => 'https://example.com/appcast.xml',
-          appcastProbeService: probe,
-          silentUpdateInstaller: _FakeInstaller(),
-          settingsStore: InMemoryAppSettingsStore(),
-        );
+      test('null jitter provider preserves immediate boot check (backward compat)', () {
+        FakeAsync().run((async) {
+          final probe = _FakeProbe();
+          final coordinator = SilentUpdateCoordinator(
+            RuntimeCapabilities.full(),
+            () => 'https://example.com/appcast.xml',
+            appcastProbeService: probe,
+            silentUpdateInstaller: _FakeInstaller(),
+            settingsStore: InMemoryAppSettingsStore(),
+          );
 
-        coordinator.scheduleAndStart();
-        await Future<void>.delayed(Duration.zero);
-        await Future<void>.delayed(Duration.zero);
+          coordinator.scheduleAndStart();
+          async.flushMicrotasks();
+          // Allow the very first microtask-driven probe to flush.
+          async.elapse(const Duration(milliseconds: 1));
 
-        expect(probe.callCount, 1);
-        coordinator.stop();
+          expect(probe.callCount, 1);
+          coordinator.stop();
+        });
       });
 
-      test('zero jitter behaves like no jitter (runs immediately)', () async {
-        final probe = _FakeProbe();
-        final coordinator = SilentUpdateCoordinator(
-          RuntimeCapabilities.full(),
-          () => 'https://example.com/appcast.xml',
-          appcastProbeService: probe,
-          silentUpdateInstaller: _FakeInstaller(),
-          settingsStore: InMemoryAppSettingsStore(),
-          bootJitterProvider: () => Duration.zero,
-        );
+      test('zero jitter behaves like no jitter (runs immediately)', () {
+        FakeAsync().run((async) {
+          final probe = _FakeProbe();
+          final coordinator = SilentUpdateCoordinator(
+            RuntimeCapabilities.full(),
+            () => 'https://example.com/appcast.xml',
+            appcastProbeService: probe,
+            silentUpdateInstaller: _FakeInstaller(),
+            settingsStore: InMemoryAppSettingsStore(),
+            bootJitterProvider: () => Duration.zero,
+          );
 
-        coordinator.scheduleAndStart();
-        await Future<void>.delayed(Duration.zero);
-        await Future<void>.delayed(Duration.zero);
+          coordinator.scheduleAndStart();
+          async.flushMicrotasks();
+          async.elapse(const Duration(milliseconds: 1));
 
-        expect(probe.callCount, 1);
-        coordinator.stop();
+          expect(probe.callCount, 1);
+          coordinator.stop();
+        });
       });
     });
 

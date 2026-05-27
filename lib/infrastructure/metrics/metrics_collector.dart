@@ -342,6 +342,8 @@ class MetricsCollector
     _currentActiveWorkers = 0;
     _maxActiveWorkers = 0;
     _queueWaitTimes.clear();
+    _autoUpdateProbeTimes.clear();
+    _autoUpdateDownloadTimes.clear();
     _agentActionQueueWaitTimes.clear();
     _agentActionExecutionDurations.clear();
     _poolWaitTimes.clear();
@@ -1005,6 +1007,21 @@ class MetricsCollector
   void recordAutoUpdateBackgroundCheckUpdaterError() =>
       _incrementEventCounter(_autoUpdateBackgroundCheckUpdaterErrorCounter);
 
+  final ListQueue<Duration> _autoUpdateProbeTimes = ListQueue<Duration>();
+  final ListQueue<Duration> _autoUpdateDownloadTimes = ListQueue<Duration>();
+
+  @override
+  void recordAutoUpdateProbeDuration(Duration duration) {
+    if (duration.isNegative) return;
+    _recordDurationSample(_autoUpdateProbeTimes, duration);
+  }
+
+  @override
+  void recordAutoUpdateDownloadDuration(Duration duration) {
+    if (duration.isNegative) return;
+    _recordDurationSample(_autoUpdateDownloadTimes, duration);
+  }
+
   /// Registra uma metrica de sucesso.
   void recordSuccess({
     required String queryId,
@@ -1149,6 +1166,8 @@ class MetricsCollector
       ..._durationStatsSnapshot('read_only_batch_parallel_wait', _readOnlyBatchParallelWaitTimes),
       ..._durationStatsSnapshot('connect', _connectTimes),
       ..._durationStatsSnapshot('sql_execution', _sqlExecutionTimes),
+      ..._durationStatsSnapshot('auto_update_probe', _autoUpdateProbeTimes),
+      ..._durationStatsSnapshot('auto_update_download', _autoUpdateDownloadTimes),
       ..._sqlExecutionModeStatsSnapshot(),
       'sql_execution_by_mode': _sqlExecutionModeNestedStatsSnapshot(),
       ..._durationStatsSnapshot('prepared_prepare', _preparedPrepareTimes),

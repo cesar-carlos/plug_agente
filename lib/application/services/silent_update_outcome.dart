@@ -41,7 +41,13 @@ enum SilentUpdateOutcome {
   /// The in-flight check was cancelled mid-flight, typically because the
   /// user disabled automatic silent updates while the download was running.
   /// No installer launched.
-  cancelled;
+  cancelled,
+
+  /// The current wall-clock time falls inside the operator-defined quiet
+  /// hours window (`AUTO_UPDATE_QUIET_HOURS_START` /
+  /// `AUTO_UPDATE_QUIET_HOURS_END`). Probe was skipped; the periodic timer
+  /// will retry on the next cycle, and any pending install is preserved.
+  skippedByQuietHours;
 
   /// Convenience boolean for callers that only need to know "should I
   /// prepare for shutdown?" without inspecting every variant.

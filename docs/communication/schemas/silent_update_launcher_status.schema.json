@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://cesar-carlos.github.io/plug_agente/schemas/silent_update_launcher_status.schema.json",
+  "title": "Silent Update Launcher Status",
+  "description": "Status JSON written by plug_update_helper.exe and consumed by SilentUpdateCoordinator to reconcile the installer state across boot sessions. All fields are optional because the helper writes them progressively as the install advances.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "state": {
+      "type": ["string", "null"],
+      "description": "High-level helper state.",
+      "enum": [
+        "starting",
+        "validatingHash",
+        "runningCurrentUser",
+        "runningElevated",
+        "waitingForAppExit",
+        "completed",
+        "failed",
+        "cancelled",
+        null
+      ]
+    },
+    "strategy": {
+      "type": ["string", "null"],
+      "description": "Mirrors SilentUpdateInstallStrategy.name.",
+      "enum": ["currentUserThenElevated", "elevatedOnly", null]
+    },
+    "installDirectory": {
+      "type": ["string", "null"],
+      "description": "Resolved install directory passed to the installer."
+    },
+    "installerPath": {
+      "type": ["string", "null"],
+      "description": "Absolute path to the downloaded installer (.exe)."
+    },
+    "logPath": {
+      "type": ["string", "null"],
+      "description": "Absolute path to the Inno Setup log captured during the install."
+    },
+    "nonAdminExitCode": {
+      "type": ["integer", "null"],
+      "description": "Exit code from the non-admin install attempt (currentUser strategy)."
+    },
+    "nonAdminDurationMs": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "elevatedExitCode": {
+      "type": ["integer", "null"],
+      "description": "Exit code from the elevated retry, when triggered."
+    },
+    "elevatedDurationMs": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "elevatedRetryStarted": {
+      "type": ["boolean", "null"]
+    },
+    "waitForAppExitDurationMs": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "appPid": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Process ID the helper was asked to wait on before installing."
+    },
+    "signatureStatus": {
+      "type": ["string", "null"],
+      "description": "Authenticode validation outcome on the downloaded installer (helper-side).",
+      "enum": ["unchecked", "valid", "invalid", "skipped", null]
+    },
+    "signatureRequired": {
+      "type": ["boolean", "null"]
+    },
+    "actualSha256": {
+      "type": ["string", "null"],
+      "description": "SHA-256 of the downloaded installer as computed by the helper.",
+      "pattern": "^([0-9a-f]{64})?$"
+    },
+    "hashValidationStatus": {
+      "type": ["string", "null"],
+      "enum": ["unchecked", "valid", "mismatch", null]
+    },
+    "installDirectoryWritable": {
+      "type": ["boolean", "null"]
+    },
+    "elevatedCancelled": {
+      "type": ["boolean", "null"],
+      "description": "True when the user cancelled the UAC prompt before the elevated install ran."
+    },
+    "errorMessage": {
+      "type": ["string", "null"],
+      "description": "Human-readable error reason, when the install failed."
+    },
+    "lastUpdatedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the last status write."
+    }
+  }
+}

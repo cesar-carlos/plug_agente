@@ -26,6 +26,8 @@ void main() {
     VoidCallback? onCheckAutomaticUpdates,
     VoidCallback? onCopyUpdateDiagnostics,
     ValueChanged<bool>? onAutomaticSilentUpdatesChanged,
+    String? releaseNotes,
+    String? releaseNotesUrl,
     bool settle = true,
   }) async {
     await tester.pumpWidget(
@@ -45,6 +47,8 @@ void main() {
               isCheckingUpdates: isCheckingUpdates,
               isAutoUpdateAvailable: isAutoUpdateAvailable,
               unavailableMessage: unavailableMessage,
+              releaseNotes: releaseNotes,
+              releaseNotesUrl: releaseNotesUrl,
               onCheckUpdates: onCheckUpdates ?? () {},
               onCheckAutomaticUpdates: onCheckAutomaticUpdates ?? () {},
               onCopyUpdateDiagnostics: onCopyUpdateDiagnostics ?? () {},
@@ -226,6 +230,35 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(copied, isTrue);
+    });
+
+    testWidgets('hides release notes expander when neither notes nor URL are set', (tester) async {
+      await pumpSection(tester);
+
+      expect(find.byKey(const ValueKey('updates_release_notes_expander')), findsNothing);
+    });
+
+    testWidgets('renders release notes expander with inline text', (tester) async {
+      await pumpSection(
+        tester,
+        releaseNotes: '- Fixed update issue\n- Improved diagnostics',
+      );
+
+      expect(find.byKey(const ValueKey('updates_release_notes_expander')), findsOneWidget);
+      expect(find.textContaining('Fixed update issue'), findsOneWidget);
+    });
+
+    testWidgets('renders release notes URL when only URL is provided', (tester) async {
+      await pumpSection(
+        tester,
+        releaseNotesUrl: 'https://github.com/cesar-carlos/plug_agente/releases/tag/v1.7.0',
+      );
+
+      expect(find.byKey(const ValueKey('updates_release_notes_expander')), findsOneWidget);
+      // The expander shows the URL as selectable plain text under the link
+      // label; the user can copy it because we deliberately avoid pulling
+      // in a browser-launcher dependency.
+      expect(find.byKey(const ValueKey('updates_release_notes_link')), findsOneWidget);
     });
   });
 }

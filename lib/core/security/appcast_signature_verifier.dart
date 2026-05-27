@@ -41,6 +41,13 @@ enum AppcastSignatureVerificationStatus {
 /// the probe still records the [AppcastSignatureVerificationStatus] in
 /// diagnostics so operators can observe signing rollout without blocking
 /// the release pipeline.
+///
+/// The `base64PublicKey` argument accepts either a single base64 key or a
+/// comma-separated list. Multi-key support enables rotation without an
+/// installed-base outage:
+/// during a rotation window the build embeds both the current and next key,
+/// releases are signed by the current key, and once telemetry confirms the
+/// older key is no longer in use the older key can be dropped from new builds.
 abstract interface class IAppcastSignatureVerifier {
   Future<AppcastSignatureVerificationStatus> verifyEnclosure({
     required String canonicalPayload,
@@ -67,40 +74,75 @@ class Ed25519AppcastSignatureVerifier implements IAppcastSignatureVerifier {
     if (signatureRaw == null || signatureRaw.isEmpty) {
       return AppcastSignatureVerificationStatus.missing;
     }
-    final publicKeyRaw = base64PublicKey?.trim();
-    if (publicKeyRaw == null || publicKeyRaw.isEmpty) {
+
+    final keyCandidates = parseAppcastPublicKeys(base64PublicKey);
+    if (keyCandidates.isEmpty) {
       return AppcastSignatureVerificationStatus.publicKeyUnavailable;
     }
 
     final Uint8List signatureBytes;
-    final Uint8List publicKeyBytes;
     try {
       signatureBytes = base64Decode(signatureRaw);
-      publicKeyBytes = base64Decode(publicKeyRaw);
     } on FormatException {
       return AppcastSignatureVerificationStatus.malformed;
     }
-
-    if (signatureBytes.length != _ed25519SignatureBytes ||
-        publicKeyBytes.length != _ed25519PublicKeyBytes) {
+    if (signatureBytes.length != _ed25519SignatureBytes) {
       return AppcastSignatureVerificationStatus.malformed;
     }
 
     final messageBytes = Uint8List.fromList(utf8.encode(canonicalPayload));
 
-    try {
-      final publicKey = SimplePublicKey(publicKeyBytes, type: KeyPairType.ed25519);
-      final signature = Signature(signatureBytes, publicKey: publicKey);
-      final ok = await _algorithm.verify(messageBytes, signature: signature);
-      return ok
-          ? AppcastSignatureVerificationStatus.valid
-          : AppcastSignatureVerificationStatus.invalid;
-    } on Object {
-      // Defensive: any unexpected library error means the signature is not
-      // trustworthy. Map to `invalid` rather than crashing the probe.
-      return AppcastSignatureVerificationStatus.invalid;
+    // Track whether at least one key was structurally valid. If every key was
+    // malformed, we surface `malformed` rather than `invalid` — the operator
+    // configured garbage, not an attacker tampering with the feed.
+    var sawValidKeyShape = false;
+
+    for (final keyRaw in keyCandidates) {
+      final Uint8List publicKeyBytes;
+      try {
+        publicKeyBytes = base64Decode(keyRaw);
+      } on FormatException {
+        continue;
+      }
+      if (publicKeyBytes.length != _ed25519PublicKeyBytes) {
+        continue;
+      }
+      sawValidKeyShape = true;
+
+      try {
+        final publicKey = SimplePublicKey(publicKeyBytes, type: KeyPairType.ed25519);
+        final signature = Signature(signatureBytes, publicKey: publicKey);
+        final ok = await _algorithm.verify(messageBytes, signature: signature);
+        if (ok) {
+          return AppcastSignatureVerificationStatus.valid;
+        }
+      } on Object {
+        // Defensive: an unexpected library error for this key — try the next.
+        continue;
+      }
     }
+
+    if (!sawValidKeyShape) {
+      return AppcastSignatureVerificationStatus.malformed;
+    }
+    return AppcastSignatureVerificationStatus.invalid;
   }
+}
+
+/// Splits a comma-separated list of base64 Ed25519 public keys into trimmed,
+/// non-empty entries. Tolerates whitespace around commas. Returns an empty
+/// list when [raw] is null/blank.
+///
+/// Public so the probe and DI can share the same parsing rule.
+List<String> parseAppcastPublicKeys(String? raw) {
+  if (raw == null) return const <String>[];
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return const <String>[];
+  return trimmed
+      .split(',')
+      .map((entry) => entry.trim())
+      .where((entry) => entry.isNotEmpty)
+      .toList(growable: false);
 }
 
 /// Canonical UTF-8 representation of a Sparkle enclosure's signable fields.

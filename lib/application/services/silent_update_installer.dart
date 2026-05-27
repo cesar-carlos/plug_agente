@@ -14,6 +14,7 @@ class SilentUpdateInstallRequest {
     required this.sha256,
     required this.requireValidSignature,
     this.cancelRequested,
+    this.allowDownloadResume = true,
   });
 
   final String version;
@@ -29,6 +30,13 @@ class SilentUpdateInstallRequest {
   /// Used by the coordinator to honor "user disabled automatic silent updates
   /// mid-download" requests promptly instead of finishing the install.
   final bool Function()? cancelRequested;
+
+  /// When `true` (default) the installer keeps a partial `.part` file across
+  /// attempts and asks the server for `Range: bytes=<offset>-` to continue
+  /// from where the previous attempt stopped. Set to `false` to force the
+  /// classic "always download from zero" path (e.g., when a proxy is known
+  /// to mishandle `Range`).
+  final bool allowDownloadResume;
 
   /// Marker used in failure context so the coordinator can distinguish a
   /// user-driven cancellation from genuine network/validation errors.
@@ -47,6 +55,7 @@ class SilentUpdateInstallResult {
     required this.appPid,
     required this.updateDirectorySecurityStatus,
     this.helperSha256,
+    this.helperSignatureStatus,
   });
 
   final String installerPath;
@@ -64,6 +73,13 @@ class SilentUpdateInstallResult {
   /// installs and detect tampering between releases. `null` when measurement
   /// failed (e.g., file disappeared between resolution and copy).
   final String? helperSha256;
+
+  /// Authenticode signature status of the source `plug_update_helper.exe`,
+  /// captured via `Get-AuthenticodeSignature` before the helper is copied
+  /// to the updates directory. Mirrors `HelperSignatureStatus.name`
+  /// (`valid`, `invalid`, `unsigned`, `unknown`). `null` when the probe was
+  /// not invoked.
+  final String? helperSignatureStatus;
 }
 
 abstract interface class ISilentUpdateInstaller {

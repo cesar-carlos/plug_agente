@@ -206,3 +206,88 @@ bool resolveAutoUpdateRequireFeedSignature({
     _ => false,
   };
 }
+
+const int _defaultPreCloseDelaySeconds = 30;
+const int _maxPreCloseDelaySeconds = 120;
+
+/// Delay (in seconds) between the moment the silent flow decides to close
+/// the app and the actual close. Used to display a "app fechando para
+/// instalar atualizacao" notice. Default 30s, capped between 0 and 120.
+int resolveAutoUpdatePreCloseDelaySeconds({
+  required Map<String, String> environment,
+}) {
+  final raw = environment['AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS']?.trim() ?? '';
+  if (raw.isEmpty) return _defaultPreCloseDelaySeconds;
+  final parsed = int.tryParse(raw);
+  if (parsed == null || parsed < 0 || parsed > _maxPreCloseDelaySeconds) {
+    return _defaultPreCloseDelaySeconds;
+  }
+  return parsed;
+}
+
+/// Parses an `HH:MM` string into minutes since midnight (`0..1439`).
+/// Returns `null` when [raw] is null/blank/malformed. Tolerates surrounding
+/// whitespace and single-digit hours/minutes.
+int? parseQuietHourMinute(String? raw) {
+  final value = raw?.trim() ?? '';
+  if (value.isEmpty) return null;
+  final parts = value.split(':');
+  if (parts.length != 2) return null;
+  final hour = int.tryParse(parts[0]);
+  final minute = int.tryParse(parts[1]);
+  if (hour == null || minute == null) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+/// Start of the quiet-hours window in minutes since midnight, or `null` when
+/// not configured. Together with [resolveAutoUpdateQuietHoursEndMinute],
+/// the silent flow returns `skippedByQuietHours` instead of probing when
+/// the current local time falls inside `[start, end)`. Wrap-around (start
+/// > end) is supported, e.g., `start=22:00`, `end=06:00`.
+int? resolveAutoUpdateQuietHoursStartMinute({
+  required Map<String, String> environment,
+}) {
+  return parseQuietHourMinute(environment['AUTO_UPDATE_QUIET_HOURS_START']);
+}
+
+/// End of the quiet-hours window in minutes since midnight, or `null`.
+int? resolveAutoUpdateQuietHoursEndMinute({
+  required Map<String, String> environment,
+}) {
+  return parseQuietHourMinute(environment['AUTO_UPDATE_QUIET_HOURS_END']);
+}
+
+/// True when [nowMinutes] (minutes since local midnight) falls inside the
+/// window `[startMinute, endMinute)`. Supports overnight windows where
+/// `start > end`. Returns `false` when either bound is null.
+bool isWithinQuietHoursWindow({
+  required int nowMinutes,
+  required int? startMinute,
+  required int? endMinute,
+}) {
+  if (startMinute == null || endMinute == null) return false;
+  if (startMinute == endMinute) return false;
+  if (startMinute < endMinute) {
+    return nowMinutes >= startMinute && nowMinutes < endMinute;
+  }
+  // Overnight window: e.g., 22:00..06:00.
+  return nowMinutes >= startMinute || nowMinutes < endMinute;
+}
+
+/// Whether the silent updater is allowed to resume a partial download by
+/// issuing an HTTP `Range` request when a `.part` file from a previous
+/// attempt is still on disk. Defaults to `true` because it strictly improves
+/// reliability on flaky links; set to `false` to opt out (e.g., for hubs that
+/// proxy the asset and do not honor `Range`).
+bool resolveAutoUpdateDownloadResume({
+  required Map<String, String> environment,
+  String? fromDefine,
+}) {
+  final raw = (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_DOWNLOAD_RESUME')).trim();
+  final value = raw.isNotEmpty ? raw : environment['AUTO_UPDATE_DOWNLOAD_RESUME']?.trim() ?? '';
+  return switch (value.toLowerCase()) {
+    '0' || 'false' || 'no' || 'nao' => false,
+    _ => true,
+  };
+}

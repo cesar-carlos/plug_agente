@@ -32,6 +32,11 @@ on:
         required: true
         type: boolean
         default: false
+      skip_authenticode_check:
+        description: "Skip signtool verify gate (only for manual rebuilds without certificate)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -70,6 +75,9 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --yes --no-progress
+
+      - name: Install Python dependencies
+        run: python -m pip install --quiet "cryptography>=42.0.0"
 
       - name: Install Flutter dependencies
         run: flutter pub get
@@ -119,7 +127,20 @@ jobs:
 
       - name: Validate appcast tooling
         if: inputs.run_tests
-        run: python -m unittest tool.test_appcast_manager tool.test_validate_release -v
+        run: python -m unittest tool.test_appcast_manager tool.test_validate_release tool.test_appcast_signing -v
+
+      - name: Ensure appcast signing tests did not skip
+        if: inputs.run_tests
+        shell: pwsh
+        run: |
+          # A skip would mean cryptography failed to install or the suite
+          # silently disabled itself. unittest prints `OK (skipped=N)` when
+          # tests skipped and a plain `OK` otherwise.
+          $output = python -m unittest tool.test_appcast_signing -v 2>&1 | Out-String
+          if ($output -match 'skipped=') {
+            Write-Error "tool.test_appcast_signing reported skipped tests: $output"
+            exit 1
+          }
 
       - name: Prepare signing certificate
         id: signing
@@ -140,13 +161,66 @@ jobs:
           AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
           AUTO_UPDATE_CHANNEL: stable
           AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: false
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
+          AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: ${{ vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE || 'false' }}
           WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
           WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
           WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing }}
         run: python installer/build_installer.py
 
       - name: Validate generated installer
-        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag
+        env:
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
+        run: |
+          python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
+        shell: bash
+
+      - name: Verify Authenticode signatures
+        if: ${{ !inputs.skip_authenticode_check }}
+        shell: pwsh
+        env:
+          INSTALLER_PATH: installer/dist/PlugAgente-Setup-${{ env.VERSION_SHORT }}.exe
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installerPath = $env:INSTALLER_PATH
+          if (-not (Test-Path $installerPath)) {
+            throw "Installer not found at $installerPath"
+          }
+
+          # signtool ships with the Windows 10/11 SDK; the runner image has it
+          # in the standard location. Resolve the most recent x64 build.
+          $signtoolCandidates = @(
+            "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe",
+            "${env:ProgramFiles}\Windows Kits\10\bin\*\x64\signtool.exe"
+          )
+          $signtool = $null
+          foreach ($pattern in $signtoolCandidates) {
+            $candidate = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if ($candidate) { $signtool = $candidate.FullName; break }
+          }
+          if (-not $signtool) {
+            throw "signtool.exe not found in Windows Kits."
+          }
+          Write-Host "Using signtool: $signtool"
+
+          $helper = Join-Path $PWD "build\windows\x64\runner\Release\plug_update_helper.exe"
+          if (-not (Test-Path $helper)) {
+            throw "plug_update_helper.exe not found at $helper"
+          }
+
+          $exitInstaller = & $signtool verify /pa /v $installerPath
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output $exitInstaller
+            throw "signtool verify failed for installer ($installerPath)"
+          }
+          $exitHelper = & $signtool verify /pa /v $helper
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output $exitHelper
+            throw "signtool verify failed for plug_update_helper.exe ($helper)"
+          }
+          Write-Host "Authenticode verification passed for installer and helper."
 
       - name: Commit version bump
         if: ${{ !inputs.dry_run }}

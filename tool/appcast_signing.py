@@ -164,3 +164,31 @@ def verify_payload(
         return True
     except Exception:
         return False
+
+
+def parse_public_keys_csv(raw: str | None) -> list[str]:
+    """Splits a comma-separated list of base64 public keys.
+
+    Mirror of ``parseAppcastPublicKeys`` in
+    ``lib/core/security/appcast_signature_verifier.dart``.
+    Trims whitespace and drops empty entries.
+    """
+    if not raw:
+        return []
+    return [entry.strip() for entry in raw.split(",") if entry.strip()]
+
+
+def verify_with_any_key(
+    payload: EnclosureSignaturePayload,
+    signature_b64: str,
+    public_keys_csv: str,
+) -> bool:
+    """Returns True when [signature_b64] verifies against any key in the CSV.
+
+    Used by tooling to confirm an item is acceptable to a fleet of clients
+    that may run with multiple trusted keys during a rotation window.
+    """
+    for candidate in parse_public_keys_csv(public_keys_csv):
+        if verify_payload(payload, signature_b64, candidate):
+            return True
+    return False

@@ -20,6 +20,8 @@ class AppcastProbeResult {
     this.itemCount,
     this.errorMessage,
     this.edSignature,
+    this.releaseNotes,
+    this.releaseNotesUrl,
   });
 
   final String requestUrl;
@@ -39,6 +41,16 @@ class AppcastProbeResult {
   /// this item yet. Verification happens in the coordinator using the
   /// configured public key, so this field is just the raw transport value.
   final String? edSignature;
+
+  /// Release notes text, taken from the `<description>` element of the item.
+  /// Already trimmed; rendering is the UI's responsibility (basic markdown
+  /// allowed). `null` when the publisher omitted the description.
+  final String? releaseNotes;
+
+  /// External URL to a release notes page (from `<sparkle:releaseNotesLink>`).
+  /// Complements [releaseNotes] when the description is too short to be
+  /// useful by itself.
+  final String? releaseNotesUrl;
 }
 
 abstract interface class IAppcastProbeService {
@@ -139,6 +151,7 @@ class AppcastProbeService implements IAppcastProbeService {
 
         final os = _sparkleOsFromEnclosure(enclosure);
         final candidate = _ProbeCandidate(
+          item: item,
           enclosure: enclosure,
           latestVersion: latestVersion,
           os: os,
@@ -230,7 +243,28 @@ class AppcastProbeService implements IAppcastProbeService {
       rolloutPercentage: _plugRolloutPercentageFromEnclosure(enclosure),
       itemCount: itemCount,
       edSignature: _plugEdSignatureFromEnclosure(enclosure),
+      releaseNotes: _releaseNotesFromItem(candidate.item),
+      releaseNotesUrl: _releaseNotesLinkFromItem(candidate.item),
     );
+  }
+
+  static String? _releaseNotesFromItem(XmlElement item) {
+    final description = _firstChildElementByName(item, 'description');
+    if (description == null) return null;
+    final value = description.innerText.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  static String? _releaseNotesLinkFromItem(XmlElement item) {
+    for (final child in item.childElements) {
+      if (child.name.local.toLowerCase() == 'releasenoteslink' &&
+          (child.name.prefix?.toLowerCase() == 'sparkle' ||
+              child.name.namespaceUri == _sparkleNamespace)) {
+        final value = child.innerText.trim();
+        if (value.isNotEmpty) return value;
+      }
+    }
+    return null;
   }
 
   static String? _plugEdSignatureFromEnclosure(XmlElement enclosure) {
@@ -353,11 +387,14 @@ class AppcastProbeService implements IAppcastProbeService {
 
 class _ProbeCandidate {
   const _ProbeCandidate({
+    required this.item,
     required this.enclosure,
     required this.latestVersion,
     required this.os,
   });
 
+  /// Parent `<item>` element. Carries release notes, pubDate, etc.
+  final XmlElement item;
   final XmlElement enclosure;
   final String latestVersion;
   final String? os;

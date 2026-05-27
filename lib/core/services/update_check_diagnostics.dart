@@ -22,6 +22,7 @@ enum UpdateCheckCompletionSource {
   /// flight (probe or download). The coordinator honored the cancellation
   /// instead of letting the installer run to completion.
   automaticCancelled,
+  automaticQuietHours,
 }
 
 class UpdateCheckDiagnostics {
@@ -29,6 +30,7 @@ class UpdateCheckDiagnostics {
     required this.checkedAt,
     required this.configuredFeedUrl,
     required this.requestedFeedUrl,
+    this.checkId,
     this.currentVersion,
     this.probeRequestUrl,
     this.triggerStartedAt,
@@ -69,8 +71,11 @@ class UpdateCheckDiagnostics {
     this.installDirectoryWritable,
     this.elevatedCancelled,
     this.helperSha256,
+    this.helperSignatureStatus,
     this.feedSignatureStatus,
     this.feedSignatureRequired,
+    this.releaseNotes,
+    this.releaseNotesUrl,
     this.rolloutChannel,
     this.rolloutPercentage,
     this.rolloutBucket,
@@ -86,6 +91,12 @@ class UpdateCheckDiagnostics {
   final DateTime checkedAt;
   final String configuredFeedUrl;
   final String requestedFeedUrl;
+
+  /// Time-ordered UUIDv7 generated at the start of each check (manual,
+  /// background, or silent). Lets operators correlate logs, diagnostics and
+  /// future telemetry pushes (Fase 7) across boot sessions.
+  final String? checkId;
+
   final String? currentVersion;
   final String? probeRequestUrl;
   final DateTime? triggerStartedAt;
@@ -133,6 +144,13 @@ class UpdateCheckDiagnostics {
   /// or the install pipeline aborted before the helper copy).
   final String? helperSha256;
 
+  /// Outcome of the Authenticode probe on the source helper executable.
+  /// Mirrors `HelperSignatureStatus.name` (`valid`, `invalid`, `unsigned`,
+  /// `unknown`). When `requireValidSignature=true` and this is not `valid`,
+  /// the installer refuses to launch (validation_code:
+  /// `helper_signature_<status>`).
+  final String? helperSignatureStatus;
+
   /// Outcome of the Ed25519 `plug:edSignature` verification on the appcast
   /// enclosure. Mirrors `AppcastSignatureVerificationStatus.name` (`missing`,
   /// `publicKeyUnavailable`, `malformed`, `valid`, `invalid`). `null` when
@@ -144,6 +162,16 @@ class UpdateCheckDiagnostics {
   /// `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE`. `null` when the field was
   /// captured before the requirement check ran.
   final bool? feedSignatureRequired;
+
+  /// Release notes captured from the appcast `<description>` element of the
+  /// item that won the probe. Optional — publishers can omit it. Rendered
+  /// in the Settings UI as a collapsible block; basic sanitisation applies.
+  final String? releaseNotes;
+
+  /// External URL to release notes (sparkle:releaseNotesLink). When both
+  /// this and [releaseNotes] are present, the UI shows the inline text and
+  /// a "more details" link.
+  final String? releaseNotesUrl;
   final String? rolloutChannel;
   final int? rolloutPercentage;
   final int? rolloutBucket;
@@ -164,6 +192,7 @@ class UpdateCheckDiagnostics {
       'checkedAt': checkedAt.toIso8601String(),
       'configuredFeedUrl': configuredFeedUrl,
       'requestedFeedUrl': requestedFeedUrl,
+      'checkId': checkId,
       'currentVersion': currentVersion,
       'probeRequestUrl': probeRequestUrl,
       'triggerStartedAt': triggerStartedAt?.toIso8601String(),
@@ -204,8 +233,11 @@ class UpdateCheckDiagnostics {
       'installDirectoryWritable': installDirectoryWritable,
       'elevatedCancelled': elevatedCancelled,
       'helperSha256': helperSha256,
+      'helperSignatureStatus': helperSignatureStatus,
       'feedSignatureStatus': feedSignatureStatus,
       'feedSignatureRequired': feedSignatureRequired,
+      'releaseNotes': releaseNotes,
+      'releaseNotesUrl': releaseNotesUrl,
       'rolloutChannel': rolloutChannel,
       'rolloutPercentage': rolloutPercentage,
       'rolloutBucket': rolloutBucket,
@@ -236,6 +268,7 @@ class UpdateCheckDiagnostics {
       checkedAt: checkedAt,
       configuredFeedUrl: configuredFeedUrl,
       requestedFeedUrl: requestedFeedUrl,
+      checkId: json['checkId'] as String?,
       currentVersion: json['currentVersion'] as String?,
       probeRequestUrl: json['probeRequestUrl'] as String?,
       triggerStartedAt: _parseDateTime(json['triggerStartedAt']),
@@ -276,8 +309,11 @@ class UpdateCheckDiagnostics {
       installDirectoryWritable: json['installDirectoryWritable'] as bool?,
       elevatedCancelled: json['elevatedCancelled'] as bool?,
       helperSha256: json['helperSha256'] as String?,
+      helperSignatureStatus: json['helperSignatureStatus'] as String?,
       feedSignatureStatus: json['feedSignatureStatus'] as String?,
       feedSignatureRequired: json['feedSignatureRequired'] as bool?,
+      releaseNotes: json['releaseNotes'] as String?,
+      releaseNotesUrl: json['releaseNotesUrl'] as String?,
       rolloutChannel: json['rolloutChannel'] as String?,
       rolloutPercentage: _parseInt(json['rolloutPercentage']),
       rolloutBucket: _parseInt(json['rolloutBucket']),
@@ -295,6 +331,7 @@ class UpdateCheckDiagnostics {
     DateTime? checkedAt,
     String? configuredFeedUrl,
     String? requestedFeedUrl,
+    String? checkId,
     String? currentVersion,
     String? probeRequestUrl,
     DateTime? triggerStartedAt,
@@ -335,8 +372,11 @@ class UpdateCheckDiagnostics {
     bool? installDirectoryWritable,
     bool? elevatedCancelled,
     String? helperSha256,
+    String? helperSignatureStatus,
     String? feedSignatureStatus,
     bool? feedSignatureRequired,
+    String? releaseNotes,
+    String? releaseNotesUrl,
     String? rolloutChannel,
     int? rolloutPercentage,
     int? rolloutBucket,
@@ -352,6 +392,7 @@ class UpdateCheckDiagnostics {
       checkedAt: checkedAt ?? this.checkedAt,
       configuredFeedUrl: configuredFeedUrl ?? this.configuredFeedUrl,
       requestedFeedUrl: requestedFeedUrl ?? this.requestedFeedUrl,
+      checkId: checkId ?? this.checkId,
       currentVersion: currentVersion ?? this.currentVersion,
       probeRequestUrl: probeRequestUrl ?? this.probeRequestUrl,
       triggerStartedAt: triggerStartedAt ?? this.triggerStartedAt,
@@ -392,8 +433,11 @@ class UpdateCheckDiagnostics {
       installDirectoryWritable: installDirectoryWritable ?? this.installDirectoryWritable,
       elevatedCancelled: elevatedCancelled ?? this.elevatedCancelled,
       helperSha256: helperSha256 ?? this.helperSha256,
+      helperSignatureStatus: helperSignatureStatus ?? this.helperSignatureStatus,
       feedSignatureStatus: feedSignatureStatus ?? this.feedSignatureStatus,
       feedSignatureRequired: feedSignatureRequired ?? this.feedSignatureRequired,
+      releaseNotes: releaseNotes ?? this.releaseNotes,
+      releaseNotesUrl: releaseNotesUrl ?? this.releaseNotesUrl,
       rolloutChannel: rolloutChannel ?? this.rolloutChannel,
       rolloutPercentage: rolloutPercentage ?? this.rolloutPercentage,
       rolloutBucket: rolloutBucket ?? this.rolloutBucket,

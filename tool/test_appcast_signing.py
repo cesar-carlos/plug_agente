@@ -115,6 +115,49 @@ class AppcastSigningTests(unittest.TestCase):
         private_b64, public_b64 = appcast_signing.generate_keypair()
         self.assertEqual(appcast_signing.derive_public_key_b64(private_b64), public_b64)
 
+    def test_parse_public_keys_csv(self) -> None:
+        self.assertEqual(appcast_signing.parse_public_keys_csv(None), [])
+        self.assertEqual(appcast_signing.parse_public_keys_csv(""), [])
+        self.assertEqual(appcast_signing.parse_public_keys_csv("   "), [])
+        self.assertEqual(appcast_signing.parse_public_keys_csv("a"), ["a"])
+        self.assertEqual(
+            appcast_signing.parse_public_keys_csv(" a , b ,, c "),
+            ["a", "b", "c"],
+        )
+
+    def test_verify_with_any_key_accepts_when_signing_key_in_csv(self) -> None:
+        signing_priv, signing_pub = appcast_signing.generate_keypair()
+        _, other_pub = appcast_signing.generate_keypair()
+        payload = appcast_signing.EnclosureSignaturePayload(
+            version="1.0.0+1",
+            os="windows",
+            sha256="aa",
+            channel="stable",
+            rollout_percentage=100,
+            asset_url="https://example.com/setup.exe",
+            asset_size=10,
+        )
+        signature = appcast_signing.sign_payload(payload, signing_priv)
+        csv = f"{other_pub}, {signing_pub}"
+        self.assertTrue(appcast_signing.verify_with_any_key(payload, signature, csv))
+
+    def test_verify_with_any_key_rejects_when_none_match(self) -> None:
+        signing_priv, _ = appcast_signing.generate_keypair()
+        _, other_pub1 = appcast_signing.generate_keypair()
+        _, other_pub2 = appcast_signing.generate_keypair()
+        payload = appcast_signing.EnclosureSignaturePayload(
+            version="1.0.0+1",
+            os="windows",
+            sha256="aa",
+            channel="stable",
+            rollout_percentage=100,
+            asset_url="https://example.com/setup.exe",
+            asset_size=10,
+        )
+        signature = appcast_signing.sign_payload(payload, signing_priv)
+        csv = f"{other_pub1},{other_pub2}"
+        self.assertFalse(appcast_signing.verify_with_any_key(payload, signature, csv))
+
 
 if __name__ == "__main__":
     unittest.main()

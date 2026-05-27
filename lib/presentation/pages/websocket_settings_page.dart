@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/config/payload_signing_config.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
@@ -36,11 +39,20 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   ConnectionProvider? _connectionProvider;
   ConfigProvider? _configProvider;
   late final ConfigFormController _formController;
+  late final FeatureFlags _featureFlags;
+  late final PayloadSigningConfig _payloadSigningConfig;
 
   @override
   void initState() {
     super.initState();
     _formController = ConfigFormController();
+    _featureFlags = getIt<FeatureFlags>();
+    _payloadSigningConfig = getIt.isRegistered<PayloadSigningConfig>()
+        ? getIt<PayloadSigningConfig>()
+        : PayloadSigningConfig.empty(
+            secureStorageAvailable: false,
+            warnings: const <String>['payload_signing_config_not_registered'],
+          );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupAuthListener();
       _setupConnectionListener();
@@ -271,19 +283,25 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return ScaffoldPage(
-      header: PageHeader(
-        title: Text(
-          l10n.navWebSocketSettings,
-          style: context.sectionTitle,
+    return MultiProvider(
+      providers: [
+        Provider<FeatureFlags>.value(value: _featureFlags),
+        Provider<PayloadSigningConfig>.value(value: _payloadSigningConfig),
+      ],
+      child: ScaffoldPage(
+        header: PageHeader(
+          title: Text(
+            l10n.navWebSocketSettings,
+            style: context.sectionTitle,
+          ),
         ),
-      ),
-      content: Padding(
-        padding: AppLayout.pagePadding(context),
-        child: AppLayout.centeredContent(
-          child: _WebSocketSettingsTabbedContent(
-            formController: _formController,
-            onSaveConfig: _saveCurrentConfig,
+        content: Padding(
+          padding: AppLayout.pagePadding(context),
+          child: AppLayout.centeredContent(
+            child: _WebSocketSettingsTabbedContent(
+              formController: _formController,
+              onSaveConfig: _saveCurrentConfig,
+            ),
           ),
         ),
       ),

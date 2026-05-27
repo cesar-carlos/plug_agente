@@ -1,0 +1,145 @@
+name: Feed Smoke
+
+# Daily probe against the published appcast feed to catch silent
+# regressions (broken Pages deploy, malformed XML, missing plug:sha256,
+# tampered plug:edSignature, etc.) outside of the release cycle.
+#
+# Runs unauthenticated against the public feed URL and re-uses the same
+# tooling as the publish pipeline so any drift in the contract is caught
+# the same way clients in the field would notice it.
+
+on:
+  schedule:
+    # 03:30 UTC daily (00:30 BRT). Cron is best-effort on GitHub
+    # Actions; the workflow tolerates skew without changing behaviour.
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+    inputs:
+      feed_url:
+        description: "Sparkle feed URL to probe."
+        required: false
+        type: string
+        default: "https://cesar-carlos.github.io/plug_agente/appcast.xml"
+
+jobs:
+  feed-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      FEED_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.feed_url || 'https://cesar-carlos.github.io/plug_agente/appcast.xml' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: python3 -m pip install --quiet "cryptography>=42.0.0"
+
+      - name: Probe published appcast
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location "${FEED_URL}" -o published_appcast.xml
+          # Basic shape: file must be non-empty, look like XML, and carry
+          # the channel attribute we publish.
+          test -s published_appcast.xml
+          grep -q "<rss" published_appcast.xml
+          # plug:sha256 is mandatory for every item shipped after the
+          # cleanup in the audit; absence means a regression.
+          if ! grep -q 'plug:sha256' published_appcast.xml; then
+            echo "Feed is missing plug:sha256 attributes." >&2
+            exit 1
+          fi
+
+      - name: Verify plug:edSignature (when configured)
+        env:
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AUTO_UPDATE_FEED_PUBLIC_KEY:-}" ]; then
+            echo "No AUTO_UPDATE_FEED_PUBLIC_KEY secret configured; skipping signature verification."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import base64
+          import os
+          import re
+          import sys
+          import urllib.parse
+          import xml.etree.ElementTree as ET
+
+          sys.path.insert(0, "tool")
+          from appcast_signing import EnclosureSignaturePayload, verify_with_any_key  # type: ignore
+
+          NS = {
+              "sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle",
+              "plug": "https://plug.com.br/xmlns/appcast",
+          }
+
+          public_keys = os.environ["AUTO_UPDATE_FEED_PUBLIC_KEY"]
+          tree = ET.parse("published_appcast.xml")
+          root = tree.getroot()
+          items = root.findall("./channel/item")
+          if not items:
+              print("Appcast has no <item> elements.", file=sys.stderr)
+              sys.exit(1)
+
+          # Pick the most recent item (sparkle:version on the enclosure).
+          def parse_version(item):
+              enc = item.find("enclosure")
+              if enc is None:
+                  return None
+              return enc.get("{%s}version" % NS["sparkle"])
+
+          def version_tuple(s):
+              if not s:
+                  return ()
+              base = s.split("+", 1)[0]
+              parts = re.findall(r"\d+", base)
+              return tuple(int(p) for p in parts)
+
+          latest = max(items, key=lambda i: version_tuple(parse_version(i)))
+          enclosure = latest.find("enclosure")
+          if enclosure is None:
+              print("Latest item is missing enclosure.", file=sys.stderr)
+              sys.exit(1)
+
+          signature_b64 = enclosure.get("{%s}edSignature" % NS["plug"])
+          if not signature_b64:
+              print("Latest item has no plug:edSignature; skipping (signing rollout in progress).")
+              sys.exit(0)
+
+          payload = EnclosureSignaturePayload(
+              version=enclosure.get("{%s}version" % NS["sparkle"]) or "",
+              os=enclosure.get("{%s}os" % NS["sparkle"]) or "",
+              sha256=(enclosure.get("{%s}sha256" % NS["plug"]) or "").lower(),
+              channel=enclosure.get("{%s}channel" % NS["plug"]) or "stable",
+              rollout_percentage=int(enclosure.get("{%s}rolloutPercentage" % NS["plug"]) or 100),
+              asset_url=enclosure.get("url") or "",
+              asset_size=int(enclosure.get("length") or 0),
+          )
+
+          if not verify_with_any_key(payload, signature_b64, public_keys):
+              print("plug:edSignature failed verification against AUTO_UPDATE_FEED_PUBLIC_KEY.", file=sys.stderr)
+              sys.exit(1)
+          print("plug:edSignature verified against configured public key(s).")
+          PY
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: feed-smoke-diagnostics
+          path: |
+            published_appcast.xml
+          if-no-files-found: ignore

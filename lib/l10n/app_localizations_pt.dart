@@ -3119,7 +3119,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configUpdateTechnicalSignatureRequired => 'Assinatura obrigatória';
 
   @override
+  String get configUpdateTechnicalCheckId => 'ID da verificação';
+
+  @override
+  String get configAutoUpdateClosingTitle => 'Atualização pronta';
+
+  @override
+  String configAutoUpdateClosingBody(int seconds) {
+    return 'Plug Agente será fechado em ${seconds}s para instalar a atualização.';
+  }
+
+  @override
+  String get configAutoUpdateReleaseNotesHeader => 'Novidades';
+
+  @override
+  String get configAutoUpdateReleaseNotesLink => 'Abrir no navegador';
+
+  @override
   String get configUpdateTechnicalHelperSha256 => 'SHA-256 do helper';
+
+  @override
+  String get configUpdateTechnicalHelperSignatureStatus => 'Assinatura do helper';
 
   @override
   String get configUpdateTechnicalFeedSignatureStatus => 'Assinatura do feed';
@@ -3216,6 +3236,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configUpdateCompletionSourceAutomaticCancelled => 'Atualização automática cancelada';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticQuietHours => 'Ignorada por janela silenciosa';
 
   @override
   String get configCopyUpdateDiagnostics => 'Copiar diagnóstico de update';
@@ -3527,6 +3550,103 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get wsClientTokenPolicyIntrospectionDescription =>
       'Desligado: o hub não pode chamar client_token.getPolicy para ler metadados de permissões; a autorização SQL com client_token não é afetada.';
+
+  @override
+  String get wsSectionPayloadSigning => 'Assinatura de PayloadFrame';
+
+  @override
+  String get wsPayloadSigningStatusOk => 'Assinatura de payload pronta';
+
+  @override
+  String get wsPayloadSigningStatusWarning => 'Assinatura de payload requer atenção';
+
+  @override
+  String get wsPayloadSigningStatusError => 'Configuração de assinatura incompleta';
+
+  @override
+  String get wsPayloadSigningMetaSigner => 'Assinador';
+
+  @override
+  String get wsPayloadSigningMetaActiveKey => 'Chave ativa';
+
+  @override
+  String get wsPayloadSigningMetaKeys => 'Chaves';
+
+  @override
+  String get wsPayloadSigningMetaSource => 'Origem';
+
+  @override
+  String get wsPayloadSigningMetaRotation => 'Rotação';
+
+  @override
+  String get wsPayloadSigningSignerConfigured => 'configurado';
+
+  @override
+  String get wsPayloadSigningSignerMissing => 'ausente';
+
+  @override
+  String get wsPayloadSigningActiveKeyNone => 'não selecionada';
+
+  @override
+  String get wsPayloadSigningRotationReady => 'pronta';
+
+  @override
+  String get wsPayloadSigningRotationSingleKey => 'chave única';
+
+  @override
+  String get wsPayloadSigningSourceNone => 'não configurado';
+
+  @override
+  String get wsPayloadSigningSourceEnvironment => 'ambiente';
+
+  @override
+  String get wsPayloadSigningSourceSecureStorage => 'armazenamento seguro';
+
+  @override
+  String get wsPayloadSigningSourceEnvironmentAndSecureStorage => 'ambiente + armazenamento seguro';
+
+  @override
+  String get wsPayloadSigningToggleOutgoing => 'Assinar quadros de saída';
+
+  @override
+  String get wsPayloadSigningToggleIncoming => 'Exigir quadros recebidos assinados';
+
+  @override
+  String get wsPayloadSigningHelp =>
+      'Chaves são lidas do secure storage e das variáveis PAYLOAD_SIGNING_*. Mantenha a exigência de assinaturas recebidas desligada até que o hub confirme assinar os quadros.';
+
+  @override
+  String get wsPayloadSigningIssueEnabledWithoutKey =>
+      'Assinatura de PayloadFrame de saída está habilitada, mas nenhuma chave de assinatura ativa está configurada.';
+
+  @override
+  String get wsPayloadSigningIssueIncomingRequiredWithoutKey =>
+      'Assinaturas de PayloadFrame recebidas são exigidas, mas o agente não consegue verificar quadros sem uma chave.';
+
+  @override
+  String get wsPayloadSigningIssueActiveKeyMissing =>
+      'Existem chaves de assinatura, mas nenhuma chave ativa foi selecionada.';
+
+  @override
+  String get wsPayloadSigningIssueActiveKeyNotFound =>
+      'A chave ativa selecionada não está presente no conjunto de chaves configurado.';
+
+  @override
+  String get wsPayloadSigningIssueSecureStorageUnavailable =>
+      'Chaves de assinatura estão configuradas, mas o armazenamento seguro não está disponível neste ambiente.';
+
+  @override
+  String get wsPayloadSigningIssueRotationSingleKey =>
+      'Apenas uma chave de assinatura está configurada. Adicione uma segunda chave antes de rotacionar identificadores em produção.';
+
+  @override
+  String get wsPayloadSigningIssueConfigNotRegistered =>
+      'Configuração de assinatura de payload não registrada na inicialização do app.';
+
+  @override
+  String wsPayloadSigningIssueGenericWarning(String code) {
+    return 'Aviso de configuração de assinatura: $code.';
+  }
 
   @override
   String get dbSectionTitle => 'Configuração do banco de dados';

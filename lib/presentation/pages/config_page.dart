@@ -225,8 +225,8 @@ class _ConfigPageState extends State<ConfigPage> {
     });
 
     result.fold(
-      (isUpdateAvailable) {
-        final message = isUpdateAvailable
+      (outcome) {
+        final message = outcome.isUpdateAvailable
             ? l10n.configUpdatesAvailable
             : '${l10n.configUpdatesNotAvailable}\n${l10n.configUpdatesNotAvailableHint}';
         final technicalDetails = _formatTechnicalDetails(
@@ -444,6 +444,10 @@ class _ConfigPageState extends State<ConfigPage> {
             startupNotice: systemSettingsProvider.startupNotice,
             isAutoUpdateAvailable: isAutoUpdateAvailable,
             autoUpdateUnavailableMessage: autoUpdateUnavailableMessage,
+            releaseNotes: orchestrator.lastManualDiagnostics?.releaseNotes ??
+                orchestrator.lastAutomaticDiagnostics?.releaseNotes,
+            releaseNotesUrl: orchestrator.lastManualDiagnostics?.releaseNotesUrl ??
+                orchestrator.lastAutomaticDiagnostics?.releaseNotesUrl,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
             onStartWithWindowsChanged: (bool value) => _onStartWithWindowsChanged(
               systemSettingsProvider,
@@ -501,6 +505,8 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.onCheckAutomaticUpdates,
     required this.onCopyUpdateDiagnostics,
     required this.onAutomaticSilentUpdatesChanged,
+    this.releaseNotes,
+    this.releaseNotesUrl,
   });
 
   final String appVersion;
@@ -524,6 +530,8 @@ class _ConfigTabbedContent extends StatefulWidget {
   final SystemSettingsNoticeState? startupNotice;
   final bool isAutoUpdateAvailable;
   final String? autoUpdateUnavailableMessage;
+  final String? releaseNotes;
+  final String? releaseNotesUrl;
   final ValueChanged<bool> onDarkThemeChanged;
   final ValueChanged<bool> onStartWithWindowsChanged;
   final ValueChanged<bool> onStartMinimizedChanged;
@@ -594,6 +602,8 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             isCheckingAutomaticUpdates: widget.isCheckingAutomaticUpdates,
             isAutoUpdateAvailable: widget.isAutoUpdateAvailable,
             unavailableMessage: widget.autoUpdateUnavailableMessage,
+            releaseNotes: widget.releaseNotes,
+            releaseNotesUrl: widget.releaseNotesUrl,
             onCheckUpdates: widget.onCheckUpdates,
             onCheckAutomaticUpdates: widget.onCheckAutomaticUpdates,
             onCopyUpdateDiagnostics: widget.onCopyUpdateDiagnostics,

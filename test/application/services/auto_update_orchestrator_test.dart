@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
+import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
@@ -284,7 +285,7 @@ void main() {
         expect(orchestrator.automaticSilentUpdatesEnabled, isTrue);
       });
 
-      test('returns Success(false) when remote version is not newer', () async {
+      test('returns SilentUpdateOutcome.noNewVersion when remote version is not newer', () async {
         final fakeProbe = FakeAppcastProbeService()
           ..result = const AppcastProbeResult(
             requestUrl: 'https://example.com/appcast.xml',
@@ -1143,7 +1144,7 @@ void main() {
 
         expect(result.isSuccess(), isTrue);
         result.fold(
-          (isUpdateAvailable) => expect(isUpdateAvailable, isTrue),
+          (outcome) => expect(outcome, ManualCheckOutcome.updateAvailable),
           (_) => fail('Expected success'),
         );
         expect(fakeGateway.lastInBackground, isTrue);
@@ -1184,7 +1185,7 @@ void main() {
         expect(fakeGateway.feedUrls, <String>['https://example.com/appcast.xml']);
       });
 
-      test('returns Success(false) when update is not available', () async {
+      test('returns ManualCheckOutcome.noUpdate when update is not available', () async {
         final fakeGateway = FakeAutoUpdaterGateway();
         final fakeProbe = FakeAppcastProbeService()
           ..result = const AppcastProbeResult(
@@ -1208,7 +1209,7 @@ void main() {
 
         expect(result.isSuccess(), isTrue);
         result.fold(
-          (isUpdateAvailable) => expect(isUpdateAvailable, isFalse),
+          (outcome) => expect(outcome, ManualCheckOutcome.noUpdate),
           (_) => fail('Expected success'),
         );
         expect(fakeGateway.lastInBackground, isTrue);

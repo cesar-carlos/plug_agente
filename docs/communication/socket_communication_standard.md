@@ -2230,6 +2230,56 @@ de idempotencia para cargas grandes.
   `rpc.request` / `rpc.response`, blocos `params` / `result` por schema de metodo
   e objeto `error` vs `rpc.error` quando presente).
 
+## Metodo `agent.autoUpdate.diagnostics.push` (proposta)
+
+Status: **proposta**. Aguarda decisao do time de hub (`Decisao 3` em
+[docs/implemente/plano_auto_update_evolution.md](../implemente/plano_auto_update_evolution.md)).
+
+### Resumo
+
+Cliente envia ao hub um subset nao-sensivel das `UpdateCheckDiagnostics`
+ao final de cada ciclo (manual, background, silent ou reconcile). Permite
+ao operador responder "X% da frota esta em versao N" e
+"qual e a taxa de `automaticInstallFailure` na ultima semana" sem precisar
+coletar diagnosticos manualmente.
+
+### Direcao
+
+`agent -> hub`. Notification ou request (decisao do hub). Recomendacao:
+notification (`one-way`), pois o cliente nao precisa do retorno para
+prosseguir.
+
+### Schema de `params`
+
+[docs/communication/schemas/auto_update_diagnostics.schema.json](./schemas/auto_update_diagnostics.schema.json).
+
+Campos sensiveis (`installerPath`, `launcherPath`,
+`installerLogPath`, `launcherStatusPath`, `installDirectory`,
+`actualSha256`) sao explicitamente **excluidos** do payload. O cliente
+trunca `errorMessage` em 1024 caracteres.
+
+### Throttle
+
+- 1 push por minuto por cliente (timer no gateway).
+- Se o ciclo termina mais rapido que isso, drop silencioso (nao
+  enfileira).
+- Cumpre o objetivo de "qual e o ultimo estado da frota" sem virar canal
+  de telemetria continua.
+
+### Privacy
+
+- Subset minimo: identificacao do agente, versao, timing, completion
+  source.
+- Nada do conteudo do feed nem credenciais.
+- Privacy review obrigatorio antes do go-live (Fase 7.B).
+
+### Implementacao planejada
+
+- Novo gateway em `lib/infrastructure/external_services/`.
+- Chamadas no fim de `_completeManualCheck`, no listener de background
+  e ao final de `checkSilently`/`_reconcilePendingSilentUpdate`.
+- E2E test em `test/live/` gated por `RUN_LIVE_HUB_TESTS=true`.
+
 ## Referencias internas
 
 - Modelos RPC: `lib/domain/protocol/`

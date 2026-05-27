@@ -3113,7 +3113,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configUpdateTechnicalSignatureRequired => 'Signature required';
 
   @override
+  String get configUpdateTechnicalCheckId => 'Check ID';
+
+  @override
+  String get configAutoUpdateClosingTitle => 'Update ready';
+
+  @override
+  String configAutoUpdateClosingBody(int seconds) {
+    return 'Plug Agente will close in ${seconds}s to install the update.';
+  }
+
+  @override
+  String get configAutoUpdateReleaseNotesHeader => 'What\'s new';
+
+  @override
+  String get configAutoUpdateReleaseNotesLink => 'Open in browser';
+
+  @override
   String get configUpdateTechnicalHelperSha256 => 'Helper SHA-256';
+
+  @override
+  String get configUpdateTechnicalHelperSignatureStatus => 'Helper signature';
 
   @override
   String get configUpdateTechnicalFeedSignatureStatus => 'Feed signature';
@@ -3210,6 +3230,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get configUpdateCompletionSourceAutomaticCancelled => 'Automatic update cancelled';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticQuietHours => 'Skipped by quiet hours';
 
   @override
   String get configCopyUpdateDiagnostics => 'Copy update diagnostics';
@@ -3521,6 +3544,102 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get wsClientTokenPolicyIntrospectionDescription =>
       'When disabled, the hub cannot call client_token.getPolicy to read permission metadata; SQL authorization with client_token is unaffected.';
+
+  @override
+  String get wsSectionPayloadSigning => 'PayloadFrame signing';
+
+  @override
+  String get wsPayloadSigningStatusOk => 'Payload signing ready';
+
+  @override
+  String get wsPayloadSigningStatusWarning => 'Payload signing needs attention';
+
+  @override
+  String get wsPayloadSigningStatusError => 'Payload signing configuration is incomplete';
+
+  @override
+  String get wsPayloadSigningMetaSigner => 'Signer';
+
+  @override
+  String get wsPayloadSigningMetaActiveKey => 'Active key';
+
+  @override
+  String get wsPayloadSigningMetaKeys => 'Keys';
+
+  @override
+  String get wsPayloadSigningMetaSource => 'Source';
+
+  @override
+  String get wsPayloadSigningMetaRotation => 'Rotation';
+
+  @override
+  String get wsPayloadSigningSignerConfigured => 'configured';
+
+  @override
+  String get wsPayloadSigningSignerMissing => 'missing';
+
+  @override
+  String get wsPayloadSigningActiveKeyNone => 'not selected';
+
+  @override
+  String get wsPayloadSigningRotationReady => 'ready';
+
+  @override
+  String get wsPayloadSigningRotationSingleKey => 'single key';
+
+  @override
+  String get wsPayloadSigningSourceNone => 'not configured';
+
+  @override
+  String get wsPayloadSigningSourceEnvironment => 'environment';
+
+  @override
+  String get wsPayloadSigningSourceSecureStorage => 'secure storage';
+
+  @override
+  String get wsPayloadSigningSourceEnvironmentAndSecureStorage => 'environment + secure storage';
+
+  @override
+  String get wsPayloadSigningToggleOutgoing => 'Sign outgoing frames';
+
+  @override
+  String get wsPayloadSigningToggleIncoming => 'Require signed incoming frames';
+
+  @override
+  String get wsPayloadSigningHelp =>
+      'Keys are read from secure storage and PAYLOAD_SIGNING_* environment variables. Keep incoming signature enforcement off until the hub is confirmed to sign frames.';
+
+  @override
+  String get wsPayloadSigningIssueEnabledWithoutKey =>
+      'Outgoing PayloadFrame signing is enabled, but no active signing key is configured.';
+
+  @override
+  String get wsPayloadSigningIssueIncomingRequiredWithoutKey =>
+      'Incoming PayloadFrame signatures are required, but the agent cannot verify frames without a key.';
+
+  @override
+  String get wsPayloadSigningIssueActiveKeyMissing => 'Signing keys exist, but no active key id is selected.';
+
+  @override
+  String get wsPayloadSigningIssueActiveKeyNotFound =>
+      'The selected active signing key id is not present in the configured key set.';
+
+  @override
+  String get wsPayloadSigningIssueSecureStorageUnavailable =>
+      'Payload signing keys are configured, but secure storage is unavailable on this runtime.';
+
+  @override
+  String get wsPayloadSigningIssueRotationSingleKey =>
+      'Only one signing key is configured. Add a second key before rotating key ids in production.';
+
+  @override
+  String get wsPayloadSigningIssueConfigNotRegistered =>
+      'Payload signing configuration was not registered at app startup.';
+
+  @override
+  String wsPayloadSigningIssueGenericWarning(String code) {
+    return 'Payload signing configuration warning: $code.';
+  }
 
   @override
   String get dbSectionTitle => 'Database configuration';

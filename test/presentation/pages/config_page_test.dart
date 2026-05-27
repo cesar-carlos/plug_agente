@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
@@ -51,17 +52,17 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   @override
   UpdateCheckDiagnostics? lastAutomaticDiagnostics;
 
-  Future<Result<bool>> Function()? onCheckManual;
+  Future<Result<ManualCheckOutcome>> Function()? onCheckManual;
   Future<Result<SilentUpdateOutcome>> Function()? onCheckSilently;
   Future<Result<void>> Function(bool value)? onSetAutomaticSilentUpdatesEnabled;
   int silentCheckCount = 0;
 
   @override
-  Future<Result<bool>> checkManual() async {
+  Future<Result<ManualCheckOutcome>> checkManual() async {
     if (onCheckManual != null) {
       return onCheckManual!.call();
     }
-    return const Success(false);
+    return const Success(ManualCheckOutcome.noUpdate);
   }
 
   @override
@@ -146,7 +147,7 @@ void main() {
   }
 
   testWidgets('shows spinner only while manual update future is pending', (tester) async {
-    final completer = Completer<Result<bool>>();
+    final completer = Completer<Result<ManualCheckOutcome>>();
     final orchestrator = FakeAutoUpdateOrchestrator(
       isAvailable: true,
       onCheckManual: () => completer.future,
@@ -163,7 +164,7 @@ void main() {
     expect(find.byKey(const ValueKey('updates_progress_ring')), findsOneWidget);
     expect(find.byKey(const ValueKey('updates_refresh_button')), findsNothing);
 
-    completer.complete(const Success(false));
+    completer.complete(const Success(ManualCheckOutcome.noUpdate));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('updates_progress_ring')), findsNothing);
@@ -186,7 +187,7 @@ void main() {
         errorMessage: 'Update check timed out while waiting for updater completion',
       ),
       onCheckManual: () async {
-        return Failure<bool, Exception>(
+        return Failure<ManualCheckOutcome, Exception>(
           domain.ServerFailure.withContext(
             message: 'Update check timed out while waiting for updater completion',
           ),

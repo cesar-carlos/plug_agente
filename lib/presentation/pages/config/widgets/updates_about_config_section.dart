@@ -19,6 +19,8 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     this.unavailableMessage,
     this.isCheckingUpdates = false,
     this.isCheckingAutomaticUpdates = false,
+    this.releaseNotes,
+    this.releaseNotesUrl,
     super.key,
   });
 
@@ -36,6 +38,15 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   final String? unavailableMessage;
   final bool isCheckingUpdates;
   final bool isCheckingAutomaticUpdates;
+
+  /// Plain-text release notes from the appcast item description. When set,
+  /// renders as a Fluent expander below the update status. Empty/null hides
+  /// the expander entirely.
+  final String? releaseNotes;
+
+  /// External "release notes link" from `sparkle:releaseNotesLink`. Shown
+  /// as a `Open in browser` link inside the expander when present.
+  final String? releaseNotesUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +109,17 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                     key: const ValueKey('automatic_updates_feed_status_label'),
                     style: context.captionText,
                   ),
+                  if ((releaseNotes ?? '').trim().isNotEmpty ||
+                      (releaseNotesUrl ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    _ReleaseNotesExpander(
+                      key: const ValueKey('updates_release_notes_expander'),
+                      headerLabel: l10n.configAutoUpdateReleaseNotesHeader,
+                      linkLabel: l10n.configAutoUpdateReleaseNotesLink,
+                      notes: releaseNotes,
+                      url: releaseNotesUrl,
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.md),
                   SettingsToggleTile(
                     key: const ValueKey('automatic_silent_updates_toggle'),
@@ -163,6 +185,60 @@ class UpdatesAboutConfigSection extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ReleaseNotesExpander extends StatelessWidget {
+  const _ReleaseNotesExpander({
+    required this.headerLabel,
+    required this.linkLabel,
+    this.notes,
+    this.url,
+    super.key,
+  });
+
+  final String headerLabel;
+  final String linkLabel;
+  final String? notes;
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmedNotes = (notes ?? '').trim();
+    final trimmedUrl = (url ?? '').trim();
+    return Expander(
+      header: Text(headerLabel),
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (trimmedNotes.isNotEmpty)
+            SelectableText(
+              trimmedNotes,
+              style: context.bodyText,
+            ),
+          if (trimmedNotes.isNotEmpty && trimmedUrl.isNotEmpty)
+            const SizedBox(height: AppSpacing.sm),
+          if (trimmedUrl.isNotEmpty)
+            // Show the URL as selectable plain text. We do not pull in a
+            // browser launcher dependency just for this single button; the
+            // user can copy and open the URL manually, and it is also
+            // captured in the diagnostics clipboard payload.
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('$linkLabel: ', style: context.captionText),
+                Flexible(
+                  child: SelectableText(
+                    trimmedUrl,
+                    key: const ValueKey('updates_release_notes_link'),
+                    style: context.captionText,
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }

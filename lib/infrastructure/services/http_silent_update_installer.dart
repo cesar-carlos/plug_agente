@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
+import 'package:plug_agente/core/security/helper_signature_probe.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
+import 'package:win32/win32.dart' as win32;
 
 typedef HttpClientFactory = HttpClient Function();
 typedef SilentUpdateProcessStarter =
@@ -21,6 +25,7 @@ typedef InstallDirectoryWritableProbe = Future<bool> Function(String installDire
 typedef UpdateHelperPathResolver = Future<String> Function();
 typedef CurrentProcessIdResolver = int Function();
 typedef UpdateDirectorySecurityHardener = Future<String> Function(String updateDirectory);
+typedef DiskFreeSpaceResolver = Future<int?> Function(String directoryPath);
 
 class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
   HttpSilentUpdateInstaller({
@@ -32,6 +37,8 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     UpdateHelperPathResolver? updateHelperPathResolver,
     CurrentProcessIdResolver? currentProcessIdResolver,
     UpdateDirectorySecurityHardener? updateDirectorySecurityHardener,
+    IHelperSignatureProbe? helperSignatureProbe,
+    DiskFreeSpaceResolver? diskFreeSpaceResolver,
     Duration downloadTimeout = _defaultDownloadTimeout,
   }) : _httpClientFactory = httpClientFactory ?? HttpClient.new,
        _processStarter = processStarter ?? Process.start,
@@ -41,6 +48,8 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
        _updateHelperPathResolver = updateHelperPathResolver ?? _resolveDefaultUpdateHelperPath,
        _currentProcessIdResolver = currentProcessIdResolver ?? _resolveCurrentProcessId,
        _updateDirectorySecurityHardener = updateDirectorySecurityHardener ?? _hardenUpdateDirectoryBestEffort,
+       _helperSignatureProbe = helperSignatureProbe ?? PowerShellHelperSignatureProbe(),
+       _diskFreeSpaceResolver = diskFreeSpaceResolver ?? _resolveDefaultDiskFreeSpace,
        _downloadTimeout = downloadTimeout;
 
   final HttpClientFactory _httpClientFactory;
@@ -51,7 +60,16 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
   final UpdateHelperPathResolver _updateHelperPathResolver;
   final CurrentProcessIdResolver _currentProcessIdResolver;
   final UpdateDirectorySecurityHardener _updateDirectorySecurityHardener;
+  final IHelperSignatureProbe _helperSignatureProbe;
+  final DiskFreeSpaceResolver _diskFreeSpaceResolver;
   final Duration _downloadTimeout;
+
+  /// Multiplier used to budget free space relative to the asset size. The
+  /// install path writes the `.part`, renames to `.exe`, and the helper
+  /// later runs the setup which extracts its payload — a 2x headroom keeps
+  /// rare cases (chunky filesystem, AV temp files) from running out of
+  /// space mid-install.
+  static const int _diskSpaceBudgetMultiplier = 2;
 
   static final RegExp _sha256Pattern = RegExp(r'^[0-9a-f]{64}$');
   static const int _waitPidTimeoutSeconds = 45;
@@ -97,6 +115,31 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     final downloadDirectoryPath = await _downloadDirectoryResolver();
     final downloadDirectory = Directory(downloadDirectoryPath);
     await downloadDirectory.create(recursive: true);
+
+    // Pre-flight: refuse to start when the filesystem cannot hold the
+    // download plus headroom. Bubbles a clear ValidationFailure instead of
+    // letting the stream blow up half-way with a generic FileSystemException.
+    final requiredBytes = request.assetSize * _diskSpaceBudgetMultiplier;
+    final freeBytes = await _diskFreeSpaceResolver(downloadDirectory.path);
+    if (freeBytes != null && freeBytes < requiredBytes) {
+      return Failure<SilentUpdateInstallResult, Exception>(
+        domain.ValidationFailure.withContext(
+          message:
+              'Silent update aborted: download directory has insufficient free space '
+              '(need at least $requiredBytes bytes, $freeBytes available).',
+          context: <String, dynamic>{
+            'operation': 'silentUpdateInstall',
+            'validation_code': 'insufficient_disk_space',
+            'version': request.version,
+            'download_directory': downloadDirectory.path,
+            'required_bytes': requiredBytes,
+            'free_bytes': freeBytes,
+            'asset_size': request.assetSize,
+          },
+        ),
+      );
+    }
+
     final updateDirectorySecurityStatus = await _updateDirectorySecurityHardener(downloadDirectory.path);
 
     final installerName = _sanitizeFileName(
@@ -118,8 +161,13 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     );
 
     final partFile = File(partPath);
+    final resumeEnabled = request.allowDownloadResume;
     try {
-      if (partFile.existsSync()) {
+      // When resume is on we keep the .part across retries; the _download
+      // helper inspects it to decide between Range and full restart. When
+      // resume is off we always start fresh to preserve the pre-existing
+      // contract (each install attempt downloads the whole file).
+      if (!resumeEnabled && partFile.existsSync()) {
         partFile.deleteSync();
       }
 
@@ -128,6 +176,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         partFile,
         expectedSize: request.assetSize,
         version: request.version,
+        resume: resumeEnabled,
         cancelRequested: request.cancelRequested,
       );
       Exception? downloadError;
@@ -210,6 +259,29 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       if (launcherFile.existsSync()) {
         launcherFile.deleteSync();
       }
+      // Probe the source helper's Authenticode signature *before* copying
+      // it to the updates directory, so a tampered helper is rejected on
+      // the install path rather than caught by Windows later. Probe is
+      // cached per session in the implementation so repeated checks within
+      // a single process cost nothing after the first.
+      final helperSignatureStatus = await _helperSignatureProbe.probe(installedHelperPath);
+      if (request.requireValidSignature && helperSignatureStatus != HelperSignatureStatus.valid) {
+        return Failure<SilentUpdateInstallResult, Exception>(
+          domain.ValidationFailure.withContext(
+            message:
+                'Silent update helper signature is required but reported '
+                '${helperSignatureStatus.name}. Refusing to launch.',
+            context: <String, dynamic>{
+              'operation': 'silentUpdateInstall',
+              'version': request.version,
+              'helper_path': installedHelperPath,
+              'helper_signature_status': helperSignatureStatus.name,
+              'validation_code': 'helper_signature_${helperSignatureStatus.name}',
+            },
+          ),
+        );
+      }
+
       installedHelperFile.copySync(launcherPath);
       final appPid = _currentProcessIdResolver();
       final helperSha256 = _sha256OfFileBestEffort(installedHelperFile);
@@ -259,6 +331,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
           appPid: appPid,
           updateDirectorySecurityStatus: updateDirectorySecurityStatus,
           helperSha256: helperSha256,
+          helperSignatureStatus: helperSignatureStatus.name,
         ),
       );
     } on Exception catch (error) {
@@ -285,11 +358,27 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     File destination, {
     required int expectedSize,
     required String version,
+    required bool resume,
     bool Function()? cancelRequested,
   }) async {
     if (cancelRequested?.call() ?? false) {
       return _cancelledDownloadFailure(assetUri, version);
     }
+
+    // Compute the resume offset *before* opening the network connection.
+    // We delete any .part that already looks bigger than expected — the
+    // SHA validation downstream would fail anyway, and a smaller restart
+    // is cheaper than detecting a poisoned cache later.
+    var startOffset = 0;
+    if (resume && destination.existsSync()) {
+      final existing = destination.lengthSync();
+      if (existing > 0 && existing < expectedSize) {
+        startOffset = existing;
+      } else if (existing >= expectedSize) {
+        destination.deleteSync();
+      }
+    }
+
     final client = _httpClientFactory();
     client.connectionTimeout = _downloadTimeout;
     var didTimeOut = false;
@@ -313,6 +402,14 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     try {
       final request = await client.getUrl(assetUri).timeout(_downloadTimeout);
       request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
+      if (startOffset > 0) {
+        // RFC 7233: open-ended range starts from the offset; server responds
+        // 206 + Content-Range. A server that ignores Range either returns
+        // 200 (full body) — handled below by restarting from zero — or
+        // breaks contract (rare). We do not request a specific upper bound
+        // to leave the server free to send the rest in one stream.
+        request.headers.set(HttpHeaders.rangeHeader, 'bytes=$startOffset-');
+      }
       final response = await request.close().timeout(_downloadTimeout);
       if (cancelRequested?.call() ?? false) {
         didCancel = true;
@@ -332,7 +429,22 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         );
       }
 
-      if (response.contentLength > expectedSize) {
+      // If we asked for Range and server ignored it (200 + full body),
+      // start from zero by truncating the .part. Without this, the cached
+      // bytes would prepend the freshly-streamed full file.
+      var effectiveStartOffset = startOffset;
+      final acceptedResume = response.statusCode == 206;
+      if (startOffset > 0 && !acceptedResume) {
+        effectiveStartOffset = 0;
+        if (destination.existsSync()) {
+          destination.deleteSync();
+        }
+      }
+
+      // For partial responses, content-length is the remainder; total must
+      // not exceed the expected size when added to the offset.
+      final reported = response.contentLength;
+      if (reported > 0 && effectiveStartOffset + reported > expectedSize) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Silent update asset download exceeded appcast length',
@@ -340,16 +452,22 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
               'operation': 'silentUpdateDownload',
               'version': version,
               'expected_size': expectedSize,
-              'content_length': response.contentLength,
+              'content_length': reported,
+              'start_offset': effectiveStartOffset,
               'asset_url': assetUri.toString(),
             },
           ),
         );
       }
 
-      final sink = destination.openWrite();
+      // Append when resuming (206) or truncate otherwise. `openWrite`
+      // defaults to `FileMode.write` (truncate); `append` keeps existing
+      // bytes intact.
+      final sink = effectiveStartOffset > 0
+          ? destination.openWrite(mode: FileMode.append)
+          : destination.openWrite();
       try {
-        var downloadedBytes = 0;
+        var downloadedBytes = effectiveStartOffset;
         await for (final chunk in response) {
           if (cancelRequested?.call() ?? false) {
             didCancel = true;
@@ -466,6 +584,43 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
   }
 
   static int _resolveCurrentProcessId() => pid;
+
+  /// Resolves free disk space on the volume that hosts [directoryPath].
+  ///
+  /// On Windows uses `GetDiskFreeSpaceExW` via FFI; on other platforms or
+  /// when the syscall fails returns `null` so the installer falls back to
+  /// best-effort (skips the check). Returning `null` is intentionally
+  /// distinct from `0` so a real "no space" answer can still block.
+  static Future<int?> _resolveDefaultDiskFreeSpace(String directoryPath) async {
+    if (!Platform.isWindows) return null;
+    final pathPtr = directoryPath.toNativeUtf16();
+    final freeBytesAvailable = calloc<Uint64>();
+    final totalNumberOfBytes = calloc<Uint64>();
+    final totalNumberOfFreeBytes = calloc<Uint64>();
+    try {
+      final ok = win32.GetDiskFreeSpaceEx(
+        pathPtr,
+        freeBytesAvailable.cast(),
+        totalNumberOfBytes.cast(),
+        totalNumberOfFreeBytes.cast(),
+      );
+      if (ok == 0) return null;
+      // FreeBytesAvailable reports the space available to the caller's
+      // quota (preferred when ACLs limit the process), falling back to
+      // total free when zero (rare).
+      final available = freeBytesAvailable.value;
+      if (available > 0) return available;
+      final totalFree = totalNumberOfFreeBytes.value;
+      return totalFree > 0 ? totalFree : 0;
+    } on Object {
+      return null;
+    } finally {
+      calloc.free(pathPtr);
+      calloc.free(freeBytesAvailable);
+      calloc.free(totalNumberOfBytes);
+      calloc.free(totalNumberOfFreeBytes);
+    }
+  }
 
   static Future<String> _hardenUpdateDirectoryBestEffort(String updateDirectory) async {
     if (!Platform.isWindows) {

@@ -62,6 +62,11 @@ class UpdateSupportDiagnosticsBuilder {
         key: l10n.configUpdateTechnicalCurrentVersion,
         value: diagnostics.currentVersion ?? currentAppVersion,
       ),
+      if (diagnostics.checkId != null)
+        SupportDiagnosticsField(
+          key: l10n.configUpdateTechnicalCheckId,
+          value: diagnostics.checkId,
+        ),
       SupportDiagnosticsField(
         key: l10n.configUpdateTechnicalCheckedAt,
         value: _formatLastUpdateCheck(diagnostics.checkedAt),
@@ -181,6 +186,7 @@ class UpdateSupportDiagnosticsBuilder {
     _addOptionalField(fields, l10n.configUpdateTechnicalLauncherStatusPath, diagnostics.launcherStatusPath);
     _addOptionalField(fields, l10n.configUpdateTechnicalLauncherState, diagnostics.launcherState);
     _addOptionalField(fields, l10n.configUpdateTechnicalHelperSha256, diagnostics.helperSha256);
+    _addOptionalField(fields, l10n.configUpdateTechnicalHelperSignatureStatus, diagnostics.helperSignatureStatus);
     _addOptionalField(fields, l10n.configUpdateTechnicalFeedSignatureStatus, diagnostics.feedSignatureStatus);
     if (diagnostics.feedSignatureRequired != null) {
       fields.add(
@@ -327,6 +333,7 @@ class UpdateSupportDiagnosticsBuilder {
       UpdateCheckCompletionSource.automaticCooldown => l10n.configUpdateCompletionSourceAutomaticCooldown,
       UpdateCheckCompletionSource.automaticRolloutSkipped => l10n.configUpdateCompletionSourceAutomaticRolloutSkipped,
       UpdateCheckCompletionSource.automaticCancelled => l10n.configUpdateCompletionSourceAutomaticCancelled,
+      UpdateCheckCompletionSource.automaticQuietHours => l10n.configUpdateCompletionSourceAutomaticQuietHours,
       null => '-',
     };
   }

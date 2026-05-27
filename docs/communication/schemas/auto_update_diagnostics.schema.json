@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://cesar-carlos.github.io/plug_agente/schemas/auto_update_diagnostics.schema.json",
+  "title": "Auto-Update Diagnostics Push",
+  "description": "Subset of UpdateCheckDiagnostics that the client pushes to the Plug hub via the agent.autoUpdate.diagnostics.push method. Sensitive paths (installerPath, launcherPath, etc.) are intentionally omitted; the hub only needs enough signal to compute fleet-level KPIs.",
+  "type": "object",
+  "required": [
+    "agentId",
+    "appVersion",
+    "checkedAt",
+    "source"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "description": "Stable agent identifier (the same value used in authentication).",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "appVersion": {
+      "type": "string",
+      "description": "Full version string (e.g., 1.6.8+1).",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:\\+\\d+)?$"
+    },
+    "checkId": {
+      "type": ["string", "null"],
+      "description": "UUIDv7 generated at the start of the cycle. Lets the hub correlate logs across reports."
+    },
+    "checkedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when the check started."
+    },
+    "source": {
+      "type": "string",
+      "description": "Which path produced the diagnostics.",
+      "enum": ["manual", "background", "silent", "reconcile"]
+    },
+    "completionSource": {
+      "type": ["string", "null"],
+      "description": "Mirrors UpdateCheckCompletionSource. Empty when the cycle is still running.",
+      "enum": [
+        "updateAvailable",
+        "updateNotAvailable",
+        "updaterError",
+        "triggerFailure",
+        "triggerTimeout",
+        "completionTimeout",
+        "notInitialized",
+        "circuitOpen",
+        "automaticDisabled",
+        "automaticInstallStarted",
+        "automaticInstallFailure",
+        "automaticDownloadFailure",
+        "automaticValidationFailure",
+        "automaticPendingCompleted",
+        "automaticPendingFailed",
+        "automaticCooldown",
+        "automaticRolloutSkipped",
+        "automaticCancelled",
+        "automaticQuietHours",
+        null
+      ]
+    },
+    "remoteVersion": {
+      "type": ["string", "null"]
+    },
+    "updateAvailable": {
+      "type": ["boolean", "null"]
+    },
+    "channel": {
+      "type": ["string", "null"],
+      "enum": ["stable", "beta", "internal", null]
+    },
+    "rolloutBucket": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 99
+    },
+    "feedSignatureStatus": {
+      "type": ["string", "null"],
+      "enum": ["valid", "invalid", "missing", "malformed", "publicKeyUnavailable", null]
+    },
+    "feedSignatureRequired": {
+      "type": ["boolean", "null"]
+    },
+    "helperSignatureStatus": {
+      "type": ["string", "null"],
+      "enum": ["valid", "invalid", "unsigned", "unknown", null]
+    },
+    "probeDurationMs": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Duration of the appcast probe step."
+    },
+    "downloadDurationMs": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Duration of the asset download step (silent path only)."
+    },
+    "automaticFailureCount": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Consecutive failure counter that drives the cooldown circuit."
+    },
+    "errorMessage": {
+      "type": ["string", "null"],
+      "description": "Truncated error message (max 1024 chars) for failure diagnostics."
+    }
+  }
+}

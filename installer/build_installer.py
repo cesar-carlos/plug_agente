@@ -219,7 +219,12 @@ def main() -> None:
             "   AUTO_UPDATE_FEED_URL nao encontrado no .env; usando feed oficial padrao",
             flush=True,
         )
-    for key in ("AUTO_UPDATE_CHANNEL", "AUTO_UPDATE_REQUIRE_VALID_SIGNATURE"):
+    for key in (
+        "AUTO_UPDATE_CHANNEL",
+        "AUTO_UPDATE_REQUIRE_VALID_SIGNATURE",
+        "AUTO_UPDATE_FEED_PUBLIC_KEY",
+        "AUTO_UPDATE_REQUIRE_FEED_SIGNATURE",
+    ):
         value = resolve_auto_update_define(key)
         if value:
             flutter_cmd.append(f"--dart-define={key}={value}")

@@ -1,33 +1,19 @@
-import 'dart:async';
-
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/config/feature_flags.dart';
-import 'package:plug_agente/core/config/outbound_compression_mode.dart';
-import 'package:plug_agente/core/config/payload_signing_config.dart';
-import 'package:plug_agente/core/config/payload_signing_diagnostics.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
-import 'package:plug_agente/core/utils/url_utils.dart';
-import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/domain/errors/failure_extensions.dart';
-import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
-import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/websocket/websocket_action_buttons.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/websocket/websocket_client_token_policy_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/websocket/websocket_config_controller.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/websocket/websocket_outbound_compression_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/websocket/websocket_payload_signing_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/websocket/websocket_server_section.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/websocket/websocket_status_section.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
-import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
-import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
-import 'package:plug_agente/shared/widgets/common/actions/settings_action_row.dart';
-import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
-import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
-import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
-import 'package:plug_agente/shared/widgets/common/form/password_field.dart';
-import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
-import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 import 'package:provider/provider.dart';
 
-class WebSocketConfigSection extends StatelessWidget {
+class WebSocketConfigSection extends StatefulWidget {
   const WebSocketConfigSection({
     required this.formController,
     required this.onSaveConfig,
@@ -38,7 +24,24 @@ class WebSocketConfigSection extends StatelessWidget {
   final Future<void> Function() onSaveConfig;
 
   @override
+  State<WebSocketConfigSection> createState() => _WebSocketConfigSectionState();
+}
+
+class _WebSocketConfigSectionState extends State<WebSocketConfigSection> {
+  WebSocketConfigController? _controller;
+
+  WebSocketConfigController _ensureController() {
+    return _controller ??= WebSocketConfigController(
+      configProvider: context.read<ConfigProvider>(),
+      authProvider: context.read<AuthProvider>(),
+      connectionProvider: context.read<ConnectionProvider>(),
+      formController: widget.formController,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final controller = _ensureController();
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
@@ -47,599 +50,27 @@ class WebSocketConfigSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ServerSection(
-                formController: formController,
-                onLoginOrLogout: () async {
-                  await _handleLoginOrLogout(context);
-                },
+              WebSocketServerSection(
+                formController: widget.formController,
+                controller: controller,
               ),
-              const SizedBox(height: 24),
-              const _OutboundCompressionSection(),
-              const SizedBox(height: 24),
-              const _PayloadSigningSection(),
-              const SizedBox(height: 24),
-              const _ClientTokenPolicyIntrospectionSection(),
-              const SizedBox(height: 24),
-              _WebSocketActionButtons(
-                formController: formController,
-                onSaveConfig: onSaveConfig,
-              ),
-              const SizedBox(height: 16),
-              const _StatusSection(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleLoginOrLogout(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final configProvider = Provider.of<ConfigProvider>(context, listen: false);
-    final connectionProvider = Provider.of<ConnectionProvider>(
-      context,
-      listen: false,
-    );
-    final currentConfigId = configProvider.currentConfig?.id;
-
-    if (authProvider.isAuthenticatedForConfig(currentConfigId)) {
-      await connectionProvider.disconnect();
-      await authProvider.logout(
-        configId: currentConfigId,
-        clearStoredSession: true,
-      );
-    } else {
-      final serverUrl = normalizeServerUrl(
-        formController.serverUrlController.text,
-      );
-      if (serverUrl.isEmpty) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.modalTitleError,
-          message: l10n.msgServerUrlRequired,
-        );
-        return;
-      }
-      final agentId = formController.agentIdController.text.trim();
-      if (agentId.isEmpty) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.modalTitleError,
-          message: l10n.msgAgentIdRequired,
-        );
-        return;
-      }
-
-      if (formController.authUsernameController.text.isNotEmpty &&
-          formController.authPasswordController.text.isNotEmpty) {
-        final savedConfig = await _persistCurrentConfig(context);
-        if (savedConfig == null) {
-          return;
-        }
-        final credentials = AuthCredentials(
-          username: formController.authUsernameController.text.trim(),
-          password: formController.authPasswordController.text.trim(),
-          agentId: savedConfig.agentId.trim(),
-        );
-        await authProvider.login(
-          configId: savedConfig.id,
-          serverUrl: savedConfig.serverUrl.trim(),
-          credentials: credentials,
-        );
-      } else {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.modalTitleError,
-          message: l10n.msgAuthCredentialsRequired,
-        );
-      }
-    }
-  }
-
-  Future<Config?> _persistCurrentConfig(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final configProvider = Provider.of<ConfigProvider>(context, listen: false);
-    formController.updateAllFieldsToProvider(configProvider);
-    final saveResult = await configProvider.saveConfig();
-    if (!context.mounted) {
-      return null;
-    }
-
-    Config? savedConfig;
-    saveResult.fold(
-      (config) => savedConfig = config,
-      (failure) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.modalTitleErrorSaving,
-          message: failure.toDisplayMessage(),
-        );
-      },
-    );
-    return savedConfig;
-  }
-}
-
-class _PayloadSigningSection extends StatefulWidget {
-  const _PayloadSigningSection();
-
-  @override
-  State<_PayloadSigningSection> createState() => _PayloadSigningSectionState();
-}
-
-class _PayloadSigningSectionState extends State<_PayloadSigningSection> {
-  late final FeatureFlags _flags = getIt<FeatureFlags>();
-  late bool _outgoingSigningEnabled;
-  late bool _incomingSignatureRequired;
-
-  PayloadSigningConfig get _config {
-    if (!getIt.isRegistered<PayloadSigningConfig>()) {
-      return PayloadSigningConfig.empty(
-        secureStorageAvailable: false,
-        warnings: const <String>['payload_signing_config_not_registered'],
-      );
-    }
-    return getIt<PayloadSigningConfig>();
-  }
-
-  PayloadSigningDiagnostics get _diagnostics {
-    return PayloadSigningDiagnostics.evaluate(
-      featureFlags: _flags,
-      config: _config,
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _outgoingSigningEnabled = _flags.enablePayloadSigning;
-    _incomingSignatureRequired = _flags.requireIncomingPayloadSignatures;
-  }
-
-  Future<void> _setOutgoingSigning(bool value) async {
-    setState(() => _outgoingSigningEnabled = value);
-    await _flags.setEnablePayloadSigning(value);
-    if (mounted) {
-      setState(() => _outgoingSigningEnabled = _flags.enablePayloadSigning);
-    }
-  }
-
-  Future<void> _setIncomingSignatureRequired(bool value) async {
-    setState(() => _incomingSignatureRequired = value);
-    await _flags.setRequireIncomingPayloadSignatures(value);
-    if (mounted) {
-      setState(() => _incomingSignatureRequired = _flags.requireIncomingPayloadSignatures);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final diagnostics = _diagnostics;
-    return AppCard(
-      child: SettingsSectionBlock(
-        title: 'PayloadFrame signing',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (diagnostics.issues.isNotEmpty) ...[
-              InfoBar(
-                title: Text(_statusTitle(diagnostics.status)),
-                content: Text(diagnostics.issues.map((issue) => issue.message).join('\n')),
-                severity: _statusSeverity(diagnostics.status),
-                isLong: true,
+              const SizedBox(height: AppSpacing.lg),
+              const WebSocketOutboundCompressionSection(),
+              const SizedBox(height: AppSpacing.lg),
+              const WebSocketPayloadSigningSection(),
+              const SizedBox(height: AppSpacing.lg),
+              const WebSocketClientTokenPolicySection(),
+              const SizedBox(height: AppSpacing.lg),
+              WebSocketActionButtons(
+                controller: controller,
+                onSaveConfig: widget.onSaveConfig,
               ),
               const SizedBox(height: AppSpacing.md),
-            ],
-            Wrap(
-              spacing: AppSpacing.lg,
-              runSpacing: AppSpacing.sm,
-              children: [
-                _SigningMeta(label: 'Signer', value: diagnostics.signerConfigured ? 'configured' : 'missing'),
-                _SigningMeta(label: 'Active key', value: diagnostics.activeKeyId ?? 'not selected'),
-                _SigningMeta(label: 'Keys', value: diagnostics.keyCount.toString()),
-                _SigningMeta(label: 'Source', value: diagnostics.keySource),
-                _SigningMeta(label: 'Rotation', value: diagnostics.rotationReady ? 'ready' : 'single key'),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            ToggleSwitch(
-              checked: _outgoingSigningEnabled,
-              onChanged: (bool value) => unawaited(_setOutgoingSigning(value)),
-              content: const Text('Sign outgoing transport frames when a key is configured'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            ToggleSwitch(
-              checked: _incomingSignatureRequired,
-              onChanged: (bool value) => unawaited(_setIncomingSignatureRequired(value)),
-              content: const Text('Require signed incoming frames before negotiation'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Keys are read from secure storage and PAYLOAD_SIGNING_* environment variables. '
-              'Keep incoming signature enforcement off until the hub is confirmed to sign frames.',
-              style: context.captionText,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _statusTitle(PayloadSigningHealthStatus status) {
-    return switch (status) {
-      PayloadSigningHealthStatus.ok => 'Payload signing ready',
-      PayloadSigningHealthStatus.warning => 'Payload signing needs attention',
-      PayloadSigningHealthStatus.error => 'Payload signing configuration is incomplete',
-    };
-  }
-
-  InfoBarSeverity _statusSeverity(PayloadSigningHealthStatus status) {
-    return switch (status) {
-      PayloadSigningHealthStatus.ok => InfoBarSeverity.success,
-      PayloadSigningHealthStatus.warning => InfoBarSeverity.warning,
-      PayloadSigningHealthStatus.error => InfoBarSeverity.error,
-    };
-  }
-}
-
-class _SigningMeta extends StatelessWidget {
-  const _SigningMeta({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('$label: ', style: context.bodyMuted),
-        Text(
-          value,
-          style: context.bodyText.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ],
-    );
-  }
-}
-
-class _ServerSection extends StatelessWidget {
-  const _ServerSection({
-    required this.formController,
-    required this.onLoginOrLogout,
-  });
-
-  final ConfigFormController formController;
-  final VoidCallback onLoginOrLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Consumer3<AuthProvider, ConnectionProvider, ConfigProvider>(
-      builder: (context, authProvider, connectionProvider, configProvider, _) {
-        final currentConfigId = configProvider.currentConfig?.id;
-        final isAuthenticatedForConfig = authProvider.isAuthenticatedForConfig(
-          currentConfigId,
-        );
-        final isAuthenticating = authProvider.status == AuthStatus.authenticating;
-        final isConnectionBusy =
-            connectionProvider.status == ConnectionStatus.connecting ||
-            connectionProvider.status == ConnectionStatus.negotiating ||
-            connectionProvider.isReconnecting;
-        final canSubmit = isAuthenticatedForConfig || (!isAuthenticating && !isConnectionBusy);
-        return AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SettingsSectionBlock(
-                title: l10n.wsSectionConnection,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppTextField(
-                      label: l10n.wsFieldServerUrl,
-                      controller: formController.serverUrlController,
-                      hint: l10n.wsHintServerUrl,
-                    ),
-                    const SizedBox(height: 16),
-                    AppTextField(
-                      label: l10n.wsFieldAgentId,
-                      controller: formController.agentIdController,
-                      hint: l10n.wsHintAgentId,
-                      readOnly: true,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              SettingsSectionBlock(
-                title: l10n.wsSectionOptionalAuth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppTextField(
-                      label: l10n.wsFieldUsername,
-                      controller: formController.authUsernameController,
-                      hint: l10n.wsHintUsername,
-                    ),
-                    const SizedBox(height: 16),
-                    PasswordField(
-                      controller: formController.authPasswordController,
-                      hint: l10n.wsHintPassword,
-                    ),
-                    const SizedBox(height: 16),
-                    AppButton(
-                      label: isAuthenticating
-                          ? l10n.wsButtonAuthenticating
-                          : isAuthenticatedForConfig
-                          ? l10n.wsButtonLogout
-                          : l10n.wsButtonLogin,
-                      isPrimary: false,
-                      isLoading: isAuthenticating,
-                      onPressed: canSubmit ? onLoginOrLogout : null,
-                    ),
-                    if (isAuthenticatedForConfig &&
-                        !connectionProvider.isConnected &&
-                        (connectionProvider.isReconnecting ||
-                            connectionProvider.status == ConnectionStatus.connecting ||
-                            connectionProvider.status == ConnectionStatus.negotiating)) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        l10n.wsSubtitleSessionWaitingForHub,
-                        style: context.captionText,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              const WebSocketStatusSection(),
             ],
           ),
-        );
-      },
-    );
-  }
-}
-
-class _ClientTokenPolicyIntrospectionSection extends StatefulWidget {
-  const _ClientTokenPolicyIntrospectionSection();
-
-  @override
-  State<_ClientTokenPolicyIntrospectionSection> createState() => _ClientTokenPolicyIntrospectionSectionState();
-}
-
-class _ClientTokenPolicyIntrospectionSectionState extends State<_ClientTokenPolicyIntrospectionSection> {
-  late final FeatureFlags _flags = getIt<FeatureFlags>();
-  late bool _introspectionEnabled;
-
-  @override
-  void initState() {
-    super.initState();
-    _introspectionEnabled = _flags.enableClientTokenPolicyIntrospection;
-  }
-
-  Future<void> _onChanged(bool enabled) async {
-    setState(() => _introspectionEnabled = enabled);
-    await _flags.setEnableClientTokenPolicyIntrospection(enabled);
-    if (mounted) {
-      setState(() => _introspectionEnabled = _flags.enableClientTokenPolicyIntrospection);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return AppCard(
-      child: SettingsSectionBlock(
-        title: l10n.wsSectionClientTokenPolicy,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ToggleSwitch(
-              checked: _introspectionEnabled,
-              onChanged: (bool value) => unawaited(_onChanged(value)),
-              content: Text(l10n.wsFieldClientTokenPolicyIntrospection),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              l10n.wsClientTokenPolicyIntrospectionDescription,
-              style: context.captionText,
-            ),
-          ],
         ),
       ),
     );
-  }
-}
-
-class _OutboundCompressionSection extends StatefulWidget {
-  const _OutboundCompressionSection();
-
-  @override
-  State<_OutboundCompressionSection> createState() => _OutboundCompressionSectionState();
-}
-
-class _OutboundCompressionSectionState extends State<_OutboundCompressionSection> {
-  late final FeatureFlags _flags = getIt<FeatureFlags>();
-  late OutboundCompressionMode _mode;
-
-  @override
-  void initState() {
-    super.initState();
-    _mode = _flags.outboundCompressionMode;
-  }
-
-  Future<void> _onModeChanged(OutboundCompressionMode mode) async {
-    setState(() => _mode = mode);
-    await _flags.setOutboundCompressionMode(mode);
-    if (mounted) {
-      setState(() {
-        _mode = _flags.outboundCompressionMode;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return AppCard(
-      child: SettingsSectionBlock(
-        title: l10n.wsSectionOutboundCompression,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AppDropdown<OutboundCompressionMode>(
-              label: l10n.wsFieldOutboundCompressionMode,
-              value: _mode,
-              items: [
-                ComboBoxItem<OutboundCompressionMode>(
-                  value: OutboundCompressionMode.none,
-                  child: Text(l10n.wsOutboundCompressionOff),
-                ),
-                ComboBoxItem<OutboundCompressionMode>(
-                  value: OutboundCompressionMode.auto,
-                  child: Text(l10n.wsOutboundCompressionAuto),
-                ),
-                ComboBoxItem<OutboundCompressionMode>(
-                  value: OutboundCompressionMode.gzip,
-                  child: Text(l10n.wsOutboundCompressionGzip),
-                ),
-              ],
-              onChanged: (OutboundCompressionMode? value) {
-                if (value != null) {
-                  unawaited(_onModeChanged(value));
-                }
-              },
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              l10n.wsOutboundCompressionDescription,
-              style: context.captionText,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WebSocketActionButtons extends StatelessWidget {
-  const _WebSocketActionButtons({
-    required this.formController,
-    required this.onSaveConfig,
-  });
-
-  final ConfigFormController formController;
-  final Future<void> Function() onSaveConfig;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Consumer3<ConnectionProvider, AuthProvider, ConfigProvider>(
-      builder: (context, connectionProvider, authProvider, configProvider, _) {
-        final isConnecting = connectionProvider.status == ConnectionStatus.connecting;
-        final isNegotiating = connectionProvider.status == ConnectionStatus.negotiating;
-        final isReconnecting = connectionProvider.status == ConnectionStatus.reconnecting;
-        final isConnectionBusy = isConnecting || isNegotiating || isReconnecting;
-        return SettingsActionRow(
-          leading: AppButton(
-            label: connectionProvider.isConnected ? l10n.wsButtonDisconnect : l10n.wsButtonConnect,
-            isLoading: isConnectionBusy,
-            onPressed: () async {
-              await _handleConnectOrDisconnect(
-                context,
-                connectionProvider,
-                authProvider,
-              );
-            },
-          ),
-          trailing: AppButton(
-            label: l10n.wsButtonSaveConfig,
-            isLoading: configProvider.isLoading,
-            onPressed: () async {
-              await onSaveConfig();
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _handleConnectOrDisconnect(
-    BuildContext context,
-    ConnectionProvider connectionProvider,
-    AuthProvider authProvider,
-  ) async {
-    if (connectionProvider.status == ConnectionStatus.connecting ||
-        connectionProvider.status == ConnectionStatus.negotiating ||
-        connectionProvider.status == ConnectionStatus.reconnecting) {
-      return;
-    }
-    if (connectionProvider.isConnected) {
-      await connectionProvider.disconnect();
-      return;
-    }
-    final l10n = AppLocalizations.of(context)!;
-    final serverUrl = normalizeServerUrl(
-      formController.serverUrlController.text,
-    );
-    final agentId = formController.agentIdController.text.trim();
-    if (serverUrl.isEmpty || agentId.isEmpty) {
-      return;
-    }
-    final savedConfig = await _persistConfigBeforeConnect(context);
-    if (!context.mounted || savedConfig == null) {
-      return;
-    }
-    final authToken = authProvider.tokenForConfig(savedConfig.id)?.token.trim();
-    if (!authProvider.isAuthenticatedForConfig(savedConfig.id) || authToken == null || authToken.isEmpty) {
-      SettingsFeedback.showError(
-        context: context,
-        title: l10n.modalTitleError,
-        message: l10n.msgLoginRequiredBeforeConnect,
-      );
-      return;
-    }
-    await connectionProvider.connect(
-      savedConfig.serverUrl.trim(),
-      savedConfig.agentId.trim(),
-      configId: savedConfig.id,
-      authToken: authToken,
-    );
-  }
-
-  Future<Config?> _persistConfigBeforeConnect(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final configProvider = Provider.of<ConfigProvider>(context, listen: false);
-    formController.updateAllFieldsToProvider(configProvider);
-    final saveResult = await configProvider.saveConfig();
-    if (!context.mounted) {
-      return null;
-    }
-
-    Config? savedConfig;
-    saveResult.fold(
-      (config) => savedConfig = config,
-      (failure) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.modalTitleErrorSaving,
-          message: failure.toDisplayMessage(),
-        );
-      },
-    );
-    return savedConfig;
-  }
-}
-
-class _StatusSection extends StatelessWidget {
-  const _StatusSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return const ConnectionStatusWidget();
   }
 }

@@ -5828,11 +5828,47 @@ abstract class AppLocalizations {
   /// **'Signature required'**
   String get configUpdateTechnicalSignatureRequired;
 
+  /// No description provided for @configUpdateTechnicalCheckId.
+  ///
+  /// In en, this message translates to:
+  /// **'Check ID'**
+  String get configUpdateTechnicalCheckId;
+
+  /// No description provided for @configAutoUpdateClosingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update ready'**
+  String get configAutoUpdateClosingTitle;
+
+  /// No description provided for @configAutoUpdateClosingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Plug Agente will close in {seconds}s to install the update.'**
+  String configAutoUpdateClosingBody(int seconds);
+
+  /// No description provided for @configAutoUpdateReleaseNotesHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s new'**
+  String get configAutoUpdateReleaseNotesHeader;
+
+  /// No description provided for @configAutoUpdateReleaseNotesLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in browser'**
+  String get configAutoUpdateReleaseNotesLink;
+
   /// No description provided for @configUpdateTechnicalHelperSha256.
   ///
   /// In en, this message translates to:
   /// **'Helper SHA-256'**
   String get configUpdateTechnicalHelperSha256;
+
+  /// No description provided for @configUpdateTechnicalHelperSignatureStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Helper signature'**
+  String get configUpdateTechnicalHelperSignatureStatus;
 
   /// No description provided for @configUpdateTechnicalFeedSignatureStatus.
   ///
@@ -6025,6 +6061,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Automatic update cancelled'**
   String get configUpdateCompletionSourceAutomaticCancelled;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticQuietHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped by quiet hours'**
+  String get configUpdateCompletionSourceAutomaticQuietHours;
 
   /// No description provided for @configCopyUpdateDiagnostics.
   ///
@@ -6625,6 +6667,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'When disabled, the hub cannot call client_token.getPolicy to read permission metadata; SQL authorization with client_token is unaffected.'**
   String get wsClientTokenPolicyIntrospectionDescription;
+
+  /// No description provided for @wsSectionPayloadSigning.
+  ///
+  /// In en, this message translates to:
+  /// **'PayloadFrame signing'**
+  String get wsSectionPayloadSigning;
+
+  /// No description provided for @wsPayloadSigningStatusOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Payload signing ready'**
+  String get wsPayloadSigningStatusOk;
+
+  /// No description provided for @wsPayloadSigningStatusWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Payload signing needs attention'**
+  String get wsPayloadSigningStatusWarning;
+
+  /// No description provided for @wsPayloadSigningStatusError.
+  ///
+  /// In en, this message translates to:
+  /// **'Payload signing configuration is incomplete'**
+  String get wsPayloadSigningStatusError;
+
+  /// No description provided for @wsPayloadSigningMetaSigner.
+  ///
+  /// In en, this message translates to:
+  /// **'Signer'**
+  String get wsPayloadSigningMetaSigner;
+
+  /// No description provided for @wsPayloadSigningMetaActiveKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Active key'**
+  String get wsPayloadSigningMetaActiveKey;
+
+  /// No description provided for @wsPayloadSigningMetaKeys.
+  ///
+  /// In en, this message translates to:
+  /// **'Keys'**
+  String get wsPayloadSigningMetaKeys;
+
+  /// No description provided for @wsPayloadSigningMetaSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get wsPayloadSigningMetaSource;
+
+  /// No description provided for @wsPayloadSigningMetaRotation.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation'**
+  String get wsPayloadSigningMetaRotation;
+
+  /// No description provided for @wsPayloadSigningSignerConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'configured'**
+  String get wsPayloadSigningSignerConfigured;
+
+  /// No description provided for @wsPayloadSigningSignerMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'missing'**
+  String get wsPayloadSigningSignerMissing;
+
+  /// No description provided for @wsPayloadSigningActiveKeyNone.
+  ///
+  /// In en, this message translates to:
+  /// **'not selected'**
+  String get wsPayloadSigningActiveKeyNone;
+
+  /// No description provided for @wsPayloadSigningRotationReady.
+  ///
+  /// In en, this message translates to:
+  /// **'ready'**
+  String get wsPayloadSigningRotationReady;
+
+  /// No description provided for @wsPayloadSigningRotationSingleKey.
+  ///
+  /// In en, this message translates to:
+  /// **'single key'**
+  String get wsPayloadSigningRotationSingleKey;
+
+  /// No description provided for @wsPayloadSigningSourceNone.
+  ///
+  /// In en, this message translates to:
+  /// **'not configured'**
+  String get wsPayloadSigningSourceNone;
+
+  /// No description provided for @wsPayloadSigningSourceEnvironment.
+  ///
+  /// In en, this message translates to:
+  /// **'environment'**
+  String get wsPayloadSigningSourceEnvironment;
+
+  /// No description provided for @wsPayloadSigningSourceSecureStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'secure storage'**
+  String get wsPayloadSigningSourceSecureStorage;
+
+  /// No description provided for @wsPayloadSigningSourceEnvironmentAndSecureStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'environment + secure storage'**
+  String get wsPayloadSigningSourceEnvironmentAndSecureStorage;
+
+  /// No description provided for @wsPayloadSigningToggleOutgoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign outgoing frames'**
+  String get wsPayloadSigningToggleOutgoing;
+
+  /// No description provided for @wsPayloadSigningToggleIncoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Require signed incoming frames'**
+  String get wsPayloadSigningToggleIncoming;
+
+  /// No description provided for @wsPayloadSigningHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Keys are read from secure storage and PAYLOAD_SIGNING_* environment variables. Keep incoming signature enforcement off until the hub is confirmed to sign frames.'**
+  String get wsPayloadSigningHelp;
+
+  /// No description provided for @wsPayloadSigningIssueEnabledWithoutKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing PayloadFrame signing is enabled, but no active signing key is configured.'**
+  String get wsPayloadSigningIssueEnabledWithoutKey;
+
+  /// No description provided for @wsPayloadSigningIssueIncomingRequiredWithoutKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming PayloadFrame signatures are required, but the agent cannot verify frames without a key.'**
+  String get wsPayloadSigningIssueIncomingRequiredWithoutKey;
+
+  /// No description provided for @wsPayloadSigningIssueActiveKeyMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing keys exist, but no active key id is selected.'**
+  String get wsPayloadSigningIssueActiveKeyMissing;
+
+  /// No description provided for @wsPayloadSigningIssueActiveKeyNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected active signing key id is not present in the configured key set.'**
+  String get wsPayloadSigningIssueActiveKeyNotFound;
+
+  /// No description provided for @wsPayloadSigningIssueSecureStorageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Payload signing keys are configured, but secure storage is unavailable on this runtime.'**
+  String get wsPayloadSigningIssueSecureStorageUnavailable;
+
+  /// No description provided for @wsPayloadSigningIssueRotationSingleKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Only one signing key is configured. Add a second key before rotating key ids in production.'**
+  String get wsPayloadSigningIssueRotationSingleKey;
+
+  /// No description provided for @wsPayloadSigningIssueConfigNotRegistered.
+  ///
+  /// In en, this message translates to:
+  /// **'Payload signing configuration was not registered at app startup.'**
+  String get wsPayloadSigningIssueConfigNotRegistered;
+
+  /// No description provided for @wsPayloadSigningIssueGenericWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Payload signing configuration warning: {code}.'**
+  String wsPayloadSigningIssueGenericWarning(String code);
 
   /// No description provided for @dbSectionTitle.
   ///

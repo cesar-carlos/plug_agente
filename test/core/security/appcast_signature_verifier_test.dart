@@ -120,4 +120,120 @@ void main() {
       expect(status, AppcastSignatureVerificationStatus.invalid);
     });
   });
+
+  group('Multi-key rotation', () {
+    test('accepts signature when ANY of the listed keys matches', () async {
+      final algorithm = Ed25519();
+      final activeKeyPair = await algorithm.newKeyPair();
+      final activePublic = await activeKeyPair.extractPublicKey();
+      final retiredKeyPair = await algorithm.newKeyPair();
+      final retiredPublic = await retiredKeyPair.extractPublicKey();
+      const payload = 'asset_url=https://example.com/setup.exe\nversion=1.0.0\n';
+
+      // Signed by the active key.
+      final signature = await algorithm.sign(utf8.encode(payload), keyPair: activeKeyPair);
+
+      final verifier = Ed25519AppcastSignatureVerifier(algorithm: algorithm);
+      // Build configures both retired and active keys (CSV).
+      final status = await verifier.verifyEnclosure(
+        canonicalPayload: payload,
+        base64Signature: base64Encode(signature.bytes),
+        base64PublicKey: '${base64Encode(retiredPublic.bytes)},${base64Encode(activePublic.bytes)}',
+      );
+      expect(status, AppcastSignatureVerificationStatus.valid);
+    });
+
+    test('returns invalid when none of multiple keys match', () async {
+      final algorithm = Ed25519();
+      final signingKeyPair = await algorithm.newKeyPair();
+      final other1 = await (await algorithm.newKeyPair()).extractPublicKey();
+      final other2 = await (await algorithm.newKeyPair()).extractPublicKey();
+      const payload = 'version=1.0.0\n';
+
+      final signature = await algorithm.sign(utf8.encode(payload), keyPair: signingKeyPair);
+
+      final verifier = Ed25519AppcastSignatureVerifier(algorithm: algorithm);
+      final status = await verifier.verifyEnclosure(
+        canonicalPayload: payload,
+        base64Signature: base64Encode(signature.bytes),
+        base64PublicKey: '${base64Encode(other1.bytes)},${base64Encode(other2.bytes)}',
+      );
+      expect(status, AppcastSignatureVerificationStatus.invalid);
+    });
+
+    test('ignores malformed entries in CSV when at least one key has valid shape', () async {
+      final algorithm = Ed25519();
+      final keyPair = await algorithm.newKeyPair();
+      final publicKey = await keyPair.extractPublicKey();
+      const payload = 'version=1.0.0\n';
+
+      final signature = await algorithm.sign(utf8.encode(payload), keyPair: keyPair);
+
+      final verifier = Ed25519AppcastSignatureVerifier(algorithm: algorithm);
+      // CSV with one garbage entry then a valid entry; verifier must succeed.
+      final status = await verifier.verifyEnclosure(
+        canonicalPayload: payload,
+        base64Signature: base64Encode(signature.bytes),
+        base64PublicKey: 'not-base64!,${base64Encode(publicKey.bytes)}',
+      );
+      expect(status, AppcastSignatureVerificationStatus.valid);
+    });
+
+    test('returns malformed when every CSV entry is invalid', () async {
+      final algorithm = Ed25519();
+      final keyPair = await algorithm.newKeyPair();
+      final signature = await algorithm.sign(utf8.encode('payload'), keyPair: keyPair);
+      final verifier = Ed25519AppcastSignatureVerifier(algorithm: algorithm);
+
+      final status = await verifier.verifyEnclosure(
+        canonicalPayload: 'payload',
+        base64Signature: base64Encode(signature.bytes),
+        base64PublicKey: 'not-base64!,also-not-base64',
+      );
+      expect(status, AppcastSignatureVerificationStatus.malformed);
+    });
+
+    test('trims whitespace around CSV entries', () async {
+      final algorithm = Ed25519();
+      final keyPair = await algorithm.newKeyPair();
+      final publicKey = await keyPair.extractPublicKey();
+      const payload = 'version=1.0.0\n';
+
+      final signature = await algorithm.sign(utf8.encode(payload), keyPair: keyPair);
+
+      final verifier = Ed25519AppcastSignatureVerifier(algorithm: algorithm);
+      final status = await verifier.verifyEnclosure(
+        canonicalPayload: payload,
+        base64Signature: base64Encode(signature.bytes),
+        base64PublicKey: '  ${base64Encode(publicKey.bytes)}  , ',
+      );
+      expect(status, AppcastSignatureVerificationStatus.valid);
+    });
+  });
+
+  group('parseAppcastPublicKeys', () {
+    test('returns empty list for null/blank input', () {
+      expect(parseAppcastPublicKeys(null), isEmpty);
+      expect(parseAppcastPublicKeys(''), isEmpty);
+      expect(parseAppcastPublicKeys('   '), isEmpty);
+    });
+
+    test('returns single entry for non-CSV input', () {
+      expect(parseAppcastPublicKeys('abc=='), <String>['abc==']);
+    });
+
+    test('splits CSV and trims whitespace', () {
+      expect(
+        parseAppcastPublicKeys(' key1, key2 ,  key3 '),
+        <String>['key1', 'key2', 'key3'],
+      );
+    });
+
+    test('drops empty entries from CSV', () {
+      expect(
+        parseAppcastPublicKeys('key1,,key2,'),
+        <String>['key1', 'key2'],
+      );
+    });
+  });
 }

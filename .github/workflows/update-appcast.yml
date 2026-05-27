@@ -59,8 +59,22 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Python dependencies
+        run: python3 -m pip install --quiet "cryptography>=42.0.0"
+
       - name: Run appcast tooling unit tests
-        run: python3 -m unittest tool.test_appcast_manager tool.test_validate_release -v
+        run: python3 -m unittest tool.test_appcast_manager tool.test_validate_release tool.test_appcast_signing -v
+
+      - name: Ensure appcast signing tests did not skip
+        shell: bash
+        run: |
+          set -e
+          output="$(python3 -m unittest tool.test_appcast_signing -v 2>&1)"
+          if echo "$output" | grep -q 'skipped='; then
+            echo "tool.test_appcast_signing reported skipped tests:" >&2
+            echo "$output" >&2
+            exit 1
+          fi
 
       - name: Resolve rollout percentage
         id: rollout
@@ -303,7 +317,12 @@ jobs:
       - name: Update appcast.xml
         env:
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
+          APPCAST_SIGNING_PRIVATE_KEY: ${{ secrets.APPCAST_SIGNING_PRIVATE_KEY }}
         run: |
+          # When APPCAST_SIGNING_PRIVATE_KEY is configured, the published item
+          # gets a plug:edSignature attribute that clients with
+          # AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true validate before
+          # downloading. Empty secret => unsigned item (backward compat).
           python3 tool/appcast_manager.py update \
             --appcast appcast.xml \
             --version-short "${{ steps.release.outputs.version }}" \
@@ -315,7 +334,8 @@ jobs:
             --channel "${{ steps.channel.outputs.channel }}" \
             --rollout-percentage "${{ steps.rollout.outputs.rollout_percentage }}" \
             --release-body-file release_body.txt \
-            --max-items "${MAX_APPCAST_ITEMS}"
+            --max-items "${MAX_APPCAST_ITEMS}" \
+            --signing-private-key "${APPCAST_SIGNING_PRIVATE_KEY}"
 
       - name: Validate appcast.xml
         env:

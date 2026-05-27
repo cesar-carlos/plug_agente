@@ -103,10 +103,24 @@ ativar `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true` no cliente, exiga assinatura
 em todos os pipelines de release antes de promover a uma proxima versao
 publica para evitar bloqueio do fluxo silencioso.
 
-Rotacao de chaves: gere um novo keypair, assine os proximos items com a
-chave nova e atualize `AUTO_UPDATE_FEED_PUBLIC_KEY` no proximo release. O
-cliente passa a aceitar somente items assinados pela chave nova; items
-antigos assinados com a chave anterior viram `invalid` na proxima validacao
+Rotacao de chaves: `AUTO_UPDATE_FEED_PUBLIC_KEY` aceita lista CSV de
+chaves base64. Use isso para janela de rotacao sem outage:
+
+```text
+# Build N: a chave nova ainda nao e usada para assinar, mas ja viaja
+AUTO_UPDATE_FEED_PUBLIC_KEY=<key_atual>,<key_nova>
+
+# Build N+1: releases passam a ser assinadas com <key_nova>.
+# Clientes ainda no build N ou N+1 aceitam ambas as chaves.
+
+# Build N+2 (apos todas as releases publicas usarem <key_nova>):
+AUTO_UPDATE_FEED_PUBLIC_KEY=<key_nova>
+```
+
+O verifier retorna `valid` se a assinatura confere com **qualquer** chave
+da lista. Items assinados pela chave antiga continuam sendo aceitos
+enquanto ela permanecer na lista. Quando todas as chaves listadas
+falharem, o status fica `invalid`
 (`automaticValidationFailure` com codigo `feed_signature_invalid`).
 
 ## Feed Oficial via GitHub Pages

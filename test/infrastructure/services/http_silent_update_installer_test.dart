@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/services/silent_update_installer.dart';
+import 'package:plug_agente/core/security/helper_signature_probe.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/services/http_silent_update_installer.dart';
 
@@ -98,6 +99,386 @@ void main() {
           '--wait-pid-timeout-seconds',
           '45',
         ],
+      );
+    });
+
+    test('resumes a partial .part by issuing a Range request (server returns 206)', () async {
+      // Pre-populate a .part with the first 2 bytes of 'hello'.
+      const installerName = 'PlugAgente-Setup-99.0.0.exe';
+      final partFile = File(p.join(tempDir.path, '$installerName.part'))
+        ..writeAsBytesSync(utf8.encode('he'));
+
+      Map<String, String>? receivedHeaders;
+      final server = await HttpServer.bind('127.0.0.1', 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((HttpRequest request) async {
+        receivedHeaders = <String, String>{};
+        request.headers.forEach((name, values) {
+          receivedHeaders![name] = values.join(',');
+        });
+        final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+        final remainder = utf8.encode('llo'); // bytes 2..4 of 'hello'
+        request.response
+          ..statusCode = HttpStatus.partialContent
+          ..headers.contentLength = remainder.length
+          ..headers.set('Content-Range', 'bytes 2-4/5');
+        if (rangeHeader == null) {
+          // Should not happen with resume=true and an existing .part.
+          request.response.statusCode = HttpStatus.ok;
+          request.response.headers.contentLength = utf8.encode('hello').length;
+          request.response.add(utf8.encode('hello'));
+        } else {
+          request.response.add(remainder);
+        }
+        await request.response.close();
+      });
+
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        helperSignatureProbe: const NoOpHelperSignatureProbe(),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async => _FakeProcess(),
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: installerName,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      expect(receivedHeaders?[HttpHeaders.rangeHeader], 'bytes=2-');
+      // Final installer must contain the full 'hello' (resumed bytes + new bytes).
+      result.fold(
+        (success) => expect(File(success.installerPath).readAsStringSync(), 'hello'),
+        (_) => fail('Expected success'),
+      );
+      expect(partFile.existsSync(), isFalse, reason: '.part must be renamed to .exe on success');
+    });
+
+    test('restarts from zero when server ignores Range and returns 200', () async {
+      const installerName = 'PlugAgente-Setup-99.0.0.exe';
+      // Stale .part has 2 bytes; if server ignores Range, those would corrupt
+      // the file unless the installer truncates first.
+      File(p.join(tempDir.path, '$installerName.part')).writeAsBytesSync(utf8.encode('xy'));
+
+      final server = await HttpServer.bind('127.0.0.1', 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((HttpRequest request) async {
+        // Pretend the server does not implement Range.
+        final body = utf8.encode('hello');
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentLength = body.length
+          ..add(body);
+        await request.response.close();
+      });
+
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        helperSignatureProbe: const NoOpHelperSignatureProbe(),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async => _FakeProcess(),
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: installerName,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      result.fold(
+        (success) => expect(File(success.installerPath).readAsStringSync(), 'hello'),
+        (_) => fail('Expected success'),
+      );
+    });
+
+    test('does not send Range when allowDownloadResume=false', () async {
+      const installerName = 'PlugAgente-Setup-99.0.0.exe';
+      File(p.join(tempDir.path, '$installerName.part')).writeAsBytesSync(utf8.encode('xy'));
+
+      String? rangeHeader;
+      final server = await HttpServer.bind('127.0.0.1', 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((HttpRequest request) async {
+        rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+        final body = utf8.encode('hello');
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentLength = body.length
+          ..add(body);
+        await request.response.close();
+      });
+
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        helperSignatureProbe: const NoOpHelperSignatureProbe(),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async => _FakeProcess(),
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: installerName,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+          allowDownloadResume: false,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      expect(rangeHeader, isNull, reason: 'opt-out must not negotiate Range');
+    });
+
+    test('aborts when download directory has insufficient free space', () async {
+      var processStarted = false;
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        // Free space = 4 bytes; asset = 5 bytes; required = 10 -> blocks.
+        diskFreeSpaceResolver: (_) async => 4,
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+          processStarted = true;
+          return _FakeProcess();
+        },
+      );
+
+      final result = await installer.install(
+        const SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:9/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(processStarted, isFalse);
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('Expected ValidationFailure for insufficient disk space'),
+        (failure) {
+          expect(failure, isA<domain.ValidationFailure>());
+          final context = (failure as domain.Failure).context;
+          expect(context['validation_code'], 'insufficient_disk_space');
+          expect(context['free_bytes'], 4);
+          expect(context['required_bytes'], 10);
+        },
+      );
+    });
+
+    test('skips disk-space check when resolver returns null (best-effort)', () async {
+      // null free-space means the platform check was unavailable; the install
+      // must still proceed so a degraded environment is not a hard outage.
+      final server = await _serveBytes(utf8.encode('hello'));
+      addTearDown(() => server.close(force: true));
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        diskFreeSpaceResolver: (_) async => null,
+        helperSignatureProbe: const NoOpHelperSignatureProbe(),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async => _FakeProcess(),
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('accepts when free space matches required budget exactly', () async {
+      // assetSize=5, budget multiplier=2, required=10; free=10 should pass.
+      final server = await _serveBytes(utf8.encode('hello'));
+      addTearDown(() => server.close(force: true));
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        diskFreeSpaceResolver: (_) async => 10,
+        helperSignatureProbe: const NoOpHelperSignatureProbe(),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async => _FakeProcess(),
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('rejects launch when helper signature is invalid and requireValidSignature=true', () async {
+      final server = await _serveBytes(utf8.encode('hello'));
+      addTearDown(() => server.close(force: true));
+      var processStarted = false;
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        helperSignatureProbe: const _StubHelperSignatureProbe(HelperSignatureStatus.invalid),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+          processStarted = true;
+          return _FakeProcess();
+        },
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: true,
+        ),
+      );
+
+      expect(processStarted, isFalse, reason: 'invalid helper signature must block launch');
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('Expected ValidationFailure'),
+        (failure) {
+          expect(failure, isA<domain.ValidationFailure>());
+          final context = (failure as domain.Failure).context;
+          expect(context['validation_code'], 'helper_signature_invalid');
+          expect(context['helper_signature_status'], 'invalid');
+        },
+      );
+    });
+
+    test('allows launch when helper signature is invalid but requireValidSignature=false', () async {
+      final server = await _serveBytes(utf8.encode('hello'));
+      addTearDown(() => server.close(force: true));
+      var processStarted = false;
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        helperSignatureProbe: const _StubHelperSignatureProbe(HelperSignatureStatus.invalid),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+          processStarted = true;
+          return _FakeProcess();
+        },
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(processStarted, isTrue, reason: 'best-effort mode must still launch');
+      expect(result.isSuccess(), isTrue);
+      result.fold(
+        (success) => expect(success.helperSignatureStatus, 'invalid'),
+        (_) => fail('Expected success'),
+      );
+    });
+
+    test('does not invoke helper signature probe when probe is the NoOp impl', () async {
+      // NoOp returns unknown — combined with requireValidSignature=false,
+      // the install path remains best-effort, mirroring the default behavior
+      // on non-Windows test agents.
+      final server = await _serveBytes(utf8.encode('hello'));
+      addTearDown(() => server.close(force: true));
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        helperSignatureProbe: const NoOpHelperSignatureProbe(),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async => _FakeProcess(),
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/PlugAgente-Setup-99.0.0.exe',
+          assetSize: 5,
+          assetName: 'PlugAgente-Setup-99.0.0.exe',
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      result.fold(
+        (success) => expect(success.helperSignatureStatus, 'unknown'),
+        (_) => fail('Expected success'),
       );
     });
 
@@ -589,6 +970,14 @@ class _FakeProcess implements Process {
 
   @override
   Stream<List<int>> get stdout => _stdout.stream;
+}
+
+class _StubHelperSignatureProbe implements IHelperSignatureProbe {
+  const _StubHelperSignatureProbe(this._status);
+  final HelperSignatureStatus _status;
+
+  @override
+  Future<HelperSignatureStatus> probe(String filePath) async => _status;
 }
 
 class _NeverCompletingHttpClient implements HttpClient {

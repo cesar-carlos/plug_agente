@@ -13,10 +13,12 @@ import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
+import 'package:plug_agente/core/services/update_check_id_recorder.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 abstract interface class ISilentUpdateCoordinator {
@@ -65,6 +67,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     Duration helperWaitDuration = _defaultHelperWaitDuration,
     Duration Function()? bootJitterProvider,
     IAppcastSignatureVerifier? signatureVerifier,
+    UpdateCheckIdRecorder? checkIdRecorder,
+    IAutoUpdateMetricsCollector? metricsCollector,
   }) : _appcastProbeService = appcastProbeService,
        _silentUpdateInstaller = silentUpdateInstaller,
        _settingsStore = settingsStore,
@@ -73,7 +77,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
        _automaticFailureCooldown = automaticFailureCooldown,
        _helperWaitDuration = helperWaitDuration,
        _bootJitterProvider = bootJitterProvider,
-       _signatureVerifier = signatureVerifier ?? Ed25519AppcastSignatureVerifier() {
+       _signatureVerifier = signatureVerifier ?? Ed25519AppcastSignatureVerifier(),
+       _checkIdRecorder = checkIdRecorder ?? UpdateCheckIdRecorder(settingsStore: settingsStore),
+       _metricsCollector = metricsCollector {
     hydratePersistedDiagnostics();
   }
 
@@ -98,10 +104,23 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   /// implementation; tests can inject a deterministic fake.
   final IAppcastSignatureVerifier _signatureVerifier;
 
+  /// Generates UUIDv7 correlation IDs for each silent cycle and keeps a
+  /// ring buffer of recent IDs for offline log correlation.
+  final UpdateCheckIdRecorder _checkIdRecorder;
+
+  /// Optional metrics sink for probe/download duration histograms. `null`
+  /// disables sampling (tests / minimal DI).
+  final IAutoUpdateMetricsCollector? _metricsCollector;
+
   bool _isSilentCheckInProgress = false;
   bool _cancelRequested = false;
   Timer? _automaticCheckTimer;
   UpdateCheckDiagnostics? _lastAutomaticDiagnostics;
+
+  /// Set at the start of every silent cycle (`checkSilently` /
+  /// `_reconcilePendingSilentUpdate`) and propagated to all
+  /// `UpdateCheckDiagnostics` constructed during that cycle.
+  String? _currentCheckId;
 
   // Settings keys — same string values as before for backward compatibility.
   static const String _lastAutomaticDiagnosticsKey = 'auto_update.last_automatic_diagnostics';
@@ -180,12 +199,16 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       );
     }
 
+    _currentCheckId = _checkIdRecorder.newId();
+    unawaited(_checkIdRecorder.record(_currentCheckId!, source: 'silent'));
+
     if (!automaticSilentUpdatesEnabled) {
       final now = DateTime.now();
       _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
         checkedAt: now,
         configuredFeedUrl: feedUrl,
         requestedFeedUrl: feedUrl,
+        checkId: _currentCheckId,
         currentVersion: AppConstants.appVersion,
         completedAt: now,
         completionSource: UpdateCheckCompletionSource.automaticDisabled,
@@ -195,6 +218,34 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled);
     }
 
+    // Quiet hours gate. Sits before installer/pending checks so the window
+    // is honoured even when settings are mid-migration. The periodic timer
+    // keeps firing; on the next tick outside the window the silent path
+    // resumes normally.
+    final environmentSnapshot = AppEnvironment.snapshot();
+    final quietHoursStart = resolveAutoUpdateQuietHoursStartMinute(environment: environmentSnapshot);
+    final quietHoursEnd = resolveAutoUpdateQuietHoursEndMinute(environment: environmentSnapshot);
+    final quietNow = DateTime.now();
+    final quietNowMinutes = quietNow.hour * 60 + quietNow.minute;
+    if (isWithinQuietHoursWindow(
+      nowMinutes: quietNowMinutes,
+      startMinute: quietHoursStart,
+      endMinute: quietHoursEnd,
+    )) {
+      _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
+        checkedAt: quietNow,
+        configuredFeedUrl: feedUrl,
+        requestedFeedUrl: feedUrl,
+        checkId: _currentCheckId,
+        currentVersion: AppConstants.appVersion,
+        completedAt: quietNow,
+        completionSource: UpdateCheckCompletionSource.automaticQuietHours,
+        updateAvailable: false,
+      );
+      await _persistLastAutomaticDiagnostics();
+      return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.skippedByQuietHours);
+    }
+
     final installer = _silentUpdateInstaller;
     if (installer == null) {
       final now = DateTime.now();
@@ -202,6 +253,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         checkedAt: now,
         configuredFeedUrl: feedUrl,
         requestedFeedUrl: feedUrl,
+        checkId: _currentCheckId,
         currentVersion: AppConstants.appVersion,
         completedAt: now,
         completionSource: UpdateCheckCompletionSource.automaticInstallFailure,
@@ -227,6 +279,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           checkedAt: now,
           configuredFeedUrl: feedUrl,
           requestedFeedUrl: feedUrl,
+          checkId: _currentCheckId,
           currentVersion: AppConstants.appVersion,
           completedAt: now,
           completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
@@ -269,6 +322,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         checkedAt: startedAt,
         configuredFeedUrl: feedUrl,
         requestedFeedUrl: feedUrl,
+        checkId: _currentCheckId,
         currentVersion: AppConstants.appVersion,
         probeRequestUrl: feedUrl,
       );
@@ -279,7 +333,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       // numbers on first execution when the value is not yet persisted.
       final bucket = await _rolloutBucket();
 
+      final probeStart = DateTime.now();
       final probeResult = await _appcastProbeService.probeLatest(feedUrl: feedUrl);
+      _metricsCollector?.recordAutoUpdateProbeDuration(DateTime.now().difference(probeStart));
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         probeRequestUrl: probeResult.requestUrl,
         probeSucceeded: probeResult.errorMessage == null,
@@ -289,6 +345,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         remoteVersion: probeResult.latestVersion,
         remoteDisplayVersion: probeResult.latestVersion,
         assetUrl: probeResult.assetUrl,
+        releaseNotes: probeResult.releaseNotes,
+        releaseNotesUrl: probeResult.releaseNotesUrl,
         assetSize: probeResult.assetSize,
         assetName: probeResult.assetName,
         sha256: probeResult.sha256,
@@ -455,6 +513,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         return await _completeAutomaticCancellation(feedUrl);
       }
 
+      final downloadStart = DateTime.now();
       final installResult = await installer.install(
         SilentUpdateInstallRequest(
           version: remoteVersion,
@@ -466,8 +525,12 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
             environment: AppEnvironment.snapshot(),
           ),
           cancelRequested: () => _cancelRequested,
+          allowDownloadResume: resolveAutoUpdateDownloadResume(
+            environment: AppEnvironment.snapshot(),
+          ),
         ),
       );
+      _metricsCollector?.recordAutoUpdateDownloadDuration(DateTime.now().difference(downloadStart));
 
       SilentUpdateInstallResult? installSuccess;
       Exception? installError;
@@ -530,6 +593,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         updateDirectorySecurityStatus: success.updateDirectorySecurityStatus,
         installDirectoryWritable: success.installDirectoryWritable,
         helperSha256: success.helperSha256,
+        helperSignatureStatus: success.helperSignatureStatus,
         signatureRequired: resolveAutoUpdateRequireValidSignature(
           environment: AppEnvironment.snapshot(),
         ),
@@ -603,6 +667,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
               checkedAt: now,
               configuredFeedUrl: feedUrl,
               requestedFeedUrl: feedUrl,
+              checkId: _currentCheckId,
               currentVersion: AppConstants.appVersion,
             ))
         .copyWith(
@@ -736,6 +801,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       checkedAt: now,
       configuredFeedUrl: feedUrl,
       requestedFeedUrl: feedUrl,
+      checkId: _currentCheckId,
       currentVersion: AppConstants.appVersion,
       completedAt: now,
       completionSource: UpdateCheckCompletionSource.automaticCooldown,
@@ -881,6 +947,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   Future<void> _reconcilePendingSilentUpdate() async {
     final pending = _readPendingSilentUpdate();
     if (pending == null) return;
+    _currentCheckId = _checkIdRecorder.newId();
+    unawaited(_checkIdRecorder.record(_currentCheckId!, source: 'reconcile'));
     final feedUrl = _feedUrlResolver() ?? officialAutoUpdateFeedUrl;
     final now = DateTime.now();
     final launcherStatus = _readLauncherStatus(pending.launcherStatusPath);
@@ -904,6 +972,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         checkedAt: now,
         configuredFeedUrl: feedUrl,
         requestedFeedUrl: feedUrl,
+        checkId: _currentCheckId,
         currentVersion: AppConstants.appVersion,
         completedAt: now,
         completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
@@ -943,6 +1012,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       checkedAt: now,
       configuredFeedUrl: feedUrl,
       requestedFeedUrl: feedUrl,
+      checkId: _currentCheckId,
       currentVersion: AppConstants.appVersion,
       completedAt: now,
       completionSource: completed
