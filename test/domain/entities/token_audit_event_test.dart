@@ -4,10 +4,14 @@ import 'package:plug_agente/domain/entities/token_audit_event.dart';
 void main() {
   group('TokenAuditEventType', () {
     test('should include management and authorization audit event types', () {
-      expect(TokenAuditEventType.values.length, 7);
+      expect(TokenAuditEventType.values.length, 8);
       expect(TokenAuditEventType.values, contains(TokenAuditEventType.create));
       expect(TokenAuditEventType.values, contains(TokenAuditEventType.copy));
       expect(TokenAuditEventType.values, contains(TokenAuditEventType.rotate));
+      expect(
+        TokenAuditEventType.values,
+        contains(TokenAuditEventType.metadataUpdate),
+      );
       expect(TokenAuditEventType.values, contains(TokenAuditEventType.revoke));
       expect(
         TokenAuditEventType.values,

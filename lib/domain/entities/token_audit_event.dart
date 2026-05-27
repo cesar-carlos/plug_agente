@@ -2,6 +2,7 @@ enum TokenAuditEventType {
   create,
   copy,
   rotate,
+  metadataUpdate,
   revoke,
   revokedInSession,
   authorizationDenied,

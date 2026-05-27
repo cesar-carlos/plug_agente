@@ -7679,8 +7679,50 @@ abstract class AppLocalizations {
   /// No description provided for @ctEditUpdatesTokenHint.
   ///
   /// In en, this message translates to:
-  /// **'Changes will apply to the selected token.'**
+  /// **'Edits to name, agent or payload keep the token. The token is rotated only when access rules change.'**
   String get ctEditUpdatesTokenHint;
+
+  /// No description provided for @ctEditPolicyChangedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving will rotate the token because the access rules changed.'**
+  String get ctEditPolicyChangedHint;
+
+  /// No description provided for @ctEditMetadataOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Access rules unchanged. The current token will be kept.'**
+  String get ctEditMetadataOnlyHint;
+
+  /// No description provided for @ctEditNoChangesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No changes to save.'**
+  String get ctEditNoChangesHint;
+
+  /// No description provided for @ctMsgTokenRotated.
+  ///
+  /// In en, this message translates to:
+  /// **'Token rotated. Copy the new value before closing.'**
+  String get ctMsgTokenRotated;
+
+  /// No description provided for @ctMsgTokenMetadataUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Token metadata updated. The token value was kept.'**
+  String get ctMsgTokenMetadataUpdated;
+
+  /// No description provided for @ctMsgTokenNoChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'No changes detected. The token was not modified.'**
+  String get ctMsgTokenNoChanges;
+
+  /// No description provided for @ctButtonCopyToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy token'**
+  String get ctButtonCopyToken;
 
   /// No description provided for @ctDialogTokenDetailsTitle.
   ///

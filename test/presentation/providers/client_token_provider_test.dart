@@ -240,7 +240,7 @@ void main() {
       expect(provider.error, isEmpty);
     });
 
-    test('should update token and refresh list', () async {
+    test('should update token and refresh list when rotation occurs', () async {
       when(
         () => mockListClientTokens(query: any(named: 'query')),
       ).thenAnswer(
@@ -274,6 +274,7 @@ void main() {
       ).thenAnswer(
         (_) async => Success(
           ClientTokenUpdateResult(
+            outcome: ClientTokenUpdateOutcome.rotated,
             tokenValue: 'rotated-token-value',
             version: 2,
             updatedAt: DateTime(2026, 3, 12, 15),
@@ -289,8 +290,110 @@ void main() {
 
       expect(success, isTrue);
       expect(provider.lastCreatedToken, equals('rotated-token-value'));
+      expect(provider.lastUpdateOutcome, equals(ClientTokenUpdateOutcome.rotated));
       expect(provider.tokens.single.name, equals('New name'));
       expect(provider.tokens.single.tokenValue, isNull);
+      expect(provider.error, isEmpty);
+    });
+
+    test('should keep lastCreatedToken null when update preserves the existing token', () async {
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer(
+        (_) async => Success(<ClientTokenSummary>[
+          ClientTokenSummary(
+            id: 'token-1',
+            clientId: 'client-1',
+            name: 'Old name',
+            createdAt: DateTime(2026, 3, 12),
+            isRevoked: false,
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: const <ClientTokenRule>[],
+          ),
+        ]),
+      );
+      await provider.loadTokens();
+
+      when(
+        () => mockUpdateClientToken(
+          'token-1',
+          any(),
+          expectedVersion: any(named: 'expectedVersion'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          ClientTokenUpdateResult(
+            outcome: ClientTokenUpdateOutcome.metadataOnly,
+            version: 2,
+            updatedAt: DateTime(2026, 3, 12, 16),
+          ),
+        ),
+      );
+
+      final success = await provider.updateToken(
+        'token-1',
+        _buildRequest(name: 'New name'),
+        refreshTokens: false,
+      );
+
+      expect(success, isTrue);
+      expect(provider.lastCreatedToken, isNull);
+      expect(provider.lastUpdateOutcome, equals(ClientTokenUpdateOutcome.metadataOnly));
+      expect(provider.tokens.single.name, equals('New name'));
+      expect(provider.tokens.single.version, equals(2));
+      expect(provider.error, isEmpty);
+    });
+
+    test('should leave in-memory state untouched when update reports unchanged outcome', () async {
+      when(
+        () => mockListClientTokens(query: any(named: 'query')),
+      ).thenAnswer(
+        (_) async => Success(<ClientTokenSummary>[
+          ClientTokenSummary(
+            id: 'token-1',
+            clientId: 'client-1',
+            name: 'Original',
+            createdAt: DateTime(2026, 3, 12),
+            isRevoked: false,
+            allTables: false,
+            allViews: false,
+            allPermissions: false,
+            rules: const <ClientTokenRule>[],
+          ),
+        ]),
+      );
+      await provider.loadTokens();
+      final originalSnapshot = provider.tokens.single;
+
+      when(
+        () => mockUpdateClientToken(
+          'token-1',
+          any(),
+          expectedVersion: any(named: 'expectedVersion'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          ClientTokenUpdateResult(
+            outcome: ClientTokenUpdateOutcome.unchanged,
+            version: originalSnapshot.version,
+            updatedAt: originalSnapshot.createdAt,
+          ),
+        ),
+      );
+
+      final success = await provider.updateToken(
+        'token-1',
+        _buildRequest(name: 'Original'),
+        refreshTokens: false,
+      );
+
+      expect(success, isTrue);
+      expect(provider.lastCreatedToken, isNull);
+      expect(provider.lastUpdateOutcome, equals(ClientTokenUpdateOutcome.unchanged));
+      expect(provider.tokens.single.name, equals('Original'));
+      expect(provider.tokens.single.version, equals(originalSnapshot.version));
       expect(provider.error, isEmpty);
     });
 

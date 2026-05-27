@@ -18,6 +18,7 @@ import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
@@ -81,6 +82,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   String _formError = '';
   String? _editingTokenId;
   int? _editingTokenVersion;
+  ClientTokenSummary? _editingTokenSnapshot;
+  bool _dialogControllerListenersAttached = false;
 
   bool get _isGlobalScopeMode => _allTables || _allViews;
 
@@ -122,6 +125,78 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _attachDialogControllerListeners() {
+    if (_dialogControllerListenersAttached) {
+      return;
+    }
+    _nameController.addListener(_notifyCreateTokenDialogChanged);
+    _clientIdController.addListener(_notifyCreateTokenDialogChanged);
+    _agentIdController.addListener(_notifyCreateTokenDialogChanged);
+    _payloadController.addListener(_notifyCreateTokenDialogChanged);
+    _dialogControllerListenersAttached = true;
+  }
+
+  void _detachDialogControllerListeners() {
+    if (!_dialogControllerListenersAttached) {
+      return;
+    }
+    _nameController.removeListener(_notifyCreateTokenDialogChanged);
+    _clientIdController.removeListener(_notifyCreateTokenDialogChanged);
+    _agentIdController.removeListener(_notifyCreateTokenDialogChanged);
+    _payloadController.removeListener(_notifyCreateTokenDialogChanged);
+    _dialogControllerListenersAttached = false;
+  }
+
+  /// Builds a request object from the current dialog state. Returns `null`
+  /// when the payload is invalid JSON — callers treat that as "cannot
+  /// determine diff" and fall back to allowing submission so the user sees a
+  /// validation error instead of a silently disabled button.
+  ClientTokenCreateRequest? _tryBuildDraftRequestFromForm() {
+    final (:payload, :error) = parseClientTokenPayloadJson(_payloadController.text);
+    if (error != null || payload == null) {
+      return null;
+    }
+    final globalPermissions = _buildGlobalPermissions();
+    return ClientTokenCreateRequest(
+      clientId: _clientIdController.text.trim(),
+      name: _nameController.text.trim(),
+      agentId: _agentIdController.text.trim().isEmpty ? null : _agentIdController.text.trim(),
+      payload: payload,
+      allTables: _allTables,
+      allViews: _allViews,
+      globalPermissions: globalPermissions,
+      rules: _isGlobalScopeMode ? const <ClientTokenRule>[] : _buildRules(),
+    );
+  }
+
+  /// Whether the edit dialog has any pending difference compared with the
+  /// snapshot captured when it was opened. Always `true` while creating.
+  bool _hasFormChanges() {
+    final snapshot = _editingTokenSnapshot;
+    if (snapshot == null) {
+      return true;
+    }
+    final draft = _tryBuildDraftRequestFromForm();
+    if (draft == null) {
+      return true;
+    }
+    return draft.changesAuthorizationPolicyFrom(snapshot) || draft.changesMetadataFrom(snapshot);
+  }
+
+  /// Whether the current edit-dialog state would rotate the token if saved.
+  /// Drives the inline hint shown above the rules section.
+  bool _hasPolicyChanges() {
+    final snapshot = _editingTokenSnapshot;
+    if (snapshot == null) {
+      return false;
+    }
+    final draft = _tryBuildDraftRequestFromForm();
+    if (draft == null) {
+      return false;
+    }
+    return draft.changesAuthorizationPolicyFrom(snapshot);
   }
 
   // Merges [incoming] into [_rules]: deduplicates within the batch, then
@@ -355,6 +430,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       _formError = '';
       _editingTokenId = baseToken?.id;
       _editingTokenVersion = baseToken?.version;
+      _editingTokenSnapshot = baseToken;
       _nameController.text = baseToken?.name ?? '';
       _clientIdController.text = baseToken?.clientId ?? _generateClientId();
       _agentIdController.text = baseToken?.agentId ?? '';
@@ -372,7 +448,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     final provider = context.read<ClientTokenProvider>();
     provider.clearError();
     provider.clearLastCreatedToken();
+    provider.clearLastUpdateOutcome();
 
+    _attachDialogControllerListeners();
     _isCreateTokenDialogOpen = true;
     try {
       await showGeneralDialog<void>(
@@ -415,12 +493,17 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   theme: theme,
                   isEditingToken: isEditingToken,
                   body: (context, tokenProvider) {
+                    final hasChanges = _hasFormChanges();
+                    final policyChanged = _hasPolicyChanges();
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: _CreateTokenDialogContent(
                             isCompact: isCompact,
+                            isEditingToken: isEditingToken,
+                            policyChanged: policyChanged,
+                            hasFormChanges: hasChanges,
                             agentFocusNode: _createTokenDialogAgentFocusNode,
                             nameController: _nameController,
                             clientIdController: _clientIdController,
@@ -473,6 +556,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                         const SizedBox(height: AppSpacing.lg),
                         _CreateTokenDialogFooter(
                           isCreating: tokenProvider.isCreating,
+                          canSubmit: hasChanges,
                           submitLabel: isEditingToken
                               ? AppLocalizations.of(dialogContext)!.ctButtonSaveTokenChanges
                               : AppLocalizations.of(dialogContext)!.ctButtonCreateToken,
@@ -505,6 +589,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       );
     } finally {
       _isCreateTokenDialogOpen = false;
+      _detachDialogControllerListeners();
     }
   }
 
@@ -570,15 +655,76 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
       _formError = '';
       _notifyCreateTokenDialogChanged();
       if (provider.error.isEmpty) {
+        final outcome = provider.lastUpdateOutcome;
+        final rotatedTokenValue = provider.lastCreatedToken;
         _clearTokenDraftForm();
         navigator.pop();
+        if (currentEditingTokenId != null) {
+          _showEditOutcomeFeedback(
+            outcome: outcome,
+            rotatedTokenValue: rotatedTokenValue,
+          );
+        }
       }
+    }
+  }
+
+  void _showEditOutcomeFeedback({
+    required ClientTokenUpdateOutcome? outcome,
+    required String? rotatedTokenValue,
+  }) {
+    if (!mounted || outcome == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    switch (outcome) {
+      case ClientTokenUpdateOutcome.unchanged:
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(l10n.ctMsgTokenNoChanges),
+            onClose: close,
+          ),
+        );
+        return;
+      case ClientTokenUpdateOutcome.metadataOnly:
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(l10n.ctMsgTokenMetadataUpdated),
+            severity: InfoBarSeverity.success,
+            onClose: close,
+          ),
+        );
+        return;
+      case ClientTokenUpdateOutcome.rotated:
+        if (rotatedTokenValue == null || rotatedTokenValue.isEmpty) {
+          return;
+        }
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(l10n.ctMsgTokenRotated),
+            content: SelectableText(rotatedTokenValue),
+            severity: InfoBarSeverity.success,
+            onClose: close,
+            action: FilledButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: rotatedTokenValue));
+                close();
+              },
+              child: Text(l10n.ctButtonCopyToken),
+            ),
+          ),
+        );
+        return;
     }
   }
 
   void _clearTokenDraftForm() {
     _editingTokenId = null;
     _editingTokenVersion = null;
+    _editingTokenSnapshot = null;
     _clientIdController.text = _generateClientId();
     _agentIdController.clear();
     _payloadController.clear();

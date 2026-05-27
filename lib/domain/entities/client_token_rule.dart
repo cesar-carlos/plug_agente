@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
+// Reason: Immutable value object compares by value for equality.
+
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 
@@ -51,4 +54,18 @@ class ClientTokenRule {
       ...permissions.toJson(),
     };
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ClientTokenRule &&
+        other.resource == resource &&
+        other.permissions == permissions &&
+        other.effect == effect;
+  }
+
+  @override
+  int get hashCode => Object.hash(resource, permissions, effect);
 }

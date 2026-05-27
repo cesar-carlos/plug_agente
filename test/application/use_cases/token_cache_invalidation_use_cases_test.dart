@@ -153,7 +153,7 @@ void main() {
       },
     );
 
-    test('update should invalidate old and new credential hashes', () async {
+    test('update should invalidate old and new credential hashes when token rotates', () async {
       when(
         () => repository.getTokenSecret('token-1'),
       ).thenAnswer(
@@ -168,6 +168,7 @@ void main() {
       ).thenAnswer(
         (_) async => Success(
           ClientTokenUpdateResult(
+            outcome: ClientTokenUpdateOutcome.rotated,
             tokenValue: 'new-secret',
             version: 2,
             updatedAt: DateTime.utc(2026, 3, 17),
@@ -206,6 +207,107 @@ void main() {
       verify(
         () => policyCache.invalidate(hashClientCredentialToken('new-secret')),
       ).called(1);
+      verify(
+        () => auditStore.record(
+          any(that: isA<TokenAuditEvent>().having((e) => e.eventType, 'eventType', TokenAuditEventType.rotate)),
+        ),
+      ).called(1);
+    });
+
+    test('update should record metadataUpdate audit and skip cache invalidation when only metadata changes', () async {
+      when(
+        () => repository.getTokenSecret('token-1'),
+      ).thenAnswer(
+        (_) async => const Success(ClientTokenSecretLookup(tokenValue: 'unchanged-secret')),
+      );
+      when(
+        () => repository.updateToken(
+          'token-1',
+          any(),
+          expectedVersion: any(named: 'expectedVersion'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          ClientTokenUpdateResult(
+            outcome: ClientTokenUpdateOutcome.metadataOnly,
+            version: 2,
+            updatedAt: DateTime.utc(2026, 3, 17),
+          ),
+        ),
+      );
+
+      final useCase = UpdateClientToken(
+        repository,
+        auditStore: auditStore,
+        decisionCache: decisionCache,
+        policyCache: policyCache,
+      );
+
+      final result = await useCase.call(
+        'token-1',
+        _request(),
+        expectedVersion: 1,
+      );
+
+      expect(result.isSuccess(), isTrue);
+      verifyNever(() => decisionCache.invalidateAll());
+      verifyNever(() => policyCache.invalidateAll());
+      verifyNever(() => decisionCache.invalidateForCredentialHash(any()));
+      verifyNever(() => policyCache.invalidate(any()));
+      verify(
+        () => auditStore.record(
+          any(
+            that: isA<TokenAuditEvent>().having(
+              (e) => e.eventType,
+              'eventType',
+              TokenAuditEventType.metadataUpdate,
+            ),
+          ),
+        ),
+      ).called(1);
+    });
+
+    test('update should skip caches and audit when nothing changed', () async {
+      when(
+        () => repository.getTokenSecret('token-1'),
+      ).thenAnswer(
+        (_) async => const Success(ClientTokenSecretLookup(tokenValue: 'unchanged-secret')),
+      );
+      when(
+        () => repository.updateToken(
+          'token-1',
+          any(),
+          expectedVersion: any(named: 'expectedVersion'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          ClientTokenUpdateResult(
+            outcome: ClientTokenUpdateOutcome.unchanged,
+            version: 1,
+            updatedAt: DateTime.utc(2026, 3, 17),
+          ),
+        ),
+      );
+
+      final useCase = UpdateClientToken(
+        repository,
+        auditStore: auditStore,
+        decisionCache: decisionCache,
+        policyCache: policyCache,
+      );
+
+      final result = await useCase.call(
+        'token-1',
+        _request(),
+        expectedVersion: 1,
+      );
+
+      expect(result.isSuccess(), isTrue);
+      verifyNever(() => decisionCache.invalidateAll());
+      verifyNever(() => policyCache.invalidateAll());
+      verifyNever(() => decisionCache.invalidateForCredentialHash(any()));
+      verifyNever(() => policyCache.invalidate(any()));
+      verifyNever(() => auditStore.record(any()));
     });
   });
 }

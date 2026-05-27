@@ -1,5 +1,6 @@
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
+import 'package:plug_agente/domain/value_objects/client_token_authorization_policy.dart';
 
 class ClientTokenSummary {
   const ClientTokenSummary({
@@ -82,6 +83,15 @@ class ClientTokenSummary {
   final List<ClientTokenRule> rules;
 
   bool get allPermissions => allTables && allViews && globalPermissions.isFullAccess;
+
+  /// Authorization policy snapshot used to compare with edit requests when
+  /// deciding whether the underlying token must be rotated.
+  ClientTokenAuthorizationPolicy get policy => ClientTokenAuthorizationPolicy(
+    allTables: allTables,
+    allViews: allViews,
+    globalPermissions: globalPermissions,
+    rules: rules,
+  );
 
   ClientTokenSummary copyWith({
     String? id,

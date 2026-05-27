@@ -246,13 +246,40 @@ class ClientTokenLocalDataSource {
       );
     }
 
-    final newTokenValue = _generateOpaqueToken();
-    final newTokenHash = _hashToken(newTokenValue);
-    await _saveSecretBestEffort(newTokenHash, newTokenValue);
+    final currentSummary = _toEntityWithoutTokenValue(current);
+    final policyChanged = request.changesAuthorizationPolicyFrom(currentSummary);
+    final metadataChanged = request.changesMetadataFrom(currentSummary);
+
+    // Pure no-op: form was saved with the exact persisted state. Skip the DB
+    // write entirely so version, updatedAt, secrets and audit trail stay
+    // untouched.
+    if (!policyChanged && !metadataChanged) {
+      return ClientTokenUpdateResult(
+        outcome: ClientTokenUpdateOutcome.unchanged,
+        version: current.version,
+        updatedAt: current.updatedAt ?? current.createdAt,
+      );
+    }
+
+    final shouldRotateToken = policyChanged;
     final nextVersion = current.version + 1;
     final now = DateTime.now().toUtc();
 
+    final String? newTokenValue;
+    final String? newTokenHash;
+    if (shouldRotateToken) {
+      newTokenValue = _generateOpaqueToken();
+      newTokenHash = _hashToken(newTokenValue);
+      await _saveSecretBestEffort(newTokenHash, newTokenValue);
+    } else {
+      newTokenValue = null;
+      newTokenHash = null;
+    }
+
     try {
+      // The token secret columns (tokenHash and tokenValue) are intentionally
+      // left absent when the policy did not change so the existing secret
+      // and its hash are preserved while still bumping version + metadata.
       final affectedRows =
           await (_database.update(
                 _database.clientTokenCacheTable,
@@ -261,11 +288,11 @@ class ClientTokenLocalDataSource {
               ))
               .write(
                 ClientTokenCacheTableCompanion(
-                  clientId: Value(request.clientId.trim()),
-                  name: Value(request.name.trim()),
-                  agentId: Value(_normalizeAgentId(request.agentId)),
-                  tokenHash: Value(newTokenHash),
-                  tokenValue: Value(_persistedTokenValue(newTokenValue)),
+                  clientId: Value(request.normalizedClientId),
+                  name: Value(request.normalizedName),
+                  agentId: Value(request.normalizedAgentId),
+                  tokenHash: shouldRotateToken ? Value(newTokenHash!) : const Value.absent(),
+                  tokenValue: shouldRotateToken ? Value(_persistedTokenValue(newTokenValue)) : const Value.absent(),
                   payloadJson: Value(jsonEncode(request.payload)),
                   allTables: Value(request.allTables),
                   allViews: Value(request.allViews),
@@ -294,14 +321,19 @@ class ClientTokenLocalDataSource {
         );
       }
     } on Exception {
-      await _deleteSecretBestEffort(newTokenHash);
+      if (shouldRotateToken) {
+        await _deleteSecretBestEffort(newTokenHash!);
+      }
       rethrow;
     }
-    await _deleteStoredSecretsBestEffort(
-      tokenId: tokenId,
-      tokenHash: current.tokenHash,
-    );
+    if (shouldRotateToken) {
+      await _deleteStoredSecretsBestEffort(
+        tokenId: tokenId,
+        tokenHash: current.tokenHash,
+      );
+    }
     return ClientTokenUpdateResult(
+      outcome: shouldRotateToken ? ClientTokenUpdateOutcome.rotated : ClientTokenUpdateOutcome.metadataOnly,
       tokenValue: newTokenValue,
       version: nextVersion,
       updatedAt: now,

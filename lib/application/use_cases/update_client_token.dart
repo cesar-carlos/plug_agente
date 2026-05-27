@@ -12,6 +12,8 @@ import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:result_dart/result_dart.dart';
 
+const _logName = 'update_client_token_use_case';
+
 class UpdateClientToken {
   UpdateClientToken(
     this._repository, {
@@ -71,7 +73,7 @@ class UpdateClientToken {
     final currentTokenValue = await loadClientTokenSecretForCacheInvalidation(
       repository: _repository,
       tokenId: tokenId,
-      logName: 'update_client_token_use_case',
+      logName: _logName,
     );
     final result = await _repository.updateToken(
       tokenId,
@@ -79,29 +81,70 @@ class UpdateClientToken {
       expectedVersion: expectedVersion,
     );
     if (result.isSuccess()) {
-      invalidateAuthCachesForClientCredential(
-        tokenValue: currentTokenValue,
-        decisionCache: _decisionCache,
-        policyCache: _policyCache,
-      );
-      invalidateAuthCachesForClientCredential(
-        tokenValue: result.getOrNull()?.tokenValue,
-        decisionCache: _decisionCache,
-        policyCache: _policyCache,
-      );
-      await _recordRotateAuditEvent(tokenId, request.clientId);
+      final updateResult = result.getOrNull();
+      if (updateResult != null) {
+        await _handleSuccessfulUpdate(
+          tokenId: tokenId,
+          clientId: request.normalizedClientId,
+          previousTokenValue: currentTokenValue,
+          updateResult: updateResult,
+        );
+      }
     }
     return result;
   }
 
-  Future<void> _recordRotateAuditEvent(String tokenId, String clientId) async {
+  Future<void> _handleSuccessfulUpdate({
+    required String tokenId,
+    required String clientId,
+    required String? previousTokenValue,
+    required ClientTokenUpdateResult updateResult,
+  }) async {
+    switch (updateResult.outcome) {
+      case ClientTokenUpdateOutcome.unchanged:
+        // No persisted change — keep caches and audit trail untouched.
+        return;
+      case ClientTokenUpdateOutcome.metadataOnly:
+        // Authorization policy and credential hash are unchanged, so cached
+        // decisions remain valid. Audit only the metadata edit.
+        await _recordAuditEvent(
+          tokenId: tokenId,
+          clientId: clientId,
+          eventType: TokenAuditEventType.metadataUpdate,
+        );
+        return;
+      case ClientTokenUpdateOutcome.rotated:
+        invalidateAuthCachesForClientCredential(
+          tokenValue: previousTokenValue,
+          decisionCache: _decisionCache,
+          policyCache: _policyCache,
+        );
+        invalidateAuthCachesForClientCredential(
+          tokenValue: updateResult.tokenValue,
+          decisionCache: _decisionCache,
+          policyCache: _policyCache,
+        );
+        await _recordAuditEvent(
+          tokenId: tokenId,
+          clientId: clientId,
+          eventType: TokenAuditEventType.rotate,
+        );
+        return;
+    }
+  }
+
+  Future<void> _recordAuditEvent({
+    required String tokenId,
+    required String clientId,
+    required TokenAuditEventType eventType,
+  }) async {
     if (_auditStore == null) {
       return;
     }
     try {
       await _auditStore.record(
         TokenAuditEvent(
-          eventType: TokenAuditEventType.rotate,
+          eventType: eventType,
           timestamp: DateTime.now().toUtc(),
           tokenId: tokenId,
           clientId: clientId,
@@ -109,8 +152,8 @@ class UpdateClientToken {
       );
     } on Exception catch (error, stackTrace) {
       developer.log(
-        'Failed to record client token rotation audit event',
-        name: 'update_client_token_use_case',
+        'Failed to record client token update audit event',
+        name: _logName,
         error: error,
         stackTrace: stackTrace,
       );

@@ -11,6 +11,7 @@ import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
 import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
+import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -47,6 +48,7 @@ class ClientTokenProvider extends ChangeNotifier {
   String? _copyingTokenSecretId;
   String _error = '';
   String? _lastCreatedToken;
+  ClientTokenUpdateOutcome? _lastUpdateOutcome;
   bool _hasLoaded = false;
   ClientTokenListQuery _lastListQuery = const ClientTokenListQuery();
   int _loadGeneration = 0;
@@ -62,6 +64,11 @@ class ClientTokenProvider extends ChangeNotifier {
   String? get copyingTokenSecretId => _copyingTokenSecretId;
   String get error => _error;
   String? get lastCreatedToken => _lastCreatedToken;
+
+  /// Outcome of the most recent successful update. `null` outside of a
+  /// recently-completed edit cycle. Consumed by the UI to decide between
+  /// "rotated", "metadata only" and "no change" feedback.
+  ClientTokenUpdateOutcome? get lastUpdateOutcome => _lastUpdateOutcome;
   bool get hasLoaded => _hasLoaded;
   bool get isListMutationInProgress => _isRevoking || _isDeleting;
   bool get isTokenMutationInProgress => _isCreating || _isRevoking || _isDeleting;
@@ -172,6 +179,7 @@ class ClientTokenProvider extends ChangeNotifier {
     _isCreating = true;
     _error = '';
     _lastCreatedToken = null;
+    _lastUpdateOutcome = null;
     notifyListeners();
 
     final result = await _updateClientToken(
@@ -184,13 +192,20 @@ class ClientTokenProvider extends ChangeNotifier {
     await result.fold(
       (updateResult) async {
         _error = '';
-        _lastCreatedToken = updateResult.tokenValue;
+        _lastUpdateOutcome = updateResult.outcome;
+        _lastCreatedToken = updateResult.didRotateToken ? updateResult.tokenValue : null;
         isSuccess = true;
+        if (updateResult.outcome == ClientTokenUpdateOutcome.unchanged) {
+          // Persisted state already matched the request; nothing in memory
+          // needs to change either.
+          return;
+        }
         final patched = _applyUpdatedTokenInMemory(
           tokenId: tokenId,
           request: request,
           nextVersion: updateResult.version,
           updatedAt: updateResult.updatedAt,
+          didRotateToken: updateResult.didRotateToken,
         );
         if (refreshTokens && !patched) {
           await loadTokens(silent: true);
@@ -204,6 +219,14 @@ class ClientTokenProvider extends ChangeNotifier {
     _isCreating = false;
     notifyListeners();
     return isSuccess;
+  }
+
+  void clearLastUpdateOutcome() {
+    if (_lastUpdateOutcome == null) {
+      return;
+    }
+    _lastUpdateOutcome = null;
+    notifyListeners();
   }
 
   bool isRevokingToken(String tokenId) {
@@ -315,6 +338,7 @@ class ClientTokenProvider extends ChangeNotifier {
     required ClientTokenCreateRequest request,
     required int nextVersion,
     required DateTime updatedAt,
+    required bool didRotateToken,
   }) {
     final index = _tokens.indexWhere((token) => token.id == tokenId);
     if (index < 0) {
@@ -323,6 +347,9 @@ class ClientTokenProvider extends ChangeNotifier {
 
     final current = _tokens[index];
     final agentId = request.agentId?.trim();
+    // When the token did not rotate, keep the previously cached tokenValue
+    // (typically null on list views). When it rotated, force a re-fetch by
+    // clearing the in-memory copy so the UI never displays a stale secret.
     final next = current.copyWith(
       clientId: request.clientId.trim(),
       name: request.name.trim(),
@@ -332,7 +359,7 @@ class ClientTokenProvider extends ChangeNotifier {
       allViews: request.allViews,
       globalPermissions: request.effectiveGlobalPermissions,
       rules: request.effectiveRules,
-      tokenValue: null,
+      tokenValue: didRotateToken ? null : current.tokenValue,
       version: nextVersion,
       updatedAt: updatedAt,
     );

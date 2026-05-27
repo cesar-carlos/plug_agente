@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
+// Reason: Immutable value object compares by value for equality.
+
 class ClientPermissionSet {
   const ClientPermissionSet({
     required this.canRead,
@@ -74,6 +77,21 @@ class ClientPermissionSet {
       'ddl': canDdl,
     };
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ClientPermissionSet &&
+        other.canRead == canRead &&
+        other.canUpdate == canUpdate &&
+        other.canDelete == canDelete &&
+        other.canDdl == canDdl;
+  }
+
+  @override
+  int get hashCode => Object.hash(canRead, canUpdate, canDelete, canDdl);
 }
 
 enum SqlOperation {

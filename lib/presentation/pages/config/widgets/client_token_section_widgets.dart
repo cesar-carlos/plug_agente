@@ -42,6 +42,9 @@ class _TokenFormErrorAnnouncerState extends State<_TokenFormErrorAnnouncer> {
 class _CreateTokenDialogContent extends StatelessWidget {
   const _CreateTokenDialogContent({
     required this.isCompact,
+    required this.isEditingToken,
+    required this.policyChanged,
+    required this.hasFormChanges,
     required this.agentFocusNode,
     required this.nameController,
     required this.clientIdController,
@@ -74,6 +77,9 @@ class _CreateTokenDialogContent extends StatelessWidget {
   });
 
   final bool isCompact;
+  final bool isEditingToken;
+  final bool policyChanged;
+  final bool hasFormChanges;
   final FocusNode agentFocusNode;
   final TextEditingController nameController;
   final TextEditingController clientIdController;
@@ -189,6 +195,13 @@ class _CreateTokenDialogContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
+            if (isEditingToken) ...[
+              _EditDialogPolicyHint(
+                policyChanged: policyChanged,
+                hasFormChanges: hasFormChanges,
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             Row(
               children: [
                 Expanded(
@@ -271,12 +284,14 @@ class _CreateTokenDialogContent extends StatelessWidget {
 class _CreateTokenDialogFooter extends StatelessWidget {
   const _CreateTokenDialogFooter({
     required this.isCreating,
+    required this.canSubmit,
     required this.submitLabel,
     required this.onCancel,
     required this.onSubmit,
   });
 
   final bool isCreating;
+  final bool canSubmit;
   final String submitLabel;
   final VoidCallback onCancel;
   final VoidCallback onSubmit;
@@ -284,6 +299,7 @@ class _CreateTokenDialogFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final submitEnabled = !isCreating && canSubmit;
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -301,10 +317,41 @@ class _CreateTokenDialogFooter extends StatelessWidget {
           child: AppButton(
             label: submitLabel,
             isLoading: isCreating,
-            onPressed: isCreating ? null : onSubmit,
+            onPressed: submitEnabled ? onSubmit : null,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _EditDialogPolicyHint extends StatelessWidget {
+  const _EditDialogPolicyHint({
+    required this.policyChanged,
+    required this.hasFormChanges,
+  });
+
+  final bool policyChanged;
+  final bool hasFormChanges;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final InfoBarSeverity severity;
+    final String message;
+    if (policyChanged) {
+      severity = InfoBarSeverity.warning;
+      message = l10n.ctEditPolicyChangedHint;
+    } else if (!hasFormChanges) {
+      severity = InfoBarSeverity.info;
+      message = l10n.ctEditNoChangesHint;
+    } else {
+      severity = InfoBarSeverity.info;
+      message = l10n.ctEditMetadataOnlyHint;
+    }
+    return InlineFeedbackCard(
+      severity: severity,
+      message: message,
     );
   }
 }

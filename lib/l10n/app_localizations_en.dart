@@ -4067,7 +4067,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctDialogSaveRule => 'Save rule';
 
   @override
-  String get ctEditUpdatesTokenHint => 'Changes will apply to the selected token.';
+  String get ctEditUpdatesTokenHint =>
+      'Edits to name, agent or payload keep the token. The token is rotated only when access rules change.';
+
+  @override
+  String get ctEditPolicyChangedHint => 'Saving will rotate the token because the access rules changed.';
+
+  @override
+  String get ctEditMetadataOnlyHint => 'Access rules unchanged. The current token will be kept.';
+
+  @override
+  String get ctEditNoChangesHint => 'No changes to save.';
+
+  @override
+  String get ctMsgTokenRotated => 'Token rotated. Copy the new value before closing.';
+
+  @override
+  String get ctMsgTokenMetadataUpdated => 'Token metadata updated. The token value was kept.';
+
+  @override
+  String get ctMsgTokenNoChanges => 'No changes detected. The token was not modified.';
+
+  @override
+  String get ctButtonCopyToken => 'Copy token';
 
   @override
   String get ctDialogTokenDetailsTitle => 'Token details';

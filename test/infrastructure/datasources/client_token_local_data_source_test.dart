@@ -351,7 +351,7 @@ void main() {
       expect(await ds.getTokenByHash(ds.hashTokenForLookup(token)), isNull);
     });
 
-    test('updateToken returns new value and bumps version', () async {
+    test('updateToken returns new value and bumps version when policy changes', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);
       final ds = ClientTokenLocalDataSource(db);
@@ -373,12 +373,184 @@ void main() {
       );
       expect(result, isNotNull);
       expect(result!.version, 2);
-      expect(result.tokenValue.length, 64);
+      expect(result.outcome, ClientTokenUpdateOutcome.rotated);
+      expect(result.didRotateToken, isTrue);
+      expect(result.tokenValue!.length, 64);
 
       final row = await ds.getTokenById(id);
       expect(row!.clientId, 'updated');
       expect(row.version, 2);
       expect(row.tokenValue, result.tokenValue);
+    });
+
+    test('updateToken keeps existing token value and hash when only metadata changes', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final secretStore = _FakeTokenSecretStore();
+      final ds = ClientTokenLocalDataSource(db, secretStore: secretStore);
+
+      final originalTokenValue = await ds.createToken(baseRequest());
+      final originalTokenHash = ds.hashTokenForLookup(originalTokenValue);
+      final id = (await ds.listTokens()).single.id;
+
+      final result = await ds.updateToken(
+        id,
+        baseRequest(clientId: 'renamed-client'),
+        expectedVersion: 1,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.outcome, ClientTokenUpdateOutcome.metadataOnly);
+      expect(result.didRotateToken, isFalse);
+      expect(result.didChangeMetadata, isTrue);
+      expect(result.tokenValue, isNull);
+      expect(result.version, 2);
+
+      final stored = await ds.getTokenById(id);
+      expect(stored, isNotNull);
+      expect(stored!.clientId, 'renamed-client');
+      expect(stored.tokenValue, equals(originalTokenValue));
+      expect(stored.version, 2);
+
+      final byHash = await ds.getTokenByHash(originalTokenHash);
+      expect(byHash, isNotNull);
+      expect(byHash!.id, equals(id));
+      expect(secretStore.readSecretSync(originalTokenHash), equals(originalTokenValue));
+      expect(secretStore.storedKeys, hasLength(1));
+    });
+
+    test('updateToken returns unchanged outcome and skips write when nothing differs', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final ds = ClientTokenLocalDataSource(db);
+
+      await ds.createToken(baseRequest());
+      final id = (await ds.listTokens()).single.id;
+      final beforeRow = await ds.getTokenById(id);
+      expect(beforeRow, isNotNull);
+
+      final result = await ds.updateToken(
+        id,
+        baseRequest(),
+        expectedVersion: beforeRow!.version,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.outcome, ClientTokenUpdateOutcome.unchanged);
+      expect(result.didRotateToken, isFalse);
+      expect(result.didChangeMetadata, isFalse);
+      expect(result.tokenValue, isNull);
+      expect(result.version, equals(beforeRow.version));
+
+      final afterRow = await ds.getTokenById(id);
+      expect(afterRow!.version, equals(beforeRow.version));
+      expect(afterRow.tokenValue, equals(beforeRow.tokenValue));
+      expect(afterRow.updatedAt, equals(beforeRow.updatedAt));
+    });
+
+    test('updateToken rotates token when only the resource rules differ', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final ds = ClientTokenLocalDataSource(db);
+
+      await ds.createToken(
+        const ClientTokenCreateRequest(
+          clientId: 'rule-client',
+          allTables: false,
+          allViews: false,
+          allPermissions: false,
+          rules: [
+            ClientTokenRule(
+              resource: DatabaseResource(
+                resourceType: DatabaseResourceType.table,
+                name: 'dbo.users',
+              ),
+              permissions: ClientPermissionSet(canRead: true, canUpdate: false, canDelete: false),
+              effect: ClientTokenRuleEffect.allow,
+            ),
+          ],
+        ),
+      );
+      final id = (await ds.listTokens()).single.id;
+
+      final result = await ds.updateToken(
+        id,
+        const ClientTokenCreateRequest(
+          clientId: 'rule-client',
+          allTables: false,
+          allViews: false,
+          allPermissions: false,
+          rules: [
+            ClientTokenRule(
+              resource: DatabaseResource(
+                resourceType: DatabaseResourceType.table,
+                name: 'dbo.users',
+              ),
+              permissions: ClientPermissionSet(canRead: true, canUpdate: true, canDelete: false),
+              effect: ClientTokenRuleEffect.allow,
+            ),
+          ],
+        ),
+        expectedVersion: 1,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.outcome, ClientTokenUpdateOutcome.rotated);
+      expect(result.tokenValue, isNotNull);
+      expect(result.version, 2);
+    });
+
+    test('updateToken treats reordered rules as unchanged policy and does not rotate', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final ds = ClientTokenLocalDataSource(db);
+
+      const ruleA = ClientTokenRule(
+        resource: DatabaseResource(
+          resourceType: DatabaseResourceType.table,
+          name: 'dbo.alpha',
+        ),
+        permissions: ClientPermissionSet(canRead: true, canUpdate: false, canDelete: false),
+        effect: ClientTokenRuleEffect.allow,
+      );
+      const ruleB = ClientTokenRule(
+        resource: DatabaseResource(
+          resourceType: DatabaseResourceType.view,
+          name: 'dbo.beta',
+        ),
+        permissions: ClientPermissionSet(canRead: true, canUpdate: true, canDelete: false),
+        effect: ClientTokenRuleEffect.allow,
+      );
+
+      final originalTokenValue = await ds.createToken(
+        const ClientTokenCreateRequest(
+          clientId: 'order-client',
+          allTables: false,
+          allViews: false,
+          allPermissions: false,
+          rules: [ruleA, ruleB],
+        ),
+      );
+      final id = (await ds.listTokens()).single.id;
+
+      final result = await ds.updateToken(
+        id,
+        const ClientTokenCreateRequest(
+          clientId: 'order-client',
+          allTables: false,
+          allViews: false,
+          allPermissions: false,
+          rules: [ruleB, ruleA],
+        ),
+        expectedVersion: 1,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.outcome, ClientTokenUpdateOutcome.unchanged);
+      expect(result.tokenValue, isNull);
+
+      final stored = await ds.getTokenById(id);
+      expect(stored!.tokenValue, equals(originalTokenValue));
     });
 
     test('updateToken throws when expectedVersion mismatches', () async {
@@ -399,7 +571,7 @@ void main() {
       );
     });
 
-    test('concurrent updates clean up temporary secret for the losing write', () async {
+    test('concurrent rotating updates clean up temporary secret for the losing write', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);
       final secretStore = _FakeTokenSecretStore();
@@ -429,19 +601,28 @@ void main() {
         }
       }
 
+      ClientTokenCreateRequest rotatingRequest({required bool ddl}) {
+        return ClientTokenCreateRequest(
+          clientId: 'concurrent-${ddl ? 'a' : 'b'}',
+          allTables: true,
+          allViews: false,
+          rules: const [],
+          payload: const {'k': 'v'},
+          agentId: 'agent-1',
+          globalPermissions: ClientPermissionSet(
+            canRead: true,
+            canUpdate: true,
+            canDelete: true,
+            canDdl: ddl,
+          ),
+        );
+      }
+
       final updateA = capture(
-        ds.updateToken(
-          id,
-          baseRequest(clientId: 'updated-a'),
-          expectedVersion: 1,
-        ),
+        ds.updateToken(id, rotatingRequest(ddl: true), expectedVersion: 1),
       );
       final updateB = capture(
-        ds.updateToken(
-          id,
-          baseRequest(clientId: 'updated-b'),
-          expectedVersion: 1,
-        ),
+        ds.updateToken(id, rotatingRequest(ddl: false), expectedVersion: 1),
       );
 
       await bothUpdatesReachedSave.future;
@@ -454,15 +635,17 @@ void main() {
       expect(successes, hasLength(1));
       expect(conflicts, hasLength(1));
 
+      final winner = successes.single;
+      expect(winner.didRotateToken, isTrue);
+      final winnerTokenValue = winner.tokenValue!;
+
       final stored = await ds.getTokenById(id);
       expect(stored, isNotNull);
-      expect(stored!.tokenValue, equals(successes.single.tokenValue));
+      expect(stored!.tokenValue, equals(winnerTokenValue));
       expect(secretStore.storedKeys, hasLength(1));
       expect(
-        secretStore.readSecretSync(
-          ds.hashTokenForLookup(successes.single.tokenValue),
-        ),
-        equals(successes.single.tokenValue),
+        secretStore.readSecretSync(ds.hashTokenForLookup(winnerTokenValue)),
+        equals(winnerTokenValue),
       );
     });
 
