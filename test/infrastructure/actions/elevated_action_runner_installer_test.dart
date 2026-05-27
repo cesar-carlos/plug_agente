@@ -35,7 +35,13 @@ void main() {
             return ProcessResult(0, 0, '', '');
           }
           if (executable == 'schtasks' && arguments.contains('/Query')) {
-            return ProcessResult(0, 0, 'TaskName: ${AgentActionElevatedConstants.scheduledTaskName}', '');
+            return ProcessResult(
+              0,
+              0,
+              'TaskName: ${AgentActionElevatedConstants.scheduledTaskName}\n'
+              'Task To Run: "${helperExecutable.path}" --watch-requests "${tempDir.path}"\n',
+              '',
+            );
           }
           return ProcessResult(1, 1, '', 'not found');
         },
@@ -78,6 +84,33 @@ void main() {
       );
       final status = await installer.getStatus();
       expect(status.state, ElevatedActionRunnerInstallState.ready);
+    });
+
+    test('should report helperPathChanged when scheduled task points to a different exe', () async {
+      // Install once so the marker exists.
+      await installer.install(requestElevation: false);
+
+      // Re-register installer with a Query stub that simulates an outdated
+      // /TR pointing to a different exe path (post-update scenario).
+      installer = ElevatedActionRunnerInstaller(
+        storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
+        processRunner: (String executable, List<String> arguments) async {
+          if (executable == 'schtasks' && arguments.contains('/Query')) {
+            return ProcessResult(
+              0,
+              0,
+              'TaskName: ${AgentActionElevatedConstants.scheduledTaskName}\n'
+              r'Task To Run: "C:\Old\Path\plug_agente_elevated_runner.exe" --watch-requests "C:\Old\Data"',
+              '',
+            );
+          }
+          return ProcessResult(0, 0, '', '');
+        },
+        isWindows: () => true,
+      );
+
+      final status = await installer.getStatus();
+      expect(status.state, ElevatedActionRunnerInstallState.helperPathChanged);
     });
   });
 }

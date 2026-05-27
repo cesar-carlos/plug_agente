@@ -31,12 +31,25 @@ class ElevatedProcessRunner {
   Future<ElevatedStatusPayload> run({
     required ElevatedExecutionContext context,
     required ElevatedLaunchSpec launch,
+    required String materializedNonce,
   }) async {
     if (context.definitionState != 'active') {
       return _failed(
         executionId: context.executionId,
         failureCode: 'ACTION_NOT_ACTIVE',
         failureMessage: 'Action is not active.',
+      );
+    }
+
+    // Defense in depth: helper roda elevado mas so deve executar acoes cuja
+    // policy declarou `elevated.runElevated=true`. Sem essa verificacao um
+    // request forjado para uma acao nao elevada (com nonce/materialized
+    // valido) seria executado com privilegios da tarefa.
+    if (!_isElevationApproved(context.policies)) {
+      return _failed(
+        executionId: context.executionId,
+        failureCode: 'ACTION_ELEVATED_NOT_CONFIGURED',
+        failureMessage: 'Action policy did not approve elevated execution.',
       );
     }
 
@@ -78,7 +91,7 @@ class ElevatedProcessRunner {
       int? exitCode;
       final deadline = startedAt.add(maxRuntime);
       while (_now().isBefore(deadline)) {
-        if (_isCancellationRequested(context.executionId)) {
+        if (_isCancellationRequested(context.executionId, materializedNonce)) {
           cancelled = true;
           process.kill(ProcessSignal.sigkill);
           exitCode = null;
@@ -180,6 +193,14 @@ class ElevatedProcessRunner {
     );
   }
 
+  bool _isElevationApproved(Map<String, dynamic> policies) {
+    final elevated = policies['elevated'];
+    if (elevated is Map) {
+      return elevated['runElevated'] == true;
+    }
+    return false;
+  }
+
   Duration _readMaxRuntime(Map<String, dynamic> policies) {
     final timeout = policies['timeout'];
     if (timeout is Map) {
@@ -255,10 +276,41 @@ class ElevatedProcessRunner {
     );
   }
 
-  bool _isCancellationRequested(String executionId) {
-    return File(
+  /// Verifies that a cancel marker exists AND echoes the materialized nonce.
+  /// Without the nonce check, any local process with write access to the
+  /// cancel directory could cancel arbitrary executions by dropping a JSON
+  /// file. With the check, only the agent that knows the nonce (issued by
+  /// the request protector) can effectively cancel.
+  ///
+  /// Legacy markers without a `nonce` field are accepted only when the
+  /// materialized file is absent (helper already finished or app rolled back
+  /// to legacy payloads). When materialized is present and the nonce field
+  /// is missing or mismatched the cancel is ignored.
+  bool _isCancellationRequested(String executionId, String materializedNonce) {
+    final cancelFile = File(
       ElevatedContract.cancelFilePath(appDirectoryPath, executionId),
-    ).existsSync();
+    );
+    if (!cancelFile.existsSync()) {
+      return false;
+    }
+    try {
+      final decoded = jsonDecode(cancelFile.readAsStringSync());
+      if (decoded is! Map) {
+        return false;
+      }
+      final cancelNonce = decoded['nonce'];
+      if (cancelNonce is String && cancelNonce.isNotEmpty) {
+        return cancelNonce == materializedNonce;
+      }
+      // Legacy marker without nonce: only accepted when there is nothing to
+      // protect (no live materialized nonce). Today the helper always has a
+      // live nonce here because materialized survives until `finally` runs,
+      // so legacy markers from the same window will be ignored. This is the
+      // safest default.
+      return false;
+    } on Object {
+      return false;
+    }
   }
 
   Future<void> _deleteCancelMarker(String executionId) async {

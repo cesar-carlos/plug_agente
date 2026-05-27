@@ -150,6 +150,7 @@ class ElevatedRequestProcessor {
     final status = await _processRunner.run(
       context: context,
       launch: materialized.launch,
+      materializedNonce: materialized.nonce,
     );
     await _statusWriter.write(status);
     await _safeDelete(file);

@@ -21,4 +21,6 @@ abstract final class AgentActionComObjectConstants {
   static const String unsupportedPlatformReason = 'com_object_unsupported_platform';
 
   static const String invocationFailedReason = 'com_object_invocation_failed';
+
+  static const String invocationTimedOutReason = 'com_object_invocation_timed_out';
 }

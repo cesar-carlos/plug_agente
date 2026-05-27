@@ -8,11 +8,14 @@ class AgentActionExecutionSupportExport {
   const AgentActionExecutionSupportExport({
     AgentActionFailureDiagnosticsResolver diagnosticsResolver = const AgentActionFailureDiagnosticsResolver(),
     SupportDiagnosticsJsonFormatter jsonFormatter = const SupportDiagnosticsJsonFormatter(),
+    AgentActionRedactor redactor = const AgentActionRedactor(),
   }) : _diagnosticsResolver = diagnosticsResolver,
-       _jsonFormatter = jsonFormatter;
+       _jsonFormatter = jsonFormatter,
+       _redactor = redactor;
 
   final AgentActionFailureDiagnosticsResolver _diagnosticsResolver;
   final SupportDiagnosticsJsonFormatter _jsonFormatter;
+  final AgentActionRedactor _redactor;
 
   String buildJson(AgentActionExecution execution) {
     final diagnostics = _diagnosticsResolver.resolve(execution);
@@ -60,10 +63,15 @@ class AgentActionExecutionSupportExport {
               key: 'corrective_action',
               value: diagnostics.correctiveAction!.wireValue,
             ),
-          SupportDiagnosticsField(key: 'stdout', value: execution.stdoutText),
+          // stdout/stderr sao re-redigidos aqui mesmo quando
+          // `redactBeforePersisting=false` na captura: o export de suporte e
+          // copiado para clipboard/clipboard de operador e nao deve vazar
+          // segredos nem padroes sensiveis na sessao de suporte.
+          SupportDiagnosticsField(key: 'stdout', value: _redactNullable(execution.stdoutText)),
           SupportDiagnosticsField(key: 'stdout_truncated', value: execution.stdoutTruncated),
-          SupportDiagnosticsField(key: 'stderr', value: execution.stderrText),
+          SupportDiagnosticsField(key: 'stderr', value: _redactNullable(execution.stderrText)),
           SupportDiagnosticsField(key: 'stderr_truncated', value: execution.stderrTruncated),
+          const SupportDiagnosticsField(key: 'support_export_redaction_applied', value: true),
         ],
       ),
     ];
@@ -75,5 +83,12 @@ class AgentActionExecutionSupportExport {
         'support_category': 'agent_action_execution',
       },
     );
+  }
+
+  String? _redactNullable(String? value) {
+    if (value == null) {
+      return null;
+    }
+    return _redactor.redactText(value);
   }
 }

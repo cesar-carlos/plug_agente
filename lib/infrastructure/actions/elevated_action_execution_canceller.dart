@@ -76,10 +76,14 @@ class ElevatedActionExecutionCanceller implements IElevatedActionExecutionCancel
       _storageContext.appDirectoryPath,
       executionId,
     );
+    // Echo the materialized nonce so the helper can reject forged cancel
+    // markers written by other processes with directory write access.
+    final materializedNonce = await _readMaterializedNonce(executionId);
     final payload = <String, Object?>{
       'version': AgentActionElevatedConstants.cancelSchemaVersion,
       'executionId': executionId,
       'requestedAt': _now().toUtc().toIso8601String(),
+      'nonce': ?materializedNonce,
     };
 
     try {
@@ -110,6 +114,32 @@ class ElevatedActionExecutionCanceller implements IElevatedActionExecutionCancel
       }
     } on Object {
       // Best effort cleanup.
+    }
+  }
+
+  /// Reads the nonce previously written into the materialized launch plan.
+  /// Returns `null` when the file is absent, unreadable, or does not carry
+  /// the field; helper falls back to legacy "execution-id only" behavior in
+  /// that case.
+  Future<String?> _readMaterializedNonce(String executionId) async {
+    try {
+      final file = File(
+        AgentActionElevatedConstants.materializedFilePath(_storageContext.appDirectoryPath, executionId),
+      );
+      if (!file.existsSync()) {
+        return null;
+      }
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map) {
+        return null;
+      }
+      final nonce = decoded['nonce'];
+      if (nonce is String && nonce.isNotEmpty) {
+        return nonce;
+      }
+      return null;
+    } on Object {
+      return null;
     }
   }
 }

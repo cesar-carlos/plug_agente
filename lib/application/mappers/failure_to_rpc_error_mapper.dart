@@ -88,8 +88,19 @@ class FailureToRpcErrorMapper {
     }
     if (failure is ActionRuntimeFailure) {
       if (failure.code == AgentActionFailureCode.alreadyFinished ||
-          failure.code == AgentActionFailureCode.cancelNotRunning) {
+          failure.code == AgentActionFailureCode.cancelNotRunning ||
+          failure.code == AgentActionFailureCode.pathSnapshotMismatch ||
+          failure.code == AgentActionFailureCode.preflightRequiredForActive ||
+          failure.code == AgentActionFailureCode.preflightExpiredForActive ||
+          // secretUnavailable can surface as either ActionValidationFailure (gate)
+          // or ActionRuntimeFailure (resolution at execution time). Both deserve
+          // invalidParams so the Hub sees a stable contract error, not a 500.
+          failure.code == AgentActionFailureCode.secretUnavailable) {
         return RpcErrorCode.invalidParams;
+      }
+      if (failure.code == AgentActionFailureCode.executionCancelled ||
+          failure.code == AgentActionFailureCode.executionKilled) {
+        return RpcErrorCode.executionCancelled;
       }
       if (failure.code == AgentActionFailureCode.elevatedSubmitFailed ||
           failure.code == AgentActionFailureCode.elevatedRequestProtectionFailed) {
@@ -437,6 +448,16 @@ class FailureToRpcErrorMapper {
       }
     }
     if (failure is ActionRuntimeFailure && code == RpcErrorCode.agentActionsTemporarilyUnavailable) {
+      final reason = failure.context['reason']?.toString();
+      if (reason != null && reason.isNotEmpty) {
+        return reason;
+      }
+    }
+    // Action runtime failures that map to invalidParams (secret unavailable,
+    // path snapshot mismatch, preflight expired/required) should preserve the
+    // domain `reason` so automation gets the actionable cause, not the generic
+    // canonical `invalid_params`.
+    if (failure is ActionRuntimeFailure && code == RpcErrorCode.invalidParams) {
       final reason = failure.context['reason']?.toString();
       if (reason != null && reason.isNotEmpty) {
         return reason;

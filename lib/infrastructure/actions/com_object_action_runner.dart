@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,7 @@ import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
 import 'package:plug_agente/infrastructure/actions/com_object_action_adapter.dart';
+import 'package:plug_agente/infrastructure/actions/com_object_invocation_handler.dart';
 import 'package:plug_agente/infrastructure/actions/com_object_invocation_registry.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -94,11 +96,37 @@ class ComObjectActionRunner implements AgentActionLocalRunner {
     }
 
     final startedAt = DateTime.now();
-    final invocationResult = await handlerResult.getOrThrow().invoke(
+    final maxRuntime = definition.policies.timeout.maxRuntime;
+    final invocationFuture = handlerResult.getOrThrow().invoke(
       arguments: config.arguments,
     );
-    final finishedAt = DateTime.now();
 
+    final Result<ComObjectInvocationResult> invocationResult;
+    try {
+      invocationResult = maxRuntime > Duration.zero
+          ? await invocationFuture.timeout(maxRuntime)
+          : await invocationFuture;
+    } on TimeoutException {
+      // COM handlers nao expoem processo principal cancelavel: a politica
+      // `killMainProcessOnTimeout` nao se aplica aqui. Apenas relatamos o
+      // timeout como falha terminal.
+      return Failure(
+        ActionTimeoutFailure.withContext(
+          message: 'COM object invocation exceeded the configured timeout.',
+          code: AgentActionFailureCode.executionTimedOut,
+          context: {
+            'action_id': definition.id,
+            'execution_id': executionId,
+            'phase': 'execution',
+            'reason': AgentActionComObjectConstants.invocationTimedOutReason,
+            'timeout_ms': maxRuntime.inMilliseconds,
+            'user_message': 'A invocacao COM excedeu o tempo limite configurado.',
+          },
+        ),
+      );
+    }
+
+    final finishedAt = DateTime.now();
     if (invocationResult.isError()) {
       return Failure(invocationResult.exceptionOrNull()!);
     }

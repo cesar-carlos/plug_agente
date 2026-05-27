@@ -123,13 +123,20 @@ auditoria append-only; retencao UI; correlacao auditoria/historico.
 Revisao alinhada ao repositorio em **2026-05-20** (backlog pos-MVP); checkpoint
 tecnico abaixo mantido desde **2026-05-18** com atualizacoes pontuais.
 
-- **Roteamento `agent.action.*`:** `RpcMethodDispatcher.dispatch` despacha
-  `agent.action.run`, `agent.action.validateRun`, `agent.action.cancel` e
-  `agent.action.getExecution` para os handlers `_handleAgentAction*` em
-  `lib/application/rpc/rpc_method_dispatcher.dart`, com injecao de
-  `RunAgentActionLocally`, `CancelAgentActionExecution`,
-  `GetAgentActionExecution` e `AgentActionRemoteRateLimiter` em
-  `lib/core/di/plug_dependency_registrar.dart`.
+- **Roteamento `agent.action.*`:** `RpcMethodDispatcher.dispatch` consulta o
+  registry de handlers (`_handlersByMethod`) montado em
+  `lib/application/rpc/handlers/rpc_method_handlers.dart` e delega para
+  `AgentActionRunRpcHandler`, `AgentActionValidateRunRpcHandler`,
+  `AgentActionCancelRpcHandler` e `AgentActionGetExecutionRpcHandler`. A logica
+  efetiva vive em `AgentActionRpcMethodHandlerOperations`
+  (`lib/application/rpc/agent_action_rpc_method_handler_operations.dart`),
+  injetada via `RpcMethodHandlerOperations`. DI em
+  `lib/core/di/plug_dependency_registrar.dart` injeta `RunAgentActionLocally`,
+  `RunAgentActionViaRemoteTrigger`, `CancelAgentActionExecution`,
+  `GetAgentActionExecution`, `AgentActionRemoteRateLimiter`,
+  `AgentActionRemoteAuthorizationService`, `BackfillAgentActionExecutionCorrelation`
+  e `AgentRuntimeIdentity`. *(O nome `_handleAgentAction*` no dispatcher e
+  historico — apos a refatoracao para registry+handlers, nao existe mais.)*
 - **Testes:** `test/application/rpc/rpc_method_dispatcher_agent_action_test.dart`
   cobre o fluxo com mocks; manter ao evoluir contrato ou politicas.
   Leitura recente na UI: `ListRecentAgentActionRemoteAudit` +
@@ -362,7 +369,7 @@ tecnico abaixo mantido desde **2026-05-18** com atualizacoes pontuais.
    `agent_action_process_kill_guard_test`, `reconcile_agent_action_executions_test`,
    `apply_agent_action_on_app_exit_policies_test`),
    `agent_action_trigger_scheduler_test.dart` e
-   `agent_actions_page_test.dart` (36 cenarios, incl. lock do scheduler, mismatch de auditoria, aviso COM sem handlers e metrica COM no summary card);
+   `agent_actions_page_test.dart` (shim que delega para `agent_actions_actions_tab_test.dart` (~73 cenarios) e `agent_actions_settings_tab_test.dart` (~5 cenarios), incl. lock do scheduler, mismatch de auditoria, aviso COM sem handlers e metrica COM no summary card);
    `agent_actions_summary_card_test.dart` (metricas isoladas do summary);
    `com_object_invocation_bootstrap_test.dart` no gate;
    repetir apos mudancas no gate. **CI (2026-05-20):** listas em
@@ -829,11 +836,12 @@ Implicacoes praticas para `agent.action.*`:
   `test/fixtures/rpc/` permanecem como amostras de fio literais.
 - [x] TODO: Usar `meta.trace_id`/`traceparent` e `meta.request_id` para
   preencher `traceId`, `requestedBy` e auditoria da execucao.
-  Implementado: `_handleAgentActionRun` / `_handleAgentActionValidateRun` em
-  `RpcMethodDispatcher` propagam `traceId` via `meta.trace_id` ou segmento de
-  `meta.traceparent` (W3C) e `requestedBy` via `meta.request_id` (fallbacks
-  documentados no codigo). Auditoria append-only por conclusao de RPC
-  `agent.action.*` (`_finishAgentActionRpcWithAudit` + tabela Drift
+  Implementado: `AgentActionRpcMethodHandlerOperations.handleAgentActionRun` /
+  `handleAgentActionValidateRun` propagam `traceId` via `meta.trace_id` ou
+  segmento de `meta.traceparent` (W3C) e `requestedBy` via `meta.request_id`
+  (fallbacks documentados no codigo). Auditoria append-only por conclusao de RPC
+  `agent.action.*` (`_finishAgentActionRpcWithAudit` em
+  `agent_action_rpc_method_handler_operations.dart` + tabela Drift
   `agent_action_remote_audit`) grava `traceId` / `requestedBy` / `idempotency_key`
   (schema 24). **Backfill (2026-05-19):** `BackfillAgentActionExecutionCorrelation` preenche
   `traceId` / `requestedBy` ausentes na execucao quando `agent.action.cancel` ou
@@ -1194,11 +1202,13 @@ houver classe homonima em `lib/`, a regra esta em adapters, use cases
   placeholders como `${secret:name}` no momento da execucao.
 - `ActionPathValidator`: canonicaliza caminhos, valida extensoes, tamanho,
   existencia e allowlist opcional de diretorios.
-- `ActionPathSnapshotter` (parcial: `AgentActionPathReference` +
-  `ActionPathValidator.ensurePathSnapshotMatchesCurrent` + metadados no
+- `ActionPathSnapshotter` (**nao existe como classe dedicada**; papel coberto
+  por `AgentActionPathReference` no dominio +
+  `ActionPathValidator.ensurePathSnapshotMatchesCurrent` /
+  `ActionPathValidator.guardPathSnapshot` em infrastructure + metadados no
   `AgentActionDefinitionSnapshotter`): captura metadados redigidos do caminho no
   momento do cadastro/teste, como caminho canonico, tipo esperado, tamanho, data
-  de modificacao e hash opcional.
+  de modificacao e hash opcional. Extracao em tipo dedicado permanece opcional.
 - `ActionExecutionPreflight` (no codigo: `AgentActionPreflight` + checagens nos
   adapters e em `RunAgentActionLocally`): revalida arquivos, diretorios,
   segredos, ambiente e pre-requisitos antes de enfileirar/iniciar processo.
@@ -1277,9 +1287,13 @@ houver classe homonima em `lib/`, a regra esta em adapters, use cases
 - `ActionRpcMethodHandler`: nome **alvo** para o concentrador que integra
   `RpcMethodDispatcher` aos use cases de acoes, mantendo schema validation,
   notification/batch policy e mapeamento de failures no padrao JSON-RPC. **No
-  repositorio atual** esse papel esta coberto pelos handlers `_handleAgentAction*`
-  em `RpcMethodDispatcher` mais `RpcRequestSchemaValidator`, `RpcInboundHandler` e
-  `AgentActionRpcConstants`; extrair tipo dedicado permanece opcional.
+  repositorio atual** esse papel esta coberto por
+  `AgentActionRpcMethodHandlerOperations` (`lib/application/rpc/`) consumido
+  pelas classes handler (`AgentActionRunRpcHandler`,
+  `AgentActionValidateRunRpcHandler`, `AgentActionCancelRpcHandler`,
+  `AgentActionGetExecutionRpcHandler`) registradas em
+  `lib/application/rpc/handlers/rpc_method_handlers.dart`, mais
+  `RpcRequestSchemaValidator`, `RpcInboundHandler` e `AgentActionRpcConstants`.
 - `ActionRpcSchemaMapper`: converte params/result dos schemas remotos para DTOs
   de aplicacao sem expor entidades internas diretamente no protocolo. **Planejado**
   como tipo dedicado; validacao de params para `agent.action.*` ja existe em
@@ -1531,11 +1545,17 @@ fatias menores que possam ser revisadas e testadas isoladamente:
    `tool/plug_agente_elevated_runner/` (`plug_agente_elevated_runner.exe` via
    `tool/build_elevated_runner.ps1`), `ElevatedActionRunnerInstaller` + tarefa
    `PlugAgente\ElevatedActionRunner`, bridge request/status/cancel em
-   `agent_actions/elevated/`, `ElevatedActionRequestProtector` + ACL
+   `lib/infrastructure/actions/elevated_action_runner_bridge.dart`,
+   `elevated_action_execution_canceller.dart`,
+   `elevated_action_execution_materializer.dart` (artefatos persistidos sob
+   `<app data>/agent_actions/elevated/{requests,status,cancel,materialized}`),
+   `ElevatedActionRequestProtector` + ACL
    (`ElevatedActionDirectoryAclHardener`), `ElevatedAgentActionExecutionService`,
    sync Drift (`ElevatedActionStatusFileSyncer`), purge de artefatos, UI
-   `prepareElevatedRunner` na `AgentActionsPage`. Endurecimento operacional
-   (distribuicao assinada, reparo em campo, E2E elevado) segue em aberto.
+   `prepareElevatedRunner` na aba **Configuracoes** da `AgentActionsPage`.
+   *Resolucao de segredos ocorre no app (`ElevatedActionExecutionMaterializer`),
+   nao no helper.* Endurecimento operacional (distribuicao assinada, reparo em
+   campo, E2E elevado) segue em aberto.
 - [x] TODO MVP 5 - Tipos adicionais: `executable`, `script`, `jar`, `email`,
    `comObject` e `developer`, sempre um tipo por contexto menor.
   **Parcial (developer fechado no MVP):** adapter `developer` com engine
@@ -1592,8 +1612,10 @@ Achados da revisao:
 - O adapter `developer`/Data7 (primeiro contexto menor) ja segue a mesma fila e
   os mesmos use cases que `commandLine` no registro atual; para constar em
   `agentActions.supportedTypes` o tipo precisa ter runner local registrado no
-  `AgentActionLocalRunnerRegistry` (hoje `commandLine` e `developer`); adapter sem
-  runner equivalente nao entra na lista anunciada ao Hub.
+  `AgentActionLocalRunnerRegistry`. Os 7 tipos MVP 5 (`commandLine`,
+  `executable`, `script`, `jar`, `email`, `comObject`, `developer`) estao
+  registrados; adapter sem runner equivalente nao entra na lista anunciada ao
+  Hub.
 - Adapters adicionais so devem ser anunciados em UI, capability remota ou
   documentacao de contrato quando passarem pelo checklist "Como adicionar uma
   nova acao".
@@ -2244,12 +2266,14 @@ acao que ja esta `queued` ou `running`:
 
 - `allowParallel`: permite mais de uma execucao da mesma acao dentro dos limites
   globais.
-- `queueIfRunning`: enfileira se ja existir execucao ativa da mesma acao.
-- `skipIfRunning`: ignora o disparo e registra resultado seguro de skip.
-  Implementado (2026-05-21): persistir `status=skipped` com
-  `failureCode=ACTION_QUEUE_IGNORED` e `failurePhase=queue`, sem tratar o caso
-  como falha terminal comum.
-- `rejectIfRunning`: rejeita com failure tipada.
+- `queueIfRunning` (no codigo: `AgentActionConcurrencyBehavior.enqueue`):
+  enfileira se ja existir execucao ativa da mesma acao.
+- `skipIfRunning` (no codigo: `AgentActionConcurrencyBehavior.ignore`): ignora
+  o disparo e registra resultado seguro de skip. Implementado (2026-05-21):
+  persistir `status=skipped` com `failureCode=ACTION_QUEUE_IGNORED` e
+  `failurePhase=queue`, sem tratar o caso como falha terminal comum.
+- `rejectIfRunning` (no codigo: `AgentActionConcurrencyBehavior.reject`):
+  rejeita com failure tipada.
 - `replaceRunning`: manter como opcao futura, porque exige politica de kill
   mais cuidadosa.
 
@@ -5092,9 +5116,12 @@ assumir detalhes tecnicos sem validacao no codigo real.
 - [x] DECISAO MVP 4: usuario/contexto da tarefa elevada e impacto no acesso ao
   `flutter_secure_storage`.
   **Implementado (MVP):** tarefa elevada roda em conta com privilegio alto;
-  materializacao no helper le materialized file/SQLite local; segredos
-  resolvidos no contexto do helper (nao via RPC). Impacto fino por perfil de
-  usuario Windows fica validacao em campo.
+  resolucao de segredos ocorre **no app** (`ElevatedActionExecutionMaterializer`
+  substitui placeholders `${secret:name}` via `AgentActionSecretPlaceholderResolver`
+  antes de gravar o `materialized.json`); o helper apenas le request +
+  materialized + SQLite local (sem acessar `flutter_secure_storage` nem RPC).
+  Mitigacoes em disco: ACL hardener + TTL + nonce + write atomico. Impacto fino
+  por perfil de usuario Windows fica validacao em campo (RA-06).
 - [x] DECISAO MVP 5: ordem de implementacao dos tipos adicionais depois de
   `commandLine`: `executable`, `script`, `jar`, `email`, `comObject` ou
   `developer`.

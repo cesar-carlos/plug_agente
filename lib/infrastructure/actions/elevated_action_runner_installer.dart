@@ -47,16 +47,26 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
       );
     }
 
-    final taskRegistered = await _isScheduledTaskRegistered();
-    final markerPresent = File(
-      AgentActionElevatedConstants.readyMarkerPath(_storageContext.appDirectoryPath),
-    ).existsSync();
-    if (!taskRegistered) {
+    final taskQuery = await _queryScheduledTask();
+    if (taskQuery == null) {
       return ElevatedActionRunnerInstallStatus(
         state: ElevatedActionRunnerInstallState.scheduledTaskMissing,
         helperExecutablePath: helperPath,
       );
     }
+
+    if (!_taskCommandPointsToHelper(taskQuery, helperPath)) {
+      // Helper exe moved (post-update) or task was registered with a different
+      // path. Force reinstall instead of treating the install as `ready`.
+      return ElevatedActionRunnerInstallStatus(
+        state: ElevatedActionRunnerInstallState.helperPathChanged,
+        helperExecutablePath: helperPath,
+      );
+    }
+
+    final markerPresent = File(
+      AgentActionElevatedConstants.readyMarkerPath(_storageContext.appDirectoryPath),
+    ).existsSync();
     if (!markerPresent) {
       return ElevatedActionRunnerInstallStatus(
         state: ElevatedActionRunnerInstallState.markerMissing,
@@ -68,6 +78,28 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
       state: ElevatedActionRunnerInstallState.ready,
       helperExecutablePath: helperPath,
     );
+  }
+
+  /// Compares the `Task To Run` field from `schtasks /Query` with the
+  /// currently resolved helper path. We normalize case and trim quotes so
+  /// the comparison survives quoting differences between Windows shells.
+  bool _taskCommandPointsToHelper(String taskQuery, String helperPath) {
+    final normalized = helperPath.replaceAll('/', r'\').toLowerCase();
+    // Look for any occurrence of the helper path inside the Task To Run
+    // line; that line may also contain `--watch-requests <appDir>`.
+    for (final line in taskQuery.split(RegExp(r'\r?\n'))) {
+      final lower = line.toLowerCase();
+      if (!(lower.startsWith('task to run') || lower.startsWith('tarefa a ser executada'))) {
+        continue;
+      }
+      // Strip the field label (`Task To Run: <value>`).
+      final colon = line.indexOf(':');
+      final value = colon >= 0 ? line.substring(colon + 1) : line;
+      return value.replaceAll('"', '').toLowerCase().contains(normalized);
+    }
+    // If the field is not present (older locale, parsing failed), fall back
+    // to a contains-anywhere check as a best-effort guard.
+    return taskQuery.toLowerCase().contains(normalized);
   }
 
   @override
@@ -193,7 +225,7 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
     await marker.writeAsString('ready\n');
   }
 
-  Future<bool> _isScheduledTaskRegistered() async {
+  Future<String?> _queryScheduledTask() async {
     final result = await _runSchtasks(<String>[
       '/Query',
       '/TN',
@@ -202,7 +234,10 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
       'LIST',
       '/V',
     ]);
-    return result.exitCode == 0;
+    if (result.exitCode != 0) {
+      return null;
+    }
+    return '${result.stdout}';
   }
 
   Future<ProcessResult> _runSchtasks(List<String> args) {

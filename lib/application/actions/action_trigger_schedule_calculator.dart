@@ -82,7 +82,17 @@ class AgentActionTriggerScheduleCalculator {
     }
 
     final startAt = trigger.schedule.startAt;
-    if (startAt == null || startAt.isBefore(now)) {
+    if (startAt == null) {
+      return null;
+    }
+
+    if (startAt.isBefore(now)) {
+      // Slot perdido enquanto o app estava fechado.
+      // Quando ignoreMissedRuns=false, dispara catch-up retornando o slot
+      // no passado; scheduler fira imediatamente via _delayUntil.
+      if (!trigger.schedule.ignoreMissedRuns) {
+        return _withinEnd(trigger, startAt) ? startAt : null;
+      }
       return null;
     }
 
@@ -105,12 +115,21 @@ class AgentActionTriggerScheduleCalculator {
 
     final elapsedMicros = now.difference(anchor).inMicroseconds;
     final intervalMicros = interval.inMicroseconds;
-    var steps = elapsedMicros ~/ intervalMicros;
-    if (elapsedMicros % intervalMicros != 0) {
-      steps += 1;
+    final completedSteps = elapsedMicros ~/ intervalMicros;
+    final isOnBoundary = elapsedMicros % intervalMicros == 0;
+
+    if (!trigger.schedule.ignoreMissedRuns) {
+      final missedSlot = anchor.add(Duration(microseconds: intervalMicros * completedSteps));
+      // Catch-up single-shot: dispara o slot mais recente que ja passou,
+      // desde que ainda nao tenha sido executado.
+      final lastScheduledAt = trigger.lastScheduledAt;
+      if (lastScheduledAt == null || missedSlot.isAfter(lastScheduledAt)) {
+        return _withinEnd(trigger, missedSlot) ? missedSlot : null;
+      }
     }
 
-    final next = anchor.add(Duration(microseconds: intervalMicros * steps));
+    final nextStep = isOnBoundary ? completedSteps : completedSteps + 1;
+    final next = anchor.add(Duration(microseconds: intervalMicros * nextStep));
     return _withinEnd(trigger, next) ? next : null;
   }
 
@@ -128,6 +147,13 @@ class AgentActionTriggerScheduleCalculator {
       return _nextDailyInLocation(trigger, now, location, timeOfDay);
     }
 
+    if (!trigger.schedule.ignoreMissedRuns) {
+      final missed = _missedDailySlot(trigger, now, timeOfDay);
+      if (missed != null) {
+        return _withinEnd(trigger, missed) ? missed : null;
+      }
+    }
+
     final base = _effectiveBase(trigger, now);
     var candidate = _atTimeOfDay(base, timeOfDay);
     if (candidate.isBefore(base)) {
@@ -135,6 +161,18 @@ class AgentActionTriggerScheduleCalculator {
     }
 
     return _withinEnd(trigger, candidate) ? candidate : null;
+  }
+
+  DateTime? _missedDailySlot(
+    AgentActionTrigger trigger,
+    DateTime now,
+    int timeOfDayMinutes,
+  ) {
+    final candidates = <DateTime>[
+      _atTimeOfDay(now, timeOfDayMinutes),
+      _atTimeOfDay(now.subtract(const Duration(days: 1)), timeOfDayMinutes),
+    ];
+    return _firstMissed(trigger, candidates, now);
   }
 
   DateTime? _nextDailyInLocation(
@@ -145,6 +183,19 @@ class AgentActionTriggerScheduleCalculator {
   ) {
     final baseInstant = _effectiveBase(trigger, now);
     final baseTz = tz.TZDateTime.from(baseInstant, location);
+
+    if (!trigger.schedule.ignoreMissedRuns) {
+      final nowTz = tz.TZDateTime.from(now, location);
+      final candidates = <DateTime>[
+        _tzAtTimeOfDay(location, nowTz, timeOfDayMinutes),
+        _tzAtTimeOfDay(location, nowTz.subtract(const Duration(days: 1)), timeOfDayMinutes),
+      ];
+      final missed = _firstMissed(trigger, candidates, now);
+      if (missed != null) {
+        return _withinEnd(trigger, missed) ? missed : null;
+      }
+    }
+
     var candidate = _tzAtTimeOfDay(location, baseTz, timeOfDayMinutes);
     if (candidate.isBefore(baseTz)) {
       candidate = _tzAtTimeOfDay(location, baseTz.add(const Duration(days: 1)), timeOfDayMinutes);
@@ -167,6 +218,13 @@ class AgentActionTriggerScheduleCalculator {
       return _nextWeeklyInLocation(trigger, now, location, timeOfDay);
     }
 
+    if (!trigger.schedule.ignoreMissedRuns) {
+      final missed = _missedWeeklySlot(trigger, now, timeOfDay);
+      if (missed != null) {
+        return _withinEnd(trigger, missed) ? missed : null;
+      }
+    }
+
     final base = _effectiveBase(trigger, now);
     for (var offset = 0; offset <= DateTime.daysPerWeek; offset += 1) {
       final date = DateTime(base.year, base.month, base.day).add(Duration(days: offset));
@@ -185,6 +243,26 @@ class AgentActionTriggerScheduleCalculator {
     return null;
   }
 
+  DateTime? _missedWeeklySlot(
+    AgentActionTrigger trigger,
+    DateTime now,
+    int timeOfDay,
+  ) {
+    final today = DateTime(now.year, now.month, now.day);
+    for (var offset = 0; offset <= DateTime.daysPerWeek; offset += 1) {
+      final date = today.subtract(Duration(days: offset));
+      if (!trigger.schedule.weekdays.contains(date.weekday)) {
+        continue;
+      }
+      final candidate = _atTimeOfDay(date, timeOfDay);
+      final missed = _firstMissed(trigger, <DateTime>[candidate], now);
+      if (missed != null) {
+        return missed;
+      }
+    }
+    return null;
+  }
+
   DateTime? _nextWeeklyInLocation(
     AgentActionTrigger trigger,
     DateTime now,
@@ -194,6 +272,22 @@ class AgentActionTriggerScheduleCalculator {
     final baseInstant = _effectiveBase(trigger, now);
     final baseTz = tz.TZDateTime.from(baseInstant, location);
     final startCal = tz.TZDateTime(location, baseTz.year, baseTz.month, baseTz.day);
+
+    if (!trigger.schedule.ignoreMissedRuns) {
+      final nowTz = tz.TZDateTime.from(now, location);
+      final todayCal = tz.TZDateTime(location, nowTz.year, nowTz.month, nowTz.day);
+      for (var offset = 0; offset <= DateTime.daysPerWeek; offset += 1) {
+        final dateTz = todayCal.subtract(Duration(days: offset));
+        if (!trigger.schedule.weekdays.contains(dateTz.weekday)) {
+          continue;
+        }
+        final candidate = _tzAtTimeOfDay(location, dateTz, timeOfDayMinutes);
+        final missed = _firstMissed(trigger, <DateTime>[candidate], now);
+        if (missed != null) {
+          return _withinEnd(trigger, missed) ? missed : null;
+        }
+      }
+    }
 
     for (var offset = 0; offset <= DateTime.daysPerWeek; offset += 1) {
       final dateTz = startCal.add(Duration(days: offset));
@@ -227,6 +321,13 @@ class AgentActionTriggerScheduleCalculator {
       return _nextMonthlyInLocation(trigger, now, location, timeOfDay, dayOfMonth);
     }
 
+    if (!trigger.schedule.ignoreMissedRuns) {
+      final missed = _missedMonthlySlot(trigger, now, timeOfDay, dayOfMonth);
+      if (missed != null) {
+        return _withinEnd(trigger, missed) ? missed : null;
+      }
+    }
+
     final base = _effectiveBase(trigger, now);
     for (var offset = 0; offset < 36; offset += 1) {
       final monthStart = DateTime(base.year, base.month + offset);
@@ -248,6 +349,29 @@ class AgentActionTriggerScheduleCalculator {
     return null;
   }
 
+  DateTime? _missedMonthlySlot(
+    AgentActionTrigger trigger,
+    DateTime now,
+    int timeOfDay,
+    int dayOfMonth,
+  ) {
+    for (var offset = 0; offset < 36; offset += 1) {
+      final cal = DateTime(now.year, now.month - offset);
+      if (dayOfMonth > _daysInMonth(cal.year, cal.month)) {
+        continue;
+      }
+      final candidate = _atTimeOfDay(
+        DateTime(cal.year, cal.month, dayOfMonth),
+        timeOfDay,
+      );
+      final missed = _firstMissed(trigger, <DateTime>[candidate], now);
+      if (missed != null) {
+        return missed;
+      }
+    }
+    return null;
+  }
+
   DateTime? _nextMonthlyInLocation(
     AgentActionTrigger trigger,
     DateTime now,
@@ -257,6 +381,28 @@ class AgentActionTriggerScheduleCalculator {
   ) {
     final baseInstant = _effectiveBase(trigger, now);
     final baseTz = tz.TZDateTime.from(baseInstant, location);
+
+    if (!trigger.schedule.ignoreMissedRuns) {
+      final nowTz = tz.TZDateTime.from(now, location);
+      for (var offset = 0; offset < 36; offset += 1) {
+        final cal = DateTime(nowTz.year, nowTz.month - offset);
+        if (dayOfMonth > _daysInMonth(cal.year, cal.month)) {
+          continue;
+        }
+        final candidate = tz.TZDateTime(
+          location,
+          cal.year,
+          cal.month,
+          dayOfMonth,
+          timeOfDayMinutes ~/ Duration.minutesPerHour,
+          timeOfDayMinutes % Duration.minutesPerHour,
+        );
+        final missed = _firstMissed(trigger, <DateTime>[candidate], now);
+        if (missed != null) {
+          return _withinEnd(trigger, missed) ? missed : null;
+        }
+      }
+    }
 
     for (var offset = 0; offset < 36; offset += 1) {
       final cal = DateTime(baseTz.year, baseTz.month + offset);
@@ -279,6 +425,29 @@ class AgentActionTriggerScheduleCalculator {
       return _withinEnd(trigger, candidate) ? candidate : null;
     }
 
+    return null;
+  }
+
+  /// Retorna o slot mais recente em [candidates] que ainda esta no passado
+  /// e ainda nao foi executado segundo `lastScheduledAt` / `startAt`.
+  ///
+  /// Usado para implementar catch-up unico quando
+  /// `AgentActionTriggerSchedule.ignoreMissedRuns` for `false`.
+  DateTime? _firstMissed(
+    AgentActionTrigger trigger,
+    List<DateTime> candidates,
+    DateTime now,
+  ) {
+    final floor = trigger.lastScheduledAt ?? trigger.schedule.startAt;
+    for (final candidate in candidates) {
+      if (!candidate.isBefore(now)) {
+        continue;
+      }
+      if (floor != null && !candidate.isAfter(floor)) {
+        continue;
+      }
+      return candidate;
+    }
     return null;
   }
 

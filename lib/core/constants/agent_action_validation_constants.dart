@@ -55,4 +55,9 @@ abstract final class AgentActionValidationConstants {
   static const String secretStoreUnavailableReason = 'secret_store_unavailable';
 
   static const String secretPersistFailedReason = 'secret_persist_failed';
+
+  /// Capture policy requires redaction when the action is exposed to remote
+  /// execution or references secret placeholders. Disabling redaction would
+  /// allow secrets to leak into Drift history, support exports and logs.
+  static const String redactionRequiredForRemoteOrSecretsReason = 'redaction_required_for_remote_or_secrets';
 }

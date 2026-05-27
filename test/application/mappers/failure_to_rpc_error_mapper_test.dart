@@ -300,5 +300,68 @@ void main() {
       expect(rpcError.code, RpcErrorCode.invalidParams);
       expect(data['reason'], AgentActionGateConstants.secretUnavailableReason);
     });
+
+    test('maps runtime secret unavailable to invalidParams (resolved during execution)', () {
+      // Mirrors AgentActionSecretPlaceholderResolver which emits this as a
+      // runtime failure; the wire contract should still be invalidParams so
+      // the Hub does not interpret it as 500.
+      final failure = ActionRuntimeFailure.withContext(
+        message: 'Resolver cannot satisfy ${'\${secret:smtp_password}'}.',
+        code: AgentActionFailureCode.secretUnavailable,
+        context: const {
+          'reason': AgentActionGateConstants.secretUnavailableReason,
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, RpcErrorCode.invalidParams);
+      expect(data['reason'], AgentActionGateConstants.secretUnavailableReason);
+      expect(data['category'], RpcErrorCode.categoryAction);
+    });
+
+    test('maps runtime path snapshot mismatch to invalidParams (definition stale)', () {
+      final failure = ActionRuntimeFailure.withContext(
+        message: 'Stored path snapshot does not match the file on disk.',
+        code: AgentActionFailureCode.pathSnapshotMismatch,
+        context: const {
+          'reason': AgentActionPathContextConstants.pathChangedAfterSaveReason,
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      expect(rpcError.code, RpcErrorCode.invalidParams);
+    });
+
+    test('maps preflight required/expired to invalidParams', () {
+      final requiredFailure = ActionRuntimeFailure.withContext(
+        message: 'Preflight is required before activating the action.',
+        code: AgentActionFailureCode.preflightRequiredForActive,
+        context: const {'reason': 'preflight_required_for_active'},
+      );
+      final expiredFailure = ActionRuntimeFailure.withContext(
+        message: 'Preflight expired; re-validate before re-running.',
+        code: AgentActionFailureCode.preflightExpiredForActive,
+        context: const {'reason': 'preflight_expired_for_active'},
+      );
+
+      expect(FailureToRpcErrorMapper.map(requiredFailure).code, RpcErrorCode.invalidParams);
+      expect(FailureToRpcErrorMapper.map(expiredFailure).code, RpcErrorCode.invalidParams);
+    });
+
+    test('maps executionCancelled / executionKilled to executionCancelled RPC code', () {
+      final cancelled = ActionRuntimeFailure.withContext(
+        message: 'Execution was cancelled.',
+        code: AgentActionFailureCode.executionCancelled,
+      );
+      final killed = ActionRuntimeFailure.withContext(
+        message: 'Execution was killed.',
+        code: AgentActionFailureCode.executionKilled,
+      );
+
+      expect(FailureToRpcErrorMapper.map(cancelled).code, RpcErrorCode.executionCancelled);
+      expect(FailureToRpcErrorMapper.map(killed).code, RpcErrorCode.executionCancelled);
+    });
   });
 }

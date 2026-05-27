@@ -21,6 +21,7 @@ void main() {
         executionId: 'exec-1',
         actionId: 'action-1',
         command: 'echo hello',
+        elevated: true,
       );
     });
 
@@ -131,6 +132,73 @@ void main() {
       );
     });
 
+    test(
+      'should fail with ACTION_ELEVATED_NOT_CONFIGURED when policy does not approve elevated execution',
+      () async {
+        // Re-seed sem `elevated.runElevated=true`.
+        await File(dbPath).delete();
+        await _seedDatabase(
+          dbPath: dbPath,
+          executionId: 'exec-2',
+          actionId: 'action-2',
+          command: 'echo hello',
+          elevated: false,
+        );
+
+        await Directory(
+          ElevatedContract.requestsDirectory(tempDir.path),
+        ).create(recursive: true);
+        const nonce = 'nonce-2';
+        final expiresAt = DateTime.utc(2026, 5, 18, 13);
+        await File(
+          ElevatedContract.requestFilePath(tempDir.path, 'exec-2'),
+        ).writeAsString(
+          jsonEncode(<String, Object?>{
+            'version': ElevatedContract.requestSchemaVersion,
+            'executionId': 'exec-2',
+            'nonce': nonce,
+            'createdAt': DateTime.utc(2026, 5, 18, 12).toIso8601String(),
+            'expiresAt': expiresAt.toIso8601String(),
+          }),
+        );
+        await File(
+          ElevatedContract.materializedFilePath(tempDir.path, 'exec-2'),
+        ).parent.create(recursive: true);
+        await File(
+          ElevatedContract.materializedFilePath(tempDir.path, 'exec-2'),
+        ).writeAsString(
+          jsonEncode(<String, Object?>{
+            'version': ElevatedContract.materializedSchemaVersion,
+            'executionId': 'exec-2',
+            'nonce': nonce,
+            'expiresAt': expiresAt.toIso8601String(),
+            'actionType': 'commandLine',
+            'launch': <String, Object?>{
+              'executable': 'cmd.exe',
+              'arguments': <String>['/c', 'echo hello'],
+              'commandPreview': 'echo hello',
+            },
+          }),
+        );
+
+        final processor = ElevatedRequestProcessor(
+          appDirectoryPath: tempDir.path,
+          now: () => DateTime.utc(2026, 5, 18, 12, 1),
+        );
+
+        await processor.processPendingRequests();
+
+        final status = jsonDecode(
+              await File(
+                ElevatedContract.statusFilePath(tempDir.path, 'exec-2'),
+              ).readAsString(),
+            )
+            as Map<String, dynamic>;
+        expect(status['status'], 'failed');
+        expect(status['failureCode'], 'ACTION_ELEVATED_NOT_CONFIGURED');
+      },
+    );
+
     test('should reject expired request files', () async {
       await Directory(
         ElevatedContract.requestsDirectory(tempDir.path),
@@ -175,6 +243,7 @@ Future<void> _seedDatabase({
   required String executionId,
   required String actionId,
   required String command,
+  required bool elevated,
 }) async {
   await File(dbPath).parent.create(recursive: true);
   final database = sqlite3.open(dbPath);
@@ -226,6 +295,7 @@ INSERT INTO agent_action_definition_table (
           'exitCode': {
             'acceptedExitCodes': [0],
           },
+          'elevated': {'runElevated': elevated},
         }),
         nowMs,
         nowMs,

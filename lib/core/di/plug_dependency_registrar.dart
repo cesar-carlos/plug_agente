@@ -35,6 +35,7 @@ import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
 import 'package:plug_agente/application/services/agent_action_execution_periodic_purge.dart';
 import 'package:plug_agente/application/services/agent_action_remote_audit_periodic_purge.dart';
+import 'package:plug_agente/application/services/agent_profile_lookup_gateways.dart';
 import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
 import 'package:plug_agente/application/services/auth_service.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator.dart';
@@ -86,6 +87,8 @@ import 'package:plug_agente/application/use_cases/list_developer_data7_connectio
 import 'package:plug_agente/application/use_cases/list_recent_agent_action_remote_audit.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/login_user.dart';
+import 'package:plug_agente/application/use_cases/lookup_agent_cep.dart';
+import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
 import 'package:plug_agente/application/use_cases/notify_agent_action_execution_if_configured.dart';
 import 'package:plug_agente/application/use_cases/prepare_elevated_action_runner.dart';
 import 'package:plug_agente/application/use_cases/preview_agent_action_definition.dart';
@@ -392,12 +395,15 @@ void registerPlugDependencyGraph(
           pathValidator: getIt<ActionPathValidator>(),
         ),
         ExecutableActionAdapter(
+          commandNormalizer: getIt<ActionCommandNormalizer>(),
           pathValidator: getIt<ActionPathValidator>(),
         ),
         ScriptActionAdapter(
+          commandNormalizer: getIt<ActionCommandNormalizer>(),
           pathValidator: getIt<ActionPathValidator>(),
         ),
         JarActionAdapter(
+          commandNormalizer: getIt<ActionCommandNormalizer>(),
           pathValidator: getIt<ActionPathValidator>(),
         ),
         EmailActionAdapter(
@@ -423,18 +429,21 @@ void registerPlugDependencyGraph(
     )
     ..registerLazySingleton<ExecutableActionProcessRunner>(
       () => ExecutableActionProcessRunner(
+        commandNormalizer: getIt<ActionCommandNormalizer>(),
         pathValidator: getIt<ActionPathValidator>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
       ),
     )
     ..registerLazySingleton<ScriptActionProcessRunner>(
       () => ScriptActionProcessRunner(
+        commandNormalizer: getIt<ActionCommandNormalizer>(),
         pathValidator: getIt<ActionPathValidator>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
       ),
     )
     ..registerLazySingleton<JarActionProcessRunner>(
       () => JarActionProcessRunner(
+        commandNormalizer: getIt<ActionCommandNormalizer>(),
         pathValidator: getIt<ActionPathValidator>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
       ),
@@ -924,6 +933,10 @@ void registerPlugDependencyGraph(
         ),
       ),
     )
+    ..registerLazySingleton<IOpenCnpjLookup>(() => getIt<OpenCnpjClient>())
+    ..registerLazySingleton<IViaCepLookup>(() => getIt<ViaCepClient>())
+    ..registerLazySingleton(() => LookupAgentCnpj(getIt<IOpenCnpjLookup>()))
+    ..registerLazySingleton(() => LookupAgentCep(getIt<IViaCepLookup>()))
     ..registerLazySingleton<IAuthorizationPolicyResolver>(
       () => AuthorizationPolicyResolver(
         getIt<FeatureFlags>(),

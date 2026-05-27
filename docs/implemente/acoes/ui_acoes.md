@@ -4,7 +4,13 @@ Indice da superficie Fluent **Acoes** e gates de regressao. Plano completo:
 [plano_acoes_agendadas_execucoes.md](../plano_acoes_agendadas_execucoes.md).
 
 **Status (2026-05-21):** pagina operacional e gate UI fechado no manifesto
-`tool/agent_actions_ui_test_paths.txt` (56 cenarios na pagina principal).
+`tool/agent_actions_ui_test_paths.txt` (7 arquivos:
+`agent_actions_page_test.dart` agora e shim que reexporta
+`agent_actions_actions_tab_test.dart` (~73 cenarios) e
+`agent_actions_settings_tab_test.dart` (~5 cenarios), alem de
+`agent_actions_summary_card_test.dart`, `agent_action_risk_labels_test.dart`,
+`agent_action_confirmations_test.dart` e
+`agent_action_remote_audit_labels_test.dart`).
 Rollout de producao da superficie completa ainda depende de `COM` real
 aprovado + Hub com policy/live signing alinhados.
 

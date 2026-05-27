@@ -69,14 +69,25 @@ Testes de contrato:
 
 | Componente | Caminho |
 | --- | --- |
-| Dispatcher | `lib/application/rpc/rpc_method_dispatcher.dart` |
-| Batch / notification | `lib/infrastructure/external_services/transport/rpc_inbound_handler.dart` |
+| Dispatcher (registry) | `lib/application/rpc/rpc_method_dispatcher.dart` |
+| Handlers `agent.action.*` | `lib/application/rpc/handlers/rpc_method_handlers.dart` (registry) |
+| Operacoes | `lib/application/rpc/agent_action_rpc_method_handler_operations.dart` |
+| Batch | `lib/infrastructure/external_services/transport/rpc_batch_inbound_handler.dart` |
+| Notification / inbound | `lib/infrastructure/external_services/transport/rpc_inbound_handler.dart` |
 | Run / validate / cancel / get | use cases em `lib/application/use_cases/` |
-| Auditoria append-only | Drift `agent_action_remote_audit` + `RpcMethodDispatcher` |
-| Output paging remoto | `lib/application/rpc/agent_action_execution_output_pager.dart` |
+| Auditoria append-only | Drift `agent_action_remote_audit` + `_finishAgentActionRpcWithAudit` |
+| Output paging remoto | `lib/application/rpc/agent_action_execution_output_pager.dart` (offsets UTF-8 por stream) |
 | Capability builder | `lib/application/actions/agent_actions_remote_capability_builder.dart` |
+| Failure mapper | `lib/application/mappers/failure_to_rpc_error_mapper.dart` |
+| Backfill correlacao | `lib/application/use_cases/backfill_agent_action_execution_correlation.dart` |
 
 Teste de roteamento: `test/application/rpc/rpc_method_dispatcher_agent_action_test.dart`.
+
+**Codigos de erro:** `missing_client_token` -> `-32001` (`authenticationFailed`);
+`agent_action_permission_denied`, `agent_actions_remote_disabled`,
+`environment_profile_denied`, `remote_action_not_approved` ->
+`-32002` (`unauthorized`); `action_secret_unavailable` -> `-32602`
+(`invalidParams`).
 
 ## Validacao local / CI
 

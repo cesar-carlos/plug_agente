@@ -2,6 +2,7 @@ import 'package:json_schema/json_schema.dart';
 import 'package:plug_agente/application/actions/action_environment_resolver.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_execution_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
+import 'package:plug_agente/application/actions/agent_action_secret_placeholder_scanner.dart';
 import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
@@ -145,6 +146,11 @@ class ValidateAgentActionDefinition {
       );
     }
 
+    final redactionFailure = _validateRedactionRequirement(definition);
+    if (redactionFailure != null) {
+      return redactionFailure;
+    }
+
     final deploymentCeilingFailure = _validateDeploymentPolicyCeilings(definition);
     if (deploymentCeilingFailure != null) {
       return deploymentCeilingFailure;
@@ -206,6 +212,51 @@ class ValidateAgentActionDefinition {
     );
     if (environmentPolicyFailure != null) {
       return environmentPolicyFailure;
+    }
+
+    return null;
+  }
+
+  /// Capture redaction is mandatory whenever the action is exposed to remote
+  /// execution OR references secrets via `${secret:name}` placeholders.
+  ///
+  /// Disabling [AgentActionCapturePolicy.redactBeforePersisting] in those
+  /// contexts would push resolved secrets into Drift history, the support
+  /// export and auditoria visible to operators.
+  ActionValidationFailure? _validateRedactionRequirement(
+    AgentActionDefinition definition,
+  ) {
+    if (definition.policies.capture.redactBeforePersisting) {
+      return null;
+    }
+
+    if (definition.policies.remote.isEnabled) {
+      return ActionValidationFailure.withContext(
+        message: 'Capture redaction is required when remote execution is enabled.',
+        context: const {
+          'field': 'capture.redactBeforePersisting',
+          'phase': AgentActionProcessConstants.definitionValidationPhase,
+          'reason': AgentActionValidationConstants.redactionRequiredForRemoteOrSecretsReason,
+          'user_message':
+              'Acoes habilitadas para o Hub precisam manter a redacao de saida ligada para nao vazar segredos no historico/auditoria.',
+        },
+      );
+    }
+
+    final placeholders = AgentActionSecretPlaceholderScanner.collectFromDefinition(definition);
+    if (placeholders.isNotEmpty) {
+      return ActionValidationFailure.withContext(
+        message: 'Capture redaction is required when the action references secret placeholders.',
+        context: {
+          'field': 'capture.redactBeforePersisting',
+          'phase': AgentActionProcessConstants.definitionValidationPhase,
+          'reason': AgentActionValidationConstants.redactionRequiredForRemoteOrSecretsReason,
+          'secret_placeholder_count': placeholders.length,
+          'user_message': r'Esta acao usa placeholders ${secret:...};'
+              ' mantenha a redacao de saida ligada para nao gravar segredos'
+              ' resolvidos no historico/auditoria.',
+        },
+      );
     }
 
     return null;
