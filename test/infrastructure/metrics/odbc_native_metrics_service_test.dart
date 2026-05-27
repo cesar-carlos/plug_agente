@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
@@ -7,6 +9,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -154,8 +157,8 @@ void main() {
       when(() => mockService.getDriverCapabilities('DSN=Test')).thenAnswer(
         (_) async => const Success(<String, Object?>{'supports_pooling': true}),
       );
-      when(() => mockService.getAsyncWorkerPoolStats()).thenAnswer(
-        (_) async => const Success(_asyncWorkerPoolStats),
+      when(() => mockService.getWorkerPoolStats()).thenAnswer(
+        (_) async => _asyncWorkerPoolStats,
       );
 
       final result = await service.collectSnapshot();
@@ -239,8 +242,8 @@ void main() {
           ),
         ),
       );
-      when(() => mockService.getAsyncWorkerPoolStats()).thenAnswer(
-        (_) async => const Success(_asyncWorkerPoolStats),
+      when(() => mockService.getWorkerPoolStats()).thenAnswer(
+        (_) async => _asyncWorkerPoolStats,
       );
 
       final result = await service.collectSnapshot();
@@ -287,8 +290,8 @@ void main() {
         ),
       );
       when(pool.getActiveCount).thenAnswer((_) async => const Success(3));
-      when(() => mockService.getAsyncWorkerPoolStats()).thenAnswer(
-        (_) async => const Success(_asyncWorkerPoolStats),
+      when(() => mockService.getWorkerPoolStats()).thenAnswer(
+        (_) async => _asyncWorkerPoolStats,
       );
 
       final result = await service.collectSnapshot();
@@ -342,8 +345,8 @@ void main() {
         },
       );
       when(pool.getActiveCount).thenAnswer((_) async => const Success(2));
-      when(() => mockService.getAsyncWorkerPoolStats()).thenAnswer(
-        (_) async => const Success(_asyncWorkerPoolStats),
+      when(() => mockService.getWorkerPoolStats()).thenAnswer(
+        (_) async => _asyncWorkerPoolStats,
       );
 
       final result = await service.collectSnapshot();
@@ -358,6 +361,110 @@ void main() {
       expect(nativePool['state_source'], 'pool_diagnostics');
       expect(nativePool['effective_strategy'], 'native_compatible');
       expect(nativePool['native_eligible'], isTrue);
+    });
+
+    test('should mark async worker pool unavailable when running in sync mode', () async {
+      when(mockConfigRepository.getCurrentConfigMetadata).thenAnswer(
+        (_) async => Failure(Exception('no active config')),
+      );
+      when(() => mockService.getMetrics()).thenAnswer(
+        (_) async => const Success(
+          OdbcMetrics(
+            queryCount: 1,
+            errorCount: 0,
+            uptimeSecs: 10,
+            totalLatencyMillis: 5,
+            avgLatencyMillis: 5,
+          ),
+        ),
+      );
+      when(() => mockService.getPreparedStatementsMetrics()).thenAnswer(
+        (_) async => const Success(
+          PreparedStatementMetrics(
+            cacheSize: 0,
+            cacheMaxSize: 16,
+            cacheHits: 0,
+            cacheMisses: 0,
+            totalPrepares: 0,
+            totalExecutions: 0,
+            memoryUsageBytes: 0,
+            avgExecutionsPerStmt: 0,
+          ),
+        ),
+      );
+      when(() => mockService.getWorkerPoolStats()).thenAnswer((_) async => null);
+
+      final result = await service.collectSnapshot();
+
+      expect(result.isSuccess(), isTrue);
+      final snapshot = result.getOrThrow();
+      final asyncWorkerPool = snapshot['async_worker_pool'] as Map<String, dynamic>;
+      expect(asyncWorkerPool['available'], isFalse);
+      expect(asyncWorkerPool.containsKey('error'), isFalse);
+    });
+
+    test('should expose recent_odbc_events block when event bridge is wired', () async {
+      final adminController = StreamController<OdbcEvent>.broadcast(sync: true);
+      addTearDown(adminController.close);
+      when(() => mockService.events).thenAnswer((_) => adminController.stream);
+      final eventBridge = OdbcEventBridge(adminService: mockService);
+      addTearDown(eventBridge.dispose);
+
+      service = OdbcNativeMetricsService(
+        mockService,
+        configRepository: mockConfigRepository,
+        settings: MockOdbcConnectionSettings(),
+        runtimeTuning: runtimeTuning,
+        metricsCollector: metricsCollector,
+        eventBridge: eventBridge,
+      );
+
+      when(mockConfigRepository.getCurrentConfigMetadata).thenAnswer(
+        (_) async => Failure(Exception('no active config')),
+      );
+      when(() => mockService.getMetrics()).thenAnswer(
+        (_) async => const Success(
+          OdbcMetrics(queryCount: 0, errorCount: 0, uptimeSecs: 0, totalLatencyMillis: 0, avgLatencyMillis: 0),
+        ),
+      );
+      when(() => mockService.getPreparedStatementsMetrics()).thenAnswer(
+        (_) async => const Success(
+          PreparedStatementMetrics(
+            cacheSize: 0,
+            cacheMaxSize: 16,
+            cacheHits: 0,
+            cacheMisses: 0,
+            totalPrepares: 0,
+            totalExecutions: 0,
+            memoryUsageBytes: 0,
+            avgExecutionsPerStmt: 0,
+          ),
+        ),
+      );
+      when(() => mockService.getWorkerPoolStats()).thenAnswer((_) async => null);
+
+      adminController.add(WorkerRecovered(timestamp: DateTime.utc(2026, 5, 27, 13)));
+      adminController.add(
+        SlowQueryDetected(
+          timestamp: DateTime.utc(2026, 5, 27, 13, 0, 1),
+          connectionId: 'conn-1',
+          sql: 'select 1',
+          durationMs: 1234,
+        ),
+      );
+
+      final result = await service.collectSnapshot();
+      expect(result.isSuccess(), isTrue);
+      final snapshot = result.getOrThrow();
+      final recent = snapshot['recent_odbc_events'] as Map<String, dynamic>;
+      expect(recent['available'], isTrue);
+      expect(recent['count'], 2);
+      final events = recent['events'] as List<dynamic>;
+      expect(events.first, isA<Map<String, Object?>>());
+      final newest = events.first as Map<String, Object?>;
+      expect(newest['kind'], 'SlowQueryDetected');
+      expect(newest['duration_ms'], 1234);
+      expect(newest['connection_id'], 'conn-1');
     });
 
     test('should return typed failure when getMetrics fails', () async {

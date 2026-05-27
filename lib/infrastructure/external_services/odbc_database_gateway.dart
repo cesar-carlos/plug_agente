@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:odbc_fast/odbc_fast.dart' as odbc show DatabaseType;
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
@@ -1314,6 +1316,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       var recycleAfterRelease = false;
       _BatchTransactionGuard? transaction;
       try {
+        final batchAccessMode = _inferBatchAccessMode(commands);
         final beginResult = await _beginBatchTransactionIfNeeded(
           connectionId: connectionState.connectionId!,
           transactionEnabled: options.transaction,
@@ -1321,6 +1324,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             options: options,
             timeout: effectiveTimeout,
           ),
+          accessMode: batchAccessMode,
         );
         if (beginResult.isError()) {
           final beginFailure = beginResult.exceptionOrNull()! as domain.Failure;
@@ -1382,6 +1386,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           }
 
           if (options.transaction && transaction.isActive) {
+            _maybeRecordTransactionalBatchDeadlineNearStall(
+              deadline: context.deadline,
+              effectiveTimeout: effectiveTimeout,
+              commandCount: commands.length,
+            );
             final commitResult = await _commitBatchTransaction(
               connectionId: connectionState.connectionId!,
               transaction: transaction,
@@ -1874,10 +1883,83 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
+  /// Infers the safest `TransactionAccessMode` for a batch.
+  ///
+  /// When every command in the batch passes the same `SELECT`/`WITH` shape
+  /// check used by the read-only batch dispatch path, the engine can be told
+  /// the unit of work is read-only. PostgreSQL / MySQL / MariaDB / DB2 /
+  /// Oracle then skip locking, pick snapshot reads where applicable, and
+  /// short-circuit lock acquisition — reducing the chance of leaving tables
+  /// locked when a long-running query is rolled back. Engines without a
+  /// native hint (SQL Server, SQLite, Snowflake) silently no-op.
+  ///
+  /// Returns [TransactionAccessMode.readWrite] when the batch is empty or
+  /// contains any non-`SELECT` command, preserving previous behavior for
+  /// mixed and write-only batches.
+  TransactionAccessMode _inferBatchAccessMode(List<SqlCommand> commands) {
+    if (commands.isEmpty) {
+      return TransactionAccessMode.readWrite;
+    }
+    for (final command in commands) {
+      if (SqlValidator.validateSelectQuery(command.sql).isError()) {
+        return TransactionAccessMode.readWrite;
+      }
+    }
+    _metrics.recordTransactionalBatchReadOnlyInference();
+    return TransactionAccessMode.readOnly;
+  }
+
+  /// Records observability when a transactional batch reaches commit having
+  /// already consumed at least 80% of its active deadline.
+  ///
+  /// A transaction this close to the timeout is at risk of being aborted
+  /// mid-commit, which forces the rollback path to run with even less time
+  /// and can leave engine-side locks while cleanup completes. The signal
+  /// lets dashboards correlate the symptom (locks lingering) with the cause
+  /// (transactions running near their budget) before users notice.
+  void _maybeRecordTransactionalBatchDeadlineNearStall({
+    required DateTime? deadline,
+    required Duration? effectiveTimeout,
+    required int commandCount,
+  }) {
+    if (deadline == null || effectiveTimeout == null || effectiveTimeout <= Duration.zero) {
+      return;
+    }
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      // Already past the deadline; the commit/rollback path handles the
+      // failure surface. No additional signal needed here.
+      return;
+    }
+    final budgetMicros = effectiveTimeout.inMicroseconds;
+    if (budgetMicros <= 0) {
+      return;
+    }
+    final consumedRatio = 1 - (remaining.inMicroseconds / budgetMicros);
+    if (consumedRatio < 0.8) {
+      return;
+    }
+    _metrics.recordTransactionalBatchDeadlineNearStall();
+    developer.log(
+      'Transactional batch reached commit near deadline',
+      name: 'database_gateway',
+      level: 900,
+      error: <String, Object?>{
+        'consumed_ratio': consumedRatio,
+        'remaining_ms': remaining.inMilliseconds,
+        'effective_timeout_ms': effectiveTimeout.inMilliseconds,
+        'command_count': commandCount,
+        'suggestion': 'Increase SqlExecutionOptions.timeoutMs or split the batch '
+            'to avoid locks lingering through the rollback window.',
+      },
+    );
+  }
+
   Future<Result<_BatchTransactionStart>> _beginBatchTransactionIfNeeded({
     required String connectionId,
     required bool transactionEnabled,
     required Duration? lockTimeout,
+    required TransactionAccessMode accessMode,
   }) async {
     if (!transactionEnabled) {
       return const Success(_BatchTransactionStart(null));
@@ -1886,7 +1968,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final beginResult = await _service.beginTransaction(
       connectionId,
       savepointDialect: SavepointDialect.auto,
-      accessMode: TransactionAccessMode.readWrite,
+      accessMode: accessMode,
       lockTimeout: lockTimeout,
     );
     if (beginResult.isError()) {
@@ -3743,13 +3825,59 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return remaining < _transactionRollbackTimeout ? remaining : _transactionRollbackTimeout;
   }
 
+  /// Maps a driver name string from the persisted [Config] to the local
+  /// [DatabaseType] used by SQL builders (paging, boolean literals, etc.).
+  ///
+  /// Falls back to the richer `odbc_fast` `DatabaseType.fromDriverName`
+  /// heuristic to recognise variants the previous exact-match switch missed
+  /// (`Microsoft SQL Server`, `Adaptive Server Anywhere`, `PostgreSQL Unicode`,
+  /// etc.). When the underlying driver maps to an engine outside the three
+  /// dialects the local SQL builders support, the call still returns
+  /// [DatabaseType.sqlServer] for backwards compatibility, but emits a
+  /// structured warning so the misconfiguration is observable instead of
+  /// silently producing broken SQL.
+  /// Test-only entry point for [_mapDriverNameToDatabaseType] so the
+  /// heuristic and fallback warning can be exercised without standing up
+  /// the full gateway harness.
+  @visibleForTesting
+  DatabaseType mapDriverNameToDatabaseTypeForTesting(String driverName) {
+    return _mapDriverNameToDatabaseType(driverName);
+  }
+
   DatabaseType _mapDriverNameToDatabaseType(String driverName) {
-    return switch (driverName) {
+    final exact = switch (driverName) {
       'SQL Server' => DatabaseType.sqlServer,
       'PostgreSQL' => DatabaseType.postgresql,
       'SQL Anywhere' => DatabaseType.sybaseAnywhere,
-      _ => DatabaseType.sqlServer,
+      _ => null,
     };
+    if (exact != null) {
+      return exact;
+    }
+
+    final detected = odbc.DatabaseType.fromDriverName(driverName);
+    final mapped = switch (detected) {
+      odbc.DatabaseType.sqlServer => DatabaseType.sqlServer,
+      odbc.DatabaseType.postgresql => DatabaseType.postgresql,
+      odbc.DatabaseType.sybaseAsa => DatabaseType.sybaseAnywhere,
+      _ => null,
+    };
+    if (mapped != null) {
+      return mapped;
+    }
+
+    developer.log(
+      'Unsupported ODBC driver detected; falling back to sqlServer dialect. '
+      'SQL generation may produce incorrect statements for this engine.',
+      name: 'database_gateway',
+      level: 1000,
+      error: <String, Object?>{
+        'driver_name': driverName,
+        'detected_engine': detected.name,
+        'supported_dialects': <String>['sqlServer', 'postgresql', 'sybaseAnywhere'],
+      },
+    );
+    return DatabaseType.sqlServer;
   }
 
   Future<_QueryExecutionOutcome> _runQueryExecution(

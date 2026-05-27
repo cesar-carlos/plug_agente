@@ -32,25 +32,23 @@ Future<void> main(List<String> args) async {
     }
 
     final versionResult = await service.getVersion();
-    final statsResult = await service.getAsyncWorkerPoolStats();
+    final stats = await service.getWorkerPoolStats();
     final supportsResultEncodingOptions = locator.nativeConnection.supportsResultEncodingOptions;
     final columnarNativeDecompressAvailable = isColumnarNativeDecompressAvailable;
 
     final report = <String, Object?>{
       'status': 'ok',
       'version': versionResult.getOrNull() ?? const <String, String>{},
-      'async_worker_pool': statsResult.fold(
-        (stats) => <String, Object?>{
-          'worker_count': stats.workerCount,
-          'active_requests': stats.activeRequests,
-          'pending_requests': stats.pendingRequests,
-          'total_routed': stats.totalRouted,
-          'fallbacks_to_blocking': stats.fallbacksToBlocking,
-        },
-        (error) => <String, Object?>{
-          'error': error.toString(),
-        },
-      ),
+      'async_worker_pool': stats == null
+          ? const <String, Object?>{'available': false}
+          : <String, Object?>{
+              'available': true,
+              'worker_count': stats.workerCount,
+              'active_requests': stats.activeRequests,
+              'pending_requests': stats.pendingRequests,
+              'total_routed': stats.totalRouted,
+              'fallbacks_to_blocking': stats.fallbacksToBlocking,
+            },
       'native_exports': <String, Object>{
         'result_encoding_options': supportsResultEncodingOptions,
         'columnar_decompress': columnarNativeDecompressAvailable,

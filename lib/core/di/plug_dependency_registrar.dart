@@ -203,6 +203,7 @@ import 'package:plug_agente/infrastructure/metrics/authorization_cache_metrics_c
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/deprecation_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collector.dart';
@@ -646,6 +647,12 @@ void registerPlugDependencyGraph(
       ),
     )
     ..registerLazySingleton(
+      () => OdbcEventBridge(
+        adminService: getIt<odbc.OdbcService>(),
+        metrics: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
       () => OdbcNativeMetricsService(
         getIt<odbc.OdbcService>(),
         activeConfigResolver: getIt<ActiveConfigResolver>(),
@@ -653,6 +660,7 @@ void registerPlugDependencyGraph(
         settings: getIt<IOdbcConnectionSettings>(),
         runtimeTuning: getIt<OdbcRuntimeTuning>(),
         metricsCollector: getIt<MetricsCollector>(),
+        eventBridge: getIt<OdbcEventBridge>(),
       ),
     )
     ..registerLazySingleton<IMetricsCollector>(getIt.get<MetricsCollector>)

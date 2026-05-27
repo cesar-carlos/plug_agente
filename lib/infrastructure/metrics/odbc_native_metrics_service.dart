@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -22,12 +23,14 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
     IOdbcConnectionSettings? settings,
     OdbcRuntimeTuning? runtimeTuning,
     MetricsCollector? metricsCollector,
+    OdbcEventBridge? eventBridge,
   }) : _activeConfigResolver = activeConfigResolver,
        _configRepository = configRepository,
        _connectionPool = connectionPool,
        _settings = settings,
        _runtimeTuning = runtimeTuning,
-       _metricsCollector = metricsCollector;
+       _metricsCollector = metricsCollector,
+       _eventBridge = eventBridge;
 
   final OdbcService _service;
   final ActiveConfigResolver? _activeConfigResolver;
@@ -36,6 +39,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
   final IOdbcConnectionSettings? _settings;
   final OdbcRuntimeTuning? _runtimeTuning;
   final MetricsCollector? _metricsCollector;
+  final OdbcEventBridge? _eventBridge;
   bool _loggedAsyncWorkerPoolSaturation = false;
 
   static const int _asyncPendingWarningThresholdPercent = 80;
@@ -113,7 +117,49 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
       'async_worker_pool': asyncWorkerPoolSnapshot,
       'runtime_tuning': _runtimeTuning?.toMap(),
       'sql_queue': sqlQueueSnapshot,
+      'recent_odbc_events': _collectRecentOdbcEventsSnapshot(),
     });
+  }
+
+  Map<String, dynamic> _collectRecentOdbcEventsSnapshot() {
+    final bridge = _eventBridge;
+    if (bridge == null) {
+      return const <String, dynamic>{'available': false};
+    }
+    final events = bridge.recentEvents;
+    return <String, dynamic>{
+      'available': true,
+      'count': events.length,
+      'events': events.map(_serializeOdbcEvent).toList(growable: false),
+    };
+  }
+
+  Map<String, Object?> _serializeOdbcEvent(OdbcEvent event) {
+    final base = <String, Object?>{
+      'kind': event.runtimeType.toString(),
+      'timestamp': event.timestamp.toIso8601String(),
+    };
+    switch (event) {
+      case ConnectionLost(:final connectionId, :final reason):
+        base['connection_id'] = connectionId;
+        base['reason_type'] = reason.runtimeType.toString();
+        base['reason_message'] = reason.toString();
+      case AutoReconnectAttempted(:final connectionId, :final attempt, :final maxAttempts):
+        base['connection_id'] = connectionId;
+        base['attempt'] = attempt;
+        base['max_attempts'] = maxAttempts;
+      case WorkerRecovered():
+        break;
+      case PoolResize(:final poolId, :final oldSize, :final newSize):
+        base['pool_id'] = poolId;
+        base['old_size'] = oldSize;
+        base['new_size'] = newSize;
+      case SlowQueryDetected(:final connectionId, :final sql, :final durationMs):
+        base['connection_id'] = connectionId;
+        base['duration_ms'] = durationMs;
+        base['sql_preview'] = sql.length > 80 ? '${sql.substring(0, 77)}...' : sql;
+    }
+    return base;
   }
 
   Future<String?> _resolveConnectionString() async {
@@ -232,14 +278,11 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
   }
 
   Future<Map<String, dynamic>> _collectAsyncWorkerPoolSnapshot() async {
-    final statsResult = await _service.getAsyncWorkerPoolStats();
-    return statsResult.fold(
-      _buildAsyncWorkerPoolSnapshot,
-      (error) => <String, dynamic>{
-        'available': false,
-        'error': error.toString(),
-      },
-    );
+    final stats = await _service.getWorkerPoolStats();
+    if (stats == null) {
+      return const <String, dynamic>{'available': false};
+    }
+    return _buildAsyncWorkerPoolSnapshot(stats);
   }
 
   Map<String, dynamic> _buildAsyncWorkerPoolSnapshot(

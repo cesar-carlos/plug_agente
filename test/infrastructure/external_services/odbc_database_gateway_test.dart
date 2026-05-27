@@ -1,7 +1,7 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:odbc_fast/odbc_fast.dart';
+import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -12,6 +12,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
+import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
@@ -1899,7 +1900,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
     );
 
     test(
-      'should use direct ODBC connection for transactional executeBatch',
+      'should infer TransactionAccessMode.readOnly for transactional batches containing only SELECTs',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         const ownedId = 'owned-tx-1';
@@ -1978,12 +1979,75 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           () => mockService.beginTransaction(
             ownedId,
             savepointDialect: SavepointDialect.auto,
-            accessMode: TransactionAccessMode.readWrite,
+            accessMode: TransactionAccessMode.readOnly,
             lockTimeout: const Duration(milliseconds: 1200),
           ),
         ).called(1);
         verify(() => mockService.disconnect(ownedId)).called(1);
         expect(metrics.transactionalBatchDirectPathCount, 1);
+      },
+    );
+
+    test(
+      'should keep TransactionAccessMode.readWrite when batch contains any non-SELECT command',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const ownedId = 'owned-tx-dml';
+        final config = _buildConfig(connectionString);
+
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: ownedId,
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(1));
+        when(
+          () => mockService.executeQuery(any(), connectionId: ownedId),
+        ).thenAnswer(
+          (_) async => const Success(
+            QueryResult(columns: [], rows: [], rowCount: 0),
+          ),
+        );
+        when(() => mockService.commitTransaction(ownedId, 1)).thenAnswer((_) async => const Success(unit));
+        when(() => mockService.disconnect(ownedId)).thenAnswer((_) async => const Success(unit));
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: "INSERT INTO audit (msg) VALUES ('ping')"),
+          ],
+          options: const SqlExecutionOptions(
+            transaction: true,
+            timeoutMs: 1200,
+          ),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => mockService.beginTransaction(
+            ownedId,
+            savepointDialect: SavepointDialect.auto,
+            accessMode: TransactionAccessMode.readWrite,
+            lockTimeout: const Duration(milliseconds: 1200),
+          ),
+        ).called(1);
       },
     );
 
@@ -2343,7 +2407,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           () => mockService.beginTransaction(
             firstOwnedId,
             savepointDialect: SavepointDialect.auto,
-            accessMode: TransactionAccessMode.readWrite,
+            accessMode: TransactionAccessMode.readOnly,
             lockTimeout: const Duration(milliseconds: 1200),
           ),
         ).called(1);
@@ -2351,7 +2415,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           () => mockService.beginTransaction(
             secondOwnedId,
             savepointDialect: SavepointDialect.auto,
-            accessMode: TransactionAccessMode.readWrite,
+            accessMode: TransactionAccessMode.readOnly,
             lockTimeout: const Duration(milliseconds: 1200),
           ),
         ).called(1);
@@ -3887,6 +3951,59 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         );
       },
     );
+
+    group('mapDriverNameToDatabaseType', () {
+      test('should resolve exact matches for the three supported dialects', () {
+        expect(gateway.mapDriverNameToDatabaseTypeForTesting('SQL Server'), DatabaseType.sqlServer);
+        expect(gateway.mapDriverNameToDatabaseTypeForTesting('PostgreSQL'), DatabaseType.postgresql);
+        expect(gateway.mapDriverNameToDatabaseTypeForTesting('SQL Anywhere'), DatabaseType.sybaseAnywhere);
+      });
+
+      test('should resolve heuristic variants via odbc_fast.DatabaseType.fromDriverName', () {
+        expect(
+          gateway.mapDriverNameToDatabaseTypeForTesting('Microsoft SQL Server'),
+          DatabaseType.sqlServer,
+        );
+        expect(
+          gateway.mapDriverNameToDatabaseTypeForTesting('PostgreSQL Unicode'),
+          DatabaseType.postgresql,
+        );
+        expect(
+          gateway.mapDriverNameToDatabaseTypeForTesting('Adaptive Server Anywhere'),
+          DatabaseType.sybaseAnywhere,
+        );
+      });
+
+      test('should fall back to sqlServer for drivers outside the supported dialects', () {
+        // MariaDB, Oracle, DB2, SQLite, Snowflake, etc. are recognised by the
+        // package heuristic but the local builders only model 3 dialects.
+        // The fallback must stay deterministic so SQL generation does not
+        // diverge silently between dialects we cannot handle yet.
+        expect(
+          gateway.mapDriverNameToDatabaseTypeForTesting('MariaDB ODBC 3.1 Driver'),
+          DatabaseType.sqlServer,
+        );
+        expect(
+          gateway.mapDriverNameToDatabaseTypeForTesting('Oracle in OraClient19Home1'),
+          DatabaseType.sqlServer,
+        );
+        expect(
+          gateway.mapDriverNameToDatabaseTypeForTesting('IBM DB2 ODBC DRIVER'),
+          DatabaseType.sqlServer,
+        );
+      });
+
+      test('should fall back to sqlServer for unknown driver names', () {
+        expect(
+          gateway.mapDriverNameToDatabaseTypeForTesting('Some Unknown Driver'),
+          DatabaseType.sqlServer,
+        );
+        expect(
+          gateway.mapDriverNameToDatabaseTypeForTesting(''),
+          DatabaseType.sqlServer,
+        );
+      });
+    });
   });
 }
 

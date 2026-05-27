@@ -34,6 +34,7 @@ import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.da
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/sql_investigation_collector.dart';
@@ -134,6 +135,9 @@ Future<void> shutdownApp() async {
   }
   if (getIt.isRegistered<SqlInvestigationCollector>()) {
     getIt<SqlInvestigationCollector>().dispose();
+  }
+  if (getIt.isRegistered<OdbcEventBridge>()) {
+    await getIt<OdbcEventBridge>().dispose();
   }
 
   // 8. Encerrar worker ODBC (synchronous)
@@ -236,9 +240,14 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
       await getIt<IConnectionPool>().closeAll();
     }
 
+    if (getIt.isRegistered<OdbcEventBridge>()) {
+      await getIt<OdbcEventBridge>().dispose();
+    }
+
     await _resetLazySingletonIfRegistered<ITransportClient>();
     await _resetLazySingletonIfRegistered<RpcMethodDispatcher>();
     await _resetLazySingletonIfRegistered<OdbcNativeMetricsService>();
+    await _resetLazySingletonIfRegistered<OdbcEventBridge>();
     await _resetLazySingletonIfRegistered<IStreamingDatabaseGateway>();
     await _resetLazySingletonIfRegistered<IDatabaseGateway>();
     await _resetLazySingletonIfRegistered<DirectOdbcConnectionLimiter>();
@@ -259,6 +268,10 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
     _logOdbcRuntimeTuningWarnings(newTuning);
 
     // Re-initialize the ODBC worker pool with the updated tuning.
+    // failFast is intentional here: SqlExecutionQueue at the application
+    // layer already owns backpressure / queueing. We want the ODBC async
+    // pool to reject overflow immediately so the queue (which has fairness,
+    // timeouts and observability) is the single point of admission control.
     _odbcLocator.shutdown();
     _odbcLocator.initialize(
       useAsync: true,
@@ -296,6 +309,7 @@ Future<void> _primeReloadedOdbcRuntimeDependencies() async {
   getIt<IConnectionPool>();
   getIt<IStreamingDatabaseGateway>();
   getIt<IDatabaseGateway>();
+  getIt<OdbcEventBridge>();
 }
 
 PayloadSigningKeyStore _createPayloadSigningKeyStore() {
@@ -473,11 +487,14 @@ Future<void> setupDependencies({
   final odbcRuntimeTuning = resolveOdbcRuntimeTuning(settings: odbcSettings);
   getIt.registerSingleton<OdbcRuntimeTuning>(odbcRuntimeTuning);
   _logOdbcRuntimeTuningWarnings(odbcRuntimeTuning);
+  // failFast is intentional: SqlExecutionQueue at the application layer
+  // owns admission control / queueing / fairness. The ODBC async pool
+  // rejects overflow immediately so the queue stays the single source of
+  // truth for backpressure decisions.
   _odbcLocator.initialize(
     useAsync: true,
     asyncWorkerCount: odbcRuntimeTuning.asyncWorkerCount,
     asyncMaxPendingRequests: odbcRuntimeTuning.asyncMaxPendingRequests,
-    // Explicit because this runtime default is part of the ODBC tuning contract.
     asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
   );
   developer.log(
@@ -526,6 +543,10 @@ Future<void> setupDependencies({
       );
     },
   );
+
+  // Force creation of the ODBC event bridge so it starts consuming the
+  // runtime event stream from boot, not lazily on first diagnostic access.
+  getIt<OdbcEventBridge>();
 
   // Initialize database
   try {

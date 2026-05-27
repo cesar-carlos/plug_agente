@@ -53,6 +53,13 @@ class MetricsCollector
   static const String _poolReleaseFailureCounter = 'pool_release_failure';
   static const String _poolRecycleCounter = 'pool_recycle';
   static const String _poolRecycleFailureCounter = 'pool_recycle_failure';
+  static const String _odbcEventConnectionLostCounter = 'odbc_event_connection_lost';
+  static const String _odbcEventAutoReconnectAttemptedCounter = 'odbc_event_auto_reconnect_attempted';
+  static const String _odbcEventWorkerRecoveredCounter = 'odbc_event_worker_recovered';
+  static const String _odbcEventPoolResizeCounter = 'odbc_event_pool_resize';
+  static const String _odbcEventSlowQueryDetectedCounter = 'odbc_event_slow_query_detected';
+  static const String _transactionalBatchReadOnlyInferenceCounter = 'transactional_batch_readonly_inference';
+  static const String _transactionalBatchDeadlineNearStallCounter = 'transactional_batch_deadline_near_stall';
   static const String _authDecisionCacheHitCounter = 'auth_decision_cache_hit';
   static const String _authDecisionCacheMissCounter = 'auth_decision_cache_miss';
   static const String _authPolicyCacheHitCounter = 'auth_policy_cache_hit';
@@ -728,6 +735,31 @@ class MetricsCollector
   void recordPoolRecycle() => _incrementEventCounter(_poolRecycleCounter);
 
   void recordPoolRecycleFailure() => _incrementEventCounter(_poolRecycleFailureCounter);
+
+  /// Counts ODBC runtime events forwarded by `OdbcEventBridge` so dashboards
+  /// have a quantitative view of connection/pool/slow-query lifecycle without
+  /// scraping logs.
+  void recordOdbcEventConnectionLost() => _incrementEventCounter(_odbcEventConnectionLostCounter);
+
+  void recordOdbcEventAutoReconnectAttempted() => _incrementEventCounter(_odbcEventAutoReconnectAttemptedCounter);
+
+  void recordOdbcEventWorkerRecovered() => _incrementEventCounter(_odbcEventWorkerRecoveredCounter);
+
+  void recordOdbcEventPoolResize() => _incrementEventCounter(_odbcEventPoolResizeCounter);
+
+  void recordOdbcEventSlowQueryDetected() => _incrementEventCounter(_odbcEventSlowQueryDetectedCounter);
+
+  /// Counts transactional batches that started with the engine-side read-only
+  /// hint (`TransactionAccessMode.readOnly`). Confirms the inference is firing
+  /// in production and lets dashboards correlate read-only batches with
+  /// fewer engine-side locks.
+  void recordTransactionalBatchReadOnlyInference() => _incrementEventCounter(_transactionalBatchReadOnlyInferenceCounter);
+
+  /// Counts transactional batches that consumed more than 80% of the active
+  /// deadline before completing. High values suggest the batch is at risk of
+  /// timing out and leaving locks while the rollback cleanup runs.
+  void recordTransactionalBatchDeadlineNearStall() =>
+      _incrementEventCounter(_transactionalBatchDeadlineNearStallCounter);
 
   void recordAuthDecisionCacheHit() => _incrementEventCounter(_authDecisionCacheHitCounter);
 
