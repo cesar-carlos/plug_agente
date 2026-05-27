@@ -81,10 +81,14 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
   }
 
   /// Compares the `Task To Run` field from `schtasks /Query` with the
-  /// currently resolved helper path. We normalize case and trim quotes so
-  /// the comparison survives quoting differences between Windows shells.
+  /// currently resolved helper path. We normalize case, trim quotes and
+  /// fold both `/` and `\` into the same separator on both sides so the
+  /// comparison survives quoting differences between Windows shells and
+  /// remains stable when the harness runs on a non-Windows host (the
+  /// `isWindows()` fake the tests use exercises this code path against
+  /// POSIX-style paths produced by `Platform.resolvedExecutable`).
   bool _taskCommandPointsToHelper(String taskQuery, String helperPath) {
-    final normalized = helperPath.replaceAll('/', r'\').toLowerCase();
+    final normalizedHelper = _normalizePathForComparison(helperPath);
     // Look for any occurrence of the helper path inside the Task To Run
     // line; that line may also contain `--watch-requests <appDir>`.
     for (final line in taskQuery.split(RegExp(r'\r?\n'))) {
@@ -95,11 +99,18 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
       // Strip the field label (`Task To Run: <value>`).
       final colon = line.indexOf(':');
       final value = colon >= 0 ? line.substring(colon + 1) : line;
-      return value.replaceAll('"', '').toLowerCase().contains(normalized);
+      return _normalizePathForComparison(value).contains(normalizedHelper);
     }
     // If the field is not present (older locale, parsing failed), fall back
     // to a contains-anywhere check as a best-effort guard.
-    return taskQuery.toLowerCase().contains(normalized);
+    return _normalizePathForComparison(taskQuery).contains(normalizedHelper);
+  }
+
+  /// Normalises a path-like fragment for case-insensitive `contains`
+  /// matching: drops surrounding quotes, folds both `/` and `\` into the
+  /// same backslash separator and lowercases the result. Idempotent.
+  static String _normalizePathForComparison(String input) {
+    return input.replaceAll('"', '').replaceAll('/', r'\').toLowerCase();
   }
 
   @override
