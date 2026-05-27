@@ -1,10 +1,10 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
-import 'package:plug_agente/presentation/providers/config_provider.dart';
+import 'package:plug_agente/presentation/pages/database_settings/database_connection_form_controller.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
@@ -19,20 +19,22 @@ import 'package:plug_agente/shared/widgets/common/layout/settings_components.dar
 class DatabaseConfigSection extends StatelessWidget {
   const DatabaseConfigSection({
     required this.formController,
-    required this.configProvider,
     required this.connectionProvider,
     required this.onDriverChanged,
     required this.onTestConnection,
     required this.onSaveConfig,
+    required this.isTesting,
+    required this.isSaving,
     super.key,
   });
 
-  final ConfigFormController formController;
-  final ConfigProvider configProvider;
+  final DatabaseConnectionFormController formController;
   final ConnectionProvider connectionProvider;
   final ValueChanged<String> onDriverChanged;
   final Future<void> Function() onTestConnection;
   final Future<void> Function() onSaveConfig;
+  final ValueListenable<bool> isTesting;
+  final ValueListenable<bool> isSaving;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +56,6 @@ class DatabaseConfigSection extends StatelessWidget {
                       driverNameController: formController.driverNameController,
                       odbcDriverNameController: formController.odbcDriverNameController,
                       onDriverChanged: onDriverChanged,
-                      fieldsInitialized: formController.fieldsInitialized,
                     ),
                     const SizedBox(height: 16),
                     _ConnectionSection(
@@ -75,7 +76,8 @@ class DatabaseConfigSection extends StatelessWidget {
                       portController: formController.portController,
                       onTestConnection: onTestConnection,
                       onSaveConfig: onSaveConfig,
-                      isLoading: configProvider.isLoading,
+                      isTesting: isTesting,
+                      isSaving: isSaving,
                       isCheckingDriver: connectionProvider.isCheckingDriver,
                     ),
                     const SizedBox(height: 16),
@@ -96,13 +98,11 @@ class _DriverSection extends StatelessWidget {
     required this.driverNameController,
     required this.odbcDriverNameController,
     required this.onDriverChanged,
-    required this.fieldsInitialized,
   });
 
   final TextEditingController driverNameController;
   final TextEditingController odbcDriverNameController;
   final ValueChanged<String> onDriverChanged;
-  final bool fieldsInitialized;
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +230,8 @@ class _ActionButtons extends StatelessWidget {
     required this.portController,
     required this.onTestConnection,
     required this.onSaveConfig,
-    required this.isLoading,
+    required this.isTesting,
+    required this.isSaving,
     required this.isCheckingDriver,
   });
 
@@ -240,38 +241,51 @@ class _ActionButtons extends StatelessWidget {
   final TextEditingController portController;
   final Future<void> Function() onTestConnection;
   final Future<void> Function() onSaveConfig;
-  final bool isLoading;
+  final ValueListenable<bool> isTesting;
+  final ValueListenable<bool> isSaving;
   final bool isCheckingDriver;
+
+  bool get _requiredFieldsFilled =>
+      driverNameController.text.isNotEmpty &&
+      hostController.text.isNotEmpty &&
+      portController.text.isNotEmpty &&
+      odbcDriverNameController.text.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return SettingsActionRow(
-      leading: AppButton(
-        label: l10n.dbButtonTestConnection,
-        isPrimary: false,
-        isLoading: isCheckingDriver,
-        onPressed: () async {
-          if (driverNameController.text.isNotEmpty &&
-              hostController.text.isNotEmpty &&
-              portController.text.isNotEmpty &&
-              odbcDriverNameController.text.isNotEmpty) {
-            await onTestConnection();
-          }
-        },
-      ),
-      trailing: AppButton(
-        label: l10n.wsButtonSaveConfig,
-        isLoading: isLoading || isCheckingDriver,
-        onPressed: () async {
-          if (driverNameController.text.isNotEmpty &&
-              hostController.text.isNotEmpty &&
-              portController.text.isNotEmpty &&
-              odbcDriverNameController.text.isNotEmpty) {
-            await onSaveConfig();
-          }
-        },
-      ),
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[isTesting, isSaving]),
+      builder: (context, _) {
+        final testing = isTesting.value || isCheckingDriver;
+        final saving = isSaving.value;
+        final anyInFlight = testing || saving;
+        return SettingsActionRow(
+          leading: AppButton(
+            label: l10n.dbButtonTestConnection,
+            isPrimary: false,
+            isLoading: testing,
+            onPressed: anyInFlight
+                ? null
+                : () async {
+                    if (_requiredFieldsFilled) {
+                      await onTestConnection();
+                    }
+                  },
+          ),
+          trailing: AppButton(
+            label: l10n.wsButtonSaveConfig,
+            isLoading: saving,
+            onPressed: anyInFlight
+                ? null
+                : () async {
+                    if (_requiredFieldsFilled) {
+                      await onSaveConfig();
+                    }
+                  },
+          ),
+        );
+      },
     );
   }
 }

@@ -101,7 +101,7 @@ void main() {
 
     test('should fire daily missed slot today when ignoreMissedRuns=false', () {
       final result = calculator.nextRun(
-        trigger: AgentActionTrigger(
+        trigger: const AgentActionTrigger(
           id: 'trigger-daily',
           actionId: 'action-1',
           type: AgentActionTriggerType.daily,
@@ -122,7 +122,7 @@ void main() {
           id: 'trigger-daily',
           actionId: 'action-1',
           type: AgentActionTriggerType.daily,
-          schedule: AgentActionTriggerSchedule(
+          schedule: const AgentActionTriggerSchedule(
             timeOfDayMinutes: 9 * 60,
             ignoreMissedRuns: false,
           ),
@@ -137,13 +137,13 @@ void main() {
 
     test('should fire weekly missed slot earlier this week when ignoreMissedRuns=false', () {
       final result = calculator.nextRun(
-        trigger: AgentActionTrigger(
+        trigger: const AgentActionTrigger(
           id: 'trigger-weekly',
           actionId: 'action-1',
           type: AgentActionTriggerType.weekly,
           schedule: AgentActionTriggerSchedule(
             timeOfDayMinutes: 9 * 60,
-            weekdays: const {DateTime.monday},
+            weekdays: {DateTime.monday},
             ignoreMissedRuns: false,
           ),
         ),
@@ -160,9 +160,9 @@ void main() {
           id: 'trigger-weekly',
           actionId: 'action-1',
           type: AgentActionTriggerType.weekly,
-          schedule: AgentActionTriggerSchedule(
+          schedule: const AgentActionTriggerSchedule(
             timeOfDayMinutes: 9 * 60,
-            weekdays: const {DateTime.monday},
+            weekdays: {DateTime.monday},
             ignoreMissedRuns: false,
           ),
           lastScheduledAt: DateTime(2026, 5, 11, 9),
@@ -175,7 +175,7 @@ void main() {
 
     test('should fire monthly missed slot this month when ignoreMissedRuns=false', () {
       final result = calculator.nextRun(
-        trigger: AgentActionTrigger(
+        trigger: const AgentActionTrigger(
           id: 'trigger-monthly',
           actionId: 'action-1',
           type: AgentActionTriggerType.monthly,

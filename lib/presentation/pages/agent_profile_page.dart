@@ -1,24 +1,28 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
+import 'package:plug_agente/application/use_cases/lookup_agent_cep.dart';
+import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
 import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
-import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
-import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/mappers/agent_profile_validation_messages_l10n.dart';
-import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
+import 'package:plug_agente/presentation/pages/agent_profile/agent_profile_form_controller.dart';
+import 'package:plug_agente/presentation/pages/agent_profile/agent_profile_save_coordinator.dart';
+import 'package:plug_agente/presentation/pages/agent_profile/agent_profile_save_outcome.dart';
+import 'package:plug_agente/presentation/pages/agent_profile/widgets/agent_profile_address_section.dart';
+import 'package:plug_agente/presentation/pages/agent_profile/widgets/agent_profile_contact_section.dart';
+import 'package:plug_agente/presentation/pages/agent_profile/widgets/agent_profile_identity_section.dart';
+import 'package:plug_agente/presentation/pages/agent_profile/widgets/agent_profile_notes_section.dart';
+import 'package:plug_agente/presentation/pages/agent_profile/widgets/agent_profile_save_action.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
-import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
-import 'package:plug_agente/shared/widgets/common/form_components.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 import 'package:provider/provider.dart';
@@ -26,15 +30,15 @@ import 'package:provider/provider.dart';
 class AgentProfilePage extends StatefulWidget {
   const AgentProfilePage({
     this.configId,
-    this.openCnpjClient,
-    this.viaCepClient,
+    this.lookupAgentCnpj,
+    this.lookupAgentCep,
     this.pushAgentProfileToHub,
     super.key,
   });
 
   final String? configId;
-  final OpenCnpjClient? openCnpjClient;
-  final ViaCepClient? viaCepClient;
+  final LookupAgentCnpj? lookupAgentCnpj;
+  final LookupAgentCep? lookupAgentCep;
   final PushAgentProfileToHub? pushAgentProfileToHub;
 
   @override
@@ -42,26 +46,46 @@ class AgentProfilePage extends StatefulWidget {
 }
 
 class _AgentProfilePageState extends State<AgentProfilePage> {
-  static final RegExp _nonDigitsPattern = RegExp('[^0-9]');
+  late final AgentProfileFormController _formController;
+  late final LookupAgentCnpj _lookupAgentCnpj;
+  late final LookupAgentCep _lookupAgentCep;
+  late final PushAgentProfileToHub _pushAgentProfileToHub;
 
-  PushAgentProfileToHub get _pushToHub => widget.pushAgentProfileToHub ?? getIt<PushAgentProfileToHub>();
+  final ValueNotifier<bool> _isLookingUpCnpj = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isLookingUpCep = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isSaving = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isFormReady = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _canSave = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _canLookup = ValueNotifier<bool>(true);
+  late final VoidCallback _refreshDerivedState;
 
-  late final ConfigFormController _formController;
-  late final OpenCnpjClient _openCnpjClient;
-  late final ViaCepClient _viaCepClient;
+  AgentProfileSaveCoordinator? _saveCoordinator;
   ConfigProvider? _configProvider;
-  bool _isLookingUpCnpj = false;
-  bool _isLookingUpCep = false;
-  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _formController = ConfigFormController();
-    _openCnpjClient = widget.openCnpjClient ?? getIt<OpenCnpjClient>();
-    _viaCepClient = widget.viaCepClient ?? getIt<ViaCepClient>();
+    _formController = AgentProfileFormController();
+    _lookupAgentCnpj = widget.lookupAgentCnpj ?? getIt<LookupAgentCnpj>();
+    _lookupAgentCep = widget.lookupAgentCep ?? getIt<LookupAgentCep>();
+    _pushAgentProfileToHub = widget.pushAgentProfileToHub ?? getIt<PushAgentProfileToHub>();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    _refreshDerivedState = () {
+      final saving = _isSaving.value;
+      final cnpjBusy = _isLookingUpCnpj.value;
+      final cepBusy = _isLookingUpCep.value;
+      _canLookup.value = !saving;
+      _canSave.value = _isFormReady.value && !saving && !cnpjBusy && !cepBusy;
+    };
+    _isSaving.addListener(_refreshDerivedState);
+    _isLookingUpCnpj.addListener(_refreshDerivedState);
+    _isLookingUpCep.addListener(_refreshDerivedState);
+    _isFormReady.addListener(_refreshDerivedState);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
       _setupConfigListener();
       unawaited(_initializePage());
     });
@@ -72,6 +96,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.configId != widget.configId) {
       _formController.resetForConfig();
+      _isFormReady.value = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
           return;
@@ -81,51 +106,65 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     }
   }
 
+  @override
+  void dispose() {
+    _configProvider?.removeListener(_onConfigStateChanged);
+    _isSaving.removeListener(_refreshDerivedState);
+    _isLookingUpCnpj.removeListener(_refreshDerivedState);
+    _isLookingUpCep.removeListener(_refreshDerivedState);
+    _isFormReady.removeListener(_refreshDerivedState);
+    _isLookingUpCnpj.dispose();
+    _isLookingUpCep.dispose();
+    _isSaving.dispose();
+    _isFormReady.dispose();
+    _canSave.dispose();
+    _canLookup.dispose();
+    _formController.dispose();
+    super.dispose();
+  }
+
+  void _setupConfigListener() {
+    _configProvider = context.read<ConfigProvider>()..addListener(_onConfigStateChanged);
+    _refreshFormReadyState(_configProvider);
+  }
+
+  void _onConfigStateChanged() {
+    _initializeFormIfReady(provider: _configProvider);
+    _refreshFormReadyState(_configProvider);
+  }
+
   Future<void> _initializePage() async {
     if (!mounted) {
       return;
     }
-    if (widget.configId != null) {
-      await _loadConfig(widget.configId!);
+    final configId = widget.configId;
+    if (configId != null) {
+      await context.read<ConfigProvider>().loadConfigById(configId);
       if (!mounted) {
         return;
       }
     }
     _initializeFormIfReady();
+    _refreshFormReadyState(_configProvider);
   }
 
-  Future<void> _loadConfig(String configId) async {
-    final configProvider = context.read<ConfigProvider>();
-    await configProvider.loadConfigById(configId);
-  }
-
-  void _setupConfigListener() {
-    _configProvider = context.read<ConfigProvider>();
-    _configProvider!.removeListener(_onConfigStateChanged);
-    _configProvider!.addListener(_onConfigStateChanged);
-  }
-
-  void _onConfigStateChanged() {
-    _initializeFormIfReady(configProvider: _configProvider);
-  }
-
-  void _initializeFormIfReady({
-    ConfigProvider? configProvider,
-  }) {
+  void _initializeFormIfReady({ConfigProvider? provider}) {
     if (!mounted) {
       return;
     }
-    final provider = configProvider ?? context.read<ConfigProvider>();
-    if (!_formController.fieldsInitialized && !provider.isLoading && provider.currentConfig != null) {
-      _formController.initializeFromConfig(provider.currentConfig);
+    final source = provider ?? context.read<ConfigProvider>();
+    if (!_formController.fieldsInitialized && !source.isLoading && source.currentConfig != null) {
+      _formController.initializeFromConfig(source.currentConfig);
     }
   }
 
-  @override
-  void dispose() {
-    _configProvider?.removeListener(_onConfigStateChanged);
-    _formController.dispose();
-    super.dispose();
+  void _refreshFormReadyState(ConfigProvider? provider) {
+    final source = provider;
+    if (source == null) {
+      _isFormReady.value = false;
+      return;
+    }
+    _isFormReady.value = !source.isLoading && source.currentConfig != null;
   }
 
   Future<void> _lookupCnpj() async {
@@ -133,40 +172,37 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     if (l10n == null) {
       return;
     }
-    final digits = _digitsOnly(_formController.cnaeCnpjCpfController.text);
-    if (digits.length != 14) {
-      await SettingsFeedback.showError(
-        context: context,
-        title: l10n.modalTitleError,
-        message: l10n.agentProfileLookupCnpjInvalid,
+
+    _clearProviderError();
+    _isLookingUpCnpj.value = true;
+    try {
+      final result = await _lookupAgentCnpj(
+        rawDocument: _formController.documentController.text,
+        invalidLengthMessage: l10n.agentProfileLookupCnpjInvalid,
       );
-      return;
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result.isError()) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: result.exceptionOrNull()!.toDisplayMessage(),
+        );
+        return;
+      }
+
+      _formController.applyOpenCnpjData(result.getOrThrow());
+    } catch (error, stackTrace) {
+      AppLogger.error('CNPJ lookup failed unexpectedly', '$error\n$stackTrace');
+      rethrow;
+    } finally {
+      if (mounted) {
+        _isLookingUpCnpj.value = false;
+      }
     }
-
-    setState(() {
-      _isLookingUpCnpj = true;
-    });
-
-    final result = await _openCnpjClient.lookupCnpj(digits);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLookingUpCnpj = false;
-    });
-
-    if (result.isError()) {
-      await SettingsFeedback.showError(
-        context: context,
-        title: l10n.modalTitleError,
-        message: result.exceptionOrNull()!.toDisplayMessage(),
-      );
-      return;
-    }
-
-    _applyOpenCnpjData(result.getOrThrow());
   }
 
   Future<void> _lookupCep() async {
@@ -174,40 +210,37 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     if (l10n == null) {
       return;
     }
-    final digits = _digitsOnly(_formController.cepController.text);
-    if (digits.length != 8) {
-      await SettingsFeedback.showError(
-        context: context,
-        title: l10n.modalTitleError,
-        message: l10n.agentProfileLookupCepInvalid,
+
+    _clearProviderError();
+    _isLookingUpCep.value = true;
+    try {
+      final result = await _lookupAgentCep(
+        rawPostalCode: _formController.postalCodeController.text,
+        invalidLengthMessage: l10n.agentProfileLookupCepInvalid,
       );
-      return;
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result.isError()) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: result.exceptionOrNull()!.toDisplayMessage(),
+        );
+        return;
+      }
+
+      _formController.applyViaCepData(result.getOrThrow());
+    } catch (error, stackTrace) {
+      AppLogger.error('CEP lookup failed unexpectedly', '$error\n$stackTrace');
+      rethrow;
+    } finally {
+      if (mounted) {
+        _isLookingUpCep.value = false;
+      }
     }
-
-    setState(() {
-      _isLookingUpCep = true;
-    });
-
-    final result = await _viaCepClient.lookupCep(digits);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLookingUpCep = false;
-    });
-
-    if (result.isError()) {
-      await SettingsFeedback.showError(
-        context: context,
-        title: l10n.modalTitleError,
-        message: result.exceptionOrNull()!.toDisplayMessage(),
-      );
-      return;
-    }
-
-    _applyViaCepData(result.getOrThrow());
   }
 
   Future<void> _saveProfile() async {
@@ -215,111 +248,47 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     if (l10n == null) {
       return;
     }
-    final result = AgentProfile.fromFormFields(
-      name: _formController.nomeController.text,
-      tradeName: _formController.nomeFantasiaController.text,
-      document: _formController.cnaeCnpjCpfController.text,
-      phone: _formController.telefoneController.text,
-      mobile: _formController.celularController.text,
+
+    final parseResult = AgentProfile.fromFormFields(
+      name: _formController.nameController.text,
+      tradeName: _formController.tradeNameController.text,
+      document: _formController.documentController.text,
+      phone: _formController.phoneController.text,
+      mobile: _formController.mobileController.text,
       email: _formController.emailController.text,
-      street: _formController.enderecoController.text,
-      number: _formController.numeroEnderecoController.text,
-      district: _formController.bairroController.text,
-      postalCode: _formController.cepController.text,
-      city: _formController.nomeMunicipioController.text,
-      state: _formController.ufMunicipioController.text,
-      notes: _formController.observacaoController.text,
+      street: _formController.streetController.text,
+      number: _formController.addressNumberController.text,
+      district: _formController.districtController.text,
+      postalCode: _formController.postalCodeController.text,
+      city: _formController.cityController.text,
+      state: _formController.stateController.text,
+      notes: _formController.notesController.text,
       validationMessages: agentProfileValidationMessages(l10n),
     );
 
-    if (result.isError()) {
+    if (parseResult.isError()) {
       await SettingsFeedback.showError(
         context: context,
         title: l10n.modalTitleError,
-        message: result.exceptionOrNull()!.toDisplayMessage(),
+        message: parseResult.exceptionOrNull()!.toDisplayMessage(),
       );
       return;
     }
 
-    final profile = result.getOrThrow();
-    _applyValidatedProfile(profile);
+    final profile = parseResult.getOrThrow();
+    _formController.applyValidatedProfile(profile);
 
-    setState(() {
-      _isSaving = true;
-    });
-
-    final configProvider = context.read<ConfigProvider>();
-    configProvider.updateAgentProfile(profile);
-    final saveResult = await configProvider.saveConfig();
-
-    if (!mounted) {
-      return;
-    }
-
-    if (saveResult.isError()) {
-      setState(() {
-        _isSaving = false;
-      });
-      await SettingsFeedback.showError(
-        context: context,
-        title: l10n.modalTitleErrorSaving,
-        message: saveResult.exceptionOrNull()!.toDisplayMessage(),
-      );
-      return;
-    }
-
-    getIt<AgentRegisterProfileProvider>().clearCache();
-
-    var hubSyncFailed = false;
-    String? hubSyncErrorMessage;
-    var hubSyncSucceeded = false;
-    final authProvider = context.read<AuthProvider>();
-    final savedConfig = configProvider.currentConfig;
-    final authHeaderToken = authProvider
-        .currentTokenForConfig(
-          savedConfig?.id,
-        )
-        ?.token
-        .trim();
-    final configStoredToken = savedConfig?.authToken?.trim();
-    final accessToken = (authHeaderToken != null && authHeaderToken.isNotEmpty)
-        ? authHeaderToken
-        : (configStoredToken ?? '');
-    if (accessToken.isNotEmpty &&
-        savedConfig != null &&
-        savedConfig.serverUrl.trim().isNotEmpty &&
-        savedConfig.agentId.trim().isNotEmpty) {
-      final pushResult = await _pushToHub(
-        serverUrl: savedConfig.serverUrl,
-        agentId: savedConfig.agentId,
-        accessToken: accessToken,
-        profile: profile,
-        expectedProfileVersion: savedConfig.hubProfileVersion,
-      );
-      if (!mounted) {
-        return;
-      }
-      if (pushResult.isSuccess()) {
-        final synced = pushResult.getOrThrow();
-        hubSyncSucceeded = true;
-        final persistResult = await configProvider.persistHubProfileCatalogSync(
-          profileVersion: synced.profileVersion,
-          profileUpdatedAtIso: synced.profileUpdatedAt,
-        );
-        persistResult.fold(
-          (_) {
-            getIt<AgentRegisterProfileProvider>().clearCache();
-          },
-          (Object failure) {
-            AppLogger.warning(
-              'Hub profile synced but failed to persist catalog version locally: '
-              '${failure.toDisplayMessage()}',
-            );
-          },
-        );
-      } else {
-        hubSyncFailed = true;
-        hubSyncErrorMessage = pushResult.exceptionOrNull()!.toDisplayMessage();
+    _clearProviderError();
+    _isSaving.value = true;
+    AgentProfileSaveOutcome? outcome;
+    try {
+      outcome = await _resolveSaveCoordinator().save(profile);
+    } catch (error, stackTrace) {
+      AppLogger.error('Agent profile save failed unexpectedly', '$error\n$stackTrace');
+      rethrow;
+    } finally {
+      if (mounted) {
+        _isSaving.value = false;
       }
     }
 
@@ -327,196 +296,82 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       return;
     }
 
-    setState(() {
-      _isSaving = false;
-    });
+    await _showSaveFeedback(l10n, outcome);
+  }
 
-    if (!mounted) {
-      return;
-    }
-
-    final l10nSuccess = AppLocalizations.of(context);
-    if (l10nSuccess == null) {
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    if (hubSyncFailed) {
-      final hubErrorDetail = hubSyncErrorMessage ?? '';
-      await SettingsFeedback.showError(
-        context: context,
-        title: l10nSuccess.agentProfileHubSavePartialTitle,
-        message: l10nSuccess.agentProfileHubSavePartialMessage(hubErrorDetail),
-      );
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    await SettingsFeedback.showSuccess(
-      context: context,
-      title: l10nSuccess.modalTitleSuccess,
-      message: hubSyncSucceeded ? l10nSuccess.agentProfileSaveSuccessSynced : l10nSuccess.agentProfileSaveSuccessLocal,
+  AgentProfileSaveCoordinator _resolveSaveCoordinator() {
+    return _saveCoordinator ??= AgentProfileSaveCoordinator(
+      configProvider: context.read<ConfigProvider>(),
+      authProvider: context.read<AuthProvider>(),
+      pushAgentProfileToHub: _pushAgentProfileToHub,
+      registerProfileProvider: getIt<AgentRegisterProfileProvider>(),
     );
   }
 
-  void _applyOpenCnpjData(OpenCnpjCompanyData data) {
-    BrazilianFieldFormatters.apply(
-      _formController.cnaeCnpjCpfController,
-      data.cnpj,
-      BrazilianFieldFormatters.document,
-    );
-    _setText(_formController.nomeController, data.legalName);
-    _setOptionalText(_formController.nomeFantasiaController, data.tradeName);
-    _setOptionalText(_formController.emailController, data.email);
-    _setOptionalFormatted(
-      _formController.telefoneController,
-      data.phone,
-      BrazilianFieldFormatters.phone,
-    );
-    _setOptionalFormatted(
-      _formController.celularController,
-      data.mobile,
-      BrazilianFieldFormatters.phone,
-    );
-    _setOptionalText(_formController.enderecoController, data.street);
-    _setOptionalText(_formController.numeroEnderecoController, data.number);
-    _setOptionalText(_formController.bairroController, data.district);
-    _setOptionalFormatted(
-      _formController.cepController,
-      data.postalCode,
-      BrazilianFieldFormatters.postalCode,
-    );
-    _setOptionalText(_formController.nomeMunicipioController, data.city);
-    _setOptionalFormatted(
-      _formController.ufMunicipioController,
-      data.state,
-      BrazilianFieldFormatters.state,
-    );
-  }
-
-  void _applyViaCepData(ViaCepAddress data) {
-    BrazilianFieldFormatters.apply(
-      _formController.cepController,
-      data.cep,
-      BrazilianFieldFormatters.postalCode,
-    );
-    _setText(_formController.enderecoController, data.logradouro);
-    _setText(_formController.bairroController, data.bairro);
-    _setText(_formController.nomeMunicipioController, data.localidade);
-    BrazilianFieldFormatters.apply(
-      _formController.ufMunicipioController,
-      data.uf,
-      BrazilianFieldFormatters.state,
-    );
-  }
-
-  void _applyValidatedProfile(AgentProfile profile) {
-    _setText(_formController.nomeController, profile.name);
-    _setText(_formController.nomeFantasiaController, profile.tradeName);
-    BrazilianFieldFormatters.apply(
-      _formController.cnaeCnpjCpfController,
-      profile.document,
-      BrazilianFieldFormatters.document,
-    );
-
-    if (profile.phone != null && profile.phone!.isNotEmpty) {
-      BrazilianFieldFormatters.apply(
-        _formController.telefoneController,
-        profile.phone!,
-        BrazilianFieldFormatters.phone,
-      );
-    } else {
-      _formController.telefoneController.clear();
-    }
-
-    BrazilianFieldFormatters.apply(
-      _formController.celularController,
-      profile.mobile,
-      BrazilianFieldFormatters.phone,
-    );
-    _setText(_formController.emailController, profile.email);
-    _setText(_formController.enderecoController, profile.address.street);
-    _setText(_formController.numeroEnderecoController, profile.address.number);
-    _setText(_formController.bairroController, profile.address.district);
-    BrazilianFieldFormatters.apply(
-      _formController.cepController,
-      profile.address.postalCode,
-      BrazilianFieldFormatters.postalCode,
-    );
-    _setText(_formController.nomeMunicipioController, profile.address.city);
-    BrazilianFieldFormatters.apply(
-      _formController.ufMunicipioController,
-      profile.address.state,
-      BrazilianFieldFormatters.state,
-    );
-    _formController.observacaoController.text = profile.notes ?? '';
-  }
-
-  void _setText(TextEditingController controller, String value) {
-    controller.text = value.trim();
-  }
-
-  void _setOptionalText(TextEditingController controller, String? value) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return;
-    }
-    controller.text = trimmed;
-  }
-
-  void _setOptionalFormatted(
-    TextEditingController controller,
-    String? value,
-    List<TextInputFormatter> formatters,
-  ) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return;
-    }
-    BrazilianFieldFormatters.apply(controller, trimmed, formatters);
-  }
-
-  String _digitsOnly(String value) {
-    return value.replaceAll(_nonDigitsPattern, '');
-  }
-
-  String? _requiredValidator(AppLocalizations l10n, String label, String? value) {
-    if ((value?.trim() ?? '').isEmpty) {
-      return l10n.formFieldRequired(label);
-    }
-    return null;
-  }
-
-  String? _requiredWithSpec(
+  Future<void> _showSaveFeedback(
     AppLocalizations l10n,
-    String label,
-    FieldSpec fieldSpec,
-    String? value,
-  ) {
-    final requiredError = _requiredValidator(l10n, label, value);
-    if (requiredError != null) {
-      return requiredError;
+    AgentProfileSaveOutcome outcome,
+  ) async {
+    switch (outcome) {
+      case AgentProfileSaveLocalFailure(errorMessage: final message):
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleErrorSaving,
+          message: message,
+        );
+      case AgentProfileSaveHubPartialFailure(hubErrorMessage: final detail):
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.agentProfileHubSavePartialTitle,
+          message: l10n.agentProfileHubSavePartialMessage(detail),
+        );
+      case AgentProfileSaveSynced():
+        await SettingsFeedback.showSuccess(
+          context: context,
+          title: l10n.modalTitleSuccess,
+          message: l10n.agentProfileSaveSuccessSynced,
+        );
+      case AgentProfileSaveLocalOnly():
+        await SettingsFeedback.showSuccess(
+          context: context,
+          title: l10n.modalTitleSuccess,
+          message: l10n.agentProfileSaveSuccessLocal,
+        );
     }
-    return fieldSpec.validator?.call(value);
+  }
+
+  void _clearProviderError() {
+    final provider = _configProvider ?? context.read<ConfigProvider>();
+    if (provider.error.isNotEmpty) {
+      provider.clearError();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final configProvider = context.watch<ConfigProvider>();
-    final isInitialLoading = configProvider.isLoading && !_formController.fieldsInitialized;
+    final viewModel = context.select<ConfigProvider, _ConfigViewModel>(
+      (provider) => _ConfigViewModel(
+        isLoading: provider.isLoading,
+        error: provider.error,
+      ),
+    );
+    final isInitialLoading = viewModel.isLoading && !_formController.fieldsInitialized;
 
     return ScaffoldPage(
       header: PageHeader(
         title: Text(
           l10n.navAgentProfile,
           style: context.sectionTitle,
+        ),
+        commandBar: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: AgentProfileSaveAction(
+            isSaving: _isSaving,
+            canSave: _canSave,
+            saveLabel: l10n.agentProfileActionSave,
+            onPressed: _saveProfile,
+          ),
         ),
       ),
       content: Padding(
@@ -526,20 +381,16 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
               ? _AgentProfileLoading(message: l10n.agentProfileLoading)
               : SingleChildScrollView(
                   child: Padding(
-                    padding: const EdgeInsets.only(
-                      right: AppLayout.scrollbarPadding,
-                    ),
+                    padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: AppLayout.maxWideFormWidth,
-                      ),
+                      constraints: const BoxConstraints(maxWidth: AppLayout.maxWideFormWidth),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (configProvider.error.isNotEmpty) ...[
+                          if (viewModel.error.isNotEmpty) ...[
                             InfoBar(
                               title: Text(l10n.modalTitleError),
-                              content: Text(configProvider.error),
+                              content: Text(viewModel.error),
                               severity: InfoBarSeverity.error,
                               isLong: true,
                             ),
@@ -551,203 +402,41 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 AppCard(
-                                  child: _AgentProfileSection(
-                                    title: l10n.agentProfileSectionIdentity,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        _ResponsiveFieldRow(
-                                          children: [
-                                            AppTextField(
-                                              label: l10n.agentProfileFieldName,
-                                              controller: _formController.nomeController,
-                                              validator: (value) => _requiredValidator(
-                                                l10n,
-                                                l10n.agentProfileFieldName,
-                                                value,
-                                              ),
-                                            ),
-                                            AppTextField(
-                                              label: l10n.agentProfileFieldTradeName,
-                                              controller: _formController.nomeFantasiaController,
-                                              validator: (value) => _requiredValidator(
-                                                l10n,
-                                                l10n.agentProfileFieldTradeName,
-                                                value,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: AppSpacing.md),
-                                        _ResponsiveFieldActionRow(
-                                          field: AppTextField(
-                                            label: l10n.agentProfileFieldDocument,
-                                            controller: _formController.cnaeCnpjCpfController,
-                                            fieldSpec: AppFieldSpecs.document(l10n),
-                                            validator: (value) => _requiredWithSpec(
-                                              l10n,
-                                              l10n.agentProfileFieldDocument,
-                                              AppFieldSpecs.document(l10n),
-                                              value,
-                                            ),
-                                          ),
-                                          action: AppButton(
-                                            label: l10n.agentProfileActionLookupCnpj,
-                                            isPrimary: false,
-                                            isLoading: _isLookingUpCnpj,
-                                            onPressed: () {
-                                              unawaited(_lookupCnpj());
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  child: AgentProfileIdentitySection(
+                                    controller: _formController,
+                                    l10n: l10n,
+                                    isLookingUpCnpj: _isLookingUpCnpj,
+                                    canLookup: _canLookup,
+                                    onLookupCnpj: () => unawaited(_lookupCnpj()),
                                   ),
                                 ),
                                 const SizedBox(height: AppSpacing.md),
-                                _AgentProfileSection(
-                                  title: l10n.agentProfileSectionContact,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      _ResponsiveFieldRow(
-                                        children: [
-                                          AppTextField(
-                                            label: l10n.agentProfileFieldPhone,
-                                            controller: _formController.telefoneController,
-                                            fieldSpec: AppFieldSpecs.phone(l10n),
-                                          ),
-                                          AppTextField(
-                                            label: l10n.agentProfileFieldMobile,
-                                            controller: _formController.celularController,
-                                            fieldSpec: AppFieldSpecs.mobile(l10n),
-                                            validator: (value) => _requiredWithSpec(
-                                              l10n,
-                                              l10n.agentProfileFieldMobile,
-                                              AppFieldSpecs.mobile(l10n),
-                                              value,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      AppTextField(
-                                        label: l10n.agentProfileFieldEmail,
-                                        controller: _formController.emailController,
-                                        fieldSpec: AppFieldSpecs.email(l10n),
-                                        validator: (value) => _requiredWithSpec(
-                                          l10n,
-                                          l10n.agentProfileFieldEmail,
-                                          AppFieldSpecs.email(l10n),
-                                          value,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                AgentProfileContactSection(
+                                  controller: _formController,
+                                  l10n: l10n,
                                 ),
                                 const SizedBox(height: AppSpacing.md),
-                                _AgentProfileSection(
-                                  title: l10n.agentProfileSectionAddress,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      _ResponsiveFieldActionRow(
-                                        field: AppTextField(
-                                          label: l10n.agentProfileFieldPostalCode,
-                                          controller: _formController.cepController,
-                                          fieldSpec: AppFieldSpecs.cep(l10n),
-                                          validator: (value) => _requiredWithSpec(
-                                            l10n,
-                                            l10n.agentProfileFieldPostalCode,
-                                            AppFieldSpecs.cep(l10n),
-                                            value,
-                                          ),
-                                        ),
-                                        action: AppButton(
-                                          label: l10n.agentProfileActionLookupCep,
-                                          isPrimary: false,
-                                          isLoading: _isLookingUpCep,
-                                          onPressed: () {
-                                            unawaited(_lookupCep());
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      _ResponsiveFieldRow(
-                                        flexes: const [3, 1],
-                                        children: [
-                                          AppTextField(
-                                            label: l10n.agentProfileFieldStreet,
-                                            controller: _formController.enderecoController,
-                                            validator: (value) => _requiredValidator(
-                                              l10n,
-                                              l10n.agentProfileFieldStreet,
-                                              value,
-                                            ),
-                                          ),
-                                          AppTextField(
-                                            label: l10n.agentProfileFieldNumber,
-                                            controller: _formController.numeroEnderecoController,
-                                            validator: (value) => _requiredValidator(
-                                              l10n,
-                                              l10n.agentProfileFieldNumber,
-                                              value,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      _ResponsiveFieldRow(
-                                        flexes: const [2, 2, 1],
-                                        children: [
-                                          AppTextField(
-                                            label: l10n.agentProfileFieldDistrict,
-                                            controller: _formController.bairroController,
-                                            validator: (value) => _requiredValidator(
-                                              l10n,
-                                              l10n.agentProfileFieldDistrict,
-                                              value,
-                                            ),
-                                          ),
-                                          AppTextField(
-                                            label: l10n.agentProfileFieldCity,
-                                            controller: _formController.nomeMunicipioController,
-                                            validator: (value) => _requiredValidator(
-                                              l10n,
-                                              l10n.agentProfileFieldCity,
-                                              value,
-                                            ),
-                                          ),
-                                          AppTextField(
-                                            label: l10n.agentProfileFieldState,
-                                            controller: _formController.ufMunicipioController,
-                                            fieldSpec: AppFieldSpecs.state(l10n),
-                                            validator: (value) => _requiredWithSpec(
-                                              l10n,
-                                              l10n.agentProfileFieldState,
-                                              AppFieldSpecs.state(l10n),
-                                              value,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
+                                AgentProfileAddressSection(
+                                  controller: _formController,
+                                  l10n: l10n,
+                                  isLookingUpCep: _isLookingUpCep,
+                                  canLookup: _canLookup,
+                                  onLookupCep: () => unawaited(_lookupCep()),
                                 ),
                                 const SizedBox(height: AppSpacing.md),
-                                _AgentProfileSection(
-                                  title: l10n.agentProfileSectionNotes,
-                                  child: AppTextField(
-                                    label: l10n.agentProfileFieldNotes,
-                                    controller: _formController.observacaoController,
-                                    maxLines: 5,
-                                  ),
+                                AgentProfileNotesSection(
+                                  controller: _formController,
+                                  l10n: l10n,
                                 ),
                                 const SizedBox(height: AppSpacing.lg),
-                                _AgentProfileSaveAction(
-                                  isLoading: _isSaving,
-                                  saveLabel: l10n.agentProfileActionSave,
-                                  onPressed: _saveProfile,
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: AgentProfileSaveAction(
+                                    isSaving: _isSaving,
+                                    canSave: _canSave,
+                                    saveLabel: l10n.agentProfileActionSave,
+                                    onPressed: _saveProfile,
+                                  ),
                                 ),
                               ],
                             ),
@@ -761,6 +450,26 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       ),
     );
   }
+}
+
+@immutable
+class _ConfigViewModel {
+  const _ConfigViewModel({
+    required this.isLoading,
+    required this.error,
+  });
+
+  final bool isLoading;
+  final String error;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is _ConfigViewModel && other.isLoading == isLoading && other.error == error;
+  }
+
+  @override
+  int get hashCode => Object.hash(isLoading, error);
 }
 
 class _AgentProfileLoading extends StatelessWidget {
@@ -779,138 +488,6 @@ class _AgentProfileLoading extends StatelessWidget {
           Text(message),
         ],
       ),
-    );
-  }
-}
-
-class _AgentProfileSection extends StatelessWidget {
-  const _AgentProfileSection({
-    required this.title,
-    required this.child,
-  });
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.md),
-        child,
-      ],
-    );
-  }
-}
-
-class _AgentProfileSaveAction extends StatelessWidget {
-  const _AgentProfileSaveAction({
-    required this.isLoading,
-    required this.saveLabel,
-    required this.onPressed,
-  });
-
-  final bool isLoading;
-  final String saveLabel;
-  final Future<void> Function() onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: AppButton(
-        label: saveLabel,
-        isLoading: isLoading,
-        onPressed: () async {
-          await onPressed();
-        },
-      ),
-    );
-  }
-}
-
-class _ResponsiveFieldActionRow extends StatelessWidget {
-  const _ResponsiveFieldActionRow({
-    required this.field,
-    required this.action,
-  });
-
-  final Widget field;
-  final Widget action;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 640) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              field,
-              const SizedBox(height: AppSpacing.md),
-              Align(
-                alignment: Alignment.centerRight,
-                child: action,
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              flex: 3,
-              child: field,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            action,
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _ResponsiveFieldRow extends StatelessWidget {
-  const _ResponsiveFieldRow({
-    required this.children,
-    this.flexes,
-  });
-
-  final List<Widget> children;
-  final List<int>? flexes;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 640) {
-          return Column(
-            children: [
-              for (var index = 0; index < children.length; index++) ...[
-                children[index],
-                if (index < children.length - 1) const SizedBox(height: AppSpacing.md),
-              ],
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var index = 0; index < children.length; index++) ...[
-              Expanded(
-                flex: flexes?[index] ?? 1,
-                child: children[index],
-              ),
-              if (index < children.length - 1) const SizedBox(width: AppSpacing.md),
-            ],
-          ],
-        );
-      },
     );
   }
 }

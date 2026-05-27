@@ -1,49 +1,21 @@
 import 'package:dio/dio.dart';
+import 'package:plug_agente/application/services/agent_profile_lookup_gateways.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
-class OpenCnpjCompanyData {
-  const OpenCnpjCompanyData({
-    required this.cnpj,
-    required this.legalName,
-    this.tradeName,
-    this.email,
-    this.street,
-    this.number,
-    this.district,
-    this.postalCode,
-    this.city,
-    this.state,
-    this.phone,
-    this.mobile,
-  });
-
-  final String cnpj;
-  final String legalName;
-  final String? tradeName;
-  final String? email;
-  final String? street;
-  final String? number;
-  final String? district;
-  final String? postalCode;
-  final String? city;
-  final String? state;
-  final String? phone;
-  final String? mobile;
-}
-
-class OpenCnpjClient {
+class OpenCnpjClient implements IOpenCnpjLookup {
   OpenCnpjClient(this._dio);
 
   static const String apiBaseUrl = 'https://api.opencnpj.org';
 
   final Dio _dio;
 
-  Future<Result<OpenCnpjCompanyData>> lookupCnpj(String cnpj) async {
+  @override
+  Future<Result<OpenCnpjCompanyData>> lookupCnpj(String cnpjDigits) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
-        '$apiBaseUrl/$cnpj',
+        '$apiBaseUrl/$cnpjDigits',
       );
       final payload = response.data;
       if (payload == null) {

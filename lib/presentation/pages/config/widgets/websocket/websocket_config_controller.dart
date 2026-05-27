@@ -1,7 +1,7 @@
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
-import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
+import 'package:plug_agente/presentation/pages/websocket_settings/websocket_config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -61,7 +61,7 @@ class WebSocketConfigController {
     required ConfigProvider configProvider,
     required AuthProvider authProvider,
     required ConnectionProvider connectionProvider,
-    required ConfigFormController formController,
+    required WebsocketConfigFormController formController,
   }) : _configProvider = configProvider,
        _authProvider = authProvider,
        _connectionProvider = connectionProvider,
@@ -70,7 +70,7 @@ class WebSocketConfigController {
   final ConfigProvider _configProvider;
   final AuthProvider _authProvider;
   final ConnectionProvider _connectionProvider;
-  final ConfigFormController _formController;
+  final WebsocketConfigFormController _formController;
 
   Future<WebSocketActionOutcome> loginOrLogout() async {
     final currentConfigId = _configProvider.currentConfig?.id;
@@ -171,7 +171,7 @@ class WebSocketConfigController {
   }
 
   Future<Result<Config>> _persistFormToConfig() {
-    _formController.updateAllFieldsToProvider(_configProvider);
+    _formController.applyToProvider(_configProvider);
     return _configProvider.saveConfig();
   }
 }

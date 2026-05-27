@@ -1,18 +1,22 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/diagnostics_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
-import 'package:plug_agente/presentation/providers/auth_provider.dart';
+import 'package:plug_agente/presentation/pages/websocket_settings/websocket_config_form_controller.dart';
+import 'package:plug_agente/presentation/pages/websocket_settings/widgets/auth_status_feedback.dart';
+import 'package:plug_agente/presentation/pages/websocket_settings/widgets/config_error_feedback.dart';
+import 'package:plug_agente/presentation/pages/websocket_settings/widgets/connection_status_feedback.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
-import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
@@ -30,22 +34,16 @@ class WebSocketSettingsPage extends StatefulWidget {
 }
 
 class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
-  AuthStatus? _previousAuthStatus;
-  String _previousAuthError = '';
-  ConnectionStatus? _previousConnectionStatus;
-  String _previousConnectionError = '';
-  String _previousConfigError = '';
-  AuthProvider? _authProvider;
-  ConnectionProvider? _connectionProvider;
   ConfigProvider? _configProvider;
-  late final ConfigFormController _formController;
+  late final WebsocketConfigFormController _formController;
   late final FeatureFlags _featureFlags;
   late final PayloadSigningConfig _payloadSigningConfig;
+  final ValueNotifier<bool> _isSavingConfig = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
-    _formController = ConfigFormController();
+    _formController = WebsocketConfigFormController();
     _featureFlags = getIt<FeatureFlags>();
     _payloadSigningConfig = getIt.isRegistered<PayloadSigningConfig>()
         ? getIt<PayloadSigningConfig>()
@@ -54,9 +52,10 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
             warnings: const <String>['payload_signing_config_not_registered'],
           );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _setupAuthListener();
-      _setupConnectionListener();
-      _setupConfigListener();
+      if (!mounted) {
+        return;
+      }
+      _configProvider = context.read<ConfigProvider>()..addListener(_onConfigStateChanged);
       unawaited(_initializePage());
     });
   }
@@ -81,7 +80,7 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     }
 
     if (widget.configId != null) {
-      await _loadConfig(widget.configId!);
+      await context.read<ConfigProvider>().loadConfigById(widget.configId!);
       if (!mounted) {
         return;
       }
@@ -90,191 +89,30 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     _initializeFormIfReady();
   }
 
-  Future<void> _loadConfig(String configId) async {
-    final configProvider = context.read<ConfigProvider>();
-    await configProvider.loadConfigById(configId);
-  }
-
-  void _setupAuthListener() {
-    _authProvider = context.read<AuthProvider>();
-    _previousAuthStatus = _authProvider!.status;
-    _previousAuthError = _authProvider!.error;
-    _authProvider!.addListener(_onAuthStateChanged);
-  }
-
-  void _setupConnectionListener() {
-    _connectionProvider = context.read<ConnectionProvider>();
-    _previousConnectionStatus = _connectionProvider!.status;
-    _previousConnectionError = _connectionProvider!.error;
-    _connectionProvider!.addListener(_onConnectionStateChanged);
-  }
-
-  void _setupConfigListener() {
-    _configProvider = context.read<ConfigProvider>();
-    _previousConfigError = _configProvider!.error;
-    _configProvider!.addListener(_onConfigStateChanged);
-  }
-
-  void _onAuthStateChanged() {
-    if (!mounted) {
-      return;
-    }
-
-    final authProvider = context.read<AuthProvider>();
-    final currentConfigId = context.read<ConfigProvider>().currentConfig?.id;
-    final currentStatus = authProvider.status;
-    final currentError = authProvider.error;
-    final isCurrentPageConfig = authProvider.activeConfigId == currentConfigId;
-
-    if (isCurrentPageConfig &&
-        _previousAuthStatus != AuthStatus.authenticated &&
-        currentStatus == AuthStatus.authenticated &&
-        currentError.isEmpty) {
-      if (!authProvider.pullSuppressAuthSuccessModalOnce()) {
-        _showSuccessModal();
-      }
-    }
-
-    if (isCurrentPageConfig && currentError.isNotEmpty && currentError != _previousAuthError) {
-      _showErrorModal(currentError);
-    }
-
-    _previousAuthStatus = currentStatus;
-    _previousAuthError = currentError;
-  }
-
-  void _onConnectionStateChanged() {
-    if (!mounted) {
-      return;
-    }
-
-    final connectionProvider = context.read<ConnectionProvider>();
-    final currentConfigId = context.read<ConfigProvider>().currentConfig?.id;
-    final currentStatus = connectionProvider.status;
-    final currentError = connectionProvider.error;
-    final isCurrentPageConfig = connectionProvider.activeConfigId == currentConfigId;
-
-    if (isCurrentPageConfig &&
-        _previousConnectionStatus != ConnectionStatus.connected &&
-        currentStatus == ConnectionStatus.connected) {
-      _showConnectionSuccessModal();
-    }
-
-    if (isCurrentPageConfig && currentError.isNotEmpty && currentError != _previousConnectionError) {
-      _showConnectionErrorModal(currentError);
-    }
-
-    _previousConnectionStatus = currentStatus;
-    _previousConnectionError = currentError;
-  }
-
   void _onConfigStateChanged() {
     if (!mounted) {
       return;
     }
-
-    final configProvider = context.read<ConfigProvider>();
-    _initializeFormIfReady(configProvider: configProvider);
-    final currentError = configProvider.error;
-
-    if (currentError.isNotEmpty && currentError != _previousConfigError) {
-      _showConfigErrorModal(currentError);
-    }
-
-    _previousConfigError = currentError;
+    _initializeFormIfReady(provider: _configProvider);
   }
 
-  void _showSuccessModal() {
-    final l10n = AppLocalizations.of(context)!;
-    _showSuccessMessage(
-      title: l10n.modalTitleSuccess,
-      message: l10n.msgAuthenticatedSuccessfully,
-    );
-  }
-
-  void _showConnectionSuccessModal() {
-    final l10n = AppLocalizations.of(context)!;
-    _showSuccessMessage(
-      title: l10n.modalTitleConnectionEstablished,
-      message: l10n.msgWebSocketConnectedSuccessfully,
-    );
-  }
-
-  void _showSuccessMessage({
-    required String title,
-    required String message,
-  }) {
-    SettingsFeedback.showSuccess(
-      context: context,
-      title: title,
-      message: message,
-    );
-  }
-
-  void _showErrorWithClear({
-    required String title,
-    required String message,
-    required VoidCallback onClear,
-  }) {
-    SettingsFeedback.showError(
-      context: context,
-      title: title,
-      message: message,
-      onConfirm: onClear,
-    );
-  }
-
-  void _showConnectionErrorModal(String error) {
-    final l10n = AppLocalizations.of(context)!;
-    _showErrorWithClear(
-      title: l10n.modalTitleConnectionError,
-      message: error,
-      onClear: () {
-        context.read<ConnectionProvider>().clearError();
-      },
-    );
-  }
-
-  void _showConfigErrorModal(String error) {
-    final l10n = AppLocalizations.of(context)!;
-    _showErrorWithClear(
-      title: l10n.modalTitleConfigError,
-      message: error,
-      onClear: () {
-        context.read<ConfigProvider>().clearError();
-      },
-    );
-  }
-
-  void _showErrorModal(String error) {
-    final l10n = AppLocalizations.of(context)!;
-    _showErrorWithClear(
-      title: l10n.modalTitleAuthError,
-      message: error,
-      onClear: () {
-        context.read<AuthProvider>().clearError();
-      },
-    );
-  }
-
-  void _initializeFormIfReady({
-    ConfigProvider? configProvider,
-  }) {
+  void _initializeFormIfReady({ConfigProvider? provider}) {
     if (!mounted) {
       return;
     }
-
-    final provider = configProvider ?? context.read<ConfigProvider>();
-    if (!_formController.fieldsInitialized && !provider.isLoading && provider.currentConfig != null) {
-      _formController.initializeFromConfig(provider.currentConfig);
+    final source = provider ?? context.read<ConfigProvider>();
+    if (!_formController.fieldsInitialized && !source.isLoading && source.currentConfig != null) {
+      _formController.initializeFromConfig(source.currentConfig);
+      // Force rebuild so children that depend on the controller text pick up
+      // the populated values when the provider state did not change.
+      setState(() {});
     }
   }
 
   @override
   void dispose() {
-    _authProvider?.removeListener(_onAuthStateChanged);
-    _connectionProvider?.removeListener(_onConnectionStateChanged);
     _configProvider?.removeListener(_onConfigStateChanged);
+    _isSavingConfig.dispose();
     _formController.dispose();
     super.dispose();
   }
@@ -288,19 +126,26 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
         Provider<FeatureFlags>.value(value: _featureFlags),
         Provider<PayloadSigningConfig>.value(value: _payloadSigningConfig),
       ],
-      child: ScaffoldPage(
-        header: PageHeader(
-          title: Text(
-            l10n.navWebSocketSettings,
-            style: context.sectionTitle,
-          ),
-        ),
-        content: Padding(
-          padding: AppLayout.pagePadding(context),
-          child: AppLayout.centeredContent(
-            child: _WebSocketSettingsTabbedContent(
-              formController: _formController,
-              onSaveConfig: _saveCurrentConfig,
+      child: AuthStatusFeedback(
+        child: ConnectionStatusFeedback(
+          child: ConfigErrorFeedback(
+            child: ScaffoldPage(
+              header: PageHeader(
+                title: Text(
+                  l10n.navWebSocketSettings,
+                  style: context.sectionTitle,
+                ),
+              ),
+              content: Padding(
+                padding: AppLayout.pagePadding(context),
+                child: AppLayout.centeredContent(
+                  child: _WebSocketSettingsTabbedContent(
+                    formController: _formController,
+                    isSavingConfig: _isSavingConfig,
+                    onSaveConfig: _saveCurrentConfig,
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -314,23 +159,37 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
     }
     final l10n = AppLocalizations.of(context)!;
     final configProvider = context.read<ConfigProvider>();
-    _formController.updateAllFieldsToProvider(configProvider);
-    final result = await configProvider.saveConfig();
-    if (!mounted) {
-      return;
+    if (configProvider.error.isNotEmpty) {
+      configProvider.clearError();
     }
-    result.fold(
-      (_) => SettingsFeedback.showSuccess(
-        context: context,
-        title: l10n.modalTitleConfigSaved,
-        message: l10n.msgConfigSavedSuccessfully,
-      ),
-      (_) => SettingsFeedback.showError(
-        context: context,
-        title: l10n.modalTitleErrorSaving,
-        message: configProvider.error,
-      ),
-    );
+
+    _isSavingConfig.value = true;
+    try {
+      _formController.applyToProvider(configProvider);
+      final result = await configProvider.saveConfig();
+      if (!mounted) {
+        return;
+      }
+      result.fold(
+        (_) => SettingsFeedback.showSuccess(
+          context: context,
+          title: l10n.modalTitleConfigSaved,
+          message: l10n.msgConfigSavedSuccessfully,
+        ),
+        (failure) => SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleErrorSaving,
+          message: failure.toDisplayMessage(),
+        ),
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error('WebSocket config save failed unexpectedly', '$error\n$stackTrace');
+      rethrow;
+    } finally {
+      if (mounted) {
+        _isSavingConfig.value = false;
+      }
+    }
   }
 }
 
@@ -339,10 +198,12 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
 class _WebSocketSettingsTabbedContent extends StatefulWidget {
   const _WebSocketSettingsTabbedContent({
     required this.formController,
+    required this.isSavingConfig,
     required this.onSaveConfig,
   });
 
-  final ConfigFormController formController;
+  final WebsocketConfigFormController formController;
+  final ValueListenable<bool> isSavingConfig;
   final Future<void> Function() onSaveConfig;
 
   @override
@@ -369,6 +230,7 @@ class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbe
           text: l10n.tabWebSocketConnection,
           body: WebSocketConfigSection(
             formController: widget.formController,
+            isSavingConfig: widget.isSavingConfig,
             onSaveConfig: widget.onSaveConfig,
           ),
         ),

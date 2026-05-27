@@ -1,15 +1,15 @@
-import 'package:dio/dio.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/services/agent_profile_lookup_gateways.dart';
 import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
+import 'package:plug_agente/application/use_cases/lookup_agent_cep.dart';
+import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
 import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
-import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_profile_page.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
@@ -26,6 +26,10 @@ class MockAuthProvider extends Mock with ChangeNotifier implements AuthProvider 
 
 class MockPushAgentProfileToHub extends Mock implements PushAgentProfileToHub {}
 
+class MockOpenCnpjLookup extends Mock implements IOpenCnpjLookup {}
+
+class MockViaCepLookup extends Mock implements IViaCepLookup {}
+
 class FakeAgentProfile extends Fake implements AgentProfile {}
 
 void main() {
@@ -41,6 +45,8 @@ void main() {
     late MockConnectionProvider mockConnectionProvider;
     late MockAuthProvider mockAuthProvider;
     late MockPushAgentProfileToHub mockPushToHub;
+    late LookupAgentCnpj lookupCnpj;
+    late LookupAgentCep lookupCep;
 
     setUp(() async {
       await getIt.reset();
@@ -51,18 +57,20 @@ void main() {
       mockConnectionProvider = MockConnectionProvider();
       mockAuthProvider = MockAuthProvider();
       mockPushToHub = MockPushAgentProfileToHub();
+      lookupCnpj = LookupAgentCnpj(MockOpenCnpjLookup());
+      lookupCep = LookupAgentCep(MockViaCepLookup());
+
       when(() => mockConfigProvider.currentConfig).thenReturn(_sampleConfig);
       when(() => mockConfigProvider.isLoading).thenReturn(false);
       when(() => mockConfigProvider.error).thenReturn('');
-      when(() => mockConfigProvider.loadConfigById(any())).thenAnswer((
-        _,
-      ) async {
+      when(() => mockConfigProvider.loadConfigById(any())).thenAnswer((_) async {
         return;
       });
       when(
         () => mockConfigProvider.saveConfig(),
       ).thenAnswer((_) async => Success(_sampleConfig));
       when(() => mockConfigProvider.updateAgentProfile(any())).thenReturn(null);
+      when(() => mockConfigProvider.clearError()).thenReturn(null);
       when(
         () => mockConfigProvider.persistHubProfileCatalogSync(
           profileVersion: any(named: 'profileVersion'),
@@ -86,6 +94,8 @@ void main() {
           mockConnectionProvider,
           mockAuthProvider,
           mockPushToHub,
+          lookupCnpj,
+          lookupCep,
         ),
       );
       await tester.pumpAndSettle();
@@ -100,7 +110,7 @@ void main() {
       expect(find.text(ptL10n.agentProfileSectionAddress), findsWidgets);
       expect(find.text(ptL10n.agentProfileSectionNotes), findsOneWidget);
       expect(find.text(ptL10n.agentProfileFieldName), findsOneWidget);
-      expect(find.text(ptL10n.agentProfileActionSave), findsOneWidget);
+      expect(find.text(ptL10n.agentProfileActionSave), findsWidgets);
     });
 
     testWidgets('saves profile when tapping save button', (tester) async {
@@ -111,12 +121,15 @@ void main() {
           mockConnectionProvider,
           mockAuthProvider,
           mockPushToHub,
+          lookupCnpj,
+          lookupCep,
         ),
       );
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text(ptL10n.agentProfileActionSave));
-      await tester.tap(find.text(ptL10n.agentProfileActionSave));
+      final saveButton = find.text(ptL10n.agentProfileActionSave).last;
+      await tester.ensureVisible(saveButton);
+      await tester.tap(saveButton);
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pumpAndSettle();
 
@@ -140,12 +153,15 @@ void main() {
             mockConnectionProvider,
             mockAuthProvider,
             mockPushToHub,
+            lookupCnpj,
+            lookupCep,
           ),
         );
         await tester.pumpAndSettle();
 
-        await tester.ensureVisible(find.text(ptL10n.agentProfileActionSave));
-        await tester.tap(find.text(ptL10n.agentProfileActionSave));
+        final saveButton = find.text(ptL10n.agentProfileActionSave).last;
+        await tester.ensureVisible(saveButton);
+        await tester.tap(saveButton);
         await tester.pump(const Duration(milliseconds: 200));
         await tester.pumpAndSettle();
 
@@ -168,6 +184,8 @@ Widget _buildWidget(
   ConnectionProvider connectionProvider,
   AuthProvider authProvider,
   PushAgentProfileToHub pushToHub,
+  LookupAgentCnpj lookupCnpj,
+  LookupAgentCep lookupCep,
 ) {
   return FluentApp(
     locale: const Locale('pt'),
@@ -180,8 +198,8 @@ Widget _buildWidget(
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
       ],
       child: AgentProfilePage(
-        openCnpjClient: OpenCnpjClient(Dio()),
-        viaCepClient: ViaCepClient(Dio()),
+        lookupAgentCnpj: lookupCnpj,
+        lookupAgentCep: lookupCep,
         pushAgentProfileToHub: pushToHub,
       ),
     ),

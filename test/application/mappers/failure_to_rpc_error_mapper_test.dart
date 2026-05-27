@@ -306,7 +306,7 @@ void main() {
       // runtime failure; the wire contract should still be invalidParams so
       // the Hub does not interpret it as 500.
       final failure = ActionRuntimeFailure.withContext(
-        message: 'Resolver cannot satisfy ${'\${secret:smtp_password}'}.',
+        message: 'Resolver cannot satisfy ${r'${secret:smtp_password}'}.',
         code: AgentActionFailureCode.secretUnavailable,
         context: const {
           'reason': AgentActionGateConstants.secretUnavailableReason,

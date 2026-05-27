@@ -4,8 +4,8 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket/websocket_config_controller.dart';
+import 'package:plug_agente/presentation/pages/websocket_settings/websocket_config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -34,7 +34,7 @@ class WebSocketServerSection extends StatelessWidget {
     super.key,
   });
 
-  final ConfigFormController formController;
+  final WebsocketConfigFormController formController;
   final WebSocketConfigController controller;
 
   @override
@@ -119,7 +119,7 @@ class _ServerCard extends StatelessWidget {
     required this.onLoginOrLogout,
   });
 
-  final ConfigFormController formController;
+  final WebsocketConfigFormController formController;
   final WebSocketServerVm vm;
   final Future<void> Function() onLoginOrLogout;
 

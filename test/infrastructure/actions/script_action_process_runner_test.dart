@@ -146,25 +146,25 @@ void main() {
 
     group('default interpreter selection', () {
       final cases = <_InterpreterCase>[
-        _InterpreterCase(
+        const _InterpreterCase(
           label: 'PowerShell for .ps1',
           scriptPath: r'C:\Jobs\daily.ps1',
           expectedExecutable: 'powershell.exe',
-          expectedLeadingArgs: const <String>['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File'],
+          expectedLeadingArgs: <String>['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File'],
           expectedScriptArgIndex: 4,
         ),
-        _InterpreterCase(
+        const _InterpreterCase(
           label: 'cmd.exe wrapper for .bat',
           scriptPath: r'C:\Jobs\daily.bat',
           expectedExecutable: 'cmd.exe',
-          expectedLeadingArgs: const <String>['/C'],
+          expectedLeadingArgs: <String>['/C'],
           expectedScriptArgIndex: 1,
         ),
-        _InterpreterCase(
+        const _InterpreterCase(
           label: 'python.exe for .py',
           scriptPath: r'C:\Jobs\daily.py',
           expectedExecutable: 'python.exe',
-          expectedLeadingArgs: const <String>[],
+          expectedLeadingArgs: <String>[],
           expectedScriptArgIndex: 0,
         ),
       ];

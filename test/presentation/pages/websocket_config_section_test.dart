@@ -10,8 +10,8 @@ import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
+import 'package:plug_agente/presentation/pages/websocket_settings/websocket_config_form_controller.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -47,7 +47,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(1400, 2200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final formController = ConfigFormController();
+      final formController = WebsocketConfigFormController();
       addTearDown(formController.dispose);
       formController.serverUrlController.text = 'https://hub.test';
       formController.agentIdController.text = 'agent-1';
@@ -110,7 +110,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(1400, 2200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final formController = ConfigFormController();
+      final formController = WebsocketConfigFormController();
       addTearDown(formController.dispose);
       formController.serverUrlController.text = 'https://hub.test';
       formController.agentIdController.text = 'agent-1';
@@ -175,7 +175,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(1400, 2200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final formController = ConfigFormController();
+      final formController = WebsocketConfigFormController();
       addTearDown(formController.dispose);
       formController.serverUrlController.text = 'https://hub.test';
       formController.agentIdController.text = 'agent-1';
@@ -481,13 +481,13 @@ Widget _buildWidget({
   required ConfigProvider configProvider,
   required AuthProvider authProvider,
   required ConnectionProvider connectionProvider,
-  ConfigFormController? formController,
+  WebsocketConfigFormController? formController,
   FeatureFlags? featureFlags,
   PayloadSigningConfig? payloadSigningConfig,
 }) {
   final flags = featureFlags ?? FeatureFlags(InMemoryAppSettingsStore());
   final signingConfig = payloadSigningConfig ?? PayloadSigningConfig.empty();
-  final form = formController ?? ConfigFormController();
+  final form = formController ?? WebsocketConfigFormController();
   return FluentApp(
     locale: const Locale('pt'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -509,6 +509,7 @@ Widget _buildWidget({
         child: ScaffoldPage(
           content: WebSocketConfigSection(
             formController: form,
+            isSavingConfig: ValueNotifier<bool>(false),
             onSaveConfig: () async {},
           ),
         ),

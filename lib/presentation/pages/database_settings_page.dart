@@ -2,13 +2,14 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/config/config_form_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/database_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
+import 'package:plug_agente/presentation/pages/database_settings/database_connection_form_controller.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/shared/extensions/failure_localization_extensions.dart';
@@ -32,26 +33,32 @@ class DatabaseSettingsPage extends StatefulWidget {
 
 class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
   late int _selectedTabIndex;
-  late final ConfigFormController _formController;
+  late final DatabaseConnectionFormController _formController;
+  final ValueNotifier<bool> _isTesting = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isSaving = ValueNotifier<bool>(false);
   ConfigProvider? _configProviderListener;
 
   @override
   void initState() {
     super.initState();
     _selectedTabIndex = widget.initialTab == AppRouteTabs.advanced ? 1 : 0;
-    _formController = ConfigFormController();
+    _formController = DatabaseConnectionFormController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       _configProviderListener = context.read<ConfigProvider>()..addListener(_onConfigChanged);
       if (widget.configId != null) {
-        _loadConfig(widget.configId!);
+        unawaited(_loadConfig(widget.configId!));
       }
       _checkAndInitializeFields();
     });
   }
 
   void _onConfigChanged() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     _checkAndInitializeFields();
   }
 
@@ -64,7 +71,7 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
         if (!mounted) {
           return;
         }
-        _loadConfig(widget.configId!);
+        unawaited(_loadConfig(widget.configId!));
         _checkAndInitializeFields();
       });
     }
@@ -83,6 +90,9 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
     final configProvider = context.read<ConfigProvider>();
     if (!_formController.fieldsInitialized && !configProvider.isLoading && configProvider.currentConfig != null) {
       _formController.initializeFromConfig(configProvider.currentConfig);
+      // The form controller is not a Listenable; force a rebuild so that
+      // `isInitialLoading` flips to false even when the provider state did
+      // not change between the load and the initialization.
       setState(() {});
     }
   }
@@ -152,9 +162,144 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
     );
   }
 
+  void _clearProviderError() {
+    final provider = _configProviderListener ?? context.read<ConfigProvider>();
+    if (provider.error.isNotEmpty) {
+      provider.clearError();
+    }
+  }
+
+  Future<void> _runTestConnection({
+    required AppLocalizations l10n,
+    required ConfigProvider configProvider,
+    required ConnectionProvider connectionProvider,
+  }) async {
+    _clearProviderError();
+    final odbcDriverName = _getValidatedOdbcDriverName(l10n);
+    if (odbcDriverName == null) {
+      return;
+    }
+
+    final isInstalled = await _ensureOdbcDriverInstalled(
+      l10n: l10n,
+      connectionProvider: connectionProvider,
+      odbcDriverName: odbcDriverName,
+      notFoundMessageBuilder: l10n.odbcDriverNotFoundTest,
+    );
+    if (!isInstalled || !mounted) {
+      return;
+    }
+
+    _isTesting.value = true;
+    try {
+      _formController.applyToProvider(configProvider);
+      final connectionString = configProvider.getConnectionString();
+      final testResult = await connectionProvider.testDbConnection(
+        connectionString,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      testResult.fold(
+        (connected) => _showDatabaseConnectionResult(l10n, connected),
+        (failure) {
+          SettingsFeedback.showError(
+            context: context,
+            title: l10n.modalTitleErrorTestingConnection,
+            message: failure.toDisplayMessageWithOdbcDetailLocalized(
+              context,
+            ),
+          );
+        },
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error('Database test connection failed unexpectedly', '$error\n$stackTrace');
+      rethrow;
+    } finally {
+      if (mounted) {
+        _isTesting.value = false;
+      }
+    }
+  }
+
+  Future<void> _runSaveConfig({
+    required AppLocalizations l10n,
+    required ConfigProvider configProvider,
+    required ConnectionProvider connectionProvider,
+  }) async {
+    _clearProviderError();
+    final odbcDriverName = _getValidatedOdbcDriverName(l10n);
+    if (odbcDriverName == null) {
+      return;
+    }
+
+    final isInstalled = await _ensureOdbcDriverInstalled(
+      l10n: l10n,
+      connectionProvider: connectionProvider,
+      odbcDriverName: odbcDriverName,
+      notFoundMessageBuilder: l10n.odbcDriverNotFoundSave,
+    );
+    if (!isInstalled || !mounted) {
+      return;
+    }
+
+    _isSaving.value = true;
+    try {
+      _formController.applyToProvider(configProvider);
+      final saveResult = await configProvider.saveConfig();
+
+      if (!mounted) {
+        return;
+      }
+
+      saveResult.fold(
+        (_) {
+          SettingsFeedback.showSuccess(
+            context: context,
+            title: l10n.modalTitleConfigSaved,
+            message: l10n.msgConfigSavedSuccessfully,
+          );
+        },
+        (failure) {
+          SettingsFeedback.showError(
+            context: context,
+            title: l10n.modalTitleErrorSaving,
+            message: failure.toDisplayMessage(),
+          );
+        },
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error('Database config save failed unexpectedly', '$error\n$stackTrace');
+      rethrow;
+    } finally {
+      if (mounted) {
+        _isSaving.value = false;
+      }
+    }
+  }
+
+  void _onDriverChanged(ConfigProvider configProvider, String value) {
+    setState(() {
+      configProvider.updateDriverName(value);
+      final currentOdbcName = _formController.odbcDriverNameController.text;
+
+      if (OdbcDrivers.isDefaultSuggestion(currentOdbcName)) {
+        final suggestion = OdbcDrivers.getDefaultDriver(value);
+        if (suggestion.isNotEmpty) {
+          _formController.odbcDriverNameController.text = suggestion;
+          configProvider.updateOdbcDriverName(suggestion);
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _configProviderListener?.removeListener(_onConfigChanged);
+    _isTesting.dispose();
+    _isSaving.dispose();
     _formController.dispose();
     super.dispose();
   }
@@ -162,8 +307,15 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final configProvider = context.watch<ConfigProvider>();
+    final viewModel = context.select<ConfigProvider, _DatabaseSettingsVm>(
+      (provider) => _DatabaseSettingsVm(
+        isLoading: provider.isLoading,
+        error: provider.error,
+      ),
+    );
     final connectionProvider = context.read<ConnectionProvider>();
+    final configProvider = context.read<ConfigProvider>();
+    final isInitialLoading = viewModel.isLoading && !_formController.fieldsInitialized;
 
     return ScaffoldPage(
       header: PageHeader(
@@ -175,17 +327,17 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
       content: Padding(
         padding: AppLayout.pagePadding(context),
         child: AppLayout.centeredContent(
-          child: configProvider.isLoading && !_formController.fieldsInitialized
+          child: isInitialLoading
               ? const Center(child: ProgressRing())
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (configProvider.error.isNotEmpty)
+                    if (viewModel.error.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: InfoBar(
                           title: Text(l10n.modalTitleError),
-                          content: SelectableText(configProvider.error),
+                          content: SelectableText(viewModel.error),
                           severity: InfoBarSeverity.error,
                           isLong: true,
                         ),
@@ -204,109 +356,20 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
                             text: l10n.dbTabDatabase,
                             body: DatabaseConfigSection(
                               formController: _formController,
-                              configProvider: configProvider,
                               connectionProvider: connectionProvider,
-                              onDriverChanged: (value) {
-                                setState(() {
-                                  configProvider.updateDriverName(value);
-                                  final currentOdbcName = _formController.odbcDriverNameController.text;
-
-                                  if (OdbcDrivers.isDefaultSuggestion(
-                                    currentOdbcName,
-                                  )) {
-                                    final suggestion = OdbcDrivers.getDefaultDriver(
-                                      value,
-                                    );
-                                    if (suggestion.isNotEmpty) {
-                                      _formController.odbcDriverNameController.text = suggestion;
-                                      configProvider.updateOdbcDriverName(suggestion);
-                                    }
-                                  }
-                                });
-                              },
-                              onTestConnection: () async {
-                                final odbcDriverName = _getValidatedOdbcDriverName(l10n);
-                                if (odbcDriverName == null) {
-                                  return;
-                                }
-
-                                final isInstalled = await _ensureOdbcDriverInstalled(
-                                  l10n: l10n,
-                                  connectionProvider: connectionProvider,
-                                  odbcDriverName: odbcDriverName,
-                                  notFoundMessageBuilder: l10n.odbcDriverNotFoundTest,
-                                );
-                                if (!isInstalled) {
-                                  return;
-                                }
-
-                                _formController.updateAllFieldsToProvider(
-                                  configProvider,
-                                );
-                                final connectionString = configProvider.getConnectionString();
-                                final testResult = await connectionProvider.testDbConnection(
-                                  connectionString,
-                                );
-
-                                if (!mounted) {
-                                  return;
-                                }
-
-                                testResult.fold(
-                                  (connected) => _showDatabaseConnectionResult(l10n, connected),
-                                  (failure) {
-                                    SettingsFeedback.showError(
-                                      context: context,
-                                      title: l10n.modalTitleErrorTestingConnection,
-                                      message: failure.toDisplayMessageWithOdbcDetailLocalized(
-                                        context,
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                              onSaveConfig: () async {
-                                final odbcDriverName = _getValidatedOdbcDriverName(l10n);
-                                if (odbcDriverName == null) {
-                                  return;
-                                }
-
-                                final isInstalled = await _ensureOdbcDriverInstalled(
-                                  l10n: l10n,
-                                  connectionProvider: connectionProvider,
-                                  odbcDriverName: odbcDriverName,
-                                  notFoundMessageBuilder: l10n.odbcDriverNotFoundSave,
-                                );
-                                if (!isInstalled) {
-                                  return;
-                                }
-
-                                _formController.updateAllFieldsToProvider(
-                                  configProvider,
-                                );
-                                final saveResult = await configProvider.saveConfig();
-
-                                if (!mounted) {
-                                  return;
-                                }
-
-                                saveResult.fold(
-                                  (_) {
-                                    SettingsFeedback.showSuccess(
-                                      context: context,
-                                      title: l10n.modalTitleConfigSaved,
-                                      message: l10n.msgConfigSavedSuccessfully,
-                                    );
-                                  },
-                                  (failure) {
-                                    SettingsFeedback.showError(
-                                      context: context,
-                                      title: l10n.modalTitleErrorSaving,
-                                      message: failure.toDisplayMessage(),
-                                    );
-                                  },
-                                );
-                              },
+                              isTesting: _isTesting,
+                              isSaving: _isSaving,
+                              onDriverChanged: (value) => _onDriverChanged(configProvider, value),
+                              onTestConnection: () => _runTestConnection(
+                                l10n: l10n,
+                                configProvider: configProvider,
+                                connectionProvider: connectionProvider,
+                              ),
+                              onSaveConfig: () => _runSaveConfig(
+                                l10n: l10n,
+                                configProvider: configProvider,
+                                connectionProvider: connectionProvider,
+                              ),
                             ),
                           ),
                           AppFluentTabItem(
@@ -323,4 +386,24 @@ class _DatabaseSettingsPageState extends State<DatabaseSettingsPage> {
       ),
     );
   }
+}
+
+@immutable
+class _DatabaseSettingsVm {
+  const _DatabaseSettingsVm({
+    required this.isLoading,
+    required this.error,
+  });
+
+  final bool isLoading;
+  final String error;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is _DatabaseSettingsVm && other.isLoading == isLoading && other.error == error;
+  }
+
+  @override
+  int get hashCode => Object.hash(isLoading, error);
 }

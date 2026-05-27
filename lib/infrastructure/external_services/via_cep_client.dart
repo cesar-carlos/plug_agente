@@ -1,29 +1,15 @@
 import 'package:dio/dio.dart';
+import 'package:plug_agente/application/services/agent_profile_lookup_gateways.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
-class ViaCepAddress {
-  const ViaCepAddress({
-    required this.cep,
-    required this.logradouro,
-    required this.bairro,
-    required this.localidade,
-    required this.uf,
-  });
-
-  final String cep;
-  final String logradouro;
-  final String bairro;
-  final String localidade;
-  final String uf;
-}
-
-class ViaCepClient {
+class ViaCepClient implements IViaCepLookup {
   ViaCepClient(this._dio);
 
   final Dio _dio;
 
+  @override
   Future<Result<ViaCepAddress>> lookupCep(String cepDigits) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(

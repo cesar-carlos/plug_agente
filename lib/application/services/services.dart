@@ -2,6 +2,7 @@ export 'active_config_resolver.dart';
 export 'agent_action_captured_output_periodic_purge.dart';
 export 'agent_action_execution_periodic_purge.dart';
 export 'agent_action_remote_audit_periodic_purge.dart';
+export 'agent_profile_lookup_gateways.dart';
 export 'agent_register_profile_provider.dart';
 export 'appcast_probe_service.dart';
 export 'auth_service.dart';
