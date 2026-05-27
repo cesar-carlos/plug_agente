@@ -61,17 +61,32 @@ version: 1.2.7+2
 ```bash
 python tool/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc --check-pages
 python installer/build_installer.py
+python tool/release_preflight.py --version 1.2.7 --allow-dirty --check-installer \
+  --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 ```
 
-O script executa:
+O `installer/build_installer.py` executa:
 
 1. `installer/update_version.py`
 2. `flutter build windows --release`
-3. `ISCC installer/setup.iss`
+3. `tool/build_elevated_runner.ps1` (compila e copia
+   `plug_agente_elevated_runner.exe` para o bundle Release/Debug; obrigatorio)
+4. Validacao de presenca de `plug_agente.exe`, `plug_update_helper.exe` e
+   `plug_agente_elevated_runner.exe` no bundle Release
+5. Assinatura opcional, na ordem: `plug_agente.exe`,
+   `plug_update_helper.exe`, `plug_agente_elevated_runner.exe`, instalador
+6. `ISCC installer/setup.iss`
 
-Quando `.env` define `AUTO_UPDATE_FEED_URL`, o build recebe
-`--dart-define=AUTO_UPDATE_FEED_URL=...` como override. Sem essa variavel, o
-app usa o feed oficial padrao embutido.
+A segunda chamada do preflight (`--check-installer --feed-public-key`)
+confirma que a chave publica Ed25519 esta embutida no `.exe` gerado; sem isso,
+clientes com `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true` reportariam
+`feedSignatureStatus=publicKeyUnavailable` em todo silent check.
+
+Quando `.env` define `AUTO_UPDATE_FEED_URL`, `AUTO_UPDATE_CHANNEL`,
+`AUTO_UPDATE_REQUIRE_VALID_SIGNATURE`, `AUTO_UPDATE_FEED_PUBLIC_KEY` ou
+`AUTO_UPDATE_REQUIRE_FEED_SIGNATURE`, o build injeta esses valores via
+`--dart-define`. Sem override de feed, o app usa o feed oficial padrao
+embutido.
 
 Saida esperada:
 
@@ -172,10 +187,19 @@ python tool/release_preflight.py --version 1.2.7 --require-iscc --check-pages --
 - Para distribuicao ampla, priorize tambem assinatura de codigo do executavel e
   do instalador para reduzir alertas de SmartScreen e aumentar confianca no
   update.
-- O script `installer/build_installer.py` assina `plug_agente.exe` e o
-  instalador quando `WINDOWS_CODE_SIGNING_CERT_PATH` aponta para um PFX. Use
-  `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar explicitamente quando a
-  assinatura nao estiver configurada.
+- O script `installer/build_installer.py` assina `plug_agente.exe`,
+  `plug_update_helper.exe`, `plug_agente_elevated_runner.exe` e o instalador
+  `PlugAgente-Setup-<versao>.exe` quando `WINDOWS_CODE_SIGNING_CERT_PATH`
+  aponta para um PFX. Use `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar
+  explicitamente quando a assinatura nao estiver configurada.
+- O workflow `Publish Windows Release` roda `signtool verify /pa /v` sobre
+  instalador e `plug_update_helper.exe` apos o build. Esse gate falha o
+  release quando qualquer dos dois nao tem cadeia confiavel. Use o input
+  `skip_authenticode_check=true` apenas em rebuild manual sem certificado.
+- O workflow tambem expoe o input `require_valid_update_signature`: quando
+  `true`, compila o release com `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true` e
+  forca `WINDOWS_CODE_SIGNING_REQUIRED=true`. Use somente depois que
+  Authenticode estiver verde no helper e no instalador em duas releases.
 - A retencao do `appcast.xml` e limitada pelo workflow para evitar crescimento
   indefinido do feed.
 - O feed oficial e publicado via GitHub Pages usando Actions artifact; habilite

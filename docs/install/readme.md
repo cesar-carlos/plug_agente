@@ -24,9 +24,12 @@ Checklist e matriz detalhada em [requirements.md](requirements.md).
 ### Gerar instalador e publicar release
 
 1. Revisar versionamento em [release_guide.md](release_guide.md)
-2. Executar o workflow manual **Publish Windows Release** no GitHub Actions
-3. Confirmar o workflow **Update Appcast on Release**
-4. Validar o auto-update em [auto_update_setup.md](auto_update_setup.md)
+2. (Opcional, recomendado) Executar o workflow manual **Release Preflight**
+   para ensaiar build, signtool e helper sem criar commit/tag/release
+3. Executar o workflow manual **Publish Windows Release** no GitHub Actions
+4. Confirmar o workflow **Update Appcast on Release** (em release publicada,
+   ele dispara duas execucoes; a segunda e que faz o deploy do Pages)
+5. Validar o auto-update em [auto_update_setup.md](auto_update_setup.md)
 
 Saida esperada:
 
@@ -49,10 +52,18 @@ installer/dist/PlugAgente-Setup-{versao}.exe
 
 - `python installer/build_installer.py`: fluxo recomendado de build Windows
 - `python installer/update_version.py`: sincroniza versao sem gerar instalador
-- `python tool/release_preflight.py`: valida sincronizacao, tag e ferramentas
-  antes da publicacao
+- `python tool/release_preflight.py`: valida sincronizacao, tag, ferramentas
+  no PATH, presenca do instalador, chave publica embutida (`--feed-public-key`)
+  e Pages habilitado (`--check-pages`) antes da publicacao
 - `python tool/validate_release.py`: valida GitHub Release e appcast local ou
   remoto
+- `python tool/validate_launcher_status.py`: valida o JSON do
+  `plug_update_helper.exe` contra o schema canonico
+- `python tool/generate_appcast_signing_key.py`: gera keypair Ed25519 para o
+  feed (privada vira `APPCAST_SIGNING_PRIVATE_KEY` em Secrets; publica vira
+  `AUTO_UPDATE_FEED_PUBLIC_KEY` nos builds de release)
+- `python tool/appcast_manager.py`: comandos `update` / `validate-file` /
+  `smoke-validate-url` / `inspect-url` do feed (chamado pelos workflows)
 - [install_monitor.bat](../../install_monitor.bat): instala PlugPortMon como
   administrador
 

@@ -83,7 +83,11 @@ jobs:
 
           NS = {
               "sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle",
-              "plug": "https://plug.com.br/xmlns/appcast",
+              # Keep this URI in sync with `PLUG_NS` in tool/appcast_manager.py
+              # and `_plugNamespace` in lib/application/services/appcast_probe_service.dart.
+              # Drift breaks signature verification silently (the script falls
+              # back to "no signature" and exits 0 instead of failing the gate).
+              "plug": "https://plug.se7esistemas.com/appcast",
           }
 
           public_keys = os.environ["AUTO_UPDATE_FEED_PUBLIC_KEY"]

@@ -37,6 +37,11 @@ on:
         required: false
         type: boolean
         default: false
+      require_valid_update_signature:
+        description: "Build with AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true (enforce Authenticode of installer+helper at runtime)"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -160,12 +165,15 @@ jobs:
         env:
           AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
           AUTO_UPDATE_CHANNEL: stable
-          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: false
+          # Default false during the Authenticode rollout (plano fase 1E.2).
+          # Flip the workflow input to true once helper+installer are signed
+          # end-to-end and at least two release builds passed in the field.
+          AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: ${{ inputs.require_valid_update_signature }}
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
           AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: ${{ vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE || 'false' }}
           WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
           WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
-          WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing }}
+          WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing || inputs.require_valid_update_signature }}
         run: python installer/build_installer.py
 
       - name: Validate generated installer

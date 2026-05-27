@@ -57,7 +57,12 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldLaunchAfterSilentUpdate
 
 [Registry]
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
+; HKA maps to HKLM for /ALLUSERS installs (default, admin) and to HKCU for
+; /CURRENTUSER installs (silent update reinstall path without admin), so the
+; autostart entry never tries to write to HKLM without privileges. The silent
+; update flow passes /MERGETASKS="!desktopicon,!startup" so this Task is not
+; reprocessed by auto-update; the original install's value is preserved.
+Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
 
 [UninstallDelete]
 Type: dirifempty; Name: "{commonappdata}\PlugAgente"

@@ -33,7 +33,7 @@ instalacao, ataques fisicos a maquina.
 | D12 | Cooldown automatico | 3 falhas em sequencia => 6h de pausa | DoS via release maliciosa que causa falhas em loop |
 | D13 | Circuit breaker manual | 3 timeouts => 15min de pausa | DoS via probe trigado por usuario |
 | D14 | Mutex global do helper | `Global\PlugAgenteUpdateHelper` | Race com dois helpers concorrentes |
-| D15 | icacls hardening | Restringe ACLs do `ProgramData\Plug\updates` | Tampering por outro processo local sem admin |
+| D15 | icacls hardening | Restringe ACLs do `ProgramData\PlugAgente\updates` | Tampering por outro processo local sem admin |
 | D16 | Drain window de listener WinSparkle | 30s | Estado tardio do WinSparkle confundindo background |
 | D17 | Cancellation token | Coordinator e installer respondem a cancel | Estado consistente quando user muda preferencia mid-flight |
 | D18 | UAC gate (currentUserThenElevated) | Estratrgia documentada em `auto_update_setup.md` | Tentativa de privilege escalation por atacante local |
@@ -92,7 +92,7 @@ malware previo.
 
 **Defesa**:
 - D15 icacls restringe ACLs do diretorio de updates global
-  (`ProgramData\Plug\updates`).
+  (`ProgramData\PlugAgente\updates`).
 - D8 + D19: Authenticode do helper + SHA-256 capturado. Quando
   `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true`, helper modificado e
   rejeitado pelo gate antes do spawn.

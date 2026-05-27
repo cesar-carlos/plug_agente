@@ -41,19 +41,52 @@ AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/plug_agente/appcast.xml
 AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600
 AUTO_UPDATE_CHANNEL=stable
 AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
+# Opcionais (ver "Variaveis adicionais" abaixo)
+# AUTO_UPDATE_FEED_PUBLIC_KEY=<base64-32-bytes>[,<base64-32-bytes-novo>]
+# AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=false
+# AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS=300
+# AUTO_UPDATE_DOWNLOAD_RESUME=true
+# AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS=30
+# AUTO_UPDATE_QUIET_HOURS_START=22:00
+# AUTO_UPDATE_QUIET_HOURS_END=06:00
+# AUTO_UPDATE_HELPER_WAIT_MINUTES=30
 ```
 
-O default seguro em `resolveAutoUpdateRequireValidSignature` e `true`. Quando
-ligado, o helper nativo bloqueia a instalacao silenciosa se a assinatura
-Authenticode do instalador nao for `valid`. A protecao em camadas inclui
-ainda o `plug:sha256` validado em Dart durante o download e novamente no
-helper antes de elevar privilegios.
+### Variaveis adicionais
 
-Use `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false` apenas em ambientes onde
-ainda nao ha pipeline de Authenticode configurado (por exemplo, builds locais
-de desenvolvedor). Nesse modo a assinatura ainda e verificada e registrada em
-`signatureStatus`, mas nao bloqueia a instalacao. Nunca distribua builds com
-esse valor para usuarios finais.
+| Variavel | Default | Faixa / efeito |
+| --- | --- | --- |
+| `AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS` | `300` | minimo 60. Timeout do `HttpClient` durante o download do instalador. |
+| `AUTO_UPDATE_DOWNLOAD_RESUME` | `true` | quando `false` desliga `HTTP Range`; use apenas em proxies que nao honram `Range`. |
+| `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` | `30` | 0 desliga o aviso pre-fechamento; max 120. Tempo de espera apos a notificacao "fechando para atualizar" antes do `exit`. |
+| `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela onde checagens automaticas retornam `skippedByQuietHours`. Suporta janelas que cruzam meia-noite. |
+| `AUTO_UPDATE_HELPER_WAIT_MINUTES` | `30` | min 5, max 120. Tempo maximo que o reconcile aguarda um helper pendente antes de considerar o pending stale e limpar. |
+| `AUTO_UPDATE_FEED_PUBLIC_KEY` | nao definido | CSV base64 de chaves Ed25519 (ver secao de assinatura). |
+| `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE` | `false` | quando `true`, items sem `plug:edSignature` valido sao rejeitados. |
+
+O default seguro em `resolveAutoUpdateRequireValidSignature` e `true` e essa
+e a configuracao do `.env.example`. Quando ligado, o gate atua em dois pontos:
+
+- Lado Dart (`HttpSilentUpdateInstaller`): bloqueia antes de spawnar o helper
+  se `plug_update_helper.exe` nao retornar Authenticode `valid` no
+  `IHelperSignatureProbe` (`helperSignatureStatus`).
+- Helper nativo (`windows/update_helper/main.cpp`): bloqueia antes de executar
+  `setup.exe` quando a Authenticode do instalador nao for `valid`
+  (`signatureStatus`).
+
+A protecao em camadas inclui ainda o `plug:sha256` validado em Dart durante o
+download e novamente no helper antes de elevar privilegios.
+
+Estado atual do rollout (plano `docs/implemente/plano_auto_update_evolution.md`
+fase 1E.2): o workflow `Publish Windows Release` ainda compila releases com
+`AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false` por padrao. Para promover, vire o
+input `require_valid_update_signature` para `true` ao acionar o workflow apos
+duas releases consecutivas com Authenticode valido em helper, runner elevado e
+installer. Builds locais de desenvolvedor sem certificado configurado devem
+manter `false` no `.env`; o status da assinatura continua sendo verificado e
+registrado em `signatureStatus`/`helperSignatureStatus`. Nunca distribua builds
+para usuarios finais quando o gate estiver desligado e o pipeline Authenticode
+nao estiver verde.
 
 ## Assinatura Ed25519 do Feed (opt-in)
 
@@ -209,13 +242,27 @@ No proximo boot:
 A tela **Atualizacoes/Sobre** mostra diagnosticos copiaveis com:
 
 - versao remota, URL, nome e tamanho do asset;
+- release notes (texto e URL quando disponiveis);
+- correlation id `checkId` (UUIDv7) para casar com logs;
 - SHA esperado e SHA calculado;
 - canal, rollout percentage, bucket e elegibilidade;
-- pending update, cooldown e contador de falhas;
+- pending update, cooldown, contador de falhas e janela silenciosa
+  (`skippedByQuietHours` quando aplicavel);
 - path do helper/status/log/instalador;
 - estrategia usada, diretorio de instalacao e gravabilidade;
 - PID aguardado, duracao de espera, exit codes e retry elevado;
-- status de assinatura (`valid`, `invalid`, `unsigned` ou `unknown`).
+- status das tres assinaturas:
+  - `signatureStatus` — Authenticode do `setup.exe` (escrita pelo helper
+    C++): `valid` / `invalid` / `unsigned` / `unknown`.
+  - `helperSignatureStatus` — Authenticode do `plug_update_helper.exe`
+    (probe PowerShell em Dart, cache por sessao): `valid` / `invalid` /
+    `unsigned` / `unknown`. Quando `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true`
+    e o status nao for `valid`, o silent flow falha com
+    `validation_code=helper_signature_*` antes mesmo de baixar o instalador.
+  - `feedSignatureStatus` — Ed25519 do item do appcast: `valid` /
+    `invalid` / `missing` / `publicKeyUnavailable` / `malformed`. Quando
+    `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true` e o status nao for `valid`,
+    o silent flow falha com `validation_code=feed_signature_*`.
 
 O botao **Tentar atualizacao automatica agora** dispara o mesmo
 `checkSilently()` usado pelo boot/intervalo. Ele nao ignora SHA-256, rollout,
@@ -223,35 +270,66 @@ cooldown, pending update ou a preferencia do usuario.
 
 ## Fonte de Verdade do Appcast
 
-A logica de geracao, validacao e smoke check do `appcast.xml` fica em:
+A logica de geracao, validacao, smoke check e assinatura do `appcast.xml`
+fica distribuida entre:
 
-```text
-tool/appcast_manager.py
-```
+| Modulo | Responsabilidade |
+| --- | --- |
+| `tool/appcast_manager.py` | Estrutura do feed, validacao, smoke check, comandos `update` / `validate-file` / `smoke-validate-url` / `inspect-url`. |
+| `tool/appcast_signing.py` | Canonical payload Ed25519, sign/verify, `verify_with_any_key` (CSV). Fonte de verdade compartilhada com `lib/core/security/appcast_signature_verifier.dart` — bytes precisam continuar identicos. |
+| `tool/generate_appcast_signing_key.py` | Gera keypair Ed25519 e imprime `APPCAST_SIGNING_PRIVATE_KEY` / `AUTO_UPDATE_FEED_PUBLIC_KEY`. |
+| `tool/validate_release.py` | Cruza GitHub Release + appcast local/remoto (tag, asset, SHA, size, channel, rollout). |
+| `tool/validate_launcher_status.py` | Valida JSON do helper nativo contra `docs/communication/schemas/silent_update_launcher_status.schema.json`. Usado pelo workflow Release Preflight. |
+| `tool/release_preflight.py` | Sincronizacao de versao, tag disponivel, ferramentas no PATH, presenca do instalador, chave publica embutida (`--feed-public-key`) e Pages habilitado (`--check-pages`). |
 
-O workflow `.github/workflows/update-appcast.yml` chama esse script para:
+Workflows que consomem esse tooling:
 
-1. atualizar o feed;
-2. validar o arquivo local;
-3. publicar o Pages artifact;
-4. validar o feed publicado.
+| Workflow | Funcao |
+| --- | --- |
+| `.github/workflows/release.yml` | Build + signtool gate + publica release. |
+| `.github/workflows/release-preflight.yml` | Ensaio sem commit/tag/release; valida helper e schema do status JSON. |
+| `.github/workflows/update-appcast.yml` | Atualiza `appcast.xml` (com `plug:edSignature` quando `APPCAST_SIGNING_PRIVATE_KEY` esta configurado), valida e publica o Pages artifact. |
+| `.github/workflows/validate-appcast.yml` | Roda diariamente contra o feed publicado e tambem manualmente. |
+| `.github/workflows/feed-smoke.yml` | Probe diario do feed publicado; checa shape, `plug:sha256` obrigatorio e `plug:edSignature` (quando a chave publica esta configurada como secret). |
 
-Teste local rapido do tooling:
+Teste local rapido do tooling Python:
 
 ```bash
-python -m unittest tool.test_appcast_manager tool.test_validate_release -v
+python -m unittest \
+  tool.test_appcast_manager \
+  tool.test_validate_release \
+  tool.test_appcast_signing \
+  tool.test_validate_launcher_status \
+  -v
 ```
+
+`tool.test_appcast_signing` exige `cryptography>=42.0.0` instalado. Workflows
+do CI falham explicitamente se essa suite reportar `skipped=N`, evitando
+regressao silenciosa do gate de assinatura.
 
 ## Workflow de Publicacao
 
 1. Publique a versao pelo workflow manual **Publish Windows Release** seguindo
-   [release_guide.md](release_guide.md).
+   [release_guide.md](release_guide.md). O workflow tambem expoe
+   `require_valid_update_signature` (vire para `true` somente apos Authenticode
+   verde em helper e installer) e `skip_authenticode_check` (rebuild manual
+   sem certificado; uso restrito).
 2. O workflow cria a tag, gera o instalador e publica a GitHub Release.
 3. O workflow **Update Appcast on Release** valida tag, versao e asset.
 4. O workflow calcula SHA-256 do asset publicado.
-5. O workflow atualiza `appcast.xml` em `main`.
+5. O workflow atualiza `appcast.xml` em `main` e, quando
+   `APPCAST_SIGNING_PRIVATE_KEY` esta configurado em GitHub Secrets, anexa o
+   atributo `plug:edSignature` no item recem-publicado.
 6. O workflow publica o feed em GitHub Pages.
 7. O smoke check confirma que o feed publicado aponta para o asset esperado.
+
+Detalhe operacional do passo 6: o workflow `update-appcast.yml` faz o deploy
+do Pages apenas no caminho `workflow_dispatch`. Quando disparado pelo evento
+`release:published`, o primeiro job commita o `appcast.xml` em `main` e
+**redespacha** o proprio workflow via `dispatch-main-appcast-publish`; o
+segundo run (workflow_dispatch) e o que publica no Pages e roda o smoke
+check. Em pos-release, valide ambos os runs em Actions, nao apenas o
+primeiro.
 
 O workflow de appcast aceita `rollout_percentage`, default `100`, para permitir
 rollout gradual em proximas releases.
