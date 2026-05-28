@@ -29,6 +29,7 @@ import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
+import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/config/odbc_result_encoding_config.dart';
@@ -172,7 +173,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   bool _initialized = false;
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
   final Map<String, ConnectionAcquireOptions> _connectionOptionsCache = <String, ConnectionAcquireOptions>{};
-  final Map<String, ConnectionCircuitBreaker> _circuitBreakers = <String, ConnectionCircuitBreaker>{};
+  final ConnectionCircuitBreakerCache _circuitBreakers = ConnectionCircuitBreakerCache(
+    factory: () => ConnectionCircuitBreaker(
+      failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
+      resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
+    ),
+  );
   String? _cachedNativeCompatibleSqlAllowlistRaw;
   Set<String> _cachedNativeCompatibleSqlAllowlist = const <String>{};
   DateTime? _cachedNativeCompatibleSqlAllowlistExpiresAt;
@@ -211,13 +217,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
   /// Gets or creates a circuit breaker for the given connection string.
   ConnectionCircuitBreaker _getCircuitBreaker(String connectionString) {
-    return _circuitBreakers.putIfAbsent(
-      connectionString,
-      () => ConnectionCircuitBreaker(
-        failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
-        resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
-      ),
-    );
+    return _circuitBreakers.getOrCreate(connectionString);
   }
 
   ConnectionAcquireOptions get _connectionOptions => _connectionOptionsForTimeout(null);

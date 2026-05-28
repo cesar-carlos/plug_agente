@@ -153,4 +153,12 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
   void dispose() {
     _queue.dispose();
   }
+
+  /// Disposes the queue and waits up to [timeout] for in-flight workers to
+  /// finish so ODBC connections are released before shutdown completes.
+  Future<Result<void>> disposeGracefully({
+    Duration timeout = const Duration(seconds: 30),
+  }) {
+    return _queue.disposeGracefully(timeout: timeout);
+  }
 }

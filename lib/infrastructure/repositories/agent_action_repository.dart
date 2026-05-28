@@ -317,12 +317,7 @@ class AgentActionRepository implements IAgentActionRepository {
         await _persistExecutionCapturedOutputChunks(execution);
         finalState = _mapper.executionFromData(row);
       });
-      return Success(
-        await _hydrateExecutionCapturedOutput(
-          finalState,
-          loadChunkedBodies: true,
-        ),
-      );
+      return Success(await _hydrateAfterSave(finalState, execution));
     } on Exception catch (error) {
       return Failure(
         _databaseFailure(
@@ -336,6 +331,42 @@ class AgentActionRepository implements IAgentActionRepository {
         ),
       );
     }
+  }
+
+  /// Materialises the result of [saveExecution] without re-reading what was
+  /// just persisted. The caller already holds the canonical captured output
+  /// for any text that was spilled to chunks (the chunker round-trip is
+  /// lossless for valid UTF-8), so reading it back from SQLite is wasted I/O
+  /// on every action run that produces large stdout/stderr.
+  ///
+  /// Falls back to loading from chunks only when the caller passed a
+  /// status-only update (text is null but the row's flags indicate chunks
+  /// exist from a previous save).
+  Future<AgentActionExecution> _hydrateAfterSave(
+    AgentActionExecution finalState,
+    AgentActionExecution original,
+  ) async {
+    var hydrated = finalState.copyWith(
+      stdoutText: original.stdoutText,
+      stderrText: original.stderrText,
+    );
+    final needsStdoutFromChunks = finalState.stdoutStoredInChunks && original.stdoutText == null;
+    final needsStderrFromChunks = finalState.stderrStoredInChunks && original.stderrText == null;
+    if (needsStdoutFromChunks) {
+      final stdout = await _capturedOutputChunks.loadConcatenatedStream(
+        executionId: original.id,
+        stream: AgentActionCapturedOutputChunkStore.streamNameForStdout(),
+      );
+      hydrated = hydrated.copyWith(stdoutText: stdout);
+    }
+    if (needsStderrFromChunks) {
+      final stderr = await _capturedOutputChunks.loadConcatenatedStream(
+        executionId: original.id,
+        stream: AgentActionCapturedOutputChunkStore.streamNameForStderr(),
+      );
+      hydrated = hydrated.copyWith(stderrText: stderr);
+    }
+    return hydrated;
   }
 
   @override

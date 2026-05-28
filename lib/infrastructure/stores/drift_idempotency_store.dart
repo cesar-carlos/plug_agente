@@ -11,16 +11,34 @@ class DriftIdempotencyStore implements IIdempotencyStore {
   DriftIdempotencyStore(
     this._db, {
     int maxEntries = 8192,
+    Duration lruUpdateMinInterval = _defaultLruUpdateMinInterval,
     DateTime Function()? nowProvider,
   }) : _maxEntries = maxEntries,
+       _lruUpdateMinInterval = lruUpdateMinInterval,
        _nowProvider = nowProvider ?? DateTime.now {
     if (_maxEntries < 1) {
       throw ArgumentError.value(maxEntries, 'maxEntries', 'must be >= 1');
     }
+    if (_lruUpdateMinInterval < Duration.zero) {
+      throw ArgumentError.value(
+        lruUpdateMinInterval,
+        'lruUpdateMinInterval',
+        'must be non-negative',
+      );
+    }
   }
+
+  /// Default minimum interval between `updated_at` touches for LRU tracking.
+  ///
+  /// A hot key hit 100 times per second would otherwise generate 100 SQLite
+  /// writes per second just for LRU bookkeeping. Throttling to once per minute
+  /// keeps the LRU order good enough for an 8192-entry cache while removing
+  /// the redundant write traffic.
+  static const Duration _defaultLruUpdateMinInterval = Duration(minutes: 1);
 
   final AppDatabase _db;
   final int _maxEntries;
+  final Duration _lruUpdateMinInterval;
   final DateTime Function() _nowProvider;
 
   @override
@@ -42,11 +60,18 @@ class DriftIdempotencyStore implements IIdempotencyStore {
       return null;
     }
 
-    await (_db.update(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).write(
-      RpcIdempotencyCacheTableCompanion(
-        updatedAt: Value(now),
-      ),
-    );
+    // Throttle LRU `updated_at` touches: skip when the existing timestamp is
+    // recent enough that the LRU ordering would not change meaningfully. This
+    // removes redundant SQLite writes on hot keys without degrading eviction
+    // accuracy for an 8192-entry cache.
+    if (_lruUpdateMinInterval <= Duration.zero ||
+        now.difference(row.updatedAt) >= _lruUpdateMinInterval) {
+      await (_db.update(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).write(
+        RpcIdempotencyCacheTableCompanion(
+          updatedAt: Value(now),
+        ),
+      );
+    }
 
     final parsed = _parseResponse(row.responseJson);
     if (parsed == null) {
@@ -75,12 +100,17 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     final expiresAt = now.add(effectiveTtl);
     final jsonText = jsonEncode(response.toJson());
 
-    // Wrap the four-step write in a transaction: expire-purge, count, evict
-    // and insert must succeed or fail atomically. Without it, a crash between
-    // eviction and insert would leave the cache below capacity but missing
-    // the entry the caller intended to persist.
+    // Wrap the writes in a transaction: count, evict and insert must succeed
+    // or fail atomically. Without it, a crash between eviction and insert
+    // would leave the cache below capacity but missing the entry the caller
+    // intended to persist.
+    //
+    // We intentionally do NOT purge expired entries here: the periodic purge
+    // (every `rpcIdempotencyExpiredPurgeInterval`) handles that, and the LRU
+    // eviction below naturally evicts expired entries first because they have
+    // the oldest `updated_at`. Skipping the per-set DELETE saves one SQLite
+    // write op on every cache write, which adds up under high RPC throughput.
     await _db.transaction(() async {
-      await _deleteExpired(now);
       final count = await _countRows();
       if (count >= _maxEntries) {
         final excess = count - _maxEntries + 1;

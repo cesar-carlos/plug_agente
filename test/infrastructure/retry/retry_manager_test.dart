@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
@@ -8,7 +10,9 @@ void main() {
     late RetryManager retryManager;
 
     setUp(() {
-      retryManager = RetryManager();
+      // Disable jitter so timing-sensitive assertions stay deterministic; the
+      // dedicated jitter group below exercises non-zero factors explicitly.
+      retryManager = RetryManager(jitterFactor: 0);
     });
 
     group('execute', () {
@@ -229,5 +233,101 @@ void main() {
         expect(isTransient, isFalse);
       });
     });
+
+    group('jitter', () {
+      test('should reject jitterFactor outside [0, 1]', () {
+        expect(() => RetryManager(jitterFactor: -0.1), throwsA(isA<AssertionError>()));
+        expect(() => RetryManager(jitterFactor: 1.1), throwsA(isA<AssertionError>()));
+      });
+
+      test('should keep delay equal to base when jitterFactor is zero', () async {
+        final manager = RetryManager(jitterFactor: 0);
+        var attempts = 0;
+        final stopwatch = Stopwatch()..start();
+
+        await manager.execute<String>(
+          () async {
+            attempts++;
+            if (attempts < 3) {
+              throw domain.ConnectionFailure('Connection timeout');
+            }
+            return const Success('success');
+          },
+          initialDelayMs: 60,
+        );
+        stopwatch.stop();
+
+        expect(attempts, 3);
+        // Without jitter: 60ms + 120ms = 180ms minimum.
+        expect(stopwatch.elapsedMilliseconds, greaterThanOrEqualTo(170));
+      });
+
+      test('should keep jittered delay within ±factor band', () async {
+        // Random.nextDouble() == 0 yields offset = (0*2 - 1) * span = -span,
+        // which is the most aggressive negative deviation possible.
+        final manager = RetryManager(
+          jitterFactor: 0.5,
+          random: _FixedRandom(0),
+        );
+        var attempts = 0;
+        final stopwatch = Stopwatch()..start();
+
+        await manager.execute<String>(
+          () async {
+            attempts++;
+            if (attempts < 2) {
+              throw domain.ConnectionFailure('Connection timeout');
+            }
+            return const Success('success');
+          },
+          initialDelayMs: 100,
+        );
+        stopwatch.stop();
+
+        // With nextDouble()=0 and factor=0.5 the delay shrinks to 50ms.
+        expect(attempts, 2);
+        expect(stopwatch.elapsedMilliseconds, lessThan(100));
+      });
+
+      test('should clamp jittered delay to at least 1ms', () async {
+        // Even with a degenerate base delay the loop must still yield.
+        final manager = RetryManager(
+          jitterFactor: 1,
+          random: _FixedRandom(0),
+        );
+        var attempts = 0;
+
+        final result = await manager.execute<String>(
+          () async {
+            attempts++;
+            if (attempts < 2) {
+              throw domain.ConnectionFailure('Connection timeout');
+            }
+            return const Success('success');
+          },
+          initialDelayMs: 1,
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(attempts, 2);
+      });
+    });
   });
+}
+
+/// `Random` stub that always returns [_value] from `nextDouble()`. Used to make
+/// jitter assertions deterministic without depending on a real RNG seed.
+class _FixedRandom implements Random {
+  _FixedRandom(this._value);
+
+  final double _value;
+
+  @override
+  bool nextBool() => false;
+
+  @override
+  double nextDouble() => _value;
+
+  @override
+  int nextInt(int max) => 0;
 }

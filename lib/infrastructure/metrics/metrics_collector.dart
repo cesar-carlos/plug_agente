@@ -192,7 +192,10 @@ class MetricsCollector
 
   static const int _maxMetrics = 10000;
 
-  final List<QueryMetrics> _metrics = [];
+  // ListQueue keeps `_addMetric` O(1) at the ring-buffer cap. Using a plain
+  // List forced `removeRange(0, 1)` on every add at cap, which is O(n) and
+  // amplifies into millions of element shifts per second under sustained QPS.
+  final ListQueue<QueryMetrics> _metrics = ListQueue<QueryMetrics>();
   final _metricsController = StreamController<QueryMetrics>.broadcast();
   final Map<String, int> _eventCounters = <String, int>{};
   int _activeDirectConnections = 0;
@@ -1092,8 +1095,12 @@ class MetricsCollector
 
   @override
   MetricsSummary getSummary({int limit = 100}) {
-    final recent = _metrics.length > limit ? _metrics.sublist(_metrics.length - limit) : _metrics;
-
+    final List<QueryMetrics> recent;
+    if (_metrics.length > limit) {
+      recent = _metrics.skip(_metrics.length - limit).toList(growable: false);
+    } else {
+      recent = _metrics.toList(growable: false);
+    }
     return MetricsSummary.fromList(recent);
   }
 
@@ -1114,9 +1121,9 @@ class MetricsCollector
 
   /// Registra metrica e notifica listeners.
   void _addMetric(QueryMetrics metric) {
-    _metrics.add(metric);
-    if (_metrics.length > _maxMetrics) {
-      _metrics.removeRange(0, _metrics.length - _maxMetrics);
+    _metrics.addLast(metric);
+    while (_metrics.length > _maxMetrics) {
+      _metrics.removeFirst();
     }
 
     if (!metric.success) {

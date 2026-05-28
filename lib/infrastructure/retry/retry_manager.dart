@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -6,12 +7,29 @@ import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Gerenciador de retries com exponential backoff.
+///
+/// Applies a multiplicative jitter on each retry delay (default ±20%) to avoid
+/// synchronized retry storms when many in-flight operations fail at the same
+/// time (e.g., after a circuit breaker closes or a network blip). A
+/// deterministic [Random] can be injected from tests via the constructor.
 class RetryManager implements IRetryManager {
-  RetryManager();
+  RetryManager({
+    double jitterFactor = _defaultJitterFactor,
+    Random? random,
+  }) : assert(
+         jitterFactor >= 0 && jitterFactor <= 1,
+         'jitterFactor must be in [0, 1]',
+       ),
+       _jitterFactor = jitterFactor,
+       _random = random ?? Random();
 
   static const int _defaultMaxAttempts = 3;
   static const int _defaultInitialDelayMs = 500;
   static const double _defaultBackoffMultiplier = 2;
+  static const double _defaultJitterFactor = 0.2;
+
+  final double _jitterFactor;
+  final Random _random;
 
   @override
   Future<Result<T>> execute<T extends Object>(
@@ -44,11 +62,12 @@ class RetryManager implements IRetryManager {
           return Failure(lastException!);
         }
 
+        final jitteredDelay = _applyJitter(delayMs);
         AppLogger.info(
-          'resilience: connect_attempt attempt=$attempts max=$maxAttempts delay_ms=$delayMs',
+          'resilience: connect_attempt attempt=$attempts max=$maxAttempts '
+          'delay_ms=$jitteredDelay base_ms=$delayMs',
         );
-        // Aguardar com exponential backoff para próxima tentativa
-        await Future<void>.delayed(Duration(milliseconds: delayMs));
+        await Future<void>.delayed(Duration(milliseconds: jitteredDelay));
         delayMs = (delayMs * backoffMultiplier).toInt();
         continue;
       }
@@ -70,11 +89,12 @@ class RetryManager implements IRetryManager {
         return Failure(lastException!);
       }
 
+      final jitteredDelay = _applyJitter(delayMs);
       AppLogger.info(
-        'resilience: connect_attempt attempt=$attempts max=$maxAttempts delay_ms=$delayMs',
+        'resilience: connect_attempt attempt=$attempts max=$maxAttempts '
+        'delay_ms=$jitteredDelay base_ms=$delayMs',
       );
-      // Aguardar com exponential backoff para próxima tentativa
-      await Future<void>.delayed(Duration(milliseconds: delayMs));
+      await Future<void>.delayed(Duration(milliseconds: jitteredDelay));
       delayMs = (delayMs * backoffMultiplier).toInt();
     }
 
@@ -139,5 +159,19 @@ class RetryManager implements IRetryManager {
         message.contains('connection') ||
         message.contains('network') ||
         message.contains('temporarily');
+  }
+
+  /// Returns [baseDelayMs] perturbed by ±[_jitterFactor] (default ±20%).
+  ///
+  /// Avoids synchronized retry storms across concurrent operations. The result
+  /// is clamped to at least `1ms` so the caller always yields the event loop.
+  int _applyJitter(int baseDelayMs) {
+    if (_jitterFactor == 0 || baseDelayMs <= 0) {
+      return baseDelayMs;
+    }
+    final span = baseDelayMs * _jitterFactor;
+    final offset = (_random.nextDouble() * 2 - 1) * span;
+    final jittered = baseDelayMs + offset;
+    return jittered < 1 ? 1 : jittered.round();
   }
 }

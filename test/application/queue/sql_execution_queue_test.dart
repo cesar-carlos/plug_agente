@@ -723,5 +723,173 @@ void main() {
       }
       expect(excReq.context['request_id'], equals('test-request-123'));
     });
+
+    group('full rejection throttling', () {
+      test('should count consecutive full rejections', () async {
+        final queue = SqlExecutionQueue(
+          maxQueueSize: 1,
+          maxConcurrentWorkers: 1,
+        );
+
+        // First submission keeps the only worker busy long enough that the
+        // queue saturates and subsequent submissions are rejected.
+        unawaited(
+          queue.submit<int>(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 80));
+            return const res.Success(1);
+          }),
+        );
+        // Second submission goes into the queue (queue=1, isFull=true).
+        unawaited(
+          queue.submit<int>(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            return const res.Success(1);
+          }),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        expect(queue.consecutiveFullRejections, 0);
+
+        for (var i = 0; i < 3; i++) {
+          final rejected = await queue.submit<int>(
+            () async => const res.Success(99),
+          );
+          expect(rejected.isError(), isTrue);
+        }
+
+        expect(queue.consecutiveFullRejections, 3);
+      });
+
+      test('should reset rejection counter when a submission is accepted', () async {
+        final queue = SqlExecutionQueue(
+          maxQueueSize: 1,
+          maxConcurrentWorkers: 1,
+        );
+
+        final firstFuture = queue.submit<int>(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+          return const res.Success(1);
+        });
+        final queuedFuture = queue.submit<int>(() async {
+          return const res.Success(2);
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+
+        for (var i = 0; i < 2; i++) {
+          await queue.submit<int>(() async => const res.Success(99));
+        }
+        expect(queue.consecutiveFullRejections, 2);
+
+        await firstFuture;
+        await queuedFuture;
+
+        // Queue drained; the next submission is accepted and the counter
+        // resets so a later saturation burst starts a fresh logging episode.
+        final accepted = await queue.submit<int>(() async => const res.Success(3));
+        expect(accepted.isSuccess(), isTrue);
+        expect(queue.consecutiveFullRejections, 0);
+      });
+
+      test('should reject custom log stride that is not positive', () {
+        expect(
+          () => SqlExecutionQueue(
+            maxQueueSize: 1,
+            maxConcurrentWorkers: 1,
+            fullRejectionLogStride: 0,
+          ),
+          throwsA(isA<AssertionError>()),
+        );
+      });
+    });
+
+    group('disposeGracefully', () {
+      test('should complete immediately when queue is idle', () async {
+        final queue = SqlExecutionQueue(
+          maxQueueSize: 4,
+          maxConcurrentWorkers: 2,
+        );
+
+        final result = await queue.disposeGracefully();
+
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should wait for in-flight workers before completing', () async {
+        final queue = SqlExecutionQueue(
+          maxQueueSize: 4,
+          maxConcurrentWorkers: 2,
+        );
+
+        var taskFinished = false;
+        final inFlight = queue.submit<int>(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+          taskFinished = true;
+          return const res.Success(1);
+        });
+        // Give the worker a tick to start before disposing.
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        final disposeResult = await queue.disposeGracefully();
+        await inFlight;
+
+        expect(disposeResult.isSuccess(), isTrue);
+        expect(taskFinished, isTrue);
+        expect(queue.activeWorkers, equals(0));
+      });
+
+      test('should fail pending requests but still drain in-flight workers', () async {
+        final queue = SqlExecutionQueue(
+          maxQueueSize: 4,
+          maxConcurrentWorkers: 1,
+        );
+
+        final inFlight = queue.submit<int>(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 60));
+          return const res.Success(1);
+        });
+        final queued = queue.submit<int>(() async {
+          return const res.Success(2);
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        final disposeResult = await queue.disposeGracefully();
+        final inFlightResult = await inFlight;
+        final queuedResult = await queued;
+
+        expect(disposeResult.isSuccess(), isTrue);
+        expect(inFlightResult.isSuccess(), isTrue);
+        expect(queuedResult.isError(), isTrue);
+        final queuedError = queuedResult.exceptionOrNull();
+        expect(queuedError, isA<ConfigurationFailure>());
+      });
+
+      test('should return failure when in-flight workers exceed timeout', () async {
+        final queue = SqlExecutionQueue(
+          maxQueueSize: 4,
+          maxConcurrentWorkers: 1,
+        );
+
+        unawaited(
+          queue.submit<int>(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 200));
+            return const res.Success(1);
+          }),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        final disposeResult = await queue.disposeGracefully(
+          timeout: const Duration(milliseconds: 30),
+        );
+
+        expect(disposeResult.isError(), isTrue);
+        final failure = disposeResult.exceptionOrNull();
+        expect(failure, isA<QueryExecutionFailure>());
+        if (failure is! QueryExecutionFailure) {
+          fail('expected QueryExecutionFailure');
+        }
+        expect(failure.context['timeout'], isTrue);
+        expect(failure.context['timeout_stage'], equals('shutdown'));
+      });
+    });
   });
 }

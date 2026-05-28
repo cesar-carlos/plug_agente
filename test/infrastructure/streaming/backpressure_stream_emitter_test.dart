@@ -274,5 +274,138 @@ void main() {
       check(accepted).isFalse();
       check(emitted).isEmpty();
     });
+
+    group('fault recovery', () {
+      test('should mark emitter as faulted when emit throws', () async {
+        var emitCount = 0;
+        var unregisteredId = '';
+        final emitter = BackpressureStreamEmitter(
+          emit: (event, payload) async {
+            emitCount++;
+            throw StateError('transport blew up');
+          },
+          onRegister: (_, _) => true,
+          onUnregister: (id) => unregisteredId = id,
+        );
+
+        final firstResult = await emitter.emitChunk(
+          RpcStreamChunk(
+            streamId: 's-fault',
+            requestId: 'req-1',
+            chunkIndex: 0,
+            rows: const [
+              {'id': 1},
+            ],
+          ),
+        );
+
+        check(emitCount).equals(1);
+        check(firstResult).isFalse();
+        check(emitter.isFaulted).isTrue();
+        check(unregisteredId).equals('s-fault');
+      });
+
+      test(
+        'should keep returning false on emitChunk after a fault without invoking emit again',
+        () async {
+          var emitCount = 0;
+          final emitter = BackpressureStreamEmitter(
+            emit: (event, payload) async {
+              emitCount++;
+              throw StateError('boom');
+            },
+            onRegister: (_, _) => true,
+            onUnregister: (_) {},
+          );
+
+          await emitter.emitChunk(
+            RpcStreamChunk(
+              streamId: 's-fault',
+              requestId: 'req-1',
+              chunkIndex: 0,
+              rows: const [
+                {'id': 1},
+              ],
+            ),
+          );
+
+          final follow = await emitter.emitChunk(
+            RpcStreamChunk(
+              streamId: 's-fault',
+              requestId: 'req-1',
+              chunkIndex: 1,
+              rows: const [
+                {'id': 2},
+              ],
+            ),
+          );
+
+          check(follow).isFalse();
+          check(emitCount).equals(1);
+        },
+      );
+
+      test('should ignore releaseChunks after a fault', () async {
+        var emitCount = 0;
+        final emitter = BackpressureStreamEmitter(
+          emit: (event, payload) async {
+            emitCount++;
+            throw StateError('boom');
+          },
+          onRegister: (_, _) => true,
+          onUnregister: (_) {},
+        );
+
+        await emitter.emitChunk(
+          RpcStreamChunk(
+            streamId: 's-fault',
+            requestId: 'req-1',
+            chunkIndex: 0,
+            rows: const [
+              {'id': 1},
+            ],
+          ),
+        );
+
+        emitter.releaseChunks(10);
+        await Future<void>.delayed(Duration.zero);
+
+        check(emitCount).equals(1);
+        check(emitter.isFaulted).isTrue();
+      });
+
+      test('should not emit complete after a fault', () async {
+        var emitCount = 0;
+        final emitter = BackpressureStreamEmitter(
+          emit: (event, payload) async {
+            emitCount++;
+            throw StateError('boom');
+          },
+          onRegister: (_, _) => true,
+          onUnregister: (_) {},
+        );
+
+        await emitter.emitChunk(
+          RpcStreamChunk(
+            streamId: 's-fault',
+            requestId: 'req-1',
+            chunkIndex: 0,
+            rows: const [
+              {'id': 1},
+            ],
+          ),
+        );
+
+        await emitter.emitComplete(
+          RpcStreamComplete(
+            streamId: 's-fault',
+            requestId: 'req-1',
+            totalRows: 1,
+          ),
+        );
+
+        check(emitCount).equals(1);
+      });
+    });
   });
 }

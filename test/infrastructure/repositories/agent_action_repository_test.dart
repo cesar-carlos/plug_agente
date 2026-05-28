@@ -351,6 +351,71 @@ void main() {
       expect(window.nextOffset, 64);
     });
 
+    group('saveExecution hydration', () {
+      test('should return text from memory without re-reading chunks on first save', () async {
+        final largeStdout = 'a' * 20 * 1024;
+        expect(AgentActionCapturedOutputChunker.shouldSpillToChunks(largeStdout), isTrue);
+        final execution = AgentActionExecution(
+          id: 'exec-fast-hydrate',
+          actionId: 'action-1',
+          actionType: AgentActionType.commandLine,
+          status: AgentActionExecutionStatus.succeeded,
+          requestedAt: DateTime.utc(2026, 5, 15),
+          source: AgentActionRequestSource.localUi,
+          finishedAt: DateTime.utc(2026, 5, 15, 1),
+          stdoutText: largeStdout,
+        );
+
+        final saved = await repository.saveExecution(execution);
+
+        // saveExecution must return the canonical captured output even though
+        // the row itself was persisted with stdoutText=null + flag=true.
+        expect(saved.isSuccess(), isTrue);
+        final returned = saved.getOrThrow();
+        expect(returned.stdoutStoredInChunks, isTrue);
+        expect(returned.stdoutText, largeStdout);
+      });
+
+      test(
+        'should fall back to loading from chunks on status-only update (no text in memory)',
+        () async {
+          final largeStdout = 'b' * 20 * 1024;
+          await repository.saveExecution(
+            AgentActionExecution(
+              id: 'exec-status-only',
+              actionId: 'action-1',
+              actionType: AgentActionType.commandLine,
+              status: AgentActionExecutionStatus.running,
+              requestedAt: DateTime.utc(2026, 5, 15),
+              source: AgentActionRequestSource.localUi,
+              stdoutText: largeStdout,
+            ),
+          );
+
+          // Status-only follow-up: caller does not supply stdout/stderr text,
+          // but the row's flags still report chunks are persisted.
+          final statusUpdate = AgentActionExecution(
+            id: 'exec-status-only',
+            actionId: 'action-1',
+            actionType: AgentActionType.commandLine,
+            status: AgentActionExecutionStatus.succeeded,
+            requestedAt: DateTime.utc(2026, 5, 15),
+            source: AgentActionRequestSource.localUi,
+            finishedAt: DateTime.utc(2026, 5, 15, 1),
+            stdoutStoredInChunks: true,
+          );
+
+          final updated = await repository.saveExecution(statusUpdate);
+
+          expect(updated.isSuccess(), isTrue);
+          final returned = updated.getOrThrow();
+          expect(returned.status, AgentActionExecutionStatus.succeeded);
+          expect(returned.stdoutText, largeStdout);
+          expect(returned.stdoutStoredInChunks, isTrue);
+        },
+      );
+    });
+
     test('should clear captured output on old terminal executions without deleting rows', () async {
       final oldFinished = AgentActionExecution(
         id: 'old-finished',

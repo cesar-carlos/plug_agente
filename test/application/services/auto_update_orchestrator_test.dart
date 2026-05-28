@@ -1560,6 +1560,60 @@ void main() {
         expect(metricsCollector.autoUpdateBackgroundCheckUpdaterErrorCount, 1);
       });
 
+      test('background trigger timeout produces triggerFailure diagnostics', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        final hang = Completer<void>();
+        final fakeGateway = FakeAutoUpdaterGateway()
+          ..onCheckForUpdates = () async {
+            await hang.future;
+          };
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          backgroundRetryLimit: 1,
+          backgroundTriggerTimeout: const Duration(milliseconds: 50),
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.checkInBackground();
+
+        expect(
+          orchestrator.lastBackgroundDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.triggerFailure,
+        );
+        expect(
+          orchestrator.lastBackgroundDiagnostics?.errorMessage,
+          contains('TimeoutException'),
+        );
+        expect(metricsCollector.autoUpdateBackgroundCheckTriggerFailureCount, 1);
+        // Release the hung future so the test does not leak it.
+        hang.complete();
+      });
+
+      test('background retry delay keeps the loop going across attempts', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        final fakeGateway = FakeAutoUpdaterGateway()..checkError = Exception('background boom');
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          backgroundRetryBaseDelay: const Duration(milliseconds: 10),
+          backgroundRetryJitterFactor: 0,
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.checkInBackground();
+
+        // All retries failed (3 attempts by default), so the trigger failure
+        // metric is bumped once per attempt.
+        expect(metricsCollector.autoUpdateBackgroundCheckTriggerFailureCount, 3);
+      });
+
       test('skips reentrant background check while another is in progress', () async {
         await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
         final pendingTrigger = Completer<void>();

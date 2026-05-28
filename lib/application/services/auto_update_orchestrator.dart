@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:math';
 
 import 'package:auto_updater/auto_updater.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
@@ -81,7 +82,14 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     Duration lateCallbackDrainWindow = _defaultLateCallbackDrainWindow,
     UpdateCheckIdRecorder? checkIdRecorder,
     ISilentUpdateCoordinator? silentUpdateCoordinator,
-  }) : _updaterGateway = updaterGateway,
+    Duration backgroundTriggerTimeout = _defaultBackgroundTriggerTimeout,
+    double backgroundRetryJitterFactor = _defaultBackgroundRetryJitterFactor,
+    Random? random,
+  }) : assert(
+         backgroundRetryJitterFactor >= 0 && backgroundRetryJitterFactor <= 1,
+         'backgroundRetryJitterFactor must be in [0, 1]',
+       ),
+       _updaterGateway = updaterGateway,
        _appcastProbeService = appcastProbeService,
        _settingsStore = settingsStore,
        _metricsCollector = metricsCollector,
@@ -92,6 +100,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
        _timeoutCircuitCooldown = timeoutCircuitCooldown,
        _backgroundRetryLimit = backgroundRetryLimit,
        _backgroundRetryBaseDelay = backgroundRetryBaseDelay,
+       _backgroundTriggerTimeout = backgroundTriggerTimeout,
+       _backgroundRetryJitterFactor = backgroundRetryJitterFactor,
+       _random = random ?? Random(),
        _lateCallbackDrainWindow = lateCallbackDrainWindow,
        _checkIdRecorder = checkIdRecorder ?? UpdateCheckIdRecorder(settingsStore: settingsStore) {
     // The coordinator needs a resolver for the feed URL. Using a closure here
@@ -127,6 +138,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   final Duration _timeoutCircuitCooldown;
   final int _backgroundRetryLimit;
   final Duration _backgroundRetryBaseDelay;
+  final Duration _backgroundTriggerTimeout;
+  final double _backgroundRetryJitterFactor;
+  final Random _random;
   final Duration _lateCallbackDrainWindow;
   final UpdateCheckIdRecorder _checkIdRecorder;
   late final ISilentUpdateCoordinator _silentCoordinator;
@@ -152,6 +166,18 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   static const Duration _defaultBackgroundRetryBaseDelay = Duration(seconds: 30);
   static const Duration _defaultManualTriggerTimeout = Duration(seconds: 15);
   static const Duration _defaultManualCompletionTimeout = Duration(seconds: 60);
+
+  /// Default timeout for the background `checkForUpdates` trigger. Mirrors
+  /// [_defaultManualTriggerTimeout] doubled — background has no user waiting,
+  /// so we tolerate a slightly longer trigger before retrying. Without this
+  /// timeout an unresponsive updater process could leave the background retry
+  /// loop blocked indefinitely.
+  static const Duration _defaultBackgroundTriggerTimeout = Duration(seconds: 30);
+
+  /// Default ±jitter applied to the background retry backoff. Avoids
+  /// synchronizing retries across fleets of agents started together when the
+  /// update server is degraded.
+  static const double _defaultBackgroundRetryJitterFactor = 0.2;
 
   /// Window during which WinSparkle callbacks arriving without `_isManualCheck`
   /// are treated as late echoes of a manual check that already timed out
@@ -613,7 +639,12 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       for (var attempt = 1; attempt <= _backgroundRetryLimit; attempt++) {
         _lastBackgroundDiagnostics = _buildBackgroundDiagnostics(feedUrl);
         try {
-          await _updaterGateway.checkForUpdates(inBackground: true);
+          // Bounded trigger: without a timeout an unresponsive updater process
+          // would leave the await suspended indefinitely, blocking the retry
+          // loop and any future cycles (until the app restarts).
+          await _updaterGateway
+              .checkForUpdates(inBackground: true)
+              .timeout(_backgroundTriggerTimeout);
           _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
             triggerCompletedAt: DateTime.now(),
           );
@@ -637,8 +668,12 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
             stackTrace: s,
           );
           if (attempt < _backgroundRetryLimit) {
-            final delay = _backgroundRetryBaseDelay * attempt;
-            developer.log('Retrying in ${delay.inSeconds}s', name: 'auto_update_orchestrator', level: 800);
+            final delay = _jitteredBackgroundRetryDelay(attempt);
+            developer.log(
+              'Retrying in ${delay.inMilliseconds}ms',
+              name: 'auto_update_orchestrator',
+              level: 800,
+            );
             await Future<void>.delayed(delay);
           }
         }
@@ -646,6 +681,20 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     } finally {
       _isBackgroundCheckInProgress = false;
     }
+  }
+
+  /// Computes the delay before the next background retry attempt, applying
+  /// ±[_backgroundRetryJitterFactor] perturbation on top of the linear base.
+  /// Returns at least 100ms so the event loop always yields.
+  Duration _jitteredBackgroundRetryDelay(int attempt) {
+    final baseMs = (_backgroundRetryBaseDelay * attempt).inMilliseconds;
+    if (_backgroundRetryJitterFactor == 0 || baseMs <= 0) {
+      return Duration(milliseconds: baseMs);
+    }
+    final span = baseMs * _backgroundRetryJitterFactor;
+    final offset = (_random.nextDouble() * 2 - 1) * span;
+    final jitteredMs = (baseMs + offset).round();
+    return Duration(milliseconds: jitteredMs < 100 ? 100 : jitteredMs);
   }
 
   @override

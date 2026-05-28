@@ -102,14 +102,26 @@ Future<void> shutdownApp() async {
   }
 
   // 4. Dispor fila SQL (antes de fechar o pool)
+  //
+  // Use disposeGracefully so in-flight ODBC workers can release their pool
+  // leases before closeAll() tears down the underlying connections. Pending
+  // queue entries are still failed immediately; only active workers are awaited.
   if (getIt.isRegistered<IDatabaseGateway>()) {
     final gateway = getIt<IDatabaseGateway>();
     if (gateway is QueuedDatabaseGateway) {
-      gateway.dispose();
-      developer.log(
-        'SQL execution queue disposed',
-        name: 'service_locator',
-        level: 800,
+      final disposeResult = await gateway.disposeGracefully();
+      disposeResult.fold(
+        (_) => developer.log(
+          'SQL execution queue disposed',
+          name: 'service_locator',
+          level: 800,
+        ),
+        (failure) => developer.log(
+          'SQL execution queue dispose timed out; proceeding to pool close',
+          name: 'service_locator',
+          level: 900,
+          error: failure,
+        ),
       );
     }
   }

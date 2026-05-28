@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import 'dart:collection';
 
 import 'package:plug_agente/domain/entities/protocol_metrics_summary.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
@@ -108,7 +109,10 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
     int maxEntries = 1000,
   }) : _maxEntries = maxEntries < 1 ? 1 : maxEntries;
 
-  final List<ProtocolMetrics> _metrics = [];
+  // ListQueue keeps `record` O(1) at the ring-buffer cap. Using a plain List
+  // forced `removeRange(0, 1)` on every record at cap, an O(n) shift on the
+  // transport hot path — every send/receive runs through this collector.
+  final ListQueue<ProtocolMetrics> _metrics = ListQueue<ProtocolMetrics>();
   final StreamController<ProtocolMetrics> _metricsController = StreamController<ProtocolMetrics>.broadcast();
   final StreamController<void> _updates = StreamController<void>.broadcast(sync: true);
   final int _maxEntries;
@@ -121,10 +125,10 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
   List<ProtocolMetrics> get metrics => List.unmodifiable(_metrics);
 
   void record(ProtocolMetrics metrics) {
-    _metrics.add(metrics);
+    _metrics.addLast(metrics);
 
-    if (_metrics.length > _maxEntries) {
-      _metrics.removeRange(0, _metrics.length - _maxEntries);
+    while (_metrics.length > _maxEntries) {
+      _metrics.removeFirst();
     }
 
     if (!_metricsController.isClosed) {
@@ -149,7 +153,9 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
     final now = DateTime.now();
     final cutoff = period != null ? now.subtract(period) : null;
 
-    final filtered = cutoff != null ? _metrics.where((m) => m.timestamp.isAfter(cutoff)).toList() : _metrics;
+    final filtered = cutoff != null
+        ? _metrics.where((m) => m.timestamp.isAfter(cutoff)).toList(growable: false)
+        : _metrics.toList(growable: false);
 
     return ProtocolMetricsSummaryBuilder.fromList(filtered);
   }
@@ -160,7 +166,9 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
   Map<String, ProtocolMetricsSummary> getSummaryByEvent({Duration? period}) {
     final now = DateTime.now();
     final cutoff = period != null ? now.subtract(period) : null;
-    final filtered = cutoff != null ? _metrics.where((m) => m.timestamp.isAfter(cutoff)) : _metrics;
+    final filtered = cutoff != null
+        ? _metrics.where((m) => m.timestamp.isAfter(cutoff))
+        : _metrics;
 
     final grouped = <String, List<ProtocolMetrics>>{};
     for (final metric in filtered) {
@@ -182,7 +190,9 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
   }) {
     final now = DateTime.now();
     final cutoff = period != null ? now.subtract(period) : null;
-    final filtered = cutoff != null ? _metrics.where((m) => m.timestamp.isAfter(cutoff)).toList() : _metrics;
+    final filtered = cutoff != null
+        ? _metrics.where((m) => m.timestamp.isAfter(cutoff)).toList(growable: false)
+        : _metrics.toList(growable: false);
     if (maxPoints <= 0 || filtered.isEmpty) {
       return const <ProtocolMetrics>[];
     }

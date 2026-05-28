@@ -34,6 +34,7 @@ class SqlExecutionQueue {
     int? maxConcurrentNonQueryWorkers,
     SqlExecutionQueueMetricsCollector? metricsCollector,
     Duration defaultEnqueueTimeout = const Duration(seconds: 5),
+    int fullRejectionLogStride = _defaultFullRejectionLogStride,
   }) : assert(maxQueueSize > 0, 'maxQueueSize must be > 0'),
        assert(maxConcurrentWorkers > 0, 'maxConcurrentWorkers must be > 0'),
        assert(
@@ -48,13 +49,25 @@ class SqlExecutionQueue {
          maxConcurrentNonQueryWorkers == null || maxConcurrentNonQueryWorkers > 0,
          'maxConcurrentNonQueryWorkers must be null or > 0',
        ),
+       assert(
+         fullRejectionLogStride > 0,
+         'fullRejectionLogStride must be greater than zero',
+       ),
        _maxQueueSize = maxQueueSize,
        _maxConcurrentWorkers = maxConcurrentWorkers,
        _maxConcurrentBatchWorkers = maxConcurrentBatchWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
        _maxConcurrentLongQueryWorkers = maxConcurrentLongQueryWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
        _maxConcurrentNonQueryWorkers = maxConcurrentNonQueryWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
        _metricsCollector = metricsCollector,
-       _defaultEnqueueTimeout = defaultEnqueueTimeout;
+       _defaultEnqueueTimeout = defaultEnqueueTimeout,
+       _fullRejectionLogStride = fullRejectionLogStride;
+
+  /// Default stride for `queue full` rejection logs.
+  ///
+  /// Sustained back-pressure produces one rejection per submit attempt, which
+  /// floods logs without adding new signal. We log the first rejection and
+  /// then every Nth rejection while the queue stays saturated.
+  static const int _defaultFullRejectionLogStride = 10;
 
   final int _maxQueueSize;
   final int _maxConcurrentWorkers;
@@ -63,6 +76,7 @@ class SqlExecutionQueue {
   final int _maxConcurrentNonQueryWorkers;
   final SqlExecutionQueueMetricsCollector? _metricsCollector;
   final Duration _defaultEnqueueTimeout;
+  final int _fullRejectionLogStride;
 
   final Map<SqlExecutionKind, Queue<_QueuedRequest>> _queues = {
     for (final kind in SqlExecutionKind.values) kind: Queue<_QueuedRequest>(),
@@ -76,6 +90,11 @@ class SqlExecutionQueue {
   bool _disposed = false;
   bool _reportedSaturation70 = false;
   bool _reportedSaturation90 = false;
+  Completer<void>? _drainedCompleter;
+  // Consecutive `queue full` rejections without any accepted submission in
+  // between. Reset whenever a submission is accepted so the next rejection
+  // burst starts a fresh logging episode.
+  int _consecutiveFullRejections = 0;
 
   /// Current number of requests waiting in the queue.
   int get queueSize => _queuedCount;
@@ -103,6 +122,10 @@ class SqlExecutionQueue {
 
   /// Whether the queue is at capacity and will reject new requests.
   bool get isFull => _queuedCount >= _maxQueueSize;
+
+  /// Number of consecutive `queue full` rejections in the current saturation
+  /// episode. Resets to zero whenever a submission is accepted.
+  int get consecutiveFullRejections => _consecutiveFullRejections;
 
   /// Submits a SQL execution task to the queue.
   ///
@@ -143,18 +166,23 @@ class SqlExecutionQueue {
     }
 
     if (isFull) {
+      _consecutiveFullRejections++;
       _metricsCollector?.recordQueueRejection();
-      developer.log(
-        'SQL request REJECTED (queue full)',
-        name: 'sql_execution_queue',
-        level: 900,
-        error: {
-          'request_id': requestId,
-          'queue_size': _queuedCount,
-          'max_queue_size': _maxQueueSize,
-          'active_workers': _activeWorkers,
-        },
-      );
+      if (_shouldLogFullRejection(_consecutiveFullRejections)) {
+        developer.log(
+          'SQL request REJECTED (queue full)',
+          name: 'sql_execution_queue',
+          level: 900,
+          error: {
+            'request_id': requestId,
+            'queue_size': _queuedCount,
+            'max_queue_size': _maxQueueSize,
+            'active_workers': _activeWorkers,
+            'consecutive_full_rejections': _consecutiveFullRejections,
+            'log_stride': _fullRejectionLogStride,
+          },
+        );
+      }
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'SQL execution queue is full; system is under heavy load',
@@ -165,6 +193,8 @@ class SqlExecutionQueue {
         ),
       );
     }
+
+    _consecutiveFullRejections = 0;
 
     final request = _QueuedRequest<T>(
       task: task,
@@ -309,7 +339,18 @@ class SqlExecutionQueue {
         _activeNonQueryWorkers--;
       }
       _metricsCollector?.recordWorkerCompleted(_activeWorkers);
+      _completeDrainedIfIdle();
       unawaited(_processQueue());
+    }
+  }
+
+  void _completeDrainedIfIdle() {
+    final pending = _drainedCompleter;
+    if (pending == null || pending.isCompleted) {
+      return;
+    }
+    if (_activeWorkers == 0 && _queuedCount == 0) {
+      pending.complete();
     }
   }
 
@@ -346,6 +387,9 @@ class SqlExecutionQueue {
   }
 
   /// Disposes the queue and prevents new requests.
+  ///
+  /// Pending requests are failed immediately with [_queueDisposedFailure];
+  /// in-flight workers continue to run until their tasks finish.
   void dispose() {
     _disposed = true;
     // Need to process each request with its own type
@@ -359,6 +403,42 @@ class SqlExecutionQueue {
       if (!request.completer.isCompleted) {
         _completeWithDisposalFailure(request);
       }
+    }
+    _completeDrainedIfIdle();
+  }
+
+  /// Prevents new requests and waits for in-flight workers to finish.
+  ///
+  /// Pending requests are failed immediately (same semantics as [dispose]); the
+  /// returned future completes when [_activeWorkers] reaches zero or when
+  /// [timeout] elapses. Use this on shutdown to release ODBC connections
+  /// instead of returning while workers still hold them.
+  Future<Result<void>> disposeGracefully({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final completer = _drainedCompleter ??= Completer<void>();
+    dispose();
+    if (completer.isCompleted) {
+      return const Success(unit);
+    }
+    try {
+      await completer.future.timeout(timeout);
+      return const Success(unit);
+    } on TimeoutException catch (error) {
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'SQL execution queue did not drain within ${timeout.inSeconds}s',
+          cause: error,
+          context: {
+            'reason': SqlPipelineContextConstants.queueDisposedReason,
+            'timeout': true,
+            'timeout_stage': 'shutdown',
+            'timeout_seconds': timeout.inSeconds,
+            'active_workers': _activeWorkers,
+            'queue_size': _queuedCount,
+          },
+        ),
+      );
     }
   }
 
@@ -402,6 +482,14 @@ class SqlExecutionQueue {
       saturationPercent: saturationPercent,
       thresholdPercent: 90,
     );
+  }
+
+  bool _shouldLogFullRejection(int rejectionCount) {
+    // Log the first rejection of an episode and then every Nth rejection while
+    // the queue stays saturated. The counter is reset by [submit] as soon as a
+    // submission is accepted, so the next saturation burst starts fresh.
+    if (rejectionCount == 1) return true;
+    return rejectionCount % _fullRejectionLogStride == 0;
   }
 
   bool _recordThresholdCrossing({

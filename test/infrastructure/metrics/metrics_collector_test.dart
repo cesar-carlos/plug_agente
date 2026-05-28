@@ -494,5 +494,27 @@ void main() {
         expect(json.first['success'], isTrue);
       });
     });
+
+    group('ring buffer cap', () {
+      test('should keep the most recent _maxMetrics entries and evict oldest first', () {
+        // Arrange: push more than the cap (10000) so the buffer wraps.
+        const cap = 10000;
+        for (var i = 0; i < cap + 5; i++) {
+          collector.recordSuccess(
+            queryId: 'q$i',
+            query: 'SELECT $i',
+            executionDuration: const Duration(milliseconds: 1),
+            rowsAffected: 0,
+            columnCount: 0,
+          );
+        }
+
+        // Assert: length is capped and the oldest entries were evicted.
+        final metrics = collector.metrics;
+        expect(metrics.length, cap);
+        expect(metrics.first.queryId, 'q5');
+        expect(metrics.last.queryId, 'q${cap + 4}');
+      });
+    });
   });
 }

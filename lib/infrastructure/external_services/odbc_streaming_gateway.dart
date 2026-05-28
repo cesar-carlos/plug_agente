@@ -13,6 +13,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
+import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
@@ -65,19 +66,18 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   final MetricsCollector? _metrics;
   final Duration _cancelDisconnectTimeout;
   final Map<String, _ActiveStreamingConnection> _activeStreams = <String, _ActiveStreamingConnection>{};
-  final Map<String, ConnectionCircuitBreaker> _circuitBreakers = <String, ConnectionCircuitBreaker>{};
+  final ConnectionCircuitBreakerCache _circuitBreakers = ConnectionCircuitBreakerCache(
+    factory: () => ConnectionCircuitBreaker(
+      failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
+      resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
+    ),
+  );
   bool _initialized = false;
   static const Duration _defaultCancelDisconnectTimeout = Duration(seconds: 8);
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
 
   ConnectionCircuitBreaker _getCircuitBreaker(String connectionString) {
-    return _circuitBreakers.putIfAbsent(
-      connectionString,
-      () => ConnectionCircuitBreaker(
-        failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
-        resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
-      ),
-    );
+    return _circuitBreakers.getOrCreate(connectionString);
   }
 
   @override
@@ -175,14 +175,38 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       );
     }
 
+    // Fail fast when the caller-provided executionId is already in use. The
+    // late check below (after connect) still covers the case where the id is
+    // derived from connection.id, but this short-circuit avoids spending a
+    // lease + connect on a duplicate retry.
+    if (executionId != null && _activeStreams.containsKey(executionId)) {
+      app_log.AppLogger.warning(
+        'executeQueryStream: duplicate executionId rejected before connect ($executionId)',
+      );
+      return Failure(
+        OdbcFailureMapper.mapStreamingError(
+          StateError('stream_duplicate_execution_id'),
+          operation: 'executeQueryStream',
+          context: {
+            'executionId': executionId,
+            'reason': OdbcContextConstants.streamDuplicateExecutionIdReason,
+            'user_message':
+                'Já existe uma consulta de streaming em andamento com este identificador. '
+                'Aguarde a finalização ou use um identificador diferente.',
+          },
+        ),
+      );
+    }
+
     // Conectar com opções otimizadas para streaming
     final hintedBufferBytes = _adaptiveBufferCache.lookup(
       connectionString: connectionString,
       sql: query,
     );
-    _directConnectionLimiter.reconfigureMaxConcurrent(
-      ConnectionConstants.directOdbcConnectionConcurrency(_settings.poolSize),
-    );
+    final desiredDirectConcurrency = ConnectionConstants.directOdbcConnectionConcurrency(_settings.poolSize);
+    if (_directConnectionLimiter.maxConcurrent != desiredDirectConcurrency) {
+      _directConnectionLimiter.reconfigureMaxConcurrent(desiredDirectConcurrency);
+    }
     final leaseResult = await _directConnectionLimiter.acquire(
       operation: 'streaming_query',
     );
@@ -373,7 +397,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   ///
   /// Useful after configuration changes or manual recovery.
   void resetCircuitBreaker(String connectionString) {
-    _circuitBreakers[connectionString]?.reset();
+    _circuitBreakers.reset(connectionString);
   }
 
   /// Best-effort disconnect with a bounded timeout. Used on cleanup paths

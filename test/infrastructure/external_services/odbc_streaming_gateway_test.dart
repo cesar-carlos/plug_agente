@@ -598,5 +598,61 @@ void main() {
       final failure = result.exceptionOrNull()! as domain.Failure;
       expect(failure.cause, isA<ConnectionError>());
     });
+
+    test('should reject duplicate executionId before connect', () async {
+      final controller = StreamController<Result<QueryResult>>();
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-dup',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQuery('conn-dup', any()),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect(any()),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final firstExecution = gateway.executeQueryStream(
+        'SELECT * FROM users',
+        'DSN=Test',
+        (_) async {},
+        executionId: 'shared-exec',
+      );
+
+      // Give the first call enough time to register the active stream.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(gateway.activeStreamCount, 1);
+
+      final duplicate = await gateway.executeQueryStream(
+        'SELECT * FROM users',
+        'DSN=Test',
+        (_) async {},
+        executionId: 'shared-exec',
+      );
+
+      expect(duplicate.isError(), isTrue);
+      final failure = duplicate.exceptionOrNull()! as domain.Failure;
+      expect(failure.context['executionId'], equals('shared-exec'));
+      // The early check skips connect entirely on the duplicate path; only the
+      // first execution should have hit mockService.connect.
+      verify(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).called(1);
+
+      await controller.close();
+      await firstExecution;
+    });
   });
 }

@@ -658,10 +658,13 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
         error,
         stackTrace,
       );
+    } finally {
+      // Same rationale as `_handleReconnectionNeeded`: an `Error` (not
+      // `Exception`) escaping or an early `return` inside the try block must
+      // not leave `_isReconnecting=true` and block future recovery cycles.
+      _isReconnecting = false;
+      notifyListeners();
     }
-
-    _isReconnecting = false;
-    notifyListeners();
   }
 
   Future<void> _handleReconnectionNeeded() async {
@@ -735,10 +738,14 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
         error,
         stackTrace,
       );
+    } finally {
+      // Must run on every exit path (Exception caught, Error escaping, or
+      // early `return` inside the try block). Without `finally`, a user
+      // disconnect mid-burst or an unhandled `Error` would leave
+      // `_isReconnecting=true`, permanently blocking future recovery attempts.
+      _isReconnecting = false;
+      notifyListeners();
     }
-
-    _isReconnecting = false;
-    notifyListeners();
   }
 
   Future<void> _disconnectTransportForRecovery() async {

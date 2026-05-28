@@ -40,11 +40,26 @@ class ConnectionCircuitBreaker {
   ConnectionCircuitBreaker({
     required int failureThreshold,
     required Duration resetTimeout,
-  }) : _failureThreshold = failureThreshold,
-       _resetTimeout = resetTimeout;
+    int openStateLogStride = _defaultOpenStateLogStride,
+  }) : assert(
+         openStateLogStride > 0,
+         'openStateLogStride must be greater than zero',
+       ),
+       _failureThreshold = failureThreshold,
+       _resetTimeout = resetTimeout,
+       _openStateLogStride = openStateLogStride;
+
+  /// Default stride for fast-fail logs while the circuit is open.
+  ///
+  /// Under sustained load the hub may retry many requests against an open
+  /// circuit. Logging every rejection produces a log storm without adding
+  /// signal. We log the first rejection (already covered by the transition to
+  /// `open`) and every [_defaultOpenStateLogStride]-th subsequent rejection.
+  static const int _defaultOpenStateLogStride = 10;
 
   final int _failureThreshold;
   final Duration _resetTimeout;
+  final int _openStateLogStride;
 
   CircuitState _state = CircuitState.closed;
   int _consecutiveFailures = 0;
@@ -52,12 +67,20 @@ class ConnectionCircuitBreaker {
   // Ensures only one concurrent probe executes in half-open state; all other
   // callers fast-fail to prevent a thundering herd when the circuit reopens.
   bool _halfOpenProbeInProgress = false;
+  // Number of fast-fail rejections delivered during the current open episode.
+  // Reset when the circuit transitions out of `open`.
+  int _openStateRejectionCount = 0;
 
   /// Current circuit breaker state.
   CircuitState get state => _state;
 
   /// Number of consecutive failures recorded.
   int get consecutiveFailures => _consecutiveFailures;
+
+  /// Number of fast-fail rejections delivered during the current `open`
+  /// episode. Resets when the circuit transitions out of `open` (manually,
+  /// after the reset timeout, or via [reset]).
+  int get openStateRejectionCount => _openStateRejectionCount;
 
   /// Whether the circuit breaker is currently open.
   bool get isOpen => _state == CircuitState.open;
@@ -75,17 +98,22 @@ class ConnectionCircuitBreaker {
     if (_state == CircuitState.open) {
       final elapsed = DateTime.now().difference(_openedAt!);
       if (elapsed < _resetTimeout) {
-        developer.log(
-          'Circuit breaker OPEN for $connectionString',
-          name: 'circuit_breaker',
-          level: 900,
-          error: {
-            'connection_string': _maskConnectionString(connectionString),
-            'elapsed_seconds': elapsed.inSeconds,
-            'reset_timeout_seconds': _resetTimeout.inSeconds,
-            'consecutive_failures': _consecutiveFailures,
-          },
-        );
+        _openStateRejectionCount++;
+        if (_shouldLogOpenStateRejection(_openStateRejectionCount)) {
+          developer.log(
+            'Circuit breaker OPEN for $connectionString',
+            name: 'circuit_breaker',
+            level: 900,
+            error: {
+              'connection_string': _maskConnectionString(connectionString),
+              'elapsed_seconds': elapsed.inSeconds,
+              'reset_timeout_seconds': _resetTimeout.inSeconds,
+              'consecutive_failures': _consecutiveFailures,
+              'rejections_during_open': _openStateRejectionCount,
+              'log_stride': _openStateLogStride,
+            },
+          );
+        }
 
         return Failure(
           domain.ConnectionFailure.withContext(
@@ -102,6 +130,7 @@ class ConnectionCircuitBreaker {
 
       // Try half-open — but only one probe at a time.
       _state = CircuitState.halfOpen;
+      _openStateRejectionCount = 0;
       developer.log(
         'Circuit breaker entering HALF-OPEN state',
         name: 'circuit_breaker',
@@ -192,6 +221,7 @@ class ConnectionCircuitBreaker {
     }
 
     _consecutiveFailures = 0;
+    _openStateRejectionCount = 0;
 
     if (_state == CircuitState.halfOpen) {
       _state = CircuitState.closed;
@@ -204,6 +234,14 @@ class ConnectionCircuitBreaker {
         },
       );
     }
+  }
+
+  bool _shouldLogOpenStateRejection(int rejectionCount) {
+    // Always log the first rejection of an open episode. After that, log every
+    // [_openStateLogStride]-th rejection so sustained back-pressure does not
+    // produce a log storm while still surfacing periodic visibility.
+    if (rejectionCount == 1) return true;
+    return rejectionCount % _openStateLogStride == 0;
   }
 
   void _onFailure(String connectionString, domain.Failure failure) {
@@ -247,6 +285,7 @@ class ConnectionCircuitBreaker {
     _consecutiveFailures = 0;
     _openedAt = null;
     _halfOpenProbeInProgress = false;
+    _openStateRejectionCount = 0;
 
     developer.log(
       'Circuit breaker manually reset',

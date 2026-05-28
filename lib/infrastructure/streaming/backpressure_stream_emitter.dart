@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 
@@ -27,6 +28,11 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   RpcStreamComplete? _pendingComplete;
   String? _streamId;
   bool _registered = false;
+  // Once a flush fails (e.g., socket emit threw), the emitter is poisoned: we
+  // do not try to drain further chunks because the underlying transport is
+  // unreliable. Future [emitChunk] calls return `false` so the caller falls
+  // back to its overflow handling (typically cancelling the active stream).
+  bool _isFaulted = false;
   int _sendCredit = 1;
 
   // Serializes _flush calls so concurrent releaseChunks + emitChunk invocations
@@ -34,16 +40,45 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   // previous in-flight future; only one flush body runs at a time.
   Future<void> _flushInFlight = Future<void>.value();
 
+  /// Whether the emitter has stopped trying to deliver chunks because a
+  /// previous emit threw. Exposed for diagnostics and tests.
+  bool get isFaulted => _isFaulted;
+
   void releaseChunks(int windowSize) {
-    if (windowSize <= 0) return;
+    if (windowSize <= 0 || _isFaulted) return;
     _sendCredit += windowSize;
-    _flushInFlight = _flushInFlight.then((_) => _flushBody());
+    _scheduleFlush();
   }
 
-  Future<void> _flush() =>
-      _flushInFlight = _flushInFlight.then((_) => _flushBody());
+  void _scheduleFlush() {
+    // Chain through `.then(...)` so flushes serialize; recover via
+    // `.catchError(...)` so a single failure does not poison every future
+    // continuation. We still mark the emitter as faulted inside _flushBody so
+    // new emitChunk/releaseChunks calls short-circuit at the public surface.
+    _flushInFlight = _flushInFlight
+        .then((_) => _flushBody())
+        .catchError(_handleFlushError);
+  }
+
+  Future<void> _handleFlushError(Object error, StackTrace stackTrace) async {
+    _isFaulted = true;
+    _chunkQueue.clear();
+    _pendingComplete = null;
+    final streamId = _streamId;
+    if (streamId != null && _registered) {
+      _registered = false;
+      _onUnregister(streamId);
+    }
+    AppLogger.error(
+      'BackpressureStreamEmitter faulted; resetting flush chain. '
+      'stream_id=${streamId ?? '<unknown>'}',
+      error,
+      stackTrace,
+    );
+  }
 
   Future<void> _flushBody() async {
+    if (_isFaulted) return;
     while (_sendCredit > 0 && _chunkQueue.isNotEmpty) {
       final chunk = _chunkQueue.removeFirst();
       final payload = chunk.toJson();
@@ -54,7 +89,9 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   }
 
   Future<void> _maybeEmitComplete() async {
-    if (_pendingComplete == null || _chunkQueue.isNotEmpty) return;
+    if (_pendingComplete == null || _chunkQueue.isNotEmpty || _isFaulted) {
+      return;
+    }
     final complete = _pendingComplete!;
     _pendingComplete = null;
     final payload = complete.toJson();
@@ -66,6 +103,9 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
 
   @override
   Future<bool> emitChunk(RpcStreamChunk chunk) async {
+    if (_isFaulted) {
+      return false;
+    }
     if (!_registered) {
       _streamId = chunk.streamId;
       final accepted = _onRegister(_streamId!, this);
@@ -74,17 +114,25 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
       }
       _registered = true;
     }
-    await _flush();
+    _scheduleFlush();
+    await _flushInFlight;
+    if (_isFaulted) {
+      return false;
+    }
     if (_chunkQueue.length >= _maxQueueSize && _sendCredit == 0) {
       return false;
     }
     _chunkQueue.add(chunk);
-    await _flush();
-    return true;
+    _scheduleFlush();
+    await _flushInFlight;
+    return !_isFaulted;
   }
 
   @override
   Future<void> emitComplete(RpcStreamComplete complete) async {
+    if (_isFaulted) {
+      return;
+    }
     _pendingComplete = complete;
     await _maybeEmitComplete();
   }

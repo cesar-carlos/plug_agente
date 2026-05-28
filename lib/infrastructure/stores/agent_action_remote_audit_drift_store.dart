@@ -75,18 +75,29 @@ class AgentActionRemoteAuditDriftStore implements IAgentActionRemoteAuditStore {
     required DateTime cutoffUtc,
     required int limit,
   }) async {
-    return _database.transaction(() async {
-      final rows =
-          await (_database.select(_database.agentActionRemoteAuditTable)
-                ..where((t) => t.occurredAt.isSmallerThanValue(cutoffUtc))
-                ..orderBy([(t) => OrderingTerm.asc(t.occurredAt)])
-                ..limit(limit))
-              .get();
-      if (rows.isEmpty) {
-        return 0;
-      }
-      final ids = rows.map((e) => e.id).toList();
-      return (_database.delete(_database.agentActionRemoteAuditTable)..where((t) => t.id.isIn(ids))).go();
-    });
+    if (limit <= 0) {
+      return 0;
+    }
+    // Single-statement DELETE with subquery: replaces the previous
+    // SELECT-then-DELETE pair which materialised entire rows just to read
+    // their IDs and then sent them back as IN-list parameters. The subquery
+    // uses the `idx_agent_action_remote_audit_occurred` index for the range
+    // scan and SQLite executes the DELETE atomically on its own — no
+    // explicit transaction needed.
+    return _database.customUpdate(
+      'DELETE FROM agent_action_remote_audit_table '
+      'WHERE id IN ( '
+      'SELECT id FROM agent_action_remote_audit_table '
+      'WHERE occurred_at < ? '
+      'ORDER BY occurred_at ASC '
+      'LIMIT ? '
+      ')',
+      variables: [
+        Variable.withDateTime(cutoffUtc),
+        Variable<int>(limit),
+      ],
+      updates: {_database.agentActionRemoteAuditTable},
+      updateKind: UpdateKind.delete,
+    );
   }
 }
