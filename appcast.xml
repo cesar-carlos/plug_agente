@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.7.2+1</title>
+   <pubDate>Thu, 28 May 2026 14:46:28 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.7.1...v1.7.2</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.7.2/PlugAgente-Setup-1.7.2.exe" sparkle:version="1.7.2+1" sparkle:os="windows" plug:sha256="b84e7a323ffac305f069dc8ddb11b415627292c75ccb4088521b043b7741496b" plug:channel="stable" plug:rolloutPercentage="100" length="21242699" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.7.1+1</title>
    <pubDate>Thu, 28 May 2026 00:45:41 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.7.0...v1.7.1</description>
