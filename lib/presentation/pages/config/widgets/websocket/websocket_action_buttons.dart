@@ -52,9 +52,7 @@ class WebSocketActionButtons extends StatelessWidget {
               leading: AppButton(
                 label: vm.isConnected ? l10n.wsButtonDisconnect : l10n.wsButtonConnect,
                 isLoading: vm.isConnectionBusy,
-                onPressed: (vm.isConnectionBusy || saving)
-                    ? null
-                    : () => _handleConnectOrDisconnect(context),
+                onPressed: (vm.isConnectionBusy || saving) ? null : () => _handleConnectOrDisconnect(context),
               ),
               trailing: AppButton(
                 label: l10n.wsButtonSaveConfig,

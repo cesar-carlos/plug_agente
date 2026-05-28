@@ -109,8 +109,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                     key: const ValueKey('automatic_updates_feed_status_label'),
                     style: context.captionText,
                   ),
-                  if ((releaseNotes ?? '').trim().isNotEmpty ||
-                      (releaseNotesUrl ?? '').trim().isNotEmpty) ...[
+                  if ((releaseNotes ?? '').trim().isNotEmpty || (releaseNotesUrl ?? '').trim().isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.sm),
                     _ReleaseNotesExpander(
                       key: const ValueKey('updates_release_notes_expander'),
@@ -218,8 +217,7 @@ class _ReleaseNotesExpander extends StatelessWidget {
               trimmedNotes,
               style: context.bodyText,
             ),
-          if (trimmedNotes.isNotEmpty && trimmedUrl.isNotEmpty)
-            const SizedBox(height: AppSpacing.sm),
+          if (trimmedNotes.isNotEmpty && trimmedUrl.isNotEmpty) const SizedBox(height: AppSpacing.sm),
           if (trimmedUrl.isNotEmpty)
             // Show the URL as selectable plain text. We do not pull in a
             // browser launcher dependency just for this single button; the

@@ -140,9 +140,7 @@ class RetryManager implements IRetryManager {
       // explicit auth-failure messages as a content-level override.
       if (exception is domain.NetworkFailure) {
         final message = exception.message.toLowerCase();
-        if (message.contains('authentication') ||
-            message.contains('invalid token') ||
-            message.contains('401')) {
+        if (message.contains('authentication') || message.contains('invalid token') || message.contains('401')) {
           return false;
         }
         return exception.isTransient; // always true

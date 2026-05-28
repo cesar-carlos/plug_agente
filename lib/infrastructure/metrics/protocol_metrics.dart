@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:plug_agente/domain/entities/protocol_metrics_summary.dart';
@@ -166,9 +166,7 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
   Map<String, ProtocolMetricsSummary> getSummaryByEvent({Duration? period}) {
     final now = DateTime.now();
     final cutoff = period != null ? now.subtract(period) : null;
-    final filtered = cutoff != null
-        ? _metrics.where((m) => m.timestamp.isAfter(cutoff))
-        : _metrics;
+    final filtered = cutoff != null ? _metrics.where((m) => m.timestamp.isAfter(cutoff)) : _metrics;
 
     final grouped = <String, List<ProtocolMetrics>>{};
     for (final metric in filtered) {

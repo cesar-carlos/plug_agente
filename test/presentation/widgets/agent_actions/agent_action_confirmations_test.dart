@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
 
-
 Future<bool?> _runConfirmAndTap({
   required WidgetTester tester,
   required Future<bool> Function({required BuildContext context, required AppLocalizations l10n}) open,

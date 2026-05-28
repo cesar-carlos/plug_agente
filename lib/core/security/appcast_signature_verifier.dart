@@ -138,11 +138,7 @@ List<String> parseAppcastPublicKeys(String? raw) {
   if (raw == null) return const <String>[];
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return const <String>[];
-  return trimmed
-      .split(',')
-      .map((entry) => entry.trim())
-      .where((entry) => entry.isNotEmpty)
-      .toList(growable: false);
+  return trimmed.split(',').map((entry) => entry.trim()).where((entry) => entry.isNotEmpty).toList(growable: false);
 }
 
 /// Canonical UTF-8 representation of a Sparkle enclosure's signable fields.

@@ -78,8 +78,7 @@ void main() {
         });
 
         const installerName = 'PlugAgente-Setup-99.0.0.exe';
-        final helperFile = File('${tempDir.path}/plug_update_helper.exe')
-          ..writeAsStringSync('helper');
+        final helperFile = File('${tempDir.path}/plug_update_helper.exe')..writeAsStringSync('helper');
 
         var launcherProcessStarts = 0;
         Result<SilentUpdateInstallResult>? lastResult;

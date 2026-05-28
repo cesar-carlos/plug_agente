@@ -94,8 +94,7 @@ class AgentActionDefinitionTable extends Table {
 @DataClassName('AgentActionTriggerData')
 class AgentActionTriggerTable extends Table {
   TextColumn get id => text()();
-  TextColumn get actionId =>
-      text().references(AgentActionDefinitionTable, #id, onDelete: KeyAction.cascade)();
+  TextColumn get actionId => text().references(AgentActionDefinitionTable, #id, onDelete: KeyAction.cascade)();
   TextColumn get type => text()();
   TextColumn get name => text().nullable()();
   BoolColumn get isEnabled => boolean().withDefault(const Constant(true))();
@@ -167,8 +166,7 @@ class RpcIdempotencyCacheTable extends Table {
 
 @DataClassName('AgentActionCapturedOutputChunkData')
 class AgentActionCapturedOutputChunkTable extends Table {
-  TextColumn get executionId =>
-      text().references(AgentActionExecutionTable, #id, onDelete: KeyAction.cascade)();
+  TextColumn get executionId => text().references(AgentActionExecutionTable, #id, onDelete: KeyAction.cascade)();
   TextColumn get stream => text()();
   IntColumn get chunkIndex => integer()();
   IntColumn get utf8Offset => integer()();

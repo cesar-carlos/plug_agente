@@ -5,6 +5,95 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+## 1.8.0 - 2026-05-28
+
+### Fixed
+
+- The silent auto-update flow no longer made the agent appear offline or
+  reject queries while an update was pending. The previous cycle could
+  block the install path mid-flight when UAC would prompt the user,
+  leaving the connection in a state where every new query returned an
+  access-denied error until the operator updated manually. The flow now
+  keeps the connection alive end-to-end; the install only happens after
+  an explicit user gesture.
+
+### Added
+
+- New `IUacDetector` abstraction (`lib/core/runtime/i_uac_detector.dart`)
+  with a Windows implementation (`WindowsUacDetector`) and a `NoopUacDetector`
+  used by tests and non-Windows platforms. The Windows backend resolves
+  the process token elevation type via `OpenProcessToken` +
+  `GetTokenInformation(TokenElevationType)` and reads the `EnableLUA`
+  policy from the **64-bit hive** (`KEY_QUERY_VALUE | KEY_WOW64_64KEY`)
+  so 32-bit builds are not redirected to `Wow6432Node`. The detector
+  exposes a rich `UacDetectionState` snapshot (`elevationType`,
+  `uacEnabled`, `requiresConsent`, `detectionError`) for diagnostics
+  and a boolean `requiresUserConsentForElevation()` for the gate. The
+  result is cached for the process lifetime by default with an optional
+  `cacheTtl` for long-lived sessions.
+- New `SilentUpdateOutcome.requiresUserConsent` and
+  `UpdateCheckCompletionSource.automaticAwaitingUserConsent` discriminate
+  the "probe found a newer version but UAC blocks unattended install"
+  state from the existing flow. The coordinator persists the diagnostic
+  so the UI can render the banner on next boot even before the periodic
+  probe runs.
+- New `IAutoUpdateOrchestrator.hasUpdateAwaitingUserConsent` getter and
+  `applyAvailableUpdate({noticeTitle, noticeBody})` method bridge the
+  in-app banner to the user-initiated flow. `applyAvailableUpdate`
+  pauses the periodic timer, calls
+  `SilentUpdateCoordinator.checkSilently(userInitiated: true)` to bypass
+  the UAC gate, applies the staged installer, and restores the timer in
+  `finally` so a flake never leaves the coordinator permanently stopped.
+- New auto-update metrics in `IAutoUpdateMetricsCollector`:
+  `recordAutoUpdateAwaitingUserConsent()`,
+  `recordAutoUpdateUserInitiatedApplySuccess()` and
+  `recordAutoUpdateUserInitiatedApplyFailure()`. The `MetricsCollector`
+  snapshot exposes matching `autoUpdateAwaitingUserConsentCount`,
+  `autoUpdateUserInitiatedApplySuccessCount` and
+  `autoUpdateUserInitiatedApplyFailureCount` counters so operations can
+  dimension the gate hit rate and operator follow-through.
+- `AutoUpdateReadyBanner` now handles both the "downloaded and ready"
+  and "awaiting UAC consent" states through a shared surface. The UAC
+  variant renders with the `shield_solid` icon, the `warning` feedback
+  tone, localized title/body explaining the elevation requirement, and
+  a "Download and install" primary action. A phase indicator next to
+  the spinner labels the in-flight stage (`downloading`, `staging`,
+  `launching`).
+- "Remind me later" on the banner now persists to `IAppSettingsStore`
+  via the new `AppSettingsKeys.autoUpdateBannerDismiss` key with a 6-hour
+  TTL. The banner hydrates the dismiss state on `initState`, hides the
+  surface while the TTL is active, and re-appears when the TTL expires
+  or the pending version changes.
+
+### Changed
+
+- `SilentUpdateCoordinator.checkSilently` accepts a new `userInitiated`
+  flag (default `false`). The automatic flow stops after the probe when
+  `userInitiated == false` and `IUacDetector.requiresUserConsentForElevation()`
+  returns `true`; passing `true` from the banner bypasses the gate so
+  the operator's explicit click consents to the upcoming UAC prompt.
+- `SilentUpdateCoordinator.hydratePersistedDiagnostics()` now reconciles
+  stale `automaticAwaitingUserConsent` snapshots on startup: when the
+  persisted `pendingVersion` is already at or below
+  `AppConstants.appVersion`, the diagnostic is rewritten to
+  `automaticUpdateNotAvailable` so the banner does not show after the
+  operator updated out of band.
+- `AutoUpdateOrchestrator.applyAvailableUpdate` translates non-
+  `installerReady` outcomes into typed `Failure`s with the originating
+  `outcome` preserved in `context`. The banner reads the context and
+  renders a localized, actionable message via the new
+  `autoUpdateApplyOutcomeCooldown/SilentDisabled/Cancelled/QuietHours/`
+  `NoNewVersion/AlreadyInProgress/PendingInProgress/Unknown` strings
+  (English + Portuguese).
+
+### Migration notes
+
+- No setting or schema migration is required. The `auto_update_banner_dismiss`
+  preference is created on demand.
+- The `ISilentUpdateCoordinator.checkSilently` contract grew a named
+  `userInitiated` parameter with a `false` default; existing call sites
+  continue to compile and behave as before.
+
 ## 1.7.2 - 2026-05-28
 
 ### Fixed

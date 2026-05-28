@@ -113,6 +113,9 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
   );
   int cleanupCount = 0;
   int installCount = 0;
+  int launchHelperCount = 0;
+  SilentUpdateLaunchRequest? lastLaunchRequest;
+  Result<void> launchResult = const Success(unit);
 
   /// Optional hook executed just before the install result is returned, allowing
   /// tests to simulate state changes that happen during download (e.g. the user
@@ -132,6 +135,15 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
   }
 
   @override
+  Future<Result<void>> launchPreparedHelper(
+    SilentUpdateLaunchRequest request,
+  ) async {
+    launchHelperCount++;
+    lastLaunchRequest = request;
+    return launchResult;
+  }
+
+  @override
   Future<Result<void>> cleanupObsoleteArtifacts() async {
     cleanupCount++;
     return const Success(unit);
@@ -141,16 +153,22 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
 class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   bool _isSilentCheckInProgress = false;
   bool automaticSilentUpdatesEnabledValue = true;
+  bool hasPendingDownloadedUpdateValue = false;
   UpdateCheckDiagnostics? lastAutomaticDiagnosticsValue;
 
   int reconcilePendingAndScheduleCallCount = 0;
   int scheduleAndStartCallCount = 0;
   int stopCallCount = 0;
   int checkSilentlyCallCount = 0;
+  int applyPendingCallCount = 0;
+  bool? lastApplyTriggerAppClose;
+  String? lastApplyNoticeTitle;
+  String? lastApplyNoticeBody;
   int resetFailureCooldownCallCount = 0;
   int hydrateCallCount = 0;
 
   Result<SilentUpdateOutcome> checkSilentlyResult = const Success(SilentUpdateOutcome.noNewVersion);
+  Result<void> applyPendingResult = const Success(unit);
 
   void setInProgress(bool value) => _isSilentCheckInProgress = value;
 
@@ -161,6 +179,9 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   bool get automaticSilentUpdatesEnabled => automaticSilentUpdatesEnabledValue;
 
   @override
+  bool get hasPendingDownloadedUpdate => hasPendingDownloadedUpdateValue;
+
+  @override
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics => lastAutomaticDiagnosticsValue;
 
   @override
@@ -169,10 +190,26 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   @override
   Future<void> reconcilePendingAndSchedule() async => reconcilePendingAndScheduleCallCount++;
 
+  bool? lastCheckSilentlyUserInitiated;
+
   @override
-  Future<Result<SilentUpdateOutcome>> checkSilently() async {
+  Future<Result<SilentUpdateOutcome>> checkSilently({bool userInitiated = false}) async {
     checkSilentlyCallCount++;
+    lastCheckSilentlyUserInitiated = userInitiated;
     return checkSilentlyResult;
+  }
+
+  @override
+  Future<Result<void>> applyPendingDownloadedUpdate({
+    String? noticeTitle,
+    String? noticeBody,
+    bool triggerAppClose = true,
+  }) async {
+    applyPendingCallCount++;
+    lastApplyNoticeTitle = noticeTitle;
+    lastApplyNoticeBody = noticeBody;
+    lastApplyTriggerAppClose = triggerAppClose;
+    return applyPendingResult;
   }
 
   @override
@@ -320,7 +357,7 @@ void main() {
         );
       });
 
-      test('starts installer and persists pending state when remote version is newer', () async {
+      test('stages installer and persists pending state when remote version is newer', () async {
         final fakeProbe = FakeAppcastProbeService()
           ..result = const AppcastProbeResult(
             requestUrl: 'https://example.com/appcast.xml',
@@ -341,7 +378,7 @@ void main() {
           silentUpdateInstaller: fakeInstaller,
           settingsStore: settingsStore,
           metricsCollector: metricsCollector,
-          closeApplicationForSilentUpdate: () async {
+          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
             closeCalled = true;
           },
         );
@@ -352,19 +389,33 @@ void main() {
         expect(result.isSuccess(), isTrue);
         result.fold(
           (outcome) {
-            expect(outcome, SilentUpdateOutcome.installerStarted);
-            expect(outcome.isInstallerLaunched, isTrue);
+            expect(outcome, SilentUpdateOutcome.installerReady);
+            expect(outcome.isInstallerReady, isTrue);
           },
           (_) => fail('Expected success'),
         );
         expect(fakeInstaller.request?.version, '99.0.0+1');
         expect(fakeInstaller.request?.sha256, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
         expect(fakeInstaller.request?.requireValidSignature, isTrue);
-        expect(closeCalled, isTrue);
+        expect(
+          fakeInstaller.request?.deferHelperLaunch,
+          isTrue,
+          reason: 'silent path must stage the helper without launching it',
+        );
+        expect(
+          fakeInstaller.launchHelperCount,
+          0,
+          reason: 'helper launch is reserved for the explicit apply step',
+        );
+        expect(
+          closeCalled,
+          isFalse,
+          reason: 'agent must stay online after a successful silent download',
+        );
         expect(settingsStore.getString('auto_update.pending_silent_update'), contains('99.0.0+1'));
         expect(
           orchestrator.lastAutomaticDiagnostics?.completionSource,
-          UpdateCheckCompletionSource.automaticInstallStarted,
+          UpdateCheckCompletionSource.automaticInstallReady,
         );
         expect(
           orchestrator.lastAutomaticDiagnostics?.silentUpdateStrategy,
@@ -410,7 +461,7 @@ void main() {
           silentUpdateInstaller: fakeInstaller,
           settingsStore: settingsStore,
           metricsCollector: metricsCollector,
-          closeApplicationForSilentUpdate: () async {
+          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
             closeCalled = true;
           },
         );
@@ -469,7 +520,7 @@ void main() {
             (_) => fail('Expected success'),
           );
         }
-        expect(outcomes.where((o) => o == SilentUpdateOutcome.installerStarted).length, 1);
+        expect(outcomes.where((o) => o == SilentUpdateOutcome.installerReady).length, 1);
         expect(outcomes.where((o) => o == SilentUpdateOutcome.alreadyInProgress).length, 1);
       });
 
@@ -1830,6 +1881,107 @@ void main() {
           orchestrator.lastAutomaticDiagnostics?.completionSource,
           UpdateCheckCompletionSource.automaticUpdateNotAvailable,
         );
+      });
+
+      test('hasUpdateAwaitingUserConsent is true when coordinator reports UAC-blocked update', () {
+        final diag = UpdateCheckDiagnostics(
+          checkedAt: DateTime.now(),
+          configuredFeedUrl: 'https://example.com/appcast.xml',
+          requestedFeedUrl: 'https://example.com/appcast.xml',
+          completionSource: UpdateCheckCompletionSource.automaticAwaitingUserConsent,
+          updateAvailable: true,
+          pendingVersion: '99.0.0+1',
+        );
+        final fakeCoordinator = FakeSilentUpdateCoordinator()..lastAutomaticDiagnosticsValue = diag;
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        expect(orchestrator.hasUpdateAwaitingUserConsent, isTrue);
+      });
+
+      test('hasUpdateAwaitingUserConsent is false when no diagnostics or different source', () {
+        final fakeCoordinator = FakeSilentUpdateCoordinator();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        expect(orchestrator.hasUpdateAwaitingUserConsent, isFalse);
+
+        fakeCoordinator.lastAutomaticDiagnosticsValue = UpdateCheckDiagnostics(
+          checkedAt: DateTime.now(),
+          configuredFeedUrl: 'https://example.com/appcast.xml',
+          requestedFeedUrl: 'https://example.com/appcast.xml',
+          completionSource: UpdateCheckCompletionSource.automaticInstallReady,
+          updateAvailable: true,
+        );
+
+        expect(orchestrator.hasUpdateAwaitingUserConsent, isFalse);
+      });
+
+      test('applyAvailableUpdate forwards userInitiated=true and applies pending on success', () async {
+        final fakeCoordinator = FakeSilentUpdateCoordinator()
+          ..checkSilentlyResult = const Success(SilentUpdateOutcome.installerReady);
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        final result = await orchestrator.applyAvailableUpdate(
+          noticeTitle: 'Updating',
+          noticeBody: 'PlugAgente will restart',
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(fakeCoordinator.checkSilentlyCallCount, 1);
+        expect(fakeCoordinator.lastCheckSilentlyUserInitiated, isTrue);
+        expect(fakeCoordinator.applyPendingCallCount, 1);
+        expect(fakeCoordinator.lastApplyNoticeTitle, 'Updating');
+        expect(fakeCoordinator.lastApplyNoticeBody, 'PlugAgente will restart');
+      });
+
+      test('applyAvailableUpdate fails when download outcome is not installerReady', () async {
+        final fakeCoordinator = FakeSilentUpdateCoordinator()
+          ..checkSilentlyResult = const Success(SilentUpdateOutcome.noNewVersion);
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        final result = await orchestrator.applyAvailableUpdate();
+
+        expect(result.isError(), isTrue);
+        expect(fakeCoordinator.applyPendingCallCount, 0);
+      });
+
+      test('applyAvailableUpdate propagates download failure', () async {
+        final fakeCoordinator = FakeSilentUpdateCoordinator()..checkSilentlyResult = Failure(Exception('boom'));
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+          silentUpdateCoordinator: fakeCoordinator,
+        );
+
+        final result = await orchestrator.applyAvailableUpdate();
+
+        expect(result.isError(), isTrue);
+        expect(fakeCoordinator.applyPendingCallCount, 0);
       });
     });
   });

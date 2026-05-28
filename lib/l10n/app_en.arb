@@ -1246,6 +1246,41 @@
       "seconds": {"type": "int"}
     }
   },
+  "autoUpdateReadyBannerTitle": "Update ready to install",
+  "autoUpdateReadyBannerBody": "Version {version} has been downloaded. The agent stays online; install it whenever you want to finish the update.",
+  "@autoUpdateReadyBannerBody": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "autoUpdateReadyBannerInstallNow": "Install now",
+  "autoUpdateReadyBannerDefer": "Later",
+  "autoUpdateReadyDialogTitle": "Install update now?",
+  "autoUpdateReadyDialogBody": "Plug Agente will close to install version {version}. The agent will be briefly offline until it reopens. Continue?",
+  "@autoUpdateReadyDialogBody": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "autoUpdateReadyDialogConfirm": "Install and restart",
+  "autoUpdateReadyDialogCancel": "Cancel",
+  "autoUpdateApplyFailureMessage": "Could not start the installer. Try again or check the update diagnostics.",
+  "autoUpdateConsentBannerTitle": "Update available — requires admin",
+  "autoUpdateConsentBannerBody": "Version {version} is available. Installing it triggers a Windows UAC prompt for administrator approval, so the automatic update did not run unattended.",
+  "@autoUpdateConsentBannerBody": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "autoUpdateConsentBannerInstall": "Download and install",
+  "autoUpdateConsentDialogTitle": "Install update now?",
+  "autoUpdateConsentDialogBody": "Plug Agente will download version {version} and then close to install it. Windows will ask for administrator approval (UAC) during installation. Continue?",
+  "@autoUpdateConsentDialogBody": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "autoUpdateConsentDialogConfirm": "Download and install",
   "configUpdateTechnicalHelperSha256": "Helper SHA-256",
   "configUpdateTechnicalHelperSignatureStatus": "Helper signature",
   "configUpdateTechnicalFeedSignatureStatus": "Feed signature",
@@ -1275,6 +1310,19 @@
   "configUpdateCompletionSourceAutomaticUpdateNotAvailable": "No automatic update available",
   "configUpdateCompletionSourceAutomaticValidationFailure": "Automatic update validation failed",
   "configUpdateCompletionSourceAutomaticDownloadFailure": "Automatic update download failed",
+  "configUpdateCompletionSourceAutomaticInstallReady": "Update downloaded and ready to install",
+  "configUpdateCompletionSourceAutomaticAwaitingUserConsent": "Update available — waiting for admin confirmation",
+  "autoUpdateApplyOutcomeCooldown": "Updates are paused after repeated failures. Try again later.",
+  "autoUpdateApplyOutcomeSilentDisabled": "Automatic updates are disabled. Re-enable them in Settings to install this update.",
+  "autoUpdateApplyOutcomeCancelled": "The update was cancelled before the installer was ready.",
+  "autoUpdateApplyOutcomeQuietHours": "Updates are paused during quiet hours. Try again outside the configured window.",
+  "autoUpdateApplyOutcomeNoNewVersion": "No new version is available right now.",
+  "autoUpdateApplyOutcomeAlreadyInProgress": "Another update check is still running. Try again in a moment.",
+  "autoUpdateApplyOutcomePendingInProgress": "A previous update is still being applied.",
+  "autoUpdateApplyOutcomeUnknown": "Could not prepare the installer. Open the update diagnostics for details.",
+  "autoUpdateApplyPhaseDownloading": "Downloading…",
+  "autoUpdateApplyPhaseStaging": "Preparing installer…",
+  "autoUpdateApplyPhaseLaunching": "Launching update helper…",
   "configUpdateCompletionSourceAutomaticInstallStarted": "Automatic installer started",
   "configUpdateCompletionSourceAutomaticInstallFailure": "Automatic installer failed to start",
   "configUpdateCompletionSourceAutomaticCooldown": "Automatic updates paused",

@@ -105,8 +105,7 @@ void main() {
     test('resumes a partial .part by issuing a Range request (server returns 206)', () async {
       // Pre-populate a .part with the first 2 bytes of 'hello'.
       const installerName = 'PlugAgente-Setup-99.0.0.exe';
-      final partFile = File(p.join(tempDir.path, '$installerName.part'))
-        ..writeAsBytesSync(utf8.encode('he'));
+      final partFile = File(p.join(tempDir.path, '$installerName.part'))..writeAsBytesSync(utf8.encode('he'));
 
       Map<String, String>? receivedHeaders;
       final server = await HttpServer.bind('127.0.0.1', 0);

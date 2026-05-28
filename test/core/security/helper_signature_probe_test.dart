@@ -51,8 +51,7 @@ void main() {
     test('maps Valid output to HelperSignatureStatus.valid', () async {
       if (!Platform.isWindows) return;
       final probe = PowerShellHelperSignatureProbe(
-        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) =>
-            stubbedRunner('Valid\n'),
+        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) => stubbedRunner('Valid\n'),
       );
       final status = await probe.probe(targetFile.path);
       expect(status, HelperSignatureStatus.valid);
@@ -61,8 +60,7 @@ void main() {
     test('maps NotSigned output to HelperSignatureStatus.unsigned', () async {
       if (!Platform.isWindows) return;
       final probe = PowerShellHelperSignatureProbe(
-        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) =>
-            stubbedRunner('NotSigned'),
+        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) => stubbedRunner('NotSigned'),
       );
       final status = await probe.probe(targetFile.path);
       expect(status, HelperSignatureStatus.unsigned);
@@ -71,8 +69,7 @@ void main() {
     test('maps HashMismatch output to HelperSignatureStatus.invalid', () async {
       if (!Platform.isWindows) return;
       final probe = PowerShellHelperSignatureProbe(
-        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) =>
-            stubbedRunner('HashMismatch'),
+        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) => stubbedRunner('HashMismatch'),
       );
       final status = await probe.probe(targetFile.path);
       expect(status, HelperSignatureStatus.invalid);
@@ -81,8 +78,7 @@ void main() {
     test('maps NotTrusted output to HelperSignatureStatus.invalid', () async {
       if (!Platform.isWindows) return;
       final probe = PowerShellHelperSignatureProbe(
-        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) =>
-            stubbedRunner('NotTrusted'),
+        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) => stubbedRunner('NotTrusted'),
       );
       final status = await probe.probe(targetFile.path);
       expect(status, HelperSignatureStatus.invalid);
@@ -91,8 +87,7 @@ void main() {
     test('falls back to unknown for unexpected status strings', () async {
       if (!Platform.isWindows) return;
       final probe = PowerShellHelperSignatureProbe(
-        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) =>
-            stubbedRunner('SomeFuturePowerShellStatus'),
+        processRunner: (_, _, {timeout = const Duration(seconds: 5)}) => stubbedRunner('SomeFuturePowerShellStatus'),
       );
       final status = await probe.probe(targetFile.path);
       expect(status, HelperSignatureStatus.unknown);

@@ -258,8 +258,7 @@ class AppcastProbeService implements IAppcastProbeService {
   static String? _releaseNotesLinkFromItem(XmlElement item) {
     for (final child in item.childElements) {
       if (child.name.local.toLowerCase() == 'releasenoteslink' &&
-          (child.name.prefix?.toLowerCase() == 'sparkle' ||
-              child.name.namespaceUri == _sparkleNamespace)) {
+          (child.name.prefix?.toLowerCase() == 'sparkle' || child.name.namespaceUri == _sparkleNamespace)) {
         final value = child.innerText.trim();
         if (value.isNotEmpty) return value;
       }

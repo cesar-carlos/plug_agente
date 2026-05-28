@@ -444,9 +444,10 @@ class _ConfigPageState extends State<ConfigPage> {
             startupNotice: systemSettingsProvider.startupNotice,
             isAutoUpdateAvailable: isAutoUpdateAvailable,
             autoUpdateUnavailableMessage: autoUpdateUnavailableMessage,
-            releaseNotes: orchestrator.lastManualDiagnostics?.releaseNotes ??
-                orchestrator.lastAutomaticDiagnostics?.releaseNotes,
-            releaseNotesUrl: orchestrator.lastManualDiagnostics?.releaseNotesUrl ??
+            releaseNotes:
+                orchestrator.lastManualDiagnostics?.releaseNotes ?? orchestrator.lastAutomaticDiagnostics?.releaseNotes,
+            releaseNotesUrl:
+                orchestrator.lastManualDiagnostics?.releaseNotesUrl ??
                 orchestrator.lastAutomaticDiagnostics?.releaseNotesUrl,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
             onStartWithWindowsChanged: (bool value) => _onStartWithWindowsChanged(

@@ -292,32 +292,21 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         return _cancelledFailure(request.version);
       }
 
-      await _processStarter(
-        launcherPath,
-        <String>[
-          '--version',
-          request.version,
-          '--installer',
-          installerPath,
-          '--install-dir',
-          installDirectory,
-          '--log',
-          logPath,
-          '--status',
-          launcherStatusPath,
-          '--app-pid',
-          appPid.toString(),
-          '--asset-size',
-          request.assetSize.toString(),
-          '--sha256',
-          sha256Value,
-          '--try-current-user-first=$installDirectoryWritable',
-          '--require-valid-signature=${request.requireValidSignature}',
-          '--wait-pid-timeout-seconds',
-          _waitPidTimeoutSeconds.toString(),
-        ],
-        mode: ProcessStartMode.detached,
-      );
+      if (!request.deferHelperLaunch) {
+        await _startHelperProcess(
+          launcherPath: launcherPath,
+          installerPath: installerPath,
+          installDirectory: installDirectory,
+          logPath: logPath,
+          launcherStatusPath: launcherStatusPath,
+          appPid: appPid,
+          assetSize: request.assetSize,
+          sha256Value: sha256Value,
+          installDirectoryWritable: installDirectoryWritable,
+          requireValidSignature: request.requireValidSignature,
+          version: request.version,
+        );
+      }
 
       return Success<SilentUpdateInstallResult, Exception>(
         SilentUpdateInstallResult(
@@ -351,6 +340,98 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     } finally {
       _deleteIfExists(partFile);
     }
+  }
+
+  @override
+  Future<Result<void>> launchPreparedHelper(
+    SilentUpdateLaunchRequest request,
+  ) async {
+    final installerFile = File(request.installerPath);
+    final launcherFile = File(request.launcherPath);
+    if (!installerFile.existsSync() || !launcherFile.existsSync()) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'Silent update artifacts are no longer available on disk',
+          context: <String, dynamic>{
+            'operation': 'silentUpdateLaunchHelper',
+            'version': request.version,
+            'installer_path': request.installerPath,
+            'launcher_path': request.launcherPath,
+            'validation_code': 'prepared_helper_missing',
+          },
+        ),
+      );
+    }
+
+    try {
+      await _startHelperProcess(
+        launcherPath: request.launcherPath,
+        installerPath: request.installerPath,
+        installDirectory: request.installDirectory,
+        logPath: request.logPath,
+        launcherStatusPath: request.launcherStatusPath,
+        appPid: request.appPid,
+        assetSize: request.assetSize,
+        sha256Value: request.sha256.toLowerCase(),
+        installDirectoryWritable: request.installDirectoryWritable,
+        requireValidSignature: request.requireValidSignature,
+        version: request.version,
+      );
+      return const Success(unit);
+    } on Exception catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to launch silent update helper',
+          cause: error,
+          context: <String, dynamic>{
+            'operation': 'silentUpdateLaunchHelper',
+            'version': request.version,
+            'launcher_path': request.launcherPath,
+          },
+        ),
+      );
+    }
+  }
+
+  Future<void> _startHelperProcess({
+    required String launcherPath,
+    required String installerPath,
+    required String installDirectory,
+    required String logPath,
+    required String launcherStatusPath,
+    required int appPid,
+    required int assetSize,
+    required String sha256Value,
+    required bool installDirectoryWritable,
+    required bool requireValidSignature,
+    required String version,
+  }) async {
+    await _processStarter(
+      launcherPath,
+      <String>[
+        '--version',
+        version,
+        '--installer',
+        installerPath,
+        '--install-dir',
+        installDirectory,
+        '--log',
+        logPath,
+        '--status',
+        launcherStatusPath,
+        '--app-pid',
+        appPid.toString(),
+        '--asset-size',
+        assetSize.toString(),
+        '--sha256',
+        sha256Value,
+        '--try-current-user-first=$installDirectoryWritable',
+        '--require-valid-signature=$requireValidSignature',
+        '--wait-pid-timeout-seconds',
+        _waitPidTimeoutSeconds.toString(),
+      ],
+      mode: ProcessStartMode.detached,
+    );
   }
 
   Future<Result<void>> _download(
@@ -463,9 +544,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       // Append when resuming (206) or truncate otherwise. `openWrite`
       // defaults to `FileMode.write` (truncate); `append` keeps existing
       // bytes intact.
-      final sink = effectiveStartOffset > 0
-          ? destination.openWrite(mode: FileMode.append)
-          : destination.openWrite();
+      final sink = effectiveStartOffset > 0 ? destination.openWrite(mode: FileMode.append) : destination.openWrite();
       try {
         var downloadedBytes = effectiveStartOffset;
         await for (final chunk in response) {

@@ -41,8 +41,8 @@ final class OdbcEventBridge {
   /// are evicted automatically. Safe to read while events arrive: the
   /// returned list is an immutable snapshot.
   List<OdbcEvent> get recentEvents => UnmodifiableListView<OdbcEvent>(
-        _recentEvents.toList(growable: false),
-      );
+    _recentEvents.toList(growable: false),
+  );
 
   void _handleEvent(OdbcEvent event) {
     _trackRecent(event);

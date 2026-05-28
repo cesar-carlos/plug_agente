@@ -86,9 +86,7 @@ class ApplyAgentActionOnAppExitPolicies {
         // Cap the wait so a pathological policy value does not block exit
         // indefinitely. waitBeforeKillOnAppExit is typically a few seconds.
         const maxWait = Duration(seconds: 30);
-        final wait = lifecycle.waitBeforeKillOnAppExit < maxWait
-            ? lifecycle.waitBeforeKillOnAppExit
-            : maxWait;
+        final wait = lifecycle.waitBeforeKillOnAppExit < maxWait ? lifecycle.waitBeforeKillOnAppExit : maxWait;
         await Future<void>.delayed(wait);
       }
 

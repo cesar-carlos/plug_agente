@@ -1949,7 +1949,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         'remaining_ms': remaining.inMilliseconds,
         'effective_timeout_ms': effectiveTimeout.inMilliseconds,
         'command_count': commandCount,
-        'suggestion': 'Increase SqlExecutionOptions.timeoutMs or split the batch '
+        'suggestion':
+            'Increase SqlExecutionOptions.timeoutMs or split the batch '
             'to avoid locks lingering through the rollback window.',
       },
     );

@@ -32,4 +32,20 @@ abstract class IAutoUpdateMetricsCollector {
   /// SHA-256 hashing). Captured when the install path completes
   /// successfully.
   void recordAutoUpdateDownloadDuration(Duration duration);
+
+  /// Probe found a new version but the silent flow stopped before
+  /// downloading because Windows UAC would prompt the user. Used to
+  /// dimension how often the gate triggers and feed conversion analysis
+  /// against the apply counters below.
+  void recordAutoUpdateAwaitingUserConsent();
+
+  /// Operator clicked "Download and install" in the in-app banner and
+  /// the full user-initiated flow finished successfully (downloaded,
+  /// staged, helper launched).
+  void recordAutoUpdateUserInitiatedApplySuccess();
+
+  /// Operator clicked "Download and install" but the user-initiated
+  /// flow could not produce a ready installer (network error, cooldown,
+  /// cancelled, etc.).
+  void recordAutoUpdateUserInitiatedApplyFailure();
 }

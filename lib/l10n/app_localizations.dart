@@ -5858,6 +5858,96 @@ abstract class AppLocalizations {
   /// **'Open in browser'**
   String get configAutoUpdateReleaseNotesLink;
 
+  /// No description provided for @autoUpdateReadyBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update ready to install'**
+  String get autoUpdateReadyBannerTitle;
+
+  /// No description provided for @autoUpdateReadyBannerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} has been downloaded. The agent stays online; install it whenever you want to finish the update.'**
+  String autoUpdateReadyBannerBody(String version);
+
+  /// No description provided for @autoUpdateReadyBannerInstallNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Install now'**
+  String get autoUpdateReadyBannerInstallNow;
+
+  /// No description provided for @autoUpdateReadyBannerDefer.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get autoUpdateReadyBannerDefer;
+
+  /// No description provided for @autoUpdateReadyDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install update now?'**
+  String get autoUpdateReadyDialogTitle;
+
+  /// No description provided for @autoUpdateReadyDialogBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Plug Agente will close to install version {version}. The agent will be briefly offline until it reopens. Continue?'**
+  String autoUpdateReadyDialogBody(String version);
+
+  /// No description provided for @autoUpdateReadyDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Install and restart'**
+  String get autoUpdateReadyDialogConfirm;
+
+  /// No description provided for @autoUpdateReadyDialogCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get autoUpdateReadyDialogCancel;
+
+  /// No description provided for @autoUpdateApplyFailureMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start the installer. Try again or check the update diagnostics.'**
+  String get autoUpdateApplyFailureMessage;
+
+  /// No description provided for @autoUpdateConsentBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available — requires admin'**
+  String get autoUpdateConsentBannerTitle;
+
+  /// No description provided for @autoUpdateConsentBannerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is available. Installing it triggers a Windows UAC prompt for administrator approval, so the automatic update did not run unattended.'**
+  String autoUpdateConsentBannerBody(String version);
+
+  /// No description provided for @autoUpdateConsentBannerInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and install'**
+  String get autoUpdateConsentBannerInstall;
+
+  /// No description provided for @autoUpdateConsentDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install update now?'**
+  String get autoUpdateConsentDialogTitle;
+
+  /// No description provided for @autoUpdateConsentDialogBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Plug Agente will download version {version} and then close to install it. Windows will ask for administrator approval (UAC) during installation. Continue?'**
+  String autoUpdateConsentDialogBody(String version);
+
+  /// No description provided for @autoUpdateConsentDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and install'**
+  String get autoUpdateConsentDialogConfirm;
+
   /// No description provided for @configUpdateTechnicalHelperSha256.
   ///
   /// In en, this message translates to:
@@ -6031,6 +6121,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Automatic update download failed'**
   String get configUpdateCompletionSourceAutomaticDownloadFailure;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticInstallReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Update downloaded and ready to install'**
+  String get configUpdateCompletionSourceAutomaticInstallReady;
+
+  /// No description provided for @configUpdateCompletionSourceAutomaticAwaitingUserConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available — waiting for admin confirmation'**
+  String get configUpdateCompletionSourceAutomaticAwaitingUserConsent;
+
+  /// No description provided for @autoUpdateApplyOutcomeCooldown.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates are paused after repeated failures. Try again later.'**
+  String get autoUpdateApplyOutcomeCooldown;
+
+  /// No description provided for @autoUpdateApplyOutcomeSilentDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic updates are disabled. Re-enable them in Settings to install this update.'**
+  String get autoUpdateApplyOutcomeSilentDisabled;
+
+  /// No description provided for @autoUpdateApplyOutcomeCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'The update was cancelled before the installer was ready.'**
+  String get autoUpdateApplyOutcomeCancelled;
+
+  /// No description provided for @autoUpdateApplyOutcomeQuietHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates are paused during quiet hours. Try again outside the configured window.'**
+  String get autoUpdateApplyOutcomeQuietHours;
+
+  /// No description provided for @autoUpdateApplyOutcomeNoNewVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'No new version is available right now.'**
+  String get autoUpdateApplyOutcomeNoNewVersion;
+
+  /// No description provided for @autoUpdateApplyOutcomeAlreadyInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Another update check is still running. Try again in a moment.'**
+  String get autoUpdateApplyOutcomeAlreadyInProgress;
+
+  /// No description provided for @autoUpdateApplyOutcomePendingInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'A previous update is still being applied.'**
+  String get autoUpdateApplyOutcomePendingInProgress;
+
+  /// No description provided for @autoUpdateApplyOutcomeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not prepare the installer. Open the update diagnostics for details.'**
+  String get autoUpdateApplyOutcomeUnknown;
+
+  /// No description provided for @autoUpdateApplyPhaseDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading…'**
+  String get autoUpdateApplyPhaseDownloading;
+
+  /// No description provided for @autoUpdateApplyPhaseStaging.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing installer…'**
+  String get autoUpdateApplyPhaseStaging;
+
+  /// No description provided for @autoUpdateApplyPhaseLaunching.
+  ///
+  /// In en, this message translates to:
+  /// **'Launching update helper…'**
+  String get autoUpdateApplyPhaseLaunching;
 
   /// No description provided for @configUpdateCompletionSourceAutomaticInstallStarted.
   ///

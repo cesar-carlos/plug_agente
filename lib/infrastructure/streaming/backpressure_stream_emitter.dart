@@ -55,9 +55,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
     // `.catchError(...)` so a single failure does not poison every future
     // continuation. We still mark the emitter as faulted inside _flushBody so
     // new emitChunk/releaseChunks calls short-circuit at the public surface.
-    _flushInFlight = _flushInFlight
-        .then((_) => _flushBody())
-        .catchError(_handleFlushError);
+    _flushInFlight = _flushInFlight.then((_) => _flushBody()).catchError(_handleFlushError);
   }
 
   Future<void> _handleFlushError(Object error, StackTrace stackTrace) async {

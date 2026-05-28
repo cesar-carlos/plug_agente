@@ -39,7 +39,7 @@ void main() {
               0,
               0,
               'TaskName: ${AgentActionElevatedConstants.scheduledTaskName}\n'
-              'Task To Run: "${helperExecutable.path}" --watch-requests "${tempDir.path}"\n',
+                  'Task To Run: "${helperExecutable.path}" --watch-requests "${tempDir.path}"\n',
               '',
             );
           }
@@ -100,7 +100,7 @@ void main() {
               0,
               0,
               'TaskName: ${AgentActionElevatedConstants.scheduledTaskName}\n'
-              r'Task To Run: "C:\Old\Path\plug_agente_elevated_runner.exe" --watch-requests "C:\Old\Data"',
+                  r'Task To Run: "C:\Old\Path\plug_agente_elevated_runner.exe" --watch-requests "C:\Old\Data"',
               '',
             );
           }

@@ -24,6 +24,7 @@ import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
+import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/core/timezone/iana_timezone_data.dart';
@@ -66,6 +67,13 @@ bool _appCloseActionsDispatched = false;
 /// 7. Encerrar metricas
 /// 8. Encerrar worker ODBC
 Future<void> shutdownApp() async {
+  // Before tearing down anything else, check whether the silent update
+  // path left an installer + helper staged on disk waiting to be applied.
+  // The helper expects to PID-watch this process; firing it here gives it
+  // the rest of the shutdown sequence to attach, then install once we
+  // exit. When no pending download exists this is a cheap no-op.
+  await _launchPendingSilentUpdateHelperIfReady();
+
   if (getIt.isRegistered<RpcIdempotencyCachePeriodicPurge>()) {
     getIt<RpcIdempotencyCachePeriodicPurge>().stop();
   }
@@ -154,6 +162,51 @@ Future<void> shutdownApp() async {
 
   // 8. Encerrar worker ODBC (synchronous)
   _odbcLocator.shutdown();
+}
+
+/// Fires the silent update helper when an installer was previously staged
+/// on disk. Guarded by `hasPendingDownloadedUpdate` so this is a no-op for
+/// every shutdown that is not consuming a prepared update. Errors are
+/// logged and swallowed: the shutdown sequence must continue even if the
+/// helper failed to start (the next boot will re-evaluate the pending
+/// record via `reconcilePendingAndSchedule`).
+Future<void> _launchPendingSilentUpdateHelperIfReady() async {
+  if (!getIt.isRegistered<IAutoUpdateOrchestrator>()) {
+    return;
+  }
+  final orchestrator = getIt<IAutoUpdateOrchestrator>();
+  if (!orchestrator.hasPendingDownloadedUpdate) {
+    return;
+  }
+  try {
+    // `triggerAppClose: false` because we are already inside the shutdown
+    // sequence — re-entering the close callback would recurse and call
+    // shutdownApp() a second time.
+    final result = await orchestrator.applyPendingSilentUpdate(
+      triggerAppClose: false,
+    );
+    result.fold(
+      (_) => developer.log(
+        'Pending silent update helper launched from shutdown path',
+        name: 'service_locator',
+        level: 800,
+      ),
+      (failure) => developer.log(
+        'Failed to launch pending silent update helper during shutdown',
+        name: 'service_locator',
+        level: 900,
+        error: failure,
+      ),
+    );
+  } on Object catch (error, stackTrace) {
+    developer.log(
+      'Pending silent update helper launch threw during shutdown',
+      name: 'service_locator',
+      level: 900,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
 }
 
 Future<void> _applyAgentActionOnAppExitPolicies() async {

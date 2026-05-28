@@ -3130,6 +3130,60 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configAutoUpdateReleaseNotesLink => 'Open in browser';
 
   @override
+  String get autoUpdateReadyBannerTitle => 'Update ready to install';
+
+  @override
+  String autoUpdateReadyBannerBody(String version) {
+    return 'Version $version has been downloaded. The agent stays online; install it whenever you want to finish the update.';
+  }
+
+  @override
+  String get autoUpdateReadyBannerInstallNow => 'Install now';
+
+  @override
+  String get autoUpdateReadyBannerDefer => 'Later';
+
+  @override
+  String get autoUpdateReadyDialogTitle => 'Install update now?';
+
+  @override
+  String autoUpdateReadyDialogBody(String version) {
+    return 'Plug Agente will close to install version $version. The agent will be briefly offline until it reopens. Continue?';
+  }
+
+  @override
+  String get autoUpdateReadyDialogConfirm => 'Install and restart';
+
+  @override
+  String get autoUpdateReadyDialogCancel => 'Cancel';
+
+  @override
+  String get autoUpdateApplyFailureMessage =>
+      'Could not start the installer. Try again or check the update diagnostics.';
+
+  @override
+  String get autoUpdateConsentBannerTitle => 'Update available — requires admin';
+
+  @override
+  String autoUpdateConsentBannerBody(String version) {
+    return 'Version $version is available. Installing it triggers a Windows UAC prompt for administrator approval, so the automatic update did not run unattended.';
+  }
+
+  @override
+  String get autoUpdateConsentBannerInstall => 'Download and install';
+
+  @override
+  String get autoUpdateConsentDialogTitle => 'Install update now?';
+
+  @override
+  String autoUpdateConsentDialogBody(String version) {
+    return 'Plug Agente will download version $version and then close to install it. Windows will ask for administrator approval (UAC) during installation. Continue?';
+  }
+
+  @override
+  String get autoUpdateConsentDialogConfirm => 'Download and install';
+
+  @override
   String get configUpdateTechnicalHelperSha256 => 'Helper SHA-256';
 
   @override
@@ -3215,6 +3269,49 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get configUpdateCompletionSourceAutomaticDownloadFailure => 'Automatic update download failed';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticInstallReady => 'Update downloaded and ready to install';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticAwaitingUserConsent =>
+      'Update available — waiting for admin confirmation';
+
+  @override
+  String get autoUpdateApplyOutcomeCooldown => 'Updates are paused after repeated failures. Try again later.';
+
+  @override
+  String get autoUpdateApplyOutcomeSilentDisabled =>
+      'Automatic updates are disabled. Re-enable them in Settings to install this update.';
+
+  @override
+  String get autoUpdateApplyOutcomeCancelled => 'The update was cancelled before the installer was ready.';
+
+  @override
+  String get autoUpdateApplyOutcomeQuietHours =>
+      'Updates are paused during quiet hours. Try again outside the configured window.';
+
+  @override
+  String get autoUpdateApplyOutcomeNoNewVersion => 'No new version is available right now.';
+
+  @override
+  String get autoUpdateApplyOutcomeAlreadyInProgress => 'Another update check is still running. Try again in a moment.';
+
+  @override
+  String get autoUpdateApplyOutcomePendingInProgress => 'A previous update is still being applied.';
+
+  @override
+  String get autoUpdateApplyOutcomeUnknown =>
+      'Could not prepare the installer. Open the update diagnostics for details.';
+
+  @override
+  String get autoUpdateApplyPhaseDownloading => 'Downloading…';
+
+  @override
+  String get autoUpdateApplyPhaseStaging => 'Preparing installer…';
+
+  @override
+  String get autoUpdateApplyPhaseLaunching => 'Launching update helper…';
 
   @override
   String get configUpdateCompletionSourceAutomaticInstallStarted => 'Automatic installer started';

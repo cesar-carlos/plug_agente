@@ -4,6 +4,7 @@ enum ElevatedActionRunnerInstallState {
   helperExecutableMissing,
   scheduledTaskMissing,
   markerMissing,
+
   /// Task is registered but `/TR` points to a different helper executable
   /// than the current installation. Reinstall is required so that updates
   /// can take effect even if the previous marker still indicates `ready`.

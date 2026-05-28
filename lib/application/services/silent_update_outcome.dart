@@ -2,17 +2,20 @@
 /// and `IAutoUpdateOrchestrator.checkSilently`.
 ///
 /// Replaces the previous `Result<bool>` contract where `true` was overloaded
-/// ("installer launched, app will close") and `false` collapsed several
-/// distinct states into a single bit. Callers that only care whether the
-/// installer started can use [isInstallerLaunched] as a boolean shortcut.
+/// and `false` collapsed several distinct states into a single bit. Callers
+/// that only care whether the installer is ready to apply can use
+/// [isInstallerReady] as a boolean shortcut.
 ///
 /// Rich diagnostics (channel, rollout bucket, helper SHA, etc.) continue to
 /// live in `UpdateCheckDiagnostics`; this enum is the API-level contract for
 /// "what kind of result was this".
 enum SilentUpdateOutcome {
-  /// Probe succeeded, asset validated, download completed, and the helper
-  /// has been launched detached. The app should expect to close shortly.
-  installerStarted,
+  /// Probe succeeded, asset validated and the installer + helper were
+  /// downloaded to disk. The helper is **not** launched and the app keeps
+  /// running normally; the operator must explicitly trigger the apply
+  /// (via `IAutoUpdateOrchestrator.applyPendingSilentUpdate`) or close the
+  /// app naturally to consume the prepared installer.
+  installerReady,
 
   /// Probe succeeded but the remote version is not newer than the running
   /// version. No installer launched.
@@ -47,12 +50,18 @@ enum SilentUpdateOutcome {
   /// hours window (`AUTO_UPDATE_QUIET_HOURS_START` /
   /// `AUTO_UPDATE_QUIET_HOURS_END`). Probe was skipped; the periodic timer
   /// will retry on the next cycle, and any pending install is preserved.
-  skippedByQuietHours;
+  skippedByQuietHours,
 
-  /// Convenience boolean for callers that only need to know "should I
-  /// prepare for shutdown?" without inspecting every variant.
-  ///
-  /// Renamed from `installerStarted` because the getter conflicted with the
-  /// enum value of the same name (`conflicting_static_and_instance`).
-  bool get isInstallerLaunched => this == SilentUpdateOutcome.installerStarted;
+  /// Probe found a newer version but Windows UAC would prompt the user
+  /// for elevation during install. The automatic cycle stopped before
+  /// downloading. The UI surfaces an "update available, requires admin"
+  /// banner; downloading and applying becomes a single user-initiated
+  /// action that culminates in the UAC prompt at install time.
+  requiresUserConsent;
+
+  /// Convenience boolean for callers that only need to know "is there a
+  /// downloaded installer ready to be applied?" without inspecting every
+  /// variant. Note: this does **not** mean the app is closing — applying
+  /// the prepared installer is now an explicit user action.
+  bool get isInstallerReady => this == SilentUpdateOutcome.installerReady;
 }

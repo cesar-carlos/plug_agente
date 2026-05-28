@@ -38,7 +38,8 @@ class PowerShellHelperSignatureProbe implements IHelperSignatureProbe {
       String executable,
       List<String> arguments, {
       Duration timeout,
-    })? processRunner,
+    })?
+    processRunner,
   }) : _timeout = timeout,
        _processRunner = processRunner ?? _defaultRunner;
 
@@ -47,7 +48,8 @@ class PowerShellHelperSignatureProbe implements IHelperSignatureProbe {
     String executable,
     List<String> arguments, {
     Duration timeout,
-  }) _processRunner;
+  })
+  _processRunner;
 
   final Map<String, HelperSignatureStatus> _cache = <String, HelperSignatureStatus>{};
 
@@ -94,10 +96,7 @@ class PowerShellHelperSignatureProbe implements IHelperSignatureProbe {
     return switch (value) {
       'Valid' => HelperSignatureStatus.valid,
       'NotSigned' || 'Incompatible' => HelperSignatureStatus.unsigned,
-      'HashMismatch' ||
-      'NotTrusted' ||
-      'UnknownError' ||
-      'NotSupportedFileFormat' => HelperSignatureStatus.invalid,
+      'HashMismatch' || 'NotTrusted' || 'UnknownError' || 'NotSupportedFileFormat' => HelperSignatureStatus.invalid,
       _ => HelperSignatureStatus.unknown,
     };
   }

@@ -149,9 +149,7 @@ class WebSocketConfigController {
     return saveResult.fold(
       (savedConfig) async {
         final token = _authProvider.tokenForConfig(savedConfig.id)?.token.trim();
-        if (!_authProvider.isAuthenticatedForConfig(savedConfig.id) ||
-            token == null ||
-            token.isEmpty) {
+        if (!_authProvider.isAuthenticatedForConfig(savedConfig.id) || token == null || token.isEmpty) {
           return const WebSocketActionLoginRequired();
         }
         await _connectionProvider.connect(

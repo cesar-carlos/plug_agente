@@ -8,6 +8,7 @@ import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
+import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
@@ -67,12 +68,22 @@ class _FakeInstaller implements ISilentUpdateInstaller {
   );
   int installCount = 0;
   int cleanupCount = 0;
+  int launchHelperCount = 0;
+  SilentUpdateLaunchRequest? lastLaunchRequest;
+  Result<void> launchResult = const Success(unit);
 
   @override
   Future<Result<SilentUpdateInstallResult>> install(SilentUpdateInstallRequest request) async {
     installCount++;
     this.request = request;
     return result;
+  }
+
+  @override
+  Future<Result<void>> launchPreparedHelper(SilentUpdateLaunchRequest request) async {
+    launchHelperCount++;
+    lastLaunchRequest = request;
+    return launchResult;
   }
 
   @override
@@ -86,7 +97,8 @@ SilentUpdateCoordinator _makeCoordinator({
   InMemoryAppSettingsStore? store,
   _FakeProbe? probe,
   _FakeInstaller? installer,
-  Future<void> Function()? closeApp,
+  CloseApplicationForSilentUpdate? closeApp,
+  IUacDetector? uacDetector,
 }) {
   final settings = store ?? InMemoryAppSettingsStore();
   dotenv.clean();
@@ -105,7 +117,30 @@ SilentUpdateCoordinator _makeCoordinator({
     silentUpdateInstaller: installer ?? _FakeInstaller(),
     settingsStore: settings,
     closeApplicationForSilentUpdate: closeApp,
+    uacDetector: uacDetector,
   );
+}
+
+class _StubUacDetector implements IUacDetector {
+  _StubUacDetector({required this.requiresConsent});
+
+  final bool requiresConsent;
+  int callCount = 0;
+
+  @override
+  bool requiresUserConsentForElevation() {
+    callCount++;
+    return requiresConsent;
+  }
+
+  @override
+  UacDetectionState detect() {
+    return UacDetectionState(
+      elevationType: requiresConsent ? UacElevationType.limited : UacElevationType.full,
+      uacEnabled: requiresConsent,
+      requiresConsent: requiresConsent,
+    );
+  }
 }
 
 void main() {
@@ -140,33 +175,129 @@ void main() {
         );
       });
 
-      test('calls installer and closes app when newer version is found', () async {
-        final installer = _FakeInstaller();
-        var closeCalled = false;
-        final coordinator = _makeCoordinator(
-          installer: installer,
-          closeApp: () async {
-            closeCalled = true;
-          },
-        );
+      test(
+        'stages installer without closing app when newer version is found',
+        () async {
+          final installer = _FakeInstaller();
+          var closeCalled = false;
+          final coordinator = _makeCoordinator(
+            installer: installer,
+            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+              closeCalled = true;
+            },
+          );
 
-        final result = await coordinator.checkSilently();
-        await Future<void>.delayed(Duration.zero);
+          final result = await coordinator.checkSilently();
+          await Future<void>.delayed(Duration.zero);
 
-        expect(result.isSuccess(), isTrue);
-        result.fold(
-          (outcome) {
-            expect(outcome, SilentUpdateOutcome.installerStarted);
-            expect(outcome.isInstallerLaunched, isTrue);
-          },
-          (_) => fail('Expected success'),
-        );
-        expect(installer.installCount, 1);
-        expect(closeCalled, isTrue);
-        expect(
-          coordinator.lastAutomaticDiagnostics?.completionSource,
-          UpdateCheckCompletionSource.automaticInstallStarted,
-        );
+          expect(result.isSuccess(), isTrue);
+          result.fold(
+            (outcome) {
+              expect(outcome, SilentUpdateOutcome.installerReady);
+              expect(outcome.isInstallerReady, isTrue);
+            },
+            (_) => fail('Expected success'),
+          );
+          expect(installer.installCount, 1);
+          expect(
+            installer.request?.deferHelperLaunch,
+            isTrue,
+            reason: 'silent path must stage the helper without launching it',
+          );
+          expect(
+            installer.launchHelperCount,
+            0,
+            reason: 'helper launch must wait for an explicit apply',
+          );
+          expect(
+            closeCalled,
+            isFalse,
+            reason: 'agent must stay online: closeApplication is only called from the apply step',
+          );
+          expect(
+            coordinator.lastAutomaticDiagnostics?.completionSource,
+            UpdateCheckCompletionSource.automaticInstallReady,
+          );
+        },
+      );
+
+      test(
+        'applyPendingDownloadedUpdate launches helper and invokes close',
+        () async {
+          final installer = _FakeInstaller();
+          var closeCalled = false;
+          String? capturedTitle;
+          String? capturedBody;
+          final coordinator = _makeCoordinator(
+            installer: installer,
+            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+              closeCalled = true;
+              capturedTitle = noticeTitle;
+              capturedBody = noticeBody;
+            },
+          );
+
+          final downloadResult = await coordinator.checkSilently();
+          expect(downloadResult.isSuccess(), isTrue);
+          expect(
+            coordinator.hasPendingDownloadedUpdate,
+            isFalse,
+            reason: 'pending paths point to a non-existent test directory',
+          );
+
+          // Force a pending record with paths recognized as existing by the
+          // coordinator's file checks would require a temp directory; here
+          // we only validate the orchestration path through the launch and
+          // close callbacks using the fake installer.
+          final applyResult = await coordinator.applyPendingDownloadedUpdate(
+            noticeTitle: 'localized title',
+            noticeBody: 'localized body',
+          );
+          await Future<void>.delayed(Duration.zero);
+
+          expect(applyResult.isSuccess(), isTrue);
+          expect(installer.launchHelperCount, 1);
+          expect(installer.lastLaunchRequest?.version, '99.0.0+1');
+          expect(closeCalled, isTrue);
+          expect(capturedTitle, 'localized title');
+          expect(capturedBody, 'localized body');
+        },
+      );
+
+      test(
+        'applyPendingDownloadedUpdate with triggerAppClose=false skips close',
+        () async {
+          final installer = _FakeInstaller();
+          var closeCalled = false;
+          final coordinator = _makeCoordinator(
+            installer: installer,
+            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+              closeCalled = true;
+            },
+          );
+
+          await coordinator.checkSilently();
+          final applyResult = await coordinator.applyPendingDownloadedUpdate(
+            triggerAppClose: false,
+          );
+          await Future<void>.delayed(Duration.zero);
+
+          expect(applyResult.isSuccess(), isTrue);
+          expect(installer.launchHelperCount, 1);
+          expect(
+            closeCalled,
+            isFalse,
+            reason: 'shutdown path must launch the helper without re-entering the close callback',
+          );
+        },
+      );
+
+      test('applyPendingDownloadedUpdate fails when no pending record', () async {
+        final coordinator = _makeCoordinator();
+
+        final result = await coordinator.applyPendingDownloadedUpdate();
+
+        expect(result.isError(), isTrue);
       });
 
       test('returns false when probe reports no newer version', () async {
@@ -283,7 +414,7 @@ void main() {
             },
           ),
           settingsStore: store,
-          closeApplicationForSilentUpdate: () async {
+          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
             closeCalled = true;
           },
         );
@@ -301,6 +432,72 @@ void main() {
           coordinator.lastAutomaticDiagnostics?.completionSource,
           UpdateCheckCompletionSource.automaticDisabled,
         );
+      });
+
+      test('blocks automatic download when UAC detector requires user consent', () async {
+        final installer = _FakeInstaller();
+        final uacDetector = _StubUacDetector(requiresConsent: true);
+        final coordinator = _makeCoordinator(
+          installer: installer,
+          uacDetector: uacDetector,
+        );
+
+        final result = await coordinator.checkSilently();
+
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.requiresUserConsent),
+          (_) => fail('Expected success'),
+        );
+        expect(installer.installCount, 0, reason: 'UAC gate must stop before downloading');
+        expect(uacDetector.callCount, greaterThanOrEqualTo(1));
+        final diagnostics = coordinator.lastAutomaticDiagnostics;
+        expect(
+          diagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticAwaitingUserConsent,
+        );
+        expect(diagnostics?.updateAvailable, isTrue);
+        expect(diagnostics?.pendingVersion, '99.0.0+1');
+      });
+
+      test('userInitiated bypasses UAC gate and runs full download', () async {
+        final installer = _FakeInstaller();
+        final uacDetector = _StubUacDetector(requiresConsent: true);
+        final coordinator = _makeCoordinator(
+          installer: installer,
+          uacDetector: uacDetector,
+        );
+
+        final result = await coordinator.checkSilently(userInitiated: true);
+
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
+          (_) => fail('Expected success'),
+        );
+        expect(installer.installCount, 1, reason: 'user-initiated path must bypass UAC gate');
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallReady,
+        );
+      });
+
+      test('automatic download proceeds when UAC detector reports no consent needed', () async {
+        final installer = _FakeInstaller();
+        final uacDetector = _StubUacDetector(requiresConsent: false);
+        final coordinator = _makeCoordinator(
+          installer: installer,
+          uacDetector: uacDetector,
+        );
+
+        final result = await coordinator.checkSilently();
+
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
+          (_) => fail('Expected success'),
+        );
+        expect(installer.installCount, 1);
       });
 
       test('isSilentCheckInProgress is true during check and false after', () async {
@@ -340,7 +537,7 @@ void main() {
           appcastProbeService: _FakeProbe(),
           silentUpdateInstaller: cancellableInstaller,
           settingsStore: store,
-          closeApplicationForSilentUpdate: () async {
+          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
             closeCalled = true;
           },
         );
@@ -555,6 +752,10 @@ class _InstallerWithHook implements ISilentUpdateInstaller {
   }
 
   @override
+  Future<Result<void>> launchPreparedHelper(SilentUpdateLaunchRequest request) =>
+      delegate.launchPreparedHelper(request);
+
+  @override
   Future<Result<void>> cleanupObsoleteArtifacts() => delegate.cleanupObsoleteArtifacts();
 }
 
@@ -601,6 +802,9 @@ class _CancellableInstaller implements ISilentUpdateInstaller {
       ),
     );
   }
+
+  @override
+  Future<Result<void>> launchPreparedHelper(SilentUpdateLaunchRequest request) async => const Success(unit);
 
   @override
   Future<Result<void>> cleanupObsoleteArtifacts() async => const Success(unit);

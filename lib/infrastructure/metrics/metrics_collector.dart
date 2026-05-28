@@ -189,6 +189,9 @@ class MetricsCollector
   static const String _autoUpdateCircuitOpenRejectedCounter = 'auto_update_circuit_open_rejected';
   static const String _autoUpdateBackgroundCheckTriggerFailureCounter = 'auto_update_background_check_trigger_failure';
   static const String _autoUpdateBackgroundCheckUpdaterErrorCounter = 'auto_update_background_check_updater_error';
+  static const String _autoUpdateAwaitingUserConsentCounter = 'auto_update_awaiting_user_consent';
+  static const String _autoUpdateUserInitiatedApplySuccessCounter = 'auto_update_user_initiated_apply_success';
+  static const String _autoUpdateUserInitiatedApplyFailureCounter = 'auto_update_user_initiated_apply_failure';
 
   static const int _maxMetrics = 10000;
 
@@ -315,6 +318,9 @@ class MetricsCollector
       _eventCounters[_autoUpdateBackgroundCheckTriggerFailureCounter] ?? 0;
   int get autoUpdateBackgroundCheckUpdaterErrorCount =>
       _eventCounters[_autoUpdateBackgroundCheckUpdaterErrorCounter] ?? 0;
+  int get autoUpdateAwaitingUserConsentCount => _eventCounters[_autoUpdateAwaitingUserConsentCounter] ?? 0;
+  int get autoUpdateUserInitiatedApplySuccessCount => _eventCounters[_autoUpdateUserInitiatedApplySuccessCounter] ?? 0;
+  int get autoUpdateUserInitiatedApplyFailureCount => _eventCounters[_autoUpdateUserInitiatedApplyFailureCounter] ?? 0;
   int get currentQueueSize => _currentQueueSize;
   int get maxQueueSize => _maxQueueSize;
   int get currentActiveWorkers => _currentActiveWorkers;
@@ -756,7 +762,8 @@ class MetricsCollector
   /// hint (`TransactionAccessMode.readOnly`). Confirms the inference is firing
   /// in production and lets dashboards correlate read-only batches with
   /// fewer engine-side locks.
-  void recordTransactionalBatchReadOnlyInference() => _incrementEventCounter(_transactionalBatchReadOnlyInferenceCounter);
+  void recordTransactionalBatchReadOnlyInference() =>
+      _incrementEventCounter(_transactionalBatchReadOnlyInferenceCounter);
 
   /// Counts transactional batches that consumed more than 80% of the active
   /// deadline before completing. High values suggest the batch is at risk of
@@ -1056,6 +1063,17 @@ class MetricsCollector
     if (duration.isNegative) return;
     _recordDurationSample(_autoUpdateDownloadTimes, duration);
   }
+
+  @override
+  void recordAutoUpdateAwaitingUserConsent() => _incrementEventCounter(_autoUpdateAwaitingUserConsentCounter);
+
+  @override
+  void recordAutoUpdateUserInitiatedApplySuccess() =>
+      _incrementEventCounter(_autoUpdateUserInitiatedApplySuccessCounter);
+
+  @override
+  void recordAutoUpdateUserInitiatedApplyFailure() =>
+      _incrementEventCounter(_autoUpdateUserInitiatedApplyFailureCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({

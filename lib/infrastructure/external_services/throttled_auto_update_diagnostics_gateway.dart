@@ -7,8 +7,7 @@ import 'package:plug_agente/domain/repositories/i_auto_update_diagnostics_gatewa
 /// Function signature for the underlying transport call. Implementations
 /// usually wrap the Socket.IO RPC client. Returns a future that completes
 /// when the hub acknowledged the notification (or threw).
-typedef AutoUpdateDiagnosticsPushTransport =
-    Future<void> Function(Map<String, dynamic> payload);
+typedef AutoUpdateDiagnosticsPushTransport = Future<void> Function(Map<String, dynamic> payload);
 
 /// Throttled gateway that pushes a non-sensitive subset of the diagnostics
 /// to the hub at most once per minute. Sits between the orchestrator/

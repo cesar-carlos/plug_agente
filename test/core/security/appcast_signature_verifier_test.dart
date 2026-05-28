@@ -17,13 +17,18 @@ void main() {
         assetSize: 21173534,
       );
 
-      expect(payload, equals('asset_size=21173534\n'
+      expect(
+        payload,
+        equals(
+          'asset_size=21173534\n'
           'asset_url=https://example.com/PlugAgente-Setup-1.6.9.exe\n'
           'channel=stable\n'
           'os=windows\n'
           'rollout_percentage=100\n'
           'sha256=aabbcc\n'
-          'version=1.6.9+1\n'));
+          'version=1.6.9+1\n',
+        ),
+      );
     });
   });
 

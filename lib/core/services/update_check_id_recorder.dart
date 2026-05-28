@@ -62,9 +62,7 @@ class UpdateCheckIdRecorder {
     if (store == null) return const <Map<String, dynamic>>[];
     try {
       final raw = _readBuffer(store);
-      return raw
-          .whereType<Map<String, dynamic>>()
-          .toList(growable: false);
+      return raw.whereType<Map<String, dynamic>>().toList(growable: false);
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to read auto-update check id ring buffer',

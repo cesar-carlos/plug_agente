@@ -91,6 +91,48 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
 
   @override
   Future<void> startAutomaticChecks() async {}
+
+  @override
+  bool hasPendingDownloadedUpdate = false;
+
+  final StreamController<void> _changesController = StreamController<void>.broadcast();
+
+  @override
+  Stream<void> get changes => _changesController.stream;
+
+  Result<void> applyPendingResult = const Success(unit);
+  int applyPendingCallCount = 0;
+  bool? lastApplyTriggerAppClose;
+
+  @override
+  Future<Result<void>> applyPendingSilentUpdate({
+    String? noticeTitle,
+    String? noticeBody,
+    bool triggerAppClose = true,
+  }) async {
+    applyPendingCallCount += 1;
+    lastApplyTriggerAppClose = triggerAppClose;
+    return applyPendingResult;
+  }
+
+  @override
+  bool hasUpdateAwaitingUserConsent = false;
+
+  int applyAvailableUpdateCallCount = 0;
+  String? lastApplyAvailableNoticeTitle;
+  String? lastApplyAvailableNoticeBody;
+  Result<void> applyAvailableUpdateResult = const Success(unit);
+
+  @override
+  Future<Result<void>> applyAvailableUpdate({
+    String? noticeTitle,
+    String? noticeBody,
+  }) async {
+    applyAvailableUpdateCallCount += 1;
+    lastApplyAvailableNoticeTitle = noticeTitle;
+    lastApplyAvailableNoticeBody = noticeBody;
+    return applyAvailableUpdateResult;
+  }
 }
 
 void main() {

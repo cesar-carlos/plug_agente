@@ -20,10 +20,10 @@ class AgentProfileSaveCoordinator {
     required AuthProvider authProvider,
     required PushAgentProfileToHub pushAgentProfileToHub,
     required AgentRegisterProfileProvider registerProfileProvider,
-  })  : _configProvider = configProvider,
-        _authProvider = authProvider,
-        _pushAgentProfileToHub = pushAgentProfileToHub,
-        _registerProfileProvider = registerProfileProvider;
+  }) : _configProvider = configProvider,
+       _authProvider = authProvider,
+       _pushAgentProfileToHub = pushAgentProfileToHub,
+       _registerProfileProvider = registerProfileProvider;
 
   final ConfigProvider _configProvider;
   final AuthProvider _authProvider;
@@ -45,7 +45,8 @@ class AgentProfileSaveCoordinator {
     final savedConfig = _configProvider.currentConfig;
     final accessToken = _resolveAccessToken(savedConfig?.id, savedConfig?.authToken);
 
-    final canSync = accessToken.isNotEmpty &&
+    final canSync =
+        accessToken.isNotEmpty &&
         savedConfig != null &&
         savedConfig.serverUrl.trim().isNotEmpty &&
         savedConfig.agentId.trim().isNotEmpty;

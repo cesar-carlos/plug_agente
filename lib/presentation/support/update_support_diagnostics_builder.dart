@@ -328,6 +328,9 @@ class UpdateSupportDiagnosticsBuilder {
       UpdateCheckCompletionSource.automaticValidationFailure =>
         l10n.configUpdateCompletionSourceAutomaticValidationFailure,
       UpdateCheckCompletionSource.automaticDownloadFailure => l10n.configUpdateCompletionSourceAutomaticDownloadFailure,
+      UpdateCheckCompletionSource.automaticInstallReady => l10n.configUpdateCompletionSourceAutomaticInstallReady,
+      UpdateCheckCompletionSource.automaticAwaitingUserConsent =>
+        l10n.configUpdateCompletionSourceAutomaticAwaitingUserConsent,
       UpdateCheckCompletionSource.automaticInstallStarted => l10n.configUpdateCompletionSourceAutomaticInstallStarted,
       UpdateCheckCompletionSource.automaticInstallFailure => l10n.configUpdateCompletionSourceAutomaticInstallFailure,
       UpdateCheckCompletionSource.automaticCooldown => l10n.configUpdateCompletionSourceAutomaticCooldown,

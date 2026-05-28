@@ -15,6 +15,7 @@ class SilentUpdateInstallRequest {
     required this.requireValidSignature,
     this.cancelRequested,
     this.allowDownloadResume = true,
+    this.deferHelperLaunch = false,
   });
 
   final String version;
@@ -38,9 +39,53 @@ class SilentUpdateInstallRequest {
   /// to mishandle `Range`).
   final bool allowDownloadResume;
 
+  /// When `true`, `install()` downloads and validates the installer + helper
+  /// but does **not** launch the helper process. The returned
+  /// [SilentUpdateInstallResult] still carries every path needed to launch
+  /// the helper later via [ISilentUpdateInstaller.launchPreparedHelper]. The
+  /// silent update flow uses this so the agent can keep running normally
+  /// after the download; the helper is only launched when the user
+  /// explicitly applies the update or the app is closing naturally.
+  final bool deferHelperLaunch;
+
   /// Marker used in failure context so the coordinator can distinguish a
   /// user-driven cancellation from genuine network/validation errors.
   static const String cancellationContextKey = 'cancelled';
+}
+
+/// Inputs required to launch a previously prepared silent update helper.
+///
+/// Built from a [SilentUpdateInstallResult] that came back from a prior
+/// `install(deferHelperLaunch: true)` invocation. Carrying these as an
+/// explicit value object keeps the apply step independent of the in-memory
+/// state of the coordinator: even after a process restart, the persisted
+/// pending record can rebuild this request and resume the apply.
+class SilentUpdateLaunchRequest {
+  const SilentUpdateLaunchRequest({
+    required this.version,
+    required this.installerPath,
+    required this.logPath,
+    required this.launcherPath,
+    required this.launcherStatusPath,
+    required this.installDirectory,
+    required this.assetSize,
+    required this.sha256,
+    required this.installDirectoryWritable,
+    required this.requireValidSignature,
+    required this.appPid,
+  });
+
+  final String version;
+  final String installerPath;
+  final String logPath;
+  final String launcherPath;
+  final String launcherStatusPath;
+  final String installDirectory;
+  final int assetSize;
+  final String sha256;
+  final bool installDirectoryWritable;
+  final bool requireValidSignature;
+  final int appPid;
 }
 
 class SilentUpdateInstallResult {
@@ -86,6 +131,13 @@ abstract interface class ISilentUpdateInstaller {
   Future<Result<SilentUpdateInstallResult>> install(
     SilentUpdateInstallRequest request,
   );
+
+  /// Launches the helper for a previously prepared install (i.e. one that
+  /// ran `install()` with [SilentUpdateInstallRequest.deferHelperLaunch] set
+  /// to `true`). The helper waits for the app to exit, runs the installer,
+  /// and relaunches the agent. The caller must initiate the app close right
+  /// after this returns success — the helper's PID-wait window is short.
+  Future<Result<void>> launchPreparedHelper(SilentUpdateLaunchRequest request);
 
   Future<Result<void>> cleanupObsoleteArtifacts();
 }

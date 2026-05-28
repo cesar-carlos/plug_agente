@@ -3136,6 +3136,60 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configAutoUpdateReleaseNotesLink => 'Abrir no navegador';
 
   @override
+  String get autoUpdateReadyBannerTitle => 'Atualização pronta para instalar';
+
+  @override
+  String autoUpdateReadyBannerBody(String version) {
+    return 'A versão $version já foi baixada. O agente continua online; instale quando quiser para concluir a atualização.';
+  }
+
+  @override
+  String get autoUpdateReadyBannerInstallNow => 'Instalar agora';
+
+  @override
+  String get autoUpdateReadyBannerDefer => 'Adiar';
+
+  @override
+  String get autoUpdateReadyDialogTitle => 'Instalar atualização agora?';
+
+  @override
+  String autoUpdateReadyDialogBody(String version) {
+    return 'O Plug Agente será fechado para instalar a versão $version. O agente ficará offline brevemente até reabrir. Deseja continuar?';
+  }
+
+  @override
+  String get autoUpdateReadyDialogConfirm => 'Instalar e reiniciar';
+
+  @override
+  String get autoUpdateReadyDialogCancel => 'Cancelar';
+
+  @override
+  String get autoUpdateApplyFailureMessage =>
+      'Não foi possível iniciar o instalador. Tente novamente ou consulte o diagnóstico de atualizações.';
+
+  @override
+  String get autoUpdateConsentBannerTitle => 'Atualização disponível — requer administrador';
+
+  @override
+  String autoUpdateConsentBannerBody(String version) {
+    return 'A versão $version está disponível. Instalar exige aprovação do Controle de Conta de Usuário (UAC) do Windows, por isso a atualização automática não foi executada sem confirmação.';
+  }
+
+  @override
+  String get autoUpdateConsentBannerInstall => 'Baixar e instalar';
+
+  @override
+  String get autoUpdateConsentDialogTitle => 'Instalar atualização agora?';
+
+  @override
+  String autoUpdateConsentDialogBody(String version) {
+    return 'O Plug Agente vai baixar a versão $version e depois fechar para instalá-la. O Windows vai pedir aprovação de administrador (UAC) durante a instalação. Deseja continuar?';
+  }
+
+  @override
+  String get autoUpdateConsentDialogConfirm => 'Baixar e instalar';
+
+  @override
   String get configUpdateTechnicalHelperSha256 => 'SHA-256 do helper';
 
   @override
@@ -3221,6 +3275,51 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configUpdateCompletionSourceAutomaticDownloadFailure => 'Download da atualização automática falhou';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticInstallReady => 'Atualização baixada e pronta para instalar';
+
+  @override
+  String get configUpdateCompletionSourceAutomaticAwaitingUserConsent =>
+      'Atualização disponível — aguardando confirmação de administrador';
+
+  @override
+  String get autoUpdateApplyOutcomeCooldown =>
+      'Atualizações estão pausadas após falhas repetidas. Tente novamente mais tarde.';
+
+  @override
+  String get autoUpdateApplyOutcomeSilentDisabled =>
+      'Atualizações automáticas estão desativadas. Reative em Configurações para instalar esta atualização.';
+
+  @override
+  String get autoUpdateApplyOutcomeCancelled => 'A atualização foi cancelada antes do instalador ficar pronto.';
+
+  @override
+  String get autoUpdateApplyOutcomeQuietHours =>
+      'Atualizações estão pausadas durante o horário silencioso. Tente novamente fora da janela configurada.';
+
+  @override
+  String get autoUpdateApplyOutcomeNoNewVersion => 'Nenhuma nova versão disponível no momento.';
+
+  @override
+  String get autoUpdateApplyOutcomeAlreadyInProgress =>
+      'Outra verificação de atualização ainda está em andamento. Tente novamente em instantes.';
+
+  @override
+  String get autoUpdateApplyOutcomePendingInProgress => 'Uma atualização anterior ainda está sendo aplicada.';
+
+  @override
+  String get autoUpdateApplyOutcomeUnknown =>
+      'Não foi possível preparar o instalador. Abra os diagnósticos de atualização para detalhes.';
+
+  @override
+  String get autoUpdateApplyPhaseDownloading => 'Baixando…';
+
+  @override
+  String get autoUpdateApplyPhaseStaging => 'Preparando instalador…';
+
+  @override
+  String get autoUpdateApplyPhaseLaunching => 'Iniciando helper de atualização…';
 
   @override
   String get configUpdateCompletionSourceAutomaticInstallStarted => 'Instalador automático iniciado';

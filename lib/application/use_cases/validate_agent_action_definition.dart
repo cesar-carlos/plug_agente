@@ -252,7 +252,8 @@ class ValidateAgentActionDefinition {
           'phase': AgentActionProcessConstants.definitionValidationPhase,
           'reason': AgentActionValidationConstants.redactionRequiredForRemoteOrSecretsReason,
           'secret_placeholder_count': placeholders.length,
-          'user_message': r'Esta acao usa placeholders ${secret:...};'
+          'user_message':
+              r'Esta acao usa placeholders ${secret:...};'
               ' mantenha a redacao de saida ligada para nao gravar segredos'
               ' resolvidos no historico/auditoria.',
         },

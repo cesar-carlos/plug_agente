@@ -122,6 +122,7 @@ import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
+import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
@@ -216,6 +217,7 @@ import 'package:plug_agente/infrastructure/repositories/agent_config_drift_datab
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/repositories/client_token_repository.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
+import 'package:plug_agente/infrastructure/runtime/windows_uac_detector.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
@@ -1307,12 +1309,16 @@ void registerPlugDependencyGraph(
         ),
       ),
     )
+    ..registerLazySingleton<IUacDetector>(
+      () => Platform.isWindows ? WindowsUacDetector() : const NoopUacDetector(),
+    )
     ..registerLazySingleton<IAutoUpdateOrchestrator>(
       () => AutoUpdateOrchestrator(
         getIt<RuntimeCapabilities>(),
         silentUpdateInstaller: getIt<ISilentUpdateInstaller>(),
         settingsStore: getIt<IAppSettingsStore>(),
         metricsCollector: getIt<MetricsCollector>(),
+        uacDetector: getIt<IUacDetector>(),
         helperWaitDuration: Duration(
           minutes: resolveAutoUpdateHelperWaitMinutes(
             environment: AppEnvironment.snapshot(),
@@ -1460,12 +1466,18 @@ Duration _autoUpdateBootJitter() {
 /// (which already runs [shutdownApp]), then falls back to a hard exit if the
 /// process is still alive after [_silentUpdateExitGraceWindow].
 ///
-/// When [INotificationService] is supported, posts a "Plug Agente will close
-/// in Ns" toast and waits up to [resolveAutoUpdatePreCloseDelaySeconds] before
-/// proceeding. The wait is best-effort and capped, so a desktop running 24/7
-/// still resumes the close even if the user did not see the toast.
-Future<void> _closeApplicationForSilentUpdate() async {
-  await _emitPreCloseNotice();
+/// Invoked only from `IAutoUpdateOrchestrator.applyPendingSilentUpdate` —
+/// never from the silent download path, which leaves the agent online.
+/// When [INotificationService] is supported, posts a localized "closing in
+/// Ns" toast and waits up to [resolveAutoUpdatePreCloseDelaySeconds] before
+/// proceeding. [noticeTitle] / [noticeBody] are passed in by the caller
+/// (the UI) so the toast text honors the active locale; defaults are kept
+/// for callers without a localization context (e.g. shutdown handler).
+Future<void> _closeApplicationForSilentUpdate({
+  String? noticeTitle,
+  String? noticeBody,
+}) async {
+  await _emitPreCloseNotice(title: noticeTitle, body: noticeBody);
   if (getIt.isRegistered<WindowManagerService>()) {
     final service = getIt<WindowManagerService>();
     // Flip preventClose/closeToTray off so the close request actually exits
@@ -1479,7 +1491,7 @@ Future<void> _closeApplicationForSilentUpdate() async {
   exit(0);
 }
 
-Future<void> _emitPreCloseNotice() async {
+Future<void> _emitPreCloseNotice({String? title, String? body}) async {
   final delaySeconds = resolveAutoUpdatePreCloseDelaySeconds(
     environment: AppEnvironment.snapshot(),
   );
@@ -1489,8 +1501,8 @@ Future<void> _emitPreCloseNotice() async {
     final notificationService = getIt<INotificationService>();
     try {
       final result = await notificationService.show(
-        title: 'Plug Agente: update ready',
-        body: 'Closing in ${delaySeconds}s to install the update.',
+        title: title ?? 'Plug Agente: update ready',
+        body: body ?? 'Closing in ${delaySeconds}s to install the update.',
       );
       result.fold(
         (_) {},

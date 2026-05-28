@@ -197,6 +197,7 @@ class ActiveSqlStreamExecution {
   final String executionId;
   final String? requestId;
   final CancellationToken cancellationToken;
+
   /// Normalized (trimmed) clientToken that initiated the stream, or null when
   /// the stream was started without a client token (hub direct call).
   final String? ownerClientToken;

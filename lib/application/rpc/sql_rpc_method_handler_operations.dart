@@ -1658,10 +1658,8 @@ class SqlRpcMethodHandlerOperations {
     // require the cancel request to carry the same token. This prevents a
     // hub peer from cancelling streams it did not initiate.
     if (_featureFlags.enableClientTokenAuthorization) {
-      final cancelToken = (params['client_token'] as String? ??
-              params['auth'] as String? ??
-              params['clientToken'] as String?)
-          ?.trim();
+      final cancelToken =
+          (params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?)?.trim();
       final ownerToken = activeExecution.ownerClientToken;
       if (ownerToken != null && ownerToken.isNotEmpty) {
         if (cancelToken == null || cancelToken.isEmpty || cancelToken != ownerToken) {

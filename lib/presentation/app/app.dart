@@ -12,6 +12,7 @@ import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
+import 'package:plug_agente/presentation/widgets/auto_update_ready_banner.dart';
 import 'package:provider/provider.dart';
 
 class PlugAgentApp extends StatefulWidget {
@@ -89,6 +90,20 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
       themeMode: themeProvider.themeMode,
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
+      // Stack the "update ready" banner on top of every screen so the
+      // operator always sees it, regardless of which page is active.
+      // The banner shrinks to zero height when there is no pending
+      // downloaded update, so it has no impact on regular layouts.
+      builder: (context, child) {
+        return Column(
+          children: [
+            const AutoUpdateReadyBanner(),
+            Expanded(
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ],
+        );
+      },
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

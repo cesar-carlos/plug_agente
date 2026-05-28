@@ -12,6 +12,7 @@ import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/update_check_diagnostics.dart';
@@ -67,7 +68,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     ISilentUpdateInstaller? silentUpdateInstaller,
     IAppSettingsStore? settingsStore,
     IAutoUpdateMetricsCollector? metricsCollector,
-    Future<void> Function()? closeApplicationForSilentUpdate,
+    CloseApplicationForSilentUpdate? closeApplicationForSilentUpdate,
     Future<void> Function()? allowQuitForUpdate,
     Duration manualTriggerTimeout = _defaultManualTriggerTimeout,
     Duration manualCompletionTimeout = _defaultManualCompletionTimeout,
@@ -85,6 +86,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     Duration backgroundTriggerTimeout = _defaultBackgroundTriggerTimeout,
     double backgroundRetryJitterFactor = _defaultBackgroundRetryJitterFactor,
     Random? random,
+    IUacDetector? uacDetector,
   }) : assert(
          backgroundRetryJitterFactor >= 0 && backgroundRetryJitterFactor <= 1,
          'backgroundRetryJitterFactor must be in [0, 1]',
@@ -116,14 +118,27 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           silentUpdateInstaller: silentUpdateInstaller,
           settingsStore: settingsStore,
           closeApplicationForSilentUpdate: closeApplicationForSilentUpdate,
+          onDiagnosticsChanged: _notifyChanges,
           automaticFailureCooldownThreshold: automaticFailureCooldownThreshold,
           automaticFailureCooldown: automaticFailureCooldown,
           helperWaitDuration: helperWaitDuration,
           bootJitterProvider: automaticBootJitterProvider,
           metricsCollector: metricsCollector,
           checkIdRecorder: _checkIdRecorder,
+          uacDetector: uacDetector,
         );
     _hydratePersistedDiagnostics();
+  }
+
+  /// Broadcasts state transitions (silent download finished, ready-to-apply,
+  /// applying, error) so UI providers can subscribe without polling. Stays
+  /// in pure-Dart territory (no Flutter import) so the application layer
+  /// remains framework-agnostic per the architecture rules.
+  final StreamController<void> _changesController = StreamController<void>.broadcast();
+
+  void _notifyChanges() {
+    if (_changesController.isClosed) return;
+    _changesController.add(null);
   }
 
   final RuntimeCapabilities _capabilities;
@@ -256,6 +271,20 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
 
   @override
   bool get isSilentCheckInProgress => _silentCoordinator.isSilentCheckInProgress;
+
+  @override
+  bool get hasPendingDownloadedUpdate => _silentCoordinator.hasPendingDownloadedUpdate;
+
+  @override
+  bool get hasUpdateAwaitingUserConsent {
+    final diagnostics = _silentCoordinator.lastAutomaticDiagnostics;
+    if (diagnostics == null) return false;
+    if (diagnostics.updateAvailable != true) return false;
+    return diagnostics.completionSource == UpdateCheckCompletionSource.automaticAwaitingUserConsent;
+  }
+
+  @override
+  Stream<void> get changes => _changesController.stream;
 
   @override
   UpdateCheckDiagnostics? get lastManualDiagnostics => _lastManualDiagnostics;
@@ -474,6 +503,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       case UpdateCheckCompletionSource.automaticUpdateNotAvailable:
       case UpdateCheckCompletionSource.automaticValidationFailure:
       case UpdateCheckCompletionSource.automaticDownloadFailure:
+      case UpdateCheckCompletionSource.automaticInstallReady:
+      case UpdateCheckCompletionSource.automaticAwaitingUserConsent:
       case UpdateCheckCompletionSource.automaticInstallStarted:
       case UpdateCheckCompletionSource.automaticInstallFailure:
       case UpdateCheckCompletionSource.automaticCooldown:
@@ -618,6 +649,128 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   Future<Result<SilentUpdateOutcome>> checkSilently() => _silentCoordinator.checkSilently();
 
   @override
+  Future<Result<void>> applyPendingSilentUpdate({
+    String? noticeTitle,
+    String? noticeBody,
+    bool triggerAppClose = true,
+  }) async {
+    final result = await _silentCoordinator.applyPendingDownloadedUpdate(
+      noticeTitle: noticeTitle,
+      noticeBody: noticeBody,
+      triggerAppClose: triggerAppClose,
+    );
+    _notifyChanges();
+    return result;
+  }
+
+  @override
+  Future<Result<void>> applyAvailableUpdate({
+    String? noticeTitle,
+    String? noticeBody,
+  }) async {
+    // Pause the periodic timer so a coincident automatic tick does not
+    // collide with the user-initiated check. Without this guard the
+    // coordinator would return `alreadyInProgress` and the operator
+    // would see a confusing "could not prepare the installer" error.
+    final shouldResumeTimer = automaticSilentUpdatesEnabled;
+    if (shouldResumeTimer) {
+      _silentCoordinator.stop();
+    }
+    try {
+      final downloadResult = await _silentCoordinator.checkSilently(userInitiated: true);
+      SilentUpdateOutcome? outcome;
+      Exception? downloadError;
+      downloadResult.fold(
+        (value) => outcome = value,
+        (error) => downloadError = error,
+      );
+      if (downloadError != null) {
+        _metricsCollector?.recordAutoUpdateUserInitiatedApplyFailure();
+        _notifyChanges();
+        return Failure(downloadError!);
+      }
+      if (outcome != SilentUpdateOutcome.installerReady) {
+        _metricsCollector?.recordAutoUpdateUserInitiatedApplyFailure();
+        _notifyChanges();
+        return Failure(_mapUserInitiatedOutcomeToFailure(outcome));
+      }
+      final applyResult = await _silentCoordinator.applyPendingDownloadedUpdate(
+        noticeTitle: noticeTitle,
+        noticeBody: noticeBody,
+      );
+      applyResult.fold(
+        (_) => _metricsCollector?.recordAutoUpdateUserInitiatedApplySuccess(),
+        (_) => _metricsCollector?.recordAutoUpdateUserInitiatedApplyFailure(),
+      );
+      _notifyChanges();
+      return applyResult;
+    } finally {
+      // Resume the periodic timer in all paths. On the success branch
+      // the helper will shortly close the app, but a flake there must
+      // not leave the coordinator permanently stopped.
+      if (shouldResumeTimer) {
+        _silentCoordinator.scheduleAndStart();
+      }
+    }
+  }
+
+  /// Translates a non-`installerReady` outcome from the user-initiated
+  /// flow into a typed [domain.Failure] with an actionable user message.
+  /// Keeps the technical context on `context` for diagnostics while the
+  /// `message` is what the banner shows to the operator.
+  domain.Failure _mapUserInitiatedOutcomeToFailure(SilentUpdateOutcome? outcome) {
+    final context = <String, dynamic>{
+      'operation': 'applyAvailableUpdate',
+      'outcome': outcome?.name,
+    };
+    switch (outcome) {
+      case SilentUpdateOutcome.cooldownActive:
+        return domain.ServerFailure.withContext(
+          message: 'Updates are paused after repeated failures. Try again later.',
+          context: context,
+        );
+      case SilentUpdateOutcome.silentDisabled:
+        return domain.ConfigurationFailure.withContext(
+          message: 'Automatic updates are disabled. Enable them in Settings to apply.',
+          context: context,
+        );
+      case SilentUpdateOutcome.cancelled:
+        return domain.ServerFailure.withContext(
+          message: 'The update was cancelled before the installer was ready.',
+          context: context,
+        );
+      case SilentUpdateOutcome.skippedByQuietHours:
+        return domain.ConfigurationFailure.withContext(
+          message: 'Updates are paused during quiet hours. Try again outside the window.',
+          context: context,
+        );
+      case SilentUpdateOutcome.noNewVersion:
+        return domain.ServerFailure.withContext(
+          message: 'No new version is available right now.',
+          context: context,
+        );
+      case SilentUpdateOutcome.alreadyInProgress:
+        return domain.ServerFailure.withContext(
+          message: 'Another update check is still running. Try again in a moment.',
+          context: context,
+        );
+      case SilentUpdateOutcome.pendingInProgress:
+        return domain.ServerFailure.withContext(
+          message: 'A previous update is still being applied.',
+          context: context,
+        );
+      case SilentUpdateOutcome.requiresUserConsent:
+      case SilentUpdateOutcome.installerReady:
+      case SilentUpdateOutcome.rolloutSkipped:
+      case null:
+        return domain.ServerFailure.withContext(
+          message: 'Could not prepare the installer. Try again or check the diagnostics.',
+          context: context,
+        );
+    }
+  }
+
+  @override
   Future<void> checkInBackground() async {
     if (!isAvailable) return;
     if (automaticSilentUpdatesEnabled) {
@@ -642,9 +795,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           // Bounded trigger: without a timeout an unresponsive updater process
           // would leave the await suspended indefinitely, blocking the retry
           // loop and any future cycles (until the app restarts).
-          await _updaterGateway
-              .checkForUpdates(inBackground: true)
-              .timeout(_backgroundTriggerTimeout);
+          await _updaterGateway.checkForUpdates(inBackground: true).timeout(_backgroundTriggerTimeout);
           _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
             triggerCompletedAt: DateTime.now(),
           );

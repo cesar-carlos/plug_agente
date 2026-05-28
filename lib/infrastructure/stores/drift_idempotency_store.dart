@@ -64,8 +64,7 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     // recent enough that the LRU ordering would not change meaningfully. This
     // removes redundant SQLite writes on hot keys without degrading eviction
     // accuracy for an 8192-entry cache.
-    if (_lruUpdateMinInterval <= Duration.zero ||
-        now.difference(row.updatedAt) >= _lruUpdateMinInterval) {
+    if (_lruUpdateMinInterval <= Duration.zero || now.difference(row.updatedAt) >= _lruUpdateMinInterval) {
       await (_db.update(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).write(
         RpcIdempotencyCacheTableCompanion(
           updatedAt: Value(now),

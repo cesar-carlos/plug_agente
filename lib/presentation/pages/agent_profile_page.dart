@@ -464,8 +464,7 @@ class _ConfigViewModel {
 
   @override
   bool operator ==(Object other) {
-    return identical(this, other) ||
-        other is _ConfigViewModel && other.isLoading == isLoading && other.error == error;
+    return identical(this, other) || other is _ConfigViewModel && other.isLoading == isLoading && other.error == error;
   }
 
   @override

@@ -237,8 +237,7 @@ ActionPathValidator _acceptingPathValidator() {
           required String field,
           required String path,
           required String phase,
-        }) =>
-            null,
+        }) => null,
   );
 }
 
