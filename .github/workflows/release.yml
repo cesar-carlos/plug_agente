@@ -254,14 +254,26 @@ jobs:
       - name: Publish GitHub Release
         if: ${{ !inputs.dry_run }}
         shell: bash
+        # Prefer RELEASE_PUBLISH_TOKEN (PAT with `repo` scope) when the
+        # secret is configured. GitHub does not propagate the
+        # `release.published` webhook for releases created with the
+        # default GITHUB_TOKEN, which means `update-appcast.yml` must be
+        # dispatched manually for every new release. Using a PAT fixes
+        # that and keeps the previous behavior as a fallback when the
+        # secret is missing.
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_PUBLISH_TOKEN || github.token }}
         run: |
           PRERELEASE_FLAG=""
           LATEST_FLAG="--latest"
           if [ "${{ inputs.prerelease }}" = "true" ]; then
             PRERELEASE_FLAG="--prerelease"
             LATEST_FLAG="--latest=false"
+          fi
+          if [ -n "${{ secrets.RELEASE_PUBLISH_TOKEN }}" ]; then
+            echo "Publishing release with RELEASE_PUBLISH_TOKEN (downstream workflows will trigger)."
+          else
+            echo "::warning::RELEASE_PUBLISH_TOKEN not configured; publishing with GITHUB_TOKEN. update-appcast.yml will NOT trigger automatically — dispatch it manually."
           fi
           gh release create "${RELEASE_TAG}" \
             "installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe" \

@@ -126,6 +126,34 @@ Apos publicar, confira o workflow **Update Appcast on Release** em GitHub
 Actions. Ele valida tag, versao, nome do asset, atualiza `appcast.xml` e roda
 o smoke check do feed publicado usando `tool/appcast_manager.py`.
 
+> **IMPORTANTE — Trigger automatico do update-appcast.**
+>
+> O `update-appcast.yml` so dispara automaticamente quando o GitHub Release e
+> criado com um Personal Access Token (PAT). Releases publicadas com o
+> `GITHUB_TOKEN` padrao nao propagam o evento `release.published` (protecao
+> contra recursao de workflows) e exigem disparo manual:
+>
+> ```bash
+> gh workflow run update-appcast.yml --ref main \
+>   -f release_tag=v1.2.7 \
+>   -f rollout_percentage=100 \
+>   -f channel=stable
+> ```
+>
+> Para automatizar, crie um PAT classico com escopo `repo` e configure-o como
+> o segredo de repositorio `RELEASE_PUBLISH_TOKEN`. O `release.yml` ja prioriza
+> esse segredo quando ele existe e cai para `GITHUB_TOKEN` (emitindo um
+> `::warning::`) quando ausente.
+>
+> Passos:
+>
+> 1. GitHub > Settings > Developer settings > Personal access tokens > Tokens
+>    (classic) > Generate new token (classic).
+> 2. Escopo minimo: `repo` (apenas). Expiracao curta recomendada
+>    (90 dias, com renovacao agendada).
+> 3. No repositorio: Settings > Secrets and variables > Actions > New
+>    repository secret > nome `RELEASE_PUBLISH_TOKEN`, valor = o PAT gerado.
+
 Feed oficial:
 
 ```text

@@ -5,6 +5,16 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Changed
+
+- `release.yml` now prefers the `RELEASE_PUBLISH_TOKEN` secret (PAT with
+  `repo` scope) when publishing the GitHub Release. Releases created with
+  the default `GITHUB_TOKEN` do not propagate the `release.published`
+  webhook to downstream workflows, which forces `update-appcast.yml` to be
+  dispatched manually. The workflow falls back to `GITHUB_TOKEN` with a
+  `::warning::` when the secret is missing. See
+  `docs/install/release_guide.md` for the setup procedure.
+
 ## 1.8.0 - 2026-05-28
 
 ### Fixed
