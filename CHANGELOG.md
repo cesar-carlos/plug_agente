@@ -5,6 +5,44 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+## 1.7.1 - 2026-05-27
+
+### Fixed
+
+- Editing a client token from the settings UI no longer regenerates the
+  opaque secret on every save. The token is now rotated only when the
+  authorization policy actually changes (scope flags, global permissions
+  or resource rules). Pure metadata edits (name, agentId, payload,
+  clientId) preserve the existing token value, hash and secure-storage
+  entry. Saving a dialog without changes is detected as a no-op and
+  skips the database write entirely.
+
+### Changed
+
+- Reordering resource rules in the edit dialog is treated as the same
+  policy and no longer triggers rotation, thanks to the new
+  `ClientTokenAuthorizationPolicy` value object with order-insensitive
+  rule equality.
+- `ClientTokenUpdateResult` now exposes a `ClientTokenUpdateOutcome`
+  (`unchanged | metadataOnly | rotated`); `tokenValue` is nullable and
+  populated only on rotation.
+- `UpdateClientToken` use case now invalidates authorization caches and
+  records a `rotate` audit event only on actual rotation; metadata-only
+  edits record a new `metadataUpdate` audit event and skip cache
+  invalidation; no-op edits record nothing.
+
+### Added
+
+- `TokenAuditEventType.metadataUpdate` to distinguish metadata edits
+  from secret rotations in the audit trail.
+- Edit dialog shows an inline hint tailored to the current state
+  ("Saving will rotate the token", "No rule changes - token kept",
+  or "No changes to save") and disables the Save button when the form
+  has no diff against the snapshot.
+- After saving an edit, an InfoBar surfaces the outcome on the section
+  page; on rotation the new token value is shown with a one-click copy
+  action so operators can redistribute it before navigating away.
+
 ## 1.7.0 - 2026-05-27
 
 ### Changed
