@@ -5,6 +5,66 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+## 1.7.2 - 2026-05-28
+
+### Fixed
+
+- `ConnectionProvider` now wraps recovery handlers (`_handleReconnectionNeeded`
+  and `_handleTokenExpired`) in `finally` so an unexpected `Error` escape or an
+  early `return` triggered by user disconnect cannot leave `_isReconnecting=true`
+  and permanently block hub recovery.
+- `BackpressureStreamEmitter` catches flush failures, marks the emitter as
+  faulted, short-circuits subsequent `emitChunk`/`releaseChunks` and unregisters
+  itself from the registry. Previously a single `_emit` failure poisoned the
+  in-flight chain via `.then(...)` propagation, silently dropping every future
+  chunk while the hub kept waiting. New `isFaulted` getter exposes the state.
+- `MetricsCollector` and `ProtocolMetricsCollector` now use `ListQueue` for the
+  ring buffer of recent metrics, so capping is O(1) instead of O(n) via
+  `removeRange(0, ...)`. Protocol metrics fire on every transport send/receive;
+  the previous pattern caused millions of element shifts per second under load.
+
+### Changed
+
+- `RetryManager` applies multiplicative jitter (±20% default) on each retry
+  delay with an injectable `Random` for deterministic tests, preventing
+  synchronized retry storms after circuit-breaker or network blips.
+- `AutoUpdateOrchestrator.checkInBackground` bounds the trigger via
+  `backgroundTriggerTimeout` (default 30s) so an unresponsive updater process
+  cannot block the retry loop indefinitely. The retry backoff also gains ±20%
+  jitter to avoid synchronized retries across fleets of agents.
+- `SqlExecutionQueue.disposeGracefully(timeout)` now drains in-flight workers
+  with a timeout before the pool is closed; the service locator awaits it
+  between transport disconnect and `pool.closeAll` so ODBC leases are
+  released cleanly during shutdown.
+- `OdbcStreamingGateway` rejects duplicate `executionId` before acquiring the
+  lease and connecting, and skips the no-op
+  `DirectOdbcConnectionLimiter.reconfigureMaxConcurrent` call when the pool
+  size has not changed.
+
+### Performance
+
+- `AgentActionRepository.saveExecution` no longer re-reads captured output
+  chunks immediately after persisting them. The original text is preserved in
+  memory; chunks are loaded only on status-only updates that pass no text.
+- `DriftIdempotencyStore` throttles `updated_at` LRU writes (default once per
+  minute per hot key) and skips the per-`set` `_deleteExpired` DELETE — the
+  periodic purge and LRU eviction already cover expired entries.
+- `AgentActionRemoteAuditDriftStore.deleteWhereOccurredBefore` replaces the
+  previous SELECT-then-DELETE pair with a single
+  `DELETE … WHERE id IN (subquery)` that uses the existing
+  `idx_agent_action_remote_audit_occurred` index.
+
+### Added
+
+- `ConnectionCircuitBreakerCache` provides a shared LRU-bounded cache
+  (default 16 entries) for the per-connection-string breakers used by
+  `OdbcDatabaseGateway` and `OdbcStreamingGateway`, closing a slow memory leak
+  on long sessions with connection-string churn.
+- `ConnectionCircuitBreaker` throttles its OPEN-state fast-fail log (first
+  rejection + every Nth) and exposes `openStateRejectionCount` for diagnostics.
+- `SqlExecutionQueue` throttles the queue-full rejection log the same way and
+  exposes `consecutiveFullRejections` for diagnostics.
+
 ## 1.7.1 - 2026-05-27
 
 ### Fixed
