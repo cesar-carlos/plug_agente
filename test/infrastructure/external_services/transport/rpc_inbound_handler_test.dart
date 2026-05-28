@@ -1021,4 +1021,108 @@ void main() {
       ).called(1);
     });
   });
+
+  group('rpc:request_ack coalescing (B2)', () {
+    Future<dynamic> frameRequest(String id) async {
+      final pipelineCache = TransportPipelineCache(
+        protocolProvider: () => protocol,
+        hasReceivedCapabilities: () => true,
+        featureFlags: featureFlags,
+      );
+      final frameCodec = PayloadFrameCodec(
+        pipelineCache: pipelineCache,
+        protocolProvider: () => protocol,
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        hasReceivedCapabilities: () => true,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
+      );
+      return (await frameCodec.prepareOutgoing(
+        event: 'rpc:request',
+        logicalPayload: <String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': id,
+          'method': 'sql.execute',
+          'params': const <String, dynamic>{'sql': 'SELECT 1'},
+        },
+      )).getOrThrow();
+    }
+
+    setUp(() {
+      when(() => featureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (invocation) async => RpcResponse.success(
+          id: (invocation.positionalArguments[0] as RpcRequest).id,
+          result: const <String, dynamic>{'ok': true},
+        ),
+      );
+    });
+
+    test('emits a single rpc:request_ack when only one request is pending after the flush window', () async {
+      final wire = await frameRequest('ack-single');
+
+      await handler.handleRequest(wire);
+      // Wait long enough for the 5 ms debounce timer to flush.
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+
+      final acks = emittedEvents.where((e) => e.event == 'rpc:request_ack').toList();
+      expect(acks, hasLength(1));
+      final payload = acks.single.payload as Map<String, dynamic>;
+      expect(payload['request_id'], 'ack-single');
+      expect(emittedEvents.any((e) => e.event == 'rpc:batch_ack'), isFalse);
+    });
+
+    test('coalesces a burst into a single rpc:batch_ack with all request ids', () async {
+      final wireA = await frameRequest('ack-burst-a');
+      final wireB = await frameRequest('ack-burst-b');
+      final wireC = await frameRequest('ack-burst-c');
+
+      await Future.wait<void>([
+        handler.handleRequest(wireA),
+        handler.handleRequest(wireB),
+        handler.handleRequest(wireC),
+      ]);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+
+      final batches = emittedEvents.where((e) => e.event == 'rpc:batch_ack').toList();
+      expect(batches, hasLength(1));
+      final payload = batches.single.payload as Map<String, dynamic>;
+      expect(
+        (payload['request_ids'] as List).cast<String>(),
+        containsAll(<String>['ack-burst-a', 'ack-burst-b', 'ack-burst-c']),
+      );
+      expect(emittedEvents.any((e) => e.event == 'rpc:request_ack'), isFalse);
+    });
+
+    test('does not emit any ack when delivery guarantees are disabled', () async {
+      when(() => featureFlags.enableSocketDeliveryGuarantees).thenReturn(false);
+      final wire = await frameRequest('no-ack');
+
+      await handler.handleRequest(wire);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+
+      expect(emittedEvents.any((e) => e.event == 'rpc:request_ack'), isFalse);
+      expect(emittedEvents.any((e) => e.event == 'rpc:batch_ack'), isFalse);
+    });
+
+    test('resetAckBuffer drops queued acks without emitting after the timer', () async {
+      final wire = await frameRequest('ack-reset');
+
+      await handler.handleRequest(wire);
+      handler.resetAckBuffer();
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+
+      expect(emittedEvents.any((e) => e.event == 'rpc:request_ack'), isFalse);
+      expect(emittedEvents.any((e) => e.event == 'rpc:batch_ack'), isFalse);
+    });
+  });
 }

@@ -483,11 +483,18 @@ void main() {
           'active_streams': 0,
         },
       );
+      // Explicitly disable the chunk streaming flag: the agent now defaults it
+      // to true, but this test verifies the *fallback* path where chunking is
+      // off and the auto-from-db policy must compensate.
       final service = HealthService(
         metricsCollector: MetricsCollector(),
         gateway: _MockDatabaseGateway(),
         streamingGateway: streamingGateway,
-        featureFlags: FeatureFlags(InMemoryAppSettingsStore()),
+        featureFlags: FeatureFlags(
+          InMemoryAppSettingsStore(<String, Object>{
+            'feature_enable_socket_streaming_chunks': false,
+          }),
+        ),
       );
 
       final status = service.getHealthStatus();

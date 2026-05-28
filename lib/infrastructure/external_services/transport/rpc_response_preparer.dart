@@ -61,6 +61,15 @@ class RpcResponsePreparer {
       final existingMeta = Map<String, dynamic>.from(
         response.meta?.toJson() ?? const <String, dynamic>{},
       );
+      // Preserve the wire-level `request_id` already propagated by
+      // [attachRequestTrace] (mirrors `request.meta.requestId`). Falls back to
+      // `response.id` for code paths that build responses without trace
+      // attachment, keeping today's behavior intact while staying compatible
+      // with the future `clientRequestIdEcho` extension where `response.id`
+      // would carry the consumer's id and `request_id` must remain the hub
+      // wire correlator. See
+      // `plug_server/docs/plug_agente/03_performance_roadmap.md` item 8.
+      final propagatedRequestId = existingMeta['request_id'] as String?;
       json = <String, dynamic>{
         'jsonrpc': response.jsonrpc,
         'id': response.id,
@@ -70,7 +79,7 @@ class RpcResponsePreparer {
         'meta': <String, dynamic>{
           ...existingMeta,
           'agent_id': _agentIdProvider(),
-          'request_id': response.id?.toString(),
+          'request_id': propagatedRequestId ?? response.id?.toString(),
           'timestamp': DateTime.now().toUtc().toIso8601String(),
         },
       };

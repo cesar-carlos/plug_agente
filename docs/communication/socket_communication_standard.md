@@ -19,8 +19,8 @@ Visao geral por tema (links externos para subdocs e ancoras internas):
 - [Eventos Socket.IO](#eventos-socketio-ativos),
   [Mapa rapido de eventos](#mapa-rapido-de-eventos),
   [Camadas do transporte](#camadas-do-transporte)
-- [Streaming chunked](#streaming-chunked-quando-enablesocketstreamingchunks-ativo-default-off),
-  [Garantia de entrega](#garantia-de-entrega-quando-enablesocketdeliveryguarantees-ativo)
+- [Streaming chunked](#streaming-chunked-enablesocketstreamingchunks-default-on),
+  [Garantia de entrega](#garantia-de-entrega-enablesocketdeliveryguarantees-default-on)
 - [Notification JSON-RPC](#notification-json-rpc-contrato-formal),
   [Regras formais de batch](#regras-formais-de-batch-contrato),
   [`api_version` e `meta`](#api_version-e-meta-contrato-formal)
@@ -100,13 +100,13 @@ Cross-references:
 | Compressao GZIP na borda de transporte                               | implemented (por threshold; fallback `cmp: none`)                                                                          |
 | Compatibilidade de leitura para payload JSON cru                     | not supported in current runtime                                                                                           |
 | `sql.cancel`                                                         | implemented (via feature flag)                                                                                             |
-| Streaming chunked                                                    | implemented (`enableSocketStreamingChunks`; default **off**; acima de `streaming_row_threshold`)                         |
+| Streaming chunked                                                    | implemented (`enableSocketStreamingChunks`; default **on**; acima de `streaming_row_threshold`, gated por `streamingResults` negociado)                         |
 | Streaming direto do banco (SELECT sem params)                        | implemented (`enableSocketStreamingFromDb`; default **on**)                                                                |
 | Backpressure                                                         | implemented (`enableSocketBackpressure`; default **off**; `window_size` em `rpc:stream.pull`)                              |
 | Ack explicito de prontidao (`agent:ready`)                           | implemented (agent-side; opcional e retrocompativel)                                                                       |
 | Notification JSON-RPC (sem resposta)                                 | implemented (via feature flag); contrato formal                                                                            |
 | Regras estritas de batch (IDs unicos/ordem)                          | implemented (via feature flag); contrato formal                                                                            |
-| Garantia de entrega por evento (ack/retry)                           | implemented (`enableSocketDeliveryGuarantees`; default **off**)                                                            |
+| Garantia de entrega por evento (ack/retry)                           | implemented (`enableSocketDeliveryGuarantees`; default **on**; acks coalescidos em janela de 5 ms)                          |
 | Timeout por etapa (SQL, transporte, ack)                             | implemented (`enableSocketTimeoutByStage`; default **off**)                                                              |
 | Idempotencia por `idempotency_key` (sql.execute/batch/bulkInsert + extensoes) | implemented (`enableSocketIdempotency`; default **off**; cache SQLite com TTL/LRU; chave `{method}:{key}`)        |
 | Connection state recovery                                            | implemented (agent-side retry/backoff)                                                                                     |
@@ -138,13 +138,15 @@ Cross-references:
 
 **Implemented** indica codigo e contrato disponiveis no runtime, nao que a
 funcionalidade esteja ativa em instalacao padrao. Flags abaixo iniciam
-**desligadas** (`FeatureFlags` / preferencias do app): `enableSocketStreamingChunks`,
+**desligadas** (`FeatureFlags` / preferencias do app):
 `enableSocketBackpressure`, `enablePayloadSigning`, `enableSocketIdempotency`,
-`enableSocketDeliveryGuarantees`, `enableSocketTimeoutByStage`. Flags de
-protocolo maduro (ex.: `enableSocketCancelMethod`, `enableSocketSchemaValidation`,
-`enableClientTokenAuthorization`, `enableSocketStreamingFromDb`) iniciam
-**ligadas**. Habilite as flags opt-in nas configuracoes do agente quando o hub
-exigir o comportamento correspondente.
+`enableSocketTimeoutByStage`. Flags de protocolo maduro / performance
+(ex.: `enableSocketCancelMethod`, `enableSocketSchemaValidation`,
+`enableClientTokenAuthorization`, `enableSocketStreamingFromDb`,
+`enableSocketStreamingChunks`, `enableSocketDeliveryGuarantees`,
+`enableParallelJsonRpcBatchDispatch`) iniciam **ligadas**. Habilite ou
+desabilite cada flag nas configuracoes do agente quando o hub exigir
+comportamento diferente do default.
 
 ## Plug JSON-RPC Profile
 
@@ -290,7 +292,7 @@ do contrato Socket.IO/JSON-RPC.
 Para cargas grandes, a recomendacao operacional e usar chunking no nivel do
 metodo de negocio, sem abrir excecao para o transporte.
 
-## Streaming chunked (quando `enableSocketStreamingChunks` ativo; default **off**)
+## Streaming chunked (`enableSocketStreamingChunks`, default **on**)
 
 Fluxo atual para resultados grandes:
 
@@ -310,13 +312,16 @@ Fluxo atual para resultados grandes:
 Quando `enableSocketBackpressure` esta ativo, o agente tambem anuncia em
 `capabilities.extensions`:
 
-- `recommendedStreamPullWindowSize`: `1` (preserva o modelo atual de credito inicial unitario)
+- `recommendedStreamPullWindowSize`: `8` (default; sobreescrito por env
+  `AGENT_STREAM_PULL_WINDOW_RECOMMENDED`, clamped em
+  `[1..maxBackpressureChunkQueueSize]`). Valor maior reduz round-trip por chunk
+  durante streaming sustentado.
 - `maxStreamPullWindowSize`: `maxBackpressureChunkQueueSize` (limite superior recomendado ao hub)
 
 Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
 `lib/domain/protocol/rpc_stream.dart`.
 
-## Garantia de entrega (quando `enableSocketDeliveryGuarantees` ativo)
+## Garantia de entrega (`enableSocketDeliveryGuarantees`, default ON)
 
 
 | Tipo de evento                 | Garantia                   | Mecanismo                                                      |
@@ -325,6 +330,10 @@ Contratos: `RpcStreamChunk`, `RpcStreamComplete`, `RpcStreamPull` em
 | Request critico hub -> agente  | at least once              | `rpc:request_ack` / `rpc:batch_ack` + retry hub + idempotencia |
 | Response critico agente -> hub | at least once (controlado) | `emitWithAck` + retry ate 3x em timeout de ack                 |
 
+Acks de inbound `rpc:request` sao coalescidos em janela de 5 ms (cap de 32 ids,
+espelhando `HUB_MAX_BATCH_SIZE`). Bursts emitem um unico `rpc:batch_ack`;
+requests isolados continuam emitindo `rpc:request_ack`. Ambas as formas sao
+aceitas pelo hub sem mudanca de contrato.
 
 ## Notification JSON-RPC (contrato formal)
 
@@ -1868,9 +1877,11 @@ e, depois, transportado dentro do `PayloadFrame`.
 - Metodo `sql.cancel` disponivel via feature flag `enableSocketCancelMethod`
 (cancela execucao em streaming ativa; execucoes nao-streaming nao sao
 cancelaveis).
-- Streaming chunked: opt-in via `enableSocketStreamingChunks` (default **off**);
-resultados acima de `streaming_row_threshold` negociado sao enviados em chunks
-(`rpc:chunk`, `rpc:complete`) quando a flag esta ligada.
+- Streaming chunked: `enableSocketStreamingChunks` agora liga por default; com
+o hub anunciando `streamingResults`, resultados acima do
+`streaming_row_threshold` fluem em chunks (`rpc:chunk`, `rpc:complete`).
+Operadores ainda podem desligar via feature flag se um deployment especifico
+nao expuser `streamingResults`.
 - `capabilities.extensions.streamingResults` e negociado entre agente e hub.
   Quando `enableSocketStreamingFromDb` esta ativo, o agente pode criar emissor
   de stream para consultas `SELECT` elegiveis mesmo que o chunking materializado
@@ -1896,9 +1907,10 @@ enforcement via `enableSocketBatchStrictValidation`.
 (`query_timeout`, `transport_timeout`, `ack_timeout`).
 - Em timeout de SQL, o agente aplica cancelamento best-effort da execucao no
 banco (desconexao/recuperacao de conexao) para evitar trabalho zumbi.
-- Garantia de entrega por tipo de evento: opt-in via
-`enableSocketDeliveryGuarantees` (default **off**); ver tabela abaixo quando
-ativo.
+- Garantia de entrega por tipo de evento: `enableSocketDeliveryGuarantees`
+agora liga por default. Acks isolados emitem `rpc:request_ack`; bursts sao
+coalescidos em `rpc:batch_ack` apos janela de 5 ms (cap de 32 ids,
+espelhando `HUB_MAX_BATCH_SIZE`). Ver tabela na secao "Garantia de entrega".
 - Connection state recovery com retry/backoff esta ativo agent-side.
 - Politica de refresh/auth no reconnect esta ativa agent-side.
 - Rate limits/quotas por evento estao ativos agent-side.
@@ -2079,6 +2091,25 @@ de prontidao.
 - `extensions.recommendedStreamPullWindowSize` e
 `extensions.maxStreamPullWindowSize` passam a anunciar hints opcionais para o
 hub ajustar `rpc:stream.pull`.
+
+### Ajustes 2026-05 (alinhamento com `plug_server` performance roadmap)
+
+- `enableSocketDeliveryGuarantees` passa a default **on**. Eliminava o ack
+  storm de re-emit a cada 1 s no hub (`SOCKET_AGENT_ACK_TIMEOUT_MS`).
+- `rpc:request_ack` agora e coalescido em janela de 5 ms (cap 32) emitindo
+  `rpc:batch_ack` para bursts; requests isolados continuam usando o evento
+  individual. Ambas as formas seguem aceitas pelo hub.
+- `enableSocketStreamingChunks` passa a default **on**. Streaming continua
+  gated pela negociacao de `streamingResults` e pelo
+  `streaming_row_threshold` do hub.
+- `extensions.recommendedStreamPullWindowSize` passa de `1` para `8` por
+  default; tunable por env `AGENT_STREAM_PULL_WINDOW_RECOMMENDED`.
+- `meta.request_id` na resposta agora preserva o `requestId` propagado por
+  `attachRequestTrace` (preventivo para a futura extensao
+  `clientRequestIdEcho`; comportamento atual nao muda).
+- `TransportSchemaLoader.loadAll()` aplica warmup explicito nas validacoes
+  hot path (`payload-frame`, `rpc.request`, `rpc.response`, `rpc.error`,
+  batches) para zerar custo da primeira request apos reconnect.
 
 ### `v2.7` (introspecao de client token policy)
 

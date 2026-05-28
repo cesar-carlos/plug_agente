@@ -7,6 +7,46 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ### Changed
 
+- Defaulted `enableSocketDeliveryGuarantees` to `true` so the agent always
+  emits `rpc:request_ack`. The hub arms a 1 s ack-retry timer
+  (`SOCKET_AGENT_ACK_TIMEOUT_MS`); without acks the agent re-parsed,
+  re-validated, re-verified and re-dispatched every long SQL twice, wasting
+  CPU and ack slots. Operators relying on the legacy "no ack" behavior can
+  still flip the flag off via settings. See
+  `plug_server/docs/plug_agente/03_performance_roadmap.md` item 1.
+- Defaulted `enableSocketStreamingChunks` to `true` so the agent can negotiate
+  ordered chunk streaming with hubs that advertise `streamingResults`. Small
+  result sets continue to flow as a single `rpc:response`; only payloads
+  above `HUB_STREAMING_ROW_THRESHOLD` switch to chunks, lowering peak RAM and
+  TTFB on large queries. See `plug_server/docs/plug_agente/03_performance_roadmap.md`
+  item 2.
+- Raised the agent-advertised `recommendedStreamPullWindowSize` default from
+  `1` to `8` so the hub starts streaming with enough in-flight credits to
+  saturate the link without a round-trip per chunk. The new ceiling is still
+  `maxBackpressureChunkQueueSize`. Tunable per deployment via the env
+  `AGENT_STREAM_PULL_WINDOW_RECOMMENDED` (positive integer). See
+  `plug_server/docs/plug_agente/03_performance_roadmap.md` item 6.
+- Coalesced inbound `rpc:request_ack` emission. Bursts of `rpc:request` are
+  buffered and flushed as a single `rpc:batch_ack` after a 5 ms debounce
+  (cap of 32 ids, mirroring `HUB_MAX_BATCH_SIZE`); single-request flushes
+  preserve the canonical `rpc:request_ack` shape. The hub already accepts
+  both forms. See `plug_server/docs/plug_agente/03_performance_roadmap.md`
+  item 3.
+- `RpcResponsePreparer.prepareForSend` now preserves a propagated
+  `meta.request_id` set by `attachRequestTrace` instead of overwriting it
+  with `response.id`. Today's behavior is unchanged (`response.id ==
+  meta.requestId == hub_uuid`); the change is preventive for the future
+  `clientRequestIdEcho` extension where `response.id` carries the consumer
+  id and `meta.request_id` must remain the wire correlator. See
+  `plug_server/docs/plug_agente/03_performance_roadmap.md` item 8.
+- `TransportSchemaLoader.loadAll()` now exercises a sentinel `validate(...)`
+  call against the hot RPC schemas (`payload-frame`, `rpc.request`,
+  `rpc.response`, `rpc.error`, batch variants) right after compilation.
+  Schemas were already eagerly compiled at boot via `service_locator.dart`;
+  this extra pass pays any one-time JIT/inline-cache cost upfront so the
+  first request after a reconnect does not absorb that latency. See
+  `plug_server/docs/plug_agente/03_performance_roadmap.md` item 9.
+
 - `release.yml` now prefers the `RELEASE_PUBLISH_TOKEN` secret (PAT with
   `repo` scope) when publishing the GitHub Release. Releases created with
   the default `GITHUB_TOKEN` do not propagate the `release.published`

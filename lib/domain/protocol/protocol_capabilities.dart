@@ -65,7 +65,8 @@ class ProtocolCapabilities {
       // Backpressure window hints communicate the agent's preferred and maximum
       // pull window sizes to the hub. The hub may pick a value <= max and
       // SHOULD start with `recommended`. See socket_communication_standard.md.
-      'recommendedStreamPullWindowSize': recommendedStreamPullWindowSize ?? 1,
+      'recommendedStreamPullWindowSize':
+          recommendedStreamPullWindowSize ?? ConnectionConstants.recommendedStreamPullWindowSize,
       'maxStreamPullWindowSize': maxStreamPullWindowSize ?? ConnectionConstants.maxBackpressureChunkQueueSize,
     };
     if (binaryPayload) {

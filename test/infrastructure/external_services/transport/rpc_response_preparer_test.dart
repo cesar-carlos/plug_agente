@@ -77,6 +77,24 @@ void main() {
       expect(meta['agent_id'], 'agent-1');
       expect(meta['request_id'], 'req-1');
     });
+
+    test('preserves propagated meta.request_id when it differs from response.id', () {
+      // Mirrors the future `clientRequestIdEcho` extension where the wire
+      // correlator (`meta.request_id`) is the hub UUID set by
+      // [attachRequestTrace] while `id` carries the consumer's own id.
+      when(() => featureFlags.enableSocketApiVersionMeta).thenReturn(true);
+      final response = RpcResponse.success(
+        id: 'client-req-42',
+        result: {'ok': true},
+        meta: const RpcProtocolMeta(requestId: 'hub-uuid-1'),
+      );
+
+      final json = preparer.prepareForSend(response);
+
+      final meta = json['meta'] as Map<String, dynamic>;
+      expect(json['id'], 'client-req-42');
+      expect(meta['request_id'], 'hub-uuid-1');
+    });
   });
 
   group('RpcResponsePreparer.attachRequestTrace', () {

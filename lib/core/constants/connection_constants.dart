@@ -391,4 +391,34 @@ class ConnectionConstants {
 
   static int get signingIsolateThresholdBytes =>
       _positiveIntEnv('TRANSPORT_SIGNING_ISOLATE_THRESHOLD_BYTES') ?? defaultSigningIsolateThresholdBytes;
+
+  /// Default credit advertised in
+  /// `agent:capabilities.extensions.recommendedStreamPullWindowSize`.
+  ///
+  /// Raised from `1` to `8` so the hub starts with enough in-flight credits to
+  /// keep streaming chunks moving without paying a round-trip per pull. The
+  /// hub clamps this to its own ceiling and to `maxStreamPullWindowSize` (the
+  /// agent advertises [maxBackpressureChunkQueueSize] as that ceiling). See
+  /// `plug_server/docs/plug_agente/03_performance_roadmap.md` item 6.
+  static const int defaultRecommendedStreamPullWindowSize = 8;
+
+  /// Effective recommended pull window. Override with env
+  /// `AGENT_STREAM_PULL_WINDOW_RECOMMENDED` (positive integer); clamped to
+  /// `[1..maxBackpressureChunkQueueSize]`.
+  static int get recommendedStreamPullWindowSize {
+    final raw = _positiveIntEnv('AGENT_STREAM_PULL_WINDOW_RECOMMENDED') ?? defaultRecommendedStreamPullWindowSize;
+    return raw.clamp(1, maxBackpressureChunkQueueSize);
+  }
+
+  /// Coalescing flush window for inbound `rpc:request_ack` debouncing. When a
+  /// burst of `rpc:request` arrives (e.g. cross-agent `mergeAll`), individual
+  /// acks are merged into a single `rpc:batch_ack` if more arrive before this
+  /// timer elapses. See `plug_server/docs/plug_agente/03_performance_roadmap.md`
+  /// item 3.
+  static const Duration rpcAckCoalesceFlushInterval = Duration(milliseconds: 5);
+
+  /// Maximum number of request ids coalesced into a single `rpc:batch_ack`.
+  /// Mirrors the hub's `HUB_MAX_BATCH_SIZE` cap so the agent never produces a
+  /// batch the hub cannot ingest in one frame.
+  static const int rpcAckCoalesceMaxBatch = 32;
 }

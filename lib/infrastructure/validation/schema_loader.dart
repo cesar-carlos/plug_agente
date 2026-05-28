@@ -166,6 +166,34 @@ class TransportSchemaLoader {
         'Skipped ${pending.length} schemas during boot: ${pending.join(', ')}',
       );
     }
+    _warmupHotSchemas();
+  }
+
+  /// Exercises the `validate(payload)` path on the schemas hit by every inbound
+  /// and outbound RPC frame so any one-time initialization inside the
+  /// `json_schema` package is paid at boot, not on the first request after
+  /// reconnect. The result of each call is intentionally discarded — the goal
+  /// is wall-clock warmup, not validation correctness. See
+  /// `plug_server/docs/plug_agente/03_performance_roadmap.md` item 9.
+  void _warmupHotSchemas() {
+    const hotSchemaIds = <String>[
+      TransportSchemaIds.payloadFrame,
+      TransportSchemaIds.rpcRequest,
+      TransportSchemaIds.rpcResponse,
+      TransportSchemaIds.rpcError,
+      TransportSchemaIds.rpcBatchRequest,
+      TransportSchemaIds.rpcBatchResponse,
+    ];
+    for (final id in hotSchemaIds) {
+      final schema = _schemas[id];
+      if (schema == null) continue;
+      try {
+        schema.validate(const <String, dynamic>{});
+      } on Object {
+        // Warmup is best-effort; failures (expected for required-field schemas)
+        // do not affect runtime correctness.
+      }
+    }
   }
 
   Future<String> _readSchemaContent(String id) async {

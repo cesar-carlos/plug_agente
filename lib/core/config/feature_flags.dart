@@ -163,7 +163,15 @@ class FeatureFlags {
   }
 
   /// Whether to enforce delivery guarantees (ack/retry) for critical events.
-  bool get enableSocketDeliveryGuarantees => _prefs.getBool(_keyEnableSocketDeliveryGuarantees) ?? false;
+  ///
+  /// Defaulted to `true` because the hub arms a 1 s timer expecting
+  /// `rpc:request_ack` (`SOCKET_AGENT_ACK_TIMEOUT_MS`) and re-emits the entire
+  /// `rpc:request` if the ack never arrives. Without this flag every SQL relay
+  /// taking more than ~1 s would force the agent to parse, validate, verify,
+  /// and dispatch the same payload twice — wasting CPU and inflating
+  /// `agent_to_hub_ms`. See `plug_server/docs/plug_agente/03_performance_roadmap.md`
+  /// item 1.
+  bool get enableSocketDeliveryGuarantees => _prefs.getBool(_keyEnableSocketDeliveryGuarantees) ?? true;
 
   Future<void> setEnableSocketDeliveryGuarantees(bool value) async {
     await _prefs.setBool(_keyEnableSocketDeliveryGuarantees, value);
@@ -220,7 +228,14 @@ class FeatureFlags {
 
   /// Whether to send large query results as ordered chunks (rpc:chunk,
   /// rpc:complete) instead of a single payload.
-  bool get enableSocketStreamingChunks => _prefs.getBool(_keyEnableSocketStreamingChunks) ?? false;
+  ///
+  /// Defaulted to `true` so the agent can negotiate streaming with hubs that
+  /// advertise `streamingResults`. Streaming is still gated by the negotiated
+  /// extension and the hub's `HUB_STREAMING_ROW_THRESHOLD`; small result sets
+  /// continue to flow as a single `rpc:response`. Avoids buffering huge
+  /// in-memory payloads and improves TTFB for large queries. See
+  /// `plug_server/docs/plug_agente/03_performance_roadmap.md` item 2.
+  bool get enableSocketStreamingChunks => _prefs.getBool(_keyEnableSocketStreamingChunks) ?? true;
 
   Future<void> setEnableSocketStreamingChunks(bool value) async {
     await _prefs.setBool(_keyEnableSocketStreamingChunks, value);
@@ -435,14 +450,14 @@ class FeatureFlags {
     await setEnableSocketBatchStrictValidation(true);
     await setEnableSocketIdempotency(false);
     await setEnableSocketTimeoutByStage(false);
-    await setEnableSocketDeliveryGuarantees(false);
+    await setEnableSocketDeliveryGuarantees(true);
     await setEnableSocketCancelMethod(true);
     await setEnableSocketSchemaValidation(true);
     await setEnableSocketOutgoingContractValidation(true);
     await setEnableSocketSummarizeLargePayloadLogs(true);
     await setEnableSocketJwksValidation(false);
     await setEnableSocketRevokedTokenInSession(false);
-    await setEnableSocketStreamingChunks(false);
+    await setEnableSocketStreamingChunks(true);
     await setEnableSocketBackpressure(false);
     await setEnableSocketStreamingFromDb(true);
     await setEnableTokenAudit(false);

@@ -124,6 +124,13 @@ class RpcInboundHandler {
   late final RpcBatchInboundHandler _batchHandler;
 
   int _activeRpcHandlers = 0;
+  // Coalescing buffer for inbound `rpc:request_ack` emission. Bursts of
+  // `rpc:request` (e.g. cross-agent `mergeAll`) are merged into a single
+  // `rpc:batch_ack` to reduce socket emit overhead. The hub already accepts
+  // both forms; see `plug_server/docs/plug_agente/03_performance_roadmap.md`
+  // item 3.
+  final List<String> _pendingAckIds = <String>[];
+  Timer? _ackFlushTimer;
   // Per-call slot-release state, set when [handleRequestWithRelease] runs and
   // looked up via [Zone.current] inside [_emitInboundRpcResponse]. Using an
   // instance bool would race across concurrent inbound requests: the first
@@ -345,7 +352,7 @@ class RpcInboundHandler {
       }
 
       if (_featureFlags.enableSocketDeliveryGuarantees && !request.isNotification) {
-        await _emitRequestAck(request.id);
+        _scheduleAck(request.id);
       }
       socketAck?.call();
 
@@ -443,13 +450,54 @@ class RpcInboundHandler {
     return _batchHandler.handleBatchRequest(data);
   }
 
-  Future<void> _emitRequestAck(dynamic requestId) async {
+  /// Buffers an inbound `rpc:request` ack and flushes either when the buffer
+  /// reaches [ConnectionConstants.rpcAckCoalesceMaxBatch] or after
+  /// [ConnectionConstants.rpcAckCoalesceFlushInterval] elapses, whichever
+  /// happens first. A buffer of size 1 still emits the canonical
+  /// `rpc:request_ack`, preserving the legacy single-id wire shape.
+  void _scheduleAck(dynamic requestId) {
     if (requestId == null) return;
-    final ackPayload = {
-      'request_id': requestId.toString(),
-      'received_at': DateTime.now().toIso8601String(),
-    };
-    await _emitEvent('rpc:request_ack', ackPayload);
+    _pendingAckIds.add(requestId.toString());
+    if (_pendingAckIds.length >= ConnectionConstants.rpcAckCoalesceMaxBatch) {
+      _ackFlushTimer?.cancel();
+      _ackFlushTimer = null;
+      unawaited(_flushPendingAcks());
+      return;
+    }
+    _ackFlushTimer ??= Timer(ConnectionConstants.rpcAckCoalesceFlushInterval, () {
+      _ackFlushTimer = null;
+      unawaited(_flushPendingAcks());
+    });
+  }
+
+  Future<void> _flushPendingAcks() async {
+    if (_pendingAckIds.isEmpty) return;
+    final ids = List<String>.unmodifiable(_pendingAckIds);
+    _pendingAckIds.clear();
+    final receivedAt = DateTime.now().toIso8601String();
+    if (ids.length == 1) {
+      await _emitEvent('rpc:request_ack', <String, dynamic>{
+        'request_id': ids.first,
+        'received_at': receivedAt,
+      });
+      return;
+    }
+    await _emitEvent('rpc:batch_ack', <String, dynamic>{
+      'request_ids': ids,
+      'received_at': receivedAt,
+    });
+  }
+
+  /// Cancels the ack-flush timer and discards any pending acks. Called by the
+  /// transport client during socket close so a pending burst does not leak a
+  /// `Timer` after disconnect; outstanding ids are dropped because the hub
+  /// will observe the disconnection and re-dispatch on reconnect. The handler
+  /// instance is reusable: a subsequent `rpc:request` rearms the buffer and
+  /// timer transparently.
+  void resetAckBuffer() {
+    _ackFlushTimer?.cancel();
+    _ackFlushTimer = null;
+    _pendingAckIds.clear();
   }
 
   Future<bool> _validateBatchRequestJsonSchemasOrEmit(List<dynamic> data) async {

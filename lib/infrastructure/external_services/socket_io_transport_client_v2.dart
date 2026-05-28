@@ -901,6 +901,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final socket = _socket;
     _socket = null;
     _streamPullHandler.dispose();
+    _inboundHandler.resetAckBuffer();
     if (socket == null) {
       return;
     }

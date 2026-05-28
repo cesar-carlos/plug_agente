@@ -61,11 +61,26 @@ void main() {
       expect(flags.enableOdbcExperimentalDriverAdaptivePooling, isTrue);
     });
 
-    test('enables DB streaming path by default when socket chunking is enabled separately', () {
+    test('enables DB streaming and ordered chunk streaming by default', () {
       final flags = FeatureFlags(InMemoryAppSettingsStore());
 
       expect(flags.enableSocketStreamingFromDb, isTrue);
-      expect(flags.enableSocketStreamingChunks, isFalse);
+      expect(flags.enableSocketStreamingChunks, isTrue);
+    });
+
+    test('enforces socket delivery guarantees (ack/retry) by default', () async {
+      // Defaulted to true so the agent emits `rpc:request_ack` and the hub's
+      // 1 s timer never fires re-emit storms on legitimate slow queries.
+      final store = InMemoryAppSettingsStore();
+      final flags = FeatureFlags(store);
+
+      expect(flags.enableSocketDeliveryGuarantees, isTrue);
+
+      await flags.setEnableSocketDeliveryGuarantees(false);
+      expect(flags.enableSocketDeliveryGuarantees, isFalse);
+
+      await flags.resetToDefaults();
+      expect(flags.enableSocketDeliveryGuarantees, isTrue);
     });
 
     test('uses conservative defaults for agent action rollout flags', () async {
