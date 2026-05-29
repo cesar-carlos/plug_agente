@@ -92,8 +92,10 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   @override
   Future<void> startAutomaticChecks() async {}
 
+  bool hasPendingDownloadedUpdateValue = false;
+
   @override
-  bool hasPendingDownloadedUpdate = false;
+  Future<bool> get hasPendingDownloadedUpdate async => hasPendingDownloadedUpdateValue;
 
   final StreamController<void> _changesController = StreamController<void>.broadcast();
 

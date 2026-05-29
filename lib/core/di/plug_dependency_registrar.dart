@@ -45,9 +45,11 @@ import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
+import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
+import 'package:plug_agente/application/services/settings_backed_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/apply_agent_action_on_app_exit_policies.dart';
@@ -130,6 +132,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
+import 'package:plug_agente/core/services/update_check_id_recorder.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
@@ -150,6 +153,7 @@ import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.da
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
@@ -198,6 +202,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
+import 'package:plug_agente/infrastructure/external_services/throttled_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_cache_metrics_collector.dart';
@@ -221,6 +226,7 @@ import 'package:plug_agente/infrastructure/runtime/windows_uac_detector.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
+import 'package:plug_agente/infrastructure/services/file_silent_update_launcher_status_reader.dart';
 import 'package:plug_agente/infrastructure/services/http_silent_update_installer.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
@@ -1312,12 +1318,50 @@ void registerPlugDependencyGraph(
     ..registerLazySingleton<IUacDetector>(
       () => Platform.isWindows ? WindowsUacDetector() : const NoopUacDetector(),
     )
+    ..registerLazySingleton<IPendingSilentUpdateStore>(
+      () => SettingsBackedPendingSilentUpdateStore(
+        settingsStore: getIt<IAppSettingsStore>(),
+      ),
+    )
+    ..registerLazySingleton<ISilentUpdateLauncherStatusReader>(
+      () => const FileSilentUpdateLauncherStatusReader(),
+    )
+    // Single recorder injected into both orchestrator and coordinator.
+    // The old default-construction in each consumer could end up with
+    // two recorders writing to the same `auto_update.recent_check_ids`
+    // ring buffer and dropping entries on concurrent records.
+    ..registerLazySingleton(
+      () => UpdateCheckIdRecorder(settingsStore: getIt<IAppSettingsStore>()),
+    )
+    // Throttled diagnostics gateway. The Plug hub method
+    // `agent.autoUpdate.diagnostics.push` is documented as **proposta**
+    // (decisao 3 of plano_auto_update_evolution.md): the agent side is
+    // production-wired but the actual outbound transport is currently a
+    // no-op. When the hub partner ships the method, swap the closure
+    // below for a real RPC sender — every call site in the orchestrator
+    // and coordinator is already in place, so the change is one line.
+    ..registerLazySingleton<IAutoUpdateDiagnosticsGateway>(
+      () => ThrottledAutoUpdateDiagnosticsGateway(
+        transport: (payload) async {
+          developer.log(
+            'auto-update diagnostics push (no-op transport; hub method still in proposta state)',
+            name: 'plug_dependency_registrar',
+            level: 700,
+          );
+        },
+        agentId: getIt<AgentRuntimeIdentity>().runtimeInstanceId,
+      ),
+    )
     ..registerLazySingleton<IAutoUpdateOrchestrator>(
       () => AutoUpdateOrchestrator(
         getIt<RuntimeCapabilities>(),
         silentUpdateInstaller: getIt<ISilentUpdateInstaller>(),
         settingsStore: getIt<IAppSettingsStore>(),
         metricsCollector: getIt<MetricsCollector>(),
+        diagnosticsGateway: getIt<IAutoUpdateDiagnosticsGateway>(),
+        pendingStore: getIt<IPendingSilentUpdateStore>(),
+        launcherStatusReader: getIt<ISilentUpdateLauncherStatusReader>(),
+        checkIdRecorder: getIt<UpdateCheckIdRecorder>(),
         uacDetector: getIt<IUacDetector>(),
         helperWaitDuration: Duration(
           minutes: resolveAutoUpdateHelperWaitMinutes(

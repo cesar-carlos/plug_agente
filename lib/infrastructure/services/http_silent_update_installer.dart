@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
+import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/security/helper_signature_probe.dart';
@@ -209,7 +210,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         );
       }
 
-      final actualSha256 = _sha256Of(partFile);
+      final actualSha256 = await _sha256OfStreaming(partFile);
       if (actualSha256 != sha256Value) {
         _deleteIfExists(partFile);
         return Failure<SilentUpdateInstallResult, Exception>(
@@ -284,7 +285,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
 
       installedHelperFile.copySync(launcherPath);
       final appPid = _currentProcessIdResolver();
-      final helperSha256 = _sha256OfFileBestEffort(installedHelperFile);
+      final helperSha256 = await _sha256OfFileBestEffort(installedHelperFile);
 
       if (request.cancelRequested?.call() ?? false) {
         _deleteIfExists(launcherFile);
@@ -607,11 +608,10 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
 
   Result<SilentUpdateInstallResult> _cancelledFailure(String version) {
     return Failure<SilentUpdateInstallResult, Exception>(
-      domain.ConfigurationFailure.withContext(
+      SilentInstallCancellationFailure(
         message: 'Silent update cancelled before completion',
         context: <String, dynamic>{
           'operation': 'silentUpdateInstall',
-          SilentUpdateInstallRequest.cancellationContextKey: true,
           'version': version,
         },
       ),
@@ -620,11 +620,10 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
 
   Result<void> _cancelledDownloadFailure(Uri assetUri, String version) {
     return Failure(
-      domain.ConfigurationFailure.withContext(
+      SilentInstallCancellationFailure(
         message: 'Silent update download cancelled before completion',
         context: <String, dynamic>{
           'operation': 'silentUpdateDownload',
-          SilentUpdateInstallRequest.cancellationContextKey: true,
           'asset_url': assetUri.toString(),
           'version': version,
         },
@@ -827,16 +826,21 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     return sanitized;
   }
 
-  static String _sha256Of(File file) {
-    final bytes = file.readAsBytesSync();
-    return sha256.convert(bytes).toString();
+  /// Streams the file through SHA-256 instead of loading every byte
+  /// into memory. Matters because installer payloads keep growing
+  /// (runtime + bundled dependencies) and `readAsBytesSync` would
+  /// allocate the whole thing on the heap *and* block the event loop.
+  static Future<String> _sha256OfStreaming(File file) async {
+    final digest = await sha256.bind(file.openRead()).first;
+    return digest.toString();
   }
 
-  /// Same as [_sha256Of] but never throws — used for diagnostic fingerprints
-  /// where measurement failure must not abort the install pipeline.
-  static String? _sha256OfFileBestEffort(File file) {
+  /// Same as [_sha256OfStreaming] but never throws — used for diagnostic
+  /// fingerprints where measurement failure must not abort the install
+  /// pipeline.
+  static Future<String?> _sha256OfFileBestEffort(File file) async {
     try {
-      return _sha256Of(file);
+      return await _sha256OfStreaming(file);
     } on FileSystemException {
       return null;
     } on Exception {

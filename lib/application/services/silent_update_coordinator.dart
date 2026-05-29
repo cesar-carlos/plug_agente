@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:io';
 import 'dart:math';
 import 'dart:ui' show VoidCallback;
 
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
+import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
+import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
+import 'package:plug_agente/application/services/pending_silent_update.dart';
+import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
+import 'package:plug_agente/application/services/settings_backed_pending_silent_update_store.dart';
+import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
@@ -20,6 +25,7 @@ import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -31,7 +37,7 @@ abstract interface class ISilentUpdateCoordinator {
   /// True when a silent download finished and the installer is staged on
   /// disk awaiting an explicit apply. The agent stays fully connected and
   /// operational while this is `true`.
-  bool get hasPendingDownloadedUpdate;
+  Future<bool> get hasPendingDownloadedUpdate;
 
   void hydratePersistedDiagnostics();
 
@@ -80,8 +86,11 @@ abstract interface class ISilentUpdateCoordinator {
     bool triggerAppClose = true,
   });
 
-  /// Starts or restarts the periodic timer and runs an immediate check.
-  void scheduleAndStart();
+  /// Starts or restarts the periodic timer. When [runImmediately] is
+  /// `true` (default), also runs a check right away (after the optional
+  /// boot jitter). Callers that just finished an apply and triggered a
+  /// close pass `false` so a new probe does not race the shutdown.
+  void scheduleAndStart({bool runImmediately = true});
 
   /// Cancels the periodic timer without touching persisted state.
   void stop();
@@ -91,8 +100,6 @@ abstract interface class ISilentUpdateCoordinator {
   /// No-op when no check is running. The coordinator clears its cancel flag
   /// at the beginning of the next [checkSilently] invocation.
   void requestCancellation();
-
-  Future<void> resetFailureCooldownIfNeeded();
 }
 
 /// Signature for the callback that flips the app off the tray and exits the
@@ -118,20 +125,39 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     IAppcastSignatureVerifier? signatureVerifier,
     UpdateCheckIdRecorder? checkIdRecorder,
     IAutoUpdateMetricsCollector? metricsCollector,
+    IAutoUpdateDiagnosticsGateway? diagnosticsGateway,
     IUacDetector? uacDetector,
+    IPendingSilentUpdateStore? pendingStore,
+    ISilentUpdateLauncherStatusReader? launcherStatusReader,
+    DateTime Function()? clock,
   }) : _appcastProbeService = appcastProbeService,
        _silentUpdateInstaller = silentUpdateInstaller,
        _settingsStore = settingsStore,
        _closeApplicationForSilentUpdate = closeApplicationForSilentUpdate,
        _onDiagnosticsChanged = onDiagnosticsChanged,
-       _automaticFailureCooldownThreshold = automaticFailureCooldownThreshold,
-       _automaticFailureCooldown = automaticFailureCooldown,
        _helperWaitDuration = helperWaitDuration,
        _bootJitterProvider = bootJitterProvider,
        _signatureVerifier = signatureVerifier ?? Ed25519AppcastSignatureVerifier(),
        _checkIdRecorder = checkIdRecorder ?? UpdateCheckIdRecorder(settingsStore: settingsStore),
        _metricsCollector = metricsCollector,
-       _uacDetector = uacDetector ?? const NoopUacDetector() {
+       _diagnosticsGateway = diagnosticsGateway,
+       _uacDetector = uacDetector ?? const NoopUacDetector(),
+       _pendingStore =
+           pendingStore ??
+           (settingsStore != null
+               ? SettingsBackedPendingSilentUpdateStore(settingsStore: settingsStore)
+               : InMemoryPendingSilentUpdateStore()),
+       _launcherStatusReader = launcherStatusReader ?? const NoopSilentUpdateLauncherStatusReader(),
+       _clock = clock ?? DateTime.now,
+       _automaticFailureBreaker = PersistentCircuitBreaker(
+         countKey: _automaticFailureCountKey,
+         cooldownKey: _automaticCooldownUntilKey,
+         threshold: automaticFailureCooldownThreshold,
+         cooldown: automaticFailureCooldown,
+         logName: 'silent_update_coordinator',
+         settingsStore: settingsStore,
+         clock: clock,
+       ) {
     hydratePersistedDiagnostics();
   }
 
@@ -144,8 +170,6 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   final IAppSettingsStore? _settingsStore;
   final CloseApplicationForSilentUpdate? _closeApplicationForSilentUpdate;
   final VoidCallback? _onDiagnosticsChanged;
-  final int _automaticFailureCooldownThreshold;
-  final Duration _automaticFailureCooldown;
   final Duration _helperWaitDuration;
 
   /// Optional jitter applied to the first automatic check after the timer is
@@ -165,12 +189,33 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   /// disables sampling (tests / minimal DI).
   final IAutoUpdateMetricsCollector? _metricsCollector;
 
+  /// Optional best-effort push of a non-sensitive subset of diagnostics
+  /// to the hub at the end of each silent cycle. Never propagates errors:
+  /// a flaky transport must not break the update flow.
+  final IAutoUpdateDiagnosticsGateway? _diagnosticsGateway;
+
   /// Detects whether applying an update would trigger a UAC prompt.
   /// Defaults to a no-op when not configured (test/non-Windows). The
   /// automatic flow honours the detector; manual / user-initiated checks
   /// bypass it because the operator has already consented to the
   /// upcoming UAC prompt by clicking "Install".
   final IUacDetector _uacDetector;
+
+  /// Persistence boundary for the in-flight/staged install record.
+  /// Hides `dart:io` from the application layer.
+  final IPendingSilentUpdateStore _pendingStore;
+
+  /// Reads the on-disk helper status file. Hides `dart:io`.
+  final ISilentUpdateLauncherStatusReader _launcherStatusReader;
+
+  /// Injected clock so tests can control "now" without sleeping and so
+  /// late-callback detection survives NTP step adjustments. Returns
+  /// wall-clock by default.
+  final DateTime Function() _clock;
+
+  /// Reusable circuit breaker that ladders failures into a cooldown
+  /// window so the silent flow stops hammering a degraded feed.
+  final PersistentCircuitBreaker _automaticFailureBreaker;
 
   bool _isSilentCheckInProgress = false;
   bool _cancelRequested = false;
@@ -184,7 +229,6 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
 
   // Settings keys — same string values as before for backward compatibility.
   static const String _lastAutomaticDiagnosticsKey = 'auto_update.last_automatic_diagnostics';
-  static const String _pendingSilentUpdateKey = 'auto_update.pending_silent_update';
   static const String _automaticFailureCountKey = 'auto_update.automatic_failure_count';
   static const String _automaticCooldownUntilKey = 'auto_update.automatic_cooldown_until_ms';
   static const String _automaticRolloutBucketKey = 'auto_update.rollout_bucket';
@@ -324,7 +368,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     unawaited(_checkIdRecorder.record(_currentCheckId!, source: 'silent'));
 
     if (!automaticSilentUpdatesEnabled) {
-      final now = DateTime.now();
+      final now = _clock();
       _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
         checkedAt: now,
         configuredFeedUrl: feedUrl,
@@ -336,6 +380,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         updateAvailable: false,
       );
       await _persistLastAutomaticDiagnostics();
+      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
       return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled);
     }
 
@@ -346,7 +391,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     final environmentSnapshot = AppEnvironment.snapshot();
     final quietHoursStart = resolveAutoUpdateQuietHoursStartMinute(environment: environmentSnapshot);
     final quietHoursEnd = resolveAutoUpdateQuietHoursEndMinute(environment: environmentSnapshot);
-    final quietNow = DateTime.now();
+    final quietNow = _clock();
     final quietNowMinutes = quietNow.hour * 60 + quietNow.minute;
     if (isWithinQuietHoursWindow(
       nowMinutes: quietNowMinutes,
@@ -364,12 +409,13 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         updateAvailable: false,
       );
       await _persistLastAutomaticDiagnostics();
+      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
       return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.skippedByQuietHours);
     }
 
     final installer = _silentUpdateInstaller;
     if (installer == null) {
-      final now = DateTime.now();
+      final now = _clock();
       _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
         checkedAt: now,
         configuredFeedUrl: feedUrl,
@@ -381,6 +427,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         errorMessage: 'Silent update installer is not configured',
       );
       await _persistLastAutomaticDiagnostics();
+      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
       return Failure<SilentUpdateOutcome, Exception>(
         domain.ConfigurationFailure.withContext(
           message: 'Silent update installer is not configured',
@@ -392,53 +439,31 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     _isSilentCheckInProgress = true;
     _cancelRequested = false;
     try {
-      final pending = _readPendingSilentUpdate();
-      if (pending != null) {
-        final now = DateTime.now();
-        final launcherStatus = _readLauncherStatus(pending.launcherStatusPath);
-        _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
-          checkedAt: now,
-          configuredFeedUrl: feedUrl,
-          requestedFeedUrl: feedUrl,
-          checkId: _currentCheckId,
-          currentVersion: AppConstants.appVersion,
-          completedAt: now,
+      final pending = await _pendingStore.read();
+      if (pending != null && pending is PendingSilentUpdateDownloaded) {
+        final now = _clock();
+        final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+        _lastAutomaticDiagnostics = _diagnosticsForPending(
+          pending: pending,
+          launcherStatus: launcherStatus,
+          feedUrl: feedUrl,
+          now: now,
           completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
-          pendingVersion: pending.version,
-          installerPath: launcherStatus?.installerPath ?? pending.installerPath,
-          installerLogPath: launcherStatus?.logPath ?? pending.logPath,
-          installDirectory: launcherStatus?.installDirectory ?? pending.installDirectory,
-          silentUpdateStrategy: launcherStatus?.strategy ?? pending.strategy,
-          launcherPath: pending.launcherPath,
-          launcherStatusPath: pending.launcherStatusPath,
-          launcherState: launcherStatus?.state,
-          nonAdminExitCode: launcherStatus?.nonAdminExitCode,
-          nonAdminDurationMs: launcherStatus?.nonAdminDurationMs,
-          elevatedExitCode: launcherStatus?.elevatedExitCode,
-          elevatedDurationMs: launcherStatus?.elevatedDurationMs,
-          elevatedRetryStarted: launcherStatus?.elevatedRetryStarted,
-          waitForAppExitDurationMs: launcherStatus?.waitForAppExitDurationMs,
-          appPid: launcherStatus?.appPid ?? pending.appPid,
-          signatureStatus: launcherStatus?.signatureStatus,
-          signatureRequired: launcherStatus?.signatureRequired,
-          updateDirectorySecurityStatus: pending.updateDirectorySecurityStatus,
-          actualSha256: launcherStatus?.actualSha256,
-          hashValidationStatus: launcherStatus?.hashValidationStatus,
-          installDirectoryWritable: launcherStatus?.installDirectoryWritable,
-          elevatedCancelled: launcherStatus?.elevatedCancelled,
           errorMessage: 'Silent update already has a pending installer execution',
         );
         await _persistLastAutomaticDiagnostics();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.pendingInProgress);
       }
 
       await _cleanupSilentUpdateArtifacts(installer);
       final cooldownResult = await _buildAutomaticCooldownResult(feedUrl);
       if (cooldownResult != null) {
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return cooldownResult;
       }
 
-      final startedAt = DateTime.now();
+      final startedAt = _clock();
       _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
         checkedAt: startedAt,
         configuredFeedUrl: feedUrl,
@@ -454,9 +479,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       // numbers on first execution when the value is not yet persisted.
       final bucket = await _rolloutBucket();
 
-      final probeStart = DateTime.now();
+      final probeStart = _clock();
       final probeResult = await _appcastProbeService.probeLatest(feedUrl: feedUrl);
-      _metricsCollector?.recordAutoUpdateProbeDuration(DateTime.now().difference(probeStart));
+      _metricsCollector?.recordAutoUpdateProbeDuration(_clock().difference(probeStart));
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         probeRequestUrl: probeResult.requestUrl,
         probeSucceeded: probeResult.errorMessage == null,
@@ -478,8 +503,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       );
 
       if (probeResult.errorMessage != null) {
-        final now = DateTime.now();
-        final failureState = await _recordAutomaticFailureAndApplyCooldown();
+        final now = _clock();
+        final failureState = await _automaticFailureBreaker.recordFailure();
         _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
           completedAt: now,
           completionSource: UpdateCheckCompletionSource.automaticDownloadFailure,
@@ -488,6 +513,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           errorMessage: probeResult.errorMessage,
         );
         await _persistLastAutomaticDiagnostics();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return Failure<SilentUpdateOutcome, Exception>(
           domain.NetworkFailure.withContext(
             message: 'Silent update appcast probe failed',
@@ -502,8 +528,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
 
       final validationError = _validateSilentProbeResult(probeResult);
       if (validationError != null) {
-        final now = DateTime.now();
-        final failureState = await _recordAutomaticFailureAndApplyCooldown();
+        final now = _clock();
+        final failureState = await _automaticFailureBreaker.recordFailure();
         _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
           completedAt: now,
           completionSource: UpdateCheckCompletionSource.automaticValidationFailure,
@@ -513,6 +539,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           errorMessage: validationError.message,
         );
         await _persistLastAutomaticDiagnostics();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return Failure<SilentUpdateOutcome, Exception>(
           domain.ValidationFailure.withContext(
             message: validationError.message,
@@ -546,8 +573,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         feedSignatureRequired: feedSignatureRequired,
       );
       if (feedSignatureRequired && signatureStatus != AppcastSignatureVerificationStatus.valid) {
-        final now = DateTime.now();
-        final failureState = await _recordAutomaticFailureAndApplyCooldown();
+        final now = _clock();
+        final failureState = await _automaticFailureBreaker.recordFailure();
         final code = 'feed_signature_${signatureStatus.name}';
         final message =
             'Silent update appcast signature is required but '
@@ -562,6 +589,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           errorMessage: message,
         );
         await _persistLastAutomaticDiagnostics();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return Failure<SilentUpdateOutcome, Exception>(
           domain.ValidationFailure.withContext(
             message: message,
@@ -584,14 +612,15 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         rolloutEligible: rolloutEligible,
       );
       if (!rolloutEligible) {
-        final now = DateTime.now();
-        await _resetAutomaticFailureCooldownIfNeeded();
+        final now = _clock();
+        await _automaticFailureBreaker.reset();
         _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
           completedAt: now,
           completionSource: UpdateCheckCompletionSource.automaticRolloutSkipped,
           updateAvailable: false,
         );
         await _persistLastAutomaticDiagnostics();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.rolloutSkipped);
       }
 
@@ -600,14 +629,15 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         currentVersion: AppConstants.appVersion,
       );
       if (!isNewer) {
-        final now = DateTime.now();
-        await _resetAutomaticFailureCooldownIfNeeded();
+        final now = _clock();
+        await _automaticFailureBreaker.reset();
         _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
           completedAt: now,
           completionSource: UpdateCheckCompletionSource.automaticUpdateNotAvailable,
           updateAvailable: false,
         );
         await _persistLastAutomaticDiagnostics();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.noNewVersion);
       }
 
@@ -618,8 +648,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       // user-initiated path (`userInitiated: true`) bypasses the gate
       // because clicking "Install" is the consent we need.
       if (!userInitiated && _uacDetector.requiresUserConsentForElevation()) {
-        final now = DateTime.now();
-        await _resetAutomaticFailureCooldownIfNeeded();
+        final now = _clock();
+        await _automaticFailureBreaker.reset();
         _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
           completedAt: now,
           completionSource: UpdateCheckCompletionSource.automaticAwaitingUserConsent,
@@ -629,34 +659,30 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         await _persistLastAutomaticDiagnostics();
         _metricsCollector?.recordAutoUpdateAwaitingUserConsent();
         _notifyDiagnosticsChanged();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.requiresUserConsent);
       }
 
-      final pendingUpdate = _PendingSilentUpdate(
-        version: remoteVersion,
-        installerPath: null,
-        logPath: null,
-        installDirectory: null,
-        strategy: null,
-        launcherPath: null,
-        launcherStatusPath: null,
-        appPid: null,
-        updateDirectorySecurityStatus: null,
-        startedAt: DateTime.now(),
+      await _pendingStore.write(
+        PendingSilentUpdateProbed(
+          version: remoteVersion,
+          startedAt: _clock(),
+        ),
       );
-      await _persistPendingSilentUpdate(pendingUpdate);
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         updateAvailable: true,
         pendingVersion: remoteVersion,
-        triggerStartedAt: DateTime.now(),
+        triggerStartedAt: _clock(),
       );
       await _persistLastAutomaticDiagnostics();
 
       if (_cancelRequested) {
-        return await _completeAutomaticCancellation(feedUrl);
+        final outcome = await _completeAutomaticCancellation(feedUrl);
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+        return outcome;
       }
 
-      final downloadStart = DateTime.now();
+      final downloadStart = _clock();
       final installResult = await installer.install(
         SilentUpdateInstallRequest(
           version: remoteVersion,
@@ -679,7 +705,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           deferHelperLaunch: true,
         ),
       );
-      _metricsCollector?.recordAutoUpdateDownloadDuration(DateTime.now().difference(downloadStart));
+      _metricsCollector?.recordAutoUpdateDownloadDuration(_clock().difference(downloadStart));
 
       SilentUpdateInstallResult? installSuccess;
       Exception? installError;
@@ -688,34 +714,38 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         (error) => installError = error,
       );
 
-      final now = DateTime.now();
+      final now = _clock();
       if (installError != null) {
         if (_isCancellationFailure(installError!)) {
-          return await _completeAutomaticCancellation(feedUrl);
+          final outcome = await _completeAutomaticCancellation(feedUrl);
+          _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+          return outcome;
         }
-        await _clearPendingSilentUpdate();
+        await _pendingStore.clear();
         final completionSource = installError is domain.NetworkFailure
             ? UpdateCheckCompletionSource.automaticDownloadFailure
             : installError is domain.ValidationFailure
             ? UpdateCheckCompletionSource.automaticValidationFailure
             : UpdateCheckCompletionSource.automaticInstallFailure;
-        final failureState = await _recordAutomaticFailureAndApplyCooldown();
+        final failureState = await _automaticFailureBreaker.recordFailure();
         _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
           triggerCompletedAt: now,
           completedAt: now,
           completionSource: completionSource,
           automaticFailureCount: failureState.failureCount,
           automaticCooldownUntil: failureState.cooldownUntil,
-          errorMessage: _extractFailureMessage(installError!),
+          errorMessage: extractAutoUpdateFailureMessage(installError!),
         );
         await _persistLastAutomaticDiagnostics();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return Failure<SilentUpdateOutcome, Exception>(installError!);
       }
 
       final success = installSuccess!;
-      await _persistPendingSilentUpdate(
-        _PendingSilentUpdate(
+      await _pendingStore.write(
+        PendingSilentUpdateDownloaded(
           version: remoteVersion,
+          startedAt: _clock(),
           installerPath: success.installerPath,
           logPath: success.logPath,
           installDirectory: success.installDirectory,
@@ -730,10 +760,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           ),
           installDirectoryWritable: success.installDirectoryWritable,
           updateDirectorySecurityStatus: success.updateDirectorySecurityStatus,
-          startedAt: DateTime.now(),
         ),
       );
-      await _resetAutomaticFailureCooldownIfNeeded();
+      await _automaticFailureBreaker.reset();
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         triggerCompletedAt: now,
         completedAt: now,
@@ -760,14 +789,16 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       await _settingsStore?.flushPendingPersistence();
 
       if (_cancelRequested) {
-        return await _completeAutomaticCancellation(feedUrl);
+        final outcome = await _completeAutomaticCancellation(feedUrl);
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+        return outcome;
       }
 
       // Check again after the download completed: the user may have disabled
       // automatic silent updates while the installer was being downloaded.
       if (!automaticSilentUpdatesEnabled) {
-        await _clearPendingSilentUpdate();
-        final disabledAt = DateTime.now();
+        await _pendingStore.clear();
+        final disabledAt = _clock();
         _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
           completedAt: disabledAt,
           completionSource: UpdateCheckCompletionSource.automaticDisabled,
@@ -775,6 +806,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         );
         await _persistLastAutomaticDiagnostics();
         _notifyDiagnosticsChanged();
+        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
         return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled);
       }
 
@@ -783,10 +815,11 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       // step driven by the UI ("Install now" banner) or by the natural
       // app shutdown handler. The agent stays online and operational.
       _notifyDiagnosticsChanged();
+      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
       return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
     } on FormatException catch (error) {
-      final now = DateTime.now();
-      final failureState = await _recordAutomaticFailureAndApplyCooldown();
+      final now = _clock();
+      final failureState = await _automaticFailureBreaker.recordFailure();
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         completedAt: now,
         completionSource: UpdateCheckCompletionSource.automaticValidationFailure,
@@ -795,6 +828,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         errorMessage: error.message,
       );
       await _persistLastAutomaticDiagnostics();
+      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
       return Failure<SilentUpdateOutcome, Exception>(
         domain.ValidationFailure.withContext(
           message: error.message,
@@ -809,18 +843,20 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   }
 
   bool _isCancellationFailure(Exception error) {
+    if (error is SilentInstallCancellationFailure) return true;
+    // Backward compatibility: older installers (or third-party fakes in
+    // tests) still encode the marker via the context map only.
     if (error is! domain.Failure) return false;
-    final value = error.context[SilentUpdateInstallRequest.cancellationContextKey];
-    return value == true;
+    return error.context[SilentInstallFailureContext.cancellationKey] == true;
   }
 
   Future<Result<SilentUpdateOutcome>> _completeAutomaticCancellation(String feedUrl) async {
-    await _clearPendingSilentUpdate();
+    await _pendingStore.clear();
     // Cancellation is a user-initiated state change, not a fault: do not
     // count it toward the automatic failure cooldown and clear any prior
     // cooldown so the user can resume immediately if they re-enable.
-    await _resetAutomaticFailureCooldownIfNeeded();
-    final now = DateTime.now();
+    await _automaticFailureBreaker.reset();
+    final now = _clock();
     final existing = _lastAutomaticDiagnostics;
     _lastAutomaticDiagnostics =
         (existing ??
@@ -842,8 +878,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   }
 
   @override
-  void scheduleAndStart() {
-    _scheduleAutomaticSilentChecks(runImmediately: true);
+  void scheduleAndStart({bool runImmediately = true}) {
+    _scheduleAutomaticSilentChecks(runImmediately: runImmediately);
   }
 
   @override
@@ -860,22 +896,12 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   }
 
   @override
-  Future<void> resetFailureCooldownIfNeeded() async {
-    await _resetAutomaticFailureCooldownIfNeeded();
-  }
-
-  @override
-  bool get hasPendingDownloadedUpdate {
-    final pending = _readPendingSilentUpdate();
-    if (pending == null) return false;
-    final installerPath = pending.installerPath;
-    final launcherPath = pending.launcherPath;
-    if (installerPath == null || launcherPath == null) {
-      // Pending record without paths is a pre-download artifact, not a
-      // ready-to-apply install.
-      return false;
-    }
-    return File(installerPath).existsSync() && File(launcherPath).existsSync();
+  Future<bool> get hasPendingDownloadedUpdate async {
+    final pending = await _pendingStore.read();
+    if (pending is! PendingSilentUpdateDownloaded) return false;
+    final installerExists = await _launcherStatusReader.fileExists(pending.installerPath);
+    final launcherExists = await _launcherStatusReader.fileExists(pending.launcherPath);
+    return installerExists && launcherExists;
   }
 
   @override
@@ -884,7 +910,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     String? noticeBody,
     bool triggerAppClose = true,
   }) async {
-    final pending = _readPendingSilentUpdate();
+    final pending = await _pendingStore.read();
     if (pending == null) {
       return Failure(
         domain.ConfigurationFailure.withContext(
@@ -908,26 +934,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         ),
       );
     }
-    final installerPath = pending.installerPath;
-    final launcherPath = pending.launcherPath;
-    final logPath = pending.logPath;
-    final launcherStatusPath = pending.launcherStatusPath;
-    final installDirectory = pending.installDirectory;
-    final assetSize = pending.assetSize;
-    final sha256 = pending.sha256;
-    final installDirectoryWritable = pending.installDirectoryWritable;
-    final requireValidSignature = pending.requireValidSignature;
-    final appPid = pending.appPid;
-    if (installerPath == null ||
-        launcherPath == null ||
-        logPath == null ||
-        launcherStatusPath == null ||
-        installDirectory == null ||
-        assetSize == null ||
-        sha256 == null ||
-        installDirectoryWritable == null ||
-        requireValidSignature == null ||
-        appPid == null) {
+    if (pending is! PendingSilentUpdateDownloaded || !pending.hasFullApplyMetadata) {
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'Pending silent update is missing helper launch metadata',
@@ -942,16 +949,16 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     final launchResult = await installer.launchPreparedHelper(
       SilentUpdateLaunchRequest(
         version: pending.version,
-        installerPath: installerPath,
-        logPath: logPath,
-        launcherPath: launcherPath,
-        launcherStatusPath: launcherStatusPath,
-        installDirectory: installDirectory,
-        assetSize: assetSize,
-        sha256: sha256,
-        installDirectoryWritable: installDirectoryWritable,
-        requireValidSignature: requireValidSignature,
-        appPid: appPid,
+        installerPath: pending.installerPath,
+        logPath: pending.logPath,
+        launcherPath: pending.launcherPath,
+        launcherStatusPath: pending.launcherStatusPath,
+        installDirectory: pending.installDirectory,
+        assetSize: pending.assetSize!,
+        sha256: pending.sha256!,
+        installDirectoryWritable: pending.installDirectoryWritable!,
+        requireValidSignature: pending.requireValidSignature!,
+        appPid: pending.appPid,
       ),
     );
     Exception? launchError;
@@ -963,7 +970,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       return Failure(launchError!);
     }
 
-    final now = DateTime.now();
+    final now = _clock();
     _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
       completedAt: now,
       completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
@@ -1002,11 +1009,29 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     }
   }
 
-  String _extractFailureMessage(Exception error) {
-    if (error is domain.Failure) {
-      return error.message;
-    }
-    return error.toString();
+  /// Best-effort push of the latest automatic diagnostics to the hub. The
+  /// telemetry contract demands the gateway throttle, omit sensitive
+  /// fields and swallow errors, so this method never awaits the future
+  /// and never propagates exceptions.
+  void _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource source) {
+    final gateway = _diagnosticsGateway;
+    final diagnostics = _lastAutomaticDiagnostics;
+    if (gateway == null || diagnostics == null) return;
+    unawaited(
+      Future<void>(() async {
+        try {
+          await gateway.push(diagnostics: diagnostics, source: source);
+        } on Object catch (error, stackTrace) {
+          developer.log(
+            'Auto-update diagnostics push threw (ignored)',
+            name: 'silent_update_coordinator',
+            level: 800,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }),
+    );
   }
 
   Future<void> _persistLastAutomaticDiagnostics() async {
@@ -1029,69 +1054,12 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     }
   }
 
-  int _automaticFailureCount() => _settingsStore?.getInt(_automaticFailureCountKey) ?? 0;
-
-  DateTime? _automaticCooldownUntil() {
-    final timestamp = _settingsStore?.getInt(_automaticCooldownUntilKey);
-    if (timestamp == null || timestamp <= 0) return null;
-    return DateTime.fromMillisecondsSinceEpoch(timestamp);
-  }
-
-  Future<void> _resetAutomaticFailureCooldownIfNeeded() async {
-    final settingsStore = _settingsStore;
-    if (settingsStore == null) return;
-    final hasFailureCount = settingsStore.containsKey(_automaticFailureCountKey);
-    final hasCooldown = settingsStore.containsKey(_automaticCooldownUntilKey);
-    if (!hasFailureCount && !hasCooldown) return;
-    try {
-      await settingsStore.remove(_automaticFailureCountKey);
-      await settingsStore.remove(_automaticCooldownUntilKey);
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to reset automatic silent update cooldown state',
-        name: 'silent_update_coordinator',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
-  Future<({int failureCount, DateTime? cooldownUntil})> _recordAutomaticFailureAndApplyCooldown() async {
-    final settingsStore = _settingsStore;
-    if (settingsStore == null) return (failureCount: 0, cooldownUntil: null);
-    final nextCount = _automaticFailureCount() + 1;
-    DateTime? cooldownUntil;
-    final values = <String, Object>{_automaticFailureCountKey: nextCount};
-    if (nextCount >= _automaticFailureCooldownThreshold) {
-      cooldownUntil = DateTime.now().add(_automaticFailureCooldown);
-      values[_automaticCooldownUntilKey] = cooldownUntil.millisecondsSinceEpoch;
-    }
-    try {
-      await settingsStore.setValues(values);
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to persist automatic silent update cooldown state',
-        name: 'silent_update_coordinator',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-    return (failureCount: nextCount, cooldownUntil: cooldownUntil);
-  }
-
   Future<Result<SilentUpdateOutcome>?> _buildAutomaticCooldownResult(String feedUrl) async {
-    final cooldownUntil = _automaticCooldownUntil();
-    if (cooldownUntil == null) return null;
-    final remaining = cooldownUntil.difference(DateTime.now());
-    if (remaining.isNegative || remaining == Duration.zero) {
-      await _resetAutomaticFailureCooldownIfNeeded();
-      return null;
-    }
+    final remaining = await _automaticFailureBreaker.remainingCooldown();
+    if (remaining == null) return null;
     final minutesRemaining = remaining.inMinutes;
     final humanRemaining = minutesRemaining >= 1 ? '$minutesRemaining min' : '${remaining.inSeconds}s';
-    final now = DateTime.now();
+    final now = _clock();
     _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
       checkedAt: now,
       configuredFeedUrl: feedUrl,
@@ -1101,8 +1069,8 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       completedAt: now,
       completionSource: UpdateCheckCompletionSource.automaticCooldown,
       updateAvailable: false,
-      automaticFailureCount: _automaticFailureCount(),
-      automaticCooldownUntil: cooldownUntil,
+      automaticFailureCount: _automaticFailureBreaker.failureCount,
+      automaticCooldownUntil: _automaticFailureBreaker.cooldownUntil,
       errorMessage: 'Automatic silent updates are paused after repeated failures. Try again in about $humanRemaining.',
     );
     await _persistLastAutomaticDiagnostics();
@@ -1181,146 +1149,102 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   }
 
   _SilentProbeValidationError? _validateSilentProbeResult(AppcastProbeResult result) {
-    final version = result.latestVersion?.trim();
-    if (version == null || version.isEmpty) {
-      return const _SilentProbeValidationError(
-        code: 'missing_latest_version',
-        message: 'Silent update appcast is missing the latest version',
-      );
-    }
-    final assetUrl = result.assetUrl?.trim();
-    if (assetUrl == null || assetUrl.isEmpty) {
-      return const _SilentProbeValidationError(
-        code: 'missing_asset_url',
-        message: 'Silent update appcast is missing the installer URL',
-      );
-    }
-    if (!isAutoUpdateInstallerUrl(assetUrl)) {
-      return const _SilentProbeValidationError(
-        code: 'invalid_asset_url',
-        message: 'Silent update appcast has an invalid installer URL',
-      );
-    }
-    final os = result.os?.trim().toLowerCase();
-    if (os != null && os.isNotEmpty && os != 'windows') {
-      return const _SilentProbeValidationError(
-        code: 'unsupported_os',
-        message: 'Silent update appcast targets an unsupported operating system',
-      );
-    }
-    final assetSize = result.assetSize;
-    if (assetSize == null || assetSize <= 0) {
-      return const _SilentProbeValidationError(
-        code: 'invalid_asset_size',
-        message: 'Silent update appcast is missing a valid installer size',
-      );
-    }
-    final assetName = result.assetName?.trim();
-    if (assetName == null || assetName.isEmpty || !assetName.toLowerCase().endsWith('.exe')) {
-      return const _SilentProbeValidationError(
-        code: 'invalid_asset_name',
-        message: 'Silent update appcast is missing a valid installer name',
-      );
-    }
-    final sha256 = result.sha256?.trim().toLowerCase();
-    if (sha256 == null || !RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256)) {
-      return const _SilentProbeValidationError(
-        code: 'invalid_sha256',
-        message: 'Silent update appcast is missing a valid plug:sha256 digest',
-      );
-    }
-    final rolloutPercentage = result.rolloutPercentage;
-    if (rolloutPercentage != null && (rolloutPercentage < 0 || rolloutPercentage > 100)) {
-      return const _SilentProbeValidationError(
-        code: 'invalid_rollout_percentage',
-        message: 'Silent update appcast has an invalid plug:rolloutPercentage value',
-      );
+    for (final validator in _silentProbeValidators) {
+      final error = validator(result);
+      if (error != null) return error;
     }
     return null;
   }
 
   Future<void> _reconcilePendingSilentUpdate() async {
-    final pending = _readPendingSilentUpdate();
+    final pending = await _pendingStore.read();
     if (pending == null) return;
     _currentCheckId = _checkIdRecorder.newId();
     unawaited(_checkIdRecorder.record(_currentCheckId!, source: 'reconcile'));
     final feedUrl = _feedUrlResolver() ?? officialAutoUpdateFeedUrl;
-    final now = DateTime.now();
-    final launcherStatus = _readLauncherStatus(pending.launcherStatusPath);
+    final now = _clock();
+    final launcherStatusPath = pending is PendingSilentUpdateDownloaded ? pending.launcherStatusPath : null;
+    final launcherStatus = await _launcherStatusReader.read(launcherStatusPath);
     bool completed;
     try {
       completed = AppVersionComparator.compare(AppConstants.appVersion, pending.version) >= 0;
     } on FormatException {
       completed = false;
     }
-    if (!completed && launcherStatus == null && _isPendingStale(pending)) {
+    if (!completed && launcherStatus == null && await _isPendingStale(pending)) {
       developer.log(
         'Clearing stale pending silent update (paths no longer exist): version=${pending.version}',
         name: 'silent_update_coordinator',
         level: 800,
       );
-      await _clearPendingSilentUpdate();
+      await _pendingStore.clear();
+      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.reconcile);
       return;
     }
     if (!completed && _shouldKeepPendingSilentUpdate(pending, launcherStatus, now)) {
-      _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
-        checkedAt: now,
-        configuredFeedUrl: feedUrl,
-        requestedFeedUrl: feedUrl,
-        checkId: _currentCheckId,
-        currentVersion: AppConstants.appVersion,
-        completedAt: now,
+      _lastAutomaticDiagnostics = _diagnosticsForPending(
+        pending: pending,
+        launcherStatus: launcherStatus,
+        feedUrl: feedUrl,
+        now: now,
         completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
-        updateAvailable: true,
-        pendingVersion: pending.version,
-        installerPath: launcherStatus?.installerPath ?? pending.installerPath,
-        installerLogPath: launcherStatus?.logPath ?? pending.logPath,
-        installDirectory: launcherStatus?.installDirectory ?? pending.installDirectory,
-        silentUpdateStrategy: launcherStatus?.strategy ?? pending.strategy,
-        launcherPath: pending.launcherPath,
-        launcherStatusPath: pending.launcherStatusPath,
-        launcherState: launcherStatus?.state,
-        nonAdminExitCode: launcherStatus?.nonAdminExitCode,
-        nonAdminDurationMs: launcherStatus?.nonAdminDurationMs,
-        elevatedExitCode: launcherStatus?.elevatedExitCode,
-        elevatedDurationMs: launcherStatus?.elevatedDurationMs,
-        elevatedRetryStarted: launcherStatus?.elevatedRetryStarted,
-        waitForAppExitDurationMs: launcherStatus?.waitForAppExitDurationMs,
-        appPid: launcherStatus?.appPid ?? pending.appPid,
-        signatureStatus: launcherStatus?.signatureStatus,
-        signatureRequired: launcherStatus?.signatureRequired,
-        updateDirectorySecurityStatus: pending.updateDirectorySecurityStatus,
-        actualSha256: launcherStatus?.actualSha256,
-        hashValidationStatus: launcherStatus?.hashValidationStatus,
-        installDirectoryWritable: launcherStatus?.installDirectoryWritable,
-        elevatedCancelled: launcherStatus?.elevatedCancelled,
         errorMessage: 'Silent update installer is still running',
+        updateAvailable: true,
       );
       await _persistLastAutomaticDiagnostics();
+      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.reconcile);
       return;
     }
-    final failureState = completed ? null : await _recordAutomaticFailureAndApplyCooldown();
+    final failureState = completed ? null : await _automaticFailureBreaker.recordFailure();
     if (completed) {
-      await _resetAutomaticFailureCooldownIfNeeded();
+      await _automaticFailureBreaker.reset();
     }
-    _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
+    _lastAutomaticDiagnostics = _diagnosticsForPending(
+      pending: pending,
+      launcherStatus: launcherStatus,
+      feedUrl: feedUrl,
+      now: now,
+      completionSource: completed
+          ? UpdateCheckCompletionSource.automaticPendingCompleted
+          : UpdateCheckCompletionSource.automaticPendingFailed,
+      updateAvailable: !completed,
+      automaticFailureCount: failureState?.failureCount,
+      automaticCooldownUntil: failureState?.cooldownUntil,
+      errorMessage: completed ? null : launcherStatus?.failureMessage ?? 'Pending silent update did not complete',
+    );
+    await _persistLastAutomaticDiagnostics();
+    await _pendingStore.clear();
+    _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.reconcile);
+  }
+
+  UpdateCheckDiagnostics _diagnosticsForPending({
+    required PendingSilentUpdate pending,
+    required SilentUpdateLauncherStatus? launcherStatus,
+    required String feedUrl,
+    required DateTime now,
+    required UpdateCheckCompletionSource completionSource,
+    bool updateAvailable = false,
+    int? automaticFailureCount,
+    DateTime? automaticCooldownUntil,
+    String? errorMessage,
+  }) {
+    final downloaded = pending is PendingSilentUpdateDownloaded ? pending : null;
+    return UpdateCheckDiagnostics(
       checkedAt: now,
       configuredFeedUrl: feedUrl,
       requestedFeedUrl: feedUrl,
       checkId: _currentCheckId,
       currentVersion: AppConstants.appVersion,
       completedAt: now,
-      completionSource: completed
-          ? UpdateCheckCompletionSource.automaticPendingCompleted
-          : UpdateCheckCompletionSource.automaticPendingFailed,
-      updateAvailable: !completed,
+      completionSource: completionSource,
+      updateAvailable: updateAvailable,
       pendingVersion: pending.version,
-      installerPath: launcherStatus?.installerPath ?? pending.installerPath,
-      installerLogPath: launcherStatus?.logPath ?? pending.logPath,
-      installDirectory: launcherStatus?.installDirectory ?? pending.installDirectory,
-      silentUpdateStrategy: launcherStatus?.strategy ?? pending.strategy,
-      launcherPath: pending.launcherPath,
-      launcherStatusPath: pending.launcherStatusPath,
+      installerPath: launcherStatus?.installerPath ?? downloaded?.installerPath,
+      installerLogPath: launcherStatus?.logPath ?? downloaded?.logPath,
+      installDirectory: launcherStatus?.installDirectory ?? downloaded?.installDirectory,
+      silentUpdateStrategy: launcherStatus?.strategy ?? downloaded?.strategy,
+      launcherPath: downloaded?.launcherPath,
+      launcherStatusPath: downloaded?.launcherStatusPath,
       launcherState: launcherStatus?.state,
       nonAdminExitCode: launcherStatus?.nonAdminExitCode,
       nonAdminDurationMs: launcherStatus?.nonAdminDurationMs,
@@ -1328,44 +1252,39 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       elevatedDurationMs: launcherStatus?.elevatedDurationMs,
       elevatedRetryStarted: launcherStatus?.elevatedRetryStarted,
       waitForAppExitDurationMs: launcherStatus?.waitForAppExitDurationMs,
-      appPid: launcherStatus?.appPid ?? pending.appPid,
+      appPid: launcherStatus?.appPid ?? downloaded?.appPid,
       signatureStatus: launcherStatus?.signatureStatus,
       signatureRequired: launcherStatus?.signatureRequired,
-      updateDirectorySecurityStatus: pending.updateDirectorySecurityStatus,
+      updateDirectorySecurityStatus: downloaded?.updateDirectorySecurityStatus,
       actualSha256: launcherStatus?.actualSha256,
       hashValidationStatus: launcherStatus?.hashValidationStatus,
       installDirectoryWritable: launcherStatus?.installDirectoryWritable,
       elevatedCancelled: launcherStatus?.elevatedCancelled,
-      automaticFailureCount: failureState?.failureCount,
-      automaticCooldownUntil: failureState?.cooldownUntil,
-      errorMessage: completed ? null : launcherStatus?.failureMessage ?? 'Pending silent update did not complete',
+      automaticFailureCount: automaticFailureCount,
+      automaticCooldownUntil: automaticCooldownUntil,
+      errorMessage: errorMessage,
     );
-    await _persistLastAutomaticDiagnostics();
-    await _clearPendingSilentUpdate();
   }
 
-  bool _isPendingStale(_PendingSilentUpdate pending) {
-    final installerPath = pending.installerPath;
-    final launcherPath = pending.launcherPath;
-    final statusPath = pending.launcherStatusPath;
-    // A pending with no paths was written before the download started (the
-    // coordinator persists the pending record before calling installer.install).
-    // If the process crashed or the download failed silently between that
-    // persist and the post-download update, the record stays with null paths
-    // forever and blocks future update checks. Treat it as stale so the next
-    // checkSilently() can start a fresh download cycle.
-    if (installerPath == null && launcherPath == null) return true;
-    final installerMissing = installerPath == null || !File(installerPath).existsSync();
-    final launcherMissing = launcherPath == null || !File(launcherPath).existsSync();
-    final statusMissing = statusPath == null || !File(statusPath).existsSync();
+  Future<bool> _isPendingStale(PendingSilentUpdate pending) async {
+    // A pending probed without paths means we crashed/restarted before
+    // the post-download persist. The reconciler treats it as stale so
+    // the next checkSilently() can start a fresh download cycle.
+    if (pending is! PendingSilentUpdateDownloaded) return true;
+    final installerMissing = !await _launcherStatusReader.fileExists(pending.installerPath);
+    final launcherMissing = !await _launcherStatusReader.fileExists(pending.launcherPath);
+    final statusMissing = !await _launcherStatusReader.fileExists(pending.launcherStatusPath);
     return installerMissing && launcherMissing && statusMissing;
   }
 
   bool _shouldKeepPendingSilentUpdate(
-    _PendingSilentUpdate pending,
-    _SilentUpdateLauncherStatus? launcherStatus,
+    PendingSilentUpdate pending,
+    SilentUpdateLauncherStatus? launcherStatus,
     DateTime now,
   ) {
+    // A pending without a start timestamp comes from a legacy persisted
+    // record (or a corrupted write). Treat it as no longer fresh so the
+    // reconciler times it out instead of keeping it alive forever.
     final startedAt = launcherStatus?.lastUpdatedAt ?? pending.startedAt;
     if (startedAt == null || now.difference(startedAt) > _helperWaitDuration) return false;
     final state = launcherStatus?.state;
@@ -1376,62 +1295,20 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         state == 'elevatedStarted';
   }
 
-  _PendingSilentUpdate? _readPendingSilentUpdate() {
-    final raw = _settingsStore?.getString(_pendingSilentUpdateKey);
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        return _PendingSilentUpdate.fromJson(decoded);
-      }
-    } on FormatException catch (error, stackTrace) {
-      developer.log(
-        'Failed to parse pending silent update state',
-        name: 'silent_update_coordinator',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-    return null;
-  }
-
-  Future<void> _persistPendingSilentUpdate(_PendingSilentUpdate pending) async {
-    await _settingsStore?.setString(
-      _pendingSilentUpdateKey,
-      jsonEncode(pending.toJson()),
-    );
-  }
-
-  Future<void> _clearPendingSilentUpdate() async {
-    await _settingsStore?.remove(_pendingSilentUpdateKey);
-  }
-
-  _SilentUpdateLauncherStatus? _readLauncherStatus(String? statusPath) {
-    if (statusPath == null || statusPath.isEmpty) return null;
-    try {
-      final statusFile = File(statusPath);
-      if (!statusFile.existsSync()) return null;
-      final decoded = jsonDecode(statusFile.readAsStringSync());
-      if (decoded is Map<String, dynamic>) {
-        return _SilentUpdateLauncherStatus.fromJson(decoded);
-      }
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to read silent update launcher status',
-        name: 'silent_update_coordinator',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-    return null;
-  }
+  /// Probe validators are evaluated in order; the first non-null return
+  /// short-circuits as the validation error. Adding a new rule means
+  /// adding a function to this list — OCP-friendly.
+  static final List<_SilentProbeValidationError? Function(AppcastProbeResult)> _silentProbeValidators = [
+    _requireLatestVersion,
+    _requireAssetUrl,
+    _requireAllowedAssetUrl,
+    _requireSupportedOs,
+    _requireValidAssetSize,
+    _requireValidAssetName,
+    _requireValidSha256,
+    _requireValidRolloutPercentage,
+  ];
 }
-
-// ---------------------------------------------------------------------------
-// Private data models (silent path only)
-// ---------------------------------------------------------------------------
 
 class _SilentProbeValidationError {
   const _SilentProbeValidationError({required this.code, required this.message});
@@ -1439,179 +1316,92 @@ class _SilentProbeValidationError {
   final String message;
 }
 
-class _PendingSilentUpdate {
-  const _PendingSilentUpdate({
-    required this.version,
-    required this.installerPath,
-    required this.logPath,
-    required this.installDirectory,
-    required this.strategy,
-    required this.launcherPath,
-    required this.launcherStatusPath,
-    required this.appPid,
-    required this.updateDirectorySecurityStatus,
-    required this.startedAt,
-    this.assetSize,
-    this.sha256,
-    this.installDirectoryWritable,
-    this.requireValidSignature,
-  });
-
-  final String version;
-  final String? installerPath;
-  final String? logPath;
-  final String? installDirectory;
-  final String? strategy;
-  final String? launcherPath;
-  final String? launcherStatusPath;
-  final int? appPid;
-  final String? updateDirectorySecurityStatus;
-  final DateTime? startedAt;
-  // Extra fields persisted so the apply step can rebuild a launch request
-  // even after a process restart (the in-memory probe result is gone by
-  // then). Nullable for backward compatibility with records written by
-  // older versions of the agent that still ran the auto-close flow.
-  final int? assetSize;
-  final String? sha256;
-  final bool? installDirectoryWritable;
-  final bool? requireValidSignature;
-
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      'version': version,
-      'installerPath': installerPath,
-      'logPath': logPath,
-      'installDirectory': installDirectory,
-      'strategy': strategy,
-      'launcherPath': launcherPath,
-      'launcherStatusPath': launcherStatusPath,
-      'appPid': appPid,
-      'updateDirectorySecurityStatus': updateDirectorySecurityStatus,
-      'startedAt': (startedAt ?? DateTime.now()).toIso8601String(),
-      'assetSize': assetSize,
-      'sha256': sha256,
-      'installDirectoryWritable': installDirectoryWritable,
-      'requireValidSignature': requireValidSignature,
-    };
-  }
-
-  static _PendingSilentUpdate? fromJson(Map<String, dynamic> json) {
-    final version = json['version'];
-    if (version is! String || version.isEmpty) return null;
-    return _PendingSilentUpdate(
-      version: version,
-      installerPath: json['installerPath'] as String?,
-      logPath: json['logPath'] as String?,
-      installDirectory: json['installDirectory'] as String?,
-      strategy: json['strategy'] as String?,
-      launcherPath: json['launcherPath'] as String?,
-      launcherStatusPath: json['launcherStatusPath'] as String?,
-      appPid: _readInt(json['appPid']),
-      updateDirectorySecurityStatus: json['updateDirectorySecurityStatus'] as String?,
-      startedAt: _readDateTime(json['startedAt']),
-      assetSize: _readInt(json['assetSize']),
-      sha256: json['sha256'] as String?,
-      installDirectoryWritable: json['installDirectoryWritable'] as bool?,
-      requireValidSignature: json['requireValidSignature'] as bool?,
+_SilentProbeValidationError? _requireLatestVersion(AppcastProbeResult result) {
+  final version = result.latestVersion?.trim();
+  if (version == null || version.isEmpty) {
+    return const _SilentProbeValidationError(
+      code: 'missing_latest_version',
+      message: 'Silent update appcast is missing the latest version',
     );
   }
-
-  static int? _readInt(Object? value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return null;
-  }
-
-  static DateTime? _readDateTime(Object? value) {
-    if (value is! String || value.isEmpty) return null;
-    return DateTime.tryParse(value);
-  }
+  return null;
 }
 
-class _SilentUpdateLauncherStatus {
-  const _SilentUpdateLauncherStatus({
-    required this.state,
-    required this.strategy,
-    required this.installDirectory,
-    required this.installerPath,
-    required this.logPath,
-    required this.nonAdminExitCode,
-    required this.nonAdminDurationMs,
-    required this.elevatedExitCode,
-    required this.elevatedDurationMs,
-    required this.elevatedRetryStarted,
-    required this.waitForAppExitDurationMs,
-    required this.appPid,
-    required this.signatureStatus,
-    required this.signatureRequired,
-    required this.actualSha256,
-    required this.hashValidationStatus,
-    required this.installDirectoryWritable,
-    required this.elevatedCancelled,
-    required this.errorMessage,
-    required this.lastUpdatedAt,
-  });
-
-  final String? state;
-  final String? strategy;
-  final String? installDirectory;
-  final String? installerPath;
-  final String? logPath;
-  final int? nonAdminExitCode;
-  final int? nonAdminDurationMs;
-  final int? elevatedExitCode;
-  final int? elevatedDurationMs;
-  final bool? elevatedRetryStarted;
-  final int? waitForAppExitDurationMs;
-  final int? appPid;
-  final String? signatureStatus;
-  final bool? signatureRequired;
-  final String? actualSha256;
-  final String? hashValidationStatus;
-  final bool? installDirectoryWritable;
-  final bool? elevatedCancelled;
-  final String? errorMessage;
-  final DateTime? lastUpdatedAt;
-
-  String? get failureMessage {
-    if (errorMessage != null && errorMessage!.isNotEmpty) return errorMessage;
-    if (state != null && state!.isNotEmpty) return 'Launcher status: $state';
-    return null;
-  }
-
-  static _SilentUpdateLauncherStatus fromJson(Map<String, dynamic> json) {
-    return _SilentUpdateLauncherStatus(
-      state: json['state'] as String?,
-      strategy: json['strategy'] as String?,
-      installDirectory: json['installDirectory'] as String?,
-      installerPath: json['installerPath'] as String?,
-      logPath: json['logPath'] as String?,
-      nonAdminExitCode: _readInt(json['nonAdminExitCode']),
-      nonAdminDurationMs: _readInt(json['nonAdminDurationMs']),
-      elevatedExitCode: _readInt(json['elevatedExitCode']),
-      elevatedDurationMs: _readInt(json['elevatedDurationMs']),
-      elevatedRetryStarted: json['elevatedRetryStarted'] as bool?,
-      waitForAppExitDurationMs: _readInt(json['waitForAppExitDurationMs']),
-      appPid: _readInt(json['appPid']),
-      signatureStatus: json['signatureStatus'] as String?,
-      signatureRequired: json['signatureRequired'] as bool?,
-      actualSha256: json['actualSha256'] as String?,
-      hashValidationStatus: json['hashValidationStatus'] as String?,
-      installDirectoryWritable: json['installDirectoryWritable'] as bool?,
-      elevatedCancelled: json['elevatedCancelled'] as bool?,
-      errorMessage: json['errorMessage'] as String?,
-      lastUpdatedAt: _readDateTime(json['lastUpdatedAt']),
+_SilentProbeValidationError? _requireAssetUrl(AppcastProbeResult result) {
+  final assetUrl = result.assetUrl?.trim();
+  if (assetUrl == null || assetUrl.isEmpty) {
+    return const _SilentProbeValidationError(
+      code: 'missing_asset_url',
+      message: 'Silent update appcast is missing the installer URL',
     );
   }
+  return null;
+}
 
-  static int? _readInt(Object? value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return null;
+_SilentProbeValidationError? _requireAllowedAssetUrl(AppcastProbeResult result) {
+  final assetUrl = result.assetUrl?.trim() ?? '';
+  if (!isAutoUpdateInstallerUrl(assetUrl)) {
+    return const _SilentProbeValidationError(
+      code: 'invalid_asset_url',
+      message: 'Silent update appcast has an invalid installer URL',
+    );
   }
+  return null;
+}
 
-  static DateTime? _readDateTime(Object? value) {
-    if (value is! String || value.isEmpty) return null;
-    return DateTime.tryParse(value);
+_SilentProbeValidationError? _requireSupportedOs(AppcastProbeResult result) {
+  final os = result.os?.trim().toLowerCase();
+  if (os != null && os.isNotEmpty && os != 'windows') {
+    return const _SilentProbeValidationError(
+      code: 'unsupported_os',
+      message: 'Silent update appcast targets an unsupported operating system',
+    );
   }
+  return null;
+}
+
+_SilentProbeValidationError? _requireValidAssetSize(AppcastProbeResult result) {
+  final assetSize = result.assetSize;
+  if (assetSize == null || assetSize <= 0) {
+    return const _SilentProbeValidationError(
+      code: 'invalid_asset_size',
+      message: 'Silent update appcast is missing a valid installer size',
+    );
+  }
+  return null;
+}
+
+_SilentProbeValidationError? _requireValidAssetName(AppcastProbeResult result) {
+  final assetName = result.assetName?.trim();
+  if (assetName == null || assetName.isEmpty || !assetName.toLowerCase().endsWith('.exe')) {
+    return const _SilentProbeValidationError(
+      code: 'invalid_asset_name',
+      message: 'Silent update appcast is missing a valid installer name',
+    );
+  }
+  return null;
+}
+
+final RegExp _sha256RegExp = RegExp(r'^[0-9a-f]{64}$');
+
+_SilentProbeValidationError? _requireValidSha256(AppcastProbeResult result) {
+  final sha256 = result.sha256?.trim().toLowerCase();
+  if (sha256 == null || !_sha256RegExp.hasMatch(sha256)) {
+    return const _SilentProbeValidationError(
+      code: 'invalid_sha256',
+      message: 'Silent update appcast is missing a valid plug:sha256 digest',
+    );
+  }
+  return null;
+}
+
+_SilentProbeValidationError? _requireValidRolloutPercentage(AppcastProbeResult result) {
+  final rolloutPercentage = result.rolloutPercentage;
+  if (rolloutPercentage != null && (rolloutPercentage < 0 || rolloutPercentage > 100)) {
+    return const _SilentProbeValidationError(
+      code: 'invalid_rollout_percentage',
+      message: 'Silent update appcast has an invalid plug:rolloutPercentage value',
+    );
+  }
+  return null;
 }

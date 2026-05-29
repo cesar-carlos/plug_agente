@@ -11,6 +11,7 @@ import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
+import 'package:plug_agente/application/services/updater_event.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -19,6 +20,7 @@ import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/services/file_silent_update_launcher_status_reader.dart';
 import 'package:result_dart/result_dart.dart';
 
 class FakeAutoUpdaterGateway implements IAutoUpdaterGateway {
@@ -29,6 +31,25 @@ class FakeAutoUpdaterGateway implements IAutoUpdaterGateway {
   Exception? checkError;
   Exception? setFeedError;
   Future<void> Function()? onCheckForUpdates;
+  final StreamController<UpdaterEvent> _eventsController = StreamController<UpdaterEvent>.broadcast();
+
+  @override
+  Stream<UpdaterEvent> get events => _eventsController.stream;
+
+  /// Emits [event] and yields control to the event loop so the
+  /// orchestrator's subscription has a chance to handle it before the
+  /// test continues with assertions. Replaces the legacy
+  /// `listener?.onUpdaterX(...)` calls now that the orchestrator
+  /// consumes the sealed stream instead of mixing `UpdaterListener`.
+  Future<void> emit(UpdaterEvent event) async {
+    _eventsController.add(event);
+    await Future<void>.delayed(Duration.zero);
+  }
+
+  /// Mirrors `StreamController.hasListener`. Lets tests assert that the
+  /// orchestrator subscribed to [events] (the new contract) without
+  /// reaching for the legacy `addListener` plumbing.
+  bool get hasEventSubscribers => _eventsController.hasListener;
 
   @override
   void addListener(UpdaterListener listener) {
@@ -164,7 +185,6 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   bool? lastApplyTriggerAppClose;
   String? lastApplyNoticeTitle;
   String? lastApplyNoticeBody;
-  int resetFailureCooldownCallCount = 0;
   int hydrateCallCount = 0;
 
   Result<SilentUpdateOutcome> checkSilentlyResult = const Success(SilentUpdateOutcome.noNewVersion);
@@ -179,7 +199,7 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   bool get automaticSilentUpdatesEnabled => automaticSilentUpdatesEnabledValue;
 
   @override
-  bool get hasPendingDownloadedUpdate => hasPendingDownloadedUpdateValue;
+  Future<bool> get hasPendingDownloadedUpdate async => hasPendingDownloadedUpdateValue;
 
   @override
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics => lastAutomaticDiagnosticsValue;
@@ -212,8 +232,13 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
     return applyPendingResult;
   }
 
+  bool? lastScheduleAndStartRunImmediately;
+
   @override
-  void scheduleAndStart() => scheduleAndStartCallCount++;
+  void scheduleAndStart({bool runImmediately = true}) {
+    scheduleAndStartCallCount++;
+    lastScheduleAndStartRunImmediately = runImmediately;
+  }
 
   @override
   void stop() => stopCallCount++;
@@ -222,9 +247,6 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   void requestCancellation() => requestCancellationCallCount++;
 
   int requestCancellationCallCount = 0;
-
-  @override
-  Future<void> resetFailureCooldownIfNeeded() async => resetFailureCooldownCallCount++;
 }
 
 void main() {
@@ -262,7 +284,7 @@ void main() {
     });
 
     group('initialize', () {
-      test('configures feed, interval and listener', () async {
+      test('configures feed, interval and event subscription', () async {
         final fakeGateway = FakeAutoUpdaterGateway();
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
@@ -273,7 +295,11 @@ void main() {
 
         await orchestrator.initialize();
 
-        expect(fakeGateway.listener, isNotNull);
+        expect(
+          fakeGateway.hasEventSubscribers,
+          isTrue,
+          reason: 'orchestrator must subscribe to the gateway events stream',
+        );
         expect(fakeGateway.feedUrls.single, 'https://example.com/appcast.xml');
         expect(fakeGateway.interval, 0);
       });
@@ -305,7 +331,7 @@ void main() {
 
         await orchestrator.initialize();
 
-        expect(fakeGateway.listener, isNotNull);
+        expect(fakeGateway.hasEventSubscribers, isTrue);
         expect(fakeGateway.feedUrls.single, officialAutoUpdateFeedUrl);
         expect(fakeGateway.interval, 0);
       });
@@ -698,6 +724,7 @@ void main() {
           silentUpdateInstaller: fakeInstaller,
           settingsStore: settingsStore,
           metricsCollector: metricsCollector,
+          launcherStatusReader: const FileSilentUpdateLauncherStatusReader(),
         );
 
         await orchestrator.startAutomaticChecks();
@@ -1093,6 +1120,11 @@ void main() {
           silentUpdateInstaller: FakeSilentUpdateInstaller(),
           settingsStore: settingsStore,
           metricsCollector: metricsCollector,
+          // The default launcher status reader is a no-op so the
+          // application layer stays free of dart:io. Tests that need
+          // to drive the reconciler from an on-disk status file must
+          // inject the file-backed implementation explicitly.
+          launcherStatusReader: const FileSilentUpdateLauncherStatusReader(),
         );
 
         await orchestrator.startAutomaticChecks();
@@ -1146,6 +1178,11 @@ void main() {
           silentUpdateInstaller: fakeInstaller,
           settingsStore: settingsStore,
           metricsCollector: metricsCollector,
+          // Reconciliation needs the real reader to verify the on-disk
+          // artifacts; otherwise the no-op default would short-circuit
+          // every path check to "does not exist" and could lead the
+          // reconciler to a different code path.
+          launcherStatusReader: const FileSilentUpdateLauncherStatusReader(),
         );
 
         // startAutomaticChecks calls _reconcilePendingSilentUpdate before checking.
@@ -1188,7 +1225,7 @@ void main() {
         );
 
         fakeGateway.onCheckForUpdates = () async {
-          fakeGateway.listener?.onUpdaterUpdateAvailable(null);
+          await fakeGateway.emit(const UpdaterUpdateAvailable());
         };
 
         final result = await orchestrator.checkManual();
@@ -1226,7 +1263,7 @@ void main() {
         );
 
         fakeGateway.onCheckForUpdates = () async {
-          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+          await fakeGateway.emit(const UpdaterUpdateNotAvailable());
         };
 
         await orchestrator.initialize();
@@ -1253,7 +1290,7 @@ void main() {
         );
 
         fakeGateway.onCheckForUpdates = () async {
-          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+          await fakeGateway.emit(const UpdaterUpdateNotAvailable());
         };
 
         final result = await orchestrator.checkManual();
@@ -1386,7 +1423,7 @@ void main() {
         );
 
         fakeGateway.onCheckForUpdates = () async {
-          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+          await fakeGateway.emit(const UpdaterUpdateNotAvailable());
         };
 
         final result = await orchestrator.checkManual();
@@ -1426,7 +1463,7 @@ void main() {
         );
 
         fakeGateway.onCheckForUpdates = () async {
-          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+          await fakeGateway.emit(const UpdaterUpdateNotAvailable());
         };
 
         final result = await orchestrator.checkManual();
@@ -1499,9 +1536,10 @@ void main() {
     group('checkInBackground', () {
       test('calls allowQuitForUpdate before native updater quits the app', () async {
         var allowQuitCalled = false;
+        final fakeGateway = FakeAutoUpdaterGateway();
         final orchestrator = AutoUpdateOrchestrator(
           RuntimeCapabilities.full(),
-          updaterGateway: FakeAutoUpdaterGateway(),
+          updaterGateway: fakeGateway,
           settingsStore: settingsStore,
           metricsCollector: metricsCollector,
           allowQuitForUpdate: () async {
@@ -1509,8 +1547,9 @@ void main() {
           },
         );
 
-        orchestrator.onUpdaterBeforeQuitForUpdate(null);
-        await Future<void>.delayed(Duration.zero);
+        // Wire the orchestrator's event subscription before emitting.
+        await orchestrator.initialize();
+        await fakeGateway.emit(const UpdaterBeforeQuitForUpdate());
 
         expect(allowQuitCalled, isTrue);
       });
@@ -1528,8 +1567,8 @@ void main() {
 
         await orchestrator.initialize();
         fakeGateway.onCheckForUpdates = () async {
-          fakeGateway.listener?.onUpdaterCheckingForUpdate(null);
-          fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+          await fakeGateway.emit(const UpdaterCheckingForUpdate());
+          await fakeGateway.emit(const UpdaterUpdateNotAvailable());
         };
 
         await orchestrator.checkInBackground();
@@ -1599,7 +1638,7 @@ void main() {
 
         await orchestrator.initialize();
         fakeGateway.onCheckForUpdates = () async {
-          fakeGateway.listener?.onUpdaterError(null);
+          await fakeGateway.emit(const UpdaterErrorEvent());
         };
 
         await orchestrator.checkInBackground();
@@ -1721,10 +1760,10 @@ void main() {
 
         // A late onUpdaterUpdateAvailable arrives after the manual check
         // already finished by timeout. The drain window must absorb it.
-        fakeGateway.listener?.onUpdaterUpdateAvailable(null);
-        fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
-        fakeGateway.listener?.onUpdaterError(null);
-        fakeGateway.listener?.onUpdaterCheckingForUpdate(null);
+        await fakeGateway.emit(const UpdaterUpdateAvailable());
+        await fakeGateway.emit(const UpdaterUpdateNotAvailable());
+        await fakeGateway.emit(const UpdaterErrorEvent());
+        await fakeGateway.emit(const UpdaterCheckingForUpdate());
 
         expect(
           orchestrator.lastBackgroundDiagnostics,
@@ -1752,7 +1791,7 @@ void main() {
 
         await Future<void>.delayed(const Duration(milliseconds: 80));
 
-        fakeGateway.listener?.onUpdaterUpdateNotAvailable(null);
+        await fakeGateway.emit(const UpdaterUpdateNotAvailable());
 
         expect(
           orchestrator.lastBackgroundDiagnostics?.completionSource,

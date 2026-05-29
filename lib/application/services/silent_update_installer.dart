@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:result_dart/result_dart.dart';
 
 enum SilentUpdateInstallStrategy {
@@ -50,7 +51,11 @@ class SilentUpdateInstallRequest {
 
   /// Marker used in failure context so the coordinator can distinguish a
   /// user-driven cancellation from genuine network/validation errors.
-  static const String cancellationContextKey = 'cancelled';
+  ///
+  /// Prefer `failure is SilentInstallCancellationFailure` in new code;
+  /// this key is kept for backward compatibility with operators reading
+  /// the persisted diagnostics payload.
+  static const String cancellationContextKey = SilentInstallFailureContext.cancellationKey;
 }
 
 /// Inputs required to launch a previously prepared silent update helper.

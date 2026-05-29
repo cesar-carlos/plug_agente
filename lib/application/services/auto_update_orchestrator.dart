@@ -5,10 +5,14 @@ import 'dart:math';
 
 import 'package:auto_updater/auto_updater.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
+import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
+import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/manual_check_outcome.dart';
+import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
+import 'package:plug_agente/application/services/updater_event.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -20,22 +24,57 @@ import 'package:plug_agente/core/services/update_check_id_recorder.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
+/// Boundary the application layer uses to talk to WinSparkle. Avoids
+/// the orchestrator importing the platform-channel plugin types
+/// directly. Tests inject a fake; the production registrar wires the
+/// real adapter [AutoUpdaterGateway] backed by `package:auto_updater`.
 abstract interface class IAutoUpdaterGateway {
+  /// Backward-compatible direct listener subscription. New consumers
+  /// should prefer [events] (sealed [UpdaterEvent] stream) instead, so
+  /// they do not depend on the plugin's `UpdaterListener` mixin.
   void addListener(UpdaterListener listener);
+
+  /// Broadcast stream of sealed [UpdaterEvent]s translated from the
+  /// underlying plugin callbacks. Multiple subscribers are allowed and
+  /// the stream lives for the gateway lifetime.
+  Stream<UpdaterEvent> get events;
+
   Future<void> setFeedURL(String feedUrl);
   Future<void> checkForUpdates({required bool inBackground});
   Future<void> setScheduledCheckInterval(int interval);
 }
 
+/// Production adapter for WinSparkle. Hides the plugin behind the
+/// sealed [UpdaterEvent] surface; the orchestrator subscribes to
+/// [events] instead of mixing `UpdaterListener` into its own type.
+///
+/// The constructor is intentionally cheap (no plugin calls): the
+/// translator is only attached to `autoUpdater` on the first access to
+/// [events]. That keeps test/non-Windows code paths that build the
+/// orchestrator (e.g. degraded runtime checks) free from platform
+/// channel errors.
 class AutoUpdaterGateway implements IAutoUpdaterGateway {
-  const AutoUpdaterGateway();
+  AutoUpdaterGateway();
+
+  _UpdaterEventTranslator? _translator;
 
   @override
   void addListener(UpdaterListener listener) {
     autoUpdater.addListener(listener);
+  }
+
+  @override
+  Stream<UpdaterEvent> get events {
+    final existing = _translator;
+    if (existing != null) return existing.events;
+    final translator = _UpdaterEventTranslator();
+    autoUpdater.addListener(translator);
+    _translator = translator;
+    return translator.events;
   }
 
   @override
@@ -54,16 +93,67 @@ class AutoUpdaterGateway implements IAutoUpdaterGateway {
   }
 }
 
+/// Internal adapter that implements the plugin's `UpdaterListener` and
+/// forwards each callback as a sealed [UpdaterEvent] through a broadcast
+/// stream. Kept private to the orchestrator file so the only public
+/// surface remains [IAutoUpdaterGateway.events].
+class _UpdaterEventTranslator with UpdaterListener {
+  final StreamController<UpdaterEvent> _controller = StreamController<UpdaterEvent>.broadcast();
+
+  Stream<UpdaterEvent> get events => _controller.stream;
+
+  @override
+  void onUpdaterError(UpdaterError? error) {
+    _controller.add(UpdaterErrorEvent(message: error?.toString()));
+  }
+
+  @override
+  void onUpdaterCheckingForUpdate(Appcast? appcast) {
+    _controller.add(UpdaterCheckingForUpdate(itemCount: appcast?.items.length));
+  }
+
+  @override
+  void onUpdaterUpdateAvailable(AppcastItem? appcastItem) {
+    _controller.add(
+      UpdaterUpdateAvailable(
+        version: appcastItem?.versionString,
+        displayVersion: appcastItem?.displayVersionString,
+      ),
+    );
+  }
+
+  @override
+  void onUpdaterUpdateNotAvailable(UpdaterError? error) {
+    _controller.add(UpdaterUpdateNotAvailable(errorMessage: error?.message));
+  }
+
+  @override
+  void onUpdaterUpdateDownloaded(AppcastItem? appcastItem) {
+    _controller.add(UpdaterUpdateDownloaded(version: appcastItem?.versionString));
+  }
+
+  @override
+  void onUpdaterBeforeQuitForUpdate(AppcastItem? appcastItem) {
+    _controller.add(UpdaterBeforeQuitForUpdate(version: appcastItem?.versionString));
+  }
+}
+
 /// Orchestrates WinSparkle (manual/background) and the silent update path.
 ///
 /// The silent update cycle (probe → download → helper) is fully delegated to
-/// [SilentUpdateCoordinator]. This class owns the WinSparkle listener callbacks,
+/// [SilentUpdateCoordinator]. This class owns the WinSparkle event handling,
 /// the manual check flow, the circuit-breaker for timeouts, and the overall
 /// lifecycle (initialize, startAutomaticChecks, setAutomaticSilentUpdatesEnabled).
-class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestrator {
+///
+/// The orchestrator consumes the sealed [UpdaterEvent] stream exposed by
+/// [IAutoUpdaterGateway.events] instead of mixing the plugin's
+/// `UpdaterListener` into its own type. Keeps the application layer free
+/// of the platform-channel plugin types and lets [_handleUpdaterEvent]
+/// dispatch with exhaustive pattern matching.
+class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   AutoUpdateOrchestrator(
     this._capabilities, {
-    IAutoUpdaterGateway updaterGateway = const AutoUpdaterGateway(),
+    IAutoUpdaterGateway? updaterGateway,
     IAppcastProbeService appcastProbeService = const AppcastProbeService(),
     ISilentUpdateInstaller? silentUpdateInstaller,
     IAppSettingsStore? settingsStore,
@@ -87,26 +177,39 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     double backgroundRetryJitterFactor = _defaultBackgroundRetryJitterFactor,
     Random? random,
     IUacDetector? uacDetector,
+    IAutoUpdateDiagnosticsGateway? diagnosticsGateway,
+    IPendingSilentUpdateStore? pendingStore,
+    ISilentUpdateLauncherStatusReader? launcherStatusReader,
+    DateTime Function()? clock,
   }) : assert(
          backgroundRetryJitterFactor >= 0 && backgroundRetryJitterFactor <= 1,
          'backgroundRetryJitterFactor must be in [0, 1]',
        ),
-       _updaterGateway = updaterGateway,
+       _updaterGateway = updaterGateway ?? AutoUpdaterGateway(),
        _appcastProbeService = appcastProbeService,
        _settingsStore = settingsStore,
        _metricsCollector = metricsCollector,
+       _diagnosticsGateway = diagnosticsGateway,
        _allowQuitForUpdate = allowQuitForUpdate,
        _manualTriggerTimeout = manualTriggerTimeout,
        _manualCompletionTimeout = manualCompletionTimeout,
-       _timeoutCircuitThreshold = timeoutCircuitThreshold,
-       _timeoutCircuitCooldown = timeoutCircuitCooldown,
        _backgroundRetryLimit = backgroundRetryLimit,
        _backgroundRetryBaseDelay = backgroundRetryBaseDelay,
        _backgroundTriggerTimeout = backgroundTriggerTimeout,
        _backgroundRetryJitterFactor = backgroundRetryJitterFactor,
        _random = random ?? Random(),
        _lateCallbackDrainWindow = lateCallbackDrainWindow,
-       _checkIdRecorder = checkIdRecorder ?? UpdateCheckIdRecorder(settingsStore: settingsStore) {
+       _clock = clock ?? DateTime.now,
+       _checkIdRecorder = checkIdRecorder ?? UpdateCheckIdRecorder(settingsStore: settingsStore),
+       _manualTimeoutBreaker = PersistentCircuitBreaker(
+         countKey: _timeoutConsecutiveCountKey,
+         cooldownKey: _timeoutCooldownUntilKey,
+         threshold: timeoutCircuitThreshold,
+         cooldown: timeoutCircuitCooldown,
+         logName: 'auto_update_orchestrator',
+         settingsStore: settingsStore,
+         clock: clock,
+       ) {
     // The coordinator needs a resolver for the feed URL. Using a closure here
     // (after `this` is available) avoids the initializer-list self-reference issue.
     _silentCoordinator =
@@ -124,8 +227,12 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           helperWaitDuration: helperWaitDuration,
           bootJitterProvider: automaticBootJitterProvider,
           metricsCollector: metricsCollector,
+          diagnosticsGateway: diagnosticsGateway,
           checkIdRecorder: _checkIdRecorder,
           uacDetector: uacDetector,
+          pendingStore: pendingStore,
+          launcherStatusReader: launcherStatusReader,
+          clock: clock,
         );
     _hydratePersistedDiagnostics();
   }
@@ -141,26 +248,75 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     _changesController.add(null);
   }
 
+  /// Releases the resources the orchestrator owns: the updater event
+  /// subscription and the in-memory `_changesController`. Safe to call
+  /// from a DI teardown or from a test `tearDown`. Idempotent.
+  Future<void> dispose() async {
+    await _updaterEventsSubscription?.cancel();
+    _updaterEventsSubscription = null;
+    if (!_changesController.isClosed) {
+      await _changesController.close();
+    }
+  }
+
+  /// Best-effort push of [diagnostics] to the hub. The contract demands
+  /// the gateway throttle, omit sensitive fields and swallow errors, so
+  /// this method never awaits the future and never propagates exceptions
+  /// (telemetry must not influence the auto-update flow).
+  void _pushDiagnosticsBestEffort(
+    UpdateCheckDiagnostics? diagnostics,
+    AutoUpdateDiagnosticsSource source,
+  ) {
+    final gateway = _diagnosticsGateway;
+    if (gateway == null || diagnostics == null) return;
+    unawaited(
+      Future<void>(() async {
+        try {
+          await gateway.push(diagnostics: diagnostics, source: source);
+        } on Object catch (error, stackTrace) {
+          developer.log(
+            'Auto-update diagnostics push threw (ignored)',
+            name: 'auto_update_orchestrator',
+            level: 800,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }),
+    );
+  }
+
   final RuntimeCapabilities _capabilities;
   final IAutoUpdaterGateway _updaterGateway;
   final IAppcastProbeService _appcastProbeService;
   final IAppSettingsStore? _settingsStore;
   final IAutoUpdateMetricsCollector? _metricsCollector;
+  final IAutoUpdateDiagnosticsGateway? _diagnosticsGateway;
   final Future<void> Function()? _allowQuitForUpdate;
   final Duration _manualTriggerTimeout;
   final Duration _manualCompletionTimeout;
-  final int _timeoutCircuitThreshold;
-  final Duration _timeoutCircuitCooldown;
   final int _backgroundRetryLimit;
   final Duration _backgroundRetryBaseDelay;
   final Duration _backgroundTriggerTimeout;
   final double _backgroundRetryJitterFactor;
   final Random _random;
   final Duration _lateCallbackDrainWindow;
+  final DateTime Function() _clock;
   final UpdateCheckIdRecorder _checkIdRecorder;
+
+  /// Shared circuit breaker that ladders consecutive manual-check
+  /// timeouts into a cooldown window. Reused implementation lives in
+  /// [PersistentCircuitBreaker].
+  final PersistentCircuitBreaker _manualTimeoutBreaker;
   late final ISilentUpdateCoordinator _silentCoordinator;
 
   bool _isInitialized = false;
+
+  /// Subscription to the gateway's sealed [UpdaterEvent] stream. Created
+  /// on first [initialize] call so test paths that never initialise the
+  /// orchestrator (e.g. degraded runtime) do not touch the underlying
+  /// plugin's broadcast stream.
+  StreamSubscription<UpdaterEvent>? _updaterEventsSubscription;
   Completer<Result<ManualCheckOutcome>>? _manualCheckCompleter;
   bool _isManualCheck = false;
   bool _isBackgroundCheckInProgress = false;
@@ -209,13 +365,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     final uri = Uri.tryParse(baseFeedUrl);
     if (uri == null) return baseFeedUrl;
     final query = Map<String, String>.from(uri.queryParameters);
-    query['cb'] = DateTime.now().millisecondsSinceEpoch.toString();
+    query['cb'] = _clock().millisecondsSinceEpoch.toString();
     return uri.replace(queryParameters: query).toString();
-  }
-
-  String _extractFailureMessage(Exception error) {
-    if (error is domain.Failure) return error.message;
-    return error.toString();
   }
 
   void _logManualCheck(
@@ -273,7 +424,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   bool get isSilentCheckInProgress => _silentCoordinator.isSilentCheckInProgress;
 
   @override
-  bool get hasPendingDownloadedUpdate => _silentCoordinator.hasPendingDownloadedUpdate;
+  Future<bool> get hasPendingDownloadedUpdate => _silentCoordinator.hasPendingDownloadedUpdate;
 
   @override
   bool get hasUpdateAwaitingUserConsent {
@@ -385,69 +536,12 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   // Timeout circuit breaker (manual check)
   // ---------------------------------------------------------------------------
 
-  int _consecutiveTimeoutCount() => _settingsStore?.getInt(_timeoutConsecutiveCountKey) ?? 0;
-
-  DateTime? _timeoutCooldownUntil() {
-    final timestamp = _settingsStore?.getInt(_timeoutCooldownUntilKey);
-    if (timestamp == null || timestamp <= 0) return null;
-    return DateTime.fromMillisecondsSinceEpoch(timestamp);
-  }
-
-  Future<void> _recordTimeoutOutcome() async {
-    final settingsStore = _settingsStore;
-    if (settingsStore == null) return;
-    final nextCount = _consecutiveTimeoutCount() + 1;
-    final values = <String, Object>{_timeoutConsecutiveCountKey: nextCount};
-    if (nextCount >= _timeoutCircuitThreshold) {
-      final cooldownUntil = DateTime.now().add(_timeoutCircuitCooldown);
-      values[_timeoutCooldownUntilKey] = cooldownUntil.millisecondsSinceEpoch;
-      _metricsCollector?.recordAutoUpdateCircuitOpened();
-      _logManualCheck('Auto-update manual check circuit opened', checkId: _activeCheckId, level: 900);
-    }
-    try {
-      await settingsStore.setValues(values);
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to persist auto-update timeout state',
-        name: 'auto_update_orchestrator',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
-  Future<void> _resetTimeoutCircuitIfNeeded() async {
-    final settingsStore = _settingsStore;
-    if (settingsStore == null) return;
-    final hasTimeoutCount = settingsStore.containsKey(_timeoutConsecutiveCountKey);
-    final hasCooldown = settingsStore.containsKey(_timeoutCooldownUntilKey);
-    if (!hasTimeoutCount && !hasCooldown) return;
-    try {
-      await settingsStore.remove(_timeoutConsecutiveCountKey);
-      await settingsStore.remove(_timeoutCooldownUntilKey);
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to reset auto-update timeout circuit state',
-        name: 'auto_update_orchestrator',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
   Future<Result<ManualCheckOutcome>?> _buildCircuitOpenFailure(String feedUrl) async {
-    final cooldownUntil = _timeoutCooldownUntil();
-    if (cooldownUntil == null) return null;
-    final remaining = cooldownUntil.difference(DateTime.now());
-    if (remaining.isNegative || remaining == Duration.zero) {
-      await _resetTimeoutCircuitIfNeeded();
-      return null;
-    }
+    final remaining = await _manualTimeoutBreaker.remainingCooldown();
+    if (remaining == null) return null;
     final minutesRemaining = remaining.inMinutes;
     final humanRemaining = minutesRemaining >= 1 ? '$minutesRemaining min' : '${remaining.inSeconds}s';
-    final now = DateTime.now();
+    final now = _clock();
     final failure = Failure<ManualCheckOutcome, Exception>(
       _buildManualFailure(
         message:
@@ -471,6 +565,21 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     await _persistLastManualDiagnostics();
     _metricsCollector?.recordAutoUpdateCircuitOpenRejected();
     return failure;
+  }
+
+  /// Records a timeout occurrence and, when the threshold is reached,
+  /// emits the circuit-opened metric. Delegates persistence to the
+  /// shared [PersistentCircuitBreaker].
+  Future<void> _recordTimeoutOutcome() async {
+    final previousCount = _manualTimeoutBreaker.failureCount;
+    final state = await _manualTimeoutBreaker.recordFailure();
+    final justOpened = state.cooldownUntil != null &&
+        previousCount + 1 >= _manualTimeoutBreaker.threshold &&
+        previousCount < _manualTimeoutBreaker.threshold;
+    if (justOpened) {
+      _metricsCollector?.recordAutoUpdateCircuitOpened();
+      _logManualCheck('Auto-update manual check circuit opened', checkId: _activeCheckId, level: 900);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -516,7 +625,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   }
 
   UpdateCheckDiagnostics _buildBackgroundDiagnostics(String feedUrl) {
-    final now = DateTime.now();
+    final now = _clock();
     final id = _checkIdRecorder.newId();
     unawaited(_checkIdRecorder.record(id, source: 'background'));
     return UpdateCheckDiagnostics(
@@ -533,7 +642,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     final feedUrl = _feedUrl ?? officialAutoUpdateFeedUrl;
     return _lastBackgroundDiagnostics ??
         UpdateCheckDiagnostics(
-          checkedAt: DateTime.now(),
+          checkedAt: _clock(),
           configuredFeedUrl: feedUrl,
           requestedFeedUrl: feedUrl,
           currentVersion: AppConstants.appVersion,
@@ -568,7 +677,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     );
     final updaterIntervalSeconds = automaticSilentUpdatesEnabled ? 0 : intervalSeconds;
     try {
-      _updaterGateway.addListener(this);
+      _updaterEventsSubscription ??= _updaterGateway.events.listen(_handleUpdaterEvent);
       await _updaterGateway.setFeedURL(feedUrl);
       await _updaterGateway.setScheduledCheckInterval(updaterIntervalSeconds);
       _isInitialized = true;
@@ -707,9 +816,12 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     } finally {
       // Resume the periodic timer in all paths. On the success branch
       // the helper will shortly close the app, but a flake there must
-      // not leave the coordinator permanently stopped.
+      // not leave the coordinator permanently stopped. We deliberately
+      // skip the immediate kick-off: a brand-new probe right after a
+      // user-initiated apply would race the shutdown handler that the
+      // helper is about to trigger.
       if (shouldResumeTimer) {
-        _silentCoordinator.scheduleAndStart();
+        _silentCoordinator.scheduleAndStart(runImmediately: false);
       }
     }
   }
@@ -797,12 +909,13 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           // loop and any future cycles (until the app restarts).
           await _updaterGateway.checkForUpdates(inBackground: true).timeout(_backgroundTriggerTimeout);
           _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
-            triggerCompletedAt: DateTime.now(),
+            triggerCompletedAt: _clock(),
           );
           unawaited(_persistLastBackgroundDiagnostics());
+          _pushDiagnosticsBestEffort(_lastBackgroundDiagnostics, AutoUpdateDiagnosticsSource.background);
           return;
         } on Exception catch (e, s) {
-          final completedAt = DateTime.now();
+          final completedAt = _clock();
           _lastBackgroundDiagnostics = _lastBackgroundDiagnostics?.copyWith(
             triggerCompletedAt: completedAt,
             completedAt: completedAt,
@@ -811,6 +924,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           );
           _metricsCollector?.recordAutoUpdateBackgroundCheckTriggerFailure();
           unawaited(_persistLastBackgroundDiagnostics());
+          _pushDiagnosticsBestEffort(_lastBackgroundDiagnostics, AutoUpdateDiagnosticsSource.background);
           developer.log(
             'Background update check failed (attempt $attempt/$_backgroundRetryLimit)',
             name: 'auto_update_orchestrator',
@@ -879,11 +993,11 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           ),
         );
         _lastManualDiagnostics = UpdateCheckDiagnostics(
-          checkedAt: DateTime.now(),
+          checkedAt: _clock(),
           configuredFeedUrl: feedUrl,
           requestedFeedUrl: feedUrl,
           currentVersion: AppConstants.appVersion,
-          completedAt: DateTime.now(),
+          completedAt: _clock(),
           completionSource: UpdateCheckCompletionSource.notInitialized,
           errorMessage: 'Auto-update is not initialized',
         );
@@ -907,7 +1021,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     final manualFeedUrl = _buildManualFeedUrl(feedUrl);
     _metricsCollector?.recordAutoUpdateManualCheckStarted();
     _activeManualDiagnostics = UpdateCheckDiagnostics(
-      checkedAt: DateTime.now(),
+      checkedAt: _clock(),
       configuredFeedUrl: feedUrl,
       requestedFeedUrl: manualFeedUrl,
       checkId: _activeCheckId,
@@ -927,14 +1041,14 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         releaseNotes: probeResult.releaseNotes,
         releaseNotesUrl: probeResult.releaseNotesUrl,
       );
-      final triggerStartedAt = DateTime.now();
+      final triggerStartedAt = _clock();
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
         triggerStartedAt: triggerStartedAt,
       );
       // Use WinSparkle check without UI so the Settings dialog is the only user-facing
       // result for "no update" / errors; native "up to date" duplicates Fluent feedback.
       await _updaterGateway.checkForUpdates(inBackground: true).timeout(_manualTriggerTimeout);
-      final triggerCompletedAt = DateTime.now();
+      final triggerCompletedAt = _clock();
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
         triggerCompletedAt: triggerCompletedAt,
       );
@@ -957,7 +1071,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         },
       );
     } on TimeoutException catch (e) {
-      final now = DateTime.now();
+      final now = _clock();
       _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(triggerCompletedAt: now);
       final failure = Failure<ManualCheckOutcome, Exception>(
         _buildManualFailure(
@@ -985,32 +1099,35 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
           completionSource == UpdateCheckCompletionSource.completionTimeout) {
         await _recordTimeoutOutcome();
       } else if (completionSource != null && completionSource != UpdateCheckCompletionSource.circuitOpen) {
-        await _resetTimeoutCircuitIfNeeded();
+        await _manualTimeoutBreaker.reset();
       }
       await _persistLastManualDiagnostics();
+      _pushDiagnosticsBestEffort(_lastManualDiagnostics, AutoUpdateDiagnosticsSource.manual);
       _activeManualDiagnostics = null;
       _isManualCheck = false;
       _manualCheckCompleter = null;
       _activeCheckId = null;
-      _lastManualCheckEndedAt = DateTime.now();
+      _lastManualCheckEndedAt = _clock();
     }
   }
 
   /// True when a callback from WinSparkle arrived after `checkManual` already
   /// ended (typically via [_manualCompletionTimeout]) and within
   /// [_lateCallbackDrainWindow]. These callbacks must not be persisted as
-  /// background diagnostics or count as background failures.
+  /// background diagnostics or count as background failures. Uses the
+  /// injected [_clock] so an NTP step on the host machine cannot
+  /// misclassify the window — tests can also drive it deterministically.
   bool _isLateManualCallback() {
     final lastEndedAt = _lastManualCheckEndedAt;
     if (lastEndedAt == null) return false;
-    return DateTime.now().difference(lastEndedAt) <= _lateCallbackDrainWindow;
+    return _clock().difference(lastEndedAt) <= _lateCallbackDrainWindow;
   }
 
   void _completeManualCheck(
     Result<ManualCheckOutcome> result, {
     UpdateCheckCompletionSource? completionSource,
   }) {
-    final completedAt = DateTime.now();
+    final completedAt = _clock();
     final isTrackedManualCheck = _activeManualDiagnostics != null;
     result.fold(
       (outcome) {
@@ -1031,7 +1148,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
           completedAt: completedAt,
           completionSource: resolvedCompletionSource,
-          errorMessage: _extractFailureMessage(error),
+          errorMessage: extractAutoUpdateFailureMessage(error),
         );
         if (isTrackedManualCheck) _recordCompletionMetric(resolvedCompletionSource);
       },
@@ -1054,35 +1171,55 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
   }
 
   // ---------------------------------------------------------------------------
-  // WinSparkle listener callbacks
+  // WinSparkle event handling (sealed UpdaterEvent dispatcher)
   // ---------------------------------------------------------------------------
 
-  @override
-  void onUpdaterError(UpdaterError? error) {
+  /// Single entry point for every plugin notification, translated to the
+  /// sealed [UpdaterEvent] tree by [AutoUpdaterGateway]. Pattern-matching
+  /// keeps the dispatcher exhaustive: a new variant forces a new branch
+  /// here, not a silent fall-through.
+  void _handleUpdaterEvent(UpdaterEvent event) {
+    switch (event) {
+      case UpdaterErrorEvent():
+        _onUpdaterError(event.message);
+      case UpdaterCheckingForUpdate():
+        _onUpdaterCheckingForUpdate(event.itemCount);
+      case UpdaterUpdateAvailable():
+        _onUpdaterUpdateAvailable(version: event.version, displayVersion: event.displayVersion);
+      case UpdaterUpdateNotAvailable():
+        _onUpdaterUpdateNotAvailable(errorMessage: event.errorMessage);
+      case UpdaterUpdateDownloaded():
+        _logManualCheck('Update downloaded: ${event.version}', checkId: _activeCheckId);
+      case UpdaterBeforeQuitForUpdate():
+        _onUpdaterBeforeQuitForUpdate(event.version);
+    }
+  }
+
+  void _onUpdaterError(String? message) {
     if (!_isManualCheck) {
       if (_isLateManualCallback()) {
         developer.log(
-          'Ignoring late auto-updater error from a previously timed-out manual check: $error',
+          'Ignoring late auto-updater error from a previously timed-out manual check: $message',
           name: 'auto_update_orchestrator',
           level: 800,
         );
         return;
       }
       _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
-        completedAt: DateTime.now(),
+        completedAt: _clock(),
         completionSource: UpdateCheckCompletionSource.updaterError,
-        errorMessage: error?.toString() ?? 'Update check failed',
+        errorMessage: message ?? 'Update check failed',
       );
       _metricsCollector?.recordAutoUpdateBackgroundCheckUpdaterError();
       unawaited(_persistLastBackgroundDiagnostics());
-      developer.log('Background auto-updater error: $error', name: 'auto_update_orchestrator', level: 900);
+      developer.log('Background auto-updater error: $message', name: 'auto_update_orchestrator', level: 900);
       return;
     }
-    _logManualCheck('Auto-updater error: $error', checkId: _activeCheckId, level: 900);
+    _logManualCheck('Auto-updater error: $message', checkId: _activeCheckId, level: 900);
     _completeManualCheck(
       Failure<ManualCheckOutcome, Exception>(
         _buildManualFailure(
-          message: error?.toString() ?? 'Update check failed',
+          message: message ?? 'Update check failed',
           completionSource: UpdateCheckCompletionSource.updaterError,
           context: {'operation': 'onUpdaterError'},
         ),
@@ -1091,8 +1228,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     );
   }
 
-  @override
-  void onUpdaterCheckingForUpdate(Appcast? appcast) {
+  void _onUpdaterCheckingForUpdate(int? itemCount) {
+    final items = itemCount ?? 0;
     if (!_isManualCheck) {
       if (_isLateManualCallback()) {
         developer.log(
@@ -1104,69 +1241,64 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
       }
       final diagnostics = _backgroundDiagnosticsOrDefault();
       _lastBackgroundDiagnostics = diagnostics.copyWith(
-        triggerStartedAt: diagnostics.triggerStartedAt ?? DateTime.now(),
+        triggerStartedAt: diagnostics.triggerStartedAt ?? _clock(),
       );
       unawaited(_persistLastBackgroundDiagnostics());
       developer.log(
-        'Background check for updates... (items: ${appcast?.items.length ?? 0})',
+        'Background check for updates... (items: $items)',
         name: 'auto_update_orchestrator',
         level: 800,
       );
       return;
     }
     _logManualCheck(
-      'Checking for updates... (items: ${appcast?.items.length ?? 0})',
+      'Checking for updates... (items: $items)',
       checkId: _activeCheckId,
     );
   }
 
-  @override
-  void onUpdaterUpdateAvailable(AppcastItem? appcastItem) {
+  void _onUpdaterUpdateAvailable({String? version, String? displayVersion}) {
     if (!_isManualCheck) {
       if (_isLateManualCallback()) {
         developer.log(
-          'Ignoring late update-available from a previously timed-out manual check: '
-          '${appcastItem?.versionString}',
+          'Ignoring late update-available from a previously timed-out manual check: $version',
           name: 'auto_update_orchestrator',
           level: 800,
         );
         return;
       }
       _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
-        completedAt: DateTime.now(),
+        completedAt: _clock(),
         completionSource: UpdateCheckCompletionSource.updateAvailable,
         updateAvailable: true,
-        remoteVersion: appcastItem?.versionString,
-        remoteDisplayVersion: appcastItem?.displayVersionString,
+        remoteVersion: version,
+        remoteDisplayVersion: displayVersion,
       );
       unawaited(_persistLastBackgroundDiagnostics());
       developer.log(
-        'Background update available: ${appcastItem?.versionString} '
-        '(display: ${appcastItem?.displayVersionString})',
+        'Background update available: $version (display: $displayVersion)',
         name: 'auto_update_orchestrator',
         level: 800,
       );
       return;
     }
     _logManualCheck(
-      'Update available: ${appcastItem?.versionString} '
-      '(display: ${appcastItem?.displayVersionString})',
+      'Update available: $version (display: $displayVersion)',
       checkId: _activeCheckId,
     );
-    final sparkleVersion = appcastItem?.versionString;
     final probeVersion = _activeManualDiagnostics?.appcastProbeVersion;
-    final probeMatchesSparkle = sparkleVersion != null && probeVersion != null ? sparkleVersion == probeVersion : null;
+    final probeMatchesSparkle = version != null && probeVersion != null ? version == probeVersion : null;
     if (probeMatchesSparkle == false) {
       _logManualCheck(
-        'Probe version ($probeVersion) does not match Sparkle version ($sparkleVersion) '
+        'Probe version ($probeVersion) does not match Sparkle version ($version) '
         '— possible CDN cache skew',
         checkId: _activeCheckId,
         level: 900,
       );
     }
     _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(
-      remoteVersion: sparkleVersion,
-      remoteDisplayVersion: appcastItem?.displayVersionString,
+      remoteVersion: version,
+      remoteDisplayVersion: displayVersion,
       probeMatchesSparkle: probeMatchesSparkle,
     );
     _completeManualCheck(
@@ -1175,8 +1307,7 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     );
   }
 
-  @override
-  void onUpdaterUpdateNotAvailable(UpdaterError? error) {
+  void _onUpdaterUpdateNotAvailable({String? errorMessage}) {
     if (!_isManualCheck) {
       if (_isLateManualCallback()) {
         developer.log(
@@ -1187,21 +1318,21 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         return;
       }
       _lastBackgroundDiagnostics = _backgroundDiagnosticsOrDefault().copyWith(
-        completedAt: DateTime.now(),
+        completedAt: _clock(),
         completionSource: UpdateCheckCompletionSource.updateNotAvailable,
         updateAvailable: false,
-        errorMessage: error?.message,
+        errorMessage: errorMessage,
       );
       unawaited(_persistLastBackgroundDiagnostics());
       developer.log(
-        'No background update available (error: $error)',
+        'No background update available (error: $errorMessage)',
         name: 'auto_update_orchestrator',
         level: 800,
       );
       return;
     }
     _logManualCheck(
-      'No update available (manual: $_isManualCheck, error: $error)',
+      'No update available (manual: $_isManualCheck, error: $errorMessage)',
       checkId: _activeCheckId,
     );
     // Probe found a version but Sparkle says no update — also a skew signal.
@@ -1215,8 +1346,8 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
         level: 900,
       );
     }
-    if (error != null) {
-      _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(errorMessage: error.message);
+    if (errorMessage != null) {
+      _activeManualDiagnostics = _activeManualDiagnostics?.copyWith(errorMessage: errorMessage);
     }
     _completeManualCheck(
       const Success(ManualCheckOutcome.noUpdate),
@@ -1224,15 +1355,9 @@ class AutoUpdateOrchestrator with UpdaterListener implements IAutoUpdateOrchestr
     );
   }
 
-  @override
-  void onUpdaterUpdateDownloaded(AppcastItem? appcastItem) {
-    _logManualCheck('Update downloaded: ${appcastItem?.versionString}', checkId: _activeCheckId);
-  }
-
-  @override
-  void onUpdaterBeforeQuitForUpdate(AppcastItem? appcastItem) {
+  void _onUpdaterBeforeQuitForUpdate(String? version) {
     _logManualCheck(
-      'Before quit for update: ${appcastItem?.versionString}',
+      'Before quit for update: $version',
       checkId: _activeCheckId,
     );
     final allowQuitForUpdate = _allowQuitForUpdate;

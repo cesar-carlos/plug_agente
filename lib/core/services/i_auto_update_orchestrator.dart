@@ -11,11 +11,13 @@ abstract class IAutoUpdateOrchestrator {
   /// Useful for the UI to show a progress indicator without polling.
   bool get isSilentCheckInProgress;
 
-  /// `true` when a silent update has finished downloading and the
-  /// installer + helper are staged on disk waiting for the user to apply
-  /// them. The agent stays fully connected and operational while this is
-  /// `true`.
-  bool get hasPendingDownloadedUpdate;
+  /// Resolves to `true` when a silent update has finished downloading
+  /// and the installer + helper are staged on disk waiting for the user
+  /// to apply them. The agent stays fully connected and operational
+  /// while this is `true`. Async because verifying the on-disk
+  /// artifacts is now done through an injectable file-system reader
+  /// instead of blocking `existsSync` calls on the event loop.
+  Future<bool> get hasPendingDownloadedUpdate;
 
   /// `true` when the silent flow detected a newer version but stopped
   /// before downloading because Windows UAC would prompt the user for

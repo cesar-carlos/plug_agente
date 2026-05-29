@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/security/helper_signature_probe.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -794,7 +795,10 @@ void main() {
       result.fold(
         (_) => fail('Expected failure when cancellation is requested'),
         (failure) {
-          expect(failure, isA<domain.ConfigurationFailure>());
+          // Cancellation is now a typed sealed failure; the legacy
+          // context marker stays in place for operators inspecting
+          // persisted diagnostics.
+          expect(failure, isA<SilentInstallCancellationFailure>());
           final context = (failure as domain.Failure).context;
           expect(context[SilentUpdateInstallRequest.cancellationContextKey], isTrue);
         },

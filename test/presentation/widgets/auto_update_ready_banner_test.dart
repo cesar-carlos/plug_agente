@@ -16,10 +16,13 @@ import 'package:result_dart/result_dart.dart';
 
 class _FakeOrchestrator implements IAutoUpdateOrchestrator {
   _FakeOrchestrator({
-    this.hasPendingDownloadedUpdate = false,
+    bool hasPendingDownloadedUpdate = false,
     this.hasUpdateAwaitingUserConsent = false,
     UpdateCheckDiagnostics? diagnostics,
-  }) : lastAutomaticDiagnostics = diagnostics;
+  }) : hasPendingDownloadedUpdateValue = hasPendingDownloadedUpdate,
+       lastAutomaticDiagnostics = diagnostics;
+
+  bool hasPendingDownloadedUpdateValue;
 
   final _changesController = StreamController<void>.broadcast();
 
@@ -36,7 +39,7 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
   bool isSilentCheckInProgress = false;
 
   @override
-  bool hasPendingDownloadedUpdate;
+  Future<bool> get hasPendingDownloadedUpdate async => hasPendingDownloadedUpdateValue;
 
   @override
   bool hasUpdateAwaitingUserConsent;

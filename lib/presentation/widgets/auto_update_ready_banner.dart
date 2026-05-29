@@ -10,6 +10,7 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/widgets/auto_update_banner_activity.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// In-app banner shown across the app shell when a silent update either
@@ -28,23 +29,22 @@ class AutoUpdateReadyBanner extends StatefulWidget {
 
 enum _BannerMode { pendingDownloaded, awaitingUserConsent }
 
-/// Coarse-grained phase used to label the spinner during an apply. We
-/// derive the phase locally from the high-level state because the
-/// installer pipeline does not currently expose a progress stream. The
-/// labels still help the operator understand that a multi-step
-/// operation is in flight (and that the app will soon close).
-enum _ApplyPhase { idle, downloading, staging, launching }
-
 class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
   static const Duration _dismissTtl = Duration(hours: 6);
 
   IAutoUpdateOrchestrator? _orchestrator;
   IAppSettingsStore? _settingsStore;
   StreamSubscription<void>? _changesSubscription;
-  bool _isApplying = false;
-  _ApplyPhase _applyPhase = _ApplyPhase.idle;
+  AutoUpdateBannerActivity _activity = const AutoUpdateBannerIdle();
   String? _dismissedForVersion;
   DateTime? _dismissedUntil;
+
+  /// Snapshot of the latest "has pending downloaded update" answer. The
+  /// orchestrator getter is async now (it inspects on-disk artifacts
+  /// through an injected reader); we hydrate this flag from
+  /// [_handleChange] / [didChangeDependencies] so [build] stays
+  /// synchronous and the rebuild path is jank-free.
+  bool _hasPendingDownloaded = false;
 
   @override
   void initState() {
@@ -58,6 +58,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
       _settingsStore = getIt<IAppSettingsStore>();
       _hydrateDismissState();
     }
+    unawaited(_refreshPendingState());
   }
 
   void _hydrateDismissState() {
@@ -94,13 +95,25 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
 
   void _handleChange() {
     if (!mounted) return;
-    setState(() {});
+    unawaited(_refreshPendingState());
+  }
+
+  Future<void> _refreshPendingState() async {
+    final orchestrator = _orchestrator;
+    if (orchestrator == null) return;
+    final result = await orchestrator.hasPendingDownloadedUpdate;
+    if (!mounted) return;
+    if (_hasPendingDownloaded != result) {
+      setState(() => _hasPendingDownloaded = result);
+    } else {
+      setState(() {});
+    }
   }
 
   _BannerMode? get _mode {
     final orchestrator = _orchestrator;
     if (orchestrator == null) return null;
-    if (orchestrator.hasPendingDownloadedUpdate) return _BannerMode.pendingDownloaded;
+    if (_hasPendingDownloaded) return _BannerMode.pendingDownloaded;
     if (orchestrator.hasUpdateAwaitingUserConsent) return _BannerMode.awaitingUserConsent;
     return null;
   }
@@ -126,7 +139,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
 
   Future<void> _onPrimaryAction(AppLocalizations l10n, _BannerMode mode) async {
     final orchestrator = _orchestrator;
-    if (orchestrator == null || _isApplying) return;
+    if (orchestrator == null || _activity.isBusy) return;
     final version = _pendingVersion(orchestrator) ?? '';
     final confirmed = await _showConfirmDialog(l10n, version, mode);
     if (!mounted || confirmed != true) return;
@@ -140,10 +153,11 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     final noticeBody = l10n.configAutoUpdateClosingBody(_preCloseDelaySeconds);
 
     setState(() {
-      _isApplying = true;
       // Pending-downloaded skips the download phase (already on disk);
       // the UAC-blocked path begins by downloading the installer.
-      _applyPhase = mode == _BannerMode.pendingDownloaded ? _ApplyPhase.staging : _ApplyPhase.downloading;
+      _activity = mode == _BannerMode.pendingDownloaded
+          ? const AutoUpdateBannerStaging()
+          : const AutoUpdateBannerDownloading();
     });
 
     final Result<void> result;
@@ -165,10 +179,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
       (failure) => error = failure,
     );
     if (error != null) {
-      setState(() {
-        _isApplying = false;
-        _applyPhase = _ApplyPhase.idle;
-      });
+      setState(() => _activity = const AutoUpdateBannerIdle());
       _showApplyError(l10n, error!);
       return;
     }
@@ -176,7 +187,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     // label one last time so the spinner reflects what is happening
     // while we wait for the app to terminate.
     if (mounted) {
-      setState(() => _applyPhase = _ApplyPhase.launching);
+      setState(() => _activity = const AutoUpdateBannerLaunching());
     }
   }
 
@@ -355,13 +366,13 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
           ),
           const SizedBox(width: AppSpacing.md),
           Button(
-            onPressed: _isApplying ? null : () => _onDefer(l10n),
+            onPressed: _activity.isBusy ? null : () => _onDefer(l10n),
             child: Text(l10n.autoUpdateReadyBannerDefer),
           ),
           const SizedBox(width: AppSpacing.sm),
           FilledButton(
-            onPressed: _isApplying ? null : () => _onPrimaryAction(l10n, mode),
-            child: _isApplying
+            onPressed: _activity.isBusy ? null : () => _onPrimaryAction(l10n, mode),
+            child: _activity.isBusy
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -371,7 +382,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
                         child: ProgressRing(strokeWidth: 2),
                       ),
                       const SizedBox(width: AppSpacing.sm),
-                      Text(_applyPhaseLabel(l10n)),
+                      Text(_activityLabel(l10n)),
                     ],
                   )
                 : Text(primaryLabel),
@@ -381,12 +392,15 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     );
   }
 
-  String _applyPhaseLabel(AppLocalizations l10n) {
-    return switch (_applyPhase) {
-      _ApplyPhase.downloading => l10n.autoUpdateApplyPhaseDownloading,
-      _ApplyPhase.staging => l10n.autoUpdateApplyPhaseStaging,
-      _ApplyPhase.launching => l10n.autoUpdateApplyPhaseLaunching,
-      _ApplyPhase.idle => l10n.autoUpdateApplyPhaseStaging,
+  String _activityLabel(AppLocalizations l10n) {
+    return switch (_activity) {
+      AutoUpdateBannerDownloading() => l10n.autoUpdateApplyPhaseDownloading,
+      AutoUpdateBannerStaging() => l10n.autoUpdateApplyPhaseStaging,
+      AutoUpdateBannerLaunching() => l10n.autoUpdateApplyPhaseLaunching,
+      // Idle never shows the spinner, so this branch is reached only
+      // during the brief transition between user click and the first
+      // setState that flips activity to Downloading/Staging.
+      AutoUpdateBannerIdle() => l10n.autoUpdateApplyPhaseStaging,
     };
   }
 }

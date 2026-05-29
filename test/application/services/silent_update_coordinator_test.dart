@@ -240,7 +240,7 @@ void main() {
           final downloadResult = await coordinator.checkSilently();
           expect(downloadResult.isSuccess(), isTrue);
           expect(
-            coordinator.hasPendingDownloadedUpdate,
+            await coordinator.hasPendingDownloadedUpdate,
             isFalse,
             reason: 'pending paths point to a non-existent test directory',
           );

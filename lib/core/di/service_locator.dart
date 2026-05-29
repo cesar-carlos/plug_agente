@@ -175,7 +175,7 @@ Future<void> _launchPendingSilentUpdateHelperIfReady() async {
     return;
   }
   final orchestrator = getIt<IAutoUpdateOrchestrator>();
-  if (!orchestrator.hasPendingDownloadedUpdate) {
+  if (!await orchestrator.hasPendingDownloadedUpdate) {
     return;
   }
   try {

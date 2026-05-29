@@ -1,31 +1,38 @@
-abstract class IAutoUpdateMetricsCollector {
-  void recordAutoUpdateBackgroundCheckTriggerFailure();
-
-  void recordAutoUpdateBackgroundCheckUpdaterError();
-
-  void recordAutoUpdateCircuitOpened();
-
-  void recordAutoUpdateCircuitOpenRejected();
-
+/// Metrics surface for the **manual** auto-update path (Settings ->
+/// "Check for updates"). Lives apart from the other surfaces so a test
+/// stub or a feature-specific consumer can implement only what it needs.
+abstract interface class IAutoUpdateManualCheckMetricsCollector {
+  void recordAutoUpdateManualCheckStarted();
+  void recordAutoUpdateManualCheckSuccessAvailable();
+  void recordAutoUpdateManualCheckSuccessNotAvailable();
+  void recordAutoUpdateManualCheckUpdaterError();
+  void recordAutoUpdateManualCheckTriggerTimeout();
   void recordAutoUpdateManualCheckCompletionTimeout();
-
+  void recordAutoUpdateManualCheckTriggerFailure();
   void recordAutoUpdateManualCheckNotInitialized();
 
-  void recordAutoUpdateManualCheckStarted();
+  /// Manual-path circuit breaker opened after repeated timeouts.
+  void recordAutoUpdateCircuitOpened();
 
-  void recordAutoUpdateManualCheckSuccessAvailable();
+  /// Manual-path check rejected because the timeout circuit is still
+  /// open.
+  void recordAutoUpdateCircuitOpenRejected();
+}
 
-  void recordAutoUpdateManualCheckSuccessNotAvailable();
+/// Metrics surface for the **background** auto-update path (WinSparkle
+/// periodic trigger).
+abstract interface class IAutoUpdateBackgroundCheckMetricsCollector {
+  void recordAutoUpdateBackgroundCheckTriggerFailure();
+  void recordAutoUpdateBackgroundCheckUpdaterError();
+}
 
-  void recordAutoUpdateManualCheckTriggerFailure();
-
-  void recordAutoUpdateManualCheckTriggerTimeout();
-
-  void recordAutoUpdateManualCheckUpdaterError();
-
-  /// Adds a duration sample for the appcast probe step (HTTP fetch + parse).
-  /// Used to expose `auto_update_probe_*_time_ms` percentiles in the metrics
-  /// snapshot.
+/// Metrics surface for the **silent** auto-update path (probe -> download
+/// -> stage -> apply). Includes the user-initiated apply path so the
+/// banner conversion KPIs travel together with the consent gate.
+abstract interface class IAutoUpdateSilentMetricsCollector {
+  /// Adds a duration sample for the appcast probe step (HTTP fetch +
+  /// parse). Used to expose `auto_update_probe_*_time_ms` percentiles
+  /// in the metrics snapshot.
   void recordAutoUpdateProbeDuration(Duration duration);
 
   /// Adds a duration sample for the asset download step (network +
@@ -49,3 +56,15 @@ abstract class IAutoUpdateMetricsCollector {
   /// cancelled, etc.).
   void recordAutoUpdateUserInitiatedApplyFailure();
 }
+
+/// Aggregate facade that bundles every auto-update metric surface. Kept
+/// as the primary type the application layer asks for, so production
+/// wiring stays a single dependency while consumers that only need a
+/// slice (e.g., the orchestrator only emits manual + background events,
+/// the coordinator only emits silent events) can ask for the narrower
+/// interface.
+abstract interface class IAutoUpdateMetricsCollector
+    implements
+        IAutoUpdateManualCheckMetricsCollector,
+        IAutoUpdateBackgroundCheckMetricsCollector,
+        IAutoUpdateSilentMetricsCollector {}
