@@ -2498,6 +2498,36 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get agentProfileHubVersionConflictTitle => 'Perfil alterado no servidor';
+
+  @override
+  String agentProfileHubVersionConflictMessage(String errorDetail) {
+    return 'O perfil foi guardado neste computador, mas o servidor tem uma versão mais recente.\n\nDetalhe: $errorDetail';
+  }
+
+  @override
+  String agentProfileHubVersionConflictDetail(String errorDetail) {
+    return '$errorDetail';
+  }
+
+  @override
+  String get agentProfileActionReloadFromServer => 'Recarregar do servidor';
+
+  @override
+  String get agentProfileActionRetrySync => 'Tentar sincronizar de novo';
+
+  @override
+  String get agentProfileHubCatalogPersistFailedTitle => 'Sincronizado com aviso';
+
+  @override
+  String agentProfileHubCatalogPersistFailedMessage(String errorDetail) {
+    return 'O perfil foi enviado ao servidor, mas não foi possível guardar a versão local para próximas atualizações.\n\nDetalhe: $errorDetail';
+  }
+
+  @override
+  String get agentProfileReloadFromHubSuccess => 'Perfil recarregado a partir do servidor.';
+
+  @override
   String get dashboardMetricsTitle => 'Métricas ODBC';
 
   @override

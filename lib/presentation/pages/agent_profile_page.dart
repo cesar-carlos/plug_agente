@@ -2,15 +2,17 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
+import 'package:plug_agente/application/use_cases/fetch_agent_hub_profile.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cep.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
-import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
+import 'package:plug_agente/application/use_cases/sync_agent_profile_with_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/mappers/agent_profile_hub_failure_l10n.dart';
 import 'package:plug_agente/presentation/mappers/agent_profile_validation_messages_l10n.dart';
 import 'package:plug_agente/presentation/pages/agent_profile/agent_profile_form_controller.dart';
 import 'package:plug_agente/presentation/pages/agent_profile/agent_profile_save_coordinator.dart';
@@ -22,6 +24,8 @@ import 'package:plug_agente/presentation/pages/agent_profile/widgets/agent_profi
 import 'package:plug_agente/presentation/pages/agent_profile/widgets/agent_profile_save_action.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
+import 'package:plug_agente/presentation/providers/connection_provider.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
@@ -32,14 +36,12 @@ class AgentProfilePage extends StatefulWidget {
     this.configId,
     this.lookupAgentCnpj,
     this.lookupAgentCep,
-    this.pushAgentProfileToHub,
     super.key,
   });
 
   final String? configId;
   final LookupAgentCnpj? lookupAgentCnpj;
   final LookupAgentCep? lookupAgentCep;
-  final PushAgentProfileToHub? pushAgentProfileToHub;
 
   @override
   State<AgentProfilePage> createState() => _AgentProfilePageState();
@@ -49,8 +51,6 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
   late final AgentProfileFormController _formController;
   late final LookupAgentCnpj _lookupAgentCnpj;
   late final LookupAgentCep _lookupAgentCep;
-  late final PushAgentProfileToHub _pushAgentProfileToHub;
-
   final ValueNotifier<bool> _isLookingUpCnpj = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _isLookingUpCep = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _isSaving = ValueNotifier<bool>(false);
@@ -68,8 +68,6 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     _formController = AgentProfileFormController();
     _lookupAgentCnpj = widget.lookupAgentCnpj ?? getIt<LookupAgentCnpj>();
     _lookupAgentCep = widget.lookupAgentCep ?? getIt<LookupAgentCep>();
-    _pushAgentProfileToHub = widget.pushAgentProfileToHub ?? getIt<PushAgentProfileToHub>();
-
     _refreshDerivedState = () {
       final saving = _isSaving.value;
       final cnpjBusy = _isLookingUpCnpj.value;
@@ -322,7 +320,9 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     return _saveCoordinator ??= AgentProfileSaveCoordinator(
       configProvider: context.read<ConfigProvider>(),
       authProvider: context.read<AuthProvider>(),
-      pushAgentProfileToHub: _pushAgentProfileToHub,
+      connectionProvider: context.read<ConnectionProvider>(),
+      syncAgentProfileWithHub: getIt<SyncAgentProfileWithHub>(),
+      fetchAgentHubProfile: getIt<FetchAgentHubProfile>(),
       registerProfileProvider: getIt<AgentRegisterProfileProvider>(),
     );
   }
@@ -338,11 +338,52 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
           title: l10n.modalTitleErrorSaving,
           message: message,
         );
-      case AgentProfileSaveHubPartialFailure(hubErrorMessage: final detail):
+      case final AgentProfileSaveHubPartialFailure failureOutcome:
+        final detail = failureOutcome.failure.toAgentProfileHubDisplayMessage(l10n);
+        if (failureOutcome.isVersionConflict) {
+          final reload = await SettingsFeedback.showConfirmation(
+            context: context,
+            title: l10n.agentProfileHubVersionConflictTitle,
+            message: l10n.agentProfileHubVersionConflictMessage(detail),
+            confirmText: l10n.agentProfileActionReloadFromServer,
+            cancelText: l10n.btnClose,
+          );
+          if (reload && mounted) {
+            await _reloadProfileFromHub(l10n, failureOutcome.profile);
+          }
+          return;
+        }
+        if (failureOutcome.canRetry) {
+          await MessageModal.show<void>(
+            context: context,
+            type: MessageType.error,
+            title: l10n.agentProfileHubSavePartialTitle,
+            message: l10n.agentProfileHubSavePartialMessage(detail),
+            confirmText: l10n.agentProfileActionRetrySync,
+            cancelText: l10n.btnClose,
+            onConfirm: () {
+              unawaited(_retryHubSync(l10n, failureOutcome.profile));
+            },
+          );
+          return;
+        }
         await SettingsFeedback.showError(
           context: context,
           title: l10n.agentProfileHubSavePartialTitle,
           message: l10n.agentProfileHubSavePartialMessage(detail),
+        );
+      case AgentProfileSaveHubCatalogPersistFailure(message: final message):
+        await SettingsFeedback.showWarning(
+          context: context,
+          title: l10n.agentProfileHubCatalogPersistFailedTitle,
+          message: l10n.agentProfileHubCatalogPersistFailedMessage(message),
+        );
+      case AgentProfileSaveReloadedFromHub(profile: final profile):
+        _formController.applyValidatedProfile(profile);
+        await SettingsFeedback.showSuccess(
+          context: context,
+          title: l10n.modalTitleSuccess,
+          message: l10n.agentProfileReloadFromHubSuccess,
         );
       case AgentProfileSaveSynced():
         await SettingsFeedback.showSuccess(
@@ -356,6 +397,40 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
           title: l10n.modalTitleSuccess,
           message: l10n.agentProfileSaveSuccessLocal,
         );
+    }
+  }
+
+  Future<void> _retryHubSync(AppLocalizations l10n, AgentProfile profile) async {
+    _isSaving.value = true;
+    try {
+      final outcome = await _resolveSaveCoordinator().retryHubSync(
+        profile,
+        validationMessages: agentProfileValidationMessages(l10n),
+      );
+      if (mounted) {
+        await _showSaveFeedback(l10n, outcome);
+      }
+    } finally {
+      if (mounted) {
+        _isSaving.value = false;
+      }
+    }
+  }
+
+  Future<void> _reloadProfileFromHub(AppLocalizations l10n, AgentProfile fallbackProfile) async {
+    _isSaving.value = true;
+    try {
+      final outcome = await _resolveSaveCoordinator().reloadProfileFromHub(
+        fallbackProfile: fallbackProfile,
+        validationMessages: agentProfileValidationMessages(l10n),
+      );
+      if (mounted) {
+        await _showSaveFeedback(l10n, outcome);
+      }
+    } finally {
+      if (mounted) {
+        _isSaving.value = false;
+      }
     }
   }
 

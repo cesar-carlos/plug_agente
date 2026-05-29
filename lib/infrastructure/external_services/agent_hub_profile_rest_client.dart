@@ -1,15 +1,19 @@
 import 'package:dio/dio.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/utils/url_utils.dart';
+import 'package:plug_agente/domain/entities/agent_hub_profile_catalog_snapshot.dart';
 import 'package:plug_agente/domain/entities/agent_hub_profile_push_result.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_hub_profile_gateway.dart';
+import 'package:plug_agente/infrastructure/external_services/agent_hub_profile_http_support.dart';
 import 'package:result_dart/result_dart.dart';
 
 class AgentHubProfileRestClient implements IAgentHubProfileGateway {
   AgentHubProfileRestClient(this._dio);
 
   final Dio _dio;
+
+  static const String _patchOperation = 'patchAgentProfile';
+  static const String _fetchOperation = 'fetchAgentProfile';
 
   @override
   Future<Result<AgentHubProfilePushResult>> patchProfile({
@@ -19,142 +23,148 @@ class AgentHubProfileRestClient implements IAgentHubProfileGateway {
     required Map<String, dynamic> body,
     String? idempotencyKey,
   }) async {
-    final trimmedUrl = serverUrl.trim();
-    final trimmedId = agentId.trim();
-    final trimmedToken = accessToken.trim();
-    if (trimmedUrl.isEmpty) {
-      return Failure(domain.ValidationFailure('Server URL cannot be empty'));
-    }
-    if (trimmedId.isEmpty) {
-      return Failure(domain.ValidationFailure('Agent ID cannot be empty'));
-    }
-    if (trimmedToken.isEmpty) {
-      return Failure(domain.ValidationFailure('Access token is required'));
+    final validation = AgentHubProfileHttpSupport.validateCredentials(
+      serverUrl: serverUrl,
+      agentId: agentId,
+      accessToken: accessToken,
+    );
+    if (validation.isError()) {
+      return Failure(validation.exceptionOrNull()!);
     }
 
-    final url = joinServerUrlAndPath(trimmedUrl, AppConstants.agentHubProfilePath(trimmedId));
-
-    final headers = <String, dynamic>{
-      'Authorization': 'Bearer $trimmedToken',
-    };
+    final url = AgentHubProfileHttpSupport.profileUrl(serverUrl, agentId);
+    final headers = AgentHubProfileHttpSupport.authHeaders(accessToken);
     final trimmedIdem = idempotencyKey?.trim();
     if (trimmedIdem != null && trimmedIdem.isNotEmpty) {
       headers['Idempotency-Key'] = trimmedIdem;
     }
 
     try {
-      final response = await _dio.patch<Map<String, dynamic>>(
+      final response = await _dio.patch<dynamic>(
         url,
         data: body,
         options: Options(headers: headers),
       );
 
       if (response.statusCode == AppConstants.httpStatusOk) {
-        final data = response.data;
+        AgentHubProfileHttpSupport.logHubResponse(
+          operation: _patchOperation,
+          response: response,
+          agentId: agentId,
+        );
+        return AgentHubProfileHttpSupport.parsePushResult(
+          response.data,
+          operation: _patchOperation,
+        );
+      }
+
+      AgentHubProfileHttpSupport.logHubResponse(
+        operation: _patchOperation,
+        response: response,
+        agentId: agentId,
+        success: false,
+      );
+      return Failure(
+        AgentHubProfileHttpSupport.failureForStatus(
+          response.statusCode,
+          response.data,
+          operation: _patchOperation,
+        ),
+      );
+    } on DioException catch (error) {
+      return Failure(_mapDioError(error, operation: _patchOperation, agentId: agentId));
+    }
+  }
+
+  @override
+  Future<Result<AgentHubProfileCatalogSnapshot>> fetchProfileCatalog({
+    required String serverUrl,
+    required String agentId,
+    required String accessToken,
+  }) async {
+    final validation = AgentHubProfileHttpSupport.validateCredentials(
+      serverUrl: serverUrl,
+      agentId: agentId,
+      accessToken: accessToken,
+    );
+    if (validation.isError()) {
+      return Failure(validation.exceptionOrNull()!);
+    }
+
+    final url = AgentHubProfileHttpSupport.profileUrl(serverUrl, agentId);
+
+    try {
+      final response = await _dio.get<dynamic>(
+        url,
+        options: Options(
+          headers: AgentHubProfileHttpSupport.authHeaders(accessToken),
+        ),
+      );
+
+      if (response.statusCode == AppConstants.httpStatusOk) {
+        AgentHubProfileHttpSupport.logHubResponse(
+          operation: _fetchOperation,
+          response: response,
+          agentId: agentId,
+        );
+        final data = AgentHubProfileHttpSupport.readJsonMap(response.data);
         if (data == null) {
           return Failure(
             domain.ServerFailure.withContext(
               message: 'Hub returned an empty profile response',
-              context: const {'operation': 'patchAgentProfile'},
+              context: const {'operation': _fetchOperation},
             ),
           );
         }
-        final agent = data['agent'];
-        if (agent is! Map<String, dynamic>) {
-          return Failure(
-            domain.ServerFailure.withContext(
-              message: 'Hub response missing agent object',
-              context: const {'operation': 'patchAgentProfile'},
-            ),
-          );
-        }
-        final parsedVersion = _parseProfileVersion(agent['profileVersion']);
-        if (parsedVersion == null) {
-          return Failure(
-            domain.ServerFailure.withContext(
-              message: 'Hub response missing or invalid profileVersion',
-              context: const {'operation': 'patchAgentProfile'},
-            ),
-          );
-        }
-        final updatedAt = agent['profileUpdatedAt'];
-        return Success(
-          AgentHubProfilePushResult(
-            profileVersion: parsedVersion,
-            profileUpdatedAt: updatedAt is String ? updatedAt : null,
-          ),
+        return AgentHubProfileHttpSupport.parseAgentCatalog(
+          data['agent'],
+          operation: _fetchOperation,
         );
       }
 
-      return Failure(_failureForStatus(response.statusCode, response.data));
-    } on DioException catch (error) {
-      final status = error.response?.statusCode;
-      if (status != null) {
-        return Failure(_failureForStatus(status, error.response?.data));
-      }
+      AgentHubProfileHttpSupport.logHubResponse(
+        operation: _fetchOperation,
+        response: response,
+        agentId: agentId,
+        success: false,
+      );
       return Failure(
-        domain.NetworkFailure.withContext(
-          message: 'Could not reach the hub to update profile',
-          cause: error,
-          context: {'operation': 'patchAgentProfile'},
+        AgentHubProfileHttpSupport.failureForStatus(
+          response.statusCode,
+          response.data,
+          operation: _fetchOperation,
         ),
       );
+    } on DioException catch (error) {
+      return Failure(_mapDioError(error, operation: _fetchOperation, agentId: agentId));
     }
   }
 
-  static int? _parseProfileVersion(Object? raw) {
-    if (raw is int) {
-      return raw;
+  domain.Failure _mapDioError(
+    DioException error, {
+    required String operation,
+    required String agentId,
+  }) {
+    AgentHubProfileHttpSupport.logHubNetworkError(
+      operation: operation,
+      error: error,
+      agentId: agentId,
+    );
+    final status = error.response?.statusCode;
+    if (status != null) {
+      return AgentHubProfileHttpSupport.failureForStatus(
+        status,
+        error.response?.data,
+        operation: operation,
+      );
     }
-    if (raw is num) {
-      return raw.toInt();
-    }
-    if (raw is String) {
-      return int.tryParse(raw.trim());
-    }
-    return null;
-  }
-
-  domain.Failure _failureForStatus(int? status, Object? body) {
-    final messageFromBody = _parseErrorMessage(body);
-    switch (status) {
-      case AppConstants.httpStatusUnauthorized:
-        return domain.ServerFailure.withContext(
-          message: messageFromBody ?? 'Session expired or invalid. Sign in again.',
-          context: {'operation': 'patchAgentProfile', 'statusCode': status},
-        );
-      case AppConstants.httpStatusForbidden:
-        return domain.ServerFailure.withContext(
-          message: messageFromBody ?? 'Not allowed to update this agent profile.',
-          context: {'operation': 'patchAgentProfile', 'statusCode': status},
-        );
-      case AppConstants.httpStatusConflict:
-        return domain.ServerFailure.withContext(
-          message:
-              messageFromBody ??
-              'Profile was changed on the server. Reload and try again, or retry after resolving the conflict.',
-          context: {'operation': 'patchAgentProfile', 'statusCode': status},
-        );
-      case AppConstants.httpStatusTooManyRequests:
-        return domain.ServerFailure.withContext(
-          message: messageFromBody ?? 'Too many profile updates. Wait and try again.',
-          context: {'operation': 'patchAgentProfile', 'statusCode': status},
-        );
-      default:
-        return domain.ServerFailure.withContext(
-          message: messageFromBody ?? 'Hub rejected the profile update (HTTP $status).',
-          context: {'operation': 'patchAgentProfile', 'statusCode': status},
-        );
-    }
-  }
-
-  String? _parseErrorMessage(Object? body) {
-    if (body is Map<String, dynamic>) {
-      final msg = body['message'];
-      if (msg is String && msg.trim().isNotEmpty) {
-        return msg.trim();
-      }
-    }
-    return null;
+    final message = operation == _fetchOperation
+        ? 'Could not reach the hub to load profile'
+        : 'Could not reach the hub to update profile';
+    return domain.NetworkFailure.withContext(
+      message: message,
+      cause: error,
+      context: {'operation': operation},
+    );
   }
 }

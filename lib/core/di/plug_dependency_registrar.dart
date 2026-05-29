@@ -77,6 +77,7 @@ import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/export_agent_actions_bundle.dart';
+import 'package:plug_agente/application/use_cases/fetch_agent_hub_profile.dart';
 import 'package:plug_agente/application/use_cases/get_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/get_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/get_agent_action_trigger.dart';
@@ -111,6 +112,7 @@ import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
 import 'package:plug_agente/application/use_cases/slice_agent_action_captured_output.dart';
+import 'package:plug_agente/application/use_cases/sync_agent_profile_with_hub.dart';
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
@@ -929,7 +931,11 @@ void registerPlugDependencyGraph(
       },
     )
     ..registerLazySingleton<IAgentHubProfileGateway>(
-      () => AgentHubProfileRestClient(DioFactory.createDio()),
+      () => AgentHubProfileRestClient(
+        DioFactory.createDio(
+          requestTimeout: ConnectionConstants.agentHubProfileHttpTimeout,
+        ),
+      ),
     )
     ..registerLazySingleton(
       () => ViaCepClient(
@@ -1382,6 +1388,12 @@ void registerPlugDependencyGraph(
         getIt<IAgentHubProfileGateway>(),
         getIt<Uuid>(),
       ),
+    )
+    ..registerLazySingleton(
+      () => FetchAgentHubProfile(getIt<IAgentHubProfileGateway>()),
+    )
+    ..registerLazySingleton(
+      () => SyncAgentProfileWithHub(getIt<PushAgentProfileToHub>()),
     )
     ..registerLazySingleton(() => LoginUser(getIt<AuthService>()))
     ..registerLazySingleton(() => RefreshAuthToken(getIt<AuthService>()))

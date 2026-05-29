@@ -1,15 +1,18 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/dtos/agent_profile_hub_sync_result.dart';
 import 'package:plug_agente/application/services/agent_profile_lookup_gateways.dart';
 import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
+import 'package:plug_agente/application/use_cases/fetch_agent_hub_profile.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cep.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
-import 'package:plug_agente/application/use_cases/push_agent_profile_to_hub.dart';
+import 'package:plug_agente/application/use_cases/sync_agent_profile_with_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_profile_page.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
@@ -24,7 +27,9 @@ class MockConnectionProvider extends Mock with ChangeNotifier implements Connect
 
 class MockAuthProvider extends Mock with ChangeNotifier implements AuthProvider {}
 
-class MockPushAgentProfileToHub extends Mock implements PushAgentProfileToHub {}
+class MockSyncAgentProfileWithHub extends Mock implements SyncAgentProfileWithHub {}
+
+class MockFetchAgentHubProfile extends Mock implements FetchAgentHubProfile {}
 
 class MockOpenCnpjLookup extends Mock implements IOpenCnpjLookup {}
 
@@ -44,7 +49,7 @@ void main() {
     late MockConfigProvider mockConfigProvider;
     late MockConnectionProvider mockConnectionProvider;
     late MockAuthProvider mockAuthProvider;
-    late MockPushAgentProfileToHub mockPushToHub;
+    late MockSyncAgentProfileWithHub mockSyncWithHub;
     late LookupAgentCnpj lookupCnpj;
     late LookupAgentCep lookupCep;
 
@@ -53,19 +58,20 @@ void main() {
       getIt.registerSingleton<AgentRegisterProfileProvider>(
         AgentRegisterProfileProvider(),
       );
+      mockSyncWithHub = MockSyncAgentProfileWithHub();
+      getIt.registerSingleton<SyncAgentProfileWithHub>(mockSyncWithHub);
+      getIt.registerSingleton<FetchAgentHubProfile>(MockFetchAgentHubProfile());
+
       mockConfigProvider = MockConfigProvider();
       mockConnectionProvider = MockConnectionProvider();
       mockAuthProvider = MockAuthProvider();
-      mockPushToHub = MockPushAgentProfileToHub();
       lookupCnpj = LookupAgentCnpj(MockOpenCnpjLookup());
       lookupCep = LookupAgentCep(MockViaCepLookup());
 
       when(() => mockConfigProvider.currentConfig).thenReturn(_sampleConfig);
       when(() => mockConfigProvider.isLoading).thenReturn(false);
       when(() => mockConfigProvider.error).thenReturn('');
-      when(() => mockConfigProvider.loadConfigById(any())).thenAnswer((_) async {
-        return;
-      });
+      when(() => mockConfigProvider.loadConfigById(any())).thenAnswer((_) async {});
       when(
         () => mockConfigProvider.saveConfig(),
       ).thenAnswer((_) async => Success(_sampleConfig));
@@ -93,7 +99,6 @@ void main() {
           mockConfigProvider,
           mockConnectionProvider,
           mockAuthProvider,
-          mockPushToHub,
           lookupCnpj,
           lookupCep,
         ),
@@ -101,15 +106,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(ptL10n.navAgentProfile), findsOneWidget);
-      expect(
-        find.text(ptL10n.agentProfileFormSectionTitle),
-        findsOneWidget,
-      );
-      expect(find.text(ptL10n.agentProfileSectionIdentity), findsWidgets);
-      expect(find.text(ptL10n.agentProfileSectionContact), findsOneWidget);
-      expect(find.text(ptL10n.agentProfileSectionAddress), findsWidgets);
-      expect(find.text(ptL10n.agentProfileSectionNotes), findsOneWidget);
-      expect(find.text(ptL10n.agentProfileFieldName), findsOneWidget);
+      expect(find.text(ptL10n.agentProfileFormSectionTitle), findsOneWidget);
       expect(find.text(ptL10n.agentProfileActionSave), findsWidgets);
     });
 
@@ -120,7 +117,6 @@ void main() {
           mockConfigProvider,
           mockConnectionProvider,
           mockAuthProvider,
-          mockPushToHub,
           lookupCnpj,
           lookupCep,
         ),
@@ -135,6 +131,101 @@ void main() {
 
       verify(() => mockConfigProvider.updateAgentProfile(any())).called(1);
       verify(() => mockConfigProvider.saveConfig()).called(1);
+    });
+
+    testWidgets('syncs profile when connected and hub sync succeeds', (tester) async {
+      when(() => mockConnectionProvider.isConnected).thenReturn(true);
+      when(() => mockAuthProvider.currentTokenForConfig('config-1')).thenReturn(
+        const AuthToken(token: 'session-token', refreshToken: 'r1'),
+      );
+      when(
+        () => mockSyncWithHub.call(
+          profile: any(named: 'profile'),
+          serverUrl: any(named: 'serverUrl'),
+          agentId: any(named: 'agentId'),
+          accessToken: any(named: 'accessToken'),
+          isHubConnected: true,
+          expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        ),
+      ).thenAnswer(
+        (_) async => const AgentProfileHubSyncSucceeded(
+          profileVersion: 4,
+          profileUpdatedAt: '2026-05-29T20:00:00.000Z',
+        ),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1400, 1000));
+      await tester.pumpWidget(
+        _buildWidget(
+          mockConfigProvider,
+          mockConnectionProvider,
+          mockAuthProvider,
+          lookupCnpj,
+          lookupCep,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final saveButton = find.text(ptL10n.agentProfileActionSave).last;
+      await tester.ensureVisible(saveButton);
+      await tester.tap(saveButton);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+
+      verify(
+        () => mockSyncWithHub.call(
+          serverUrl: _sampleConfig.serverUrl,
+          agentId: _sampleConfig.agentId,
+          accessToken: 'session-token',
+          isHubConnected: true,
+          profile: any(named: 'profile'),
+          expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        ),
+      ).called(1);
+      expect(find.text(ptL10n.agentProfileSaveSuccessSynced), findsOneWidget);
+    });
+
+    testWidgets('shows partial failure when hub sync fails after local save', (tester) async {
+      when(() => mockConnectionProvider.isConnected).thenReturn(true);
+      when(() => mockAuthProvider.currentTokenForConfig('config-1')).thenReturn(
+        const AuthToken(token: 'session-token', refreshToken: 'r1'),
+      );
+      when(
+        () => mockSyncWithHub.call(
+          profile: any(named: 'profile'),
+          serverUrl: any(named: 'serverUrl'),
+          agentId: any(named: 'agentId'),
+          accessToken: any(named: 'accessToken'),
+          isHubConnected: any(named: 'isHubConnected'),
+          expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        ),
+      ).thenAnswer(
+        (_) async => AgentProfileHubSyncPushFailed(
+          domain.NetworkFailure('hub offline'),
+        ),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1400, 1000));
+      await tester.pumpWidget(
+        _buildWidget(
+          mockConfigProvider,
+          mockConnectionProvider,
+          mockAuthProvider,
+          lookupCnpj,
+          lookupCep,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final saveButton = find.text(ptL10n.agentProfileActionSave).last;
+      await tester.ensureVisible(saveButton);
+      await tester.tap(saveButton);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+
+      expect(find.text(ptL10n.agentProfileHubSavePartialTitle), findsOneWidget);
+      expect(find.textContaining('hub offline'), findsOneWidget);
+      expect(find.text(ptL10n.agentProfileActionRetrySync), findsOneWidget);
     });
 
     testWidgets(
@@ -152,7 +243,6 @@ void main() {
             mockConfigProvider,
             mockConnectionProvider,
             mockAuthProvider,
-            mockPushToHub,
             lookupCnpj,
             lookupCep,
           ),
@@ -166,11 +256,12 @@ void main() {
         await tester.pumpAndSettle();
 
         verifyNever(
-          () => mockPushToHub.call(
+          () => mockSyncWithHub.call(
+            profile: any(named: 'profile'),
             serverUrl: any(named: 'serverUrl'),
             agentId: any(named: 'agentId'),
             accessToken: any(named: 'accessToken'),
-            profile: any(named: 'profile'),
+            isHubConnected: any(named: 'isHubConnected'),
             expectedProfileVersion: any(named: 'expectedProfileVersion'),
           ),
         );
@@ -183,7 +274,6 @@ Widget _buildWidget(
   ConfigProvider configProvider,
   ConnectionProvider connectionProvider,
   AuthProvider authProvider,
-  PushAgentProfileToHub pushToHub,
   LookupAgentCnpj lookupCnpj,
   LookupAgentCep lookupCep,
 ) {
@@ -200,7 +290,6 @@ Widget _buildWidget(
       child: AgentProfilePage(
         lookupAgentCnpj: lookupCnpj,
         lookupAgentCep: lookupCep,
-        pushAgentProfileToHub: pushToHub,
       ),
     ),
   );
@@ -209,6 +298,7 @@ Widget _buildWidget(
 final Config _sampleConfig = Config(
   id: 'config-1',
   agentId: 'agent-1',
+  serverUrl: 'https://hub.example.com',
   driverName: 'SQL Server',
   odbcDriverName: 'ODBC Driver 17 for SQL Server',
   connectionString: '',

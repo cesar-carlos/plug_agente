@@ -963,6 +963,35 @@
       }
     }
   },
+  "agentProfileHubVersionConflictTitle": "Perfil alterado no servidor",
+  "agentProfileHubVersionConflictMessage": "O perfil foi guardado neste computador, mas o servidor tem uma versão mais recente.\n\nDetalhe: {errorDetail}",
+  "@agentProfileHubVersionConflictMessage": {
+    "placeholders": {
+      "errorDetail": {
+        "type": "String"
+      }
+    }
+  },
+  "agentProfileHubVersionConflictDetail": "{errorDetail}",
+  "@agentProfileHubVersionConflictDetail": {
+    "placeholders": {
+      "errorDetail": {
+        "type": "String"
+      }
+    }
+  },
+  "agentProfileActionReloadFromServer": "Recarregar do servidor",
+  "agentProfileActionRetrySync": "Tentar sincronizar de novo",
+  "agentProfileHubCatalogPersistFailedTitle": "Sincronizado com aviso",
+  "agentProfileHubCatalogPersistFailedMessage": "O perfil foi enviado ao servidor, mas não foi possível guardar a versão local para próximas atualizações.\n\nDetalhe: {errorDetail}",
+  "@agentProfileHubCatalogPersistFailedMessage": {
+    "placeholders": {
+      "errorDetail": {
+        "type": "String"
+      }
+    }
+  },
+  "agentProfileReloadFromHubSuccess": "Perfil recarregado a partir do servidor.",
   "dashboardMetricsTitle": "Métricas ODBC",
   "dashboardMetricsQueries": "Consultas executadas",
   "dashboardMetricsSuccess": "Sucesso",

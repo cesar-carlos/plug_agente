@@ -2496,6 +2496,36 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get agentProfileHubVersionConflictTitle => 'Profile changed on the server';
+
+  @override
+  String agentProfileHubVersionConflictMessage(String errorDetail) {
+    return 'The profile was saved on this computer, but the server has a newer version.\n\nDetail: $errorDetail';
+  }
+
+  @override
+  String agentProfileHubVersionConflictDetail(String errorDetail) {
+    return '$errorDetail';
+  }
+
+  @override
+  String get agentProfileActionReloadFromServer => 'Reload from server';
+
+  @override
+  String get agentProfileActionRetrySync => 'Retry sync';
+
+  @override
+  String get agentProfileHubCatalogPersistFailedTitle => 'Synced with warning';
+
+  @override
+  String agentProfileHubCatalogPersistFailedMessage(String errorDetail) {
+    return 'The profile was sent to the server, but the local version could not be saved for the next update.\n\nDetail: $errorDetail';
+  }
+
+  @override
+  String get agentProfileReloadFromHubSuccess => 'Profile reloaded from the server.';
+
+  @override
   String get dashboardMetricsTitle => 'ODBC metrics';
 
   @override

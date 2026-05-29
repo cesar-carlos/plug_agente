@@ -109,7 +109,9 @@ class MessageModal extends StatelessWidget {
     required String title,
     required String message,
     VoidCallback? onConfirm,
+    VoidCallback? onCancel,
     String? confirmText,
+    String? cancelText,
   }) {
     return show<T>(
       context: context,
@@ -117,7 +119,9 @@ class MessageModal extends StatelessWidget {
       message: message,
       type: MessageType.error,
       onConfirm: onConfirm,
+      onCancel: onCancel,
       confirmText: confirmText,
+      cancelText: cancelText,
     );
   }
 

@@ -115,6 +115,24 @@ class DatabaseFailure extends Failure {
   bool get isRecoverable => true;
 }
 
+/// Hub rejected a profile PATCH because the expected profile version did not match.
+class ProfileVersionConflictFailure extends Failure {
+  ProfileVersionConflictFailure(String message) : super(message, 'PROFILE_VERSION_CONFLICT');
+
+  ProfileVersionConflictFailure.withContext({
+    required super.message,
+    super.code,
+    super.cause,
+    super.timestamp,
+    super.context,
+  }) : super.withContext(
+         defaultCode: 'PROFILE_VERSION_CONFLICT',
+       );
+
+  @override
+  bool get isRecoverable => true;
+}
+
 class ValidationFailure extends Failure {
   ValidationFailure(String message) : super(message, 'VALIDATION_ERROR');
 

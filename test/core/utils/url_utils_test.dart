@@ -23,6 +23,20 @@ void main() {
         'https://hub.example.com',
       );
     });
+
+    test('converts wss scheme to https for HTTP clients', () {
+      expect(
+        hubHttpBaseUrl('wss://hub.example.com/agents'),
+        'https://hub.example.com',
+      );
+    });
+
+    test('converts ws scheme to http for HTTP clients', () {
+      expect(
+        hubHttpBaseUrl('ws://hub.example.com/consumers'),
+        'http://hub.example.com',
+      );
+    });
   });
 
   group('ensureAgentsNamespaceUrl', () {

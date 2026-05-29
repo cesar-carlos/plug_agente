@@ -17,6 +17,9 @@ class ConnectionConstants {
   /// Hub `GET /api/v1/agents` during backup restore staging (duplicate-session check).
   static const Duration backupRestoreAgentsListTimeout = Duration(seconds: 15);
 
+  /// Hub agent profile PATCH/GET (`/api/v1/agents/{id}/profile`).
+  static const Duration agentHubProfileHttpTimeout = Duration(seconds: 30);
+
   static const Duration defaultLoginTimeout = Duration(seconds: 30);
   static const Duration defaultQueryTimeout = Duration(seconds: 60);
   static const Duration defaultTransactionalBatchTimeout = Duration(seconds: 60);

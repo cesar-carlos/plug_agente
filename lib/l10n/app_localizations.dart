@@ -4646,6 +4646,54 @@ abstract class AppLocalizations {
   /// **'The profile was saved on this computer, but updating the server failed. Data will be sent on the next connection.\n\nDetail: {errorDetail}'**
   String agentProfileHubSavePartialMessage(String errorDetail);
 
+  /// No description provided for @agentProfileHubVersionConflictTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile changed on the server'**
+  String get agentProfileHubVersionConflictTitle;
+
+  /// No description provided for @agentProfileHubVersionConflictMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile was saved on this computer, but the server has a newer version.\n\nDetail: {errorDetail}'**
+  String agentProfileHubVersionConflictMessage(String errorDetail);
+
+  /// No description provided for @agentProfileHubVersionConflictDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'{errorDetail}'**
+  String agentProfileHubVersionConflictDetail(String errorDetail);
+
+  /// No description provided for @agentProfileActionReloadFromServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload from server'**
+  String get agentProfileActionReloadFromServer;
+
+  /// No description provided for @agentProfileActionRetrySync.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry sync'**
+  String get agentProfileActionRetrySync;
+
+  /// No description provided for @agentProfileHubCatalogPersistFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Synced with warning'**
+  String get agentProfileHubCatalogPersistFailedTitle;
+
+  /// No description provided for @agentProfileHubCatalogPersistFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile was sent to the server, but the local version could not be saved for the next update.\n\nDetail: {errorDetail}'**
+  String agentProfileHubCatalogPersistFailedMessage(String errorDetail);
+
+  /// No description provided for @agentProfileReloadFromHubSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile reloaded from the server.'**
+  String get agentProfileReloadFromHubSuccess;
+
   /// No description provided for @dashboardMetricsTitle.
   ///
   /// In en, this message translates to:
