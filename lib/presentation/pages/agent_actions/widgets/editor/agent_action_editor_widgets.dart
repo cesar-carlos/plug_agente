@@ -199,3 +199,35 @@ String agentActionEditorStateLabel(AgentActionState state, AppLocalizations l10n
     AgentActionState.needsValidation => l10n.agentActionsStateNeedsValidation,
   };
 }
+
+String agentActionEditorOnAppExitLabel(AgentActionOnAppExitBehavior behavior, AppLocalizations l10n) {
+  return switch (behavior) {
+    AgentActionOnAppExitBehavior.killMainProcess => l10n.agentActionsFormOnAppExitKill,
+    AgentActionOnAppExitBehavior.waitThenKillMainProcess => l10n.agentActionsFormOnAppExitWaitThenKill,
+    AgentActionOnAppExitBehavior.leaveRunning => l10n.agentActionsFormOnAppExitLeaveRunning,
+  };
+}
+
+String agentActionEditorProcessWindowModeLabel(AgentActionProcessWindowMode mode, AppLocalizations l10n) {
+  return switch (mode) {
+    AgentActionProcessWindowMode.normal => l10n.agentActionsFormProcessWindowModeNormal,
+    AgentActionProcessWindowMode.hidden => l10n.agentActionsFormProcessWindowModeHidden,
+    AgentActionProcessWindowMode.minimized => l10n.agentActionsFormProcessWindowModeMinimized,
+  };
+}
+
+String agentActionEditorConcurrencyBehaviorLabel(AgentActionConcurrencyBehavior behavior, AppLocalizations l10n) {
+  return switch (behavior) {
+    AgentActionConcurrencyBehavior.allowParallel => l10n.agentActionsFormConcurrencyAllowParallel,
+    AgentActionConcurrencyBehavior.enqueue => l10n.agentActionsFormConcurrencyEnqueue,
+    AgentActionConcurrencyBehavior.reject => l10n.agentActionsFormConcurrencyReject,
+    AgentActionConcurrencyBehavior.ignore => l10n.agentActionsFormConcurrencyIgnore,
+  };
+}
+
+String agentActionEditorOutputEncodingModeLabel(AgentActionOutputEncodingMode mode, AppLocalizations l10n) {
+  return switch (mode) {
+    AgentActionOutputEncodingMode.utf8 => l10n.agentActionsFormOutputEncodingUtf8,
+    AgentActionOutputEncodingMode.systemConsole => l10n.agentActionsFormOutputEncodingSystemConsole,
+  };
+}

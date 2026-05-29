@@ -61,31 +61,25 @@ class AppDataGrid<T> extends StatelessWidget {
       context,
     ).resources.controlStrokeColorDefault;
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: strokeColor),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Column(
-        children: [
-          _AppDataGridHeader(columns: columns, strokeColor: strokeColor),
-          if (rows.isEmpty && emptyMessage != null)
-            _AppDataGridEmpty(message: emptyMessage!)
-          else
-            ...List<Widget>.generate(rows.length, (index) {
-              return _AppDataGridRow<T>(
-                item: rows[index],
-                columns: columns,
-                cells: rowCells(rows[index]),
-                index: index,
-                strokeColor: strokeColor,
-                height: rowHeight,
-                isLast: index == rows.length - 1,
-              );
-            }),
-        ],
-      ),
+    return _AppDataGridFrame(
+      columns: columns,
+      strokeColor: strokeColor,
+      body: rows.isEmpty && emptyMessage != null
+          ? _AppDataGridEmpty(message: emptyMessage!)
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: List<Widget>.generate(rows.length, (index) {
+                return _AppDataGridRow<T>(
+                  item: rows[index],
+                  columns: columns,
+                  cells: rowCells(rows[index]),
+                  index: index,
+                  strokeColor: strokeColor,
+                  height: rowHeight,
+                  isLast: index == rows.length - 1,
+                );
+              }),
+            ),
     );
   }
 }
@@ -124,19 +118,12 @@ class AppDataGridScrollable<T> extends StatelessWidget {
       context,
     ).resources.controlStrokeColorDefault;
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: strokeColor),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Column(
-        children: [
-          _AppDataGridHeader(columns: columns, strokeColor: strokeColor),
-          if (rows.isEmpty && emptyMessage != null)
-            _AppDataGridEmpty(message: emptyMessage!)
-          else
-            Expanded(
+    return _AppDataGridFrame(
+      columns: columns,
+      strokeColor: strokeColor,
+      body: rows.isEmpty && emptyMessage != null
+          ? _AppDataGridEmpty(message: emptyMessage!)
+          : Expanded(
               child: ListView.builder(
                 controller: scrollController,
                 itemCount: rows.length,
@@ -156,6 +143,35 @@ class AppDataGridScrollable<T> extends StatelessWidget {
                 },
               ),
             ),
+    );
+  }
+}
+
+/// Shared frame for [AppDataGrid] and [AppDataGridScrollable]: bordered, clipped
+/// container with the styled header above a [body] slot.
+class _AppDataGridFrame extends StatelessWidget {
+  const _AppDataGridFrame({
+    required this.columns,
+    required this.strokeColor,
+    required this.body,
+  });
+
+  final List<AppGridColumn> columns;
+  final Color strokeColor;
+  final Widget body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: strokeColor),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        children: [
+          _AppDataGridHeader(columns: columns, strokeColor: strokeColor),
+          body,
         ],
       ),
     );

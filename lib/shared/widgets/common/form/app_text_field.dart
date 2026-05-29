@@ -60,6 +60,7 @@ class AppTextField extends StatefulWidget {
 
 class _AppTextFieldState extends State<AppTextField> {
   bool _touched = false;
+  String _lastChangedValue = '';
 
   String? get _effectiveHint => widget.hint ?? widget.fieldSpec?.hint;
 
@@ -87,7 +88,7 @@ class _AppTextFieldState extends State<AppTextField> {
     if (validate == null) {
       return null;
     }
-    final text = widget.controller?.text ?? '';
+    final text = widget.controller?.text ?? _lastChangedValue;
     return validate(text);
   }
 
@@ -121,6 +122,7 @@ class _AppTextFieldState extends State<AppTextField> {
   void _handleChanged(String value) {
     setState(() {
       _touched = true;
+      _lastChangedValue = value;
     });
     widget.onChanged?.call(value);
   }

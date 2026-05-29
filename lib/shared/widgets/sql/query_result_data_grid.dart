@@ -201,27 +201,17 @@ class _CachingQueryDataSource extends DataGridSource {
 
   List<Map<String, dynamic>> _data;
   List<DataGridRow>? _rowsCache;
-  int _cachedLength = -1;
-  String? _structureKey;
+
+  /// The exact list instance the cache was built from. The widget always calls
+  /// [updateData] when the data identity changes, so an O(1) identity check is
+  /// enough to keep the cache valid without re-scanning columns on every read.
+  List<Map<String, dynamic>>? _cachedFor;
 
   void updateData(List<Map<String, dynamic>> data) {
     _data = data;
-    _invalidateCache();
-    notifyListeners();
-  }
-
-  void _invalidateCache() {
     _rowsCache = null;
-    _cachedLength = -1;
-    _structureKey = null;
-  }
-
-  String? _computeStructureKey() {
-    if (_data.isEmpty) {
-      return '';
-    }
-    final keys = _data.first.keys.toList()..sort();
-    return '${_data.length}:${keys.join('|')}';
+    _cachedFor = null;
+    notifyListeners();
   }
 
   @override
@@ -229,13 +219,11 @@ class _CachingQueryDataSource extends DataGridSource {
     if (_data.isEmpty) {
       return [];
     }
-    final structureKey = _computeStructureKey();
-    if (_rowsCache != null && _cachedLength == _data.length && _structureKey == structureKey) {
+    if (_rowsCache != null && identical(_cachedFor, _data)) {
       return _rowsCache!;
     }
     final keys = _data.first.keys.toList();
-    _structureKey = structureKey;
-    _cachedLength = _data.length;
+    _cachedFor = _data;
     _rowsCache = _data.map((row) {
       return DataGridRow(
         cells: keys

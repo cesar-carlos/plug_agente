@@ -13,33 +13,15 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_kind.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_parsers.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_sections.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_widgets.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
-
-enum _AgentActionDraftKind {
-  commandLine,
-  executable,
-  script,
-  jar,
-  email,
-  comObject,
-  developer,
-  powerShell,
-}
-
-enum _PowerShellDraftMode {
-  inline,
-  script,
-}
-
-enum _PowerShellExecutable {
-  windowsPowerShell,
-  powerShell7,
-}
 
 abstract final class AgentActionEditorKeys {
   static const ValueKey<String> actionTypeDropdown = ValueKey<String>('agent_action_editor_type_dropdown');
@@ -87,15 +69,15 @@ class AgentActionEditor extends StatefulWidget {
   State<AgentActionEditor> createState() => _AgentActionEditorState();
 }
 
-const List<_AgentActionDraftKind> _editableDraftKinds = <_AgentActionDraftKind>[
-  _AgentActionDraftKind.commandLine,
-  _AgentActionDraftKind.executable,
-  _AgentActionDraftKind.script,
-  _AgentActionDraftKind.jar,
-  _AgentActionDraftKind.email,
-  _AgentActionDraftKind.comObject,
-  _AgentActionDraftKind.developer,
-  _AgentActionDraftKind.powerShell,
+const List<AgentActionDraftKind> _editableDraftKinds = <AgentActionDraftKind>[
+  AgentActionDraftKind.commandLine,
+  AgentActionDraftKind.executable,
+  AgentActionDraftKind.script,
+  AgentActionDraftKind.jar,
+  AgentActionDraftKind.email,
+  AgentActionDraftKind.comObject,
+  AgentActionDraftKind.developer,
+  AgentActionDraftKind.powerShell,
 ];
 
 class _AgentActionEditorState extends State<AgentActionEditor> {
@@ -147,10 +129,10 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   final ScrollController _dialogScrollController = ScrollController();
 
   String? _editingActionId;
-  _AgentActionDraftKind _draftKind = _AgentActionDraftKind.commandLine;
+  AgentActionDraftKind _draftKind = AgentActionDraftKind.commandLine;
   AgentActionType _draftType = AgentActionType.commandLine;
-  _PowerShellDraftMode _powerShellMode = _PowerShellDraftMode.inline;
-  _PowerShellExecutable _powerShellExecutable = _PowerShellExecutable.windowsPowerShell;
+  PowerShellDraftMode _powerShellMode = PowerShellDraftMode.inline;
+  PowerShellExecutable _powerShellExecutable = PowerShellExecutable.windowsPowerShell;
   AgentActionState _state = AgentActionState.needsValidation;
   bool _isDraftModifiedSinceLoad = false;
   bool _applyingLoadedDefinition = false;
@@ -375,34 +357,21 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     return false;
   }
 
-  AgentActionType _actionTypeForDraftKind(_AgentActionDraftKind draftKind) {
-    return switch (draftKind) {
-      _AgentActionDraftKind.commandLine => AgentActionType.commandLine,
-      _AgentActionDraftKind.executable => AgentActionType.executable,
-      _AgentActionDraftKind.script => AgentActionType.script,
-      _AgentActionDraftKind.jar => AgentActionType.jar,
-      _AgentActionDraftKind.email => AgentActionType.email,
-      _AgentActionDraftKind.comObject => AgentActionType.comObject,
-      _AgentActionDraftKind.developer => AgentActionType.developer,
-      _AgentActionDraftKind.powerShell => switch (_powerShellMode) {
-        _PowerShellDraftMode.inline => AgentActionType.commandLine,
-        _PowerShellDraftMode.script => AgentActionType.script,
-      },
-    };
-  }
+  AgentActionType _actionTypeForDraftKind(AgentActionDraftKind draftKind) =>
+      agentActionTypeForDraftKind(draftKind, _powerShellMode);
 
-  void _setDraftKind(_AgentActionDraftKind draftKind) {
+  void _setDraftKind(AgentActionDraftKind draftKind) {
     _draftKind = draftKind;
-    if (draftKind == _AgentActionDraftKind.powerShell && _isPowerShellModeUnavailable(_powerShellMode)) {
+    if (draftKind == AgentActionDraftKind.powerShell && _isPowerShellModeUnavailable(_powerShellMode)) {
       _powerShellMode = _defaultAvailablePowerShellMode();
     }
     _draftType = _actionTypeForDraftKind(draftKind);
     _syncReadOnlyDisplayControllers();
   }
 
-  void _setPowerShellMode(_PowerShellDraftMode mode) {
+  void _setPowerShellMode(PowerShellDraftMode mode) {
     _powerShellMode = mode;
-    _draftType = _actionTypeForDraftKind(_AgentActionDraftKind.powerShell);
+    _draftType = _actionTypeForDraftKind(AgentActionDraftKind.powerShell);
     _syncReadOnlyDisplayControllers();
   }
 
@@ -418,49 +387,33 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     controller.text = text;
   }
 
-  String _powerShellExecutableName(_PowerShellExecutable executable) {
-    return switch (executable) {
-      _PowerShellExecutable.windowsPowerShell => PowerShellCommandLine.windowsPowerShellExecutable,
-      _PowerShellExecutable.powerShell7 => PowerShellCommandLine.powerShell7Executable,
-    };
-  }
+  String _powerShellExecutableName(PowerShellExecutable executable) => powerShellExecutableName(executable);
 
-  String _draftKindLabel(_AgentActionDraftKind draftKind) {
-    return switch (draftKind) {
-      _AgentActionDraftKind.commandLine => agentActionEditorTypeLabel(AgentActionType.commandLine, widget.l10n),
-      _AgentActionDraftKind.executable => agentActionEditorTypeLabel(AgentActionType.executable, widget.l10n),
-      _AgentActionDraftKind.script => agentActionEditorTypeLabel(AgentActionType.script, widget.l10n),
-      _AgentActionDraftKind.jar => agentActionEditorTypeLabel(AgentActionType.jar, widget.l10n),
-      _AgentActionDraftKind.email => agentActionEditorTypeLabel(AgentActionType.email, widget.l10n),
-      _AgentActionDraftKind.comObject => agentActionEditorTypeLabel(AgentActionType.comObject, widget.l10n),
-      _AgentActionDraftKind.developer => agentActionEditorTypeLabel(AgentActionType.developer, widget.l10n),
-      _AgentActionDraftKind.powerShell => widget.l10n.agentActionsTypePowerShell,
-    };
-  }
+  String _draftKindLabel(AgentActionDraftKind draftKind) => agentActionDraftKindLabel(draftKind, widget.l10n);
 
-  bool _isDraftKindUnavailable(_AgentActionDraftKind draftKind) {
-    if (draftKind == _AgentActionDraftKind.powerShell) {
-      return _PowerShellDraftMode.values.every(_isPowerShellModeUnavailable);
+  bool _isDraftKindUnavailable(AgentActionDraftKind draftKind) {
+    if (draftKind == AgentActionDraftKind.powerShell) {
+      return PowerShellDraftMode.values.every(_isPowerShellModeUnavailable);
     }
 
     return widget.provider.isActionTypeUnavailable(_actionTypeForDraftKind(draftKind));
   }
 
-  bool _isPowerShellModeUnavailable(_PowerShellDraftMode mode) {
+  bool _isPowerShellModeUnavailable(PowerShellDraftMode mode) {
     return switch (mode) {
-      _PowerShellDraftMode.inline => widget.provider.isActionTypeUnavailable(AgentActionType.commandLine),
-      _PowerShellDraftMode.script => widget.provider.isActionTypeUnavailable(AgentActionType.script),
+      PowerShellDraftMode.inline => widget.provider.isActionTypeUnavailable(AgentActionType.commandLine),
+      PowerShellDraftMode.script => widget.provider.isActionTypeUnavailable(AgentActionType.script),
     };
   }
 
-  _PowerShellDraftMode _defaultAvailablePowerShellMode() {
-    for (final mode in _PowerShellDraftMode.values) {
+  PowerShellDraftMode _defaultAvailablePowerShellMode() {
+    for (final mode in PowerShellDraftMode.values) {
       if (!_isPowerShellModeUnavailable(mode)) {
         return mode;
       }
     }
 
-    return _PowerShellDraftMode.inline;
+    return PowerShellDraftMode.inline;
   }
 
   void _loadDefinition(AgentActionDefinition? definition) {
@@ -525,14 +478,14 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
         case final CommandLineActionConfig config:
           final powerShellCommand = PowerShellCommandLine.tryParseInlineCommand(config.command);
           if (powerShellCommand == null) {
-            _setDraftKind(_AgentActionDraftKind.commandLine);
+            _setDraftKind(AgentActionDraftKind.commandLine);
             _commandController.text = config.command;
           } else {
-            _powerShellMode = _PowerShellDraftMode.inline;
+            _powerShellMode = PowerShellDraftMode.inline;
             _powerShellExecutable = PowerShellCommandLine.isPowerShell7Executable(powerShellCommand.executable)
-                ? _PowerShellExecutable.powerShell7
-                : _PowerShellExecutable.windowsPowerShell;
-            _setDraftKind(_AgentActionDraftKind.powerShell);
+                ? PowerShellExecutable.powerShell7
+                : PowerShellExecutable.windowsPowerShell;
+            _setDraftKind(AgentActionDraftKind.powerShell);
             _commandController.text = powerShellCommand.command;
           }
           _workingDirectoryController.text = config.workingDirectory?.originalPath ?? '';
@@ -561,7 +514,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           _connectionLabelController.clear();
           widget.provider.clearDeveloperData7Connections(notify: false);
         case final ExecutableActionConfig config:
-          _setDraftKind(_AgentActionDraftKind.executable);
+          _setDraftKind(AgentActionDraftKind.executable);
           _commandController.clear();
           _executableTargetPathController.text = config.executablePath.originalPath;
           _executableArgumentsController.text = config.arguments.join('\n');
@@ -589,13 +542,13 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           widget.provider.clearDeveloperData7Connections(notify: false);
         case final ScriptActionConfig config:
           if (PowerShellCommandLine.isPowerShellScriptPath(config.scriptPath.originalPath)) {
-            _powerShellMode = _PowerShellDraftMode.script;
+            _powerShellMode = PowerShellDraftMode.script;
             _powerShellExecutable = PowerShellCommandLine.isPowerShell7Executable(config.interpreterPath?.originalPath)
-                ? _PowerShellExecutable.powerShell7
-                : _PowerShellExecutable.windowsPowerShell;
-            _setDraftKind(_AgentActionDraftKind.powerShell);
+                ? PowerShellExecutable.powerShell7
+                : PowerShellExecutable.windowsPowerShell;
+            _setDraftKind(AgentActionDraftKind.powerShell);
           } else {
-            _setDraftKind(_AgentActionDraftKind.script);
+            _setDraftKind(AgentActionDraftKind.script);
           }
           _commandController.clear();
           _executableTargetPathController.clear();
@@ -624,7 +577,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           _connectionLabelController.clear();
           widget.provider.clearDeveloperData7Connections(notify: false);
         case final JarActionConfig config:
-          _setDraftKind(_AgentActionDraftKind.jar);
+          _setDraftKind(AgentActionDraftKind.jar);
           _commandController.clear();
           _executableTargetPathController.clear();
           _executableArgumentsController.clear();
@@ -652,7 +605,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           _connectionLabelController.clear();
           widget.provider.clearDeveloperData7Connections(notify: false);
         case final EmailActionConfig config:
-          _setDraftKind(_AgentActionDraftKind.email);
+          _setDraftKind(AgentActionDraftKind.email);
           _commandController.clear();
           _executableTargetPathController.clear();
           _executableArgumentsController.clear();
@@ -676,7 +629,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           _connectionLabelController.clear();
           widget.provider.clearDeveloperData7Connections(notify: false);
         case final ComObjectActionConfig config:
-          _setDraftKind(_AgentActionDraftKind.comObject);
+          _setDraftKind(AgentActionDraftKind.comObject);
           _commandController.clear();
           _executableTargetPathController.clear();
           _executableArgumentsController.clear();
@@ -703,7 +656,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           _connectionLabelController.clear();
           widget.provider.clearDeveloperData7Connections(notify: false);
         case final DeveloperActionConfig config:
-          _setDraftKind(_AgentActionDraftKind.developer);
+          _setDraftKind(AgentActionDraftKind.developer);
           _commandController.clear();
           _executableTargetPathController.clear();
           _executableArgumentsController.clear();
@@ -738,10 +691,10 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     }
   }
 
-  void _clearDraft([_AgentActionDraftKind? draftKind]) {
+  void _clearDraft([AgentActionDraftKind? draftKind]) {
     _editingActionId = null;
     _setDraftKind(draftKind ?? _draftKind);
-    _powerShellExecutable = _PowerShellExecutable.windowsPowerShell;
+    _powerShellExecutable = PowerShellExecutable.windowsPowerShell;
     _nameController.clear();
     _descriptionController.clear();
     _commandController.clear();
@@ -942,14 +895,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     );
   }
 
-  int? _parsePositiveInt(String input) {
-    final parsed = int.tryParse(input.trim());
-    if (parsed == null || parsed < 1) {
-      return null;
-    }
-
-    return parsed;
-  }
+  int? _parsePositiveInt(String input) => AgentActionDraftParsers.positiveInt(input);
 
   bool get _draftCapturesProcessOutput {
     return switch (_draftType) {
@@ -1071,74 +1017,16 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     );
   }
 
-  Set<String> _parseAllowedProfiles(String input) => _parseCommaSeparatedTokens(input);
+  Set<String> _parseAllowedProfiles(String input) => AgentActionDraftParsers.commaSeparatedTokens(input);
 
-  Set<String> _parseCommaSeparatedTokens(String input) {
-    if (input.trim().isEmpty) {
-      return const <String>{};
-    }
+  Set<String> _parseCommaSeparatedTokens(String input) => AgentActionDraftParsers.commaSeparatedTokens(input);
 
-    return input.split(',').map((String part) => part.trim()).where((String part) => part.isNotEmpty).toSet();
-  }
+  Map<String, String> _parseEnvironmentVariables(String input) => AgentActionDraftParsers.environmentVariables(input);
 
-  Map<String, String> _parseEnvironmentVariables(String input) {
-    final variables = <String, String>{};
-    for (final rawLine in input.split(RegExp(r'\r?\n'))) {
-      final line = rawLine.trim();
-      if (line.isEmpty || line.startsWith('#')) {
-        continue;
-      }
+  String _formatEnvironmentVariables(Map<String, String> variables) =>
+      AgentActionDraftParsers.formatEnvironmentVariables(variables);
 
-      final separatorIndex = line.indexOf('=');
-      if (separatorIndex <= 0) {
-        throw const FormatException('Invalid environment variable line.');
-      }
-
-      final name = line.substring(0, separatorIndex).trim();
-      if (name.isEmpty) {
-        throw const FormatException('Environment variable name is blank.');
-      }
-
-      variables[name] = line.substring(separatorIndex + 1);
-    }
-
-    return Map<String, String>.unmodifiable(variables);
-  }
-
-  String _formatEnvironmentVariables(Map<String, String> variables) {
-    if (variables.isEmpty) {
-      return '';
-    }
-
-    final names = variables.keys.toList()..sort();
-    return names.map((String name) => '$name=${variables[name]}').join('\n');
-  }
-
-  Set<int>? _tryParseAcceptedExitCodes(String input) {
-    final trimmed = input.trim();
-    if (trimmed.isEmpty) {
-      return const <int>{0};
-    }
-
-    final codes = <int>{};
-    for (final part in trimmed.split(',')) {
-      final token = part.trim();
-      if (token.isEmpty) {
-        continue;
-      }
-      final code = int.tryParse(token);
-      if (code == null) {
-        return null;
-      }
-      codes.add(code);
-    }
-
-    if (codes.isEmpty) {
-      return const <int>{0};
-    }
-
-    return codes;
-  }
+  Set<int>? _tryParseAcceptedExitCodes(String input) => AgentActionDraftParsers.acceptedExitCodes(input);
 
   List<String> _missingRequiredFieldLabels() {
     final fields = <String>[];
@@ -1146,13 +1034,13 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       fields.add(widget.l10n.agentActionsFormName);
     }
 
-    if (_draftKind == _AgentActionDraftKind.powerShell) {
+    if (_draftKind == AgentActionDraftKind.powerShell) {
       switch (_powerShellMode) {
-        case _PowerShellDraftMode.inline:
+        case PowerShellDraftMode.inline:
           if (_commandController.text.trim().isEmpty) {
             fields.add(widget.l10n.agentActionsFormPowerShellCommand);
           }
-        case _PowerShellDraftMode.script:
+        case PowerShellDraftMode.script:
           if (_scriptPathController.text.trim().isEmpty) {
             fields.add(widget.l10n.agentActionsFormPowerShellScriptPath);
           }
@@ -1251,14 +1139,14 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     }
 
     final saveRequest = switch (_draftKind) {
-      _AgentActionDraftKind.commandLine => _saveCommandLineDraft(),
-      _AgentActionDraftKind.executable => _saveExecutableDraft(),
-      _AgentActionDraftKind.script => _saveScriptDraft(),
-      _AgentActionDraftKind.jar => _saveJarDraft(),
-      _AgentActionDraftKind.email => _saveEmailDraft(),
-      _AgentActionDraftKind.comObject => _saveComObjectDraft(),
-      _AgentActionDraftKind.developer => _saveDeveloperDraft(),
-      _AgentActionDraftKind.powerShell => _savePowerShellDraft(),
+      AgentActionDraftKind.commandLine => _saveCommandLineDraft(),
+      AgentActionDraftKind.executable => _saveExecutableDraft(),
+      AgentActionDraftKind.script => _saveScriptDraft(),
+      AgentActionDraftKind.jar => _saveJarDraft(),
+      AgentActionDraftKind.email => _saveEmailDraft(),
+      AgentActionDraftKind.comObject => _saveComObjectDraft(),
+      AgentActionDraftKind.developer => _saveDeveloperDraft(),
+      AgentActionDraftKind.powerShell => _savePowerShellDraft(),
     };
     final saveResult = await saveRequest;
     if (!saveResult) {
@@ -1361,7 +1249,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
                       readOnly: true,
                       textInputAction: TextInputAction.next,
                     )
-                  : AppDropdown<_AgentActionDraftKind>(
+                  : AppDropdown<AgentActionDraftKind>(
                       key: AgentActionEditorKeys.actionTypeDropdown,
                       label: widget.l10n.agentActionsFormType,
                       helpTitle: widget.l10n.agentActionsHelpTypeTitle,
@@ -1372,7 +1260,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
                             (draftKind) {
                               final unavailable = _isDraftKindUnavailable(draftKind);
                               final label = _draftKindLabel(draftKind);
-                              return ComboBoxItem<_AgentActionDraftKind>(
+                              return ComboBoxItem<AgentActionDraftKind>(
                                 value: draftKind,
                                 enabled: !unavailable,
                                 child: Text(
@@ -1477,7 +1365,35 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
         ],
         if (_isDialogSectionVisible(2)) ...[
           const SizedBox(height: AppSpacing.md),
-          _buildExecutionPoliciesSection(saving),
+          AgentActionExecutionPoliciesSection(
+            l10n: widget.l10n,
+            enabled: !saving && widget.provider.canSaveAction,
+            elevatedFeatureEnabled: widget.provider.isElevatedAgentActionsEnabled,
+            elevatedRunnerReady:
+                widget.provider.isElevatedRunnerConfigured && !widget.provider.isElevatedRunnerDegraded,
+            maxAttempts: _maxAttempts,
+            maxRuntimeMinutesController: _maxRuntimeMinutesController,
+            killMainProcessOnTimeout: _killMainProcessOnTimeout,
+            allowRemoteRetry: _allowRemoteRetry,
+            runElevated: _runElevated,
+            contextInjectionMode: _contextInjectionMode,
+            pathChangePolicy: _pathChangePolicy,
+            runtimeParameterSchemaController: _runtimeParameterSchemaController,
+            callbacks: AgentActionExecutionPoliciesCallbacks(
+              onMaxAttemptsChanged: (value) => setState(() => _maxAttempts = value),
+              onMaxRuntimeMinutesChanged: (value) {
+                final parsed = int.tryParse(value.trim());
+                if (parsed != null && parsed > 0) {
+                  setState(() => _maxRuntimeMinutes = parsed);
+                }
+              },
+              onKillOnTimeoutChanged: (value) => setState(() => _killMainProcessOnTimeout = value),
+              onAllowRemoteRetryChanged: (value) => setState(() => _allowRemoteRetry = value),
+              onRunElevatedChanged: (value) => unawaited(_onRunElevatedChanged(value)),
+              onContextInjectionModeChanged: (value) => setState(() => _contextInjectionMode = value),
+              onPathChangePolicyChanged: (value) => setState(() => _pathChangePolicy = value),
+            ),
+          ),
         ],
         if (_isDialogSectionVisible(3)) ...[
           const SizedBox(height: AppSpacing.md),
@@ -1485,11 +1401,32 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
         ],
         if (_isDialogSectionVisible(4)) ...[
           const SizedBox(height: AppSpacing.md),
-          _buildRemotePolicySection(saving),
+          AgentActionRemotePolicySection(
+            l10n: widget.l10n,
+            enabled: !saving && widget.provider.canSaveAction,
+            remoteFeatureEnabled: widget.provider.isRemoteAgentActionsEnabled,
+            remoteAdHocFeatureEnabled: widget.provider.isRemoteAdHocAgentActionsEnabled,
+            remoteEnabled: _remoteEnabled,
+            remoteAdHoc: _remoteAdHoc,
+            remoteApprovalGranted: _remoteApprovalGranted,
+            requiresReapproval: widget.definition?.policies.remote.requiresReapproval ?? false,
+            reapprovalInfoBarKey: AgentActionEditorKeys.remoteReapprovalInfoBar,
+            onRemoteEnabledChanged: (value) => unawaited(_onRemoteEnabledChanged(value)),
+            onRemoteAdHocChanged: (value) => unawaited(_onRemoteAdHocChanged(value)),
+          ),
         ],
         if (_isDialogSectionVisible(5)) ...[
           const SizedBox(height: AppSpacing.md),
-          _buildNotificationPolicySection(saving),
+          AgentActionNotificationPolicySection(
+            l10n: widget.l10n,
+            enabled: !saving && widget.provider.canSaveAction,
+            notifyOnSuccess: _notifyOnSuccess,
+            notifyOnFailure: _notifyOnFailure,
+            notifyOnTimeout: _notifyOnTimeout,
+            onNotifyOnSuccessChanged: (value) => setState(() => _notifyOnSuccess = value),
+            onNotifyOnFailureChanged: (value) => setState(() => _notifyOnFailure = value),
+            onNotifyOnTimeoutChanged: (value) => setState(() => _notifyOnTimeout = value),
+          ),
         ],
         if (widget.showChrome) ...[
           const SizedBox(height: AppSpacing.md),
@@ -1532,213 +1469,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
             right: AppSpacing.lg,
           ),
           child: saveButton,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExecutionPoliciesSection(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.l10n.agentActionsFormExecutionPoliciesTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          widget.l10n.agentActionsFormExecutionPoliciesDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 220,
-              child: AppDropdown<int>(
-                label: widget.l10n.agentActionsFormMaxAttempts,
-                helpTitle: widget.l10n.agentActionsHelpMaxAttemptsTitle,
-                helpMessage: widget.l10n.agentActionsHelpMaxAttemptsMessage,
-                value: _maxAttempts,
-                items: List<ComboBoxItem<int>>.generate(
-                  5,
-                  (int index) {
-                    final attempts = index + 1;
-                    return ComboBoxItem<int>(
-                      value: attempts,
-                      child: Text('$attempts'),
-                    );
-                  },
-                  growable: false,
-                ),
-                onChanged: enabled
-                    ? (int? value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setState(() {
-                          _maxAttempts = value;
-                        });
-                      }
-                    : null,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormMaxRuntimeMinutes,
-                helpTitle: widget.l10n.agentActionsHelpTimeoutTitle,
-                helpMessage: widget.l10n.agentActionsHelpTimeoutMessage,
-                controller: _maxRuntimeMinutesController,
-                enabled: enabled,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                onChanged: (String value) {
-                  final parsed = int.tryParse(value.trim());
-                  if (parsed != null && parsed > 0) {
-                    setState(() {
-                      _maxRuntimeMinutes = parsed;
-                    });
-                  }
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Checkbox(
-              checked: _killMainProcessOnTimeout,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _killMainProcessOnTimeout = value ?? true;
-                      });
-                    }
-                  : null,
-              content: AgentActionEditorHelpCheckboxLabel(
-                label: widget.l10n.agentActionsFormKillOnTimeout,
-                helpTitle: widget.l10n.agentActionsHelpKillOnTimeoutTitle,
-                helpMessage: widget.l10n.agentActionsHelpKillOnTimeoutMessage,
-              ),
-            ),
-            Checkbox(
-              checked: _allowRemoteRetry,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _allowRemoteRetry = value ?? false;
-                      });
-                    }
-                  : null,
-              content: AgentActionEditorHelpCheckboxLabel(
-                label: widget.l10n.agentActionsFormAllowRemoteRetry,
-                helpTitle: widget.l10n.agentActionsHelpRemoteRetryTitle,
-                helpMessage: widget.l10n.agentActionsHelpRemoteRetryMessage,
-              ),
-            ),
-            if (widget.provider.isElevatedAgentActionsEnabled)
-              Checkbox(
-                checked: _runElevated,
-                onChanged:
-                    enabled && widget.provider.isElevatedRunnerConfigured && !widget.provider.isElevatedRunnerDegraded
-                    ? (bool? value) {
-                        unawaited(_onRunElevatedChanged(value ?? false));
-                      }
-                    : null,
-                content: AgentActionEditorHelpCheckboxLabel(
-                  label: widget.l10n.agentActionsFormRunElevated,
-                  helpTitle: widget.l10n.agentActionsHelpRunElevatedTitle,
-                  helpMessage: widget.l10n.agentActionsHelpRunElevatedMessage,
-                ),
-              ),
-          ],
-        ),
-        if (widget.provider.isElevatedAgentActionsEnabled) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            widget.l10n.agentActionsFormRunElevatedHint,
-            style: context.bodyMuted,
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        AppDropdown<AgentActionContextInjectionMode>(
-          label: widget.l10n.agentActionsFormContextInjectionMode,
-          helpTitle: widget.l10n.agentActionsHelpContextInjectionTitle,
-          helpMessage: widget.l10n.agentActionsHelpContextInjectionMessage,
-          value: _contextInjectionMode,
-          items: [
-            ComboBoxItem(
-              value: AgentActionContextInjectionMode.argument,
-              child: Text(widget.l10n.agentActionsFormContextInjectionArgument),
-            ),
-            ComboBoxItem(
-              value: AgentActionContextInjectionMode.file,
-              child: Text(widget.l10n.agentActionsFormContextInjectionFile),
-            ),
-            ComboBoxItem(
-              value: AgentActionContextInjectionMode.environment,
-              child: Text(widget.l10n.agentActionsFormContextInjectionEnvironment),
-            ),
-            ComboBoxItem(
-              value: AgentActionContextInjectionMode.stdin,
-              child: Text(widget.l10n.agentActionsFormContextInjectionStdin),
-            ),
-          ],
-          onChanged: enabled
-              ? (AgentActionContextInjectionMode? value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _contextInjectionMode = value;
-                  });
-                }
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppDropdown<AgentActionPathChangePolicy>(
-          label: widget.l10n.agentActionsFormPathChangePolicy,
-          helpTitle: widget.l10n.agentActionsHelpPathChangePolicyTitle,
-          helpMessage: widget.l10n.agentActionsHelpPathChangePolicyMessage,
-          value: _pathChangePolicy,
-          items: [
-            ComboBoxItem(
-              value: AgentActionPathChangePolicy.failIfChanged,
-              child: Text(widget.l10n.agentActionsFormPathChangePolicyFail),
-            ),
-            ComboBoxItem(
-              value: AgentActionPathChangePolicy.warnIfChanged,
-              child: Text(widget.l10n.agentActionsFormPathChangePolicyWarn),
-            ),
-            ComboBoxItem(
-              value: AgentActionPathChangePolicy.allowChanged,
-              child: Text(widget.l10n.agentActionsFormPathChangePolicyAllow),
-            ),
-          ],
-          onChanged: enabled
-              ? (AgentActionPathChangePolicy? value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _pathChangePolicy = value;
-                  });
-                }
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormRuntimeParameterSchema,
-          helpTitle: widget.l10n.agentActionsHelpRuntimeSchemaTitle,
-          helpMessage: widget.l10n.agentActionsHelpRuntimeSchemaMessage,
-          controller: _runtimeParameterSchemaController,
-          enabled: enabled,
-          maxLines: 6,
-          hint: widget.l10n.agentActionsFormRuntimeParameterSchemaHint,
         ),
       ],
     );
@@ -1853,7 +1583,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
               .map(
                 (AgentActionConcurrencyBehavior behavior) => ComboBoxItem<AgentActionConcurrencyBehavior>(
                   value: behavior,
-                  child: Text(_concurrencyBehaviorLabel(behavior, widget.l10n)),
+                  child: Text(agentActionEditorConcurrencyBehaviorLabel(behavior, widget.l10n)),
                 ),
               )
               .toList(growable: false),
@@ -1915,7 +1645,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
                 .map(
                   (AgentActionProcessWindowMode mode) => ComboBoxItem<AgentActionProcessWindowMode>(
                     value: mode,
-                    child: Text(_processWindowModeLabel(mode, widget.l10n)),
+                    child: Text(agentActionEditorProcessWindowModeLabel(mode, widget.l10n)),
                   ),
                 )
                 .toList(growable: false),
@@ -2007,7 +1737,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
                       .map(
                         (AgentActionOutputEncodingMode mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
                           value: mode,
-                          child: Text(_outputEncodingModeLabel(mode, widget.l10n)),
+                          child: Text(agentActionEditorOutputEncodingModeLabel(mode, widget.l10n)),
                         ),
                       )
                       .toList(growable: false),
@@ -2034,7 +1764,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
                       .map(
                         (AgentActionOutputEncodingMode mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
                           value: mode,
-                          child: Text(_outputEncodingModeLabel(mode, widget.l10n)),
+                          child: Text(agentActionEditorOutputEncodingModeLabel(mode, widget.l10n)),
                         ),
                       )
                       .toList(growable: false),
@@ -2076,7 +1806,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
                   .map(
                     (AgentActionOnAppExitBehavior behavior) => ComboBoxItem<AgentActionOnAppExitBehavior>(
                       value: behavior,
-                      child: Text(_onAppExitLabel(behavior, widget.l10n)),
+                      child: Text(agentActionEditorOnAppExitLabel(behavior, widget.l10n)),
                     ),
                   )
                   .toList(growable: false),
@@ -2113,121 +1843,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
             );
           },
         ),
-      ],
-    );
-  }
-
-  String _onAppExitLabel(AgentActionOnAppExitBehavior behavior, AppLocalizations l10n) {
-    return switch (behavior) {
-      AgentActionOnAppExitBehavior.killMainProcess => l10n.agentActionsFormOnAppExitKill,
-      AgentActionOnAppExitBehavior.waitThenKillMainProcess => l10n.agentActionsFormOnAppExitWaitThenKill,
-      AgentActionOnAppExitBehavior.leaveRunning => l10n.agentActionsFormOnAppExitLeaveRunning,
-    };
-  }
-
-  String _processWindowModeLabel(AgentActionProcessWindowMode mode, AppLocalizations l10n) {
-    return switch (mode) {
-      AgentActionProcessWindowMode.normal => l10n.agentActionsFormProcessWindowModeNormal,
-      AgentActionProcessWindowMode.hidden => l10n.agentActionsFormProcessWindowModeHidden,
-      AgentActionProcessWindowMode.minimized => l10n.agentActionsFormProcessWindowModeMinimized,
-    };
-  }
-
-  String _concurrencyBehaviorLabel(AgentActionConcurrencyBehavior behavior, AppLocalizations l10n) {
-    return switch (behavior) {
-      AgentActionConcurrencyBehavior.allowParallel => l10n.agentActionsFormConcurrencyAllowParallel,
-      AgentActionConcurrencyBehavior.enqueue => l10n.agentActionsFormConcurrencyEnqueue,
-      AgentActionConcurrencyBehavior.reject => l10n.agentActionsFormConcurrencyReject,
-      AgentActionConcurrencyBehavior.ignore => l10n.agentActionsFormConcurrencyIgnore,
-    };
-  }
-
-  String _outputEncodingModeLabel(AgentActionOutputEncodingMode mode, AppLocalizations l10n) {
-    return switch (mode) {
-      AgentActionOutputEncodingMode.utf8 => l10n.agentActionsFormOutputEncodingUtf8,
-      AgentActionOutputEncodingMode.systemConsole => l10n.agentActionsFormOutputEncodingSystemConsole,
-    };
-  }
-
-  Widget _buildRemotePolicySection(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    final remoteFeatureEnabled = widget.provider.isRemoteAgentActionsEnabled;
-    final remoteAdHocFeatureEnabled = widget.provider.isRemoteAdHocAgentActionsEnabled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.l10n.agentActionsFormRemotePoliciesTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          widget.l10n.agentActionsFormRemotePoliciesDescription,
-          style: context.bodyMuted,
-        ),
-        if (!remoteFeatureEnabled) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            title: Text(widget.l10n.agentActionsFormRemoteFeatureDisabledTitle),
-            content: Text(widget.l10n.agentActionsFormRemoteFeatureDisabledMessage),
-            isLong: true,
-          ),
-        ] else if (!remoteAdHocFeatureEnabled) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            title: Text(widget.l10n.agentActionsFormRemoteAdHocFeatureDisabledTitle),
-            content: Text(widget.l10n.agentActionsFormRemoteAdHocFeatureDisabledMessage),
-            isLong: true,
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Checkbox(
-              checked: _remoteEnabled,
-              onChanged: !enabled
-                  ? null
-                  : (bool? value) {
-                      unawaited(_onRemoteEnabledChanged(value ?? false));
-                    },
-              content: AgentActionEditorHelpCheckboxLabel(
-                label: widget.l10n.agentActionsFormRemoteExecutionEnabled,
-                helpTitle: widget.l10n.agentActionsHelpRemoteExecutionTitle,
-                helpMessage: widget.l10n.agentActionsHelpRemoteExecutionMessage,
-              ),
-            ),
-            Checkbox(
-              checked: _remoteAdHoc,
-              onChanged: !enabled || !_remoteEnabled || !remoteAdHocFeatureEnabled
-                  ? null
-                  : (bool? value) {
-                      unawaited(_onRemoteAdHocChanged(value ?? false));
-                    },
-              content: AgentActionEditorHelpCheckboxLabel(
-                label: widget.l10n.agentActionsFormRemoteAdHocEnabled,
-                helpTitle: widget.l10n.agentActionsHelpRemoteAdHocTitle,
-                helpMessage: widget.l10n.agentActionsHelpRemoteAdHocMessage,
-              ),
-            ),
-          ],
-        ),
-        if (widget.definition?.policies.remote.requiresReapproval ?? false) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            key: AgentActionEditorKeys.remoteReapprovalInfoBar,
-            title: Text(widget.l10n.agentActionsFormRemoteReapprovalRequiredTitle),
-            content: Text(widget.l10n.agentActionsFormRemoteReapprovalRequiredMessage),
-            severity: InfoBarSeverity.warning,
-            isLong: true,
-          ),
-        ] else if (_remoteEnabled && _remoteApprovalGranted) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            widget.l10n.agentActionsFormRemoteApprovedHint,
-            style: context.bodyMuted,
-          ),
-        ],
       ],
     );
   }
@@ -2315,76 +1930,8 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     });
   }
 
-  Widget _buildNotificationPolicySection(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.l10n.agentActionsFormNotificationsTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          widget.l10n.agentActionsFormNotificationsDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Checkbox(
-              checked: _notifyOnSuccess,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _notifyOnSuccess = value ?? false;
-                      });
-                    }
-                  : null,
-              content: AgentActionEditorHelpCheckboxLabel(
-                label: widget.l10n.agentActionsFormNotifyOnSuccess,
-                helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
-                helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
-              ),
-            ),
-            Checkbox(
-              checked: _notifyOnFailure,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _notifyOnFailure = value ?? false;
-                      });
-                    }
-                  : null,
-              content: AgentActionEditorHelpCheckboxLabel(
-                label: widget.l10n.agentActionsFormNotifyOnFailure,
-                helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
-                helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
-              ),
-            ),
-            Checkbox(
-              checked: _notifyOnTimeout,
-              onChanged: enabled
-                  ? (bool? value) {
-                      setState(() {
-                        _notifyOnTimeout = value ?? false;
-                      });
-                    }
-                  : null,
-              content: AgentActionEditorHelpCheckboxLabel(
-                label: widget.l10n.agentActionsFormNotifyOnTimeout,
-                helpTitle: widget.l10n.agentActionsHelpNotificationsTitle,
-                helpMessage: widget.l10n.agentActionsHelpNotificationsMessage,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   List<Widget> _buildDraftFields(bool saving) {
-    if (_draftKind == _AgentActionDraftKind.powerShell) {
+    if (_draftKind == AgentActionDraftKind.powerShell) {
       return _buildPowerShellDraftFields(saving);
     }
 
@@ -2891,18 +2438,18 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
             readOnly: true,
             textInputAction: TextInputAction.next,
           )
-        : AppDropdown<_PowerShellDraftMode>(
+        : AppDropdown<PowerShellDraftMode>(
             key: AgentActionEditorKeys.powerShellModeDropdown,
             label: widget.l10n.agentActionsFormPowerShellMode,
             helpTitle: widget.l10n.agentActionsHelpPowerShellModeTitle,
             helpMessage: widget.l10n.agentActionsHelpPowerShellModeMessage,
             value: _powerShellMode,
-            items: _PowerShellDraftMode.values
+            items: PowerShellDraftMode.values
                 .map(
                   (mode) {
                     final unavailable = _isPowerShellModeUnavailable(mode);
                     final label = _powerShellModeLabel(mode);
-                    return ComboBoxItem<_PowerShellDraftMode>(
+                    return ComboBoxItem<PowerShellDraftMode>(
                       value: mode,
                       enabled: !unavailable,
                       child: Text(
@@ -2923,15 +2470,15 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
                   }
                 : null,
           );
-    final executableField = AppDropdown<_PowerShellExecutable>(
+    final executableField = AppDropdown<PowerShellExecutable>(
       key: AgentActionEditorKeys.powerShellExecutableDropdown,
       label: widget.l10n.agentActionsFormPowerShellExecutable,
       helpTitle: widget.l10n.agentActionsHelpPowerShellExecutableTitle,
       helpMessage: widget.l10n.agentActionsHelpPowerShellExecutableMessage,
       value: _powerShellExecutable,
-      items: _PowerShellExecutable.values
+      items: PowerShellExecutable.values
           .map(
-            (executable) => ComboBoxItem<_PowerShellExecutable>(
+            (executable) => ComboBoxItem<PowerShellExecutable>(
               value: executable,
               child: Text(_powerShellExecutableLabel(executable)),
             ),
@@ -2959,7 +2506,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
         ],
       ),
       const SizedBox(height: AppSpacing.sm),
-      if (_powerShellMode == _PowerShellDraftMode.inline) ...[
+      if (_powerShellMode == PowerShellDraftMode.inline) ...[
         AppTextField(
           label: widget.l10n.agentActionsFormPowerShellCommand,
           helpTitle: widget.l10n.agentActionsHelpPowerShellCommandTitle,
@@ -3011,19 +2558,10 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     ];
   }
 
-  String _powerShellModeLabel(_PowerShellDraftMode mode) {
-    return switch (mode) {
-      _PowerShellDraftMode.inline => widget.l10n.agentActionsFormPowerShellModeCommand,
-      _PowerShellDraftMode.script => widget.l10n.agentActionsFormPowerShellModeScript,
-    };
-  }
+  String _powerShellModeLabel(PowerShellDraftMode mode) => powerShellDraftModeLabel(mode, widget.l10n);
 
-  String _powerShellExecutableLabel(_PowerShellExecutable executable) {
-    return switch (executable) {
-      _PowerShellExecutable.windowsPowerShell => widget.l10n.agentActionsFormPowerShellExecutableWindows,
-      _PowerShellExecutable.powerShell7 => widget.l10n.agentActionsFormPowerShellExecutablePwsh,
-    };
-  }
+  String _powerShellExecutableLabel(PowerShellExecutable executable) =>
+      powerShellExecutableLabel(executable, widget.l10n);
 
   List<Widget> _buildDeveloperBinaryPathHints() {
     final hints = <AgentActionEditorDeveloperHintData>[];
@@ -3430,23 +2968,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     );
   }
 
-  Map<String, Object?>? _parseComObjectArguments(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return const <String, Object?>{};
-    }
-
-    try {
-      final decoded = jsonDecode(trimmed);
-      if (decoded is! Map) {
-        return null;
-      }
-
-      return Map<String, Object?>.from(decoded);
-    } on FormatException {
-      return null;
-    }
-  }
+  Map<String, Object?>? _parseComObjectArguments(String raw) => AgentActionDraftParsers.comObjectArguments(raw);
 
   Future<bool> _saveScriptDraft() async {
     final scriptPath = _scriptPathController.text.trim();
@@ -3488,13 +3010,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     );
   }
 
-  List<String> _parseStructuredArguments(String raw) {
-    return raw
-        .split(RegExp(r'\r?\n'))
-        .map((String line) => line.trim())
-        .where((String line) => line.isNotEmpty)
-        .toList(growable: false);
-  }
+  List<String> _parseStructuredArguments(String raw) => AgentActionDraftParsers.structuredArguments(raw);
 
   Future<bool> _saveCommandLineDraft() async {
     final command = _commandController.text.trim();
@@ -3543,7 +3059,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     }
 
     switch (_powerShellMode) {
-      case _PowerShellDraftMode.inline:
+      case PowerShellDraftMode.inline:
         final command = _commandController.text.trim();
         if (command.isEmpty) {
           setState(() {
@@ -3582,7 +3098,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           queuePolicy: _draftQueuePolicy(),
           pathPolicy: _draftPathPolicy(),
         );
-      case _PowerShellDraftMode.script:
+      case PowerShellDraftMode.script:
         final scriptPath = _scriptPathController.text.trim();
         if (scriptPath.isEmpty) {
           setState(() {
@@ -3606,7 +3122,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           name: _nameController.text.trim(),
           description: _descriptionController.text,
           scriptPath: scriptPath,
-          interpreterPath: _powerShellExecutable == _PowerShellExecutable.powerShell7
+          interpreterPath: _powerShellExecutable == PowerShellExecutable.powerShell7
               ? PowerShellCommandLine.powerShell7Executable
               : '',
           arguments: _parseStructuredArguments(_executableArgumentsController.text),
@@ -3690,27 +3206,27 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
   String _createTitle() {
     return switch (_draftKind) {
-      _AgentActionDraftKind.commandLine => widget.l10n.agentActionsFormCreateTitle,
-      _AgentActionDraftKind.executable => widget.l10n.agentActionsFormCreateExecutableTitle,
-      _AgentActionDraftKind.script => widget.l10n.agentActionsFormCreateScriptTitle,
-      _AgentActionDraftKind.jar => widget.l10n.agentActionsFormCreateJarTitle,
-      _AgentActionDraftKind.email => widget.l10n.agentActionsFormCreateEmailTitle,
-      _AgentActionDraftKind.comObject => widget.l10n.agentActionsFormCreateComObjectTitle,
-      _AgentActionDraftKind.developer => widget.l10n.agentActionsFormCreateDeveloperTitle,
-      _AgentActionDraftKind.powerShell => widget.l10n.agentActionsFormCreatePowerShellTitle,
+      AgentActionDraftKind.commandLine => widget.l10n.agentActionsFormCreateTitle,
+      AgentActionDraftKind.executable => widget.l10n.agentActionsFormCreateExecutableTitle,
+      AgentActionDraftKind.script => widget.l10n.agentActionsFormCreateScriptTitle,
+      AgentActionDraftKind.jar => widget.l10n.agentActionsFormCreateJarTitle,
+      AgentActionDraftKind.email => widget.l10n.agentActionsFormCreateEmailTitle,
+      AgentActionDraftKind.comObject => widget.l10n.agentActionsFormCreateComObjectTitle,
+      AgentActionDraftKind.developer => widget.l10n.agentActionsFormCreateDeveloperTitle,
+      AgentActionDraftKind.powerShell => widget.l10n.agentActionsFormCreatePowerShellTitle,
     };
   }
 
   String _editTitle() {
     return switch (_draftKind) {
-      _AgentActionDraftKind.commandLine => widget.l10n.agentActionsFormEditTitle,
-      _AgentActionDraftKind.executable => widget.l10n.agentActionsFormEditExecutableTitle,
-      _AgentActionDraftKind.script => widget.l10n.agentActionsFormEditScriptTitle,
-      _AgentActionDraftKind.jar => widget.l10n.agentActionsFormEditJarTitle,
-      _AgentActionDraftKind.email => widget.l10n.agentActionsFormEditEmailTitle,
-      _AgentActionDraftKind.comObject => widget.l10n.agentActionsFormEditComObjectTitle,
-      _AgentActionDraftKind.developer => widget.l10n.agentActionsFormEditDeveloperTitle,
-      _AgentActionDraftKind.powerShell => widget.l10n.agentActionsFormEditPowerShellTitle,
+      AgentActionDraftKind.commandLine => widget.l10n.agentActionsFormEditTitle,
+      AgentActionDraftKind.executable => widget.l10n.agentActionsFormEditExecutableTitle,
+      AgentActionDraftKind.script => widget.l10n.agentActionsFormEditScriptTitle,
+      AgentActionDraftKind.jar => widget.l10n.agentActionsFormEditJarTitle,
+      AgentActionDraftKind.email => widget.l10n.agentActionsFormEditEmailTitle,
+      AgentActionDraftKind.comObject => widget.l10n.agentActionsFormEditComObjectTitle,
+      AgentActionDraftKind.developer => widget.l10n.agentActionsFormEditDeveloperTitle,
+      AgentActionDraftKind.powerShell => widget.l10n.agentActionsFormEditPowerShellTitle,
     };
   }
 
@@ -4040,14 +3556,10 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     }
   }
 
-  String _normalizePathForComparison(String path) {
-    return path.trim().replaceAll('/', r'\').toLowerCase();
-  }
+  String _normalizePathForComparison(String path) => AgentActionDraftParsers.normalizePathForComparison(path);
 
-  bool _endsWithFileName(String normalizedPath, String fileName) {
-    final expectedSuffix = r'\' + fileName.toLowerCase();
-    return normalizedPath.endsWith(expectedSuffix) || normalizedPath == fileName.toLowerCase();
-  }
+  bool _endsWithFileName(String normalizedPath, String fileName) =>
+      AgentActionDraftParsers.endsWithFileName(normalizedPath, fileName);
 
   List<AgentActionEditorDeveloperHintData> _buildDeveloperFileInspectionHints({
     required String path,

@@ -29,26 +29,15 @@ class ErrorDisplay extends StatelessWidget {
       title: title,
       onRetry: onRetry,
     );
+    final canRetry = display._isRecoverable() && onRetry != null;
 
     return MessageModal.show(
       context: context,
       title: display._getTitle(l10n),
       message: display._getMessage(),
       type: MessageType.error,
-      onConfirm: onRetry,
-      confirmText: onRetry != null ? l10n.btnRetry : null,
-    );
-  }
-
-  static Widget show({
-    required Object error,
-    String? title,
-    VoidCallback? onRetry,
-  }) {
-    return ErrorDisplay(
-      error: error,
-      title: title,
-      onRetry: onRetry,
+      onConfirm: canRetry ? onRetry : null,
+      confirmText: canRetry ? l10n.btnRetry : null,
     );
   }
 
