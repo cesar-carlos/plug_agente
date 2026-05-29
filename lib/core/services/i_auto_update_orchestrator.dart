@@ -1,6 +1,6 @@
+import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
-import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:result_dart/result_dart.dart';
 
 abstract class IAutoUpdateOrchestrator {

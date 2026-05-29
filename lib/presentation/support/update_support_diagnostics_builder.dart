@@ -1,5 +1,5 @@
+import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
-import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/support/support_diagnostics_section.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/core/services/update_check_diagnostics.dart';
+import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 
 void main() {
   group('UpdateCheckDiagnostics', () {

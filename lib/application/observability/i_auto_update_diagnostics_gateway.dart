@@ -1,4 +1,4 @@
-import 'package:plug_agente/core/services/update_check_diagnostics.dart';
+import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 
 /// Pushes a non-sensitive subset of [UpdateCheckDiagnostics] to the Plug
 /// hub after every auto-update cycle. The contract is documented in

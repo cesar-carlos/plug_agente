@@ -4,8 +4,8 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/core/services/update_check_diagnostics.dart';
-import 'package:plug_agente/domain/repositories/i_auto_update_diagnostics_gateway.dart';
+import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
+import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/infrastructure/external_services/throttled_auto_update_diagnostics_gateway.dart';
 
 import '../helpers/e2e_env.dart';

@@ -4,6 +4,10 @@ import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'package:auto_updater/auto_updater.dart';
+import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
+import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
+import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
+import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
 import 'package:plug_agente/application/services/auto_update_orchestrator_options.dart';
@@ -23,13 +27,9 @@ import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
-import 'package:plug_agente/core/services/update_check_diagnostics.dart';
-import 'package:plug_agente/core/services/update_check_id_recorder.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
-import 'package:plug_agente/domain/repositories/i_auto_update_diagnostics_gateway.dart';
-import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Boundary the application layer uses to talk to WinSparkle. Avoids

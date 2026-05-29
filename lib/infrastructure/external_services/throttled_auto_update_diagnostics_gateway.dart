@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:plug_agente/core/services/update_check_diagnostics.dart';
-import 'package:plug_agente/domain/repositories/i_auto_update_diagnostics_gateway.dart';
+import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
+import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 
 /// Function signature for the underlying transport call. Implementations
 /// usually wrap the Socket.IO RPC client. Returns a future that completes

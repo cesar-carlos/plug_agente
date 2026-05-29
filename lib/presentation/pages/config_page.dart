@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -10,7 +11,6 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
-import 'package:plug_agente/core/services/update_check_diagnostics.dart';
 import 'package:plug_agente/core/support/runtime_support_diagnostics_builder.dart';
 import 'package:plug_agente/core/support/support_diagnostics_section.dart';
 import 'package:plug_agente/core/support/support_diagnostics_text_formatter.dart';

@@ -26,6 +26,8 @@ import 'package:plug_agente/application/actions/elevated_action_status_file_sync
 import 'package:plug_agente/application/actions/elevated_agent_action_execution_service.dart';
 import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
+import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
+import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/rpc/agent_action_remote_authorization_service.dart';
@@ -132,7 +134,6 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
-import 'package:plug_agente/core/services/update_check_id_recorder.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
@@ -153,7 +154,6 @@ import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.da
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
-import 'package:plug_agente/domain/repositories/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
