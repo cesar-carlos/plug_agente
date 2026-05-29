@@ -24,15 +24,42 @@ class UpdateCheckIdRecorder {
   final IAppSettingsStore? _settingsStore;
   final Uuid _uuid;
 
+  /// Serializes [record] invocations so concurrent calls cannot race
+  /// the "read existing buffer / mutate / write back" sequence. Without
+  /// this, two cycles starting at the same time (e.g. silent + manual)
+  /// could each load the same prefix, append their own entry on top of
+  /// it, and overwrite each other on flush — one of the IDs would be
+  /// silently dropped.
+  Future<void> _writeQueue = Future<void>.value();
+
   /// Returns a new UUIDv7 (time-ordered RFC 9562 §5.7).
   String newId() => _uuid.v7();
 
   /// Appends [id] to the persisted ring buffer. Best-effort: an IO error
   /// is logged but does not propagate, because the ID is also already
   /// embedded in the in-memory `UpdateCheckDiagnostics` for the caller.
-  Future<void> record(String id, {required String source}) async {
+  ///
+  /// Calls are serialised through [_writeQueue] so concurrent invokers
+  /// cannot lose entries through a read-modify-write race.
+  Future<void> record(String id, {required String source}) {
     final store = _settingsStore;
-    if (store == null) return;
+    if (store == null) return Future<void>.value();
+    final pending = _writeQueue
+        .catchError((Object _, StackTrace _) {
+          // Swallow the previous batch's error so the queue can continue
+          // with the latest snapshot. The error was already logged when
+          // it first happened.
+        })
+        .then((_) => _appendEntry(store, id: id, source: source));
+    _writeQueue = pending;
+    return pending;
+  }
+
+  Future<void> _appendEntry(
+    IAppSettingsStore store, {
+    required String id,
+    required String source,
+  }) async {
     try {
       final existing = _readBuffer(store);
       existing.add(<String, dynamic>{

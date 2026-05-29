@@ -5,6 +5,7 @@ import 'dart:math';
 import 'dart:ui' show VoidCallback;
 
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
+import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
@@ -118,9 +119,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     IAppSettingsStore? settingsStore,
     CloseApplicationForSilentUpdate? closeApplicationForSilentUpdate,
     VoidCallback? onDiagnosticsChanged,
-    int automaticFailureCooldownThreshold = _defaultAutomaticFailureCooldownThreshold,
-    Duration automaticFailureCooldown = _defaultAutomaticFailureCooldown,
-    Duration helperWaitDuration = _defaultHelperWaitDuration,
+    int automaticFailureCooldownThreshold = AutoUpdateDefaults.automaticFailureCooldownThreshold,
+    Duration automaticFailureCooldown = AutoUpdateDefaults.automaticFailureCooldown,
+    Duration helperWaitDuration = AutoUpdateDefaults.helperWaitDuration,
     Duration Function()? bootJitterProvider,
     IAppcastSignatureVerifier? signatureVerifier,
     UpdateCheckIdRecorder? checkIdRecorder,
@@ -158,7 +159,25 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
          settingsStore: settingsStore,
          clock: clock,
        ) {
+    _warnIfUacDetectorIsNoopOnSupportedRuntime();
     hydratePersistedDiagnostics();
+  }
+
+  /// Logs a loud warning when the runtime *does* support auto-update
+  /// (so silent installs can actually trigger UAC prompts), yet the
+  /// injected detector is the no-op fallback. Catches DI mistakes early
+  /// instead of letting the UAC gate silently approve every install.
+  void _warnIfUacDetectorIsNoopOnSupportedRuntime() {
+    if (!_capabilities.supportsAutoUpdate) return;
+    if (_uacDetector is! NoopUacDetector) return;
+    developer.log(
+      'SilentUpdateCoordinator is using NoopUacDetector on a runtime '
+      'that supports auto-update (supportsAutoUpdate=true). The UAC '
+      'gate will never engage; verify the DI registrar wires a real '
+      'detector (e.g. WindowsUacDetector) on Windows.',
+      name: 'silent_update_coordinator',
+      level: 900,
+    );
   }
 
   final RuntimeCapabilities _capabilities;
@@ -233,15 +252,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   static const String _automaticCooldownUntilKey = 'auto_update.automatic_cooldown_until_ms';
   static const String _automaticRolloutBucketKey = 'auto_update.rollout_bucket';
 
-  static const int _defaultAutomaticFailureCooldownThreshold = 3;
-  static const Duration _defaultAutomaticFailureCooldown = Duration(hours: 6);
-  static const Duration _defaultHelperWaitDuration = Duration(minutes: 30);
-
-  // Public aliases so other classes (e.g. AutoUpdateOrchestrator) can use the
-  // same defaults without hard-coding magic values.
-  static const int defaultAutomaticFailureCooldownThreshold = _defaultAutomaticFailureCooldownThreshold;
-  static const Duration defaultAutomaticFailureCooldown = _defaultAutomaticFailureCooldown;
-  static const Duration defaultHelperWaitDuration = _defaultHelperWaitDuration;
+  // Shared defaults live in `AutoUpdateDefaults` so the orchestrator
+  // and the coordinator do not need cross-class "public alias"
+  // constants to stay in sync.
 
   // ---------------------------------------------------------------------------
   // Public interface

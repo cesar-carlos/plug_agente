@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/application/services/user_initiated_apply_failure.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
@@ -274,29 +275,29 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     );
   }
 
-  /// Picks the most operator-friendly message for an apply failure. When
-  /// the failure carries an `outcome` context (set by the orchestrator for
-  /// the user-initiated apply path), we map it to a localized string so
-  /// the operator sees actionable text in their language. We fall back to
-  /// the raw `failure.message` only when the context is missing — that
-  /// covers infrastructure failures (e.g., network) that already carry
-  /// useful text.
+  /// Picks the most operator-friendly message for an apply failure.
+  ///
+  /// User-initiated apply failures are sealed
+  /// ([UserInitiatedApplyFailure]); we pattern-match on the concrete
+  /// subtype so adding a new outcome forces the compiler to surface the
+  /// missing localisation branch. Infrastructure failures (e.g.
+  /// network) fall back to `failure.message`, which already carries
+  /// actionable text from the lower layer.
   String _resolveApplyErrorMessage(AppLocalizations l10n, Exception error) {
-    if (error is! domain.Failure) {
-      return l10n.autoUpdateApplyFailureMessage;
+    if (error is UserInitiatedApplyFailure) {
+      return switch (error) {
+        UserInitiatedApplyCooldownActive() => l10n.autoUpdateApplyOutcomeCooldown,
+        UserInitiatedApplySilentDisabled() => l10n.autoUpdateApplyOutcomeSilentDisabled,
+        UserInitiatedApplyCancelled() => l10n.autoUpdateApplyOutcomeCancelled,
+        UserInitiatedApplyQuietHours() => l10n.autoUpdateApplyOutcomeQuietHours,
+        UserInitiatedApplyNoNewVersion() => l10n.autoUpdateApplyOutcomeNoNewVersion,
+        UserInitiatedApplyAlreadyInProgress() => l10n.autoUpdateApplyOutcomeAlreadyInProgress,
+        UserInitiatedApplyPendingInProgress() => l10n.autoUpdateApplyOutcomePendingInProgress,
+        UserInitiatedApplyCouldNotPrepare() => l10n.autoUpdateApplyOutcomeUnknown,
+      };
     }
-    final outcomeName = error.context['outcome'];
-    if (outcomeName is! String) return error.message;
-    return switch (outcomeName) {
-      'cooldownActive' => l10n.autoUpdateApplyOutcomeCooldown,
-      'silentDisabled' => l10n.autoUpdateApplyOutcomeSilentDisabled,
-      'cancelled' => l10n.autoUpdateApplyOutcomeCancelled,
-      'skippedByQuietHours' => l10n.autoUpdateApplyOutcomeQuietHours,
-      'noNewVersion' => l10n.autoUpdateApplyOutcomeNoNewVersion,
-      'alreadyInProgress' => l10n.autoUpdateApplyOutcomeAlreadyInProgress,
-      'pendingInProgress' => l10n.autoUpdateApplyOutcomePendingInProgress,
-      _ => l10n.autoUpdateApplyOutcomeUnknown,
-    };
+    if (error is domain.Failure) return error.message;
+    return l10n.autoUpdateApplyFailureMessage;
   }
 
   @override
