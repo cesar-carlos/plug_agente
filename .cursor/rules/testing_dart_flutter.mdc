@@ -1,7 +1,7 @@
 ---
 description: Dart and Flutter testing conventions - assertions, widget tests, and harness setup
 globs: ["test/**/*.dart"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Testes Dart e Flutter

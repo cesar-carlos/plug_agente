@@ -1,128 +1,51 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:plug_agente/shared/widgets/common/feedback/loading_indicator.dart';
 
 void main() {
   group('LoadingIndicator', () {
-    testWidgets('should render CircularProgressIndicator', (tester) async {
-      // Act
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingIndicator(),
-          ),
-        ),
+    Widget wrap(Widget child) {
+      return FluentApp(
+        home: ScaffoldPage(content: child),
       );
+    }
 
-      // Assert
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    testWidgets('should render a ProgressRing', (tester) async {
+      await tester.pumpWidget(wrap(const LoadingIndicator()));
+
+      expect(find.byType(ProgressRing), findsOneWidget);
     });
 
     testWidgets('should render Center widget', (tester) async {
-      // Act
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingIndicator(),
-          ),
-        ),
-      );
+      await tester.pumpWidget(wrap(const LoadingIndicator()));
 
-      // Assert
-      expect(find.byType(Center), findsOneWidget);
-    });
-
-    testWidgets('should render Card widget', (tester) async {
-      // Act
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingIndicator(),
-          ),
-        ),
-      );
-
-      // Assert
-      expect(find.byType(Card), findsOneWidget);
+      expect(find.byType(Center), findsWidgets);
     });
 
     testWidgets('should NOT render message when null', (tester) async {
-      // Act
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingIndicator(),
-          ),
-        ),
-      );
+      await tester.pumpWidget(wrap(const LoadingIndicator()));
 
-      // Assert
       expect(find.byType(Text), findsNothing);
     });
 
     testWidgets('should render message when provided', (tester) async {
-      // Arrange
       const message = 'Loading data...';
 
-      // Act
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingIndicator(message: message),
-          ),
-        ),
-      );
+      await tester.pumpWidget(wrap(const LoadingIndicator(message: message)));
 
-      // Assert
       expect(find.text(message), findsOneWidget);
     });
 
-    testWidgets('should render SizedBox between indicator and message', (
-      tester,
-    ) async {
-      // Arrange
-      const message = 'Loading...';
+    testWidgets('should use a MainAxisSize.min Column', (tester) async {
+      await tester.pumpWidget(wrap(const LoadingIndicator()));
 
-      // Act
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingIndicator(message: message),
-          ),
+      final column = tester.widget<Column>(
+        find.descendant(
+          of: find.byType(LoadingIndicator),
+          matching: find.byType(Column),
         ),
       );
-
-      // Assert
-      expect(find.byType(SizedBox), findsOneWidget);
-    });
-
-    testWidgets('should use Column layout', (tester) async {
-      // Act
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingIndicator(),
-          ),
-        ),
-      );
-
-      // Assert
-      expect(find.byType(Column), findsOneWidget);
-    });
-
-    testWidgets('should use MainAxisSize.min for Column', (tester) async {
-      // Act
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingIndicator(),
-          ),
-        ),
-      );
-
-      // Assert
-      final column = tester.widget<Column>(find.byType(Column));
       expect(column.mainAxisSize, MainAxisSize.min);
     });
   });

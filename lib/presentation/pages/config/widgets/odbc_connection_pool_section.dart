@@ -8,6 +8,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/actions/settings_action_row.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form/numeric_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
@@ -32,6 +33,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   late final TextEditingController _streamingChunkSizeController;
   bool _isLoading = true;
   bool _isSaving = false;
+  String? _loadError;
 
   @override
   void initState() {
@@ -44,8 +46,27 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   }
 
   Future<void> _loadSettings() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     final settings = getIt<IOdbcConnectionSettings>();
-    await settings.load();
+    try {
+      await settings.load();
+    } on Object catch (error, stackTrace) {
+      AppLogger.error('Failed to load advanced ODBC settings', error, stackTrace);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _loadError = AppLocalizations.of(context)!.odbcErrorLoadFailed;
+      });
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _poolSizeController.text = settings.poolSize.toString();
@@ -165,6 +186,26 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     }
 
     final l10n = AppLocalizations.of(context)!;
+
+    if (_loadError != null) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppLayout.maxFormWidth),
+          child: InlineFeedbackCard(
+            severity: InfoBarSeverity.error,
+            title: l10n.modalTitleError,
+            message: _loadError,
+            content: Align(
+              alignment: Alignment.centerLeft,
+              child: AppButton(
+                label: l10n.btnRetry,
+                onPressed: _loadSettings,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.only(right: AppLayout.scrollbarPadding),

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/value_objects/hub_recovery_diagnostics_snapshot.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -61,7 +62,21 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
 
   Future<void> _setOdbcPaginatedSqlLog(bool value) async {
     setState(() => _odbcPaginatedSqlLog = value);
-    await _flags.setEnableOdbcPaginatedSqlDebugLog(value);
+    try {
+      await _flags.setEnableOdbcPaginatedSqlDebugLog(value);
+    } on Object catch (error, stackTrace) {
+      AppLogger.error('Failed to persist ODBC paginated SQL debug log flag', error, stackTrace);
+      if (mounted) {
+        setState(() => _odbcPaginatedSqlLog = _flags.enableOdbcPaginatedSqlDebugLog);
+        final l10n = AppLocalizations.of(context)!;
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.settingsPersistError,
+        );
+      }
+      return;
+    }
     if (mounted) {
       setState(() {});
     }
@@ -98,10 +113,22 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
       );
       return;
     }
-    await _flags.setHubPersistentRetryMaxFailedTicksOverride(maxTicks);
-    await _flags.setHubPersistentRetryIntervalSecondsOverride(intervalSec);
-    await _flags.setEnableHubHardReloginRecovery(_enableHardReloginRecovery);
-    await _flags.setHubHardReloginFailureThreshold(hardReloginThreshold);
+    try {
+      await _flags.setHubPersistentRetryMaxFailedTicksOverride(maxTicks);
+      await _flags.setHubPersistentRetryIntervalSecondsOverride(intervalSec);
+      await _flags.setEnableHubHardReloginRecovery(_enableHardReloginRecovery);
+      await _flags.setHubHardReloginFailureThreshold(hardReloginThreshold);
+    } on Object catch (error, stackTrace) {
+      AppLogger.error('Failed to persist hub reconnect overrides', error, stackTrace);
+      if (context.mounted) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.settingsPersistError,
+        );
+      }
+      return;
+    }
     _reloadHubReconnectFields();
     if (!context.mounted) {
       return;
@@ -114,9 +141,22 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
   }
 
   Future<void> _resetHubReconnect() async {
-    await _flags.resetHubResilienceOverrides();
-    await _flags.setEnableHubHardReloginRecovery(true);
-    await _flags.setHubHardReloginFailureThreshold(3);
+    try {
+      await _flags.resetHubResilienceOverrides();
+      await _flags.setEnableHubHardReloginRecovery(true);
+      await _flags.setHubHardReloginFailureThreshold(3);
+    } on Object catch (error, stackTrace) {
+      AppLogger.error('Failed to reset hub reconnect overrides', error, stackTrace);
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.settingsPersistError,
+        );
+      }
+      return;
+    }
     _enableHardReloginRecovery = _flags.enableHubHardReloginRecovery;
     _reloadHubReconnectFields();
     if (mounted) {

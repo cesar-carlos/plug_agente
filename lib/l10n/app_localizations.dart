@@ -146,6 +146,12 @@ abstract class AppLocalizations {
   /// **'Run selected'**
   String get agentActionsRunSelected;
 
+  /// No description provided for @agentActionsMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get agentActionsMoreActions;
+
   /// No description provided for @agentActionsTestSelected.
   ///
   /// In en, this message translates to:
@@ -4400,6 +4406,18 @@ abstract class AppLocalizations {
   /// **'Error'**
   String get modalTitleError;
 
+  /// No description provided for @settingsPersistError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the setting. Please try again.'**
+  String get settingsPersistError;
+
+  /// No description provided for @errorUnexpected.
+  ///
+  /// In en, this message translates to:
+  /// **'An unexpected error occurred. Please try again.'**
+  String get errorUnexpected;
+
   /// No description provided for @modalTitleAuthError.
   ///
   /// In en, this message translates to:
@@ -4759,6 +4777,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'P99 auth latency'**
   String get wsLogP99Latency;
+
+  /// No description provided for @wsLogAuthMissingPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'missing permission'**
+  String get wsLogAuthMissingPermission;
+
+  /// No description provided for @wsLogAuthTokenNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'token not found'**
+  String get wsLogAuthTokenNotFound;
+
+  /// No description provided for @wsLogAuthTokenRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'token revoked'**
+  String get wsLogAuthTokenRevoked;
 
   /// No description provided for @wsLogPreserveSqlDeprecatedUses.
   ///
@@ -5479,6 +5515,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Checking for updates...'**
   String get configUpdatesChecking;
+
+  /// No description provided for @configCheckUpdatesNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get configCheckUpdatesNow;
 
   /// No description provided for @configLastUpdatePrefix.
   ///
@@ -7130,6 +7172,12 @@ abstract class AppLocalizations {
   /// **'Failed to save advanced settings. Try again.'**
   String get odbcErrorSaveFailed;
 
+  /// No description provided for @odbcErrorLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load advanced settings.'**
+  String get odbcErrorLoadFailed;
+
   /// No description provided for @odbcSuccessAppliedNow.
   ///
   /// In en, this message translates to:
@@ -7988,11 +8036,23 @@ abstract class AppLocalizations {
   /// **'The file is empty or contains no valid rules.'**
   String get ctImportRulesErrorEmpty;
 
+  /// No description provided for @ctImportRulesErrorReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the selected file.'**
+  String get ctImportRulesErrorReadFailed;
+
   /// No description provided for @ctImportRulesErrorFileTooLarge.
   ///
   /// In en, this message translates to:
   /// **'The file exceeds the maximum allowed size (512 KB).'**
   String get ctImportRulesErrorFileTooLarge;
+
+  /// No description provided for @ctExportRulesError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export the rules to the selected file.'**
+  String get ctExportRulesError;
 
   /// No description provided for @ctImportRulesSuccess.
   ///
@@ -8335,6 +8395,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter password'**
   String get formPasswordDefaultHint;
+
+  /// No description provided for @formPasswordShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get formPasswordShow;
+
+  /// No description provided for @formPasswordHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get formPasswordHide;
 
   /// No description provided for @formPasswordRequired.
   ///

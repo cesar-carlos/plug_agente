@@ -36,6 +36,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRunSelected => 'Executar selecionada';
 
   @override
+  String get agentActionsMoreActions => 'Mais ações';
+
+  @override
   String get agentActionsTestSelected => 'Testar acao';
 
   @override
@@ -2369,6 +2372,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get modalTitleError => 'Erro';
 
   @override
+  String get settingsPersistError => 'Não foi possível salvar a configuração. Tente novamente.';
+
+  @override
+  String get errorUnexpected => 'Ocorreu um erro inesperado. Tente novamente.';
+
+  @override
   String get modalTitleAuthError => 'Erro de Autenticação';
 
   @override
@@ -2553,6 +2562,15 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get wsLogP99Latency => 'Latência P99 (auth)';
+
+  @override
+  String get wsLogAuthMissingPermission => 'permissão ausente';
+
+  @override
+  String get wsLogAuthTokenNotFound => 'token não encontrado';
+
+  @override
+  String get wsLogAuthTokenRevoked => 'token revogado';
 
   @override
   String get wsLogPreserveSqlDeprecatedUses => 'Uso de preserve_sql (deprecated)';
@@ -2938,6 +2956,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configUpdatesChecking => 'Verificando atualizações...';
+
+  @override
+  String get configCheckUpdatesNow => 'Verificar atualizações';
 
   @override
   String get configLastUpdatePrefix => 'Última verificação: ';
@@ -3808,6 +3829,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get odbcErrorSaveFailed => 'Falha ao salvar configurações avançadas. Tente novamente.';
 
   @override
+  String get odbcErrorLoadFailed => 'Falha ao carregar configurações avançadas.';
+
+  @override
   String get odbcSuccessAppliedNow =>
       'As configurações de pool, timeout e streaming foram salvas e aplicadas para novas conexões.';
 
@@ -4255,7 +4279,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctImportRulesErrorEmpty => 'O arquivo está vazio ou não contém regras válidas.';
 
   @override
+  String get ctImportRulesErrorReadFailed => 'Não foi possível ler o arquivo selecionado.';
+
+  @override
   String get ctImportRulesErrorFileTooLarge => 'O arquivo excede o tamanho máximo permitido (512 KB).';
+
+  @override
+  String get ctExportRulesError => 'Não foi possível exportar as regras para o arquivo selecionado.';
 
   @override
   String ctImportRulesSuccess(int count) {
@@ -4447,6 +4477,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get formPasswordDefaultHint => 'Digite a senha';
+
+  @override
+  String get formPasswordShow => 'Mostrar senha';
+
+  @override
+  String get formPasswordHide => 'Ocultar senha';
 
   @override
   String formPasswordRequired(String fieldLabel) {

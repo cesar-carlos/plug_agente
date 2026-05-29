@@ -75,10 +75,25 @@ class WebSocketActionButtons extends StatelessWidget {
     switch (outcome) {
       case WebSocketActionSuccess():
       case WebSocketActionAlreadyBusy():
-      case WebSocketActionMissingServerUrl():
-      case WebSocketActionMissingAgentId():
-      case WebSocketActionMissingCredentials():
         return;
+      case WebSocketActionMissingServerUrl():
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.msgServerUrlRequired,
+        );
+      case WebSocketActionMissingAgentId():
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.msgAgentIdRequired,
+        );
+      case WebSocketActionMissingCredentials():
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.msgAuthCredentialsRequired,
+        );
       case WebSocketActionLoginRequired():
         SettingsFeedback.showError(
           context: context,

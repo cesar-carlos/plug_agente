@@ -1,7 +1,7 @@
 ---
 description: Universal testing patterns - structure, isolation, and behavior coverage
 globs: ["test/**/*.dart"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Padroes de Testes

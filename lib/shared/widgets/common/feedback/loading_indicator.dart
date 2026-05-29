@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:plug_agente/core/theme/app_spacing.dart';
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
 class LoadingIndicator extends StatelessWidget {
   const LoadingIndicator({super.key, this.message});
@@ -8,19 +9,17 @@ class LoadingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              if (message != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(message!, style: Theme.of(context).textTheme.bodyMedium),
-              ],
+      child: AppCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ProgressRing(),
+            if (message != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(message!, style: context.bodyText),
             ],
-          ),
+          ],
         ),
       ),
     );

@@ -1,7 +1,7 @@
 ---
 description: Flutter widgets - composition, local state, layout, and rebuild performance
 globs: ["lib/presentation/**/*.dart", "lib/shared/**/*.dart"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Flutter Widgets
@@ -85,17 +85,11 @@ class _CounterPanelState extends State<CounterPanel> {
   construtor direto resolver
 - Pages devem orquestrar a tela; componentes reutilizaveis e superficies comuns
   devem migrar para `shared/` quando aparecerem em mais de um fluxo
-- Para evoluir componentes base, prefira composicao por slots, parametros,
-  builders, tema e pequenos contratos a criar arvores de heranca de widgets
-- Use heranca em widgets apenas quando houver um contrato visual e comportamental
-  realmente estavel, com substituicao clara e baixo risco de overrides
-- Se duas variantes diferem so em partes da superficie, extraia um componente
-  base composicional e injete as diferencas em vez de subclassificar
-- Quando um padrao aparecer em mais de um fluxo, evolua primeiro o componente em
-  `shared/` antes de duplicar ou criar uma nova variante isolada
 - Componentes compartilhados devem encapsular estrutura visual, spacing,
   estados e tokens recorrentes; comportamento especifico da tela entra por
   parametros, callbacks, slots ou builders
+- Para composicao vs heranca e evolucao de componentes base, veja
+  "Evolucao de Componentes Base" abaixo
 
 ```dart
 class UserListPage extends StatelessWidget {
@@ -227,6 +221,12 @@ TextField(
 
 - Ao surgir uma nova variante, tente primeiro estender o componente base por
   configuracao, composicao ou estrategia local
+- Prefira composicao por slots, parametros, builders, tema e pequenos contratos a
+  criar arvores de heranca de widgets
+- Use heranca em widgets apenas quando houver um contrato visual e comportamental
+  realmente estavel, com substituicao clara e baixo risco de overrides
+- Se duas variantes diferem so em partes da superficie, extraia um componente
+  base composicional e injete as diferencas em vez de subclassificar
 - Evite criar subclasses apenas para trocar icone, padding, cor, label ou partes
   pequenas do layout
 - Se o componente base estiver acumulando muitos parametros desconexos, quebre-o
@@ -235,14 +235,13 @@ TextField(
   facilita manutencao, testes e substituicao futura
 - Antes de criar uma nova superficie visual isolada, procure componente
   existente em `shared/` ou no fluxo mais proximo e evolua-o quando a identidade
-  visual for a mesma
+  visual for a mesma; evolua primeiro o componente em `shared/` antes de duplicar
 - Nao crie componente compartilhado para uma variacao unica e especulativa; faca
   isso quando houver repeticao real ou padrao visual deliberado do produto
 
 ## Texto e Localizacao no Widget
 
-- Use `AppLocalizations` para strings visiveis em widgets que ja participam do
-  fluxo localizado
+- Estrategia de localizacao do repositorio: `project_specifics.mdc`
 - Evite duplicar literals de UI entre `presentation/` e `shared/`
 - Se um widget compartilhado precisar de texto variavel, prefira receber a
   string pronta ou um contrato simples em vez de acoplar regras de negocio
@@ -261,6 +260,7 @@ TextField(
   `ui_ux_design.mdc`
 - Regras gerais de reutilizacao e duplicacao: `general_rules.mdc`
 - Estilo Dart e tooling: `coding_style.mdc`
+- Estrategia de localizacao do repositorio: `project_specifics.mdc`
 
 ## Checklist
 

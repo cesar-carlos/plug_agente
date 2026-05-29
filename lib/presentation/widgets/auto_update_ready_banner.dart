@@ -267,7 +267,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
       builder: (context, close) {
         return InfoBar(
           title: Text(l10n.autoUpdateApplyFailureMessage),
-          content: Text(message),
+          content: SelectableText(message),
           severity: InfoBarSeverity.error,
           onClose: close,
         );

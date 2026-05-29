@@ -18,6 +18,7 @@ import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.
 import 'package:plug_agente/infrastructure/backup/backup_sqlite_reader.dart';
 import 'package:plug_agente/infrastructure/backup/backup_zip_encoder.dart';
 import 'package:plug_agente/infrastructure/backup/connected_agents_response_parser.dart';
+import 'package:plug_agente/infrastructure/backup/restore_failure_diagnostics.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -490,6 +491,14 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
         ),
       );
     }
+  }
+
+  @override
+  Future<void> writeRestoreFailureDiagnostics(Object failure) {
+    return RestoreFailureDiagnostics.writeFromFailure(
+      storage: _storageContext,
+      failure: failure,
+    );
   }
 
   @override

@@ -33,28 +33,9 @@ Depois disso, leia apenas as rules do tema que a tarefa tocar.
 
 ## Topic Routing
 
-Use `rules_index.mdc` para decidir a rule correta. Como atalho:
-
-- comportamento geral, comentarios, duplicacao, refatoracao:
-  `./.cursor/rules/general_rules.mdc`
-- camadas, limites arquiteturais e direcao de imports:
-  `./.cursor/rules/clean_architecture.mdc`
-- SRP, DIP, contratos e design de classes/interfaces:
-  `./.cursor/rules/solid_principles.mdc`
-- estrategia de testes em qualquer stack:
-  `./.cursor/rules/testing.mdc`
-- estilo Dart, imports, async, logging e linguagem:
-  `./.cursor/rules/coding_style.mdc`
-- null safety e modelagem de nulabilidade:
-  `./.cursor/rules/null_safety.mdc`
-- widgets Flutter, composicao, estado local e performance de rebuild:
-  `./.cursor/rules/flutter_widgets.mdc`
-- desktop UX, Fluent UI, acessibilidade e comportamento responsivo:
-  `./.cursor/rules/ui_ux_design.mdc`
-- testes Dart/Flutter, widget tests, mocks, fakes e harness:
-  `./.cursor/rules/testing_dart_flutter.mdc`
-- decisoes especificas deste repositorio:
-  `./.cursor/rules/project_specifics.mdc`
+O mapa de tema para rule, a ownership por assunto e a coordenacao entre temas
+ficam apenas em `./.cursor/rules/rules_index.mdc`. Use esse indice para escolher
+a rule correta em vez de duplicar o roteamento aqui.
 
 ## Search Strategy For AI
 

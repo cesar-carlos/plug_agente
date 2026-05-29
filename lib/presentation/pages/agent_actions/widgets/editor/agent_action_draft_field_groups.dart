@@ -561,7 +561,7 @@ class AgentActionDeveloperFields extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           InfoBar(
             title: Text(l10n.agentActionsValidationTitle),
-            content: Text(connectionLookupMessage!),
+            content: SelectableText(connectionLookupMessage!),
             severity: InfoBarSeverity.warning,
             isLong: true,
           ),

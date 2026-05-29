@@ -59,7 +59,8 @@ class _MainWindowState extends State<MainWindow> {
       paneBodyBuilder: (item, body) {
         return Column(
           children: [
-            if (runtimeMode.isDegraded) _buildDegradedModeBanner(context),
+            if (runtimeMode.isDegraded)
+              _DegradedModeBanner(reasons: runtimeMode.degradationReasons),
             Expanded(
               child: AppLayout.centeredContent(
                 maxWidth: AppLayout.maxPaneContentWidth,
@@ -71,9 +72,15 @@ class _MainWindowState extends State<MainWindow> {
       },
     );
   }
+}
 
-  Widget _buildDegradedModeBanner(BuildContext context) {
-    final runtimeMode = context.watch<RuntimeModeProvider>();
+class _DegradedModeBanner extends StatelessWidget {
+  const _DegradedModeBanner({required this.reasons});
+
+  final List<String> reasons;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     return InfoBar(
@@ -84,7 +91,7 @@ class _MainWindowState extends State<MainWindow> {
         children: [
           Text(l10n.mainDegradedModeDescription),
           const SizedBox(height: AppSpacing.sm),
-          ...runtimeMode.degradationReasons.map(
+          ...reasons.map(
             (reason) => Padding(
               padding: const EdgeInsets.only(
                 left: AppSpacing.md,

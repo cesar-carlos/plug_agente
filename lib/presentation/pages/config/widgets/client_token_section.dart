@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:io';
 import 'dart:math' show max, min;
 
 import 'package:file_picker/file_picker.dart';
@@ -24,7 +23,9 @@ import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_details_dialog.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token_list_preferences.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_dialog.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_file_service.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_ui_formatters.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
@@ -40,11 +41,6 @@ import 'package:provider/provider.dart';
 
 part 'client_token_section_dialog_shell.dart';
 part 'client_token_section_widgets.dart';
-
-const _tokenClientFilterKey = 'client_token_list_client_filter';
-const _tokenStatusFilterKey = 'client_token_list_status_filter';
-const _tokenSortFilterKey = 'client_token_list_sort_filter';
-const _tokenAutoRefreshAfterCreateKey = 'client_token_auto_refresh_after_create';
 
 class ClientTokenSection extends StatefulWidget {
   const ClientTokenSection({
@@ -65,6 +61,10 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   final TextEditingController _payloadController = TextEditingController();
   final TextEditingController _listClientFilterController = TextEditingController();
   final List<ClientTokenRuleDraft> _rules = <ClientTokenRuleDraft>[];
+  final ClientTokenRuleFileService _ruleFileService = const ClientTokenRuleFileService();
+  final ClientTokenListPreferences _listPreferences = ClientTokenListPreferences(
+    () => getIt.isRegistered<IAppSettingsStore>() ? getIt<IAppSettingsStore>() : null,
+  );
   Timer? _clientFilterDebounceTimer;
   final ValueNotifier<int> _createTokenDialogRevision = ValueNotifier<int>(0);
   final FocusNode _createTokenDialogAgentFocusNode = FocusNode();
@@ -274,7 +274,15 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         type: FileType.custom,
         allowedExtensions: ['txt'],
       );
-    } on Exception {
+    } on Exception catch (e, st) {
+      developer.log('Rule import picker failed', name: 'client_token_section', error: e, stackTrace: st);
+      if (mounted) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesErrorReadFailed,
+        );
+      }
       return;
     }
 
@@ -285,79 +293,43 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     _setImportingRules(true);
 
     try {
-      final file = File(filePath);
-      final size = await file.length();
+      final outcome = await _ruleFileService.importFromFile(filePath);
       if (!mounted) return;
 
-      if (size == 0) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.ctButtonImportRules,
-          message: l10n.ctImportRulesErrorEmpty,
-        );
-        return;
-      }
-      if (size > maxRuleImportFileSizeBytes) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.ctButtonImportRules,
-          message: l10n.ctImportRulesErrorFileTooLarge,
-        );
-        return;
-      }
-
-      final content = await file.readAsString();
-      if (!mounted) return;
-
-      final result = parseTokenRulesStrict(content);
-
-      if (result.drafts.isEmpty) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.ctButtonImportRules,
-          message: l10n.ctImportRulesErrorEmpty,
-        );
-        return;
-      }
-
-      if (result.hasErrors) {
-        final firstError = result.errors.first;
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.ctButtonImportRules,
-          message: l10n.ctImportRulesErrorInvalidFormat(firstError.line, firstError.content),
-        );
-        return;
-      }
-
-      _mergeRules(result.drafts);
-      _notifyCreateTokenDialogChanged();
-
-      if (mounted) {
-        final countAdded = result.drafts.length;
-        SettingsFeedback.showSuccess(
-          context: context,
-          title: l10n.ctButtonImportRules,
-          message: l10n.ctImportRulesSuccess(countAdded),
-        );
-      }
-    } on FormatException catch (e) {
-      developer.log('Rule import encoding error', name: 'client_token_section', error: e);
-      if (mounted) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.ctButtonImportRules,
-          message: l10n.ctImportRulesErrorEmpty,
-        );
-      }
-    } on Exception catch (e) {
-      developer.log('Failed to import rules', name: 'client_token_section', error: e);
-      if (mounted) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.ctButtonImportRules,
-          message: l10n.ctImportRulesErrorEmpty,
-        );
+      switch (outcome) {
+        case ClientTokenRuleImportEmpty():
+          SettingsFeedback.showError(
+            context: context,
+            title: l10n.ctButtonImportRules,
+            message: l10n.ctImportRulesErrorEmpty,
+          );
+        case ClientTokenRuleImportTooLarge():
+          SettingsFeedback.showError(
+            context: context,
+            title: l10n.ctButtonImportRules,
+            message: l10n.ctImportRulesErrorFileTooLarge,
+          );
+        case ClientTokenRuleImportInvalidFormat(:final line, :final content):
+          SettingsFeedback.showError(
+            context: context,
+            title: l10n.ctButtonImportRules,
+            message: l10n.ctImportRulesErrorInvalidFormat(line, content),
+          );
+        case ClientTokenRuleImportReadFailure(:final error, :final stackTrace):
+          developer.log('Failed to import rules', name: 'client_token_section', error: error, stackTrace: stackTrace);
+          SettingsFeedback.showError(
+            context: context,
+            title: l10n.ctButtonImportRules,
+            message: l10n.ctImportRulesErrorEmpty,
+          );
+        case ClientTokenRuleImportLoaded(:final drafts):
+          _mergeRules(drafts);
+          _notifyCreateTokenDialogChanged();
+          SettingsFeedback.showSuccess(
+            context: context,
+            title: l10n.ctButtonImportRules,
+            message: l10n.ctImportRulesSuccess(drafts.length),
+          );
       }
     } finally {
       if (mounted) _setImportingRules(false);
@@ -367,18 +339,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   Future<void> _handleExportRules() async {
     if (_rules.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
-
-    final lines = _rules
-        .map((rule) {
-          final perms = [
-            if (rule.canRead) 'read',
-            if (rule.canUpdate) 'update',
-            if (rule.canDelete) 'delete',
-            if (rule.canDdl) 'ddl',
-          ].join(',');
-          return '${rule.resource};${rule.resourceType.name};${rule.effect.name};$perms';
-        })
-        .join('\n');
 
     final tokenName = _nameController.text.trim();
     final defaultFileName = tokenName.isNotEmpty
@@ -393,13 +353,21 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         allowedExtensions: ['txt'],
       );
       if (savePath == null) return;
-      await File(savePath).writeAsString(lines);
-    } on Exception catch (e) {
+      await _ruleFileService.exportToFile(savePath, _rules);
+    } on Exception catch (e, st) {
       developer.log(
         'Failed to export rules',
         name: 'client_token_section',
         error: e,
+        stackTrace: st,
       );
+      if (mounted) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonExportRules,
+          message: l10n.ctExportRulesError,
+        );
+      }
     }
   }
 
@@ -836,102 +804,25 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   Future<void> _restoreTokenListPreferences() async {
-    if (!getIt.isRegistered<IAppSettingsStore>()) {
+    final data = _listPreferences.restore();
+    if (data == null || !mounted) {
       return;
     }
-    final prefs = getIt<IAppSettingsStore>();
-    try {
-      final clientFilter = prefs.getString(_tokenClientFilterKey) ?? '';
-      final statusFilter = _statusFilterFromStorage(
-        prefs.getString(_tokenStatusFilterKey),
-      );
-      final sortFilter = _sortFilterFromStorage(
-        prefs.getString(_tokenSortFilterKey),
-      );
-      final autoRefreshAfterCreate = prefs.getBool(_tokenAutoRefreshAfterCreateKey) ?? true;
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _listClientFilterController.text = clientFilter;
-        _tokenStatusFilter = statusFilter;
-        _tokenSortOption = sortFilter;
-        _autoRefreshAfterCreate = autoRefreshAfterCreate;
-      });
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to restore client token preferences',
-        name: 'client_token_section',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
+    setState(() {
+      _listClientFilterController.text = data.clientFilter;
+      _tokenStatusFilter = data.statusFilter;
+      _tokenSortOption = data.sortOption;
+      _autoRefreshAfterCreate = data.autoRefreshAfterCreate;
+    });
   }
 
-  Future<void> _saveTokenListPreferences() async {
-    if (!getIt.isRegistered<IAppSettingsStore>()) {
-      return;
-    }
-    final prefs = getIt<IAppSettingsStore>();
-    try {
-      await prefs.setString(
-        _tokenClientFilterKey,
-        _listClientFilterController.text.trim(),
-      );
-      await prefs.setString(
-        _tokenStatusFilterKey,
-        _statusFilterToStorage(_tokenStatusFilter),
-      );
-      await prefs.setString(
-        _tokenSortFilterKey,
-        _sortFilterToStorage(_tokenSortOption),
-      );
-      await prefs.setBool(
-        _tokenAutoRefreshAfterCreateKey,
-        _autoRefreshAfterCreate,
-      );
-    } on Exception catch (error, stackTrace) {
-      developer.log(
-        'Failed to save client token preferences',
-        name: 'client_token_section',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
-  String _statusFilterToStorage(ClientTokenStatusFilter value) {
-    return switch (value) {
-      ClientTokenStatusFilter.all => 'all',
-      ClientTokenStatusFilter.active => 'active',
-      ClientTokenStatusFilter.revoked => 'revoked',
-    };
-  }
-
-  ClientTokenStatusFilter _statusFilterFromStorage(String? value) {
-    return switch (value) {
-      'active' => ClientTokenStatusFilter.active,
-      'revoked' => ClientTokenStatusFilter.revoked,
-      _ => ClientTokenStatusFilter.all,
-    };
-  }
-
-  String _sortFilterToStorage(ClientTokenSortOption value) {
-    return switch (value) {
-      ClientTokenSortOption.newest => 'newest',
-      ClientTokenSortOption.oldest => 'oldest',
-      ClientTokenSortOption.clientAsc => 'client_asc',
-      ClientTokenSortOption.clientDesc => 'client_desc',
-    };
-  }
-
-  ClientTokenSortOption _sortFilterFromStorage(String? value) {
-    return switch (value) {
-      'oldest' => ClientTokenSortOption.oldest,
-      'client_asc' => ClientTokenSortOption.clientAsc,
-      'client_desc' => ClientTokenSortOption.clientDesc,
-      _ => ClientTokenSortOption.newest,
-    };
+  Future<void> _saveTokenListPreferences() {
+    return _listPreferences.save((
+      clientFilter: _listClientFilterController.text.trim(),
+      statusFilter: _tokenStatusFilter,
+      sortOption: _tokenSortOption,
+      autoRefreshAfterCreate: _autoRefreshAfterCreate,
+    ));
   }
 
   double? _getCurrentScrollOffset() {
@@ -1008,7 +899,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
           context,
           builder: (context, close) => InfoBar(
             title: Text(l10n.ctInfoClientTokenLoadFailed),
-            content: Text(failure.toDisplayMessage()),
+            content: SelectableText(failure.toDisplayMessage()),
             severity: InfoBarSeverity.error,
           ),
         );

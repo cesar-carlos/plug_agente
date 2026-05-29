@@ -153,15 +153,15 @@ class _AuthorizationSummaryCard extends StatelessWidget {
             value: _formatLatency(summary!.overallP99LatencyMs),
           ),
           _SummaryChip(
-            label: 'missing_permission',
+            label: l10n.wsLogAuthMissingPermission,
             value: '$missingPermissionRate%',
           ),
           _SummaryChip(
-            label: 'token_not_found',
+            label: l10n.wsLogAuthTokenNotFound,
             value: '$tokenNotFoundRate%',
           ),
           _SummaryChip(
-            label: 'token_revoked',
+            label: l10n.wsLogAuthTokenRevoked,
             value: '$tokenRevokedRate%',
           ),
         ],
@@ -382,13 +382,22 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
           AppFluentTabItem(
             icon: FluentIcons.plug_connected,
             text: widget.l10n.wsLogTabStream,
-            body: _buildMessageList(context),
+            body: _WebSocketMessageListPane(
+              l10n: widget.l10n,
+              logProvider: widget.logProvider,
+              authSummary: _authSummary,
+              protocolSummary: _protocolSummary,
+              deprecationCount: _deprecationCount,
+            ),
           ),
           if (showSqlTab)
             AppFluentTabItem(
               icon: FluentIcons.database,
               text: widget.l10n.wsLogTabSqlInvestigation,
-              body: _buildSqlInvestigationBody(context, sqlProvider),
+              body: _SqlInvestigationPane(
+                l10n: widget.l10n,
+                sqlProvider: sqlProvider,
+              ),
             ),
         ];
         return AppFluentTabView(
@@ -405,7 +414,30 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
     );
   }
 
-  Widget _buildMessageList(BuildContext context) {
+}
+
+/// Stream tab body: enable/clear controls, metric summary cards and the
+/// scrollable message list. Rebuilds with its parent so live metric and log
+/// updates stay visible.
+class _WebSocketMessageListPane extends StatelessWidget {
+  const _WebSocketMessageListPane({
+    required this.l10n,
+    required this.logProvider,
+    required this.authSummary,
+    required this.protocolSummary,
+    required this.deprecationCount,
+  });
+
+  final AppLocalizations l10n;
+  final WebSocketLogProvider logProvider;
+  final AuthorizationMetricsSummary? authSummary;
+  final ProtocolMetricsSummary? protocolSummary;
+  final int? deprecationCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final protocol = protocolSummary;
+    final deprecations = deprecationCount;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -415,21 +447,21 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Tooltip(
-                message: widget.l10n.wsLogToggleEnabledTooltip,
+                message: l10n.wsLogToggleEnabledTooltip,
                 child: ToggleSwitch(
-                  checked: widget.logProvider.isEnabled,
-                  onChanged: widget.logProvider.setEnabled,
-                  content: Text(widget.l10n.wsLogEnabled),
+                  checked: logProvider.isEnabled,
+                  onChanged: logProvider.setEnabled,
+                  content: Text(l10n.wsLogEnabled),
                 ),
               ),
               const SizedBox(width: 16),
               Tooltip(
-                message: widget.l10n.wsLogClearTooltip,
+                message: l10n.wsLogClearTooltip,
                 child: AppButton(
-                  label: widget.l10n.wsLogClear,
+                  label: l10n.wsLogClear,
                   isPrimary: false,
                   labelStyle: context.bodyText,
-                  onPressed: widget.logProvider.clearMessages,
+                  onPressed: logProvider.clearMessages,
                 ),
               ),
             ],
@@ -441,16 +473,16 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _AuthorizationSummaryCard(l10n: widget.l10n, summary: _authSummary),
-              if (_protocolSummary != null && _protocolSummary!.totalMessages > 0) ...[
+              _AuthorizationSummaryCard(l10n: l10n, summary: authSummary),
+              if (protocol != null && protocol.totalMessages > 0) ...[
                 const SizedBox(height: AppSpacing.sm),
-                _ProtocolMetricsSummaryCard(summary: _protocolSummary),
+                _ProtocolMetricsSummaryCard(summary: protocol),
               ],
-              if (_deprecationCount != null) ...[
+              if (deprecations != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 _DeprecationSummaryCard(
-                  l10n: widget.l10n,
-                  count: _deprecationCount!,
+                  l10n: l10n,
+                  count: deprecations,
                 ),
               ],
             ],
@@ -458,17 +490,17 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
         ),
         const SizedBox(height: AppSpacing.sm),
         Expanded(
-          child: widget.logProvider.messages.isEmpty
+          child: logProvider.messages.isEmpty
               ? Center(
                   child: Text(
-                    widget.l10n.wsLogNoMessages,
+                    l10n.wsLogNoMessages,
                     style: context.bodyMuted,
                   ),
                 )
               : ListView.builder(
-                  itemCount: widget.logProvider.messages.length,
+                  itemCount: logProvider.messages.length,
                   itemBuilder: (BuildContext context, int index) {
-                    final message = widget.logProvider.messages[index];
+                    final message = logProvider.messages[index];
                     return _MessageItem(message: message);
                   },
                 ),
@@ -476,20 +508,29 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
       ],
     );
   }
+}
 
-  Widget _buildSqlInvestigationBody(
-    BuildContext context,
-    SqlInvestigationProvider sqlProvider,
-  ) {
+/// SQL investigation tab body: clear control and the scrollable event list.
+class _SqlInvestigationPane extends StatelessWidget {
+  const _SqlInvestigationPane({
+    required this.l10n,
+    required this.sqlProvider,
+  });
+
+  final AppLocalizations l10n;
+  final SqlInvestigationProvider sqlProvider;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Align(
           alignment: AlignmentDirectional.centerEnd,
           child: Tooltip(
-            message: widget.l10n.wsSqlInvestigationClearTooltip,
+            message: l10n.wsSqlInvestigationClearTooltip,
             child: AppButton(
-              label: widget.l10n.wsSqlInvestigationClear,
+              label: l10n.wsSqlInvestigationClear,
               isPrimary: false,
               labelStyle: context.bodyText,
               onPressed: sqlProvider.clearEvents,
@@ -501,7 +542,7 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
           child: sqlProvider.events.isEmpty
               ? Center(
                   child: Text(
-                    widget.l10n.wsSqlInvestigationEmpty,
+                    l10n.wsSqlInvestigationEmpty,
                     style: context.bodyMuted,
                   ),
                 )
@@ -510,7 +551,7 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
                   itemBuilder: (BuildContext context, int index) {
                     return _SqlInvestigationItem(
                       event: sqlProvider.events[index],
-                      l10n: widget.l10n,
+                      l10n: l10n,
                     );
                   },
                 ),

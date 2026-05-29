@@ -4,8 +4,10 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/config/payload_signing_diagnostics.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 import 'package:provider/provider.dart';
@@ -70,8 +72,12 @@ class _WebSocketPayloadSigningSectionState extends State<WebSocketPayloadSigning
       _isPersistingOutgoing = true;
       _outgoingSigningEnabled = value;
     });
+    var persisted = true;
     try {
       await _flags.setEnablePayloadSigning(value);
+    } on Object catch (error, stackTrace) {
+      persisted = false;
+      AppLogger.error('Failed to persist outgoing payload signing flag', error, stackTrace);
     } finally {
       if (mounted) {
         setState(() {
@@ -80,6 +86,9 @@ class _WebSocketPayloadSigningSectionState extends State<WebSocketPayloadSigning
           _cachedDiagnostics = null;
           _cachedDiagnosticsKey = null;
         });
+        if (!persisted) {
+          _showPersistError();
+        }
       }
     }
   }
@@ -92,8 +101,12 @@ class _WebSocketPayloadSigningSectionState extends State<WebSocketPayloadSigning
       _isPersistingIncoming = true;
       _incomingSignatureRequired = value;
     });
+    var persisted = true;
     try {
       await _flags.setRequireIncomingPayloadSignatures(value);
+    } on Object catch (error, stackTrace) {
+      persisted = false;
+      AppLogger.error('Failed to persist incoming payload signature requirement', error, stackTrace);
     } finally {
       if (mounted) {
         setState(() {
@@ -102,8 +115,20 @@ class _WebSocketPayloadSigningSectionState extends State<WebSocketPayloadSigning
           _cachedDiagnostics = null;
           _cachedDiagnosticsKey = null;
         });
+        if (!persisted) {
+          _showPersistError();
+        }
       }
     }
+  }
+
+  void _showPersistError() {
+    final l10n = AppLocalizations.of(context)!;
+    SettingsFeedback.showError(
+      context: context,
+      title: l10n.modalTitleError,
+      message: l10n.settingsPersistError,
+    );
   }
 
   @override

@@ -23,6 +23,9 @@ class AppColors {
   static const Color success = Color(0xFF16A34A);
   static const Color warning = Color(0xFFD97706);
   static const Color error = Color(0xFFD13438);
+
+  /// Foreground used on top of accent/destructive filled surfaces.
+  static const Color onAccent = Color(0xFFFFFFFF);
 }
 
 class AppThemeColors extends ThemeExtension<AppThemeColors> {

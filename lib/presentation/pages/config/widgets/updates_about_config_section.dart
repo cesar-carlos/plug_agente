@@ -83,10 +83,13 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                           child: ProgressRing(strokeWidth: 2),
                         )
                       else
-                        IconButton(
-                          key: const ValueKey('updates_refresh_button'),
-                          icon: const Icon(FluentIcons.refresh),
-                          onPressed: onCheckUpdates,
+                        Tooltip(
+                          message: l10n.configCheckUpdatesNow,
+                          child: IconButton(
+                            key: const ValueKey('updates_refresh_button'),
+                            icon: const Icon(FluentIcons.refresh),
+                            onPressed: onCheckUpdates,
+                          ),
                         ),
                     ],
                   ),

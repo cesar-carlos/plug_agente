@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
-import 'package:plug_agente/core/constants/agent_action_approval_constants.dart';
 import 'package:plug_agente/core/theme/theme.dart';
-import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_developer_hints.dart';
@@ -13,6 +11,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft.
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_kind.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_mapper.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_parsers.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_save_coordinator.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_validation.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_draft_field_groups.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_sections.dart';
@@ -100,7 +99,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   int _visibleDialogSectionCount = _dialogSectionCount;
 
   static const AgentOperationalProfileResolver _operationalProfileResolver = AgentOperationalProfileResolver();
-  static const String _localRemoteApprover = AgentActionApprovalConstants.localUiApprover;
 
   @override
   void initState() {
@@ -235,8 +233,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     controller.text = text;
   }
 
-  String _powerShellExecutableName(PowerShellExecutable executable) => powerShellExecutableName(executable);
-
   String _draftKindLabel(AgentActionDraftKind draftKind) => agentActionDraftKindLabel(draftKind, widget.l10n);
 
   bool _isDraftKindUnavailable(AgentActionDraftKind draftKind) {
@@ -303,19 +299,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     );
   }
 
-  // Policy builders moved to `AgentActionDraft` (see Fase 1). Thin
-  // wrappers below keep the call sites short and inject the provider
-  // feature flags that the policy builders cannot infer on their own.
-
-  AgentActionElevatedPolicy _draftElevatedPolicy() =>
-      _draft.elevatedPolicy(elevatedFeatureEnabled: widget.provider.isElevatedAgentActionsEnabled);
-
-  AgentActionRemotePolicy _draftRemotePolicy() => _draft.remotePolicy(
-        remoteAdHocFeatureEnabled: widget.provider.isRemoteAdHocAgentActionsEnabled,
-        localApprover: _localRemoteApprover,
-        previousDefinition: widget.definition,
-      );
-
   bool get _shouldShowProductionPathAllowlistWarning {
     if (!_operationalProfileResolver.isProductionProfile || !_draft.requiresProductionPathAllowlist()) {
       return false;
@@ -374,30 +357,10 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     );
   }
 
-  /// Pure validators (no `setState`, no `widget.provider`). The editor
-  /// applies the resulting message through [_applyValidationFailure].
-  /// Defaults to a fresh `ActionEnvironmentResolver`, which is
-  /// stateless.
+  /// Pure validators (no `setState`, no `widget.provider`). Used for the
+  /// pre-save checks in [_save]; the per-kind save mapping and policy
+  /// validation now live in [AgentActionDraftSaveCoordinator].
   static const AgentActionDraftValidators _validators = AgentActionDraftValidators();
-
-  /// Runs the policy validators and copies the resulting message into
-  /// the draft via `setState`. Returns `true` when every policy is
-  /// valid. Replaces the previous trio of `_validateDraftXxx` methods
-  /// that each set `_draft.validationMessage` as a side-effect.
-  bool _validateDraftPolicies() {
-    final result = _validators.validatePolicies(_draft, l10n: widget.l10n);
-    return _applyValidationFailure(result);
-  }
-
-  bool _applyValidationFailure(DraftValidationResult result) {
-    if (result is DraftValidationInvalid) {
-      setState(() {
-        _draft.validationMessage = result.message;
-      });
-      return false;
-    }
-    return true;
-  }
 
   Set<int>? _tryParseAcceptedExitCodes(String input) => AgentActionDraftParsers.acceptedExitCodes(input);
 
@@ -425,23 +388,29 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       return _showValidationDialog(message);
     }
 
-    final saveRequest = switch (_draft.draftKind) {
-      AgentActionDraftKind.commandLine => _saveCommandLineDraft(),
-      AgentActionDraftKind.executable => _saveExecutableDraft(),
-      AgentActionDraftKind.script => _saveScriptDraft(),
-      AgentActionDraftKind.jar => _saveJarDraft(),
-      AgentActionDraftKind.email => _saveEmailDraft(),
-      AgentActionDraftKind.comObject => _saveComObjectDraft(),
-      AgentActionDraftKind.developer => _saveDeveloperDraft(),
-      AgentActionDraftKind.powerShell => _savePowerShellDraft(),
-    };
-    final saveResult = await saveRequest;
-    if (!saveResult) {
-      final validationMessage = _draft.validationMessage;
-      if (validationMessage != null && validationMessage.isNotEmpty) {
-        return _showValidationDialog(validationMessage);
-      }
-      return _showSaveFailureDialog();
+    final coordinator = AgentActionDraftSaveCoordinator(
+      draft: _draft,
+      provider: widget.provider,
+      l10n: widget.l10n,
+      previousDefinition: widget.definition,
+    );
+    final outcome = await coordinator.save(acceptedExitCodes: acceptedExitCodes);
+    if (!mounted) {
+      return false;
+    }
+
+    switch (outcome) {
+      case AgentActionDraftSaveRejected(:final message):
+        _setValidationMessage(message);
+        return _showValidationDialog(message);
+      case AgentActionDraftSaveForwarded(:final persisted):
+        if (!persisted) {
+          final validationMessage = _draft.validationMessage;
+          if (validationMessage != null && validationMessage.isNotEmpty) {
+            return _showValidationDialog(validationMessage);
+          }
+          return _showSaveFailureDialog();
+        }
     }
 
     setState(() {
@@ -1004,457 +973,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     }
 
     return const <Widget>[];
-  }
-
-  Future<bool> _saveExecutableDraft() async {
-    final executablePath = _draft.executable.targetPath.text.trim();
-    if (executablePath.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormExecutablePath);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    return widget.provider.saveExecutableAction(
-      actionId: _draft.editingActionId,
-      name: _draft.identity.name.text.trim(),
-      description: _draft.identity.description.text,
-      executablePath: executablePath,
-      arguments: _parseStructuredArguments(_draft.executable.arguments.text),
-      workingDirectory: _draft.commandLine.workingDirectory.text,
-      state: _draft.state,
-      notificationPolicy: _draft.notificationPolicy(),
-      retryPolicy: _draft.retryPolicy(),
-      timeoutPolicy: _draft.timeoutPolicy(),
-      environmentPolicy: _draft.environmentPolicy(),
-      exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-      processPolicy: _draft.processPolicy(),
-      encodingPolicy: _draft.encodingPolicy(),
-      capturePolicy: _draft.capturePolicy(),
-      lifecyclePolicy: _draft.lifecyclePolicy(),
-      remotePolicy: _draftRemotePolicy(),
-      elevatedPolicy: _draftElevatedPolicy(),
-      contextPolicy: _draft.contextPolicy(),
-      pathChangePolicy: _draft.pathChangePolicy,
-      queuePolicy: _draft.queuePolicy(),
-      pathPolicy: _draft.pathPolicy(),
-    );
-  }
-
-  Future<bool> _saveJarDraft() async {
-    final jarPath = _draft.jar.path.text.trim();
-    if (jarPath.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormJarPath);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    return widget.provider.saveJarAction(
-      actionId: _draft.editingActionId,
-      name: _draft.identity.name.text.trim(),
-      description: _draft.identity.description.text,
-      jarPath: jarPath,
-      javaExecutablePath: _draft.jar.javaExecutablePath.text,
-      arguments: _parseStructuredArguments(_draft.executable.arguments.text),
-      workingDirectory: _draft.commandLine.workingDirectory.text,
-      state: _draft.state,
-      notificationPolicy: _draft.notificationPolicy(),
-      retryPolicy: _draft.retryPolicy(),
-      timeoutPolicy: _draft.timeoutPolicy(),
-      environmentPolicy: _draft.environmentPolicy(),
-      exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-      processPolicy: _draft.processPolicy(),
-      encodingPolicy: _draft.encodingPolicy(),
-      capturePolicy: _draft.capturePolicy(),
-      lifecyclePolicy: _draft.lifecyclePolicy(),
-      remotePolicy: _draftRemotePolicy(),
-      elevatedPolicy: _draftElevatedPolicy(),
-      contextPolicy: _draft.contextPolicy(),
-      pathChangePolicy: _draft.pathChangePolicy,
-      queuePolicy: _draft.queuePolicy(),
-      pathPolicy: _draft.pathPolicy(),
-    );
-  }
-
-  Future<bool> _saveEmailDraft() async {
-    final smtpProfileId = _draft.email.smtpProfileId.text.trim();
-    if (smtpProfileId.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormSmtpProfileId);
-      });
-      return false;
-    }
-
-    final from = _draft.email.from.text.trim();
-    if (from.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormEmailFrom);
-      });
-      return false;
-    }
-
-    final to = _parseStructuredArguments(_draft.email.to.text);
-    if (to.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormEmailTo);
-      });
-      return false;
-    }
-
-    final subject = _draft.email.subject.text.trim();
-    if (subject.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormEmailSubject);
-      });
-      return false;
-    }
-
-    final body = _draft.email.body.text.trim();
-    if (body.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormEmailBody);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    final attachmentPaths = _parseStructuredArguments(_draft.email.attachments.text)
-        .map(
-          (path) => AgentActionPathReference(
-            originalPath: path,
-            pathChangePolicy: _draft.pathChangePolicy,
-          ),
-        )
-        .toList(growable: false);
-
-    return widget.provider.saveEmailAction(
-      actionId: _draft.editingActionId,
-      name: _draft.identity.name.text.trim(),
-      description: _draft.identity.description.text,
-      smtpProfileId: smtpProfileId,
-      from: from,
-      to: to,
-      cc: _parseStructuredArguments(_draft.email.cc.text),
-      bcc: _parseStructuredArguments(_draft.email.bcc.text),
-      subjectTemplate: subject,
-      bodyTemplate: body,
-      attachmentPaths: attachmentPaths,
-      state: _draft.state,
-      notificationPolicy: _draft.notificationPolicy(),
-      retryPolicy: _draft.retryPolicy(),
-      timeoutPolicy: _draft.timeoutPolicy(),
-      environmentPolicy: _draft.environmentPolicy(),
-      exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-      processPolicy: _draft.processPolicy(),
-      lifecyclePolicy: _draft.lifecyclePolicy(),
-      remotePolicy: _draftRemotePolicy(),
-      elevatedPolicy: _draftElevatedPolicy(),
-      contextPolicy: _draft.contextPolicy(),
-      pathChangePolicy: _draft.pathChangePolicy,
-      queuePolicy: _draft.queuePolicy(),
-      pathPolicy: _draft.pathPolicy(),
-    );
-  }
-
-  Future<bool> _saveComObjectDraft() async {
-    final progId = _draft.comObject.progId.text.trim();
-    if (progId.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormComProgId);
-      });
-      return false;
-    }
-
-    final memberName = _draft.comObject.memberName.text.trim();
-    if (memberName.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormComMemberName);
-      });
-      return false;
-    }
-
-    final argumentsResult = _parseComObjectArguments(_draft.comObject.arguments.text);
-    if (argumentsResult == null) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.agentActionsFormInvalidComArguments;
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    return widget.provider.saveComObjectAction(
-      actionId: _draft.editingActionId,
-      name: _draft.identity.name.text.trim(),
-      description: _draft.identity.description.text,
-      progId: progId,
-      memberName: memberName,
-      arguments: argumentsResult,
-      state: _draft.state,
-      notificationPolicy: _draft.notificationPolicy(),
-      retryPolicy: _draft.retryPolicy(),
-      timeoutPolicy: _draft.timeoutPolicy(),
-      environmentPolicy: _draft.environmentPolicy(),
-      exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-      processPolicy: _draft.processPolicy(),
-      lifecyclePolicy: _draft.lifecyclePolicy(),
-      remotePolicy: _draftRemotePolicy(),
-      elevatedPolicy: _draftElevatedPolicy(),
-      contextPolicy: _draft.contextPolicy(),
-      pathChangePolicy: _draft.pathChangePolicy,
-      queuePolicy: _draft.queuePolicy(),
-      pathPolicy: _draft.pathPolicy(),
-    );
-  }
-
-  Map<String, Object?>? _parseComObjectArguments(String raw) => AgentActionDraftParsers.comObjectArguments(raw);
-
-  Future<bool> _saveScriptDraft() async {
-    final scriptPath = _draft.script.path.text.trim();
-    if (scriptPath.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormScriptPath);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    return widget.provider.saveScriptAction(
-      actionId: _draft.editingActionId,
-      name: _draft.identity.name.text.trim(),
-      description: _draft.identity.description.text,
-      scriptPath: scriptPath,
-      interpreterPath: _draft.script.interpreterPath.text,
-      arguments: _parseStructuredArguments(_draft.executable.arguments.text),
-      workingDirectory: _draft.commandLine.workingDirectory.text,
-      state: _draft.state,
-      notificationPolicy: _draft.notificationPolicy(),
-      retryPolicy: _draft.retryPolicy(),
-      timeoutPolicy: _draft.timeoutPolicy(),
-      environmentPolicy: _draft.environmentPolicy(),
-      exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-      processPolicy: _draft.processPolicy(),
-      encodingPolicy: _draft.encodingPolicy(),
-      capturePolicy: _draft.capturePolicy(),
-      lifecyclePolicy: _draft.lifecyclePolicy(),
-      remotePolicy: _draftRemotePolicy(),
-      elevatedPolicy: _draftElevatedPolicy(),
-      contextPolicy: _draft.contextPolicy(),
-      pathChangePolicy: _draft.pathChangePolicy,
-      queuePolicy: _draft.queuePolicy(),
-      pathPolicy: _draft.pathPolicy(),
-    );
-  }
-
-  List<String> _parseStructuredArguments(String raw) => AgentActionDraftParsers.structuredArguments(raw);
-
-  Future<bool> _saveCommandLineDraft() async {
-    final command = _draft.commandLine.command.text.trim();
-    if (command.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormCommand);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    return widget.provider.saveCommandLineAction(
-      actionId: _draft.editingActionId,
-      name: _draft.identity.name.text.trim(),
-      description: _draft.identity.description.text,
-      command: command,
-      workingDirectory: _draft.commandLine.workingDirectory.text,
-      state: _draft.state,
-      notificationPolicy: _draft.notificationPolicy(),
-      retryPolicy: _draft.retryPolicy(),
-      timeoutPolicy: _draft.timeoutPolicy(),
-      environmentPolicy: _draft.environmentPolicy(),
-      exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-      processPolicy: _draft.processPolicy(),
-      encodingPolicy: _draft.encodingPolicy(),
-      capturePolicy: _draft.capturePolicy(),
-      lifecyclePolicy: _draft.lifecyclePolicy(),
-      remotePolicy: _draftRemotePolicy(),
-      elevatedPolicy: _draftElevatedPolicy(),
-      contextPolicy: _draft.contextPolicy(),
-      pathChangePolicy: _draft.pathChangePolicy,
-      queuePolicy: _draft.queuePolicy(),
-      pathPolicy: _draft.pathPolicy(),
-    );
-  }
-
-  Future<bool> _savePowerShellDraft() async {
-    if (_isPowerShellModeUnavailable(_draft.powerShellMode)) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.agentActionsFormPowerShellModeUnavailable;
-      });
-      return false;
-    }
-
-    switch (_draft.powerShellMode) {
-      case PowerShellDraftMode.inline:
-        final command = _draft.commandLine.command.text.trim();
-        if (command.isEmpty) {
-          setState(() {
-            _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormPowerShellCommand);
-          });
-          return false;
-        }
-
-        if (!_validateDraftPolicies()) {
-          return false;
-        }
-
-        return widget.provider.saveCommandLineAction(
-          actionId: _draft.editingActionId,
-          name: _draft.identity.name.text.trim(),
-          description: _draft.identity.description.text,
-          command: PowerShellCommandLine.wrapInlineCommand(
-            command,
-            executable: _powerShellExecutableName(_draft.powerShellExecutable),
-          ),
-          workingDirectory: _draft.commandLine.workingDirectory.text,
-          state: _draft.state,
-          notificationPolicy: _draft.notificationPolicy(),
-          retryPolicy: _draft.retryPolicy(),
-          timeoutPolicy: _draft.timeoutPolicy(),
-          environmentPolicy: _draft.environmentPolicy(),
-          exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-          processPolicy: _draft.processPolicy(),
-          encodingPolicy: _draft.encodingPolicy(),
-          capturePolicy: _draft.capturePolicy(),
-          lifecyclePolicy: _draft.lifecyclePolicy(),
-          remotePolicy: _draftRemotePolicy(),
-          elevatedPolicy: _draftElevatedPolicy(),
-          contextPolicy: _draft.contextPolicy(),
-          pathChangePolicy: _draft.pathChangePolicy,
-          queuePolicy: _draft.queuePolicy(),
-          pathPolicy: _draft.pathPolicy(),
-        );
-      case PowerShellDraftMode.script:
-        final scriptPath = _draft.script.path.text.trim();
-        if (scriptPath.isEmpty) {
-          setState(() {
-            _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormPowerShellScriptPath);
-          });
-          return false;
-        }
-        if (!PowerShellCommandLine.isPowerShellScriptPath(scriptPath)) {
-          setState(() {
-            _draft.validationMessage = widget.l10n.agentActionsFormPowerShellScriptPathInvalid;
-          });
-          return false;
-        }
-
-        if (!_validateDraftPolicies()) {
-          return false;
-        }
-
-        return widget.provider.saveScriptAction(
-          actionId: _draft.editingActionId,
-          name: _draft.identity.name.text.trim(),
-          description: _draft.identity.description.text,
-          scriptPath: scriptPath,
-          interpreterPath: _draft.powerShellExecutable == PowerShellExecutable.powerShell7
-              ? PowerShellCommandLine.powerShell7Executable
-              : '',
-          arguments: _parseStructuredArguments(_draft.executable.arguments.text),
-          workingDirectory: _draft.commandLine.workingDirectory.text,
-          state: _draft.state,
-          notificationPolicy: _draft.notificationPolicy(),
-          retryPolicy: _draft.retryPolicy(),
-          timeoutPolicy: _draft.timeoutPolicy(),
-          environmentPolicy: _draft.environmentPolicy(),
-          exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-          processPolicy: _draft.processPolicy(),
-          encodingPolicy: _draft.encodingPolicy(),
-          capturePolicy: _draft.capturePolicy(),
-          lifecyclePolicy: _draft.lifecyclePolicy(),
-          remotePolicy: _draftRemotePolicy(),
-          elevatedPolicy: _draftElevatedPolicy(),
-          contextPolicy: _draft.contextPolicy(),
-          pathChangePolicy: _draft.pathChangePolicy,
-          queuePolicy: _draft.queuePolicy(),
-          pathPolicy: _draft.pathPolicy(),
-        );
-    }
-  }
-
-  Future<bool> _saveDeveloperDraft() async {
-    final executorPath = _draft.developer.executorPath.text.trim();
-    if (executorPath.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormExecutorPath);
-      });
-      return false;
-    }
-
-    final projectPath = _draft.developer.projectPath.text.trim();
-    if (projectPath.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormProjectPath);
-      });
-      return false;
-    }
-
-    final connectionId = _draft.developer.connectionId.text.trim();
-    if (connectionId.isEmpty) {
-      setState(() {
-        _draft.validationMessage = widget.l10n.formFieldRequired(widget.l10n.agentActionsFormConnectionId);
-      });
-      return false;
-    }
-
-    if (!_validateDraftPolicies()) {
-      return false;
-    }
-
-    return widget.provider.saveDeveloperData7Action(
-      actionId: _draft.editingActionId,
-      name: _draft.identity.name.text.trim(),
-      description: _draft.identity.description.text,
-      executorPath: executorPath,
-      projectPath: projectPath,
-      data7ConfigPath: _draft.developer.data7ConfigPath.text,
-      connectionId: connectionId,
-      connectionLabel: _draft.developer.connectionLabel.text,
-      state: _draft.state,
-      notificationPolicy: _draft.notificationPolicy(),
-      retryPolicy: _draft.retryPolicy(),
-      timeoutPolicy: _draft.timeoutPolicy(),
-      environmentPolicy: _draft.environmentPolicy(),
-      exitCodePolicy: _draft.exitCodePolicy(_tryParseAcceptedExitCodes(_draft.executionPolicy.acceptedExitCodes.text)!),
-      processPolicy: _draft.processPolicy(),
-      encodingPolicy: _draft.encodingPolicy(),
-      capturePolicy: _draft.capturePolicy(),
-      lifecyclePolicy: _draft.lifecyclePolicy(),
-      remotePolicy: _draftRemotePolicy(),
-      elevatedPolicy: _draftElevatedPolicy(),
-      contextPolicy: _draft.contextPolicy(),
-      pathChangePolicy: _draft.pathChangePolicy,
-      queuePolicy: _draft.queuePolicy(),
-      pathPolicy: _draft.pathPolicy(),
-    );
   }
 
   String _createTitle() {

@@ -36,6 +36,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsRunSelected => 'Run selected';
 
   @override
+  String get agentActionsMoreActions => 'More actions';
+
+  @override
   String get agentActionsTestSelected => 'Test action';
 
   @override
@@ -2368,6 +2371,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modalTitleError => 'Error';
 
   @override
+  String get settingsPersistError => 'Could not save the setting. Please try again.';
+
+  @override
+  String get errorUnexpected => 'An unexpected error occurred. Please try again.';
+
+  @override
   String get modalTitleAuthError => 'Authentication Error';
 
   @override
@@ -2551,6 +2560,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get wsLogP99Latency => 'P99 auth latency';
+
+  @override
+  String get wsLogAuthMissingPermission => 'missing permission';
+
+  @override
+  String get wsLogAuthTokenNotFound => 'token not found';
+
+  @override
+  String get wsLogAuthTokenRevoked => 'token revoked';
 
   @override
   String get wsLogPreserveSqlDeprecatedUses => 'preserve_sql (deprecated) usage';
@@ -2932,6 +2950,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get configUpdatesChecking => 'Checking for updates...';
+
+  @override
+  String get configCheckUpdatesNow => 'Check for updates';
 
   @override
   String get configLastUpdatePrefix => 'Last check: ';
@@ -3799,6 +3820,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get odbcErrorSaveFailed => 'Failed to save advanced settings. Try again.';
 
   @override
+  String get odbcErrorLoadFailed => 'Failed to load advanced settings.';
+
+  @override
   String get odbcSuccessAppliedNow => 'Pool, timeout and streaming settings were saved and apply to new connections.';
 
   @override
@@ -4243,7 +4267,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctImportRulesErrorEmpty => 'The file is empty or contains no valid rules.';
 
   @override
+  String get ctImportRulesErrorReadFailed => 'Could not read the selected file.';
+
+  @override
   String get ctImportRulesErrorFileTooLarge => 'The file exceeds the maximum allowed size (512 KB).';
+
+  @override
+  String get ctExportRulesError => 'Could not export the rules to the selected file.';
 
   @override
   String ctImportRulesSuccess(int count) {
@@ -4435,6 +4465,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get formPasswordDefaultHint => 'Enter password';
+
+  @override
+  String get formPasswordShow => 'Show password';
+
+  @override
+  String get formPasswordHide => 'Hide password';
 
   @override
   String formPasswordRequired(String fieldLabel) {

@@ -106,15 +106,28 @@ Nao presuma que `clean_architecture.mdc` e intercambiavel entre repositorios.
 Projetos com organizacao por feature, por camada global ou com fronteiras
 hibridas precisam refletir isso explicitamente na rule.
 
+## Modelo de Carregamento
+
+Para manter baixo acoplamento, nem toda rule fica ativa o tempo todo:
+
+- Sempre ativas (`alwaysApply: true`), por serem transversais:
+  `rules_index.mdc`, `general_rules.mdc` e `project_specifics.mdc`
+- Escopadas por `globs` (`alwaysApply: false`): as demais rules tematicas, que
+  so entram em contexto quando a tarefa toca os arquivos correspondentes
+
+Assim, editar um teste nao carrega regra de UX desktop, e mexer em `domain` nao
+carrega regra de widget.
+
 ## Ajustando Globs
 
-Se a estrutura do projeto mudar, atualize o frontmatter:
+Se a estrutura do projeto mudar, atualize o frontmatter da rule tematica e
+mantenha `alwaysApply: false` para que o escopo por `globs` seja respeitado:
 
 ```yaml
 ---
 description: Descricao da regra
 globs: ["lib/presentation/**/*.dart"]
-alwaysApply: true
+alwaysApply: false
 ---
 ```
 

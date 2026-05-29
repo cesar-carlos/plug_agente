@@ -7,12 +7,10 @@ import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
-import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/backup/local_data_backup.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_failures;
 import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.dart';
-import 'package:plug_agente/infrastructure/backup/restore_failure_diagnostics.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/backup_failure_localizer.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
@@ -172,10 +170,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
         name: 'backup_config_section',
         error: failure,
       );
-      await RestoreFailureDiagnostics.writeFromFailure(
-        storage: getIt<GlobalStorageContext>(),
-        failure: failure,
-      );
+      await service.writeRestoreFailureDiagnostics(failure);
       exit(1);
     }
 

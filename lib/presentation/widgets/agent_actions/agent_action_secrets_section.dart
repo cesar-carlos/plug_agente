@@ -168,7 +168,7 @@ class _SecretStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    final color = isConfigured ? theme.accentColor : const Color(0xFFC50F1F);
+    final color = isConfigured ? theme.accentColor : context.appColors.error;
 
     return DecoratedBox(
       decoration: BoxDecoration(

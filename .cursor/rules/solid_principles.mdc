@@ -1,7 +1,7 @@
 ---
 description: SOLID principles - class and interface design guidance
 globs: ["lib/**/*.dart"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Principios SOLID

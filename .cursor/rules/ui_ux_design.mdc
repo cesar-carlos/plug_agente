@@ -1,7 +1,7 @@
 ---
 description: UI/UX design principles for Windows desktop apps
 globs: ["lib/presentation/**/*.dart", "lib/shared/**/*.dart"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # UI/UX Design Principles for Desktop Apps
@@ -86,10 +86,9 @@ SelectableText.rich(
 
 ## Localizacao e Texto
 
-- Em superficies ja integradas com `AppLocalizations`, prefira strings vindas
-  da localizacao em vez de novos literais soltos
+- Estrategia de localizacao do repositorio: `project_specifics.mdc`
 - Mantenha terminologia consistente entre navegacao, formularios, erros e
-  feedbacks
+ feedbacks
 - Textos operacionais devem ser curtos, acionaveis e adequados a usuarios de
   desktop
 

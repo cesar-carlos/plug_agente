@@ -108,9 +108,12 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
         const SizedBox(width: AppSpacing.xs),
         DropDownButton(
           key: ValueKey<String>('agent_action_definition_more_${definition.id}'),
-          buttonBuilder: (context, onOpen) => IconButton(
-            icon: const Icon(FluentIcons.more),
-            onPressed: onOpen,
+          buttonBuilder: (context, onOpen) => Tooltip(
+            message: l10n.agentActionsMoreActions,
+            child: IconButton(
+              icon: const Icon(FluentIcons.more),
+              onPressed: onOpen,
+            ),
           ),
           items: [
             MenuFlyoutItem(

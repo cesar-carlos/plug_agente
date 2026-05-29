@@ -46,13 +46,16 @@ class _PasswordFieldState extends State<PasswordField> {
       onChanged: widget.onChanged,
       enabled: widget.enabled,
       prefixIcon: const Icon(FluentIcons.lock),
-      suffixIcon: IconButton(
-        icon: Icon(_obscureText ? FluentIcons.view : FluentIcons.hide),
-        onPressed: () {
-          setState(() {
-            _obscureText = !_obscureText;
-          });
-        },
+      suffixIcon: Tooltip(
+        message: _obscureText ? l10n.formPasswordShow : l10n.formPasswordHide,
+        child: IconButton(
+          icon: Icon(_obscureText ? FluentIcons.view : FluentIcons.hide),
+          onPressed: () {
+            setState(() {
+              _obscureText = !_obscureText;
+            });
+          },
+        ),
       ),
     );
   }

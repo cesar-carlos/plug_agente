@@ -3,19 +3,15 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/dashboard/dashboard_metrics_controller.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/presentation/widgets/websocket_log_viewer.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
-
-enum _MetricsPeriod { last1h, last24h, all }
-
-const _dashboardMetricsPeriodKey = 'dashboard_metrics_period';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -25,101 +21,21 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  MetricsSummary _metricsSummary = MetricsSummary.fromList([]);
-  _MetricsPeriod _selectedPeriod = _MetricsPeriod.all;
-  Timer? _metricsTimer;
-  StreamSubscription<QueryMetrics>? _metricsSubscription;
+  late final DashboardMetricsController _metricsController;
 
   @override
   void initState() {
     super.initState();
-    _updateMetrics();
-    unawaited(
-      _restoreMetricsPeriod().catchError(
-        (Object e) => AppLogger.warning('Failed to restore metrics period', e),
-      ),
-    );
-    _metricsTimer = Timer.periodic(
-      AppConstants.dashboardMetricsInterval,
-      (_) => _updateMetrics(),
-    );
-    _metricsSubscription = getIt<IMetricsCollector>().metricsStream.listen(
-      (_) => _updateMetrics(),
-      onError: (Object e, StackTrace? s) => AppLogger.warning(
-        'Metrics stream error',
-        e,
-        s,
-      ),
-    );
-  }
-
-  void _updateMetrics() {
-    if (!mounted) return;
-    final summary = _buildSummaryForPeriod(
-      getIt<IMetricsCollector>().metrics,
-      _selectedPeriod,
-    );
-    setState(() => _metricsSummary = summary);
-  }
-
-  MetricsSummary _buildSummaryForPeriod(
-    List<QueryMetrics> metrics,
-    _MetricsPeriod period,
-  ) {
-    if (period == _MetricsPeriod.all) {
-      return MetricsSummary.fromList(metrics);
-    }
-
-    final now = DateTime.now();
-    final cutoff = period == _MetricsPeriod.last1h
-        ? now.subtract(const Duration(hours: 1))
-        : now.subtract(const Duration(hours: 24));
-
-    final filtered = metrics.where((metric) => metric.timestamp.isAfter(cutoff)).toList();
-
-    return MetricsSummary.fromList(filtered);
-  }
-
-  Future<void> _restoreMetricsPeriod() async {
-    final prefs = getIt<IAppSettingsStore>();
-    final storedValue = prefs.getString(_dashboardMetricsPeriodKey);
-    final restored = _metricsPeriodFromStorage(storedValue);
-    if (!mounted) {
-      return;
-    }
-
-    setState(() => _selectedPeriod = restored);
-    _updateMetrics();
-  }
-
-  Future<void> _saveMetricsPeriod(_MetricsPeriod period) async {
-    final prefs = getIt<IAppSettingsStore>();
-    await prefs.setString(
-      _dashboardMetricsPeriodKey,
-      _metricsPeriodToStorage(period),
-    );
-  }
-
-  String _metricsPeriodToStorage(_MetricsPeriod period) {
-    return switch (period) {
-      _MetricsPeriod.last1h => '1h',
-      _MetricsPeriod.last24h => '24h',
-      _MetricsPeriod.all => 'all',
-    };
-  }
-
-  _MetricsPeriod _metricsPeriodFromStorage(String? value) {
-    return switch (value) {
-      '1h' => _MetricsPeriod.last1h,
-      '24h' => _MetricsPeriod.last24h,
-      _ => _MetricsPeriod.all,
-    };
+    _metricsController = DashboardMetricsController(
+      metricsCollector: getIt<IMetricsCollector>(),
+      refreshInterval: AppConstants.dashboardMetricsInterval,
+      settingsStore: getIt.isRegistered<IAppSettingsStore>() ? getIt<IAppSettingsStore>() : null,
+    )..initialize();
   }
 
   @override
   void dispose() {
-    _metricsTimer?.cancel();
-    _metricsSubscription?.cancel();
+    _metricsController.dispose();
     super.dispose();
   }
 
@@ -159,25 +75,19 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              _OdbcMetricsCard(
-                l10n: l10n,
-                summary: _metricsSummary,
-                selectedPeriod: _selectedPeriod,
-                onPeriodChanged: (period) {
-                  if (period == null) {
-                    return;
-                  }
-                  setState(() => _selectedPeriod = period);
-                  unawaited(
-                    _saveMetricsPeriod(period).catchError(
-                      (Object e) => AppLogger.warning(
-                        'Failed to save metrics period',
-                        e,
-                      ),
-                    ),
-                  );
-                  _updateMetrics();
-                },
+              ListenableBuilder(
+                listenable: _metricsController,
+                builder: (context, _) => _OdbcMetricsCard(
+                  l10n: l10n,
+                  summary: _metricsController.summary,
+                  selectedPeriod: _metricsController.selectedPeriod,
+                  onPeriodChanged: (period) {
+                    if (period == null) {
+                      return;
+                    }
+                    unawaited(_metricsController.changePeriod(period));
+                  },
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
               const Expanded(child: WebSocketLogViewer()),
@@ -198,8 +108,8 @@ class _OdbcMetricsCard extends StatelessWidget {
   });
   final AppLocalizations l10n;
   final MetricsSummary summary;
-  final _MetricsPeriod selectedPeriod;
-  final ValueChanged<_MetricsPeriod?> onPeriodChanged;
+  final DashboardMetricsPeriod selectedPeriod;
+  final ValueChanged<DashboardMetricsPeriod?> onPeriodChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +133,7 @@ class _OdbcMetricsCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               SizedBox(
                 width: 160,
-                child: ComboBox<_MetricsPeriod>(
+                child: ComboBox<DashboardMetricsPeriod>(
                   value: selectedPeriod,
                   onChanged: onPeriodChanged,
                   isExpanded: true,
@@ -233,21 +143,21 @@ class _OdbcMetricsCard extends StatelessWidget {
                   ),
                   items: [
                     ComboBoxItem(
-                      value: _MetricsPeriod.last1h,
+                      value: DashboardMetricsPeriod.last1h,
                       child: Text(
                         l10n.dashboardMetricsPeriod1h,
                         style: context.bodyText.copyWith(fontSize: 12),
                       ),
                     ),
                     ComboBoxItem(
-                      value: _MetricsPeriod.last24h,
+                      value: DashboardMetricsPeriod.last24h,
                       child: Text(
                         l10n.dashboardMetricsPeriod24h,
                         style: context.bodyText.copyWith(fontSize: 12),
                       ),
                     ),
                     ComboBoxItem(
-                      value: _MetricsPeriod.all,
+                      value: DashboardMetricsPeriod.all,
                       child: Text(
                         l10n.dashboardMetricsPeriodAll,
                         style: context.bodyText.copyWith(fontSize: 12),

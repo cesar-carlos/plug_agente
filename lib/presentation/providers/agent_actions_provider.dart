@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/agent_action_definition_assembler.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
 import 'package:plug_agente/application/actions/agent_action_failure_diagnostics.dart';
 import 'package:plug_agente/application/actions/agent_action_preflight_validity.dart';
@@ -150,6 +151,7 @@ class AgentActionsProvider extends ChangeNotifier {
   final AgentActionTriggerScheduler? _triggerScheduler;
   final IComObjectInvocationDiagnostics? _comObjectInvocationDiagnostics;
   final AgentActionDefinitionSnapshotter _definitionSnapshotter;
+  final AgentActionDefinitionAssembler _assembler = const AgentActionDefinitionAssembler();
   final AgentActionPreflightSettings? _preflightSettings;
   final DateTime Function() _now;
 
@@ -1095,9 +1097,9 @@ class AgentActionsProvider extends ChangeNotifier {
       state: state,
       config: CommandLineActionConfig(
         command: command.trim(),
-        workingDirectory: _optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
+        workingDirectory: _assembler.optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
       ),
-      buildPolicies: (existing) => _policiesForSave(
+      buildPolicies: (existing) => _assembler.policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1148,11 +1150,11 @@ class AgentActionsProvider extends ChangeNotifier {
       description: description,
       state: state,
       config: ExecutableActionConfig(
-        executablePath: _pathReference(executablePath.trim(), pathChangePolicy: pathChangePolicy),
+        executablePath: _assembler.pathReference(executablePath.trim(), pathChangePolicy: pathChangePolicy),
         arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: _optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
+        workingDirectory: _assembler.optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
       ),
-      buildPolicies: (existing) => _policiesForSave(
+      buildPolicies: (existing) => _assembler.policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1205,12 +1207,12 @@ class AgentActionsProvider extends ChangeNotifier {
       description: description,
       state: state,
       config: ScriptActionConfig(
-        scriptPath: _pathReference(scriptPath.trim(), pathChangePolicy: pathChangePolicy),
-        interpreterPath: _optionalPathReference(trimmedInterpreterPath, pathChangePolicy: pathChangePolicy),
+        scriptPath: _assembler.pathReference(scriptPath.trim(), pathChangePolicy: pathChangePolicy),
+        interpreterPath: _assembler.optionalPathReference(trimmedInterpreterPath, pathChangePolicy: pathChangePolicy),
         arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: _optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
+        workingDirectory: _assembler.optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
       ),
-      buildPolicies: (existing) => _policiesForSave(
+      buildPolicies: (existing) => _assembler.policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1263,12 +1265,12 @@ class AgentActionsProvider extends ChangeNotifier {
       description: description,
       state: state,
       config: JarActionConfig(
-        jarPath: _pathReference(jarPath.trim(), pathChangePolicy: pathChangePolicy),
-        javaExecutablePath: _optionalPathReference(trimmedJavaPath, pathChangePolicy: pathChangePolicy),
+        jarPath: _assembler.pathReference(jarPath.trim(), pathChangePolicy: pathChangePolicy),
+        javaExecutablePath: _assembler.optionalPathReference(trimmedJavaPath, pathChangePolicy: pathChangePolicy),
         arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: _optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
+        workingDirectory: _assembler.optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
       ),
-      buildPolicies: (existing) => _policiesForSave(
+      buildPolicies: (existing) => _assembler.policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1330,7 +1332,7 @@ class AgentActionsProvider extends ChangeNotifier {
         bodyTemplate: bodyTemplate.trim(),
         attachmentPaths: List<AgentActionPathReference>.unmodifiable(attachmentPaths),
       ),
-      buildPolicies: (existing) => _policiesForSave(
+      buildPolicies: (existing) => _assembler.policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1380,7 +1382,7 @@ class AgentActionsProvider extends ChangeNotifier {
         memberName: memberName.trim(),
         arguments: Map<String, Object?>.unmodifiable(arguments),
       ),
-      buildPolicies: (existing) => _policiesForSave(
+      buildPolicies: (existing) => _assembler.policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1432,13 +1434,13 @@ class AgentActionsProvider extends ChangeNotifier {
       description: description,
       state: state,
       config: DeveloperActionConfig.data7Executor(
-        executorPath: _pathReference(executorPath.trim()),
-        projectPath: _pathReference(projectPath.trim()),
-        data7ConfigPath: _pathReference(trimmedData7ConfigPath),
+        executorPath: _assembler.pathReference(executorPath.trim()),
+        projectPath: _assembler.pathReference(projectPath.trim()),
+        data7ConfigPath: _assembler.pathReference(trimmedData7ConfigPath),
         connectionId: trimmedConnectionId,
         connectionLabel: connectionLabel.trim().isEmpty ? trimmedConnectionId : connectionLabel.trim(),
       ),
-      buildPolicies: (existing) => _policiesForSave(
+      buildPolicies: (existing) => _assembler.policiesForSave(
         existing: existing,
         notificationPolicy: notificationPolicy,
         retryPolicy: retryPolicy,
@@ -1718,63 +1720,6 @@ class AgentActionsProvider extends ChangeNotifier {
     }
 
     return _definitions.where((definition) => definition.id == actionId).firstOrNull;
-  }
-
-  AgentActionPathReference _pathReference(
-    String originalPath, {
-    AgentActionPathChangePolicy? pathChangePolicy,
-  }) {
-    return AgentActionPathReference(
-      originalPath: originalPath,
-      pathChangePolicy: pathChangePolicy,
-    );
-  }
-
-  AgentActionPathReference? _optionalPathReference(
-    String? originalPath, {
-    AgentActionPathChangePolicy? pathChangePolicy,
-  }) {
-    final trimmed = originalPath?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return null;
-    }
-
-    return _pathReference(trimmed, pathChangePolicy: pathChangePolicy);
-  }
-
-  AgentActionDefinitionPolicies _policiesForSave({
-    required AgentActionDefinition? existing,
-    required AgentActionNotificationPolicy notificationPolicy,
-    required AgentActionRetryPolicy retryPolicy,
-    required AgentActionTimeoutPolicy timeoutPolicy,
-    required AgentActionEnvironmentPolicy environmentPolicy,
-    required AgentActionExitCodePolicy exitCodePolicy,
-    required AgentActionProcessPolicy processPolicy,
-    required AgentActionLifecyclePolicy lifecyclePolicy,
-    required AgentActionRemotePolicy remotePolicy,
-    required AgentActionElevatedPolicy elevatedPolicy,
-    AgentActionContextPolicy? contextPolicy,
-    AgentActionEncodingPolicy? encodingPolicy,
-    AgentActionCapturePolicy? capturePolicy,
-    AgentActionQueuePolicy? queuePolicy,
-    AgentActionPathPolicy? pathPolicy,
-  }) {
-    return (existing?.policies ?? const AgentActionDefinitionPolicies()).copyWith(
-      notification: notificationPolicy,
-      retry: retryPolicy,
-      timeout: timeoutPolicy,
-      environment: environmentPolicy,
-      exitCode: exitCodePolicy,
-      process: processPolicy,
-      lifecycle: lifecyclePolicy,
-      remote: remotePolicy,
-      elevated: elevatedPolicy,
-      context: contextPolicy,
-      encoding: encodingPolicy ?? existing?.policies.encoding,
-      capture: capturePolicy ?? existing?.policies.capture,
-      queue: queuePolicy ?? existing?.policies.queue,
-      path: pathPolicy ?? existing?.policies.path,
-    );
   }
 
   /// Shared scaffold for all save*Action methods.

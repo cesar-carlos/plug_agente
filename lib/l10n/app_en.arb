@@ -9,6 +9,7 @@
   "navAgentActions": "System Actions",
   "agentActionsRefresh": "Refresh",
   "agentActionsRunSelected": "Run selected",
+  "agentActionsMoreActions": "More actions",
   "agentActionsTestSelected": "Test action",
   "agentActionsCancelExecution": "Cancel execution",
   "agentActionsDeleteSelected": "Delete action",
@@ -915,6 +916,8 @@
   "titleConfig": "Settings - Plug Database",
   "modalTitleSuccess": "Success",
   "modalTitleError": "Error",
+  "settingsPersistError": "Could not save the setting. Please try again.",
+  "errorUnexpected": "An unexpected error occurred. Please try again.",
   "modalTitleAuthError": "Authentication Error",
   "modalTitleConnectionError": "Connection Error",
   "modalTitleConfigError": "Configuration Error",
@@ -982,6 +985,9 @@
   "wsLogDenialRate": "Denial rate",
   "wsLogP95Latency": "P95 auth latency",
   "wsLogP99Latency": "P99 auth latency",
+  "wsLogAuthMissingPermission": "missing permission",
+  "wsLogAuthTokenNotFound": "token not found",
+  "wsLogAuthTokenRevoked": "token revoked",
   "wsLogPreserveSqlDeprecatedUses": "preserve_sql (deprecated) usage",
   "wsLogTabStream": "Stream",
   "wsLogTabSqlInvestigation": "SQL",
@@ -1171,6 +1177,7 @@
   "@configBackupRestoreOlderSchemaNote": { "description": "Info when backup user_version is below current app schema." },
   "configLastUpdateNever": "Never checked",
   "configUpdatesChecking": "Checking for updates...",
+  "configCheckUpdatesNow": "Check for updates",
   "configLastUpdatePrefix": "Last check: ",
   "configLastBackgroundUpdatePrefix": "Last background check: ",
   "configLastAutomaticUpdatePrefix": "Last automatic check: ",
@@ -1492,6 +1499,7 @@
   "odbcErrorBufferRange": "Result buffer must be between 8 and 128 MB",
   "odbcErrorChunkRange": "Streaming chunk must be between 64 and 8192 KB",
   "odbcErrorSaveFailed": "Failed to save advanced settings. Try again.",
+  "odbcErrorLoadFailed": "Failed to load advanced settings.",
   "odbcSuccessAppliedNow": "Pool, timeout and streaming settings were saved and apply to new connections.",
   "odbcSuccessAppliedGradually": "Pool, timeout and streaming settings were saved. New options apply gradually to new connections.",
   "odbcModalTitleSaved": "Settings saved",
@@ -1651,7 +1659,9 @@
     }
   },
   "ctImportRulesErrorEmpty": "The file is empty or contains no valid rules.",
+  "ctImportRulesErrorReadFailed": "Could not read the selected file.",
   "ctImportRulesErrorFileTooLarge": "The file exceeds the maximum allowed size (512 KB).",
+  "ctExportRulesError": "Could not export the rules to the selected file.",
   "ctImportRulesSuccess": "{count,plural, =1{1 rule imported successfully.} other{{count} rules imported successfully.}}",
   "@ctImportRulesSuccess": {
     "placeholders": {
@@ -1725,6 +1735,8 @@
   "formValidationStateLetters": "State must be 2 letters",
   "formFieldLabelPassword": "Password",
   "formPasswordDefaultHint": "Enter password",
+  "formPasswordShow": "Show password",
+  "formPasswordHide": "Hide password",
   "formPasswordRequired": "{fieldLabel} is required.",
   "@formPasswordRequired": {
     "placeholders": {

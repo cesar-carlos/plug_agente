@@ -9,6 +9,7 @@
   "navAgentActions": "Ações do Sistema",
   "agentActionsRefresh": "Atualizar",
   "agentActionsRunSelected": "Executar selecionada",
+  "agentActionsMoreActions": "Mais ações",
   "agentActionsTestSelected": "Testar acao",
   "agentActionsCancelExecution": "Cancelar execucao",
   "agentActionsDeleteSelected": "Excluir acao",
@@ -915,6 +916,8 @@
   "titleConfig": "Configurações - Plug Database",
   "modalTitleSuccess": "Sucesso",
   "modalTitleError": "Erro",
+  "settingsPersistError": "Não foi possível salvar a configuração. Tente novamente.",
+  "errorUnexpected": "Ocorreu um erro inesperado. Tente novamente.",
   "modalTitleAuthError": "Erro de Autenticação",
   "modalTitleConnectionError": "Erro de Conexão",
   "modalTitleConfigError": "Erro de Configuração",
@@ -982,6 +985,9 @@
   "wsLogDenialRate": "Taxa de negação",
   "wsLogP95Latency": "Latência P95 (auth)",
   "wsLogP99Latency": "Latência P99 (auth)",
+  "wsLogAuthMissingPermission": "permissão ausente",
+  "wsLogAuthTokenNotFound": "token não encontrado",
+  "wsLogAuthTokenRevoked": "token revogado",
   "wsLogPreserveSqlDeprecatedUses": "Uso de preserve_sql (deprecated)",
   "wsLogTabStream": "Fluxo",
   "wsLogTabSqlInvestigation": "SQL",
@@ -1171,6 +1177,7 @@
   "@configBackupRestoreOlderSchemaNote": { "description": "Info when backup user_version is below current app schema." },
   "configLastUpdateNever": "Nunca verificado",
   "configUpdatesChecking": "Verificando atualizações...",
+  "configCheckUpdatesNow": "Verificar atualizações",
   "configLastUpdatePrefix": "Última verificação: ",
   "configLastBackgroundUpdatePrefix": "Última verificação em segundo plano: ",
   "configLastAutomaticUpdatePrefix": "Última verificação automática: ",
@@ -1492,6 +1499,7 @@
   "odbcErrorBufferRange": "Buffer de resultados deve ser entre 8 e 128 MB",
   "odbcErrorChunkRange": "Chunk do streaming deve ser entre 64 e 8192 KB",
   "odbcErrorSaveFailed": "Falha ao salvar configurações avançadas. Tente novamente.",
+  "odbcErrorLoadFailed": "Falha ao carregar configurações avançadas.",
   "odbcSuccessAppliedNow": "As configurações de pool, timeout e streaming foram salvas e aplicadas para novas conexões.",
   "odbcSuccessAppliedGradually": "As configurações de pool, timeout e streaming foram salvas. As novas opções serão aplicadas gradualmente em novas conexões.",
   "odbcModalTitleSaved": "Configurações salvas",
@@ -1651,7 +1659,9 @@
     }
   },
   "ctImportRulesErrorEmpty": "O arquivo está vazio ou não contém regras válidas.",
+  "ctImportRulesErrorReadFailed": "Não foi possível ler o arquivo selecionado.",
   "ctImportRulesErrorFileTooLarge": "O arquivo excede o tamanho máximo permitido (512 KB).",
+  "ctExportRulesError": "Não foi possível exportar as regras para o arquivo selecionado.",
   "ctImportRulesSuccess": "{count,plural, =1{1 regra importada com sucesso.} other{{count} regras importadas com sucesso.}}",
   "@ctImportRulesSuccess": {
     "placeholders": {
@@ -1725,6 +1735,8 @@
   "formValidationStateLetters": "UF com 2 letras",
   "formFieldLabelPassword": "Senha",
   "formPasswordDefaultHint": "Digite a senha",
+  "formPasswordShow": "Mostrar senha",
+  "formPasswordHide": "Ocultar senha",
   "formPasswordRequired": "{fieldLabel} é obrigatória.",
   "@formPasswordRequired": {
     "placeholders": {

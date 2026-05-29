@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
@@ -37,14 +39,26 @@ class _WebSocketOutboundCompressionSectionState extends State<WebSocketOutboundC
       _isPersisting = true;
       _mode = mode;
     });
+    var persisted = true;
     try {
       await _flags.setOutboundCompressionMode(mode);
+    } on Object catch (error, stackTrace) {
+      persisted = false;
+      AppLogger.error('Failed to persist outbound compression mode', error, stackTrace);
     } finally {
       if (mounted) {
         setState(() {
           _isPersisting = false;
           _mode = _flags.outboundCompressionMode;
         });
+        if (!persisted) {
+          final l10n = AppLocalizations.of(context)!;
+          SettingsFeedback.showError(
+            context: context,
+            title: l10n.modalTitleError,
+            message: l10n.settingsPersistError,
+          );
+        }
       }
     }
   }

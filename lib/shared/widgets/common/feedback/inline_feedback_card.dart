@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 
 class InlineFeedbackCard extends StatelessWidget {
   const InlineFeedbackCard({
@@ -85,9 +86,12 @@ class InlineFeedbackCard extends StatelessWidget {
                 ),
               ),
               if (onDismiss != null)
-                IconButton(
-                  icon: const Icon(FluentIcons.clear, size: 14),
-                  onPressed: onDismiss,
+                Tooltip(
+                  message: AppLocalizations.of(context)?.btnClose ?? '',
+                  child: IconButton(
+                    icon: const Icon(FluentIcons.clear, size: 14),
+                    onPressed: onDismiss,
+                  ),
                 ),
             ],
           ),

@@ -1,7 +1,7 @@
 ---
 description: Dart Style Guide - Effective Dart with modern best practices
 globs: ["lib/**/*.dart", "test/**/*.dart"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Dart Style Guide

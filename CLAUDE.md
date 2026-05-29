@@ -17,33 +17,9 @@ reinterpreting rules from memory.
 
 ## Rule Categories
 
-The list below mirrors `./.cursor/rules/rules_index.mdc`. If this section and
-the index ever diverge, follow `**rules_index.mdc**`.
-
-### Universal
-
-Use these as language-agnostic guidance:
-
-- `./.cursor/rules/general_rules.mdc`
-- `./.cursor/rules/clean_architecture.mdc`
-- `./.cursor/rules/solid_principles.mdc`
-- `./.cursor/rules/testing.mdc`
-
-### Dart and Flutter
-
-Use these only for Dart/Flutter code:
-
-- `./.cursor/rules/coding_style.mdc`
-- `./.cursor/rules/null_safety.mdc`
-- `./.cursor/rules/flutter_widgets.mdc`
-- `./.cursor/rules/ui_ux_design.mdc`
-- `./.cursor/rules/testing_dart_flutter.mdc`
-
-### Project-Specific
-
-Use these for repository-specific decisions:
-
-- `./.cursor/rules/project_specifics.mdc`
+The category list, ownership per topic, and cross-topic coordination live only
+in `./.cursor/rules/rules_index.mdc`. Read it there instead of duplicating the
+list here.
 
 ## Usage Rules
 

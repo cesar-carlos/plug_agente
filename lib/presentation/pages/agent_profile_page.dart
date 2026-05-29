@@ -195,9 +195,15 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       }
 
       _formController.applyOpenCnpjData(result.getOrThrow());
-    } catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       AppLogger.error('CNPJ lookup failed unexpectedly', '$error\n$stackTrace');
-      rethrow;
+      if (mounted) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.errorUnexpected,
+        );
+      }
     } finally {
       if (mounted) {
         _isLookingUpCnpj.value = false;
@@ -233,9 +239,15 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       }
 
       _formController.applyViaCepData(result.getOrThrow());
-    } catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       AppLogger.error('CEP lookup failed unexpectedly', '$error\n$stackTrace');
-      rethrow;
+      if (mounted) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.errorUnexpected,
+        );
+      }
     } finally {
       if (mounted) {
         _isLookingUpCep.value = false;
@@ -283,9 +295,16 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     AgentProfileSaveOutcome? outcome;
     try {
       outcome = await _resolveSaveCoordinator().save(profile);
-    } catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       AppLogger.error('Agent profile save failed unexpectedly', '$error\n$stackTrace');
-      rethrow;
+      if (mounted) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.modalTitleError,
+          message: l10n.errorUnexpected,
+        );
+      }
+      return;
     } finally {
       if (mounted) {
         _isSaving.value = false;
@@ -390,7 +409,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
                           if (viewModel.error.isNotEmpty) ...[
                             InfoBar(
                               title: Text(l10n.modalTitleError),
-                              content: Text(viewModel.error),
+                              content: SelectableText(viewModel.error),
                               severity: InfoBarSeverity.error,
                               isLong: true,
                             ),
