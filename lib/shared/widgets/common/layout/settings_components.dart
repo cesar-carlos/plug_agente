@@ -88,13 +88,14 @@ class SettingsToggleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
+    final onChanged = this.onChanged;
     final isEnabled = onChanged != null;
     final labelStyle = context.bodyStrong.copyWith(
       color: isEnabled ? null : theme.inactiveColor,
     );
     final description = this.description;
 
-    return Row(
+    final row = Row(
       children: [
         Expanded(
           child: Column(
@@ -116,8 +117,30 @@ class SettingsToggleTile extends StatelessWidget {
             ],
           ),
         ),
-        ToggleSwitch(checked: value, onChanged: onChanged),
+        ExcludeSemantics(
+          child: ToggleSwitch(checked: value, onChanged: onChanged),
+        ),
       ],
+    );
+
+    if (!isEnabled) {
+      return row;
+    }
+
+    // The whole tile acts as the toggle target so the label and description are
+    // clickable, not just the switch. Semantics on the switch are excluded to
+    // avoid a duplicated control announcement.
+    return Semantics(
+      toggled: value,
+      label: label,
+      hint: description,
+      container: true,
+      onTap: () => onChanged(!value),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onChanged(!value),
+        child: row,
+      ),
     );
   }
 }

@@ -1106,6 +1106,10 @@
       }
     }
   },
+  "configBackupRestoreFailedNoticeTitle": "A última restauração falhou",
+  "configBackupRestoreFailedNoticeBody": "Os detalhes técnicos abaixo foram salvos quando o aplicativo fechou durante a última tentativa de restauração.",
+  "configBackupRestoreFailedDetailsHeader": "Detalhes técnicos",
+  "configBackupRestoreFailedNoticeDismiss": "Dispensar",
   "configBackupButtonExport": "Exportar cópia de segurança…",
   "configBackupButtonRestore": "Restaurar a partir da cópia…",
   "configBackupExporting": "A exportar cópia de segurança…",
@@ -1345,6 +1349,8 @@
   "gsToggleStartMinimized": "Iniciar minimizado",
   "gsToggleStartMinimizedNextLaunchHint": "Aplicado na próxima inicialização do Windows.",
   "gsToggleStartMinimizedRequiresTray": "Requer suporte à bandeja neste ambiente.",
+  "gsToggleStartMinimizedRequiresStartup": "Requer \"Iniciar com o Windows\" ativado.",
+  "gsToggleStartWithWindowsAdminHint": "Pode solicitar privilégios de administrador.",
   "gsToggleMinimizeToTray": "Minimizar para bandeja",
   "gsToggleCloseToTray": "Fechar para bandeja",
   "gsSectionUpdates": "Atualizações",

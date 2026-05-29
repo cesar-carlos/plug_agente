@@ -25,6 +25,7 @@ void main() {
     bool trayBehaviorSupported = true,
     SystemSettingsErrorState? startupError,
     SystemSettingsErrorState? preferenceError,
+    SystemSettingsErrorState? themeError,
     SystemSettingsNoticeState? startupNotice,
     Locale locale = const Locale('pt'),
     void Function(bool)? onDarkThemeChanged,
@@ -54,6 +55,7 @@ void main() {
               trayBehaviorSupported: trayBehaviorSupported,
               startupError: startupError,
               preferenceError: preferenceError,
+              themeError: themeError,
               startupNotice: startupNotice,
               onDarkThemeChanged: onDarkThemeChanged ?? (_) {},
               onStartWithWindowsChanged: onStartWithWindowsChanged ?? (_) {},
@@ -129,10 +131,54 @@ void main() {
       },
     );
 
-    testWidgets('startMinimized shows next launch hint when supported', (tester) async {
-      await pumpSection(tester);
+    testWidgets('startMinimized shows next launch hint when supported and startup enabled', (tester) async {
+      await pumpSection(tester, startWithWindows: true);
 
       expect(find.text(ptL10n.gsToggleStartMinimizedNextLaunchHint), findsOneWidget);
+    });
+
+    testWidgets(
+      'startMinimized is disabled with requires-startup hint when start with Windows is off',
+      (tester) async {
+        await pumpSection(tester);
+
+        final toggle = tester.widget<ToggleSwitch>(
+          findToggleFor(ptL10n.gsToggleStartMinimized),
+        );
+        expect(toggle.onChanged, isNull);
+        expect(find.text(ptL10n.gsToggleStartMinimizedRequiresStartup), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'startMinimized is enabled when tray supported and start with Windows is on',
+      (tester) async {
+        bool? captured;
+        await pumpSection(
+          tester,
+          startWithWindows: true,
+          onStartMinimizedChanged: (v) => captured = v,
+        );
+
+        final toggle = tester.widget<ToggleSwitch>(
+          findToggleFor(ptL10n.gsToggleStartMinimized),
+        );
+        expect(toggle.onChanged, isNotNull);
+        toggle.onChanged!(true);
+        expect(captured, isTrue);
+      },
+    );
+
+    testWidgets('startWithWindows shows admin hint when supported', (tester) async {
+      await pumpSection(tester);
+
+      expect(find.text(ptL10n.gsToggleStartWithWindowsAdminHint), findsOneWidget);
+    });
+
+    testWidgets('startWithWindows hides admin hint when not supported', (tester) async {
+      await pumpSection(tester, startupSupported: false);
+
+      expect(find.text(ptL10n.gsToggleStartWithWindowsAdminHint), findsNothing);
     });
 
     testWidgets(
@@ -258,6 +304,23 @@ void main() {
         'settings.json denied',
       );
       expect(find.text(expected), findsOneWidget);
+    });
+
+    testWidgets('renders theme persistence error in the appearance section', (tester) async {
+      await pumpSection(
+        tester,
+        themeError: const SystemSettingsErrorState(
+          code: SystemSettingsErrorCode.settingsPersistenceFailed,
+          detail: 'theme write denied',
+        ),
+      );
+
+      final expected = ptL10n.gsErrorWithDetail(
+        ptL10n.gsErrorSettingsPersistenceFailed,
+        'theme write denied',
+      );
+      expect(find.text(expected), findsOneWidget);
+      expect(find.byIcon(FluentIcons.error_badge), findsOneWidget);
     });
 
     testWidgets('renders repaired startup launch notice as informational feedback', (tester) async {

@@ -1106,6 +1106,10 @@
       }
     }
   },
+  "configBackupRestoreFailedNoticeTitle": "The last restore failed",
+  "configBackupRestoreFailedNoticeBody": "The technical details below were saved when the app closed during the last restore attempt.",
+  "configBackupRestoreFailedDetailsHeader": "Technical details",
+  "configBackupRestoreFailedNoticeDismiss": "Dismiss",
   "configBackupButtonExport": "Export backup…",
   "configBackupButtonRestore": "Restore from backup…",
   "configBackupExporting": "Exporting backup…",
@@ -1345,6 +1349,8 @@
   "gsToggleStartMinimized": "Start minimized",
   "gsToggleStartMinimizedNextLaunchHint": "Applies on the next Windows startup.",
   "gsToggleStartMinimizedRequiresTray": "Requires tray support in this environment.",
+  "gsToggleStartMinimizedRequiresStartup": "Requires \"Start with Windows\" enabled.",
+  "gsToggleStartWithWindowsAdminHint": "May request administrator privileges.",
   "gsToggleMinimizeToTray": "Minimize to tray",
   "gsToggleCloseToTray": "Close to tray",
   "gsSectionUpdates": "Updates",

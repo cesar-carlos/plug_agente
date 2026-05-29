@@ -15,5 +15,12 @@ abstract class ILocalAppDataBackupService {
   /// been torn down, so the next launch can surface what went wrong.
   Future<void> writeRestoreFailureDiagnostics(Object failure);
 
+  /// Reads the diagnostics written by a previous failed restore, if any.
+  /// Returns null when there is nothing pending to surface.
+  Future<String?> readPendingRestoreFailureDiagnostics();
+
+  /// Clears the pending restore failure diagnostics once the user has seen it.
+  Future<void> clearRestoreFailureDiagnostics();
+
   void disposeStaging(RestoreStagingSnapshot staging);
 }

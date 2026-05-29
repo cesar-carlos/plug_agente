@@ -5306,6 +5306,30 @@ abstract class AppLocalizations {
   /// **'If restore fails after the app closes, details are saved as {fileName} in the app data folder.'**
   String configBackupRestoreDiagnosticsHint(String fileName);
 
+  /// No description provided for @configBackupRestoreFailedNoticeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The last restore failed'**
+  String get configBackupRestoreFailedNoticeTitle;
+
+  /// No description provided for @configBackupRestoreFailedNoticeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The technical details below were saved when the app closed during the last restore attempt.'**
+  String get configBackupRestoreFailedNoticeBody;
+
+  /// No description provided for @configBackupRestoreFailedDetailsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Technical details'**
+  String get configBackupRestoreFailedDetailsHeader;
+
+  /// No description provided for @configBackupRestoreFailedNoticeDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get configBackupRestoreFailedNoticeDismiss;
+
   /// Primary action to save a backup ZIP.
   ///
   /// In en, this message translates to:
@@ -6331,6 +6355,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requires tray support in this environment.'**
   String get gsToggleStartMinimizedRequiresTray;
+
+  /// No description provided for @gsToggleStartMinimizedRequiresStartup.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires \"Start with Windows\" enabled.'**
+  String get gsToggleStartMinimizedRequiresStartup;
+
+  /// No description provided for @gsToggleStartWithWindowsAdminHint.
+  ///
+  /// In en, this message translates to:
+  /// **'May request administrator privileges.'**
+  String get gsToggleStartWithWindowsAdminHint;
 
   /// No description provided for @gsToggleMinimizeToTray.
   ///

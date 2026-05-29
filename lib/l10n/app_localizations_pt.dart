@@ -2844,6 +2844,19 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get configBackupRestoreFailedNoticeTitle => 'A última restauração falhou';
+
+  @override
+  String get configBackupRestoreFailedNoticeBody =>
+      'Os detalhes técnicos abaixo foram salvos quando o aplicativo fechou durante a última tentativa de restauração.';
+
+  @override
+  String get configBackupRestoreFailedDetailsHeader => 'Detalhes técnicos';
+
+  @override
+  String get configBackupRestoreFailedNoticeDismiss => 'Dispensar';
+
+  @override
   String get configBackupButtonExport => 'Exportar cópia de segurança…';
 
   @override
@@ -3386,6 +3399,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gsToggleStartMinimizedRequiresTray => 'Requer suporte à bandeja neste ambiente.';
+
+  @override
+  String get gsToggleStartMinimizedRequiresStartup => 'Requer \"Iniciar com o Windows\" ativado.';
+
+  @override
+  String get gsToggleStartWithWindowsAdminHint => 'Pode solicitar privilégios de administrador.';
 
   @override
   String get gsToggleMinimizeToTray => 'Minimizar para bandeja';

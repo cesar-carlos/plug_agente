@@ -24,6 +24,7 @@ class PreferencesConfigSection extends StatelessWidget {
     this.trayBehaviorSupported = true,
     this.startupError,
     this.preferenceError,
+    this.themeError,
     this.startupNotice,
     super.key,
   });
@@ -45,11 +46,22 @@ class PreferencesConfigSection extends StatelessWidget {
   final bool trayBehaviorSupported;
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
+  final SystemSettingsErrorState? themeError;
   final SystemSettingsNoticeState? startupNotice;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // "Start minimized" only takes effect when the app is launched by the
+    // Windows auto-start entry, which exists only while "Start with Windows"
+    // is enabled. Gate the toggle on both tray support and startup being on,
+    // and explain the active constraint instead of leaving a dead setting.
+    final startMinimizedEnabled = startMinimizedSupported && startWithWindows;
+    final startMinimizedDescription = !startMinimizedSupported
+        ? l10n.gsToggleStartMinimizedRequiresTray
+        : !startWithWindows
+        ? l10n.gsToggleStartMinimizedRequiresStartup
+        : l10n.gsToggleStartMinimizedNextLaunchHint;
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
@@ -62,6 +74,14 @@ class PreferencesConfigSection extends StatelessWidget {
               value: isDarkThemeEnabled,
               onChanged: onDarkThemeChanged,
             ),
+            if (themeError != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _SystemSettingsFeedbackMessage(
+                message: _translateError(l10n, themeError!),
+                tone: AppFeedbackTone.error,
+                icon: FluentIcons.error_badge,
+              ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             const Divider(),
             const SizedBox(height: AppSpacing.lg),
@@ -69,6 +89,7 @@ class PreferencesConfigSection extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
               label: l10n.gsToggleStartWithWindows,
+              description: startupSupported ? l10n.gsToggleStartWithWindowsAdminHint : null,
               value: startWithWindows,
               onChanged: startupSupported ? onStartWithWindowsChanged : null,
             ),
@@ -98,11 +119,9 @@ class PreferencesConfigSection extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
               label: l10n.gsToggleStartMinimized,
-              description: startMinimizedSupported
-                  ? l10n.gsToggleStartMinimizedNextLaunchHint
-                  : l10n.gsToggleStartMinimizedRequiresTray,
+              description: startMinimizedDescription,
               value: startMinimized,
-              onChanged: startMinimizedSupported ? onStartMinimizedChanged : null,
+              onChanged: startMinimizedEnabled ? onStartMinimizedChanged : null,
             ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(

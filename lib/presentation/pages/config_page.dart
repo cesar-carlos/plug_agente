@@ -441,6 +441,7 @@ class _ConfigPageState extends State<ConfigPage> {
             trayBehaviorSupported: supportsTray,
             startupError: systemSettingsProvider.startupError,
             preferenceError: systemSettingsProvider.preferenceError,
+            themeError: themeProvider.persistenceError,
             startupNotice: systemSettingsProvider.startupNotice,
             isAutoUpdateAvailable: isAutoUpdateAvailable,
             autoUpdateUnavailableMessage: autoUpdateUnavailableMessage,
@@ -492,6 +493,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.trayBehaviorSupported,
     required this.startupError,
     required this.preferenceError,
+    required this.themeError,
     required this.startupNotice,
     required this.isAutoUpdateAvailable,
     required this.autoUpdateUnavailableMessage,
@@ -528,6 +530,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final bool trayBehaviorSupported;
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
+  final SystemSettingsErrorState? themeError;
   final SystemSettingsNoticeState? startupNotice;
   final bool isAutoUpdateAvailable;
   final String? autoUpdateUnavailableMessage;
@@ -579,6 +582,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             trayBehaviorSupported: widget.trayBehaviorSupported,
             startupError: widget.startupError,
             preferenceError: widget.preferenceError,
+            themeError: widget.themeError,
             startupNotice: widget.startupNotice,
             onDarkThemeChanged: widget.onDarkThemeChanged,
             onStartWithWindowsChanged: widget.onStartWithWindowsChanged,

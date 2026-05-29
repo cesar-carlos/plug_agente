@@ -429,9 +429,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
   @override
   Future<Result<void>> applyRestore(RestoreStagingSnapshot staging) async {
     try {
-      _deleteIfExists(
-        File(p.join(_storageContext.appDirectoryPath, AppConstants.lastRestoreErrorFileName)),
-      );
+      _deleteIfExists(_restoreFailureDiagnosticsFile());
 
       final targetDb = File(_storageContext.databaseFilePath);
       final targetSettings = File(_storageContext.settingsFilePath);
@@ -498,6 +496,37 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
     return RestoreFailureDiagnostics.writeFromFailure(
       storage: _storageContext,
       failure: failure,
+    );
+  }
+
+  @override
+  Future<String?> readPendingRestoreFailureDiagnostics() async {
+    try {
+      final file = _restoreFailureDiagnosticsFile();
+      if (!file.existsSync()) {
+        return null;
+      }
+      final content = await file.readAsString();
+      return content.trim().isEmpty ? null : content;
+    } on Object catch (e, st) {
+      developer.log(
+        'failed to read ${AppConstants.lastRestoreErrorFileName}',
+        name: 'local_app_data_backup_service',
+        error: e,
+        stackTrace: st,
+      );
+      return null;
+    }
+  }
+
+  @override
+  Future<void> clearRestoreFailureDiagnostics() async {
+    _deleteIfExists(_restoreFailureDiagnosticsFile());
+  }
+
+  File _restoreFailureDiagnosticsFile() {
+    return File(
+      p.join(_storageContext.appDirectoryPath, AppConstants.lastRestoreErrorFileName),
     );
   }
 

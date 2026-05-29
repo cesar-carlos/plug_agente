@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
@@ -27,6 +28,31 @@ class BackupConfigSection extends StatefulWidget {
 class _BackupConfigSectionState extends State<BackupConfigSection> {
   bool _busy = false;
   String? _busySemanticsLabel;
+  String? _pendingRestoreFailure;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadPendingRestoreFailure());
+  }
+
+  Future<void> _loadPendingRestoreFailure() async {
+    if (!getIt.isRegistered<ILocalAppDataBackupService>()) {
+      return;
+    }
+    final diagnostics = await getIt<ILocalAppDataBackupService>().readPendingRestoreFailureDiagnostics();
+    if (!mounted || diagnostics == null) {
+      return;
+    }
+    setState(() => _pendingRestoreFailure = diagnostics);
+  }
+
+  Future<void> _dismissRestoreFailure() async {
+    setState(() => _pendingRestoreFailure = null);
+    if (getIt.isRegistered<ILocalAppDataBackupService>()) {
+      await getIt<ILocalAppDataBackupService>().clearRestoreFailureDiagnostics();
+    }
+  }
 
   String _failureMessage(Object failure, AppLocalizations l10n) {
     if (failure is domain_failures.Failure) {
@@ -186,6 +212,40 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_pendingRestoreFailure case final String diagnostics) ...[
+              InfoBar(
+                key: const ValueKey('restore_failure_notice'),
+                title: Text(l10n.configBackupRestoreFailedNoticeTitle),
+                severity: InfoBarSeverity.error,
+                isLong: true,
+                content: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.configBackupRestoreFailedNoticeBody),
+                    const SizedBox(height: AppSpacing.sm),
+                    Expander(
+                      header: Text(l10n.configBackupRestoreFailedDetailsHeader),
+                      content: SelectableText(
+                        diagnostics,
+                        key: const ValueKey('restore_failure_details'),
+                        style: context.captionText,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: AppButton(
+                        key: const ValueKey('restore_failure_dismiss_button'),
+                        label: l10n.configBackupRestoreFailedNoticeDismiss,
+                        isPrimary: false,
+                        onPressed: () => unawaited(_dismissRestoreFailure()),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             SettingsSectionTitle(title: l10n.configBackupSectionTitle),
             const SizedBox(height: AppSpacing.md),
             Text(l10n.configBackupIntro, style: context.bodyText),

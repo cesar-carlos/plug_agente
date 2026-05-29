@@ -2839,6 +2839,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get configBackupRestoreFailedNoticeTitle => 'The last restore failed';
+
+  @override
+  String get configBackupRestoreFailedNoticeBody =>
+      'The technical details below were saved when the app closed during the last restore attempt.';
+
+  @override
+  String get configBackupRestoreFailedDetailsHeader => 'Technical details';
+
+  @override
+  String get configBackupRestoreFailedNoticeDismiss => 'Dismiss';
+
+  @override
   String get configBackupButtonExport => 'Export backup…';
 
   @override
@@ -3378,6 +3391,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gsToggleStartMinimizedRequiresTray => 'Requires tray support in this environment.';
+
+  @override
+  String get gsToggleStartMinimizedRequiresStartup => 'Requires \"Start with Windows\" enabled.';
+
+  @override
+  String get gsToggleStartWithWindowsAdminHint => 'May request administrator privileges.';
 
   @override
   String get gsToggleMinimizeToTray => 'Minimize to tray';

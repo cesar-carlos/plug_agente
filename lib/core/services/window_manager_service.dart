@@ -292,12 +292,17 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
   void onWindowMinimize() {
     if (_minimizeToTray) {
       unawaited(
-        hide().catchError((Object e) {
+        _hideToTray().catchError((Object e) {
           _logger.e('Failed to hide window on minimize', error: e);
         }),
       );
     }
     _onMinimize?.call();
+  }
+
+  Future<void> _hideToTray() async {
+    await hide();
+    await windowManager.setSkipTaskbar(true);
   }
 
   @override
