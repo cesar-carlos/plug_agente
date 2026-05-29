@@ -179,8 +179,12 @@ class ConnectionFailure extends Failure {
          defaultCode: 'CONNECTION_ERROR',
        );
 
+  /// Connection failures are transient by default, but the mapper marks
+  /// non-retryable cases (authentication, driver-not-found, connect timeout)
+  /// with `context['retryable'] == false`. Honor that explicit signal so
+  /// `isTransient` stays consistent with the retry decision.
   @override
-  bool get isTransient => true;
+  bool get isTransient => context['retryable'] as bool? ?? true;
 }
 
 class QueryExecutionFailure extends Failure {

@@ -3,9 +3,10 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:result_dart/result_dart.dart';
 
-class ActiveConfigResolver {
+class ActiveConfigResolver implements IQueryConfigSource {
   ActiveConfigResolver(
     this._repository,
     this._settingsStore,
@@ -13,6 +14,20 @@ class ActiveConfigResolver {
 
   final IAgentConfigRepository _repository;
   final IAppSettingsStore _settingsStore;
+
+  @override
+  Future<Result<Config>> resolveConfigForQuery(String? configId) {
+    final normalized = _normalizeConfigId(configId);
+    if (normalized != null) {
+      return resolveExplicit(normalized, metadataOnly: true);
+    }
+    return resolveActiveConfig();
+  }
+
+  @override
+  Future<Result<Config>> resolveActiveConfig() {
+    return resolveActiveOrFallback(metadataOnly: true);
+  }
 
   String? getActiveConfigId() => _normalizeConfigId(
     _settingsStore.getString(AppConstants.activeConfigIdSettingsKey),

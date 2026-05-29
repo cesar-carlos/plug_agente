@@ -65,14 +65,30 @@ class OdbcAdaptiveBufferCache {
     expiredKeys.forEach(_entries.remove);
   }
 
+  static final RegExp _sqlStringLiteral = RegExp("'(?:''|[^'])*'");
+  static final RegExp _sqlNumberLiteral = RegExp(r'\b\d+(?:\.\d+)?\b');
+  static final RegExp _whitespaceRun = RegExp(r'\s+');
+
+  /// Connection-string secrets (`PWD`/`PASSWORD`) must not be retained as part
+  /// of the in-memory cache key. Stripping them keeps DSN/host/database
+  /// isolation while avoiding credential exposure in the live entry map.
+  static final RegExp _connectionSecret = RegExp(
+    r'(pwd|password)\s*=\s*[^;]*',
+    caseSensitive: false,
+  );
+
   static String _cacheKey(String connectionString, String sql) {
     final normalizedSql = sql
-        .replaceAll(RegExp("'(?:''|[^'])*'"), '?')
-        .replaceAll(RegExp(r'\b\d+(?:\.\d+)?\b'), '?')
-        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(_sqlStringLiteral, '?')
+        .replaceAll(_sqlNumberLiteral, '?')
+        .replaceAll(_whitespaceRun, ' ')
         .trim()
         .toLowerCase();
-    return '$connectionString::$normalizedSql';
+    final redactedConnection = connectionString.replaceAll(
+      _connectionSecret,
+      'pwd=<redacted>',
+    );
+    return '$redactedConnection::$normalizedSql';
   }
 }
 

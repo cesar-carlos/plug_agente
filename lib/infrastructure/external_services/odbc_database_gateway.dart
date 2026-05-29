@@ -5,9 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:odbc_fast/odbc_fast.dart' as odbc show DatabaseType;
-import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
-import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
@@ -21,42 +19,36 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
-import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
-import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
-import 'package:plug_agente/infrastructure/config/odbc_result_encoding_config.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
-import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
+import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
+import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_batch_transaction_manager.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_bulk_insert_executor.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_connection_string_rewriter.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
-import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
+import 'package:plug_agente/infrastructure/external_services/query_execution_outcome.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
-import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
-
-class _QueryExecutionOutcome {
-  const _QueryExecutionOutcome.success(this.response) : error = null;
-
-  const _QueryExecutionOutcome.failure(this.error) : response = null;
-
-  final QueryResponse? response;
-  final Object? error;
-
-  bool get isSuccess => response != null;
-}
 
 class _BatchExecutionContext {
   const _BatchExecutionContext({
@@ -81,37 +73,6 @@ class _BatchExecutionContext {
   final bool nativeCompatibleAcquire;
 }
 
-class _BatchTransactionStart {
-  const _BatchTransactionStart(this.transactionId);
-
-  final int? transactionId;
-}
-
-class _BatchTransactionGuard {
-  _BatchTransactionGuard(this.transactionId);
-
-  final int? transactionId;
-  bool _closed = false;
-
-  bool get isActive => transactionId != null && !_closed;
-
-  Future<void> rollback(
-    Future<void> Function(int transactionId) rollback,
-  ) async {
-    final id = transactionId;
-    if (id == null || _closed) {
-      return;
-    }
-
-    _closed = true;
-    await rollback(id);
-  }
-
-  void markCommitted() {
-    _closed = true;
-  }
-}
-
 class _BatchConnectionState {
   _BatchConnectionState(this.connectionId);
 
@@ -129,7 +90,7 @@ class _BatchConnectionState {
 /// - Performance metrics collection
 class OdbcDatabaseGateway implements IDatabaseGateway {
   OdbcDatabaseGateway(
-    Object configContext,
+    this._configSource,
     this._service,
     IConnectionPool connectionPool,
     this._retryManager,
@@ -138,9 +99,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     FeatureFlags? featureFlags,
     DirectOdbcConnectionLimiter? directConnectionLimiter,
     ISqlInvestigationCollector? sqlInvestigation,
-  }) : _activeConfigResolver = configContext is ActiveConfigResolver ? configContext : null,
-       _configRepository = configContext is IAgentConfigRepository ? configContext : null,
-       _featureFlags = featureFlags,
+  }) : _featureFlags = featureFlags,
        _connectionManager = OdbcGatewayConnectionManager(
          service: _service,
          connectionPool: connectionPool,
@@ -158,48 +117,58 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
        ),
        _readOnlyBatchParallelSemaphore = PoolSemaphore(_safeReadOnlyBatchParallelism(_settings.poolSize)),
        _sqlInvestigation = sqlInvestigation,
-       _uuid = const Uuid();
+       _nativeCompatiblePolicy = NativeCompatibleAcquirePolicy(featureFlags: featureFlags),
+       _optionsResolver = OdbcConnectionOptionsResolver(_settings),
+       _resultEncodingExecutor = OdbcResultEncodingExecutor(_service),
+       _txManager = OdbcBatchTransactionManager(service: _service, metrics: _metrics),
+       _uuid = const Uuid() {
+    _statementExecutor = OdbcStatementExecutor(
+      service: _service,
+      metrics: _metrics,
+      markConnectionForDiscard: _connectionManager.markConnectionForDiscard,
+    );
+    _queryRunner = OdbcQueryRunner(
+      service: _service,
+      metrics: _metrics,
+      statementExecutor: _statementExecutor,
+      resultEncodingExecutor: _resultEncodingExecutor,
+      markConnectionForDiscard: _connectionManager.markConnectionForDiscard,
+    );
+    _bulkInsertExecutor = OdbcBulkInsertExecutor(
+      connectionManager: _connectionManager,
+      optionsResolver: _optionsResolver,
+      service: _service,
+      metrics: _metrics,
+    );
+  }
   final OdbcService _service;
-  final ActiveConfigResolver? _activeConfigResolver;
-  final IAgentConfigRepository? _configRepository;
+  final IQueryConfigSource _configSource;
   final IRetryManager _retryManager;
   final MetricsCollector _metrics;
   final IOdbcConnectionSettings _settings;
   final OdbcGatewayConnectionManager _connectionManager;
   final FeatureFlags? _featureFlags;
   final ISqlInvestigationCollector? _sqlInvestigation;
+  final NativeCompatibleAcquirePolicy _nativeCompatiblePolicy;
+  final OdbcConnectionOptionsResolver _optionsResolver;
+  final OdbcResultEncodingExecutor _resultEncodingExecutor;
+  final OdbcBatchTransactionManager _txManager;
+  late final OdbcStatementExecutor _statementExecutor;
+  late final OdbcQueryRunner _queryRunner;
+  late final OdbcBulkInsertExecutor _bulkInsertExecutor;
   final Uuid _uuid;
   final PoolSemaphore _readOnlyBatchParallelSemaphore;
   bool _initialized = false;
-  final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
-  final Map<String, ConnectionAcquireOptions> _connectionOptionsCache = <String, ConnectionAcquireOptions>{};
+  Future<Result<void>>? _initialization;
   final ConnectionCircuitBreakerCache _circuitBreakers = ConnectionCircuitBreakerCache(
     factory: () => ConnectionCircuitBreaker(
       failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
       resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
     ),
   );
-  String? _cachedNativeCompatibleSqlAllowlistRaw;
-  Set<String> _cachedNativeCompatibleSqlAllowlist = const <String>{};
-  DateTime? _cachedNativeCompatibleSqlAllowlistExpiresAt;
   static const int _multiResultSqlLogPreviewChars = 120;
-  static const int _maxPreparedStatementsPerBatchConnection = 64;
   static const int _bulkInsertRecommendationCommandThreshold = 50;
-  static const int _asyncRequestPendingStatus = 0;
-  static const int _asyncRequestReadyStatus = 1;
-  static const int _asyncRequestErrorStatus = -1;
-  static const int _asyncRequestCancelledStatus = -2;
-  static const Duration _asyncRequestPollInterval = Duration(milliseconds: 20);
-  static const String _nativeCompatibleSqlAllowlistEnv = 'ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST';
-  static const Duration _nativeCompatibleSqlAllowlistCacheTtl = Duration(seconds: 10);
-  static const Duration _transactionRollbackTimeout = Duration(seconds: 15);
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
-  static final List<RegExp> _connectionStringDatabasePatterns = [
-    RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
-    RegExp(r'(dbn)\s*=\s*[^;]*', caseSensitive: false),
-    RegExp(r'(initial\s+catalog)\s*=\s*[^;]*', caseSensitive: false),
-  ];
-  ResultEncoding _lastLoggedResultEncoding = ResultEncoding.rowMajor;
 
   static String _previewSqlForLog(String sql) {
     final collapsed = sql.replaceAll(_previewSqlWhitespaceCollapse, ' ').trim();
@@ -220,46 +189,19 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return _circuitBreakers.getOrCreate(connectionString);
   }
 
-  ConnectionAcquireOptions get _connectionOptions => _connectionOptionsForTimeout(null);
-
-  ConnectionAcquireOptions _connectionOptionsForTimeout(Duration? timeout) {
-    final key = [
-      timeout?.inMilliseconds ?? 0,
-      _settings.loginTimeoutSeconds,
-      _settings.maxResultBufferMb,
-    ].join(':');
-    return _connectionOptionsCache.putIfAbsent(
-      key,
-      () {
-        if (timeout == null) {
-          return OdbcConnectionOptionsBuilder.forQueryExecution(_settings);
-        }
-        return OdbcConnectionOptionsBuilder.forQueryExecutionWithTimeout(
-          _settings,
-          queryTimeout: timeout,
-        );
-      },
-    );
-  }
-
-  /// Options for transactional batch connections.
-  ///
-  /// Uses [OdbcConnectionOptionsBuilder.forTransactionalBatch] which sets
-  /// `autoReconnectOnConnectionLost` to false, preventing silent transaction
-  /// loss if the connection drops mid-transaction.
-  ConnectionAcquireOptions _transactionalConnectionOptionsForTimeout(Duration? timeout) {
-    return OdbcConnectionOptionsBuilder.forTransactionalBatch(
-      _settings,
-      queryTimeout: timeout,
-    );
-  }
-
   /// Ensures ODBC environment is initialized before operations.
-  Future<Result<void>> _ensureInitialized() async {
+  ///
+  /// Concurrent callers share a single in-flight initialization future so the
+  /// underlying `OdbcService.initialize()` runs at most once. The memoized
+  /// future is cleared on failure so a later request can retry.
+  Future<Result<void>> _ensureInitialized() {
     if (_initialized) {
-      return const Success(unit);
+      return Future<Result<void>>.value(const Success(unit));
     }
+    return _initialization ??= _initializeOnce();
+  }
 
+  Future<Result<void>> _initializeOnce() async {
     developer.log('Initializing ODBC environment', name: 'database_gateway');
 
     final initResult = await _service.initialize();
@@ -274,6 +216,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         return const Success(unit);
       },
       (error) {
+        _initialization = null;
         developer.log(
           'ODBC initialization failed',
           name: 'database_gateway',
@@ -295,45 +238,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   Future<Result<Config>> _resolveConfigForQuery(String? configId) {
-    final normalized = configId?.trim();
-    final resolver = _activeConfigResolver;
-    if (resolver != null) {
-      if (normalized != null && normalized.isNotEmpty) {
-        return resolver.resolveExplicit(
-          normalized,
-          metadataOnly: true,
-        );
-      }
-      return _resolveActiveConfig();
-    }
-
-    if (normalized != null && normalized.isNotEmpty) {
-      return _configRepository!.getByIdMetadata(normalized);
-    }
-    return _configRepository!.getCurrentConfigMetadata();
+    return _configSource.resolveConfigForQuery(configId);
   }
 
   Future<Result<Config>> _resolveActiveConfig() {
-    final resolver = _activeConfigResolver;
-    if (resolver != null) {
-      return resolver.resolveActiveOrFallback(
-        metadataOnly: true,
-      );
-    }
-    return _configRepository!.getCurrentConfigMetadata();
+    return _configSource.resolveActiveConfig();
   }
 
   String _odbcErrorMessage(Object error) => OdbcErrorInspector.message(error);
-
-  String _bufferExpansionErrorMessage(Object error) {
-    if (error is domain.Failure) {
-      final rawOdbcMessage = error.context['odbc_message'];
-      if (rawOdbcMessage is String && rawOdbcMessage.trim().isNotEmpty) {
-        return rawOdbcMessage;
-      }
-    }
-    return _odbcErrorMessage(error);
-  }
 
   Exception _asException(
     Object? error, {
@@ -346,18 +258,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       return Exception(fallbackMessage);
     }
     return Exception(error.toString());
-  }
-
-  bool _isBufferTooSmallError(Object error) {
-    if (error is domain.Failure && error.context['reason'] == OdbcContextConstants.bufferTooSmallReason) {
-      return true;
-    }
-    if (error is domain.Failure && OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(error.message)) {
-      return true;
-    }
-    return OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
-      _bufferExpansionErrorMessage(error),
-    );
   }
 
   void _recordSqlInvestigationExecutionFailure({
@@ -424,113 +324,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
-  static final RegExp _dmlPrefix = RegExp(
-    r'^(insert|update|delete|merge)\s',
-    caseSensitive: false,
-  );
-
-  // Returns true when the query is DML so that affectedRows carries meaningful
-  // semantics. SELECT/WITH return false to avoid misleading row count reporting.
-  bool _isDmlQuery(String query) => _dmlPrefix.hasMatch(query.trimLeft());
-
-  QueryResponse _createSuccessResponse(
-    QueryRequest request,
-    QueryResult queryResult, {
-    DateTime? startedAt,
-  }) {
-    final rawData = OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
-      queryResult,
-    );
-    final paginationResponse = OdbcGatewayQueryResultMapper.buildPaginationResponse(
-      request.pagination,
-      rawData,
-    );
-    final data = paginationResponse == null ? rawData : rawData.take(request.pagination!.pageSize).toList();
-
-    final isDml = _isDmlQuery(request.query);
-    final finishedAt = DateTime.now();
-    return QueryResponse(
-      id: _uuid.v4(),
-      requestId: request.id,
-      agentId: request.agentId,
-      data: data,
-      // rowCount carries SQLRowCount for DML (affected rows) and rows-fetched
-      // for SELECT; data.length is always 0 for plain DML without OUTPUT/RETURNING.
-      affectedRows: isDml ? queryResult.rowCount : null,
-      startedAt: startedAt,
-      timestamp: finishedAt,
-      columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
-        queryResult.columns,
-      ),
-      pagination: paginationResponse,
-    );
-  }
-
-  /// Builds a multi-result [QueryResponse]. Top-level [QueryResponse.affectedRows]
-  /// sums row-count items when present; otherwise falls back to the first result
-  /// set row count (legacy single-field compatibility for RPC).
-  QueryResponse _createSuccessResponseFromMulti(
-    QueryRequest request,
-    QueryResultMulti queryResult, {
-    DateTime? startedAt,
-  }) {
-    final resultSets = <QueryResultSet>[];
-    final items = <QueryResponseItem>[];
-    var resultSetIndex = 0;
-    var totalAffectedRows = 0;
-
-    for (var itemIndex = 0; itemIndex < queryResult.items.length; itemIndex++) {
-      final item = queryResult.items[itemIndex];
-      if (item.resultSet != null) {
-        final resultSet = QueryResultSet(
-          index: resultSetIndex,
-          rows: OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
-            item.resultSet!,
-          ),
-          rowCount: item.resultSet!.rowCount,
-          columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
-            item.resultSet!.columns,
-          ),
-        );
-        resultSets.add(resultSet);
-        items.add(
-          QueryResponseItem.resultSet(
-            index: itemIndex,
-            resultSet: resultSet,
-          ),
-        );
-        resultSetIndex++;
-        continue;
-      }
-
-      final rowCount = item.rowCount ?? 0;
-      totalAffectedRows += rowCount;
-      items.add(
-        QueryResponseItem.rowCount(
-          index: itemIndex,
-          rowCount: rowCount,
-        ),
-      );
-    }
-
-    final primaryResultSet = resultSets.isNotEmpty
-        ? resultSets.first
-        : const QueryResultSet(index: 0, rows: [], rowCount: 0);
-
-    return QueryResponse(
-      id: _uuid.v4(),
-      requestId: request.id,
-      agentId: request.agentId,
-      data: primaryResultSet.rows,
-      affectedRows: totalAffectedRows > 0 ? totalAffectedRows : primaryResultSet.rowCount,
-      startedAt: startedAt,
-      timestamp: DateTime.now(),
-      columnMetadata: primaryResultSet.columnMetadata,
-      resultSets: resultSets,
-      items: items,
-    );
-  }
-
   @override
   Future<Result<bool>> testConnection(String connectionString) async {
     final initResult = await _ensureInitialized();
@@ -544,7 +337,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
       final connResult = await _service.connect(
         connectionString,
-        options: _connectionOptions.toOdbcConnectionOptions(),
+        options: _optionsResolver.defaultOptions.toOdbcConnectionOptions(),
       );
 
       return connResult.fold(
@@ -614,8 +407,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             );
           },
           (domainFailure) => Failure(
-            domain.ConfigurationFailure(
-              'Failed to load database configuration: $domainFailure',
+            domain.ConfigurationFailure.withContext(
+              message: 'Failed to load database configuration',
+              cause: domainFailure,
+              context: {
+                'reason': OdbcContextConstants.configurationLoadFailedReason,
+                'operation': 'resolve_config_for_query',
+                if (request.configId != null) 'config_id': request.configId,
+              },
             ),
           ),
         );
@@ -779,8 +578,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       preparedExecution: preparedExecution,
     );
 
-    final baseOptions = _connectionOptionsForTimeout(timeout);
-    final hintedOptions = _hintedConnectionOptions(
+    final baseOptions = _optionsResolver.forTimeout(timeout);
+      final hintedOptions = _optionsResolver.hintedFor(
       connectionString: connectionString,
       sql: preparedExecution.sql,
       baseOptions: baseOptions,
@@ -807,8 +606,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       stopwatch,
       preparedExecution: preparedExecution,
       timeout: timeout,
-      allowNativeCompatibleAcquire: _shouldUseNativeCompatibleAcquire(
-        databaseConfig: databaseConfig,
+      allowNativeCompatibleAcquire: _nativeCompatiblePolicy.shouldUseAcquire(
+        databaseType: databaseConfig.databaseType,
         request: request,
         preparedExecution: preparedExecution,
         acquireOptions: null,
@@ -831,7 +630,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final effectiveDeadline = deadline ?? _deadlineFor(timeout);
     final poolAcquireOptions =
         acquireOptions ??
-        _connectionOptionsForTimeout(
+        _optionsResolver.forTimeout(
           _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
         );
     final poolResult = allowNativeCompatibleAcquire
@@ -890,7 +689,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final effectiveOptions = poolAcquireOptions;
 
     try {
-      final outcome = await _runQueryExecutionWithTimeout(
+      final outcome = await _queryRunner.runWithTimeout(
         connId: connId,
         request: request,
         preparedExecution: preparedExecution,
@@ -928,7 +727,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           );
         }
 
-        if (allowAdaptiveRetry && _isBufferTooSmallError(error)) {
+        if (allowAdaptiveRetry && _optionsResolver.isBufferTooSmallError(error)) {
           _metrics.recordOdbcBufferExpansion();
           _metrics.recordDiagnosticReason(
             category: 'query',
@@ -942,11 +741,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           );
           final currentBufferBytes =
               effectiveOptions.maxResultBufferBytes ?? ConnectionConstants.defaultMaxResultBufferBytes;
-          _adaptiveBufferCache.rememberExpandedBuffer(
+          _optionsResolver.rememberExpandedBuffer(
             connectionString: connectionString,
             sql: preparedExecution.sql,
             currentBufferBytes: currentBufferBytes,
-            errorMessage: _bufferExpansionErrorMessage(error),
+            error: error,
           );
           developer.log(
             'Buffer too small in pooled query, retrying with expanded buffer',
@@ -962,7 +761,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             stopwatch,
             preparedExecution: preparedExecution,
             timeout: timeout,
-            acquireOptions: _buildExpandedConnectionOptions(
+            acquireOptions: _optionsResolver.expandedFor(
               error,
               baseOptions: effectiveOptions,
               currentBufferBytes: currentBufferBytes,
@@ -1081,67 +880,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
   }
 
-  bool _shouldUseNativeCompatibleAcquire({
-    required DatabaseConfig databaseConfig,
-    required QueryRequest request,
-    required OdbcPreparedQueryExecution preparedExecution,
-    required ConnectionAcquireOptions? acquireOptions,
-    required Duration? timeout,
-  }) {
-    if (!(_featureFlags?.enableOdbcExperimentalDriverAdaptivePooling ?? false)) {
-      return false;
-    }
-    if (timeout != null) {
-      return false;
-    }
-    if (acquireOptions != null || request.expectMultipleResults || _hasNamedParameters(preparedExecution)) {
-      return false;
-    }
-    final isSafeResultShape =
-        request.pagination != null ||
-        _isNativeCompatibleProbeQuery(preparedExecution.sql) ||
-        _isNativeCompatibleExplicitlyLimitedSelect(preparedExecution.sql) ||
-        _isNativeCompatibleAllowlistedSql(preparedExecution.sql);
-    if (!isSafeResultShape) {
-      return false;
-    }
-    return switch (databaseConfig.databaseType) {
-      DatabaseType.sqlServer || DatabaseType.postgresql => true,
-      DatabaseType.sybaseAnywhere => false,
-    };
-  }
-
-  bool _shouldUseNativeCompatibleTransactionalBatch({
-    required DatabaseConfig databaseConfig,
-    required List<SqlCommand> commands,
-  }) {
-    if (!(_featureFlags?.enableOdbcExperimentalDriverAdaptivePooling ?? false) || commands.isEmpty) {
-      return false;
-    }
-    if (!commands.every((command) => _isNativeCompatibleTransactionalDml(command.sql))) {
-      return false;
-    }
-    return switch (databaseConfig.databaseType) {
-      DatabaseType.sqlServer || DatabaseType.postgresql => true,
-      DatabaseType.sybaseAnywhere => false,
-    };
-  }
-
-  bool _isNativeCompatibleTransactionalDml(String sql) {
-    final normalized = _normalizeNativeCompatibleSql(sql);
-    final startsWithSupportedDml =
-        normalized.startsWith('insert ') ||
-        normalized.startsWith('update ') ||
-        normalized.startsWith('delete ') ||
-        normalized.startsWith('merge ');
-    if (!startsWithSupportedDml) {
-      return false;
-    }
-
-    final padded = ' $normalized ';
-    return !padded.contains(' output ') && !padded.contains(' returning ');
-  }
-
   bool _shouldFallbackTransactionalNativePoolToDirect(
     _BatchExecutionContext context,
     Object error,
@@ -1183,90 +921,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       error: error,
       stage: stage,
     );
-  }
-
-  bool _isNativeCompatibleProbeQuery(String sql) {
-    final normalized = SqlValidator.removeComments(
-      sql,
-    ).replaceAll(RegExp(r'\s+'), ' ').trim().replaceFirst(RegExp(r';+$'), '').toLowerCase();
-    return RegExp(
-      r'^select\s+(?:1|0|null|current_timestamp|getdate\(\)|@@version|version\(\))(?:\s+(?:as\s+)?[a-z_][a-z0-9_]*)?$',
-    ).hasMatch(normalized);
-  }
-
-  bool _isNativeCompatibleExplicitlyLimitedSelect(String sql) {
-    final normalized = SqlValidator.removeComments(
-      sql,
-    ).replaceAll(RegExp(r'\s+'), ' ').trim().replaceFirst(RegExp(r';+$'), '').toLowerCase();
-    if (!normalized.startsWith('select ') && !normalized.startsWith('with ')) {
-      return false;
-    }
-    if (_hasNativeCompatibleWildcardProjection(normalized)) {
-      return false;
-    }
-    final limit = _extractExplicitRowLimit(normalized);
-    return limit != null && limit <= 100;
-  }
-
-  bool _hasNativeCompatibleWildcardProjection(String normalizedSql) {
-    return RegExp(
-      r'\bselect\s+(?:top\s*\(?\s*\d+\s*\)?\s+)?\*[\s,]',
-    ).hasMatch('$normalizedSql ');
-  }
-
-  int? _extractExplicitRowLimit(String normalizedSql) {
-    final match = RegExp(
-      r'(?:\btop\s*\(?\s*(\d+)\s*\)?|\blimit\s+(\d+)\b|\bfetch\s+first\s+(\d+)\s+rows?\s+only\b)',
-    ).firstMatch(normalizedSql);
-    if (match == null) {
-      return null;
-    }
-    for (var i = 1; i <= match.groupCount; i++) {
-      final value = match.group(i);
-      if (value != null) {
-        return int.tryParse(value);
-      }
-    }
-    return null;
-  }
-
-  bool _isNativeCompatibleAllowlistedSql(String sql) {
-    final allowlist = _nativeCompatibleSqlAllowlist();
-    if (allowlist.isEmpty) {
-      return false;
-    }
-    final normalizedSql = _normalizeNativeCompatibleSql(sql);
-    if (_hasNativeCompatibleWildcardProjection(normalizedSql)) {
-      return false;
-    }
-    return allowlist.contains(normalizedSql);
-  }
-
-  Set<String> _nativeCompatibleSqlAllowlist() {
-    final now = DateTime.now();
-    final expiresAt = _cachedNativeCompatibleSqlAllowlistExpiresAt;
-    final rawAllowlist = AppEnvironment.get(_nativeCompatibleSqlAllowlistEnv);
-    if (expiresAt != null && now.isBefore(expiresAt) && rawAllowlist == _cachedNativeCompatibleSqlAllowlistRaw) {
-      return _cachedNativeCompatibleSqlAllowlist;
-    }
-
-    _cachedNativeCompatibleSqlAllowlistRaw = rawAllowlist;
-    _cachedNativeCompatibleSqlAllowlistExpiresAt = now.add(_nativeCompatibleSqlAllowlistCacheTtl);
-    if (rawAllowlist == null || rawAllowlist.trim().isEmpty) {
-      return _cachedNativeCompatibleSqlAllowlist = const <String>{};
-    }
-
-    return _cachedNativeCompatibleSqlAllowlist = rawAllowlist
-        .split('|')
-        .map(_normalizeNativeCompatibleSql)
-        .where((value) => value.isNotEmpty)
-        .toSet();
-  }
-
-  String _normalizeNativeCompatibleSql(String sql) {
-    return SqlValidator.removeComments(
-      sql,
-    ).replaceAll(RegExp(r'\s+'), ' ').trim().replaceFirst(RegExp(r';+$'), '').toLowerCase();
   }
 
   @override
@@ -1314,10 +968,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       final context = contextResult.getOrNull()!;
       final connectionState = _BatchConnectionState(context.connectionId);
       var recycleAfterRelease = false;
-      _BatchTransactionGuard? transaction;
+      BatchTransactionGuard? transaction;
       try {
         final batchAccessMode = _inferBatchAccessMode(commands);
-        final beginResult = await _beginBatchTransactionIfNeeded(
+        final beginResult = await _txManager.beginIfNeeded(
           connectionId: connectionState.connectionId!,
           transactionEnabled: options.transaction,
           lockTimeout: _transactionLockTimeout(
@@ -1358,7 +1012,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               level: 800,
             );
           }
-          transaction = _BatchTransactionGuard(beginResult.getOrNull()!.transactionId);
+          transaction = BatchTransactionGuard(beginResult.getOrNull()!.transactionId);
 
           final commandResult = await _executeBatchCommands(
             context: context,
@@ -1391,9 +1045,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               effectiveTimeout: effectiveTimeout,
               commandCount: commands.length,
             );
-            final commitResult = await _commitBatchTransaction(
+            final commitResult = await _txManager.commit(
               connectionId: connectionState.connectionId!,
-              transaction: transaction,
+              guard: transaction,
               deadline: context.deadline,
             );
             if (commitResult.isError()) {
@@ -1418,13 +1072,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       } on Object catch (error, stackTrace) {
         final activeConnectionId = connectionState.connectionId;
         if (options.transaction) {
-          final rollbackTimeout = _rollbackTimeoutFromDeadline(context.deadline);
+          final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
           await transaction?.rollback(
             (transactionId) async {
               if (activeConnectionId == null) {
                 return;
               }
-              await _rollbackTransactionIfNeeded(
+              await _txManager.rollbackIfNeeded(
                 activeConnectionId,
                 transactionId,
                 timeout: rollbackTimeout,
@@ -1568,8 +1222,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final configResult = await _resolveActiveConfig();
     if (configResult.isError()) {
       return Failure(
-        domain.ConfigurationFailure(
-          'Failed to load database configuration for read-only batch execution',
+        domain.ConfigurationFailure.withContext(
+          message: 'Failed to load database configuration for read-only batch execution',
+          cause: configResult.exceptionOrNull(),
+          context: {
+            'reason': OdbcContextConstants.configurationLoadFailedReason,
+            'operation': 'resolve_active_config_read_only_batch',
+          },
         ),
       );
     }
@@ -1776,8 +1435,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final deadline = timeout == null ? null : DateTime.now().add(timeout);
     final useNativeCompatibleTransaction =
         allowNativeCompatibleTransaction &&
-        _shouldUseNativeCompatibleTransactionalBatch(
-          databaseConfig: localConfig,
+        _nativeCompatiblePolicy.shouldUseTransactionalBatch(
+          databaseType: localConfig.databaseType,
           commands: commands,
         );
 
@@ -1801,8 +1460,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
         options: isTransactional
-            ? _transactionalConnectionOptionsForTimeout(remainingTimeout).toOdbcConnectionOptions()
-            : _connectionOptionsForTimeout(remainingTimeout).toOdbcConnectionOptions(),
+            ? _optionsResolver.transactionalForTimeout(remainingTimeout).toOdbcConnectionOptions()
+            : _optionsResolver.forTimeout(remainingTimeout).toOdbcConnectionOptions(),
       );
       return connectResult.fold(
         (connection) {
@@ -1839,8 +1498,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     final remainingTimeout = _remainingTimeoutFromDeadline(deadline) ?? timeout;
     final connectionOptions = isTransactional
-        ? _transactionalConnectionOptionsForTimeout(remainingTimeout)
-        : _connectionOptionsForTimeout(remainingTimeout);
+        ? _optionsResolver.transactionalForTimeout(remainingTimeout)
+        : _optionsResolver.forTimeout(remainingTimeout);
     final poolResult = useNativeCompatibleTransaction
         ? await _connectionManager.acquireNativeCompatiblePooledConnection(
             connectionString,
@@ -1956,76 +1615,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
-  Future<Result<_BatchTransactionStart>> _beginBatchTransactionIfNeeded({
-    required String connectionId,
-    required bool transactionEnabled,
-    required Duration? lockTimeout,
-    required TransactionAccessMode accessMode,
-  }) async {
-    if (!transactionEnabled) {
-      return const Success(_BatchTransactionStart(null));
-    }
-
-    final beginResult = await _service.beginTransaction(
-      connectionId,
-      savepointDialect: SavepointDialect.auto,
-      accessMode: accessMode,
-      lockTimeout: lockTimeout,
-    );
-    if (beginResult.isError()) {
-      final error = beginResult.exceptionOrNull()!;
-      return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'Failed to start transaction',
-          cause: error,
-          context: {
-            'reason': OdbcContextConstants.transactionFailedReason,
-            'operation': 'transaction_begin',
-            'error': _odbcErrorMessage(error),
-          },
-        ),
-      );
-    }
-
-    return Success(_BatchTransactionStart(beginResult.getOrNull()));
-  }
-
-  Future<Result<void>> _commitBatchTransaction({
-    required String connectionId,
-    required _BatchTransactionGuard transaction,
-    DateTime? deadline,
-  }) async {
-    final transactionId = transaction.transactionId;
-    if (transactionId == null) {
-      return const Success(unit);
-    }
-
-    final commitResult = await _service.commitTransaction(
-      connectionId,
-      transactionId,
-    );
-    if (commitResult.isError()) {
-      final error = commitResult.exceptionOrNull()!;
-      final rollbackTimeout = _rollbackTimeoutFromDeadline(deadline);
-      await transaction.rollback(
-        (id) => _rollbackTransactionIfNeeded(connectionId, id, timeout: rollbackTimeout),
-      );
-      return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'Failed to commit transaction',
-          cause: error,
-          context: {
-            'reason': OdbcContextConstants.transactionFailedReason,
-            'operation': 'transaction_commit',
-            'error': _odbcErrorMessage(error),
-          },
-        ),
-      );
-    }
-
-    transaction.markCommitted();
-    return const Success(unit);
-  }
 
   Future<Result<List<SqlCommandResult>>> _executeBatchCommands({
     required _BatchExecutionContext context,
@@ -2033,11 +1622,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     required String agentId,
     required List<SqlCommand> commands,
     required SqlExecutionOptions options,
-    required _BatchTransactionGuard transaction,
+    required BatchTransactionGuard transaction,
     String? sourceRpcRequestId,
   }) async {
     final results = <SqlCommandResult>[];
-    final repeatedPreparedKeys = _collectRepeatedPreparedKeys(commands);
+    final repeatedPreparedKeys = OdbcQueryRunner.collectRepeatedPreparedKeys(commands);
     final preparedStatements = <String, int>{};
 
     try {
@@ -2047,9 +1636,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         if (validation.isError()) {
           final failure = validation.exceptionOrNull()! as domain.Failure;
           if (options.transaction) {
-            final rollbackTimeout = _rollbackTimeoutFromDeadline(context.deadline);
+            final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
             await transaction.rollback(
-              (transactionId) => _rollbackTransactionIfNeeded(
+              (transactionId) => _txManager.rollbackIfNeeded(
                 context.connectionId,
                 transactionId,
                 timeout: rollbackTimeout,
@@ -2086,18 +1675,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         );
         final remainingTimeout = _remainingTimeout(context.deadline);
 
-        Future<_QueryExecutionOutcome> executeCurrentCommand() async {
+        Future<QueryExecutionOutcome> executeCurrentCommand() async {
           final currentConnectionId = connectionState.connectionId;
           if (currentConnectionId == null) {
-            return _QueryExecutionOutcome.failure(
+            return QueryExecutionOutcome.failure(
               StateError('batch_connection_unavailable'),
             );
           }
 
-          final key = _preparedStatementKeyFor(preparedExecution);
+          final key = OdbcQueryRunner.preparedStatementKeyFor(preparedExecution);
           final usePrepared = repeatedPreparedKeys.contains(key);
           return usePrepared
-              ? _runPreparedBatchExecutionWithTimeout(
+              ? _queryRunner.runPreparedBatch(
                   connectionId: currentConnectionId,
                   request: commandRequest,
                   preparedExecution: preparedExecution,
@@ -2105,7 +1694,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                   statementKey: key,
                   timeout: remainingTimeout,
                 )
-              : _runQueryExecutionWithTimeout(
+              : _queryRunner.runWithTimeout(
                   connId: currentConnectionId,
                   request: commandRequest,
                   preparedExecution: preparedExecution,
@@ -2131,12 +1720,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             );
 
             if (options.transaction) {
-              final rollbackTimeout = _rollbackTimeoutFromDeadline(context.deadline);
+              final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
               await transaction.rollback(
                 (transactionId) async {
                   final activeConnId = connectionState.connectionId;
                   if (activeConnId == null) return;
-                  await _rollbackTransactionIfNeeded(
+                  await _txManager.rollbackIfNeeded(
                     activeConnId,
                     transactionId,
                     timeout: rollbackTimeout,
@@ -2231,12 +1820,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           );
         } on TimeoutException catch (error) {
           if (options.transaction) {
-            final rollbackTimeout = _rollbackTimeoutFromDeadline(context.deadline);
+            final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
             await transaction.rollback(
               (transactionId) async {
                 final activeConnId = connectionState.connectionId;
                 if (activeConnId == null) return;
-                await _rollbackTransactionIfNeeded(
+                await _txManager.rollbackIfNeeded(
                   activeConnId,
                   transactionId,
                   timeout: rollbackTimeout,
@@ -2275,7 +1864,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     } finally {
       final activeConnectionId = connectionState.connectionId;
       if (activeConnectionId != null) {
-        await _closePreparedStatements(
+        await _statementExecutor.closePreparedStatements(
           activeConnectionId,
           preparedStatements.values,
         );
@@ -2297,20 +1886,20 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return failure.context['connectionFailed'] == true;
   }
 
-  Future<_QueryExecutionOutcome> _retryBatchCommandAfterConnectionFailure({
+  Future<QueryExecutionOutcome> _retryBatchCommandAfterConnectionFailure({
     required _BatchExecutionContext context,
     required _BatchConnectionState connectionState,
     required Map<String, int> preparedStatements,
     required domain.Failure failure,
-    required Future<_QueryExecutionOutcome> Function() executeCommand,
+    required Future<QueryExecutionOutcome> Function() executeCommand,
   }) async {
     final currentConnectionId = connectionState.connectionId;
     if (currentConnectionId == null) {
-      return _QueryExecutionOutcome.failure(failure);
+      return QueryExecutionOutcome.failure(failure);
     }
 
     if (preparedStatements.isNotEmpty) {
-      await _closePreparedStatements(
+      await _statementExecutor.closePreparedStatements(
         currentConnectionId,
         preparedStatements.values,
       );
@@ -2333,14 +1922,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     final reacquireResult = await _connectionManager.acquirePooledConnection(
       context.connectionString,
-      options: _connectionOptionsForTimeout(
+      options: _optionsResolver.forTimeout(
         _remainingTimeoutFromDeadline(context.deadline),
       ),
       deadline: context.deadline,
       context: {'operation': 'batch_reacquire_connection'},
     );
     if (reacquireResult.isError()) {
-      return _QueryExecutionOutcome.failure(
+      return QueryExecutionOutcome.failure(
         reacquireResult.exceptionOrNull() ?? failure,
       );
     }
@@ -2404,7 +1993,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     Duration? timeout,
     String? database,
   }) async {
-    final validationFailure = _validateBulkInsertRequest(request);
+    final validationFailure = OdbcBulkInsertExecutor.validate(request);
     if (validationFailure != null) {
       return Failure(validationFailure);
     }
@@ -2421,195 +2010,26 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               localConfig,
               databaseOverride: database,
             );
-            return _executeBulkInsertDirect(
+            return _bulkInsertExecutor.executeDirect(
               request,
               connectionString,
               timeout: timeout,
             );
           },
           (domainFailure) => Failure(
-            domain.ConfigurationFailure(
-              'Failed to get config: $domainFailure',
+            domain.ConfigurationFailure.withContext(
+              message: 'Failed to load database configuration for bulk insert',
+              cause: domainFailure,
+              context: {
+                'reason': OdbcContextConstants.configurationLoadFailedReason,
+                'operation': 'resolve_active_config_bulk_insert',
+              },
             ),
           ),
         );
       },
       Failure.new,
     );
-  }
-
-  domain.Failure? _validateBulkInsertRequest(BulkInsertRequest request) {
-    if (request.table.trim().isEmpty) {
-      return domain.ValidationFailure('Bulk insert table is required');
-    }
-    if (request.columns.isEmpty) {
-      return domain.ValidationFailure('Bulk insert requires at least one column');
-    }
-    if (request.rows.isEmpty) {
-      return domain.ValidationFailure('Bulk insert requires at least one row');
-    }
-    for (final column in request.columns) {
-      if (column.name.trim().isEmpty) {
-        return domain.ValidationFailure('Bulk insert column names must not be empty');
-      }
-    }
-    for (var i = 0; i < request.rows.length; i++) {
-      if (request.rows[i].length != request.columns.length) {
-        return domain.ValidationFailure.withContext(
-          message: 'Bulk insert row length does not match column count',
-          context: {
-            'row_index': i,
-            'row_length': request.rows[i].length,
-            'column_count': request.columns.length,
-          },
-        );
-      }
-    }
-    return null;
-  }
-
-  Future<Result<int>> _executeBulkInsertDirect(
-    BulkInsertRequest request,
-    String connectionString, {
-    Duration? timeout,
-  }) async {
-    final deadline = _deadlineFor(timeout);
-    final leaseResult = await _connectionManager.acquireDirectLease(
-      operation: 'bulk_insert_direct',
-      deadline: deadline,
-    );
-    if (leaseResult.isError()) {
-      return Failure(leaseResult.exceptionOrNull()!);
-    }
-    final directLease = leaseResult.getOrThrow();
-    var directLeaseReleased = false;
-    void releaseDirectLease() {
-      if (directLeaseReleased) {
-        return;
-      }
-      directLeaseReleased = true;
-      directLease.release();
-    }
-
-    try {
-      final connectResult = await _connectionManager.connectSafely(
-        connectionString,
-        options: _connectionOptionsForTimeout(
-          _remainingTimeoutFromDeadline(deadline) ?? timeout,
-        ).toOdbcConnectionOptions(),
-      );
-      return await connectResult.fold(
-        (connection) async {
-          try {
-            final builder = _buildNativeBulkInsert(request);
-            final operation = _service.bulkInsert(
-              connection.id,
-              builder.tableName,
-              builder.columnNames,
-              builder.build(),
-              builder.rowCount,
-            );
-            final remaining = _remainingTimeoutFromDeadline(deadline) ?? timeout;
-            final result = remaining == null ? await operation : await operation.timeout(remaining);
-            return result.fold(
-              Success.new,
-              (error) => Failure(
-                OdbcFailureMapper.mapQueryError(
-                  error,
-                  operation: 'bulk_insert_direct',
-                ),
-              ),
-            );
-          } on TimeoutException catch (error) {
-            return Failure(
-              domain.QueryExecutionFailure.withContext(
-                message: 'Bulk insert execution timeout',
-                cause: error,
-                context: {
-                  'timeout': true,
-                  'timeout_stage': 'sql',
-                  'stage': 'bulk_insert',
-                  'reason': RpcSqlBudgetConstants.queryTimeoutReason,
-                  if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
-                },
-              ),
-            );
-          } finally {
-            await _connectionManager.disconnectOwnedConnectionAndReleaseLease(
-              connectionId: connection.id,
-              directLease: directLease,
-              operation: 'bulk_insert_direct_disconnect',
-            );
-          }
-        },
-        (error) {
-          if (_looksLikeTimeoutError(error)) {
-            _metrics.recordConnectTimeout();
-          }
-          return Failure(
-            OdbcFailureMapper.mapConnectionError(
-              error,
-              operation: 'connect_direct',
-            ),
-          );
-        },
-      );
-    } finally {
-      releaseDirectLease();
-    }
-  }
-
-  BulkInsertBuilder _buildNativeBulkInsert(BulkInsertRequest request) {
-    final builder = BulkInsertBuilder()..table(request.table);
-    for (final column in request.columns) {
-      builder.addColumn(
-        column.name,
-        _toNativeBulkColumnType(column.type),
-        nullable: column.nullable,
-        maxLen: column.maxLen,
-      );
-    }
-    for (final row in request.rows) {
-      builder.addRow(_coerceBulkInsertRow(row, request.columns));
-    }
-    return builder;
-  }
-
-  BulkColumnType _toNativeBulkColumnType(BulkInsertColumnType type) {
-    return switch (type) {
-      BulkInsertColumnType.i32 => BulkColumnType.i32,
-      BulkInsertColumnType.i64 => BulkColumnType.i64,
-      BulkInsertColumnType.text => BulkColumnType.text,
-      BulkInsertColumnType.decimal => BulkColumnType.decimal,
-      BulkInsertColumnType.binary => BulkColumnType.binary,
-      BulkInsertColumnType.timestamp => BulkColumnType.timestamp,
-    };
-  }
-
-  List<dynamic> _coerceBulkInsertRow(
-    List<dynamic> row,
-    List<BulkInsertColumn> columns,
-  ) {
-    return List<dynamic>.generate(row.length, (index) {
-      final value = row[index];
-      final column = columns[index];
-      if (value == null || column.type != BulkInsertColumnType.timestamp) {
-        return value;
-      }
-      if (value is BulkTimestamp) {
-        return value;
-      }
-      if (value is DateTime) {
-        return BulkTimestamp.fromDateTime(value);
-      }
-      if (value is String) {
-        final parsed = DateTime.tryParse(value);
-        if (parsed != null) {
-          return BulkTimestamp.fromDateTime(parsed);
-        }
-      }
-      return value;
-    });
   }
 
   Future<Result<int>> _executeNonQueryWithRetry(
@@ -2642,7 +2062,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     final deadline = _deadlineFor(timeout);
     final poolResult = await _connectionManager.acquirePooledConnection(
       connectionString,
-      options: _connectionOptionsForTimeout(timeout),
+      options: _optionsResolver.forTimeout(timeout),
       deadline: deadline,
     );
 
@@ -2730,338 +2150,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
   }
 
-  Future<_QueryExecutionOutcome> _runQueryExecutionWithTimeout({
-    required String connId,
-    required QueryRequest request,
-    required OdbcPreparedQueryExecution preparedExecution,
-    required String connectionString,
-    Duration? timeout,
-    bool preferPreparedTimeout = true,
-    String executionMode = 'pooled',
-  }) async {
-    final stopwatch = Stopwatch()..start();
-    final usesMultiResultExecution = OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
-      request,
-      preparedExecution,
-    );
-    final usesPreparedTimeout = _shouldUsePreparedTimeoutPath(
-      preparedExecution: preparedExecution,
-      timeout: timeout,
-      preferPreparedTimeout: preferPreparedTimeout,
-      usesMultiResultExecution: usesMultiResultExecution,
-    );
-    try {
-      if (usesPreparedTimeout) {
-        return await _runPreparedQueryExecution(
-          connectionId: connId,
-          request: request,
-          preparedExecution: preparedExecution,
-          timeout: timeout,
-        );
-      }
-
-      if (timeout != null && !usesMultiResultExecution && !_hasNamedParameters(preparedExecution)) {
-        final startedAt = DateTime.now();
-        final asyncResult = await _runNativeAsyncQueryWithTimeout(
-          connectionId: connId,
-          query: preparedExecution.sql,
-          timeout: timeout,
-        );
-        if (asyncResult.isSuccess()) {
-          return _QueryExecutionOutcome.success(
-            _createSuccessResponse(request, asyncResult.getOrThrow(), startedAt: startedAt),
-          );
-        }
-
-        final asyncError = asyncResult.exceptionOrNull();
-        if (asyncError is! UnsupportedFeatureError) {
-          return _QueryExecutionOutcome.failure(asyncError);
-        }
-      }
-
-      if (timeout == null) {
-        return await _runQueryExecution(connId, request, preparedExecution);
-      }
-
-      return await _runQueryExecution(
-        connId,
-        request,
-        preparedExecution,
-      ).timeout(timeout);
-    } on TimeoutException catch (error) {
-      _metrics.recordQueryTimeout();
-      _metrics.recordOdbcQueryTimeoutByStage('query');
-      _metrics.recordDiagnosticReason(
-        category: 'timeout',
-        reason: RpcSqlBudgetConstants.queryTimeoutReason,
-      );
-      if (!usesPreparedTimeout) {
-        await _cancelConnectionForTimeout(connId, connectionString);
-      }
-      developer.log(
-        'SQL query timed out before completion',
-        name: 'database_gateway',
-        level: 900,
-        error: error,
-      );
-      rethrow;
-    } finally {
-      stopwatch.stop();
-      _metrics.recordSqlExecutionTime(
-        stopwatch.elapsed,
-        mode: executionMode,
-      );
-    }
-  }
-
-  bool _shouldUsePreparedTimeoutPath({
-    required OdbcPreparedQueryExecution preparedExecution,
-    required Duration? timeout,
-    required bool preferPreparedTimeout,
-    required bool usesMultiResultExecution,
-  }) {
-    return timeout != null &&
-        preferPreparedTimeout &&
-        !usesMultiResultExecution &&
-        _hasNamedParameters(preparedExecution);
-  }
-
-  bool _hasNamedParameters(OdbcPreparedQueryExecution preparedExecution) {
-    return preparedExecution.parameters?.isNotEmpty ?? false;
-  }
-
-  Set<String> _collectRepeatedPreparedKeys(
-    List<SqlCommand> commands,
-  ) {
-    final counts = <String, int>{};
-    for (final command in commands) {
-      final key = _preparedStatementKeyFor(
-        OdbcPreparedQueryExecution(
-          sql: command.sql,
-          parameters: command.params,
-        ),
-      );
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-
-    return counts.entries.where((entry) => entry.value > 1).map((entry) => entry.key).toSet();
-  }
-
-  String _preparedStatementKeyFor(
-    OdbcPreparedQueryExecution preparedExecution,
-  ) {
-    final parameterNames = List<String>.of(
-      preparedExecution.parameters?.keys ?? const <String>[],
-    );
-    parameterNames.sort();
-    return '${preparedExecution.sql}::${parameterNames.join(',')}';
-  }
-
-  Future<_QueryExecutionOutcome> _runPreparedBatchExecutionWithTimeout({
-    required String connectionId,
-    required QueryRequest request,
-    required OdbcPreparedQueryExecution preparedExecution,
-    required Map<String, int> preparedStatements,
-    required String statementKey,
-    Duration? timeout,
-  }) async {
-    final deadline = _deadlineFor(timeout);
-    final stmtId = await _getOrPrepareStatement(
-      connectionId: connectionId,
-      preparedExecution: preparedExecution,
-      preparedStatements: preparedStatements,
-      statementKey: statementKey,
-      timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
-    );
-    if (stmtId.isError()) {
-      return _QueryExecutionOutcome.failure(
-        stmtId.exceptionOrNull() ?? StateError('prepare_statement_failed'),
-      );
-    }
-
-    final preparedStatementId = stmtId.getOrThrow();
-    final startedAt = DateTime.now();
-    final result = await _executePreparedStatementWithTimeout(
-      connectionId: connectionId,
-      preparedExecution: preparedExecution,
-      statementId: preparedStatementId,
-      timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
-    );
-    return result.fold(
-      (queryResult) => _QueryExecutionOutcome.success(
-        _createSuccessResponse(request, queryResult, startedAt: startedAt),
-      ),
-      _QueryExecutionOutcome.failure,
-    );
-  }
-
-  Future<_QueryExecutionOutcome> _runPreparedQueryExecution({
-    required String connectionId,
-    required QueryRequest request,
-    required OdbcPreparedQueryExecution preparedExecution,
-    Duration? timeout,
-  }) async {
-    final deadline = _deadlineFor(timeout);
-    final preparedStatements = <String, int>{};
-    final statementKey = _preparedStatementKeyFor(preparedExecution);
-    try {
-      final stmtId = await _getOrPrepareStatement(
-        connectionId: connectionId,
-        preparedExecution: preparedExecution,
-        preparedStatements: preparedStatements,
-        statementKey: statementKey,
-        timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
-      );
-      if (stmtId.isError()) {
-        return _QueryExecutionOutcome.failure(
-          stmtId.exceptionOrNull() ?? StateError('prepare_statement_failed'),
-        );
-      }
-
-      final startedAt = DateTime.now();
-      final result = await _executePreparedStatementWithTimeout(
-        connectionId: connectionId,
-        preparedExecution: preparedExecution,
-        statementId: stmtId.getOrThrow(),
-        timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
-      );
-      return result.fold(
-        (queryResult) => _QueryExecutionOutcome.success(
-          _createSuccessResponse(request, queryResult, startedAt: startedAt),
-        ),
-        _QueryExecutionOutcome.failure,
-      );
-    } finally {
-      await _closePreparedStatements(
-        connectionId,
-        preparedStatements.values,
-      );
-    }
-  }
-
-  Future<Result<int>> _getOrPrepareStatement({
-    required String connectionId,
-    required OdbcPreparedQueryExecution preparedExecution,
-    required Map<String, int> preparedStatements,
-    required String statementKey,
-    Duration? timeout,
-  }) async {
-    final existingStmtId = preparedStatements[statementKey];
-    if (existingStmtId != null) {
-      preparedStatements.remove(statementKey);
-      preparedStatements[statementKey] = existingStmtId;
-      _metrics.recordPreparedStatementReuse();
-      return Success(existingStmtId);
-    }
-
-    _metrics.recordPreparedStatementCacheMiss();
-
-    final timeoutMs = timeout?.inMilliseconds ?? 0;
-    final prepareStopwatch = Stopwatch()..start();
-    final prepareResult = preparedExecution.parameters != null && preparedExecution.parameters!.isNotEmpty
-        ? await _service.prepareNamed(
-            connectionId,
-            preparedExecution.sql,
-            timeoutMs: timeoutMs,
-          )
-        : await _service.prepare(
-            connectionId,
-            preparedExecution.sql,
-            timeoutMs: timeoutMs,
-          );
-    prepareStopwatch.stop();
-    _metrics.recordPreparedPrepareTime(prepareStopwatch.elapsed);
-
-    return prepareResult.fold(
-      (stmtId) {
-        if (preparedStatements.length >= _maxPreparedStatementsPerBatchConnection) {
-          final oldestKey = preparedStatements.keys.first;
-          final oldestStmtId = preparedStatements.remove(oldestKey);
-          if (oldestStmtId != null) {
-            unawaited(_closePreparedStatements(connectionId, <int>[oldestStmtId]));
-          }
-        }
-        preparedStatements[statementKey] = stmtId;
-        return Success(stmtId);
-      },
-      Failure.new,
-    );
-  }
-
-  Future<Result<QueryResult>> _executePreparedStatement({
-    required String connectionId,
-    required OdbcPreparedQueryExecution preparedExecution,
-    required int stmtId,
-    StatementOptions? options,
-  }) {
-    final parameters = preparedExecution.parameters;
-    if (parameters != null && parameters.isNotEmpty) {
-      return _service.executePreparedNamed(
-        connectionId,
-        stmtId,
-        parameters,
-        options,
-      );
-    }
-
-    return _service.executePrepared(
-      connectionId,
-      stmtId,
-      null,
-      options,
-    );
-  }
-
-  Future<Result<QueryResult>> _executePreparedStatementWithTimeout({
-    required String connectionId,
-    required OdbcPreparedQueryExecution preparedExecution,
-    required int statementId,
-    Duration? timeout,
-  }) async {
-    final statementOptions = timeout == null ? null : StatementOptions(timeout: timeout);
-    final execution = _executePreparedStatement(
-      connectionId: connectionId,
-      preparedExecution: preparedExecution,
-      stmtId: statementId,
-      options: statementOptions,
-    );
-    if (timeout == null) {
-      return execution;
-    }
-
-    return execution.timeout(
-      timeout,
-      onTimeout: () async {
-        _connectionManager.markConnectionForDiscard(connectionId);
-        unawaited(
-          _cancelPreparedStatementForTimeout(
-            connectionId: connectionId,
-            statementId: statementId,
-          ),
-        );
-        throw TimeoutException('Prepared statement execution deadline exceeded');
-      },
-    );
-  }
-
-  Future<void> _closePreparedStatements(
-    String connectionId,
-    Iterable<int> stmtIds,
-  ) async {
-    for (final stmtId in stmtIds) {
-      try {
-        await _service.closeStatement(connectionId, stmtId);
-      } on Object catch (error) {
-        developer.log(
-          'Failed to close prepared statement after execution',
-          name: 'database_gateway',
-          level: 900,
-          error: error,
-        );
-      }
-    }
-  }
-
   Future<Result<QueryResult>> _runNonQueryWithTimeout({
     required String connectionId,
     required String query,
@@ -3086,7 +2174,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       }
 
       if (parameters == null || parameters.isEmpty) {
-        final asyncResult = await _runNativeAsyncQueryWithTimeout(
+        final asyncResult = await _statementExecutor.runNativeAsyncQueryWithTimeout(
           connectionId: connectionId,
           query: query,
           timeout: timeout,
@@ -3111,9 +2199,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         parameters: parameters,
       );
       final preparedStatements = <String, int>{};
-      final statementKey = _preparedStatementKeyFor(preparedExecution);
+      final statementKey = OdbcQueryRunner.preparedStatementKeyFor(preparedExecution);
       try {
-        final stmtId = await _getOrPrepareStatement(
+        final stmtId = await _statementExecutor.getOrPrepareStatement(
           connectionId: connectionId,
           preparedExecution: preparedExecution,
           preparedStatements: preparedStatements,
@@ -3126,14 +2214,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           return Failure(failure);
         }
 
-        return await _executePreparedStatementWithTimeout(
+        return await _statementExecutor.executePreparedStatementWithTimeout(
           connectionId: connectionId,
           preparedExecution: preparedExecution,
           statementId: stmtId.getOrThrow(),
           timeout: timeout,
         );
       } finally {
-        await _closePreparedStatements(
+        await _statementExecutor.closePreparedStatements(
           connectionId,
           preparedStatements.values,
         );
@@ -3159,142 +2247,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         mode: executionMode,
       );
     }
-  }
-
-  Future<Result<QueryResult>> _runNativeAsyncQueryWithTimeout({
-    required String connectionId,
-    required String query,
-    required Duration timeout,
-  }) async {
-    final startResult = await _service.executeAsyncStart(
-      connectionId,
-      query,
-    );
-    if (startResult.isError()) {
-      return Failure(startResult.exceptionOrNull()!);
-    }
-
-    final requestId = startResult.getOrThrow();
-    final deadline = DateTime.now().add(timeout);
-
-    try {
-      while (true) {
-        final pollResult = await _service.asyncPoll(requestId);
-        if (pollResult.isError()) {
-          return Failure(pollResult.exceptionOrNull()!);
-        }
-
-        final status = pollResult.getOrThrow();
-        switch (status) {
-          case _asyncRequestReadyStatus:
-            final result = await _service.asyncGetResult(requestId);
-            return result.fold(Success.new, Failure.new);
-          case _asyncRequestPendingStatus:
-            final remaining = deadline.difference(DateTime.now());
-            if (remaining <= Duration.zero) {
-              await _cancelAsyncRequestForTimeout(
-                connectionId: connectionId,
-                requestId: requestId,
-              );
-              throw TimeoutException('Async SQL execution deadline exceeded');
-            }
-            final delay = remaining < _asyncRequestPollInterval ? remaining : _asyncRequestPollInterval;
-            await Future<void>.delayed(delay);
-            continue;
-          case _asyncRequestErrorStatus:
-          case _asyncRequestCancelledStatus:
-            final result = await _service.asyncGetResult(requestId);
-            if (result.isError()) {
-              return Failure(result.exceptionOrNull()!);
-            }
-            return Failure(
-              Exception(
-                'Async SQL request completed with status $status without error payload',
-              ),
-            );
-          default:
-            return Failure(
-              Exception('Unexpected async SQL request status: $status'),
-            );
-        }
-      }
-    } finally {
-      await _freeAsyncRequestSafely(requestId);
-    }
-  }
-
-  Future<void> _cancelConnectionForTimeout(
-    String connectionId,
-    String _,
-  ) async {
-    _connectionManager.markConnectionForDiscard(connectionId);
-    _metrics.recordTimeoutCancelFailure();
-    developer.log(
-      'SQL query timed out; connection marked for discard because no statement handle is available to cancel',
-      name: 'database_gateway',
-      level: 900,
-    );
-  }
-
-  Future<void> _cancelPreparedStatementForTimeout({
-    required String connectionId,
-    required int statementId,
-  }) async {
-    final cancelResult = await _service.cancelStatement(
-      connectionId,
-      statementId,
-    );
-    cancelResult.fold(
-      (_) {
-        _metrics.recordTimeoutCancelSuccess();
-      },
-      (error) {
-        _connectionManager.markConnectionForDiscard(connectionId);
-        _metrics.recordTimeoutCancelFailure();
-        developer.log(
-          'Failed to cancel prepared statement after timeout',
-          name: 'database_gateway',
-          level: 900,
-          error: error,
-        );
-      },
-    );
-  }
-
-  Future<void> _cancelAsyncRequestForTimeout({
-    required String connectionId,
-    required int requestId,
-  }) async {
-    _connectionManager.markConnectionForDiscard(connectionId);
-    final cancelResult = await _service.asyncCancel(requestId);
-    cancelResult.fold(
-      (_) {
-        _metrics.recordTimeoutCancelSuccess();
-      },
-      (error) {
-        _metrics.recordTimeoutCancelFailure();
-        developer.log(
-          'Failed to cancel async SQL request after timeout',
-          name: 'database_gateway',
-          level: 900,
-          error: error,
-        );
-      },
-    );
-  }
-
-  Future<void> _freeAsyncRequestSafely(int requestId) async {
-    final freeResult = await _service.asyncFree(requestId);
-    if (freeResult.isSuccess()) {
-      return;
-    }
-
-    developer.log(
-      'Failed to free async SQL request after completion',
-      name: 'database_gateway',
-      level: 900,
-      error: freeResult.exceptionOrNull(),
-    );
   }
 
   Duration? _remainingTimeout(DateTime? deadline) {
@@ -3332,37 +2284,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     }
     final remaining = deadline.difference(DateTime.now());
     return remaining <= Duration.zero ? Duration.zero : remaining;
-  }
-
-  Future<void> _rollbackTransactionIfNeeded(
-    String connectionId,
-    int? transactionId, {
-    Duration timeout = _transactionRollbackTimeout,
-  }) async {
-    if (transactionId == null) {
-      return;
-    }
-    _metrics.recordTransactionRollbackAttempt();
-    try {
-      final rollback = await _service.rollbackTransaction(connectionId, transactionId).timeout(timeout);
-      if (rollback.isError()) {
-        _metrics.recordTransactionRollbackFailure();
-        developer.log(
-          'Failed to rollback transaction',
-          name: 'database_gateway',
-          level: 900,
-          error: rollback.exceptionOrNull(),
-        );
-      }
-    } on TimeoutException catch (error) {
-      _metrics.recordTransactionRollbackFailure();
-      developer.log(
-        'Rollback timed out after ${timeout.inSeconds}s; connection will be discarded',
-        name: 'database_gateway',
-        level: 900,
-        error: error,
-      );
-    }
   }
 
   Future<Result<QueryResponse>> _executeQueryWithoutPool(
@@ -3404,7 +2325,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
 
     final effectiveOptions =
         options ??
-        _connectionOptionsForTimeout(
+        _optionsResolver.forTimeout(
           _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
         );
 
@@ -3430,7 +2351,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
           }
 
           try {
-            final outcome = await _runQueryExecutionWithTimeout(
+            final outcome = await _queryRunner.runWithTimeout(
               connId: connection.id,
               request: request,
               preparedExecution: preparedExecution,
@@ -3440,7 +2361,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
             );
             if (!outcome.isSuccess) {
               final error = outcome.error!;
-              if (_isBufferTooSmallError(error)) {
+              if (_optionsResolver.isBufferTooSmallError(error)) {
                 _metrics.recordOdbcBufferExpansion();
                 _metrics.recordDiagnosticReason(
                   category: 'query',
@@ -3448,11 +2369,11 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                 );
                 final currentBufferBytes =
                     effectiveOptions.maxResultBufferBytes ?? ConnectionConstants.defaultMaxResultBufferBytes;
-                _adaptiveBufferCache.rememberExpandedBuffer(
+                _optionsResolver.rememberExpandedBuffer(
                   connectionString: connectionString,
                   sql: preparedExecution.sql,
                   currentBufferBytes: currentBufferBytes,
-                  errorMessage: _bufferExpansionErrorMessage(error),
+                  error: error,
                 );
 
                 if (allowAdaptiveRetry) {
@@ -3468,7 +2389,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
                     connectionString,
                     stopwatch,
                     preparedExecution: preparedExecution,
-                    options: _buildExpandedConnectionOptions(
+                    options: _optionsResolver.expandedFor(
                       error,
                       baseOptions: effectiveOptions,
                       currentBufferBytes: currentBufferBytes,
@@ -3612,7 +2533,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     try {
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
-        options: _connectionOptionsForTimeout(
+        options: _optionsResolver.forTimeout(
           _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
         ).toOdbcConnectionOptions(),
       );
@@ -3680,111 +2601,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     DatabaseConfig databaseConfig, {
     String? databaseOverride,
   }) {
-    final override = databaseOverride?.trim();
-    final resolved = config.resolveConnectionString().trim();
-
-    if (override != null && override.isNotEmpty) {
-      final overriddenDatabaseConfig = DatabaseConfig(
-        driverName: databaseConfig.driverName,
-        username: databaseConfig.username,
-        password: databaseConfig.password,
-        database: override,
-        server: databaseConfig.server,
-        port: databaseConfig.port,
-        databaseType: databaseConfig.databaseType,
-      );
-      if (resolved.isNotEmpty) {
-        return _overrideDatabaseInConnectionString(resolved, override);
-      }
-      return OdbcConnectionBuilder.build(overriddenDatabaseConfig);
-    }
-
-    if (resolved.isNotEmpty) {
-      return resolved;
-    }
-    return OdbcConnectionBuilder.build(databaseConfig);
-  }
-
-  String _overrideDatabaseInConnectionString(
-    String connectionString,
-    String database,
-  ) {
-    var updated = connectionString;
-
-    var replaced = false;
-    for (final pattern in _connectionStringDatabasePatterns) {
-      if (pattern.hasMatch(updated)) {
-        updated = updated.replaceAllMapped(pattern, (match) {
-          replaced = true;
-          return '${match.group(1)}=$database';
-        });
-      }
-    }
-
-    if (replaced) {
-      return updated;
-    }
-
-    final suffix = updated.endsWith(';') ? '' : ';';
-    return '$updated${suffix}DATABASE=$database';
-  }
-
-  ConnectionAcquireOptions _buildExpandedConnectionOptions(
-    Object error, {
-    required ConnectionAcquireOptions baseOptions,
-    required int currentBufferBytes,
-  }) {
-    final expandedBufferBytes = OdbcGatewayBufferExpansion.calculateExpandedBufferBytes(
-      currentBufferBytes: currentBufferBytes,
-      errorMessage: _bufferExpansionErrorMessage(error),
-    );
-    final baseInitialBufferBytes =
-        baseOptions.initialResultBufferBytes ?? ConnectionConstants.defaultInitialResultBufferBytes;
-    final initialResultBufferBytes = baseInitialBufferBytes < expandedBufferBytes
-        ? baseInitialBufferBytes
-        : expandedBufferBytes;
-
-    developer.log(
-      'Expanding max result buffer for retry: '
-      '$currentBufferBytes -> $expandedBufferBytes bytes',
-      name: 'database_gateway',
-      level: 800,
-    );
-
-    return ConnectionAcquireOptions(
-      loginTimeout: baseOptions.loginTimeout,
-      queryTimeout: baseOptions.queryTimeout,
-      maxResultBufferBytes: expandedBufferBytes,
-      initialResultBufferBytes: initialResultBufferBytes,
-      autoReconnectOnConnectionLost: baseOptions.autoReconnectOnConnectionLost,
-      maxReconnectAttempts: baseOptions.maxReconnectAttempts,
-      reconnectBackoff: baseOptions.reconnectBackoff,
-    );
-  }
-
-  ConnectionAcquireOptions? _hintedConnectionOptions({
-    required String connectionString,
-    required String sql,
-    required ConnectionAcquireOptions baseOptions,
-  }) {
-    final hintedBufferBytes = _adaptiveBufferCache.lookup(
-      connectionString: connectionString,
-      sql: sql,
-    );
-    if (hintedBufferBytes == null) {
-      return null;
-    }
-
-    final initialBufferBytes =
-        baseOptions.initialResultBufferBytes ?? ConnectionConstants.defaultInitialResultBufferBytes;
-    return ConnectionAcquireOptions(
-      loginTimeout: baseOptions.loginTimeout,
-      queryTimeout: baseOptions.queryTimeout,
-      maxResultBufferBytes: hintedBufferBytes,
-      initialResultBufferBytes: initialBufferBytes < hintedBufferBytes ? initialBufferBytes : hintedBufferBytes,
-      autoReconnectOnConnectionLost: baseOptions.autoReconnectOnConnectionLost,
-      maxReconnectAttempts: baseOptions.maxReconnectAttempts,
-      reconnectBackoff: baseOptions.reconnectBackoff,
+    return OdbcConnectionStringRewriter.resolve(
+      config,
+      databaseConfig,
+      databaseOverride: databaseOverride,
     );
   }
 
@@ -3811,20 +2631,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   bool _isInvalidConnectionIdError(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
-
-  /// Returns the remaining time from [deadline] clamped to [_transactionRollbackTimeout].
-  ///
-  /// If no deadline is set, falls back to [_transactionRollbackTimeout].
-  Duration _rollbackTimeoutFromDeadline(DateTime? deadline) {
-    if (deadline == null) {
-      return _transactionRollbackTimeout;
-    }
-    final remaining = deadline.difference(DateTime.now());
-    if (remaining <= Duration.zero) {
-      return _transactionRollbackTimeout;
-    }
-    return remaining < _transactionRollbackTimeout ? remaining : _transactionRollbackTimeout;
-  }
 
   /// Maps a driver name string from the persisted [Config] to the local
   /// [DatabaseType] used by SQL builders (paging, boolean literals, etc.).
@@ -3881,110 +2687,4 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     return DatabaseType.sqlServer;
   }
 
-  Future<_QueryExecutionOutcome> _runQueryExecution(
-    String connectionId,
-    QueryRequest request,
-    OdbcPreparedQueryExecution preparedExecution,
-  ) async {
-    if (OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
-      request,
-      preparedExecution,
-    )) {
-      final startedAt = DateTime.now();
-      final queryResult = await _service.executeQueryMultiFull(
-        connectionId,
-        preparedExecution.sql,
-      );
-      return queryResult.fold(
-        (success) => _QueryExecutionOutcome.success(
-          _createSuccessResponseFromMulti(request, success, startedAt: startedAt),
-        ),
-        _QueryExecutionOutcome.failure,
-      );
-    }
-
-    final resultEncoding = resolveOdbcResultEncoding();
-    if (resultEncoding != ResultEncoding.rowMajor) {
-      _logResultEncodingIfNeeded(resultEncoding);
-    }
-
-    final startedAt = DateTime.now();
-    final queryResult = resultEncoding == ResultEncoding.rowMajor
-        ? await _executeQueryRowMajor(connectionId, preparedExecution)
-        : await _executeQueryWithResultEncoding(
-            connectionId,
-            preparedExecution,
-            resultEncoding,
-          );
-
-    return queryResult.fold(
-      (success) => _QueryExecutionOutcome.success(
-        _createSuccessResponse(request, success, startedAt: startedAt),
-      ),
-      _QueryExecutionOutcome.failure,
-    );
-  }
-
-  Future<Result<QueryResult>> _executeQueryRowMajor(
-    String connectionId,
-    OdbcPreparedQueryExecution preparedExecution,
-  ) {
-    final parameters = preparedExecution.parameters;
-    if (parameters != null && parameters.isNotEmpty) {
-      return _service.executeQueryNamed(
-        connectionId,
-        preparedExecution.sql,
-        parameters,
-      );
-    }
-
-    return _service.executeQuery(
-      preparedExecution.sql,
-      connectionId: connectionId,
-    );
-  }
-
-  Future<Result<QueryResult>> _executeQueryWithResultEncoding(
-    String connectionId,
-    OdbcPreparedQueryExecution preparedExecution,
-    ResultEncoding resultEncoding,
-  ) {
-    final parameters = preparedExecution.parameters;
-    if (parameters == null || parameters.isEmpty) {
-      return _service.executeQueryParams(
-        connectionId,
-        preparedExecution.sql,
-        const <Object?>[],
-        resultEncoding: resultEncoding,
-      );
-    }
-
-    final parsed = NamedParameterParser.extract(preparedExecution.sql);
-    final positionalParams = NamedParameterParser.toPositionalParams(
-      namedParams: Map<String, Object?>.from(parameters),
-      paramNames: parsed.paramNames,
-    );
-    return _service.executeQueryParams(
-      connectionId,
-      parsed.cleanedSql,
-      positionalParams,
-      resultEncoding: resultEncoding,
-    );
-  }
-
-  void _logResultEncodingIfNeeded(ResultEncoding resultEncoding) {
-    if (_lastLoggedResultEncoding == resultEncoding) {
-      return;
-    }
-    _lastLoggedResultEncoding = resultEncoding;
-    developer.log(
-      'ODBC result encoding override enabled',
-      name: 'database_gateway',
-      level: 800,
-      error: <String, Object?>{
-        'env': odbcResultEncodingEnvKey,
-        'result_encoding': resultEncodingConfigName(resultEncoding),
-      },
-    );
-  }
 }

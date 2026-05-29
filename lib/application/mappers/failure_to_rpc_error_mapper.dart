@@ -4,6 +4,7 @@ import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
 import 'package:plug_agente/core/constants/rpc_error_data_constants.dart';
 import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/core/utils/odbc_message_sanitizer.dart';
 import 'package:plug_agente/core/utils/sensitive_map_redactor.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
@@ -17,6 +18,10 @@ import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 /// with `connectionFailed: true`. Prefer [DatabaseFailure] only where repositories
 /// already emit that type.
 class FailureToRpcErrorMapper {
+  /// Failure-context key holding the verbatim ODBC driver message. Kept local
+  /// for diagnostics; never forwarded across the RPC boundary.
+  static const String _odbcMessageContextKey = 'odbc_message';
+
   /// Converts a Failure to an RpcError with Problem Details data.
   ///
   /// When [useTimeoutByStage] is true, uses `timeout_stage` from failure
@@ -216,6 +221,11 @@ class FailureToRpcErrorMapper {
     final correlationId = instance ?? RpcErrorCode.createCorrelationId();
     final safeContext = _sanitizeContext(failure.context);
     final contextForExtra = Map<String, dynamic>.from(safeContext);
+    // The verbatim ODBC driver message (server/database/user identifiers) is
+    // kept on the local Failure for in-app diagnostics, but must not be
+    // forwarded across the RPC boundary to the hub.
+    contextForExtra.remove(_odbcMessageContextKey);
+    final clientDetail = OdbcMessageSanitizer.sanitize(failure.message);
     final rawContextReason = contextForExtra.remove('reason');
     final domainReason = _stringifyOptionalReason(rawContextReason);
     final timeoutReason = _getTimeoutReasonOverride(
@@ -231,7 +241,7 @@ class FailureToRpcErrorMapper {
       'type': _getTypeUri(failure, code),
       'title': RpcErrorCode.getMessage(code),
       'status': RpcErrorCode.getStatus(code),
-      'detail': failure.message,
+      'detail': clientDetail,
       ...(instance != null ? {'instance': instance} : {}),
       'recoverable': RpcErrorCode.isRecoverable(code),
       'failure_code': failure.code,
@@ -243,7 +253,7 @@ class FailureToRpcErrorMapper {
 
     return RpcErrorCode.buildErrorData(
       code: code,
-      technicalMessage: failure.message,
+      technicalMessage: clientDetail,
       correlationId: correlationId,
       timestamp: failure.timestamp,
       retryable: RpcErrorCode.isTransient(code),

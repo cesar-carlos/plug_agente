@@ -9,6 +9,8 @@ abstract final class OdbcContextConstants {
 
   static const String connectionLostDuringQueryReason = 'connection_lost_during_query';
 
+  static const String configurationLoadFailedReason = 'configuration_load_failed';
+
   static const String connectionTimeoutReason = 'connection_timeout';
 
   static const String databaseConnectionFailedReason = 'database_connection_failed';

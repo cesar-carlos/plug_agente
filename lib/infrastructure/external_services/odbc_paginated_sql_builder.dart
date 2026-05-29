@@ -93,11 +93,32 @@ ORDER BY $orderByClause
     };
   }
 
+  /// Identifier-only ORDER BY expression (optionally dotted/bracketed/quoted),
+  /// mirroring `SqlValidator`'s accepted order term shape. Cursor pagination
+  /// interpolates these expressions directly into SQL, so this is a
+  /// defense-in-depth guard against injection for any caller that reaches the
+  /// builder without passing through `SqlValidator` first.
+  static final RegExp _safeOrderExpression = RegExp(
+    r'^(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)'
+    r'(?:\.(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))*$',
+  );
+
+  static void _assertSafeOrderExpression(String expression) {
+    if (!_safeOrderExpression.hasMatch(expression.trim())) {
+      throw ArgumentError.value(
+        expression,
+        'orderBy.expression',
+        'Unsafe pagination order expression rejected before SQL composition',
+      );
+    }
+  }
+
   static String buildOrderByClause(List<QueryPaginationOrderTerm> orderBy) {
     return orderBy
-        .map(
-          (term) => '${term.expression}${term.descending ? ' DESC' : ' ASC'}',
-        )
+        .map((term) {
+          _assertSafeOrderExpression(term.expression);
+          return '${term.expression}${term.descending ? ' DESC' : ' ASC'}';
+        })
         .join(', ');
   }
 
@@ -111,12 +132,14 @@ ORDER BY $orderByClause
     for (var i = 0; i < orderBy.length; i++) {
       final conjunctions = <String>[];
       for (var j = 0; j < i; j++) {
+        _assertSafeOrderExpression(orderBy[j].expression);
         conjunctions.add(
           '${orderBy[j].expression} = '
           '${toSqlLiteral(lastRowValues[j], databaseType)}',
         );
       }
 
+      _assertSafeOrderExpression(orderBy[i].expression);
       final operator = orderBy[i].descending ? '<' : '>';
       conjunctions.add(
         '${orderBy[i].expression} $operator '

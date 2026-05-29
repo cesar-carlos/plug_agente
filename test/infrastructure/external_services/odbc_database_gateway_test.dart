@@ -15,6 +15,7 @@ import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/repositories/agent_config_query_config_source.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -55,7 +56,7 @@ void main() {
       metrics = MetricsCollector()..clear();
       mockSettings = MockOdbcConnectionSettings();
       gateway = OdbcDatabaseGateway(
-        mockConfigRepository,
+        AgentConfigQueryConfigSource(mockConfigRepository),
         mockService,
         mockConnectionPool,
         retryManager,
@@ -243,6 +244,44 @@ void main() {
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
         verify(() => mockConnectionPool.recycle(any())).called(1);
+      },
+    );
+
+    test(
+      'should initialize ODBC only once under concurrent callers',
+      () async {
+        var initializeCalls = 0;
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          initializeCalls++;
+          // Delay so the three calls overlap before initialization resolves.
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          return const Success(unit);
+        });
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async {
+          return Success(
+            Connection(
+              id: 'concurrent-init',
+              connectionString: 'DSN=x',
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        });
+        when(() => mockService.disconnect(any())).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final results = await Future.wait([
+          gateway.testConnection('DSN=x'),
+          gateway.testConnection('DSN=x'),
+          gateway.testConnection('DSN=x'),
+        ]);
+
+        expect(results.every((result) => result.isSuccess()), isTrue);
+        expect(initializeCalls, 1);
+        verify(() => mockService.initialize()).called(1);
       },
     );
 
@@ -2060,7 +2099,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
-          mockConfigRepository,
+          AgentConfigQueryConfigSource(mockConfigRepository),
           mockService,
           nativePool,
           retryManager,
@@ -2137,7 +2176,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
-          mockConfigRepository,
+          AgentConfigQueryConfigSource(mockConfigRepository),
           mockService,
           nativePool,
           retryManager,
@@ -2215,7 +2254,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final featureFlags = FeatureFlags(InMemoryAppSettingsStore());
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
-          mockConfigRepository,
+          AgentConfigQueryConfigSource(mockConfigRepository),
           mockService,
           nativePool,
           retryManager,
@@ -2901,7 +2940,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         await featureFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
-          mockConfigRepository,
+          AgentConfigQueryConfigSource(mockConfigRepository),
           mockService,
           nativePool,
           retryManager,
@@ -2967,7 +3006,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         await featureFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
-          mockConfigRepository,
+          AgentConfigQueryConfigSource(mockConfigRepository),
           mockService,
           nativePool,
           retryManager,
@@ -3033,7 +3072,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         await featureFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
-          mockConfigRepository,
+          AgentConfigQueryConfigSource(mockConfigRepository),
           mockService,
           nativePool,
           retryManager,
@@ -3110,7 +3149,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         await featureFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
-          mockConfigRepository,
+          AgentConfigQueryConfigSource(mockConfigRepository),
           mockService,
           nativePool,
           retryManager,
@@ -3951,6 +3990,89 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         );
       },
     );
+
+    group('testConnection', () {
+      test('should reject an empty connection string with a ValidationFailure', () async {
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+
+        final result = await gateway.testConnection('   ');
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<domain.ValidationFailure>());
+        verifyNever(() => mockService.connect(any(), options: any(named: 'options')));
+      });
+
+      test('should connect and disconnect, returning true on success', () async {
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockService.connect(any(), options: any(named: 'options'))).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: 'tc-1',
+              connectionString: 'DSN=x',
+              createdAt: DateTime(2024, 2, 3),
+              isActive: true,
+            ),
+          ),
+        );
+        when(() => mockService.disconnect('tc-1')).thenAnswer((_) async => const Success(unit));
+
+        final result = await gateway.testConnection('DSN=x');
+
+        expect(result.getOrNull(), isTrue);
+        verify(() => mockService.disconnect('tc-1')).called(1);
+      });
+
+      test('should map a connect failure to a ConnectionFailure', () async {
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockService.connect(any(), options: any(named: 'options')))
+            .thenAnswer((_) async => Failure(Exception('unreachable')));
+
+        final result = await gateway.testConnection('DSN=x');
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<domain.Failure>());
+      });
+
+      test('should map a disconnect failure to a ConnectionFailure', () async {
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockService.connect(any(), options: any(named: 'options'))).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: 'tc-2',
+              connectionString: 'DSN=x',
+              createdAt: DateTime(2024, 2, 3),
+              isActive: true,
+            ),
+          ),
+        );
+        when(() => mockService.disconnect('tc-2')).thenAnswer((_) async => Failure(Exception('disconnect boom')));
+
+        final result = await gateway.testConnection('DSN=x');
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<domain.Failure>());
+      });
+
+      test('should surface a ConfigurationFailure preserving cause when config resolution fails', () async {
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(() => mockConfigRepository.getCurrentConfigMetadata())
+            .thenAnswer((_) async => Failure(domain.NotFoundFailure('no active config')));
+
+        final request = QueryRequest(
+          id: 'cfg-fail',
+          agentId: 'agent',
+          query: 'SELECT 1',
+          timestamp: DateTime(2024, 2, 3),
+        );
+
+        final result = await gateway.executeQuery(request);
+
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as domain.Failure;
+        expect(failure, isA<domain.ConfigurationFailure>());
+        expect(failure.cause, isA<domain.NotFoundFailure>());
+      });
+    });
 
     group('mapDriverNameToDatabaseType', () {
       test('should resolve exact matches for the three supported dialects', () {

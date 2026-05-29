@@ -306,7 +306,7 @@ final class AdaptiveOdbcConnectionPool
     _connectionOwners.clear();
     _connectionCircuitKeys.clear();
     if (errors.isNotEmpty) {
-      return Failure(Exception(errors.join(', ')));
+      return Failure(_aggregatePoolFailure(errors, operation: 'pool_close_all'));
     }
 
     return const Success(unit);
@@ -326,10 +326,36 @@ final class AdaptiveOdbcConnectionPool
     }
 
     if (errors.isNotEmpty) {
-      return Failure(Exception(errors.join(', ')));
+      return Failure(_aggregatePoolFailure(errors, operation: 'pool_recycle'));
     }
 
     return const Success(unit);
+  }
+
+  /// Preserves typed child failures (with their `cause`/`context`) instead of
+  /// flattening them into a raw `Exception` string. A single child failure is
+  /// returned as-is; multiple are aggregated under a typed failure that keeps
+  /// the first as `cause`.
+  domain.Failure _aggregatePoolFailure(
+    List<Object> errors, {
+    required String operation,
+  }) {
+    if (errors.length == 1 && errors.first is domain.Failure) {
+      return errors.first as domain.Failure;
+    }
+
+    final messages = errors
+        .map((error) => error is domain.Failure ? error.message : error.toString())
+        .join('; ');
+    return domain.ConnectionFailure.withContext(
+      message: 'Pool operation completed with errors: $messages',
+      cause: errors.first,
+      context: {
+        'reason': OdbcContextConstants.poolErrorReason,
+        'operation': operation,
+        'error_count': errors.length,
+      },
+    );
   }
 
   @override

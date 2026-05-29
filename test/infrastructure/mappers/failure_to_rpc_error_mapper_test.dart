@@ -499,6 +499,45 @@ void main() {
       },
     );
 
+    test('should not forward the verbatim ODBC driver message across the RPC boundary', () {
+      final failure = QueryExecutionFailure.withContext(
+        message: 'The database returned an error when executing the query.',
+        context: {
+          'reason': OdbcContextConstants.sqlExecutionFailedReason,
+          'odbc_message': "[Microsoft][ODBC Driver 17][SQL Server]Login failed for user 'sa' on SRV01.",
+          'odbc_sql_state': '42000',
+          'user_message': 'The database returned an error when executing the query.',
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(data.containsKey('odbc_message'), isFalse);
+      // The local Failure still keeps the diagnostic detail for in-app display.
+      expect(failure.context['odbc_message'], isNotNull);
+      // Safe, structured fields remain available to the hub.
+      expect(data['odbc_sql_state'], equals('42000'));
+      expect(data['user_message'], isA<String>());
+    });
+
+    test('should redact credential tokens from detail and technical_message', () {
+      final failure = ConnectionFailure.withContext(
+        message: 'connect failed using DRIVER={x};UID=app;PWD=topsecret;Server=h',
+        context: {
+          'reason': OdbcContextConstants.databaseConnectionFailedReason,
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(data['detail'], contains('PWD=***'));
+      expect(data['detail'], isNot(contains('topsecret')));
+      expect(data['technical_message'], contains('PWD=***'));
+      expect(data['technical_message'], isNot(contains('topsecret')));
+    });
+
     test('should map ActionValidationFailure to invalidParams with action category', () {
       final failure = ActionValidationFailure.withContext(
         message: 'Remote idempotency key is required',

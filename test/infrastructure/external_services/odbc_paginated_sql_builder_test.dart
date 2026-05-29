@@ -53,5 +53,41 @@ void main() {
       expect(decoded.offset, 5);
       expect(decoded.isStableCursor, isFalse);
     });
+
+    test('buildOrderByClause accepts dotted/quoted identifiers', () {
+      final clause = OdbcPaginatedSqlBuilder.buildOrderByClause(const [
+        QueryPaginationOrderTerm(expression: 't.created_at', lookupKey: 'created_at', descending: true),
+        QueryPaginationOrderTerm(expression: '[Order Id]', lookupKey: 'Order Id'),
+      ]);
+      expect(clause, 't.created_at DESC, [Order Id] ASC');
+    });
+
+    test('buildOrderByClause rejects unsafe order expression (injection guard)', () {
+      expect(
+        () => OdbcPaginatedSqlBuilder.buildOrderByClause(const [
+          QueryPaginationOrderTerm(
+            expression: 'id; DROP TABLE users',
+            lookupKey: 'id',
+          ),
+        ]),
+        throwsArgumentError,
+      );
+    });
+
+    test('buildKeysetWhereClause rejects unsafe order expression (injection guard)', () {
+      expect(
+        () => OdbcPaginatedSqlBuilder.buildKeysetWhereClause(
+          const [
+            QueryPaginationOrderTerm(
+              expression: '1) OR (1=1',
+              lookupKey: 'id',
+            ),
+          ],
+          const [1],
+          DatabaseType.postgresql,
+        ),
+        throwsArgumentError,
+      );
+    });
   });
 }

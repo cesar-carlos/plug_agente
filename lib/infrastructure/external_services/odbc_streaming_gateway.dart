@@ -73,6 +73,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     ),
   );
   bool _initialized = false;
+  Future<Result<void>>? _initialization;
   static const Duration _defaultCancelDisconnectTimeout = Duration(seconds: 8);
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
 
@@ -128,27 +129,33 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     );
   }
 
-  Future<Result<void>> _ensureInitialized() async {
+  Future<Result<void>> _ensureInitialized() {
     if (_initialized) {
-      return const Success(unit);
+      return Future<Result<void>>.value(const Success(unit));
     }
+    return _initialization ??= _initializeOnce();
+  }
 
+  Future<Result<void>> _initializeOnce() async {
     final initResult = await _service.initialize();
     return initResult.fold(
       (_) {
         _initialized = true;
         return const Success(unit);
       },
-      (error) => Failure(
-        OdbcFailureMapper.mapConnectionError(
-          error,
-          operation: 'initialize_streaming_odbc',
-          context: {
-            'reason': OdbcContextConstants.odbcInitializationFailedReason,
-            'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
-          },
-        ),
-      ),
+      (error) {
+        _initialization = null;
+        return Failure(
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'initialize_streaming_odbc',
+            context: {
+              'reason': OdbcContextConstants.odbcInitializationFailedReason,
+              'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
+            },
+          ),
+        );
+      },
     );
   }
 

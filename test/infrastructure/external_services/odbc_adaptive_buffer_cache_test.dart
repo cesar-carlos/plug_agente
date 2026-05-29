@@ -21,6 +21,44 @@ void main() {
       expect(hint, greaterThan(2097152));
     });
 
+    test('should reuse hint when only the password differs in the connection string', () {
+      final cache = OdbcAdaptiveBufferCache();
+
+      cache.rememberExpandedBuffer(
+        connectionString: 'DSN=Test;UID=app;PWD=secret-one',
+        sql: 'SELECT * FROM users',
+        currentBufferBytes: 1024 * 1024,
+        errorMessage: 'buffer too small: need 2097152 bytes',
+      );
+
+      // Same DSN/host/db, rotated password: the credential must not partition
+      // the cache, so the learned buffer is still reused.
+      final hint = cache.lookup(
+        connectionString: 'DSN=Test;UID=app;PWD=secret-two',
+        sql: 'SELECT * FROM users',
+      );
+
+      expect(hint, greaterThan(2097152));
+    });
+
+    test('should still isolate hints per database when password is redacted', () {
+      final cache = OdbcAdaptiveBufferCache();
+
+      cache.rememberExpandedBuffer(
+        connectionString: 'DSN=Prod;DATABASE=sales;PWD=secret',
+        sql: 'SELECT * FROM users',
+        currentBufferBytes: 1024 * 1024,
+        errorMessage: 'buffer too small: need 2097152 bytes',
+      );
+
+      final differentDatabase = cache.lookup(
+        connectionString: 'DSN=Prod;DATABASE=hr;PWD=secret',
+        sql: 'SELECT * FROM users',
+      );
+
+      expect(differentDatabase, isNull);
+    });
+
     test('should expire hints after ttl', () async {
       final cache = OdbcAdaptiveBufferCache(
         entryTtl: const Duration(milliseconds: 10),

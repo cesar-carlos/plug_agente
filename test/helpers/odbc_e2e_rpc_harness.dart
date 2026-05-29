@@ -17,6 +17,7 @@ import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
+import 'package:plug_agente/infrastructure/repositories/agent_config_query_config_source.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -100,7 +101,7 @@ class OdbcE2eRpcHarness {
     final retry = RetryManager();
     final metrics = MetricsCollector()..clear();
     final gateway = OdbcDatabaseGateway(
-      configRepo,
+      AgentConfigQueryConfigSource(configRepo),
       service,
       pool,
       retry,

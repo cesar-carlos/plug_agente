@@ -273,5 +273,55 @@ void main() {
         'The streaming query was cancelled.',
       );
     });
+
+    test('maps "relation does not exist" to a SQL validation failure', () {
+      final failure = OdbcFailureMapper.mapQueryError(
+        StateError('relation "products" does not exist'),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<ValidationFailure>());
+      expect(failure.context['reason'], SqlPipelineContextConstants.sqlValidationFailedReason);
+    });
+
+    test('does not misclassify "database does not exist" as a SQL validation failure', () {
+      final failure = OdbcFailureMapper.mapQueryError(
+        StateError('database "reporting" does not exist'),
+        operation: 'execute_query',
+      );
+
+      // A missing catalog is not a query the user can fix by editing SQL.
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], OdbcContextConstants.sqlExecutionFailedReason);
+    });
+
+    test('maps execute-time "access denied" to a permission failure', () {
+      final failure = OdbcFailureMapper.mapQueryError(
+        StateError('Access denied for user when selecting from orders'),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], OdbcContextConstants.sqlPermissionDeniedReason);
+    });
+
+    test('keeps ConnectionFailure.isTransient consistent with the retryable flag', () {
+      final timeout = OdbcFailureMapper.mapConnectionError(
+        StateError('Login timeout expired'),
+        operation: 'connect',
+      );
+
+      // Connect timeout is marked non-retryable; isTransient must agree.
+      expect(timeout.context['retryable'], isFalse);
+      expect(timeout.isTransient, isFalse);
+    });
+
+    test('ConnectionFailure without an explicit retryable flag remains transient', () {
+      expect(ConnectionFailure('boom').isTransient, isTrue);
+      expect(
+        ConnectionFailure.withContext(message: 'boom', context: {'retryable': false}).isTransient,
+        isFalse,
+      );
+    });
   });
 }

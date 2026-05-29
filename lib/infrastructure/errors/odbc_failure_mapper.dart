@@ -492,12 +492,31 @@ class OdbcFailureMapper {
     }
 
     final normalized = detail.toLowerCase();
-    return normalized.contains('syntax') ||
+    if (normalized.contains('syntax') ||
         normalized.contains('incorrect syntax') ||
         normalized.contains('invalid column') ||
         normalized.contains('invalid object') ||
-        normalized.contains('does not exist') ||
-        normalized.contains('undeclared');
+        normalized.contains('undeclared')) {
+      return true;
+    }
+
+    // "does not exist" usually means a missing relation/column/object reference
+    // (a query validation error). A missing database/catalog, however, is a
+    // configuration/connection concern, not a query the user can fix by editing
+    // SQL — so only treat the object-scoped phrasing as a validation error.
+    if (normalized.contains('does not exist')) {
+      final isObjectScope = normalized.contains('relation') ||
+          normalized.contains('table') ||
+          normalized.contains('column') ||
+          normalized.contains('function') ||
+          normalized.contains('view') ||
+          normalized.contains('object') ||
+          normalized.contains('schema');
+      final isCatalogScope = normalized.contains('database') || normalized.contains('catalog');
+      return isObjectScope || !isCatalogScope;
+    }
+
+    return false;
   }
 
   static bool _isPermissionDenied(String? sqlState, String detail) {
@@ -509,7 +528,11 @@ class OdbcFailureMapper {
     return normalized.contains('permission denied') ||
         normalized.contains('not authorized') ||
         normalized.contains('insufficient privilege') ||
-        normalized.contains('permission was denied');
+        normalized.contains('permission was denied') ||
+        // Execute-time "access denied"/"command denied" (e.g. MySQL) is a
+        // privilege problem on the object, not a connect-time auth failure.
+        normalized.contains('access denied') ||
+        normalized.contains('command denied');
   }
 
   static bool _isTransientQueryFailure(String? sqlState, String detail) {
