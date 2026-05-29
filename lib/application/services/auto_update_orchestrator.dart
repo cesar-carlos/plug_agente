@@ -957,6 +957,22 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
               level: 800,
             );
             await Future<void>.delayed(delay);
+            // Bail out of the retry loop when the runtime state turned
+            // hostile during the sleep: the user disabled auto-update,
+            // the feed URL changed to something incompatible, or the
+            // silent path took over. Without this check we would wake
+            // up and dispatch one extra `checkForUpdates` against an
+            // updater that no longer makes sense to drive.
+            if (!isAvailable || automaticSilentUpdatesEnabled) {
+              developer.log(
+                'Background update retry aborted after delay: '
+                'isAvailable=$isAvailable, '
+                'automaticSilentUpdatesEnabled=$automaticSilentUpdatesEnabled',
+                name: 'auto_update_orchestrator',
+                level: 800,
+              );
+              return;
+            }
           }
         }
       }
