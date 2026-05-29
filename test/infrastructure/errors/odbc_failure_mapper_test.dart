@@ -323,5 +323,32 @@ void main() {
         isFalse,
       );
     });
+
+    test('uses the driver error category to flag connection-lost when heuristics miss it', () {
+      // A ConnectionError whose message does not match the connection-exception
+      // substrings and carries no 08xxx SQLSTATE still classifies as a lost
+      // connection via OdbcError.category.
+      final failure = OdbcFailureMapper.mapQueryError(
+        const ConnectionError(message: 'session terminated unexpectedly'),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['connectionFailed'], isTrue);
+      expect(failure.context['reason'], OdbcContextConstants.connectionLostDuringQueryReason);
+    });
+
+    test('keeps fatal driver errors as a generic SQL execution failure', () {
+      // Duplicate key (23505) is not transient/connection/validation by our
+      // heuristics nor by category -> generic execution failure.
+      final failure = OdbcFailureMapper.mapQueryError(
+        const QueryError(message: 'duplicate key value violates unique constraint', sqlState: '23505'),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], OdbcContextConstants.sqlExecutionFailedReason);
+      expect(failure.context.containsKey('connectionFailed'), isFalse);
+    });
   });
 }

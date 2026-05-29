@@ -293,6 +293,15 @@ class OdbcFailureMapper {
       );
     }
 
+    // The driver's own categorization is a robust last-resort signal when the
+    // SQLSTATE/message heuristics above did not match. It only refines the
+    // otherwise-flat generic failure, so the richer branches (permission,
+    // buffer, timeout, connection-lost) keep precedence and their context.
+    final categorized = _mapByErrorCategory(error, detail, baseContext);
+    if (categorized != null) {
+      return categorized;
+    }
+
     return QueryExecutionFailure.withContext(
       message: detail,
       cause: error,
@@ -302,6 +311,63 @@ class OdbcFailureMapper {
         'user_message': 'The database returned an error when executing the query.',
       },
     );
+  }
+
+  /// Refines a query failure from the driver-provided [OdbcError.category] when
+  /// the specific heuristics did not classify it. Returns null for non-ODBC
+  /// errors and for [ErrorCategory.fatal] (handled by the generic fallback).
+  static Failure? _mapByErrorCategory(
+    Object error,
+    String detail,
+    Map<String, dynamic> baseContext,
+  ) {
+    if (error is! OdbcError) {
+      return null;
+    }
+    switch (error.category) {
+      case ErrorCategory.connectionLost:
+        return QueryExecutionFailure.withContext(
+          message: detail,
+          cause: error,
+          context: {
+            ...baseContext,
+            'connectionFailed': true,
+            'retryable': error.isRetryable,
+            'reason': OdbcContextConstants.connectionLostDuringQueryReason,
+            'user_message':
+                'The database session was interrupted during the query. '
+                'Check the network, server, and try again.',
+          },
+        );
+      case ErrorCategory.transient:
+        return QueryExecutionFailure.withContext(
+          message: detail,
+          cause: error,
+          context: {
+            ...baseContext,
+            'retryable': true,
+            'reason': OdbcContextConstants.transientQueryFailureReason,
+            'user_message':
+                'The database returned a transient failure when executing the query. '
+                'Try again.',
+          },
+        );
+      case ErrorCategory.validation:
+        return ValidationFailure.withContext(
+          message: detail,
+          cause: error,
+          context: {
+            ...baseContext,
+            'operation': 'sql_validation',
+            'reason': SqlPipelineContextConstants.sqlValidationFailedReason,
+            'user_message':
+                'The query could not be executed because it contains a syntax error '
+                'or an invalid reference.',
+          },
+        );
+      case ErrorCategory.fatal:
+        return null;
+    }
   }
 
   static Failure mapPoolError(
