@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
@@ -13,8 +12,10 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/agent_action_developer_hints.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_kind.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_parsers.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_draft_field_groups.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_sections.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_widgets.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
@@ -377,7 +378,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
   void _syncReadOnlyDisplayControllers() {
     _setControllerText(_actionTypeDisplayController, _draftKindLabel(_draftKind));
-    _setControllerText(_powerShellModeDisplayController, _powerShellModeLabel(_powerShellMode));
+    _setControllerText(_powerShellModeDisplayController, powerShellDraftModeLabel(_powerShellMode, widget.l10n));
   }
 
   void _setControllerText(TextEditingController controller, String text) {
@@ -1397,7 +1398,39 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
         ],
         if (_isDialogSectionVisible(3)) ...[
           const SizedBox(height: AppSpacing.md),
-          _buildRuntimePoliciesSection(saving),
+          AgentActionRuntimePoliciesSection(
+            l10n: widget.l10n,
+            enabled: !saving && widget.provider.canSaveAction,
+            currentProfile: _operationalProfileResolver.currentProfile,
+            allowedProfilesController: _allowedProfilesController,
+            allowedEnvironmentVariableNamesController: _allowedEnvironmentVariableNamesController,
+            environmentVariablesController: _environmentVariablesController,
+            maxConcurrentController: _maxConcurrentController,
+            maxQueuedController: _maxQueuedController,
+            concurrencyBehavior: _concurrencyBehavior,
+            allowedWorkingDirectoriesController: _allowedWorkingDirectoriesController,
+            allowedContextDirectoriesController: _allowedContextDirectoriesController,
+            showProductionPathAllowlistWarning: _shouldShowProductionPathAllowlistWarning,
+            capturesProcessOutput: _draftCapturesProcessOutput,
+            processWindowMode: _processWindowMode,
+            captureStdout: _captureStdout,
+            captureStderr: _captureStderr,
+            redactBeforePersisting: _redactBeforePersisting,
+            stdoutEncodingMode: _stdoutEncodingMode,
+            stderrEncodingMode: _stderrEncodingMode,
+            acceptedExitCodesController: _acceptedExitCodesController,
+            onAppExit: _onAppExit,
+            callbacks: AgentActionRuntimePoliciesCallbacks(
+              onConcurrencyBehaviorChanged: (value) => setState(() => _concurrencyBehavior = value),
+              onProcessWindowModeChanged: (value) => setState(() => _processWindowMode = value),
+              onCaptureStdoutChanged: (value) => setState(() => _captureStdout = value),
+              onCaptureStderrChanged: (value) => setState(() => _captureStderr = value),
+              onRedactBeforePersistingChanged: (value) => setState(() => _redactBeforePersisting = value),
+              onStdoutEncodingModeChanged: (value) => setState(() => _stdoutEncodingMode = value),
+              onStderrEncodingModeChanged: (value) => setState(() => _stderrEncodingMode = value),
+              onOnAppExitChanged: (value) => setState(() => _onAppExit = value),
+            ),
+          ),
         ],
         if (_isDialogSectionVisible(4)) ...[
           const SizedBox(height: AppSpacing.md),
@@ -1469,379 +1502,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
             right: AppSpacing.lg,
           ),
           child: saveButton,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRuntimePoliciesSection(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    final currentProfile = _operationalProfileResolver.currentProfile;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.l10n.agentActionsFormRuntimePoliciesTitle, style: context.sectionTitle),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          widget.l10n.agentActionsFormRuntimePoliciesDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        InfoBar(
-          title: Text(
-            currentProfile == null
-                ? widget.l10n.agentActionsFormCurrentOperationalProfileUnset
-                : widget.l10n.agentActionsFormCurrentOperationalProfile(currentProfile),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormAllowedProfiles,
-          helpTitle: widget.l10n.agentActionsHelpAllowedProfilesTitle,
-          helpMessage: widget.l10n.agentActionsHelpAllowedProfilesMessage,
-          controller: _allowedProfilesController,
-          enabled: enabled,
-          hint: widget.l10n.agentActionsFormAllowedProfilesHint,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormAllowedEnvironmentVariableNames,
-          helpTitle: widget.l10n.agentActionsHelpAllowedEnvironmentVariablesTitle,
-          helpMessage: widget.l10n.agentActionsHelpAllowedEnvironmentVariablesMessage,
-          controller: _allowedEnvironmentVariableNamesController,
-          enabled: enabled,
-          hint: widget.l10n.agentActionsFormAllowedEnvironmentVariableNamesHint,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEnvironmentVariables,
-          helpTitle: widget.l10n.agentActionsHelpEnvironmentVariablesTitle,
-          helpMessage: widget.l10n.agentActionsHelpEnvironmentVariablesMessage,
-          controller: _environmentVariablesController,
-          enabled: enabled,
-          maxLines: 6,
-          hint: widget.l10n.agentActionsFormEnvironmentVariablesHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          widget.l10n.agentActionsFormQueuePolicyDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stackFields = constraints.maxWidth < 720;
-            final maxConcurrentField = AppTextField(
-              label: widget.l10n.agentActionsFormMaxConcurrent,
-              helpTitle: widget.l10n.agentActionsHelpQueueTitle,
-              helpMessage: widget.l10n.agentActionsHelpQueueMessage,
-              controller: _maxConcurrentController,
-              enabled: enabled,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.next,
-            );
-            final maxQueuedField = AppTextField(
-              label: widget.l10n.agentActionsFormMaxQueued,
-              helpTitle: widget.l10n.agentActionsHelpQueueTitle,
-              helpMessage: widget.l10n.agentActionsHelpQueueMessage,
-              controller: _maxQueuedController,
-              enabled: enabled,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.next,
-            );
-
-            if (stackFields) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  maxConcurrentField,
-                  const SizedBox(height: AppSpacing.sm),
-                  maxQueuedField,
-                ],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: maxConcurrentField),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: maxQueuedField),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppDropdown<AgentActionConcurrencyBehavior>(
-          label: widget.l10n.agentActionsFormConcurrencyBehavior,
-          helpTitle: widget.l10n.agentActionsHelpQueueTitle,
-          helpMessage: widget.l10n.agentActionsHelpQueueMessage,
-          value: _concurrencyBehavior,
-          items: AgentActionConcurrencyBehavior.values
-              .map(
-                (AgentActionConcurrencyBehavior behavior) => ComboBoxItem<AgentActionConcurrencyBehavior>(
-                  value: behavior,
-                  child: Text(agentActionEditorConcurrencyBehaviorLabel(behavior, widget.l10n)),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: enabled
-              ? (AgentActionConcurrencyBehavior? value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _concurrencyBehavior = value;
-                  });
-                }
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          widget.l10n.agentActionsFormPathAllowlistDescription,
-          style: context.bodyMuted,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormAllowedWorkingDirectories,
-          helpTitle: widget.l10n.agentActionsHelpPathAllowlistTitle,
-          helpMessage: widget.l10n.agentActionsHelpPathAllowlistMessage,
-          controller: _allowedWorkingDirectoriesController,
-          enabled: enabled,
-          maxLines: 3,
-          hint: widget.l10n.agentActionsFormPathAllowlistHint,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormAllowedContextDirectories,
-          helpTitle: widget.l10n.agentActionsHelpPathAllowlistTitle,
-          helpMessage: widget.l10n.agentActionsHelpPathAllowlistMessage,
-          controller: _allowedContextDirectoriesController,
-          enabled: enabled,
-          maxLines: 3,
-          hint: widget.l10n.agentActionsFormPathAllowlistHint,
-          textInputAction: TextInputAction.next,
-        ),
-        if (_shouldShowProductionPathAllowlistWarning) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            title: Text(widget.l10n.agentActionsProductionPathAllowlistRequiredTitle),
-            content: Text(widget.l10n.agentActionsProductionPathAllowlistRequiredMessage),
-            severity: InfoBarSeverity.error,
-            isLong: true,
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        if (_draftCapturesProcessOutput) ...[
-          AppDropdown<AgentActionProcessWindowMode>(
-            label: widget.l10n.agentActionsFormProcessWindowMode,
-            helpTitle: widget.l10n.agentActionsHelpProcessWindowTitle,
-            helpMessage: widget.l10n.agentActionsHelpProcessWindowMessage,
-            value: _processWindowMode,
-            items: AgentActionProcessWindowMode.values
-                .map(
-                  (AgentActionProcessWindowMode mode) => ComboBoxItem<AgentActionProcessWindowMode>(
-                    value: mode,
-                    child: Text(agentActionEditorProcessWindowModeLabel(mode, widget.l10n)),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: enabled
-                ? (AgentActionProcessWindowMode? value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setState(() {
-                      _processWindowMode = value;
-                    });
-                  }
-                : null,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            widget.l10n.agentActionsFormCapturePolicyDescription,
-            style: context.bodyMuted,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.lg,
-            runSpacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Checkbox(
-                checked: _captureStdout,
-                onChanged: enabled
-                    ? (bool? value) {
-                        setState(() {
-                          _captureStdout = value ?? true;
-                        });
-                      }
-                    : null,
-                content: AgentActionEditorHelpCheckboxLabel(
-                  label: widget.l10n.agentActionsFormCaptureStdout,
-                  helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
-                  helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
-                ),
-              ),
-              Checkbox(
-                checked: _captureStderr,
-                onChanged: enabled
-                    ? (bool? value) {
-                        setState(() {
-                          _captureStderr = value ?? true;
-                        });
-                      }
-                    : null,
-                content: AgentActionEditorHelpCheckboxLabel(
-                  label: widget.l10n.agentActionsFormCaptureStderr,
-                  helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
-                  helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
-                ),
-              ),
-              Checkbox(
-                checked: _redactBeforePersisting,
-                onChanged: enabled
-                    ? (bool? value) {
-                        setState(() {
-                          _redactBeforePersisting = value ?? true;
-                        });
-                      }
-                    : null,
-                content: AgentActionEditorHelpCheckboxLabel(
-                  label: widget.l10n.agentActionsFormRedactBeforePersisting,
-                  helpTitle: widget.l10n.agentActionsHelpCaptureTitle,
-                  helpMessage: widget.l10n.agentActionsHelpCaptureMessage,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            widget.l10n.agentActionsFormOutputEncodingDescription,
-            style: context.bodyMuted,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: AppDropdown<AgentActionOutputEncodingMode>(
-                  label: widget.l10n.agentActionsFormStdoutEncoding,
-                  helpTitle: widget.l10n.agentActionsHelpEncodingTitle,
-                  helpMessage: widget.l10n.agentActionsHelpEncodingMessage,
-                  value: _stdoutEncodingMode,
-                  items: AgentActionOutputEncodingMode.values
-                      .map(
-                        (AgentActionOutputEncodingMode mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
-                          value: mode,
-                          child: Text(agentActionEditorOutputEncodingModeLabel(mode, widget.l10n)),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: enabled
-                      ? (AgentActionOutputEncodingMode? value) {
-                          if (value == null) {
-                            return;
-                          }
-                          setState(() {
-                            _stdoutEncodingMode = value;
-                          });
-                        }
-                      : null,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: AppDropdown<AgentActionOutputEncodingMode>(
-                  label: widget.l10n.agentActionsFormStderrEncoding,
-                  helpTitle: widget.l10n.agentActionsHelpEncodingTitle,
-                  helpMessage: widget.l10n.agentActionsHelpEncodingMessage,
-                  value: _stderrEncodingMode,
-                  items: AgentActionOutputEncodingMode.values
-                      .map(
-                        (AgentActionOutputEncodingMode mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
-                          value: mode,
-                          child: Text(agentActionEditorOutputEncodingModeLabel(mode, widget.l10n)),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: enabled
-                      ? (AgentActionOutputEncodingMode? value) {
-                          if (value == null) {
-                            return;
-                          }
-                          setState(() {
-                            _stderrEncodingMode = value;
-                          });
-                        }
-                      : null,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stackFields = constraints.maxWidth < 720;
-            final exitCodesField = AppTextField(
-              label: widget.l10n.agentActionsFormAcceptedExitCodes,
-              helpTitle: widget.l10n.agentActionsHelpAcceptedExitCodesTitle,
-              helpMessage: widget.l10n.agentActionsHelpAcceptedExitCodesMessage,
-              controller: _acceptedExitCodesController,
-              enabled: enabled,
-              hint: widget.l10n.agentActionsFormAcceptedExitCodesHint,
-              keyboardType: TextInputType.text,
-              textInputAction: TextInputAction.next,
-            );
-            final onAppExitField = AppDropdown<AgentActionOnAppExitBehavior>(
-              label: widget.l10n.agentActionsFormOnAppExit,
-              helpTitle: widget.l10n.agentActionsHelpOnAppExitTitle,
-              helpMessage: widget.l10n.agentActionsHelpOnAppExitMessage,
-              value: _onAppExit,
-              items: AgentActionOnAppExitBehavior.values
-                  .map(
-                    (AgentActionOnAppExitBehavior behavior) => ComboBoxItem<AgentActionOnAppExitBehavior>(
-                      value: behavior,
-                      child: Text(agentActionEditorOnAppExitLabel(behavior, widget.l10n)),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: enabled
-                  ? (AgentActionOnAppExitBehavior? value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        _onAppExit = value;
-                      });
-                    }
-                  : null,
-            );
-
-            if (stackFields) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  exitCodesField,
-                  const SizedBox(height: AppSpacing.sm),
-                  onAppExitField,
-                ],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: exitCodesField),
-                const SizedBox(width: AppSpacing.md),
-                SizedBox(width: 280, child: onAppExitField),
-              ],
-            );
-          },
         ),
       ],
     );
@@ -1935,755 +1595,186 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       return _buildPowerShellDraftFields(saving);
     }
 
+    final enabled = !saving && widget.provider.canSaveAction;
     return switch (_draftType) {
       AgentActionType.commandLine => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormCommand,
-          helpTitle: widget.l10n.agentActionsHelpCommandTitle,
-          helpMessage: widget.l10n.agentActionsHelpCommandMessage,
-          controller: _commandController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 2,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormWorkingDirectory,
-          helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
-          helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
-          controller: _workingDirectoryController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
+        AgentActionCommandLineFields(
+          l10n: widget.l10n,
+          enabled: enabled,
+          commandController: _commandController,
+          workingDirectoryController: _workingDirectoryController,
+          onSubmitted: () => unawaited(_save()),
         ),
       ],
       AgentActionType.executable => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormExecutablePath,
-          helpTitle: widget.l10n.agentActionsHelpPathTitle,
-          helpMessage: widget.l10n.agentActionsHelpPathMessage,
-          controller: _executableTargetPathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          suffixIcon: AgentActionEditorPathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseExecutablePath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickExecutableTargetPath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormArguments,
-          helpTitle: widget.l10n.agentActionsHelpArgumentsTitle,
-          helpMessage: widget.l10n.agentActionsHelpArgumentsMessage,
-          controller: _executableArgumentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormArgumentsHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormWorkingDirectory,
-          helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
-          helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
-          controller: _workingDirectoryController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
+        AgentActionExecutableFields(
+          l10n: widget.l10n,
+          enabled: enabled,
+          executableTargetPathController: _executableTargetPathController,
+          argumentsController: _executableArgumentsController,
+          workingDirectoryController: _workingDirectoryController,
+          onPickExecutablePath: _pickExecutableTargetPath,
+          onSubmitted: () => unawaited(_save()),
         ),
       ],
       AgentActionType.comObject => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormComProgId,
-          helpTitle: widget.l10n.agentActionsHelpComTitle,
-          helpMessage: widget.l10n.agentActionsHelpComMessage,
-          controller: _comProgIdController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormComMemberName,
-          helpTitle: widget.l10n.agentActionsHelpComTitle,
-          helpMessage: widget.l10n.agentActionsHelpComMessage,
-          controller: _comMemberNameController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormComArguments,
-          helpTitle: widget.l10n.agentActionsHelpComTitle,
-          helpMessage: widget.l10n.agentActionsHelpComMessage,
-          controller: _comArgumentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 8,
-          textInputAction: TextInputAction.done,
-          hint: widget.l10n.agentActionsFormComArgumentsHint,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
+        AgentActionComObjectFields(
+          l10n: widget.l10n,
+          enabled: enabled,
+          comProgIdController: _comProgIdController,
+          comMemberNameController: _comMemberNameController,
+          comArgumentsController: _comArgumentsController,
+          onSubmitted: () => unawaited(_save()),
         ),
       ],
       AgentActionType.email => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormSmtpProfileId,
-          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
-          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
-          controller: _smtpProfileIdController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormSmtpProfileIdHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailFrom,
-          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
-          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
-          controller: _emailFromController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailTo,
-          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
-          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
-          controller: _emailToController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailToHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailCc,
-          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
-          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
-          controller: _emailCcController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 3,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailCcHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailBcc,
-          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
-          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
-          controller: _emailBccController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 3,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailBccHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailSubject,
-          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
-          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
-          controller: _emailSubjectController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailSubjectHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailBody,
-          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
-          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
-          controller: _emailBodyController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 8,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormEmailBodyHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormEmailAttachments,
-          helpTitle: widget.l10n.agentActionsHelpEmailTitle,
-          helpMessage: widget.l10n.agentActionsHelpEmailMessage,
-          controller: _emailAttachmentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.done,
-          hint: widget.l10n.agentActionsFormEmailAttachmentsHint,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
+        AgentActionEmailFields(
+          l10n: widget.l10n,
+          enabled: enabled,
+          smtpProfileIdController: _smtpProfileIdController,
+          fromController: _emailFromController,
+          toController: _emailToController,
+          ccController: _emailCcController,
+          bccController: _emailBccController,
+          subjectController: _emailSubjectController,
+          bodyController: _emailBodyController,
+          attachmentsController: _emailAttachmentsController,
+          onSubmitted: () => unawaited(_save()),
         ),
       ],
       AgentActionType.jar => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormJarPath,
-          helpTitle: widget.l10n.agentActionsHelpJarTitle,
-          helpMessage: widget.l10n.agentActionsHelpJarMessage,
-          controller: _jarPathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          suffixIcon: AgentActionEditorPathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseJarPath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickJarPath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormJavaExecutablePath,
-          helpTitle: widget.l10n.agentActionsHelpInterpreterTitle,
-          helpMessage: widget.l10n.agentActionsHelpInterpreterMessage,
-          controller: _javaExecutablePathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormJavaExecutablePathHint,
-          suffixIcon: AgentActionEditorPathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseJavaExecutablePath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickJavaExecutablePath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormArguments,
-          helpTitle: widget.l10n.agentActionsHelpArgumentsTitle,
-          helpMessage: widget.l10n.agentActionsHelpArgumentsMessage,
-          controller: _executableArgumentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormArgumentsHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormWorkingDirectory,
-          helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
-          helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
-          controller: _workingDirectoryController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
+        AgentActionJarFields(
+          l10n: widget.l10n,
+          enabled: enabled,
+          jarPathController: _jarPathController,
+          javaExecutablePathController: _javaExecutablePathController,
+          argumentsController: _executableArgumentsController,
+          workingDirectoryController: _workingDirectoryController,
+          onPickJarPath: _pickJarPath,
+          onPickJavaExecutablePath: _pickJavaExecutablePath,
+          onSubmitted: () => unawaited(_save()),
         ),
       ],
       AgentActionType.script => <Widget>[
-        AppTextField(
-          label: widget.l10n.agentActionsFormScriptPath,
-          helpTitle: widget.l10n.agentActionsHelpPathTitle,
-          helpMessage: widget.l10n.agentActionsHelpPathMessage,
-          controller: _scriptPathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          suffixIcon: AgentActionEditorPathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseScriptPath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickScriptPath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormInterpreterPath,
-          helpTitle: widget.l10n.agentActionsHelpInterpreterTitle,
-          helpMessage: widget.l10n.agentActionsHelpInterpreterMessage,
-          controller: _scriptInterpreterPathController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormInterpreterPathHint,
-          suffixIcon: AgentActionEditorPathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowseInterpreterPath,
-            icon: FluentIcons.open_file,
-            onPressed: saving || !widget.provider.canSaveAction ? null : _pickScriptInterpreterPath,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormArguments,
-          helpTitle: widget.l10n.agentActionsHelpArgumentsTitle,
-          helpMessage: widget.l10n.agentActionsHelpArgumentsMessage,
-          controller: _executableArgumentsController,
-          enabled: !saving && widget.provider.canSaveAction,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormArgumentsHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormWorkingDirectory,
-          helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
-          helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
-          controller: _workingDirectoryController,
-          enabled: !saving && widget.provider.canSaveAction,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
+        AgentActionScriptFields(
+          l10n: widget.l10n,
+          enabled: enabled,
+          scriptPathController: _scriptPathController,
+          interpreterPathController: _scriptInterpreterPathController,
+          argumentsController: _executableArgumentsController,
+          workingDirectoryController: _workingDirectoryController,
+          onPickScriptPath: _pickScriptPath,
+          onPickInterpreterPath: _pickScriptInterpreterPath,
+          onSubmitted: () => unawaited(_save()),
         ),
       ],
       AgentActionType.developer => <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormExecutorPath,
-                helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
-                helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
-                controller: _executorPathController,
-                enabled: !saving && widget.provider.canSaveAction,
-                textInputAction: TextInputAction.next,
-                onChanged: _handleDeveloperBinaryPathChanged,
-                suffixIcon: AgentActionEditorPathPickerButton(
-                  tooltip: widget.l10n.agentActionsFormBrowseExecutorPath,
-                  icon: FluentIcons.open_file,
-                  onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperExecutorPath,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormProjectPath,
-                helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
-                helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
-                controller: _projectPathController,
-                enabled: !saving && widget.provider.canSaveAction,
-                textInputAction: TextInputAction.next,
-                onChanged: _handleDeveloperBinaryPathChanged,
-                suffixIcon: AgentActionEditorPathPickerButton(
-                  tooltip: widget.l10n.agentActionsFormBrowseProjectPath,
-                  icon: FluentIcons.open_file,
-                  onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperProjectPath,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        AgentActionEditorDeveloperPathShortcuts(
-          primaryLabel: widget.l10n.agentActionsFormUseDefaultExecutorPath,
-          onPrimaryPressed: saving || !widget.provider.canSaveAction ? null : _applyDefaultDeveloperExecutorPath,
-        ),
-        ..._buildDeveloperBinaryPathHints(),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            Button(
-              onPressed: saving || !widget.provider.canSaveAction || widget.provider.isLoadingDeveloperConnections
-                  ? null
-                  : () {
-                      unawaited(
-                        _reloadDeveloperConnections(
-                          pathPolicy: _draftPathPolicy(),
-                        ),
-                      );
-                    },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (widget.provider.isLoadingDeveloperConnections)
-                    const SizedBox.square(
-                      dimension: 14,
-                      child: ProgressRing(strokeWidth: 2),
-                    )
-                  else
-                    const Icon(FluentIcons.refresh),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(widget.l10n.agentActionsFormReloadConnections),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            if (widget.provider.usedDefaultDeveloperData7ConfigPath)
-              Expanded(
-                child: Text(
-                  widget.l10n.agentActionsFormDefaultConfigResolved,
-                  style: context.bodyMuted,
-                ),
-              ),
-          ],
-        ),
-        if (widget.provider.developerConnectionLookupMessage != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            title: Text(widget.l10n.agentActionsValidationTitle),
-            content: Text(widget.provider.developerConnectionLookupMessage!),
-            severity: InfoBarSeverity.warning,
-            isLong: true,
-          ),
-        ],
-        ..._buildDeveloperConnectionStatus(),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormData7ConfigPath,
-                helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
-                helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
-                controller: _data7ConfigPathController,
-                enabled: !saving && widget.provider.canSaveAction,
-                textInputAction: TextInputAction.next,
-                onChanged: _handleDeveloperConfigPathChanged,
-                suffixIcon: AgentActionEditorPathPickerButton(
-                  tooltip: widget.l10n.agentActionsFormBrowseData7ConfigPath,
-                  icon: FluentIcons.open_file,
-                  onPressed: saving || !widget.provider.canSaveAction ? null : _pickDeveloperData7ConfigPath,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppTextField(
-                label: widget.l10n.agentActionsFormConnectionId,
-                helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
-                helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
-                controller: _connectionIdController,
-                enabled: !saving && widget.provider.canSaveAction,
-                textInputAction: TextInputAction.next,
-                onChanged: _handleDeveloperConnectionIdChanged,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        AgentActionEditorDeveloperPathShortcuts(
-          primaryLabel: widget.l10n.agentActionsFormUseDefaultConfigBinPath,
-          onPrimaryPressed: saving || !widget.provider.canSaveAction ? null : _applyDefaultDeveloperData7ConfigBinPath,
-          secondaryLabel: widget.l10n.agentActionsFormUseDefaultConfigRootPath,
-          onSecondaryPressed: saving || !widget.provider.canSaveAction
-              ? null
-              : _applyDefaultDeveloperData7ConfigRootPath,
-        ),
-        ..._buildDeveloperConfigPathHints(),
-        ..._buildDeveloperResolvedConfigHints(),
-        if (widget.provider.developerConnections.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          AppTextField(
-            label: widget.l10n.agentActionsFormConnectionSearch,
-            helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
-            helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
-            controller: _developerConnectionSearchController,
-            enabled: !saving && widget.provider.canSaveAction,
-            onChanged: (value) {
-              setState(() {
-                _developerConnectionSearchQuery = value;
-              });
-            },
-            textInputAction: TextInputAction.search,
-          ),
-          if (_developerConnectionFilterHasNoMatches) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              widget.l10n.agentActionsFormConnectionFilterEmpty,
-              style: context.bodyMuted,
-            ),
-          ],
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        AppDropdown<String>(
-          label: widget.l10n.agentActionsFormConnectionSelector,
-          helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
-          helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
-          value:
-              _developerConnectionsForSelector().any(
-                (option) => option.id == _connectionIdController.text.trim(),
-              )
-              ? _connectionIdController.text.trim()
-              : null,
-          items: _developerConnectionsForSelector()
-              .map(
-                (option) => ComboBoxItem<String>(
-                  value: option.id,
-                  child: Text(option.label),
-                ),
-              )
+        AgentActionDeveloperFields(
+          l10n: widget.l10n,
+          enabled: enabled,
+          isLoadingConnections: widget.provider.isLoadingDeveloperConnections,
+          usedDefaultConfigPath: widget.provider.usedDefaultDeveloperData7ConfigPath,
+          connectionLookupMessage: widget.provider.developerConnectionLookupMessage,
+          hasConnections: widget.provider.developerConnections.isNotEmpty,
+          filterHasNoMatches: _developerConnectionFilterHasNoMatches,
+          connectionOptions: _developerConnectionsForSelector()
+              .map((option) => (id: option.id, label: option.label))
               .toList(growable: false),
-          onChanged: saving || !widget.provider.canSaveAction ? null : _applyDeveloperConnectionSelection,
-          placeholder: Text(widget.l10n.agentActionsFormConnectionSelectorPlaceholder),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormConnectionLabel,
-          helpTitle: widget.l10n.agentActionsHelpDeveloperTitle,
-          helpMessage: widget.l10n.agentActionsHelpDeveloperMessage,
-          controller: _connectionLabelController,
-          enabled: false,
-          readOnly: true,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            unawaited(_save());
-          },
+          executorPathController: _executorPathController,
+          projectPathController: _projectPathController,
+          data7ConfigPathController: _data7ConfigPathController,
+          connectionIdController: _connectionIdController,
+          connectionLabelController: _connectionLabelController,
+          connectionSearchController: _developerConnectionSearchController,
+          binaryPathHints: _buildDeveloperBinaryPathHints(),
+          connectionStatus: _buildDeveloperConnectionStatus(),
+          configPathHints: _buildDeveloperConfigPathHints(),
+          resolvedConfigHints: _buildDeveloperResolvedConfigHints(),
+          callbacks: AgentActionDeveloperFieldsCallbacks(
+            onBinaryPathChanged: _handleDeveloperBinaryPathChanged,
+            onPickExecutorPath: _pickDeveloperExecutorPath,
+            onPickProjectPath: _pickDeveloperProjectPath,
+            onApplyDefaultExecutorPath: _applyDefaultDeveloperExecutorPath,
+            onReloadConnections: () => unawaited(_reloadDeveloperConnections(pathPolicy: _draftPathPolicy())),
+            onConfigPathChanged: _handleDeveloperConfigPathChanged,
+            onPickConfigPath: _pickDeveloperData7ConfigPath,
+            onApplyDefaultConfigBinPath: _applyDefaultDeveloperData7ConfigBinPath,
+            onApplyDefaultConfigRootPath: _applyDefaultDeveloperData7ConfigRootPath,
+            onConnectionIdChanged: _handleDeveloperConnectionIdChanged,
+            onConnectionSearchChanged: (value) => setState(() => _developerConnectionSearchQuery = value),
+            onConnectionSelected: _applyDeveloperConnectionSelection,
+            onSubmitted: () => unawaited(_save()),
+          ),
         ),
       ],
     };
   }
 
   List<Widget> _buildPowerShellDraftFields(bool saving) {
-    final enabled = !saving && widget.provider.canSaveAction;
-    final isEditing = _editingActionId != null;
-    final modeField = isEditing
-        ? AppTextField(
-            key: AgentActionEditorKeys.powerShellModeDropdown,
-            label: widget.l10n.agentActionsFormPowerShellMode,
-            helpTitle: widget.l10n.agentActionsHelpPowerShellModeTitle,
-            helpMessage: widget.l10n.agentActionsHelpPowerShellModeMessage,
-            controller: _powerShellModeDisplayController,
-            enabled: !saving,
-            readOnly: true,
-            textInputAction: TextInputAction.next,
-          )
-        : AppDropdown<PowerShellDraftMode>(
-            key: AgentActionEditorKeys.powerShellModeDropdown,
-            label: widget.l10n.agentActionsFormPowerShellMode,
-            helpTitle: widget.l10n.agentActionsHelpPowerShellModeTitle,
-            helpMessage: widget.l10n.agentActionsHelpPowerShellModeMessage,
-            value: _powerShellMode,
-            items: PowerShellDraftMode.values
-                .map(
-                  (mode) {
-                    final unavailable = _isPowerShellModeUnavailable(mode);
-                    final label = _powerShellModeLabel(mode);
-                    return ComboBoxItem<PowerShellDraftMode>(
-                      value: mode,
-                      enabled: !unavailable,
-                      child: Text(
-                        unavailable ? '$label (${widget.l10n.agentActionsRiskRunnerUnavailable})' : label,
-                      ),
-                    );
-                  },
-                )
-                .toList(growable: false),
-            onChanged: enabled
-                ? (value) {
-                    if (value == null || value == _powerShellMode || _isPowerShellModeUnavailable(value)) {
-                      return;
-                    }
-                    setState(() {
-                      _setPowerShellMode(value);
-                    });
-                  }
-                : null,
-          );
-    final executableField = AppDropdown<PowerShellExecutable>(
-      key: AgentActionEditorKeys.powerShellExecutableDropdown,
-      label: widget.l10n.agentActionsFormPowerShellExecutable,
-      helpTitle: widget.l10n.agentActionsHelpPowerShellExecutableTitle,
-      helpMessage: widget.l10n.agentActionsHelpPowerShellExecutableMessage,
-      value: _powerShellExecutable,
-      items: PowerShellExecutable.values
-          .map(
-            (executable) => ComboBoxItem<PowerShellExecutable>(
-              value: executable,
-              child: Text(_powerShellExecutableLabel(executable)),
-            ),
-          )
-          .toList(growable: false),
-      onChanged: enabled
-          ? (value) {
-              if (value == null || value == _powerShellExecutable) {
-                return;
-              }
-              setState(() {
-                _powerShellExecutable = value;
-              });
-            }
-          : null,
-    );
-
     return <Widget>[
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 220, child: modeField),
-          const SizedBox(width: AppSpacing.md),
-          SizedBox(width: 240, child: executableField),
-        ],
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      if (_powerShellMode == PowerShellDraftMode.inline) ...[
-        AppTextField(
-          label: widget.l10n.agentActionsFormPowerShellCommand,
-          helpTitle: widget.l10n.agentActionsHelpPowerShellCommandTitle,
-          helpMessage: widget.l10n.agentActionsHelpPowerShellCommandMessage,
-          controller: _commandController,
-          enabled: enabled,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-      ] else ...[
-        AppTextField(
-          label: widget.l10n.agentActionsFormPowerShellScriptPath,
-          helpTitle: widget.l10n.agentActionsHelpPowerShellScriptTitle,
-          helpMessage: widget.l10n.agentActionsHelpPowerShellScriptMessage,
-          controller: _scriptPathController,
-          enabled: enabled,
-          textInputAction: TextInputAction.next,
-          suffixIcon: AgentActionEditorPathPickerButton(
-            tooltip: widget.l10n.agentActionsFormBrowsePowerShellScriptPath,
-            icon: FluentIcons.open_file,
-            onPressed: enabled ? _pickPowerShellScriptPath : null,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppTextField(
-          label: widget.l10n.agentActionsFormArguments,
-          helpTitle: widget.l10n.agentActionsHelpArgumentsTitle,
-          helpMessage: widget.l10n.agentActionsHelpArgumentsMessage,
-          controller: _executableArgumentsController,
-          enabled: enabled,
-          maxLines: 4,
-          textInputAction: TextInputAction.next,
-          hint: widget.l10n.agentActionsFormArgumentsHint,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-      ],
-      AppTextField(
-        label: widget.l10n.agentActionsFormWorkingDirectory,
-        helpTitle: widget.l10n.agentActionsHelpWorkingDirectoryTitle,
-        helpMessage: widget.l10n.agentActionsHelpWorkingDirectoryMessage,
-        controller: _workingDirectoryController,
-        enabled: enabled,
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) {
-          unawaited(_save());
-        },
+      AgentActionPowerShellDraftFields(
+        l10n: widget.l10n,
+        enabled: !saving && widget.provider.canSaveAction,
+        modeDisplayEnabled: !saving,
+        isEditing: _editingActionId != null,
+        mode: _powerShellMode,
+        executable: _powerShellExecutable,
+        isModeUnavailable: _isPowerShellModeUnavailable,
+        modeDisplayController: _powerShellModeDisplayController,
+        commandController: _commandController,
+        scriptPathController: _scriptPathController,
+        argumentsController: _executableArgumentsController,
+        workingDirectoryController: _workingDirectoryController,
+        modeDropdownKey: AgentActionEditorKeys.powerShellModeDropdown,
+        executableDropdownKey: AgentActionEditorKeys.powerShellExecutableDropdown,
+        onModeChanged: (value) => setState(() => _setPowerShellMode(value)),
+        onExecutableChanged: (value) => setState(() => _powerShellExecutable = value),
+        onPickScriptPath: _pickPowerShellScriptPath,
+        onSubmitted: () => unawaited(_save()),
       ),
     ];
   }
 
-  String _powerShellModeLabel(PowerShellDraftMode mode) => powerShellDraftModeLabel(mode, widget.l10n);
-
-  String _powerShellExecutableLabel(PowerShellExecutable executable) =>
-      powerShellExecutableLabel(executable, widget.l10n);
-
-  List<Widget> _buildDeveloperBinaryPathHints() {
-    final hints = <AgentActionEditorDeveloperHintData>[];
-    final executorPath = _executorPathController.text.trim();
-    if (executorPath.isNotEmpty) {
-      final normalizedExecutorPath = _normalizePathForComparison(executorPath);
-      if (!_endsWithFileName(normalizedExecutorPath, 'executor.exe')) {
-        hints.add(
-          AgentActionEditorDeveloperHintData.warning(
-            widget.l10n.agentActionsFormExecutorPathHintExpectedFileName,
-          ),
-        );
-      } else if (normalizedExecutorPath == _normalizePathForComparison(_defaultDeveloperExecutorPath)) {
-        hints.add(
-          AgentActionEditorDeveloperHintData.info(
-            widget.l10n.agentActionsFormExecutorPathHintDefault,
-          ),
-        );
-      }
-      hints.addAll(
-        _buildDeveloperFileInspectionHints(
-          path: executorPath,
-          missingMessage: widget.l10n.agentActionsFormExecutorPathHintMissing,
-          directoryMessage: widget.l10n.agentActionsFormExecutorPathHintDirectory,
-        ),
-      );
-    }
-
-    final projectPath = _projectPathController.text.trim();
-    if (projectPath.isNotEmpty) {
-      if (!_normalizePathForComparison(projectPath).endsWith('.7proj')) {
-        hints.add(
-          AgentActionEditorDeveloperHintData.warning(
-            widget.l10n.agentActionsFormProjectPathHintExpectedExtension,
-          ),
-        );
-      }
-      hints.addAll(
-        _buildDeveloperFileInspectionHints(
-          path: projectPath,
-          missingMessage: widget.l10n.agentActionsFormProjectPathHintMissing,
-          directoryMessage: widget.l10n.agentActionsFormProjectPathHintDirectory,
-        ),
-      );
-    }
-
+  List<Widget> _developerHintWrap(List<AgentActionEditorDeveloperHintData> hints) {
     if (hints.isEmpty) {
       return const <Widget>[];
     }
-
     return <Widget>[
       const SizedBox(height: AppSpacing.xs),
       AgentActionEditorDeveloperHintsWrap(hints: hints),
     ];
+  }
+
+  List<Widget> _buildDeveloperBinaryPathHints() {
+    return _developerHintWrap(
+      AgentActionDeveloperHints.binaryPathHints(
+        executorPath: _executorPathController.text.trim(),
+        projectPath: _projectPathController.text.trim(),
+        defaultExecutorPath: _defaultDeveloperExecutorPath,
+        l10n: widget.l10n,
+      ),
+    );
   }
 
   List<Widget> _buildDeveloperConfigPathHints() {
-    final configPath = _data7ConfigPathController.text.trim();
-    if (configPath.isEmpty) {
-      return const <Widget>[];
-    }
-
-    final normalizedConfigPath = _normalizePathForComparison(configPath);
-    final hints = <AgentActionEditorDeveloperHintData>[];
-    if (!_endsWithFileName(normalizedConfigPath, 'data7.config')) {
-      hints.add(
-        AgentActionEditorDeveloperHintData.warning(
-          widget.l10n.agentActionsFormData7ConfigPathHintExpectedFileName,
-        ),
-      );
-    } else if (normalizedConfigPath == _normalizePathForComparison(_defaultDeveloperConfigBinPath)) {
-      hints.add(
-        AgentActionEditorDeveloperHintData.info(
-          widget.l10n.agentActionsFormData7ConfigPathHintDefaultBin,
-        ),
-      );
-    } else if (normalizedConfigPath == _normalizePathForComparison(_defaultDeveloperConfigRootPath)) {
-      hints.add(
-        AgentActionEditorDeveloperHintData.info(
-          widget.l10n.agentActionsFormData7ConfigPathHintDefaultRoot,
-        ),
-      );
-    }
-    hints.addAll(
-      _buildDeveloperFileInspectionHints(
-        path: configPath,
-        missingMessage: widget.l10n.agentActionsFormData7ConfigPathHintMissing,
-        directoryMessage: widget.l10n.agentActionsFormData7ConfigPathHintDirectory,
+    return _developerHintWrap(
+      AgentActionDeveloperHints.configPathHints(
+        configPath: _data7ConfigPathController.text.trim(),
+        defaultConfigBinPath: _defaultDeveloperConfigBinPath,
+        defaultConfigRootPath: _defaultDeveloperConfigRootPath,
+        l10n: widget.l10n,
       ),
     );
-
-    if (hints.isEmpty) {
-      return const <Widget>[];
-    }
-
-    return <Widget>[
-      const SizedBox(height: AppSpacing.xs),
-      AgentActionEditorDeveloperHintsWrap(hints: hints),
-    ];
   }
 
   List<Widget> _buildDeveloperResolvedConfigHints() {
-    final resolvedPath = widget.provider.resolvedDeveloperData7ConfigPath?.trim();
-    if (resolvedPath == null || resolvedPath.isEmpty) {
-      return const <Widget>[];
-    }
-
-    final typedPath = _data7ConfigPathController.text.trim();
-    final normalizedResolvedPath = _normalizePathForComparison(resolvedPath);
-    final normalizedTypedPath = _normalizePathForComparison(typedPath);
-    final message = normalizedTypedPath.isNotEmpty && normalizedResolvedPath != normalizedTypedPath
-        ? widget.l10n.agentActionsFormLoadedConfigPath(resolvedPath)
-        : widget.l10n.agentActionsFormResolvedConfigPath(resolvedPath);
-
-    return <Widget>[
-      const SizedBox(height: AppSpacing.xs),
-      AgentActionEditorDeveloperHintsWrap(
-        hints: <AgentActionEditorDeveloperHintData>[
-          AgentActionEditorDeveloperHintData.info(message),
-        ],
+    return _developerHintWrap(
+      AgentActionDeveloperHints.resolvedConfigHints(
+        resolvedConfigPath: widget.provider.resolvedDeveloperData7ConfigPath,
+        typedConfigPath: _data7ConfigPathController.text,
+        l10n: widget.l10n,
       ),
-    ];
+    );
   }
 
   List<Widget> _buildDeveloperConnectionStatus() {
@@ -3556,35 +2647,6 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     }
   }
 
-  String _normalizePathForComparison(String path) => AgentActionDraftParsers.normalizePathForComparison(path);
-
-  bool _endsWithFileName(String normalizedPath, String fileName) =>
-      AgentActionDraftParsers.endsWithFileName(normalizedPath, fileName);
-
-  List<AgentActionEditorDeveloperHintData> _buildDeveloperFileInspectionHints({
-    required String path,
-    required String missingMessage,
-    required String directoryMessage,
-  }) {
-    try {
-      final entityType = FileSystemEntity.typeSync(path);
-      return switch (entityType) {
-        FileSystemEntityType.notFound => <AgentActionEditorDeveloperHintData>[
-          AgentActionEditorDeveloperHintData.warning(missingMessage),
-        ],
-        FileSystemEntityType.directory => <AgentActionEditorDeveloperHintData>[
-          AgentActionEditorDeveloperHintData.warning(directoryMessage),
-        ],
-        _ => const <AgentActionEditorDeveloperHintData>[],
-      };
-    } on FileSystemException {
-      return <AgentActionEditorDeveloperHintData>[
-        AgentActionEditorDeveloperHintData.warning(
-          widget.l10n.agentActionsFormPathHintInspectionFailed,
-        ),
-      ];
-    }
-  }
 }
 
 /// Defers mounting [AgentActionEditor] until after the first frame so dialog layout settles.
