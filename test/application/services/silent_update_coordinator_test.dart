@@ -300,6 +300,41 @@ void main() {
         expect(result.isError(), isTrue);
       });
 
+      test(
+        'applyPendingDownloadedUpdate is idempotent: a second call does not relaunch the helper',
+        () async {
+          final installer = _FakeInstaller();
+          var closeCount = 0;
+          final coordinator = _makeCoordinator(
+            installer: installer,
+            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+              closeCount++;
+            },
+          );
+
+          await coordinator.checkSilently();
+
+          final first = await coordinator.applyPendingDownloadedUpdate(triggerAppClose: false);
+          // Mirrors the race where the shutdown path already launched the
+          // helper and the operator's "Install now" click arrives afterwards.
+          final second = await coordinator.applyPendingDownloadedUpdate();
+          await Future<void>.delayed(Duration.zero);
+
+          expect(first.isSuccess(), isTrue);
+          expect(second.isSuccess(), isTrue);
+          expect(
+            installer.launchHelperCount,
+            1,
+            reason: 'the native helper holds a global mutex; a second launch would only clobber its status file',
+          );
+          expect(
+            closeCount,
+            1,
+            reason: 'the no-op second call must still honour triggerAppClose so the UI close path is not lost',
+          );
+        },
+      );
+
       test('returns false when probe reports no newer version', () async {
         final probe = _FakeProbe()
           ..result = const AppcastProbeResult(

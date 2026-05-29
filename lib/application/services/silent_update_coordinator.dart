@@ -238,6 +238,14 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
 
   bool _isSilentCheckInProgress = false;
   bool _cancelRequested = false;
+
+  /// Set once a prepared helper has been launched in this session. Guards
+  /// against a double launch when both the UI "Install now" action
+  /// (`triggerAppClose: true`) and the shutdown path
+  /// (`triggerAppClose: false`) fire for the same pending record: the native
+  /// helper holds a global mutex, so a second launch would only overwrite a
+  /// healthy status file with "another update helper is already running".
+  bool _applyInProgress = false;
   Timer? _automaticCheckTimer;
   UpdateCheckDiagnostics? _lastAutomaticDiagnostics;
 
@@ -923,6 +931,22 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     String? noticeBody,
     bool triggerAppClose = true,
   }) async {
+    if (_applyInProgress) {
+      // The helper was already launched this session (e.g. the operator
+      // clicked "Install" and the shutdown path is now re-entering). Skip a
+      // second launch so we do not clobber the in-flight status file, but
+      // still honour the close request in case the earlier launch came from
+      // the shutdown path and never triggered it.
+      if (triggerAppClose) {
+        final closeApplication = _closeApplicationForSilentUpdate;
+        if (closeApplication != null) {
+          unawaited(
+            closeApplication(noticeTitle: noticeTitle, noticeBody: noticeBody),
+          );
+        }
+      }
+      return const Success(unit);
+    }
     final pending = await _pendingStore.read();
     if (pending == null) {
       return Failure(
@@ -982,6 +1006,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     if (launchError != null) {
       return Failure(launchError!);
     }
+    // Latch only after a confirmed launch so a failed attempt can still be
+    // retried by the UI; a successful launch makes further calls a no-op.
+    _applyInProgress = true;
 
     final now = _clock();
     _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(

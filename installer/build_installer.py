@@ -169,6 +169,39 @@ def should_sign_artifacts() -> bool:
     return signing_cert_path() is not None or read_env_flag("WINDOWS_CODE_SIGNING_REQUIRED")
 
 
+def auto_update_requires_valid_signature() -> bool:
+    """Mirrors the Dart resolver `resolveAutoUpdateRequireValidSignature`:
+    unset defaults to TRUE, and only an explicit falsy token disables it.
+
+    Keeping this in lockstep with the runtime contract is what lets the build
+    refuse to ship a self-bricking installer (see `ensure_signing_matches_runtime`).
+    """
+    value = resolve_auto_update_define("AUTO_UPDATE_REQUIRE_VALID_SIGNATURE")
+    if value is None or not value.strip():
+        return True
+    return value.strip().lower() not in {"0", "false", "no", "nao"}
+
+
+def ensure_signing_matches_runtime() -> None:
+    """Fails fast when the build would embed `requireValidSignature=true` at
+    runtime but does not Authenticode-sign the artifacts.
+
+    Such a build produces an installer that the update helper refuses to run
+    (it gates on a valid Authenticode signature), silently bricking every
+    future auto-update. Operators building unsigned dev artifacts must opt out
+    explicitly with `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false`.
+    """
+    if auto_update_requires_valid_signature() and not should_sign_artifacts():
+        raise SystemExit(
+            "Refusing to build: AUTO_UPDATE_REQUIRE_VALID_SIGNATURE resolves to "
+            "true (the runtime default) but code signing is not configured, so "
+            "the update helper would reject the resulting installer and break "
+            "auto-update. Configure WINDOWS_CODE_SIGNING_CERT_PATH (or set "
+            "WINDOWS_CODE_SIGNING_REQUIRED=true), or set "
+            "AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false for unsigned dev builds."
+        )
+
+
 def sign_file(path: Path) -> None:
     cert_path = signing_cert_path()
     required = read_env_flag("WINDOWS_CODE_SIGNING_REQUIRED")
@@ -205,6 +238,8 @@ def sign_file(path: Path) -> None:
 
 
 def main() -> None:
+    ensure_signing_matches_runtime()
+
     print("1. Executando update_version.py...", flush=True)
     run([sys.executable, str(INSTALLER_DIR / "update_version.py")])
 

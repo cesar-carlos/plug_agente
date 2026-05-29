@@ -163,6 +163,12 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
 
     final partFile = File(partPath);
     final resumeEnabled = request.allowDownloadResume;
+    // Set to true only when a transient transport error leaves a usable
+    // partial behind; in that case the `finally` keeps the `.part` so the
+    // next attempt can resume via Range instead of re-downloading the whole
+    // installer. Every other exit (success, validation/hash mismatch,
+    // cancellation) wipes it.
+    var preservePartForResume = false;
     try {
       // When resume is on we keep the .part across retries; the _download
       // helper inspects it to decide between Range and full restart. When
@@ -186,6 +192,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         (error) => downloadError = error,
       );
       if (downloadError != null) {
+        preservePartForResume = resumeEnabled && _isResumableDownloadError(downloadError!);
         return Failure<SilentUpdateInstallResult, Exception>(downloadError!);
       }
 
@@ -339,8 +346,23 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         ),
       );
     } finally {
-      _deleteIfExists(partFile);
+      if (!preservePartForResume) {
+        _deleteIfExists(partFile);
+      }
     }
+  }
+
+  /// A `.part` is only worth keeping for a follow-up resume when the failure
+  /// was a transient transport error (timeout, dropped connection, 5xx, etc.,
+  /// all mapped to [domain.NetworkFailure]). Validation failures (size/hash
+  /// mismatch, appcast length overrun) mean the bytes on disk are poisoned,
+  /// and cancellations are explicit user intent — both must wipe the partial
+  /// so the next attempt starts clean.
+  static bool _isResumableDownloadError(Exception error) {
+    if (error is SilentInstallCancellationFailure) {
+      return false;
+    }
+    return error is domain.NetworkFailure;
   }
 
   @override
@@ -362,6 +384,33 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
           },
         ),
       );
+    }
+
+    // Defense-in-depth against TOCTOU: the staged helper lives in the updates
+    // directory, where the current user keeps Modify rights so the agent can
+    // write there. `install()` only verified the *source* helper before
+    // copying it; by the time apply runs (user click or shutdown, possibly
+    // long after the download) a same-user process could have swapped the
+    // copy. Re-probe the *copied* helper's Authenticode right before launch so
+    // a tampered binary cannot be handed to the elevation prompt.
+    if (request.requireValidSignature) {
+      final launcherSignatureStatus = await _helperSignatureProbe.probe(request.launcherPath);
+      if (launcherSignatureStatus != HelperSignatureStatus.valid) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message:
+                'Prepared silent update helper signature is required but reported '
+                '${launcherSignatureStatus.name}. Refusing to launch.',
+            context: <String, dynamic>{
+              'operation': 'silentUpdateLaunchHelper',
+              'version': request.version,
+              'launcher_path': request.launcherPath,
+              'helper_signature_status': launcherSignatureStatus.name,
+              'validation_code': 'helper_signature_${launcherSignatureStatus.name}',
+            },
+          ),
+        );
+      }
     }
 
     try {

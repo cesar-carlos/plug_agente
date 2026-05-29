@@ -869,6 +869,164 @@ void main() {
       expect(partFile.existsSync(), isFalse);
     });
 
+    test('keeps the .part for resume after a transient network failure', () async {
+      const installerName = 'PlugAgente-Setup-99.0.0.exe';
+      // A previous attempt left 2 of the 5 expected bytes on disk.
+      final partFile = File(p.join(tempDir.path, '$installerName.part'))..writeAsBytesSync(utf8.encode('he'));
+
+      final server = await HttpServer.bind('127.0.0.1', 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((HttpRequest request) async {
+        // Flaky edge: respond 503 so the installer maps it to a transient
+        // NetworkFailure without ever touching the partial bytes.
+        request.response.statusCode = HttpStatus.serviceUnavailable;
+        await request.response.close();
+      });
+
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        helperSignatureProbe: const NoOpHelperSignatureProbe(),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async => _FakeProcess(),
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/$installerName',
+          assetSize: 5,
+          assetName: installerName,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(
+        partFile.existsSync(),
+        isTrue,
+        reason: 'transient transport failure must keep the .part so the next attempt can resume',
+      );
+      expect(partFile.readAsBytesSync(), utf8.encode('he'));
+    });
+
+    test('discards the .part on failure when resume is disabled', () async {
+      const installerName = 'PlugAgente-Setup-99.0.0.exe';
+      final partFile = File(p.join(tempDir.path, '$installerName.part'))..writeAsBytesSync(utf8.encode('he'));
+
+      final server = await HttpServer.bind('127.0.0.1', 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((HttpRequest request) async {
+        request.response.statusCode = HttpStatus.serviceUnavailable;
+        await request.response.close();
+      });
+
+      final helperFile = _createHelper(tempDir);
+      final installer = HttpSilentUpdateInstaller(
+        downloadDirectoryResolver: () async => tempDir.path,
+        installDirectoryResolver: () async => tempDir.path,
+        installDirectoryWritableProbe: (_) async => true,
+        updateHelperPathResolver: () async => helperFile.path,
+        currentProcessIdResolver: () => 1234,
+        updateDirectorySecurityHardener: (_) async => 'restricted',
+        helperSignatureProbe: const NoOpHelperSignatureProbe(),
+        processStarter: (_, _, {mode = ProcessStartMode.normal}) async => _FakeProcess(),
+      );
+
+      final result = await installer.install(
+        SilentUpdateInstallRequest(
+          version: '99.0.0+1',
+          assetUrl: 'http://127.0.0.1:${server.port}/$installerName',
+          assetSize: 5,
+          assetName: installerName,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          requireValidSignature: false,
+          allowDownloadResume: false,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(partFile.existsSync(), isFalse, reason: 'resume opt-out must start fresh, never preserving a partial');
+    });
+
+    group('launchPreparedHelper re-probes the staged helper', () {
+      SilentUpdateLaunchRequest buildRequest({required bool requireValidSignature}) {
+        final installerFile = File(p.join(tempDir.path, 'PlugAgente-Setup-99.0.0.exe'))..writeAsStringSync('installer');
+        final launcherFile = File(p.join(tempDir.path, 'PlugAgente-Update-Helper-99.0.0+1.exe'))
+          ..writeAsStringSync('helper');
+        return SilentUpdateLaunchRequest(
+          version: '99.0.0+1',
+          installerPath: installerFile.path,
+          logPath: p.join(tempDir.path, 'PlugAgente-Update-99.0.0+1.log'),
+          launcherPath: launcherFile.path,
+          launcherStatusPath: p.join(tempDir.path, 'PlugAgente-Update-Helper-99.0.0+1.status.json'),
+          installDirectory: tempDir.path,
+          assetSize: 9,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          installDirectoryWritable: true,
+          requireValidSignature: requireValidSignature,
+          appPid: 1234,
+        );
+      }
+
+      test('refuses to launch when the staged helper signature is not valid', () async {
+        var started = false;
+        final installer = HttpSilentUpdateInstaller(
+          helperSignatureProbe: const _StubHelperSignatureProbe(HelperSignatureStatus.invalid),
+          processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+            started = true;
+            return _FakeProcess();
+          },
+        );
+
+        final result = await installer.launchPreparedHelper(buildRequest(requireValidSignature: true));
+
+        expect(result.isError(), isTrue);
+        expect(started, isFalse, reason: 'a tampered staged helper must never reach the elevation prompt');
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) => expect((failure as domain.Failure).context['validation_code'], 'helper_signature_invalid'),
+        );
+      });
+
+      test('launches when the staged helper signature is valid', () async {
+        var started = false;
+        final installer = HttpSilentUpdateInstaller(
+          helperSignatureProbe: const _StubHelperSignatureProbe(HelperSignatureStatus.valid),
+          processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+            started = true;
+            return _FakeProcess();
+          },
+        );
+
+        final result = await installer.launchPreparedHelper(buildRequest(requireValidSignature: true));
+
+        expect(result.isSuccess(), isTrue);
+        expect(started, isTrue);
+      });
+
+      test('skips the signature gate when requireValidSignature is false', () async {
+        var started = false;
+        final installer = HttpSilentUpdateInstaller(
+          helperSignatureProbe: const _StubHelperSignatureProbe(HelperSignatureStatus.unknown),
+          processStarter: (_, _, {mode = ProcessStartMode.normal}) async {
+            started = true;
+            return _FakeProcess();
+          },
+        );
+
+        final result = await installer.launchPreparedHelper(buildRequest(requireValidSignature: false));
+
+        expect(result.isSuccess(), isTrue);
+        expect(started, isTrue);
+      });
+    });
+
     test('proceeds with install when directory hardener reports failedTimeout', () async {
       final server = await _serveBytes(utf8.encode('hello'));
       addTearDown(() => server.close(force: true));
