@@ -62,6 +62,8 @@ class PayloadLogSummarizer {
       return false;
     } on _PayloadUtf8BudgetExceeded {
       return true;
+    } on Object {
+      return false;
     }
   }
 

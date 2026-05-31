@@ -98,6 +98,15 @@ void main() {
       final big = {'sql': 'x' * 4096};
       expect(summarizer.exceedsByteBudget(big, 64), isTrue);
     });
+
+    test('returns false on encoding errors', () {
+      final summarizer = PayloadLogSummarizer(thresholdBytes: 16);
+
+      expect(
+        summarizer.exceedsByteBudget({'value': const _Unencodable()}, 64),
+        isFalse,
+      );
+    });
   });
 }
 

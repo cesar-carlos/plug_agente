@@ -45,4 +45,6 @@ abstract final class AgentActionTriggerConstants {
   static const String schedulerBootstrapFailedReason = 'scheduler_bootstrap_failed';
 
   static const String schedulerInstanceLockedReason = 'scheduler_instance_locked';
+
+  static const String schedulerStorageAccessDeniedReason = 'scheduler_storage_access_denied';
 }

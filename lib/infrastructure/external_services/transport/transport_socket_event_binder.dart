@@ -195,7 +195,9 @@ class TransportSocketEventBinder {
         unawaited(_inboundHandler.emitConcurrencyLimitedError(data));
         return;
       }
-      unawaited(_inboundHandler.handleRequestWithRelease(data));
+      // Defer hub sql.execute dispatch out of the socket listener turn, keeping
+      // Socket.IO I/O free to process ACKs, pulls and disconnects promptly.
+      Timer.run(() => unawaited(_inboundHandler.handleRequestWithRelease(data)));
     });
 
     // Register rpc:stream.pull whenever any streaming path is active: the hub

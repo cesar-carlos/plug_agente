@@ -60,6 +60,9 @@ class FakeTransportClient implements ITransportClient {
   ) {}
 
   @override
+  void setHubSqlDashboardCapturePauseHandler(void Function(bool paused)? handler) {}
+
+  @override
   void setOnTokenExpired(void Function()? callback) {
     onTokenExpired = callback;
   }

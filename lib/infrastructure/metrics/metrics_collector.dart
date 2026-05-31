@@ -76,6 +76,8 @@ class MetricsCollector
   static const String _rpcStreamTerminalCompleteEmittedCounter = 'rpc_stream_terminal_complete_emitted';
   static const String _rpcStreamTerminalCompleteFailedCounter = 'rpc_stream_terminal_complete_failed';
   static const String _rpcResponseAckRetryCounter = 'rpc_response_ack_retry';
+  static const String _rpcResponseAckDeliveredCounter = 'rpc_response_ack_delivered';
+  static const String _rpcResponseAckAbortedConnectionChangeCounter = 'rpc_response_ack_aborted_connection_change';
   static const String _rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
   static const String _rpcClientTokenGetPolicySuccessCounter = 'rpc_client_token_get_policy_success';
   static const String _rpcClientTokenGetPolicyFailureCounter = 'rpc_client_token_get_policy_failure';
@@ -282,6 +284,9 @@ class MetricsCollector
   int get rpcStreamTerminalCompleteEmittedCount => _eventCounters[_rpcStreamTerminalCompleteEmittedCounter] ?? 0;
   int get rpcStreamTerminalCompleteFailedCount => _eventCounters[_rpcStreamTerminalCompleteFailedCounter] ?? 0;
   int get rpcResponseAckRetryCount => _eventCounters[_rpcResponseAckRetryCounter] ?? 0;
+  int get rpcResponseAckDeliveredCount => _eventCounters[_rpcResponseAckDeliveredCounter] ?? 0;
+  int get rpcResponseAckAbortedConnectionChangeCount =>
+      _eventCounters[_rpcResponseAckAbortedConnectionChangeCounter] ?? 0;
   int get rpcResponseAckFallbackWithoutAckCount => _eventCounters[_rpcResponseAckFallbackWithoutAckCounter] ?? 0;
   int get rpcClientTokenGetPolicySuccessCount => _eventCounters[_rpcClientTokenGetPolicySuccessCounter] ?? 0;
   int get rpcClientTokenGetPolicyFailureCount => _eventCounters[_rpcClientTokenGetPolicyFailureCounter] ?? 0;
@@ -825,6 +830,11 @@ class MetricsCollector
   void recordRpcStreamTerminalCompleteFailed() => _incrementEventCounter(_rpcStreamTerminalCompleteFailedCounter);
 
   void recordRpcResponseAckRetry() => _incrementEventCounter(_rpcResponseAckRetryCounter);
+
+  void recordRpcResponseAckDelivered() => _incrementEventCounter(_rpcResponseAckDeliveredCounter);
+
+  void recordRpcResponseAckAbortedConnectionChange() =>
+      _incrementEventCounter(_rpcResponseAckAbortedConnectionChangeCounter);
 
   void recordRpcResponseAckFallbackWithoutAck() => _incrementEventCounter(_rpcResponseAckFallbackWithoutAckCounter);
 

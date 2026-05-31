@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/validation/query_validation_messages.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -138,7 +139,10 @@ void main() {
         () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(
-        () => mockDatabaseGateway.executeQuery(any()),
+        () => mockDatabaseGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+        ),
       ).thenAnswer((_) async => Success(expectedResponse));
 
       // Act
@@ -150,6 +154,12 @@ void main() {
       expect(response, isNotNull);
       expect(response!.data.length, 1);
       expect(response.data.first['name'], 'John');
+      verify(
+        () => mockDatabaseGateway.executeQuery(
+          any(),
+          timeout: ConnectionConstants.defaultQueryTimeout,
+        ),
+      ).called(1);
     });
 
     test('should propagate database gateway failure', () async {
@@ -172,9 +182,12 @@ void main() {
       when(
         () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
-      when(() => mockDatabaseGateway.executeQuery(any())).thenAnswer(
-        (_) async => Failure(domain.QueryExecutionFailure('SQL error')),
-      );
+      when(
+        () => mockDatabaseGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer((_) async => Failure(domain.QueryExecutionFailure('SQL error')));
 
       // Act
       final result = await useCase.call(validQuery);
@@ -219,7 +232,10 @@ void main() {
         () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(
-        () => mockDatabaseGateway.executeQuery(any()),
+        () => mockDatabaseGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+        ),
       ).thenAnswer((_) async => Success(expectedResponse));
 
       // Act
@@ -277,7 +293,10 @@ void main() {
         () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(
-        () => mockDatabaseGateway.executeQuery(any()),
+        () => mockDatabaseGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+        ),
       ).thenAnswer((_) async => Success(expectedResponse));
 
       // Act
@@ -285,7 +304,10 @@ void main() {
 
       // Assert - verificar que a query foi criada com o UUID correto
       final captured = verify(
-        () => mockDatabaseGateway.executeQuery(captureAny()),
+        () => mockDatabaseGateway.executeQuery(
+          captureAny(),
+          timeout: ConnectionConstants.defaultQueryTimeout,
+        ),
       ).captured;
       expect(captured.length, 1);
       expect(captured.first, isA<QueryRequest>());
@@ -323,7 +345,10 @@ void main() {
         () => mockConfigRepository.getCurrentConfigMetadata(),
       ).thenAnswer((_) async => Success(config));
       when(
-        () => mockDatabaseGateway.executeQuery(any()),
+        () => mockDatabaseGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+        ),
       ).thenAnswer((_) async => Success(expectedResponse));
 
       // Act
@@ -363,7 +388,10 @@ void main() {
           () => mockConfigRepository.getCurrentConfigMetadata(),
         ).thenAnswer((_) async => Success(config));
         when(
-          () => mockDatabaseGateway.executeQuery(any()),
+          () => mockDatabaseGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+          ),
         ).thenAnswer((_) async => Success(expectedResponse));
 
         await useCase.call(
@@ -373,7 +401,10 @@ void main() {
 
         final captured =
             verify(
-                  () => mockDatabaseGateway.executeQuery(captureAny()),
+                  () => mockDatabaseGateway.executeQuery(
+                    captureAny(),
+                    timeout: ConnectionConstants.defaultQueryTimeout,
+                  ),
                 ).captured.single
                 as QueryRequest;
 
@@ -414,7 +445,10 @@ void main() {
           () => mockConfigRepository.getCurrentConfigMetadata(),
         ).thenAnswer((_) async => Success(config));
         when(
-          () => mockDatabaseGateway.executeQuery(any()),
+          () => mockDatabaseGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+          ),
         ).thenAnswer((_) async => Success(expectedResponse));
 
         await useCase.call(
@@ -424,7 +458,10 @@ void main() {
 
         final captured =
             verify(
-                  () => mockDatabaseGateway.executeQuery(captureAny()),
+                  () => mockDatabaseGateway.executeQuery(
+                    captureAny(),
+                    timeout: ConnectionConstants.defaultQueryTimeout,
+                  ),
                 ).captured.single
                 as QueryRequest;
 
@@ -462,7 +499,10 @@ void main() {
           () => mockConfigRepository.getCurrentConfigMetadata(),
         ).thenAnswer((_) async => Success(config));
         when(
-          () => mockDatabaseGateway.executeQuery(any()),
+          () => mockDatabaseGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+          ),
         ).thenAnswer((_) async => Success(expectedResponse));
 
         await useCase.call(
@@ -472,7 +512,10 @@ void main() {
 
         final captured =
             verify(
-                  () => mockDatabaseGateway.executeQuery(captureAny()),
+                  () => mockDatabaseGateway.executeQuery(
+                    captureAny(),
+                    timeout: ConnectionConstants.defaultQueryTimeout,
+                  ),
                 ).captured.single
                 as QueryRequest;
 

@@ -92,6 +92,7 @@ List<Widget> buildAgentActionSchedulerOperationalIssueWidgets(AgentActionsProvid
 
   final message = switch (reason) {
     AgentActionTriggerConstants.schedulerInstanceLockedReason => l10n.agentActionsSchedulerInstanceLockedMessage,
+    AgentActionTriggerConstants.schedulerStorageAccessDeniedReason => l10n.agentActionsSchedulerStorageAccessDeniedMessage,
     AgentActionTriggerConstants.schedulerBootstrapFailedReason => l10n.agentActionsSchedulerBootstrapFailedMessage,
     _ => null,
   };

@@ -10,7 +10,7 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 /// when credit is available. Initial credit is 1; [releaseChunks] adds more.
 class BackpressureStreamEmitter implements IRpcStreamEmitter {
   BackpressureStreamEmitter({
-    required Future<void> Function(String event, Map<String, dynamic> payload) emit,
+    required Future<bool> Function(String event, Map<String, dynamic> payload) emit,
     required bool Function(String streamId, BackpressureStreamEmitter emitter) onRegister,
     required void Function(String streamId) onUnregister,
     int? maxQueueSize,
@@ -19,7 +19,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
        _onUnregister = onUnregister,
        _maxQueueSize = maxQueueSize ?? ConnectionConstants.maxBackpressureChunkQueueSize;
 
-  final Future<void> Function(String event, Map<String, dynamic> payload) _emit;
+  final Future<bool> Function(String event, Map<String, dynamic> payload) _emit;
   final bool Function(String streamId, BackpressureStreamEmitter emitter) _onRegister;
   final void Function(String streamId) _onUnregister;
   final int _maxQueueSize;
@@ -80,7 +80,10 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
     while (_sendCredit > 0 && _chunkQueue.isNotEmpty) {
       final chunk = _chunkQueue.removeFirst();
       final payload = chunk.toJson();
-      await _emit('rpc:chunk', payload);
+      final emitted = await _emit('rpc:chunk', payload);
+      if (!emitted) {
+        throw StateError('rpc stream chunk emit returned false');
+      }
       _sendCredit--;
     }
     await _maybeEmitComplete();
@@ -93,7 +96,10 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
     final complete = _pendingComplete!;
     _pendingComplete = null;
     final payload = complete.toJson();
-    await _emit('rpc:complete', payload);
+    final emitted = await _emit('rpc:complete', payload);
+    if (!emitted) {
+      throw StateError('rpc stream complete emit returned false');
+    }
     if (_streamId != null) {
       _onUnregister(_streamId!);
     }
@@ -132,6 +138,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
       return;
     }
     _pendingComplete = complete;
-    await _maybeEmitComplete();
+    _scheduleFlush();
+    await _flushInFlight;
   }
 }

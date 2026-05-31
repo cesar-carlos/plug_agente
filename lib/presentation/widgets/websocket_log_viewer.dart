@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
@@ -25,30 +26,23 @@ class WebSocketLogViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Consumer<WebSocketLogProvider>(
-      builder: (context, logProvider, child) {
-        return AppCard(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final spacing = constraints.maxHeight < 50 ? AppSpacing.sm : AppSpacing.md;
+    return AppCard(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final spacing = constraints.maxHeight < 50 ? AppSpacing.sm : AppSpacing.md;
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.wsLogTitle, style: context.sectionTitle),
-                  SizedBox(height: spacing),
-                  Expanded(
-                    child: _WebSocketLogTabbedPane(
-                      l10n: l10n,
-                      logProvider: logProvider,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        );
-      },
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.wsLogTitle, style: context.sectionTitle),
+              SizedBox(height: spacing),
+              Expanded(
+                child: _WebSocketLogTabbedPane(l10n: l10n),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -292,11 +286,9 @@ class _SummaryChip extends StatelessWidget {
 class _WebSocketLogTabbedPane extends StatefulWidget {
   const _WebSocketLogTabbedPane({
     required this.l10n,
-    required this.logProvider,
   });
 
   final AppLocalizations l10n;
-  final WebSocketLogProvider logProvider;
 
   @override
   State<_WebSocketLogTabbedPane> createState() => _WebSocketLogTabbedPaneState();
@@ -307,9 +299,21 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
   StreamSubscription<void>? _authMetricsSub;
   StreamSubscription<void>? _deprecationMetricsSub;
   StreamSubscription<void>? _protocolMetricsSub;
+  Timer? _metricsDebounceTimer;
   AuthorizationMetricsSummary? _authSummary;
   int? _deprecationCount;
   ProtocolMetricsSummary? _protocolSummary;
+
+  void _scheduleMetricsSnap() {
+    _metricsDebounceTimer?.cancel();
+    _metricsDebounceTimer = Timer(const Duration(milliseconds: 200), () {
+      _metricsDebounceTimer = null;
+      if (!mounted) {
+        return;
+      }
+      setState(_snapMetrics);
+    });
+  }
 
   void _snapMetrics() {
     _authSummary = getIt.isRegistered<IAuthorizationMetricsCollector>()
@@ -329,14 +333,14 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
     if (getIt.isRegistered<IAuthorizationMetricsCollector>()) {
       _authMetricsSub = getIt<IAuthorizationMetricsCollector>().updates.listen((_) {
         if (mounted) {
-          setState(_snapMetrics);
+          _scheduleMetricsSnap();
         }
       });
     }
     if (getIt.isRegistered<IDeprecationMetricsCollector>()) {
       _deprecationMetricsSub = getIt<IDeprecationMetricsCollector>().updates.listen((_) {
         if (mounted) {
-          setState(_snapMetrics);
+          _scheduleMetricsSnap();
         }
       });
     }
@@ -344,7 +348,7 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
     if (protocolMetrics != null) {
       _protocolMetricsSub = protocolMetrics.updates.listen((_) {
         if (mounted) {
-          setState(_snapMetrics);
+          _scheduleMetricsSnap();
         }
       });
     }
@@ -360,6 +364,7 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
 
   @override
   void dispose() {
+    _metricsDebounceTimer?.cancel();
     _authMetricsSub?.cancel();
     _deprecationMetricsSub?.cancel();
     _protocolMetricsSub?.cancel();
@@ -384,7 +389,6 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
             text: widget.l10n.wsLogTabStream,
             body: _WebSocketMessageListPane(
               l10n: widget.l10n,
-              logProvider: widget.logProvider,
               authSummary: _authSummary,
               protocolSummary: _protocolSummary,
               deprecationCount: _deprecationCount,
@@ -413,7 +417,6 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
       },
     );
   }
-
 }
 
 /// Stream tab body: enable/clear controls, metric summary cards and the
@@ -422,14 +425,12 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
 class _WebSocketMessageListPane extends StatelessWidget {
   const _WebSocketMessageListPane({
     required this.l10n,
-    required this.logProvider,
     required this.authSummary,
     required this.protocolSummary,
     required this.deprecationCount,
   });
 
   final AppLocalizations l10n;
-  final WebSocketLogProvider logProvider;
   final AuthorizationMetricsSummary? authSummary;
   final ProtocolMetricsSummary? protocolSummary;
   final int? deprecationCount;
@@ -438,6 +439,7 @@ class _WebSocketMessageListPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final protocol = protocolSummary;
     final deprecations = deprecationCount;
+    final logProvider = context.read<WebSocketLogProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -446,13 +448,18 @@ class _WebSocketMessageListPane extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Tooltip(
-                message: l10n.wsLogToggleEnabledTooltip,
-                child: ToggleSwitch(
-                  checked: logProvider.isEnabled,
-                  onChanged: logProvider.setEnabled,
-                  content: Text(l10n.wsLogEnabled),
-                ),
+              Selector<WebSocketLogProvider, bool>(
+                selector: (_, WebSocketLogProvider provider) => provider.isEnabled,
+                builder: (BuildContext context, bool isEnabled, Widget? child) {
+                  return Tooltip(
+                    message: l10n.wsLogToggleEnabledTooltip,
+                    child: ToggleSwitch(
+                      checked: isEnabled,
+                      onChanged: logProvider.setEnabled,
+                      content: Text(l10n.wsLogEnabled),
+                    ),
+                  );
+                },
               ),
               const SizedBox(width: 16),
               Tooltip(
@@ -490,20 +497,32 @@ class _WebSocketMessageListPane extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
         Expanded(
-          child: logProvider.messages.isEmpty
-              ? Center(
+          child: ListenableBuilder(
+            listenable: logProvider,
+            builder: (BuildContext context, Widget? child) {
+              final messages = logProvider.messages;
+              if (messages.isEmpty) {
+                return Center(
                   child: Text(
                     l10n.wsLogNoMessages,
                     style: context.bodyMuted,
                   ),
-                )
-              : ListView.builder(
-                  itemCount: logProvider.messages.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    final message = logProvider.messages[index];
-                    return _MessageItem(message: message);
-                  },
-                ),
+                );
+              }
+              final visibleCount = messages.length.clamp(
+                0,
+                AppConstants.dashboardDiagnosticFeedMaxVisibleItems,
+              );
+              return ListView.builder(
+                itemCount: visibleCount,
+                itemBuilder: (BuildContext context, int index) {
+                  return RepaintBoundary(
+                    child: _MessageItem(message: messages[index]),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ],
     );
@@ -857,8 +876,10 @@ class _MessageItem extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          SelectableText(
+          Text(
             message.formattedData,
+            maxLines: 8,
+            overflow: TextOverflow.ellipsis,
             style: context.bodyMuted.copyWith(
               fontFamily: 'Consolas',
               fontSize: 11,

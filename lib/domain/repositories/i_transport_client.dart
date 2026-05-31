@@ -45,4 +45,8 @@ abstract class ITransportClient {
   /// Optional correlation id appended to `resilience:` transport logs; set by
   /// the connection presentation layer during hub recovery. Pass null to clear.
   void setResilienceLogContext(String? recoveryId);
+
+  /// Optional hook so the dashboard can defer WebSocket log UI work while hub
+  /// `sql.execute` is in flight. Default is a no-op for test doubles.
+  void setHubSqlDashboardCapturePauseHandler(void Function(bool paused)? handler) {}
 }

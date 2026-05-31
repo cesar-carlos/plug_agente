@@ -49,6 +49,7 @@ class RpcBatchInboundHandler {
     required bool Function(Map<String, dynamic> requestMap) hasNullIdCompatibilityViolation,
     MetricsCollector? metricsCollector,
     int Function()? poolSizeProvider,
+    void Function(bool paused)? setHubSqlDashboardCapturePaused,
   }) : _featureFlags = featureFlags,
        _protocolProvider = protocolProvider,
        _logSummarizer = logSummarizer,
@@ -64,7 +65,8 @@ class RpcBatchInboundHandler {
        _validateBatchRequestJsonSchemasOrEmit = validateBatchRequestJsonSchemasOrEmit,
        _hasNullIdCompatibilityViolation = hasNullIdCompatibilityViolation,
        _metricsCollector = metricsCollector,
-       _poolSizeProvider = poolSizeProvider ?? _defaultPoolSize;
+       _poolSizeProvider = poolSizeProvider ?? _defaultPoolSize,
+       _setHubSqlDashboardCapturePaused = setHubSqlDashboardCapturePaused;
 
   static int _defaultPoolSize() => ConnectionConstants.poolSize;
 
@@ -94,271 +96,294 @@ class RpcBatchInboundHandler {
   final bool Function(Map<String, dynamic> requestMap) _hasNullIdCompatibilityViolation;
   final MetricsCollector? _metricsCollector;
   final int Function() _poolSizeProvider;
+  final void Function(bool paused)? _setHubSqlDashboardCapturePaused;
 
   /// Validates the batch envelope, dispatches each item independently, then
   /// emits the merged batch response (optionally preserving order based on the
   /// negotiated extension).
   Future<void> handleBatchRequest(List<dynamic> data) async {
+    final pauseDashboardCapture = _shouldPauseDashboardCapture(data);
+    if (pauseDashboardCapture) {
+      _setHubSqlDashboardCapturePaused?.call(true);
+    }
     try {
-      if (data.isEmpty) {
-        const code = RpcErrorCode.invalidRequest;
+      try {
+        if (data.isEmpty) {
+          const code = RpcErrorCode.invalidRequest;
+          final errorResponse = RpcResponse.error(
+            id: null,
+            error: RpcError(
+              code: code,
+              message: RpcErrorCode.getMessage(code),
+              data: RpcErrorCode.buildErrorData(
+                code: code,
+                technicalMessage: RpcInboundConstants.batchRequestEmptyDetail,
+                extra: {'detail': RpcInboundConstants.batchRequestEmptyDetail},
+              ),
+            ),
+          );
+          await _emitInboundRpcResponse(errorResponse);
+          return;
+        }
+
+        if (_exceedsPayloadLimit(data)) {
+          await _sendSchemaValidationError(
+            null,
+            RpcErrorCode.invalidPayload,
+            RpcInboundConstants.batchRequestExceedsPayloadLimitTechnicalMessage,
+          );
+          return;
+        }
+
+        if (_featureFlags.enableSocketSchemaValidation) {
+          final validation = _schemaValidator.validateBatch(
+            data,
+            limits: _protocolProvider().effectiveLimits,
+          );
+          if (validation.isError()) {
+            final failure = validation.exceptionOrNull() as domain.Failure?;
+            if (failure != null) {
+              await _sendSchemaValidationError(
+                null,
+                rpcInboundValidationFailureCode(failure),
+                failure.message,
+              );
+              return;
+            }
+          }
+          if (!await _validateBatchRequestJsonSchemasOrEmit(data)) {
+            return;
+          }
+        }
+
+        for (final item in data) {
+          if (item is! Map<String, dynamic>) {
+            await _sendSchemaValidationError(
+              null,
+              RpcErrorCode.invalidRequest,
+              RpcInboundConstants.eachBatchElementMustBeJsonObjectTechnicalMessage,
+            );
+            return;
+          }
+          if (!_responsePreparer.verifyIncomingSignature(item)) {
+            await _sendSchemaValidationError(
+              item['id'],
+              RpcErrorCode.authenticationFailed,
+              RpcInboundConstants.invalidPayloadSignatureTechnicalMessage,
+              errorReason: RpcErrorCode.reasonInvalidSignature,
+            );
+            return;
+          }
+        }
+
+        final requests = data.map((e) => RpcRequest.fromJson(e as Map<String, dynamic>)).toList();
+
+        for (final item in data.whereType<Map<String, dynamic>>()) {
+          if (_hasNullIdCompatibilityViolation(item)) {
+            await _sendSchemaValidationError(
+              null,
+              RpcErrorCode.invalidRequest,
+              RpcInboundConstants.nullIdNotificationsCompatibilityTechnicalMessage,
+            );
+            return;
+          }
+        }
+
+        if (_featureFlags.enableSocketDeliveryGuarantees) {
+          await _emitBatchRequestAck(requests);
+        }
+
+        if (_featureFlags.enableSocketBatchStrictValidation) {
+          final batch = RpcBatchRequest(requests);
+          final validation = batch.validateStrict(
+            maxSize: _protocolProvider().effectiveLimits.maxBatchSize,
+          );
+          switch (validation) {
+            case RpcBatchDuplicateIds(:final duplicateIds):
+              await _emitInboundRpcResponse(
+                RpcResponse.error(
+                  id: null,
+                  error: RpcError(
+                    code: RpcErrorCode.invalidRequest,
+                    message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
+                    data: RpcErrorCode.buildErrorData(
+                      code: RpcErrorCode.invalidRequest,
+                      technicalMessage: '${RpcBatchConstants.duplicateRequestIdsTechnicalMessagePrefix}$duplicateIds',
+                      reason: RpcBatchConstants.duplicateRequestIdsReason,
+                      extra: {'duplicate_ids': duplicateIds},
+                    ),
+                  ),
+                ),
+              );
+              return;
+            case RpcBatchExceedsLimit(:final size, :final limit):
+              await _emitInboundRpcResponse(
+                RpcResponse.error(
+                  id: null,
+                  error: RpcError(
+                    code: RpcErrorCode.invalidRequest,
+                    message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
+                    data: RpcErrorCode.buildErrorData(
+                      code: RpcErrorCode.invalidRequest,
+                      technicalMessage: '${RpcBatchConstants.exceedsLimitTechnicalMessagePrefix}$size > $limit',
+                      reason: RpcBatchConstants.exceedsLimitReason,
+                      extra: {'size': size, 'limit': limit},
+                    ),
+                  ),
+                ),
+              );
+              return;
+            case RpcBatchValid():
+              break;
+          }
+        }
+
+        final readOnlyAgentActionCount = requests
+            .where((request) => _isAgentActionBatchReadMethod(request.method))
+            .length;
+        final maxReadPerBatch = AgentActionPolicyDefaults.maxAgentActionReadRpcMethodsPerBatch;
+        if (readOnlyAgentActionCount > maxReadPerBatch) {
+          _metricsCollector?.recordRpcAgentActionBatchReadLimitRejected();
+          await _emitInboundRpcResponse(
+            RpcResponse.error(
+              id: null,
+              error: RpcError(
+                code: RpcErrorCode.invalidRequest,
+                message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
+                data: RpcErrorCode.buildErrorData(
+                  code: RpcErrorCode.invalidRequest,
+                  technicalMessage:
+                      '${AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitTechnicalMessagePrefix}'
+                      '$readOnlyAgentActionCount > $maxReadPerBatch',
+                  reason: AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitErrorReason,
+                  extra: <String, Object?>{
+                    'read_method_count': readOnlyAgentActionCount,
+                    'limit': maxReadPerBatch,
+                  },
+                ),
+              ),
+            ),
+          );
+          return;
+        }
+
+        final responses = <({int index, RpcResponse response})>[];
+        final responseMethodsById = <Object?, String>{};
+        final pendingDispatches = <({int index, RpcRequest request})>[];
+
+        for (var index = 0; index < requests.length; index++) {
+          final request = requests[index];
+          if (_isAgentActionBatchRejectedMethod(request.method)) {
+            final errorResponse = _responsePreparer.buildErrorResponse(
+              id: request.id,
+              code: RpcErrorCode.invalidRequest,
+              technicalMessage:
+                  '${AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedTechnicalMessagePrefix}'
+                  '${request.method}'
+                  '${AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedTechnicalMessageSuffix}',
+              errorReason: AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedErrorReason,
+            );
+            if (!request.isNotification) {
+              responses.add((index: index, response: errorResponse));
+              responseMethodsById[request.id] = request.method;
+            }
+            continue;
+          }
+
+          final guardResult = _requestGuard.evaluate(request);
+          if (guardResult != RpcRequestGuardResult.allow) {
+            final errorResponse = _responsePreparer.buildErrorResponse(
+              id: request.id,
+              code: rpcInboundGuardResultToCode(guardResult),
+              technicalMessage: rpcInboundGuardResultToTechnicalMessage(guardResult),
+              errorReason: rpcInboundGuardResultToReason(guardResult),
+            );
+            if (!request.isNotification) {
+              responses.add((index: index, response: errorResponse));
+              responseMethodsById[request.id] = request.method;
+            }
+            continue;
+          }
+
+          pendingDispatches.add((index: index, request: request));
+        }
+
+        if (pendingDispatches.isNotEmpty) {
+          final pendingRequests = pendingDispatches.map((entry) => entry.request).toList(growable: false);
+          if (_shouldUseParallelBatchDispatch(pendingRequests)) {
+            await _dispatchBatchItemsInParallel(
+              pendingDispatches,
+              responses,
+              responseMethodsById,
+              pendingRequests,
+            );
+          } else {
+            await _dispatchBatchItemsSequentially(
+              pendingDispatches,
+              responses,
+              responseMethodsById,
+            );
+          }
+        }
+
+        if (responses.isEmpty) {
+          return;
+        }
+
+        final orderedResponses = _supportsOrderedBatchResponses()
+            ? (responses.toList()..sort((left, right) => left.index.compareTo(right.index)))
+                  .map((entry) => entry.response)
+                  .toList()
+            : responses.map((entry) => entry.response).toList();
+        await _emitInboundRpcResponse(
+          orderedResponses,
+          methodsById: responseMethodsById,
+        );
+      } on Exception catch (error, stackTrace) {
+        AppLogger.error(
+          'Error processing RPC batch request',
+          error,
+          stackTrace,
+        );
         final errorResponse = RpcResponse.error(
           id: null,
           error: RpcError(
-            code: code,
-            message: RpcErrorCode.getMessage(code),
-            data: RpcErrorCode.buildErrorData(
-              code: code,
-              technicalMessage: RpcInboundConstants.batchRequestEmptyDetail,
-              extra: {'detail': RpcInboundConstants.batchRequestEmptyDetail},
-            ),
-          ),
-        );
-        await _emitInboundRpcResponse(errorResponse);
-        return;
-      }
-
-      if (_exceedsPayloadLimit(data)) {
-        await _sendSchemaValidationError(
-          null,
-          RpcErrorCode.invalidPayload,
-          RpcInboundConstants.batchRequestExceedsPayloadLimitTechnicalMessage,
-        );
-        return;
-      }
-
-      if (_featureFlags.enableSocketSchemaValidation) {
-        final validation = _schemaValidator.validateBatch(
-          data,
-          limits: _protocolProvider().effectiveLimits,
-        );
-        if (validation.isError()) {
-          final failure = validation.exceptionOrNull() as domain.Failure?;
-          if (failure != null) {
-            await _sendSchemaValidationError(
-              null,
-              rpcInboundValidationFailureCode(failure),
-              failure.message,
-            );
-            return;
-          }
-        }
-        if (!await _validateBatchRequestJsonSchemasOrEmit(data)) {
-          return;
-        }
-      }
-
-      for (final item in data) {
-        if (item is! Map<String, dynamic>) {
-          await _sendSchemaValidationError(
-            null,
-            RpcErrorCode.invalidRequest,
-            RpcInboundConstants.eachBatchElementMustBeJsonObjectTechnicalMessage,
-          );
-          return;
-        }
-        if (!_responsePreparer.verifyIncomingSignature(item)) {
-          await _sendSchemaValidationError(
-            item['id'],
-            RpcErrorCode.authenticationFailed,
-            RpcInboundConstants.invalidPayloadSignatureTechnicalMessage,
-            errorReason: RpcErrorCode.reasonInvalidSignature,
-          );
-          return;
-        }
-      }
-
-      final requests = data.map((e) => RpcRequest.fromJson(e as Map<String, dynamic>)).toList();
-
-      for (final item in data.whereType<Map<String, dynamic>>()) {
-        if (_hasNullIdCompatibilityViolation(item)) {
-          await _sendSchemaValidationError(
-            null,
-            RpcErrorCode.invalidRequest,
-            RpcInboundConstants.nullIdNotificationsCompatibilityTechnicalMessage,
-          );
-          return;
-        }
-      }
-
-      if (_featureFlags.enableSocketDeliveryGuarantees) {
-        await _emitBatchRequestAck(requests);
-      }
-
-      if (_featureFlags.enableSocketBatchStrictValidation) {
-        final batch = RpcBatchRequest(requests);
-        final validation = batch.validateStrict(
-          maxSize: _protocolProvider().effectiveLimits.maxBatchSize,
-        );
-        switch (validation) {
-          case RpcBatchDuplicateIds(:final duplicateIds):
-            await _emitInboundRpcResponse(
-              RpcResponse.error(
-                id: null,
-                error: RpcError(
-                  code: RpcErrorCode.invalidRequest,
-                  message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
-                  data: RpcErrorCode.buildErrorData(
-                    code: RpcErrorCode.invalidRequest,
-                    technicalMessage: '${RpcBatchConstants.duplicateRequestIdsTechnicalMessagePrefix}$duplicateIds',
-                    reason: RpcBatchConstants.duplicateRequestIdsReason,
-                    extra: {'duplicate_ids': duplicateIds},
-                  ),
-                ),
-              ),
-            );
-            return;
-          case RpcBatchExceedsLimit(:final size, :final limit):
-            await _emitInboundRpcResponse(
-              RpcResponse.error(
-                id: null,
-                error: RpcError(
-                  code: RpcErrorCode.invalidRequest,
-                  message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
-                  data: RpcErrorCode.buildErrorData(
-                    code: RpcErrorCode.invalidRequest,
-                    technicalMessage: '${RpcBatchConstants.exceedsLimitTechnicalMessagePrefix}$size > $limit',
-                    reason: RpcBatchConstants.exceedsLimitReason,
-                    extra: {'size': size, 'limit': limit},
-                  ),
-                ),
-              ),
-            );
-            return;
-          case RpcBatchValid():
-            break;
-        }
-      }
-
-      final readOnlyAgentActionCount = requests
-          .where((request) => _isAgentActionBatchReadMethod(request.method))
-          .length;
-      final maxReadPerBatch = AgentActionPolicyDefaults.maxAgentActionReadRpcMethodsPerBatch;
-      if (readOnlyAgentActionCount > maxReadPerBatch) {
-        _metricsCollector?.recordRpcAgentActionBatchReadLimitRejected();
-        await _emitInboundRpcResponse(
-          RpcResponse.error(
-            id: null,
-            error: RpcError(
-              code: RpcErrorCode.invalidRequest,
-              message: RpcErrorCode.getMessage(RpcErrorCode.invalidRequest),
-              data: RpcErrorCode.buildErrorData(
-                code: RpcErrorCode.invalidRequest,
-                technicalMessage:
-                    '${AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitTechnicalMessagePrefix}'
-                    '$readOnlyAgentActionCount > $maxReadPerBatch',
-                reason: AgentActionRpcConstants.jsonRpcBatchAgentActionReadLimitErrorReason,
-                extra: <String, Object?>{
-                  'read_method_count': readOnlyAgentActionCount,
-                  'limit': maxReadPerBatch,
-                },
-              ),
-            ),
-          ),
-        );
-        return;
-      }
-
-      final responses = <({int index, RpcResponse response})>[];
-      final responseMethodsById = <Object?, String>{};
-      final pendingDispatches = <({int index, RpcRequest request})>[];
-
-      for (var index = 0; index < requests.length; index++) {
-        final request = requests[index];
-        if (_isAgentActionBatchRejectedMethod(request.method)) {
-          final errorResponse = _responsePreparer.buildErrorResponse(
-            id: request.id,
-            code: RpcErrorCode.invalidRequest,
-            technicalMessage:
-                '${AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedTechnicalMessagePrefix}'
-                '${request.method}'
-                '${AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedTechnicalMessageSuffix}',
-            errorReason: AgentActionRpcConstants.jsonRpcBatchMethodNotAllowedErrorReason,
-          );
-          if (!request.isNotification) {
-            responses.add((index: index, response: errorResponse));
-            responseMethodsById[request.id] = request.method;
-          }
-          continue;
-        }
-
-        final guardResult = _requestGuard.evaluate(request);
-        if (guardResult != RpcRequestGuardResult.allow) {
-          final errorResponse = _responsePreparer.buildErrorResponse(
-            id: request.id,
-            code: rpcInboundGuardResultToCode(guardResult),
-            technicalMessage: rpcInboundGuardResultToTechnicalMessage(guardResult),
-            errorReason: rpcInboundGuardResultToReason(guardResult),
-          );
-          if (!request.isNotification) {
-            responses.add((index: index, response: errorResponse));
-            responseMethodsById[request.id] = request.method;
-          }
-          continue;
-        }
-
-        pendingDispatches.add((index: index, request: request));
-      }
-
-      if (pendingDispatches.isNotEmpty) {
-        final pendingRequests = pendingDispatches.map((entry) => entry.request).toList(growable: false);
-        if (_shouldUseParallelBatchDispatch(pendingRequests)) {
-          await _dispatchBatchItemsInParallel(
-            pendingDispatches,
-            responses,
-            responseMethodsById,
-            pendingRequests,
-          );
-        } else {
-          await _dispatchBatchItemsSequentially(
-            pendingDispatches,
-            responses,
-            responseMethodsById,
-          );
-        }
-      }
-
-      if (responses.isEmpty) {
-        return;
-      }
-
-      final orderedResponses = _supportsOrderedBatchResponses()
-          ? (responses.toList()..sort((left, right) => left.index.compareTo(right.index)))
-                .map((entry) => entry.response)
-                .toList()
-          : responses.map((entry) => entry.response).toList();
-      await _emitInboundRpcResponse(
-        orderedResponses,
-        methodsById: responseMethodsById,
-      );
-    } on Exception catch (error, stackTrace) {
-      AppLogger.error(
-        'Error processing RPC batch request',
-        error,
-        stackTrace,
-      );
-      final errorResponse = RpcResponse.error(
-        id: null,
-        error: RpcError(
-          code: RpcErrorCode.internalError,
-          message: RpcErrorCode.getMessage(RpcErrorCode.internalError),
-          data: RpcErrorCode.buildErrorData(
             code: RpcErrorCode.internalError,
-            technicalMessage: RpcInboundConstants.unhandledBatchProcessingTechnicalMessage,
-            extra: {'failure_code': RpcInboundConstants.unhandledBatchExceptionFailureCode},
+            message: RpcErrorCode.getMessage(RpcErrorCode.internalError),
+            data: RpcErrorCode.buildErrorData(
+              code: RpcErrorCode.internalError,
+              technicalMessage: RpcInboundConstants.unhandledBatchProcessingTechnicalMessage,
+              extra: {'failure_code': RpcInboundConstants.unhandledBatchExceptionFailureCode},
+            ),
           ),
-        ),
-      );
-      try {
-        await _emitInboundRpcResponse(errorResponse);
-      } on Object catch (emitError, emitStack) {
-        AppLogger.error(
-          'Failed to emit batch error response',
-          emitError,
-          emitStack,
         );
+        try {
+          await _emitInboundRpcResponse(errorResponse);
+        } on Object catch (emitError, emitStack) {
+          AppLogger.error(
+            'Failed to emit batch error response',
+            emitError,
+            emitStack,
+          );
+        }
+      }
+    } finally {
+      if (pauseDashboardCapture) {
+        _setHubSqlDashboardCapturePaused?.call(false);
       }
     }
+  }
+
+  bool _shouldPauseDashboardCapture(List<dynamic> data) {
+    for (final item in data) {
+      if (item is! Map) {
+        continue;
+      }
+      if (item['method'] == 'sql.execute') {
+        return true;
+      }
+    }
+    return false;
   }
 
   bool _isAgentActionBatchRejectedMethod(String method) {

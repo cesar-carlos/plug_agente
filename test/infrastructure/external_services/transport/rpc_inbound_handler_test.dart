@@ -93,6 +93,7 @@ void main() {
   late ProtocolConfig protocol;
   late List<dynamic> emittedResponses;
   late List<({String event, dynamic payload})> emittedEvents;
+  late List<bool> hubSqlCaptureTransitions;
   late RpcInboundHandler handler;
   late MetricsCollector inboundMetrics;
 
@@ -121,6 +122,7 @@ void main() {
     );
     emittedResponses = [];
     emittedEvents = [];
+    hubSqlCaptureTransitions = <bool>[];
 
     final pipelineCache = TransportPipelineCache(
       protocolProvider: () => protocol,
@@ -171,6 +173,7 @@ void main() {
       },
       hasReceivedCapabilities: () => true,
       metricsCollector: inboundMetrics,
+      setHubSqlDashboardCapturePaused: (paused) => hubSqlCaptureTransitions.add(paused),
     );
   });
 
@@ -305,6 +308,7 @@ void main() {
 
       unblockEmit.complete();
       await handleFuture;
+      await Future<void>.delayed(Duration.zero);
 
       expect(emittedResponses, hasLength(1));
       final response = emittedResponses.single as RpcResponse;
@@ -631,6 +635,88 @@ void main() {
       final data = response.error!.data as Map<String, dynamic>;
       expect(data['detail'], RpcInboundConstants.batchRequestEmptyDetail);
       expect(data['technical_message'], RpcInboundConstants.batchRequestEmptyDetail);
+    });
+
+    test('pauses and resumes dashboard capture for batch containing sql.execute', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(id: request.id, result: const <String, dynamic>{'ok': true});
+      });
+
+      await handler.handleBatchRequest([
+        {
+          'jsonrpc': '2.0',
+          'id': 'sql-batch-1',
+          'method': 'sql.execute',
+          'params': {'sql': 'SELECT 1'},
+        },
+      ]);
+
+      expect(hubSqlCaptureTransitions, [true, false]);
+    });
+
+    test('does not pause dashboard capture for batch without sql.execute', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((_) async => RpcResponse.success(id: 'health-1', result: const <String, dynamic>{'ok': true}));
+
+      await handler.handleBatchRequest([
+        {
+          'jsonrpc': '2.0',
+          'id': 'health-1',
+          'method': 'health.check',
+          'params': const <String, dynamic>{},
+        },
+      ]);
+
+      expect(hubSqlCaptureTransitions, isEmpty);
+    });
+
+    test('always resumes dashboard capture when sql.execute batch dispatch throws', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenThrow(Exception('dispatch failed'));
+
+      await handler.handleBatchRequest([
+        {
+          'jsonrpc': '2.0',
+          'id': 'sql-batch-error',
+          'method': 'sql.execute',
+          'params': {'sql': 'SELECT 1'},
+        },
+      ]);
+
+      expect(hubSqlCaptureTransitions, [true, false]);
+      expect(emittedResponses, isNotEmpty);
+      final last = emittedResponses.last;
+      final response = switch (last) {
+        final List<RpcResponse> responses when responses.isNotEmpty => responses.first,
+        final RpcResponse single => single,
+        _ => throw StateError('Unexpected batch response type: ${last.runtimeType}'),
+      };
+      expect(response.error?.code, RpcErrorCode.internalError);
     });
 
     test('rejects side-effect agent actions in batch before dispatch', () async {

@@ -17,7 +17,7 @@ class RpcStreamPullHandler {
     required PayloadFrameCodec frameCodec,
     required RpcContractValidator contractValidator,
     required ProtocolConfig Function() protocolProvider,
-    required Future<void> Function(String event, dynamic logicalPayload) emitEventAsync,
+    required Future<bool> Function(String event, dynamic logicalPayload) emitEventAsync,
     required void Function(String direction, String event, dynamic data) logMessage,
   }) : _featureFlags = featureFlags,
        _frameCodec = frameCodec,
@@ -33,7 +33,7 @@ class RpcStreamPullHandler {
   final FeatureFlags _featureFlags;
   final PayloadFrameCodec _frameCodec;
   final RpcContractValidator _contractValidator;
-  final Future<void> Function(String event, dynamic logicalPayload) _emitEventAsync;
+  final Future<bool> Function(String event, dynamic logicalPayload) _emitEventAsync;
   final void Function(String direction, String event, dynamic data) _logMessage;
   final StreamEmitterRegistry _streamEmitters;
 
@@ -93,7 +93,7 @@ class RpcStreamPullHandler {
     _streamEmitters.dispose();
   }
 
-  Future<void> _emitValidatedStreamEvent(
+  Future<bool> _emitValidatedStreamEvent(
     String event,
     Map<String, dynamic> payload,
   ) async {
@@ -109,27 +109,31 @@ class RpcStreamPullHandler {
       if (validation.isError()) {
         final failure = validation.exceptionOrNull()! as domain.Failure;
         AppLogger.error('Invalid $event payload: ${failure.message}');
-        return;
+        return false;
       }
     }
 
-    await _emitEventAsync(event, payload);
+    return _emitEventAsync(event, payload);
   }
 }
 
 class _PassthroughRpcStreamEmitter implements IRpcStreamEmitter {
   _PassthroughRpcStreamEmitter(this._emitAsync);
 
-  final Future<void> Function(String event, Map<String, dynamic> payload) _emitAsync;
+  final Future<bool> Function(String event, Map<String, dynamic> payload) _emitAsync;
 
   @override
   Future<bool> emitChunk(RpcStreamChunk chunk) async {
-    await _emitAsync('rpc:chunk', chunk.toJson());
-    return true;
+    return _emitAsync('rpc:chunk', chunk.toJson());
   }
 
   @override
   Future<void> emitComplete(RpcStreamComplete complete) async {
-    await _emitAsync('rpc:complete', complete.toJson());
+    final emitted = await _emitAsync('rpc:complete', complete.toJson());
+    if (!emitted) {
+      AppLogger.warning(
+        'rpc stream complete emit failed. stream_id=${complete.streamId}',
+      );
+    }
   }
 }

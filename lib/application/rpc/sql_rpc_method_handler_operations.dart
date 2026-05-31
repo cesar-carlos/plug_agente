@@ -223,9 +223,9 @@ class SqlRpcMethodHandlerOperations {
     final paramReader = SqlExecuteParamsReader(params);
     final sql = paramReader.sql;
     final maxRows = _resolveMaxRows(params, limits.maxRows);
-    final deadline = _featureFlags.enableSocketTimeoutByStage
-        ? DateTime.now().add(_sqlExecuteTotalBudgetDuration)
-        : null;
+    // Always bound hub-originated sql.execute so a slow ODBC call cannot hold the
+    // UI isolate and RPC slots indefinitely when the stage-timeout flag is off.
+    final deadline = DateTime.now().add(_sqlExecuteTotalBudgetDuration);
 
     if (sql == null || sql.isEmpty) {
       return _support.invalidParams(request, 'sql is required');
@@ -380,8 +380,7 @@ class SqlRpcMethodHandlerOperations {
 
         return result.fold<Future<RpcResponse>>(
           (QueryResponse queryResponse) async {
-            // Normalize
-            var normalized = _normalizerService.normalize(queryResponse);
+            var normalized = await _normalizerService.normalizeAsync(queryResponse);
 
             var multiResultSetsTruncated = false;
             if (normalized.resultSets.isNotEmpty) {
@@ -431,6 +430,7 @@ class SqlRpcMethodHandlerOperations {
                   overflowed = true;
                   break;
                 }
+                await Future<void>.delayed(Duration.zero);
               }
 
               if (!overflowed) {
@@ -469,16 +469,16 @@ class SqlRpcMethodHandlerOperations {
                   totalRows: rows.length,
                   affectedRows: normalized.affectedRows,
                   executionId: normalized.id,
-                  startedAt: queryRequest.timestamp.toIso8601String(),
-                  finishedAt: normalized.timestamp.toIso8601String(),
+                  startedAt: _executionTimestampUtcIso(queryRequest.timestamp),
+                  finishedAt: _executionTimestampUtcIso(normalized.timestamp),
                 ),
               );
 
               final resultData = {
                 'stream_id': streamId,
                 'execution_id': normalized.id,
-                'started_at': queryRequest.timestamp.toIso8601String(),
-                'finished_at': normalized.timestamp.toIso8601String(),
+                'started_at': _executionTimestampUtcIso(queryRequest.timestamp),
+                'finished_at': _executionTimestampUtcIso(normalized.timestamp),
                 'sql_handling_mode': queryRequest.sqlHandlingMode.name,
                 'max_rows_handling': 'response_truncation',
                 'effective_max_rows': maxRows,
@@ -632,7 +632,7 @@ class SqlRpcMethodHandlerOperations {
             columnMetadata = chunk.first.keys.map((k) => <String, dynamic>{'name': k, 'type': 'string'}).toList();
           }
           totalRows += chunk.length;
-          if (!await streamEmitter.emitChunk(
+          final accepted = await streamEmitter.emitChunk(
             RpcStreamChunk(
               streamId: streamId,
               requestId: request.id,
@@ -640,7 +640,8 @@ class SqlRpcMethodHandlerOperations {
               rows: chunk,
               columnMetadata: columnMetadata,
             ),
-          )) {
+          );
+          if (!accepted) {
             overflowed = true;
             await gateway.cancelActiveStream(
               executionId: executionId,
@@ -698,6 +699,10 @@ class SqlRpcMethodHandlerOperations {
         );
       }
 
+      final executionStartedAtUtc = queryRequest.timestamp.toUtc();
+      final executionFinishedAtUtc = DateTime.now().toUtc();
+      final startedAtIso = _executionTimestampUtcIso(executionStartedAtUtc);
+      final finishedAtIso = _executionTimestampUtcIso(executionFinishedAtUtc);
       await streamEmitter.emitComplete(
         RpcStreamComplete(
           streamId: streamId,
@@ -705,8 +710,8 @@ class SqlRpcMethodHandlerOperations {
           totalRows: totalRows,
           affectedRows: totalRows,
           executionId: executionId,
-          startedAt: queryRequest.timestamp.toIso8601String(),
-          finishedAt: DateTime.now().toUtc().toIso8601String(),
+          startedAt: startedAtIso,
+          finishedAt: finishedAtIso,
         ),
       );
       final dbStreamResponse = RpcResponse.success(
@@ -714,8 +719,8 @@ class SqlRpcMethodHandlerOperations {
         result: {
           'stream_id': streamId,
           'execution_id': executionId,
-          'started_at': queryRequest.timestamp.toIso8601String(),
-          'finished_at': DateTime.now().toUtc().toIso8601String(),
+          'started_at': startedAtIso,
+          'finished_at': finishedAtIso,
           'sql_handling_mode': queryRequest.sqlHandlingMode.name,
           'max_rows_handling': 'response_truncation',
           'effective_max_rows': limits.maxRows,
@@ -871,7 +876,7 @@ class SqlRpcMethodHandlerOperations {
 
     final params = request.params as Map<String, dynamic>;
     final commandsJson = params['commands'] as List<dynamic>?;
-    final deadline = _featureFlags.enableSocketTimeoutByStage ? DateTime.now().add(_sqlBatchTotalBudgetDuration) : null;
+    final deadline = DateTime.now().add(_sqlBatchTotalBudgetDuration);
     if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
       final options = params['options'] as Map<String, dynamic>?;
       if (options?['page'] != null || options?['page_size'] != null) {
@@ -1128,7 +1133,7 @@ class SqlRpcMethodHandlerOperations {
     final bulkRequest = bulkRequestResult.getOrThrow();
     final database = params['database'] as String?;
     final authorizationSql = _bulkInsertAuthorizationSql(bulkRequest);
-    final deadline = _featureFlags.enableSocketTimeoutByStage ? DateTime.now().add(_sqlBatchTotalBudgetDuration) : null;
+    final deadline = DateTime.now().add(_sqlBatchTotalBudgetDuration);
 
     final idempotencyKey = params['idempotency_key'] as String?;
     final idempotencyFingerprint = await resolveIdempotencyFingerprint(
@@ -1459,20 +1464,24 @@ class SqlRpcMethodHandlerOperations {
     }
 
     try {
+      final Result<QueryResponse> result;
       if (timeout == null) {
         if (database == null || database.isEmpty) {
-          return await _databaseGateway.executeQuery(queryRequest);
+          result = await _databaseGateway.executeQuery(queryRequest);
+        } else {
+          result = await _databaseGateway.executeQuery(
+            queryRequest,
+            database: database,
+          );
         }
-        return await _databaseGateway.executeQuery(
+      } else {
+        result = await _databaseGateway.executeQuery(
           queryRequest,
+          timeout: timeout,
           database: database,
         );
       }
-      return await _databaseGateway.executeQuery(
-        queryRequest,
-        timeout: timeout,
-        database: database,
-      );
+      return result;
     } on TimeoutException catch (error) {
       final context = <String, dynamic>{
         'timeout': true,
@@ -1913,6 +1922,11 @@ class SqlRpcMethodHandlerOperations {
     };
   }
 
+  /// Hub-facing execution timestamps must both be UTC ISO-8601 (with `Z` offset).
+  static String _executionTimestampUtcIso(DateTime timestamp) {
+    return timestamp.toUtc().toIso8601String();
+  }
+
   Map<String, dynamic> _buildExecuteResultData(
     QueryResponse response, {
     required DateTime startedAt,
@@ -1925,8 +1939,8 @@ class SqlRpcMethodHandlerOperations {
   }) {
     final resultData = <String, dynamic>{
       'execution_id': response.id,
-      'started_at': startedAt.toIso8601String(),
-      'finished_at': finishedAt.toIso8601String(),
+      'started_at': _executionTimestampUtcIso(startedAt),
+      'finished_at': _executionTimestampUtcIso(finishedAt),
       'sql_handling_mode': sqlHandlingMode.name,
       'max_rows_handling': 'response_truncation',
       'effective_max_rows': effectiveMaxRows,

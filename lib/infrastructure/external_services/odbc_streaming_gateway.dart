@@ -18,6 +18,7 @@ import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_chunk_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
@@ -534,20 +535,15 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     final safeFetchSize = fetchSize > 0 ? fetchSize : 1000;
     final columns = result.columns;
     var chunk = <Map<String, dynamic>>[];
+
     for (final row in result.rows) {
-      final mappedRow = <String, dynamic>{};
-      for (var i = 0; i < columns.length; i++) {
-        mappedRow[columns[i]] = row[i];
-      }
-      chunk.add(mappedRow);
+      chunk.add(mapOdbcRowToStreamingMap(columns, row));
       if (chunk.length >= safeFetchSize) {
         await onChunk(chunk);
         chunk = <Map<String, dynamic>>[];
-        // If a single QueryResult contains many rows (driver delivered the
-        // whole resultset in one event), the outer loop's cancel check would
-        // not run until this method returns. Stop emitting chunks as soon as
-        // cancellation is requested so cancel latency stays bounded by chunk
-        // size, not result size.
+        // Yield between chunks so a large driver-delivered result does not
+        // monopolize the UI isolate while it is being re-framed for Socket.IO.
+        await Future<void>.delayed(Duration.zero);
         if (activeStream?.isCancelRequested ?? false) {
           return;
         }

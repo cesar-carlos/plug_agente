@@ -1,6 +1,7 @@
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/validation/query_validation_messages.dart';
 import 'package:plug_agente/application/validation/sql_validator.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -64,7 +65,10 @@ class ExecutePlaygroundQuery {
               sqlHandlingMode: sqlHandlingMode,
             );
 
-            return _databaseGateway.executeQuery(request);
+            return _databaseGateway.executeQuery(
+              request,
+              timeout: ConnectionConstants.defaultQueryTimeout,
+            );
           },
           (failure) {
             final failureMessage = failure is domain.Failure ? failure.message : failure.toString();

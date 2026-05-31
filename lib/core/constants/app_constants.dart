@@ -57,6 +57,9 @@ class AppConstants {
 
   /// Max in-memory items for WebSocket log and SQL investigation dashboard feeds.
   static const int dashboardDiagnosticFeedMaxItems = 500;
+
+  /// Max messages rendered in the dashboard WebSocket list (newest first).
+  static const int dashboardDiagnosticFeedMaxVisibleItems = 80;
   static const Duration clientTokenDebounceDelay = Duration(milliseconds: 250);
   static const Duration formTransitionDelay = Duration(milliseconds: 100);
   static const Duration ruleDialogTransition = Duration(milliseconds: 120);

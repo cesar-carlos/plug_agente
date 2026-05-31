@@ -325,6 +325,7 @@ class _QueryResultSetSelector extends StatelessWidget {
       width: 180,
       child: ComboBox<int>(
         value: selectedResultSetIndex,
+        isExpanded: true,
         placeholder: Text(l10n.queryResultSetLabel),
         items: List<ComboBoxItem<int>>.generate(
           resultSetCount,
@@ -381,6 +382,7 @@ class _QueryPaginationControls extends StatelessWidget {
           width: 140,
           child: ComboBox<int>(
             value: pageSize,
+            isExpanded: true,
             placeholder: Text(l10n.queryPaginationPageSize),
             items: const [25, 50, 100, 250]
                 .map(

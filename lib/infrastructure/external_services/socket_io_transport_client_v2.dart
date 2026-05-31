@@ -158,7 +158,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
       frameCodec: _frameCodec,
       contractValidator: _contractValidator,
       protocolProvider: () => _currentProtocol,
-      emitEventAsync: _emitEventVoid,
+      emitEventAsync: _emitEventAsync,
       logMessage: _logMessage,
     );
     _inboundHandler = RpcInboundHandler(
@@ -180,6 +180,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
       jsonSchemaValidator: _jsonSchemaValidator,
       schemaCatalog: _schemaCatalog,
       metricsCollector: _metricsCollector,
+      // Must stay late-bound: WebSocketLogProvider registers the handler after construction.
+      setHubSqlDashboardCapturePaused: (bool paused) {
+        _hubSqlDashboardCapturePauseHandler?.call(paused);
+      },
     );
     _socketEventBinder = TransportSocketEventBinder(
       featureFlags: _featureFlags,
@@ -274,6 +278,13 @@ class SocketIOTransportClientV2 implements ITransportClient {
     _onMessage = callback;
   }
 
+  void Function(bool paused)? _hubSqlDashboardCapturePauseHandler;
+
+  @override
+  void setHubSqlDashboardCapturePauseHandler(void Function(bool paused)? handler) {
+    _hubSqlDashboardCapturePauseHandler = handler;
+  }
+
   @override
   void setOnTokenExpired(void Function()? callback) {
     _onTokenExpired = callback;
@@ -303,7 +314,7 @@ class SocketIOTransportClientV2 implements ITransportClient {
     final traced = _featureFlags.enableSocketSummarizeLargePayloadLogs && data != null
         ? _logSummarizer.summarize(direction, event, data)
         : data;
-    onMessage(direction, event, traced);
+    scheduleMicrotask(() => onMessage(direction, event, traced));
   }
 
   ProtocolCapabilities _localCapabilities() {
@@ -408,42 +419,92 @@ class SocketIOTransportClientV2 implements ITransportClient {
     }
     final outgoingPayload = outgoingResult.getOrThrow();
 
-    if (!_featureFlags.enableSocketDeliveryGuarantees || _socket == null) {
+    final deliverySocket = _socket;
+    if (deliverySocket == null) {
+      AppLogger.warning('Skipping rpc:response emit because socket is disconnected');
+      return;
+    }
+    if (!_featureFlags.enableSocketDeliveryGuarantees) {
+      try {
+        deliverySocket.emit('rpc:response', outgoingPayload);
+      } on Object catch (error, stackTrace) {
+        AppLogger.error(
+          'Socket emit failed for rpc:response',
+          error,
+          stackTrace,
+        );
+        Error.throwWithStackTrace(error, stackTrace);
+      }
       _logMessage('SENT', 'rpc:response', validatedPayload);
-      _socket?.emit('rpc:response', outgoingPayload);
       return;
     }
 
-    // Total send attempts: 1 initial + maxResponseRetries.
-    // After all attempts fail, fall back to fire-and-forget emit so the hub
-    // still receives the response (best-effort) instead of nothing at all.
+    // Hub ack for rpc:response can take up to (maxRetries + 1) * responseAckTimeout.
+    // Run that wait off the inbound handler continuation so sql.execute and the UI
+    // isolate are not held while the hub catches up (or never acks).
+    _logMessage('SENT', 'rpc:response', validatedPayload);
+    final deliveryGeneration = _connectGeneration;
+    unawaited(
+      _deliverRpcResponseWithAck(
+        outgoingPayload,
+        socket: deliverySocket,
+        connectGeneration: deliveryGeneration,
+      ).catchError((Object error, StackTrace stackTrace) {
+        AppLogger.error(
+          'Unhandled rpc:response ACK delivery failure',
+          error,
+          stackTrace,
+        );
+      }),
+    );
+  }
+
+  /// Retries [rpc:response] until the hub acks or attempts are exhausted.
+  Future<void> _deliverRpcResponseWithAck(
+    dynamic outgoingPayload, {
+    required io.Socket socket,
+    required int connectGeneration,
+  }) async {
     const maxRetries = DeliveryGuaranteeConfig.maxResponseRetries;
     final timeoutMs = DeliveryGuaranteeConfig.responseAckTimeout.inMilliseconds;
     const totalAttempts = maxRetries + 1;
 
     for (var attempt = 0; attempt < totalAttempts; attempt++) {
-      // Capture _socket per iteration: if the socket is closed mid-retry the
-      // null-assertion operator on a nullable field would throw TypeError (not
-      // Exception) and escape the catch below.
-      final socket = _socket;
-      if (socket == null) return;
-      try {
-        _logMessage('SENT', 'rpc:response', validatedPayload);
-        await socket.timeout(timeoutMs).emitWithAckAsync('rpc:response', outgoingPayload);
+      if (_socket != socket || _connectGeneration != connectGeneration) {
+        _metricsCollector?.recordRpcResponseAckAbortedConnectionChange();
+        AppLogger.info(
+          'rpc:response ack delivery aborted due connection generation change',
+        );
         return;
-      } on Exception catch (e) {
+      }
+      try {
+        await socket.timeout(timeoutMs).emitWithAckAsync('rpc:response', outgoingPayload);
+        _metricsCollector?.recordRpcResponseAckDelivered();
+        return;
+      } on Object catch (e, stackTrace) {
         final remaining = totalAttempts - attempt - 1;
         if (remaining > 0) {
+          _metricsCollector?.recordRpcResponseAckRetry();
           AppLogger.warning(
             'rpc:response ack timeout, retrying (${attempt + 1}/$maxRetries)',
             e,
+            stackTrace,
           );
         } else {
-          AppLogger.warning(
-            'rpc:response ack failed after $maxRetries retries, sending without ack',
-            e,
-          );
-          _socket?.emit('rpc:response', outgoingPayload);
+          if (_socket == socket && _connectGeneration == connectGeneration) {
+            _metricsCollector?.recordRpcResponseAckFallbackWithoutAck();
+            AppLogger.warning(
+              'rpc:response ack failed after $maxRetries retries, sending without ack',
+              e,
+              stackTrace,
+            );
+            socket.emit('rpc:response', outgoingPayload);
+          } else {
+            _metricsCollector?.recordRpcResponseAckAbortedConnectionChange();
+            AppLogger.info(
+              'rpc:response fallback without ack aborted due connection generation change',
+            );
+          }
         }
       }
     }
@@ -617,7 +678,16 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _emitEvent(String event, dynamic logicalPayload) {
-    unawaited(_emitEventAsync(event, logicalPayload));
+    unawaited(
+      _emitEventAsync(event, logicalPayload).catchError((Object error, StackTrace stackTrace) {
+        AppLogger.error(
+          'Unhandled socket emit failure for $event',
+          error,
+          stackTrace,
+        );
+        return false;
+      }),
+    );
   }
 
   /// Emits [event] after framing [logicalPayload] through the transport
@@ -625,7 +695,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
   /// when the socket is absent or encoding failed (failure is logged as a
   /// warning so callers can react to silent drops — e.g. agent:register).
   Future<bool> _emitEventAsync(String event, dynamic logicalPayload) async {
-    if (_socket == null) {
+    final socket = _socket;
+    if (socket == null) {
       return false;
     }
     final outgoingResult = await _prepareOutgoingPayloadAsync(
@@ -640,8 +711,17 @@ class SocketIOTransportClientV2 implements ITransportClient {
       return false;
     }
     final outgoingPayload = outgoingResult.getOrThrow();
+    try {
+      socket.emit(event, outgoingPayload);
+    } on Object catch (error, stackTrace) {
+      AppLogger.error(
+        'Socket emit failed for $event',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
     _logMessage('SENT', event, logicalPayload);
-    _socket!.emit(event, outgoingPayload);
     return true;
   }
 
@@ -897,7 +977,15 @@ class SocketIOTransportClientV2 implements ITransportClient {
     // delivery) are not blocked by IDs seen on the previous session.
     // Cross-session double-execution is mitigated by the idempotency cache.
     _rpcRequestGuard.clearReplayCache();
-    unawaited(_rpcDispatcher.cancelActiveStreamOnDisconnect());
+    unawaited(
+      _rpcDispatcher.cancelActiveStreamOnDisconnect().catchError((Object error, StackTrace stackTrace) {
+        AppLogger.warning(
+          'Failed to cancel active stream on socket disconnect',
+          error,
+          stackTrace,
+        );
+      }),
+    );
     final socket = _socket;
     _socket = null;
     _streamPullHandler.dispose();

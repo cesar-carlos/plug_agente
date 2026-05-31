@@ -378,6 +378,17 @@ class ConnectionConstants {
   /// `tool/benchmark_transport_pipeline.dart --gzip-isolate-threshold-sweep`.
   static const int defaultGzipIsolateThresholdBytes = 32 * 1024;
 
+  /// JSON tree size above which `rpc:chunk` / `rpc:complete` encoding uses `compute`.
+  ///
+  /// Lower than `jsonPayloadIsolateEncodeThresholdBytes` so streaming row payloads
+  /// do not block the UI isolate between ODBC fetches.
+  static const int streamingChunkJsonIsolateThresholdBytes = 32 * 1024;
+
+  /// Row count in an `rpc:chunk` payload above which JSON encoding always uses
+  /// `compute`, even when the byte-size heuristic is below
+  /// [streamingChunkJsonIsolateThresholdBytes].
+  static const int streamingChunkRowIsolateThreshold = 50;
+
   /// GZIP payload size above which transport compress/decompress uses `compute`.
   ///
   /// Override with env `TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES` (positive integer bytes).

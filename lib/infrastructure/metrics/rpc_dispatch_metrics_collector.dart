@@ -38,6 +38,12 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
   void recordRpcResponseAckRetry() => _metrics.recordRpcResponseAckRetry();
 
   @override
+  void recordRpcResponseAckDelivered() => _metrics.recordRpcResponseAckDelivered();
+
+  @override
+  void recordRpcResponseAckAbortedConnectionChange() => _metrics.recordRpcResponseAckAbortedConnectionChange();
+
+  @override
   void recordRpcResponseAckFallbackWithoutAck() => _metrics.recordRpcResponseAckFallbackWithoutAck();
 
   @override

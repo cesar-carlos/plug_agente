@@ -25,6 +25,13 @@ abstract class IRpcDispatchMetricsCollector {
   /// Incremented on each ACK retry for a pending `rpc:response`.
   void recordRpcResponseAckRetry();
 
+  /// Incremented when an `rpc:response` ACK is delivered successfully.
+  void recordRpcResponseAckDelivered();
+
+  /// Incremented when an ACK delivery loop is abandoned because socket or
+  /// connection generation changed before completion.
+  void recordRpcResponseAckAbortedConnectionChange();
+
   /// Incremented when an `rpc:response` is sent without waiting for ACK
   /// because the ACK mechanism is unavailable or timed out.
   void recordRpcResponseAckFallbackWithoutAck();

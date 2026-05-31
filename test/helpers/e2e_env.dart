@@ -231,6 +231,20 @@ class E2EEnv {
   /// Smoke query for ODBC integration (default: SELECT 1).
   static String get odbcSmokeQuery => _get('ODBC_INTEGRATION_SMOKE_QUERY') ?? 'SELECT 1';
 
+  /// When true (`ODBC_E2E_CODCLIENTE_TESTS=true`), runs the live
+  /// `sql.execute` probe for `CodCliente` query in integration tests.
+  static bool get odbcE2eCodClienteTests => _get('ODBC_E2E_CODCLIENTE_TESTS') == 'true';
+
+  /// SQL used by the `CodCliente` live E2E probe.
+  /// Defaults to `SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente`.
+  static String get odbcE2eCodClienteQuery {
+    final custom = _get('ODBC_E2E_CODCLIENTE_QUERY');
+    if (custom != null && custom.trim().isNotEmpty) {
+      return custom.trim();
+    }
+    return 'SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente';
+  }
+
   /// Optional SQL Anywhere smoke using TOP/START AT (pagination-shaped).
   /// When unset, a built-in query against `sys.systable` is used.
   static String? get odbcSqlAnywhereTopStartAtQuery => _get('ODBC_SQL_ANYWHERE_TOP_START_AT_QUERY');

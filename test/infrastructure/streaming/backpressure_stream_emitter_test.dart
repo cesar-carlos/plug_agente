@@ -15,6 +15,7 @@ void main() {
       return BackpressureStreamEmitter(
         emit: (event, payload) async {
           emitted.add((event: event, payload: payload));
+          return true;
         },
         onRegister: onRegister ?? (_, _) => true,
         onUnregister: onUnregister ?? (_) {},
@@ -178,6 +179,7 @@ void main() {
         final emitterWithSmallLimit = BackpressureStreamEmitter(
           emit: (event, payload) async {
             emitted.add((event: event, payload: payload));
+            return true;
           },
           onRegister: (_, _) => true,
           onUnregister: (_) {},
@@ -276,6 +278,35 @@ void main() {
     });
 
     group('fault recovery', () {
+      test('should mark emitter as faulted when emit returns false', () async {
+        var emitCount = 0;
+        var unregisteredId = '';
+        final emitter = BackpressureStreamEmitter(
+          emit: (event, payload) async {
+            emitCount++;
+            return false;
+          },
+          onRegister: (_, _) => true,
+          onUnregister: (id) => unregisteredId = id,
+        );
+
+        final firstResult = await emitter.emitChunk(
+          RpcStreamChunk(
+            streamId: 's-false',
+            requestId: 'req-1',
+            chunkIndex: 0,
+            rows: const [
+              {'id': 1},
+            ],
+          ),
+        );
+
+        check(emitCount).equals(1);
+        check(firstResult).isFalse();
+        check(emitter.isFaulted).isTrue();
+        check(unregisteredId).equals('s-false');
+      });
+
       test('should mark emitter as faulted when emit throws', () async {
         var emitCount = 0;
         var unregisteredId = '';

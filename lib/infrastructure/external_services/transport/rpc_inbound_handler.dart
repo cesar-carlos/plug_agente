@@ -59,6 +59,7 @@ class RpcInboundHandler {
     JsonSchemaContractValidator? jsonSchemaValidator,
     RpcMethodSchemaCatalog schemaCatalog = const RpcMethodSchemaCatalog(),
     MetricsCollector? metricsCollector,
+    void Function(bool paused)? setHubSqlDashboardCapturePaused,
   }) : _featureFlags = featureFlags,
        _protocolProvider = protocolProvider,
        _agentIdProvider = agentIdProvider,
@@ -79,7 +80,8 @@ class RpcInboundHandler {
        _hasReceivedCapabilities = hasReceivedCapabilities,
        _jsonSchemaValidator = jsonSchemaValidator,
        _schemaCatalog = schemaCatalog,
-       _metricsCollector = metricsCollector {
+       _metricsCollector = metricsCollector,
+       _setHubSqlDashboardCapturePaused = setHubSqlDashboardCapturePaused {
     _batchHandler = RpcBatchInboundHandler(
       featureFlags: _featureFlags,
       protocolProvider: _protocolProvider,
@@ -96,6 +98,7 @@ class RpcInboundHandler {
       validateBatchRequestJsonSchemasOrEmit: _validateBatchRequestJsonSchemasOrEmit,
       hasNullIdCompatibilityViolation: _hasNullIdCompatibilityViolation,
       metricsCollector: _metricsCollector,
+      setHubSqlDashboardCapturePaused: _setHubSqlDashboardCapturePaused,
     );
   }
 
@@ -120,10 +123,12 @@ class RpcInboundHandler {
   final JsonSchemaContractValidator? _jsonSchemaValidator;
   final RpcMethodSchemaCatalog _schemaCatalog;
   final MetricsCollector? _metricsCollector;
+  final void Function(bool paused)? _setHubSqlDashboardCapturePaused;
 
   late final RpcBatchInboundHandler _batchHandler;
 
   int _activeRpcHandlers = 0;
+
   // Coalescing buffer for inbound `rpc:request_ack` emission. Bursts of
   // `rpc:request` (e.g. cross-agent `mergeAll`) are merged into a single
   // `rpc:batch_ack` to reduce socket emit overhead. The hub already accepts
@@ -170,9 +175,18 @@ class RpcInboundHandler {
     Map<Object?, String> methodsById = const <Object?, String>{},
   }) async {
     _releaseInboundSlotIfDeferred();
-    await _emitRpcResponse(
-      responseData,
-      methodsById: methodsById,
+    // Hub sql.execute must not block the socket handler on outbound encode/emit.
+    unawaited(
+      _emitRpcResponse(
+        responseData,
+        methodsById: methodsById,
+      ).catchError((Object error, StackTrace stackTrace) {
+        AppLogger.error(
+          'Failed to emit inbound rpc:response',
+          error,
+          stackTrace,
+        );
+      }),
     );
   }
 
@@ -377,29 +391,39 @@ class RpcInboundHandler {
           )
           ? _streamEmitterFactory()
           : null;
-      final response = await _dispatcher.dispatch(
-        request,
-        _agentIdProvider(),
-        clientToken: clientToken,
-        streamEmitter: streamEmitter,
-        limits: protocol.effectiveLimits,
-        negotiatedExtensions: protocol.negotiatedExtensions,
-      );
-      final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
-      _authorizationDecisionLogger.log(
-        request: request,
-        response: tracedResponse,
-        clientToken: clientToken,
-      );
-
-      if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
-        return;
+      final pauseDashboardCapture = request.method == 'sql.execute';
+      if (pauseDashboardCapture) {
+        _setHubSqlDashboardCapturePaused?.call(true);
       }
+      try {
+        final response = await _dispatcher.dispatch(
+          request,
+          _agentIdProvider(),
+          clientToken: clientToken,
+          streamEmitter: streamEmitter,
+          limits: protocol.effectiveLimits,
+          negotiatedExtensions: protocol.negotiatedExtensions,
+        );
+        final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
+        _authorizationDecisionLogger.log(
+          request: request,
+          response: tracedResponse,
+          clientToken: clientToken,
+        );
 
-      await _emitInboundRpcResponse(
-        tracedResponse,
-        methodsById: <Object?, String>{request.id: request.method},
-      );
+        if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
+          return;
+        }
+
+        await _emitInboundRpcResponse(
+          tracedResponse,
+          methodsById: <Object?, String>{request.id: request.method},
+        );
+      } finally {
+        if (pauseDashboardCapture) {
+          _setHubSqlDashboardCapturePaused?.call(false);
+        }
+      }
     } on Exception catch (error, stackTrace) {
       AppLogger.error(
         'Error processing RPC request',

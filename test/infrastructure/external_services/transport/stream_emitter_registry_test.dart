@@ -4,7 +4,7 @@ import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter
 
 BackpressureStreamEmitter _emitter() {
   return BackpressureStreamEmitter(
-    emit: (_, _) async {},
+    emit: (_, _) async => true,
     onRegister: (_, _) => true,
     onUnregister: (_) {},
   );

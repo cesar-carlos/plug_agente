@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -73,6 +75,8 @@ final ClientTokenGetPolicyRateLimiter _transportTestNoopGetPolicyRateLimiter = C
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUpAll(() {
     registerFallbackValue(
       const RpcRequest(
@@ -111,6 +115,7 @@ void main() {
     late MockSocket mockSocket;
     late MockManager mockManager;
     late ProtocolMetricsCollector metricsCollector;
+    late MetricsCollector rpcMetricsCollector;
     late SocketIOTransportClientV2 client;
     late Map<String, Function> handlers;
     late Map<String, Function> managerHandlers;
@@ -187,6 +192,7 @@ void main() {
       mockSocket = MockSocket();
       mockManager = MockManager();
       metricsCollector = ProtocolMetricsCollector();
+      rpcMetricsCollector = MetricsCollector();
       handlers = <String, Function>{};
       managerHandlers = <String, Function>{};
       emitted = <({String event, dynamic data})>[];
@@ -311,7 +317,10 @@ void main() {
         negotiator: mockNegotiator,
         rpcDispatcher: mockDispatcher,
         featureFlags: mockFeatureFlags,
-        options: SocketIOTransportClientV2Options(protocolMetricsCollector: metricsCollector),
+        options: SocketIOTransportClientV2Options(
+          protocolMetricsCollector: metricsCollector,
+          metricsCollector: rpcMetricsCollector,
+        ),
       );
     });
 
@@ -361,6 +370,7 @@ void main() {
         featureFlags: mockFeatureFlags,
         options: SocketIOTransportClientV2Options(
           protocolMetricsCollector: metricsCollector,
+          metricsCollector: rpcMetricsCollector,
           agentActionsRemoteCapabilityProvider: capabilityProvider,
           agentActionLocalRunnerRegistry: runnerRegistry,
         ),
@@ -475,6 +485,120 @@ void main() {
       expect(result['started_at'] != result['finished_at'], isTrue);
     });
 
+    test('should stop rpc:response ACK retries after socket generation changes', () async {
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+
+      final ackAttemptStarted = Completer<void>();
+      final releaseAckAttempt = Completer<void>();
+      var ackAttempts = 0;
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        ackAttempts++;
+        if (ackAttempts == 1) {
+          ackAttemptStarted.complete();
+          await releaseAckAttempt.future;
+          throw Exception('ack timeout');
+        }
+        throw StateError('stale socket retry should not happen');
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      final result = await client.sendResponse(
+        QueryResponse(
+          id: 'exec-ack',
+          requestId: 'req-ack',
+          agentId: 'agent-1',
+          data: const [],
+          timestamp: DateTime.utc(2026, 5, 1, 12),
+        ),
+      );
+      expect(result.isSuccess(), isTrue);
+      await ackAttemptStarted.future.timeout(const Duration(seconds: 1));
+
+      await client.disconnect();
+      releaseAckAttempt.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ackAttempts, 1);
+      expect(emitted.where((item) => item.event == 'rpc:response'), isEmpty);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckAbortedConnectionChangeCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 0);
+    });
+
+    test('should record rpc:response ACK success outcome', () async {
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      final ackDelivered = Completer<void>();
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        if (!ackDelivered.isCompleted) {
+          ackDelivered.complete();
+        }
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      final result = await client.sendResponse(
+        QueryResponse(
+          id: 'exec-ack-success',
+          requestId: 'req-ack-success',
+          agentId: 'agent-1',
+          data: const [],
+          timestamp: DateTime.utc(2026, 5, 1, 12),
+        ),
+      );
+      expect(result.isSuccess(), isTrue);
+      await ackDelivered.future.timeout(const Duration(seconds: 1));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckAbortedConnectionChangeCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      expect(emitted.where((item) => item.event == 'rpc:response'), isEmpty);
+    });
+
+    test('should record rpc:response ACK fallback outcome when retries exhaust', () async {
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenThrow(Exception('ack timeout'));
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      final result = await client.sendResponse(
+        QueryResponse(
+          id: 'exec-ack-fallback',
+          requestId: 'req-ack-fallback',
+          agentId: 'agent-1',
+          data: const [],
+          timestamp: DateTime.utc(2026, 5, 1, 12),
+        ),
+      );
+      expect(result.isSuccess(), isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, greaterThan(0));
+      expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckAbortedConnectionChangeCount, 0);
+      expect(emitted.where((item) => item.event == 'rpc:response'), hasLength(1));
+    });
+
     test('should register reconnect lifecycle handlers on Socket.IO manager', () async {
       final connectFuture = client.connect('https://hub.test', 'agent-1');
 
@@ -569,6 +693,7 @@ void main() {
             return null;
           },
           protocolMetricsCollector: metricsCollector,
+          metricsCollector: rpcMetricsCollector,
         ),
       );
       var reconnectRequests = 0;
@@ -1535,11 +1660,18 @@ void main() {
             timestamp: DateTime.now(),
           );
           when(
-            () => mockGateway.executeQuery(any()),
+            () => mockGateway.executeQuery(
+              any(),
+              timeout: any(named: 'timeout'),
+              database: any(named: 'database'),
+            ),
           ).thenAnswer((_) async => Success(queryResponse));
           when(
             () => mockNormalizer.normalize(any()),
           ).thenAnswer((_) => queryResponse);
+          when(
+            () => mockNormalizer.normalizeAsync(any()),
+          ).thenAnswer((_) async => queryResponse);
 
           final realDispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,

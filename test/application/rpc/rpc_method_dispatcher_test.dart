@@ -218,6 +218,12 @@ void main() {
       when(() => mockNormalizer.normalizeRows(any())).thenAnswer(
         (invocation) => invocation.positionalArguments[0] as List<Map<String, dynamic>>,
       );
+      when(() => mockNormalizer.normalize(any())).thenAnswer(
+        (invocation) => invocation.positionalArguments[0] as QueryResponse,
+      );
+      when(() => mockNormalizer.normalizeAsync(any())).thenAnswer(
+        (invocation) async => invocation.positionalArguments[0] as QueryResponse,
+      );
       when(
         () => mockGateway.executeBatch(
           any(),
@@ -1023,6 +1029,55 @@ void main() {
     });
 
     test(
+      'should bound sql.execute ODBC timeout when stage budgets flag is disabled',
+      () async {
+        when(() => mockFeatureFlags.enableSocketTimeoutByStage).thenReturn(false);
+
+        Duration? capturedTimeout;
+        when(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).thenAnswer((invocation) async {
+          const sym = Symbol('timeout');
+          capturedTimeout = invocation.namedArguments.containsKey(sym)
+              ? invocation.namedArguments[sym] as Duration?
+              : null;
+          return Success(
+            QueryResponse(
+              id: 'exec-bounded',
+              requestId: 'req-bounded',
+              agentId: 'agent-1',
+              data: const [],
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+        when(
+          () => mockNormalizer.normalize(any()),
+        ).thenAnswer((invocation) => invocation.positionalArguments[0] as QueryResponse);
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-bounded',
+          params: {
+            'sql': 'SELECT 1',
+          },
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(response.isSuccess, isTrue);
+        expect(capturedTimeout, isNotNull);
+        expect(capturedTimeout!.inMilliseconds, greaterThan(0));
+        expect(capturedTimeout!.inMilliseconds, lessThanOrEqualTo(30000));
+      },
+    );
+
+    test(
       'should cap sql.execute ODBC timeout with options.timeout_ms when stage '
       'budgets are enabled',
       () async {
@@ -1089,7 +1144,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer(
           (_) async => Failure(
             domain.ConnectionFailure.withContext(
@@ -1193,7 +1252,11 @@ void main() {
       );
 
       when(
-        () => mockGateway.executeQuery(any()),
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
@@ -1233,7 +1296,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -1298,7 +1365,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(() => mockNormalizer.normalize(any())).thenAnswer(
           (invocation) => invocation.positionalArguments[0] as QueryResponse,
@@ -1337,7 +1408,13 @@ void main() {
 
         expect(response.isError, isTrue);
         expect(response.error!.code, RpcErrorCode.invalidParams);
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 
@@ -1372,7 +1449,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -1385,7 +1466,15 @@ void main() {
         );
 
         expect(response.isSuccess, isTrue);
-        final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
+        final captured =
+            verify(
+                  () => mockGateway.executeQuery(
+                    captureAny(),
+                    timeout: any(named: 'timeout'),
+                    database: any(named: 'database'),
+                  ),
+                ).captured.single
+                as QueryRequest;
         expect(captured.pagination, isNotNull);
         expect(captured.pagination!.page, 2);
         expect(captured.pagination!.pageSize, 25);
@@ -1425,7 +1514,11 @@ void main() {
         ),
       );
       when(
-        () => mockGateway.executeQuery(any()),
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
@@ -1434,7 +1527,15 @@ void main() {
       final response = await dispatcher.dispatch(request, 'agent-1');
 
       expect(response.isSuccess, isTrue);
-      final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
+      final captured =
+          verify(
+                () => mockGateway.executeQuery(
+                  captureAny(),
+                  timeout: any(named: 'timeout'),
+                  database: any(named: 'database'),
+                ),
+              ).captured.single
+              as QueryRequest;
       expect(captured.pagination, isNotNull);
       expect(captured.pagination!.orderBy, isEmpty);
     });
@@ -1460,7 +1561,13 @@ void main() {
         data['technical_message'],
         'Paginated queries must declare an explicit ORDER BY clause',
       );
-      verifyNever(() => mockGateway.executeQuery(any()));
+      verifyNever(
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
+      );
     });
 
     test(
@@ -1487,7 +1594,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -1499,7 +1610,15 @@ void main() {
         final result = response.result as Map<String, dynamic>;
         expect(result['sql_handling_mode'], 'preserve');
         expect(result['max_rows_handling'], 'response_truncation');
-        final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
+        final captured =
+            verify(
+                  () => mockGateway.executeQuery(
+                    captureAny(),
+                    timeout: any(named: 'timeout'),
+                    database: any(named: 'database'),
+                  ),
+                ).captured.single
+                as QueryRequest;
         expect(captured.preserveSql, isTrue);
         expect(captured.sqlHandlingMode, SqlHandlingMode.preserve);
         expect(captured.pagination, isNull);
@@ -1532,7 +1651,13 @@ void main() {
           data['technical_message'],
           'execution_mode "preserve" cannot be combined with page, page_size, or cursor',
         );
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 
@@ -1558,7 +1683,11 @@ void main() {
       );
 
       when(
-        () => mockGateway.executeQuery(any()),
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
@@ -1567,7 +1696,15 @@ void main() {
       final response = await dispatcher.dispatch(request, 'agent-1');
 
       expect(response.isSuccess, isTrue);
-      final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
+      final captured =
+          verify(
+                () => mockGateway.executeQuery(
+                  captureAny(),
+                  timeout: any(named: 'timeout'),
+                  database: any(named: 'database'),
+                ),
+              ).captured.single
+              as QueryRequest;
       expect(captured.sqlHandlingMode, SqlHandlingMode.preserve);
     });
 
@@ -1604,7 +1741,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -1624,7 +1765,15 @@ void main() {
         );
 
         expect(response.isSuccess, isTrue);
-        final captured = verify(() => mockGateway.executeQuery(captureAny())).captured.single as QueryRequest;
+        final captured =
+            verify(
+                  () => mockGateway.executeQuery(
+                    captureAny(),
+                    timeout: any(named: 'timeout'),
+                    database: any(named: 'database'),
+                  ),
+                ).captured.single
+                as QueryRequest;
         expect(captured.pagination, isNotNull);
         expect(captured.pagination!.cursor, cursor);
         expect(captured.pagination!.usesStableCursor, isTrue);
@@ -1727,7 +1876,13 @@ void main() {
 
         verify(() => mockEmitter.emitChunk(any())).called(2);
         verify(() => mockEmitter.emitComplete(any())).called(1);
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 
@@ -1904,7 +2059,13 @@ void main() {
             cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).called(1);
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 
@@ -1923,7 +2084,11 @@ void main() {
         final mockConfigRepo = MockAgentConfigRepository();
         final metrics = MetricsCollector();
         when(
-          () => mockGateway.executeQuery(any(), timeout: any(named: 'timeout')),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer(
           (_) async => Success(
             QueryResponse(
@@ -1990,7 +2155,13 @@ void main() {
             cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
-        verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
+        verify(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).called(1);
       },
     );
 
@@ -2064,7 +2235,13 @@ void main() {
             cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         ).called(1);
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 
@@ -2160,7 +2337,11 @@ void main() {
         when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
         when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(true);
         when(
-          () => mockGateway.executeQuery(any(), timeout: any(named: 'timeout')),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer(
           (_) async => Success(
             QueryResponse(
@@ -2219,7 +2400,13 @@ void main() {
             cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
-        verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
+        verify(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).called(1);
       },
     );
 
@@ -2281,7 +2468,13 @@ void main() {
             cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
-        verify(() => mockGateway.executeQuery(any(), timeout: any(named: 'timeout'))).called(1);
+        verify(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).called(1);
       },
     );
 
@@ -2430,7 +2623,11 @@ void main() {
           ),
         );
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -2466,7 +2663,13 @@ void main() {
             cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
           ),
         );
-        verify(() => mockGateway.executeQuery(any())).called(1);
+        verify(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).called(1);
       },
     );
 
@@ -2494,7 +2697,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -3130,7 +3337,13 @@ void main() {
         expect(data['odbc_reason'], equals('missing_permission'));
         expect(data['category'], equals('auth'));
         expect(data['client_id'], equals('client-acme'));
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 
@@ -3164,7 +3377,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -3192,7 +3409,13 @@ void main() {
           'SELECT 1 AS x',
           "SELECT 'a;b' AS y FROM dbo.t",
         ]);
-        verify(() => mockGateway.executeQuery(any())).called(1);
+        verify(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).called(1);
       },
     );
 
@@ -3249,7 +3472,13 @@ void main() {
 
         expect(response.isError, isTrue);
         expect(response.error!.code, equals(RpcErrorCode.unauthorized));
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 
@@ -3307,7 +3536,13 @@ void main() {
       final data = response.error!.data as Map<String, dynamic>;
       expect(data['reason'], equals(AuthorizationContextConstants.unauthorizedReason));
       expect(data['odbc_reason'], equals('authorization_timeout'));
-      verifyNever(() => mockGateway.executeQuery(any()));
+      verifyNever(
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
+      );
     });
 
     test('should include instance in error data', () async {
@@ -3320,7 +3555,13 @@ void main() {
         },
       );
 
-      when(() => mockGateway.executeQuery(any())).thenAnswer(
+      when(
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
+      ).thenAnswer(
         (_) async => Failure(domain.QueryExecutionFailure('Query failed')),
       );
 
@@ -3371,7 +3612,11 @@ void main() {
         );
 
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -3463,7 +3708,13 @@ void main() {
         check(response.isError).isTrue();
         check(response.error!.code).equals(RpcErrorCode.invalidParams);
         check(mismatchCount).equals(1);
-        verifyNever(() => mockGateway.executeQuery(any()));
+        verifyNever(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        );
       },
     );
 
@@ -3505,7 +3756,11 @@ void main() {
       );
 
       when(
-        () => mockGateway.executeQuery(any()),
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
@@ -3545,7 +3800,11 @@ void main() {
       );
 
       when(
-        () => mockGateway.executeQuery(any()),
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),

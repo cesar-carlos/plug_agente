@@ -197,7 +197,13 @@ void main() {
         var executeQueryCalls = 0;
         final unblockQuery = Completer<void>();
 
-        when(() => gateway.executeQuery(any())).thenAnswer((invocation) async {
+        when(
+          () => gateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).thenAnswer((invocation) async {
           executeQueryCalls++;
           await unblockQuery.future;
           final request = invocation.positionalArguments[0] as QueryRequest;
@@ -214,6 +220,9 @@ void main() {
           );
         });
         when(() => normalizer.normalize(any())).thenAnswer((invocation) {
+          return invocation.positionalArguments[0] as QueryResponse;
+        });
+        when(() => normalizer.normalizeAsync(any())).thenAnswer((invocation) async {
           return invocation.positionalArguments[0] as QueryResponse;
         });
 
@@ -263,7 +272,13 @@ void main() {
     test(
       'should return cached idempotency response for later batch item after leader completes',
       () async {
-        when(() => gateway.executeQuery(any())).thenAnswer((invocation) async {
+        when(
+          () => gateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).thenAnswer((invocation) async {
           final request = invocation.positionalArguments[0] as QueryRequest;
           return Success(
             QueryResponse(
@@ -278,6 +293,9 @@ void main() {
           );
         });
         when(() => normalizer.normalize(any())).thenAnswer((invocation) {
+          return invocation.positionalArguments[0] as QueryResponse;
+        });
+        when(() => normalizer.normalizeAsync(any())).thenAnswer((invocation) async {
           return invocation.positionalArguments[0] as QueryResponse;
         });
 
@@ -304,7 +322,13 @@ void main() {
           ),
         ]);
 
-        verify(() => gateway.executeQuery(any())).called(1);
+        verify(
+          () => gateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).called(1);
 
         final responses = emittedResponses.single as List<RpcResponse>;
         expect(responses.single.id, 'sql-follower');

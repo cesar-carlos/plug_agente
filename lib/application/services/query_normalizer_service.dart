@@ -1,5 +1,8 @@
+import 'dart:isolate';
+
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 
 class QueryNormalizerService {
   QueryNormalizerService(this._normalizer);
@@ -7,6 +10,29 @@ class QueryNormalizerService {
 
   static final RegExp _columnWhitespace = RegExp(r'\s+');
   static final RegExp _columnNonAlnum = RegExp('[^a-z0-9_]');
+
+  /// Row count above which normalization runs in a background isolate so the
+  /// UI isolate stays responsive during hub/playground materialized responses.
+  static int normalizeIsolateRowThreshold = TransportLimits.defaultStreamingRowThreshold;
+
+  static int totalRowCount(QueryResponse response) {
+    if (response.resultSets.isEmpty) {
+      return response.data.length;
+    }
+    var count = 0;
+    for (final resultSet in response.resultSets) {
+      count += resultSet.rows.length;
+    }
+    return count;
+  }
+
+  /// Normalizes on the current isolate or offloads when [totalRowCount] is high.
+  Future<QueryResponse> normalizeAsync(QueryResponse response) async {
+    if (totalRowCount(response) < normalizeIsolateRowThreshold) {
+      return normalize(response);
+    }
+    return Isolate.run(() => normalizeQueryResponseInIsolate(response));
+  }
 
   /// Normalizes row maps and column names for RPC/hub consumption (sync CPU work).
   QueryResponse normalize(QueryResponse response) {
@@ -98,4 +124,9 @@ class QueryNormalizerService {
 
     return value;
   }
+}
+
+/// Top-level entry for `Isolate.run` when normalizing large result sets off the UI isolate.
+QueryResponse normalizeQueryResponseInIsolate(QueryResponse response) {
+  return QueryNormalizerService(QueryNormalizer()).normalize(response);
 }

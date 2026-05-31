@@ -16,6 +16,36 @@ import 'package:uuid/uuid.dart';
 const int defaultTransportCompressionThresholdBytes = 4096;
 const double defaultTransportMaxInflationRatio = 10;
 
+int _jsonEncodeIsolateThresholdBytes(String? metricEventName) {
+  if (metricEventName == 'rpc:chunk' || metricEventName == 'rpc:complete') {
+    return ConnectionConstants.streamingChunkJsonIsolateThresholdBytes;
+  }
+  return jsonPayloadIsolateEncodeThresholdBytes;
+}
+
+int _outboundRpcChunkRowCount(dynamic data) {
+  if (data is! Map) {
+    return 0;
+  }
+  final rows = data['rows'];
+  if (rows is List) {
+    return rows.length;
+  }
+  return 0;
+}
+
+bool _shouldEncodeJsonInIsolate(
+  dynamic data,
+  String? metricEventName,
+  int budgetBytes,
+) {
+  if (metricEventName == 'rpc:chunk' &&
+      _outboundRpcChunkRowCount(data) >= ConnectionConstants.streamingChunkRowIsolateThreshold) {
+    return true;
+  }
+  return jsonTreeLikelyExceedsByteBudget(data, budgetBytes);
+}
+
 Map<String, dynamic> _transportContext(
   int rpcErrorCode,
   Map<String, dynamic> context,
@@ -308,10 +338,12 @@ class TransportPipeline {
       final encodeStopwatch = Stopwatch()..start();
       late final Uint8List encodedBytes;
       var usedJsonEncodeIsolate = false;
+      final jsonEncodeThreshold = _jsonEncodeIsolateThresholdBytes(metricEventName);
       if (encoding == 'json' &&
-          jsonTreeLikelyExceedsByteBudget(
+          _shouldEncodeJsonInIsolate(
             data,
-            jsonPayloadIsolateEncodeThresholdBytes,
+            metricEventName,
+            jsonEncodeThreshold,
           )) {
         usedJsonEncodeIsolate = true;
         try {
