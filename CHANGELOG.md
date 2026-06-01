@@ -55,6 +55,27 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   `::warning::` when the secret is missing. See
   `docs/install/release_guide.md` for the setup procedure.
 
+## 1.8.2 - 2026-06-01
+
+### Fixed
+
+- Windows auto-start repair now removes legacy `HKLM` / WOW6432 duplicate Run
+  entries via elevated PowerShell registry cmdlets, reports partial success
+  when HKCU is healthy but machine-scope cleanup needs UAC, and exposes
+  startup diagnostics in Config preferences.
+- SQL RPC responses omit null optional fields so hub JSON Schema validation
+  no longer fails on nullable properties sent as explicit `null`.
+
+### Added
+
+- Update notification preferences and manual-only silent update mode in
+  system settings.
+
+### Changed
+
+- Inno Setup startup task registers only in `HKCU` to avoid duplicate Run keys
+  with the in-app auto-start service.
+
 ## 1.8.0 - 2026-05-28
 
 ### Fixed
