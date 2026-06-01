@@ -1738,6 +1738,128 @@ void main() {
         await thirdCall;
         expect(triggerCount, 2, reason: 'guard must release after the first call completes');
       });
+
+      test('startAutomaticChecks skips WinSparkle when automatic and notifications are off', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        await settingsStore.setBool(AppSettingsKeys.updateNotificationsEnabled, false);
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.startAutomaticChecks();
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        expect(fakeGateway.lastInBackground, isNull);
+        expect(fakeGateway.interval, 0);
+      });
+
+      test('checkInBackground is a no-op when notifications are disabled', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        await settingsStore.setBool(AppSettingsKeys.updateNotificationsEnabled, false);
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.initialize();
+        await orchestrator.checkInBackground();
+
+        expect(fakeGateway.lastInBackground, isNull);
+      });
+
+      test('setUpdateNotificationsEnabled persists preference and disables WinSparkle interval', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.initialize();
+        expect(fakeGateway.interval, greaterThan(0));
+
+        final result = await orchestrator.setUpdateNotificationsEnabled(false);
+
+        expect(result.isSuccess(), isTrue);
+        expect(settingsStore.getBool(AppSettingsKeys.updateNotificationsEnabled), isFalse);
+        expect(orchestrator.updateNotificationsEnabled, isFalse);
+        expect(fakeGateway.interval, 0);
+      });
+
+      test('setUpdateNotificationsEnabled(true) restores WinSparkle interval when automatic is off', () async {
+        await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        await settingsStore.setBool(AppSettingsKeys.updateNotificationsEnabled, false);
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.initialize();
+        expect(fakeGateway.interval, 0);
+
+        final result = await orchestrator.setUpdateNotificationsEnabled(true);
+
+        expect(result.isSuccess(), isTrue);
+        expect(fakeGateway.interval, greaterThan(0));
+      });
+
+      test('applyManualOnlyUpdateMode disables both preferences and records metric', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        await orchestrator.initialize();
+        final result = await orchestrator.applyManualOnlyUpdateMode();
+
+        expect(result.isSuccess(), isTrue);
+        expect(orchestrator.updateNotificationsEnabled, isFalse);
+        expect(orchestrator.automaticSilentUpdatesEnabled, isFalse);
+        expect(fakeGateway.interval, 0);
+        expect(
+          metricsCollector.getSnapshot()['auto_update_manual_only_mode_applied'],
+          1,
+        );
+      });
+
+      test('setAutomaticSilentUpdatesEnabled notifies listeners', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        var changeCount = 0;
+        orchestrator.changes.listen((_) => changeCount++);
+
+        await orchestrator.setAutomaticSilentUpdatesEnabled(false);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(changeCount, greaterThan(0));
+      });
     });
 
     group('late WinSparkle callbacks', () {

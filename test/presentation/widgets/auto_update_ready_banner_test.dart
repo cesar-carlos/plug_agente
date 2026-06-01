@@ -36,6 +36,9 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
   bool automaticSilentUpdatesEnabled = true;
 
   @override
+  bool updateNotificationsEnabled = true;
+
+  @override
   bool isSilentCheckInProgress = false;
 
   @override
@@ -77,7 +80,20 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
   }
 
   @override
+  Future<Result<void>> setUpdateNotificationsEnabled(bool enabled) async {
+    updateNotificationsEnabled = enabled;
+    return const Success(unit);
+  }
+
+  @override
   Future<void> startAutomaticChecks() async {}
+
+  @override
+  Future<Result<void>> applyManualOnlyUpdateMode() async {
+    updateNotificationsEnabled = false;
+    automaticSilentUpdatesEnabled = false;
+    return const Success(unit);
+  }
 
   @override
   Future<Result<void>> applyPendingSilentUpdate({
@@ -155,6 +171,20 @@ void main() {
 
   testWidgets('renders nothing when no update state is active', (tester) async {
     final orchestrator = _FakeOrchestrator();
+    await _pumpBanner(tester, orchestrator: orchestrator);
+
+    expect(find.byType(FilledButton), findsNothing);
+  });
+
+  testWidgets('renders nothing when update notifications are disabled', (tester) async {
+    final orchestrator = _FakeOrchestrator(
+      hasPendingDownloadedUpdate: true,
+      diagnostics: _diag(
+        source: UpdateCheckCompletionSource.automaticInstallReady,
+        updateAvailable: true,
+        pendingVersion: '99.0.0+1',
+      ),
+    )..updateNotificationsEnabled = false;
     await _pumpBanner(tester, orchestrator: orchestrator);
 
     expect(find.byType(FilledButton), findsNothing);

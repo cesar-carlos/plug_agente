@@ -44,6 +44,56 @@ class _ConfigPageState extends State<ConfigPage> {
 
   String _lastUpdateCheck = '';
   bool _isCheckingUpdates = false;
+  bool _hasPendingDownloadedUpdate = false;
+  StreamSubscription<void>? _orchestratorChangesSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    if (getIt.isRegistered<IAutoUpdateOrchestrator>()) {
+      final orchestrator = getIt<IAutoUpdateOrchestrator>();
+      _orchestratorChangesSubscription = orchestrator.changes.listen((_) {
+        unawaited(_refreshPendingUpdateState());
+      });
+      unawaited(_refreshPendingUpdateState());
+    }
+  }
+
+  @override
+  void dispose() {
+    _orchestratorChangesSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshPendingUpdateState() async {
+    if (!getIt.isRegistered<IAutoUpdateOrchestrator>()) {
+      return;
+    }
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    final hasPending = await orchestrator.hasPendingDownloadedUpdate;
+    if (!mounted) {
+      return;
+    }
+    if (_hasPendingDownloadedUpdate != hasPending) {
+      setState(() => _hasPendingDownloadedUpdate = hasPending);
+    }
+  }
+
+  String? _resolvePendingUpdateNotice(
+    AppLocalizations l10n,
+    IAutoUpdateOrchestrator orchestrator,
+  ) {
+    if (orchestrator.updateNotificationsEnabled) {
+      return null;
+    }
+    if (_hasPendingDownloadedUpdate) {
+      return l10n.configUpdatePendingReadyNotice;
+    }
+    if (orchestrator.hasUpdateAwaitingUserConsent) {
+      return l10n.configUpdatePendingAwaitingConsentNotice;
+    }
+    return null;
+  }
 
   /// `AppConstants.appVersion` é mantido em sincronia com `pubspec.yaml` pelo
   /// script `installer/update_version.py`. Usamos a constante diretamente para
@@ -153,6 +203,8 @@ class _ConfigPageState extends State<ConfigPage> {
         manualDiagnostics: orchestrator.lastManualDiagnostics,
         backgroundDiagnostics: orchestrator.lastBackgroundDiagnostics,
         automaticDiagnostics: orchestrator.lastAutomaticDiagnostics,
+        updateNotificationsEnabled: orchestrator.updateNotificationsEnabled,
+        automaticSilentUpdatesEnabled: orchestrator.automaticSilentUpdatesEnabled,
       ),
     ];
 
@@ -336,6 +388,70 @@ class _ConfigPageState extends State<ConfigPage> {
     );
   }
 
+  Future<void> _onUpdateNotificationsChanged(bool value) async {
+    final l10n = AppLocalizations.of(context)!;
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    final result = await orchestrator.setUpdateNotificationsEnabled(value);
+    if (!mounted) {
+      return;
+    }
+
+    result.fold(
+      (_) {
+        unawaited(_refreshPendingUpdateState());
+        setState(() {});
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(
+              value ? l10n.configUpdateNotificationsEnabled : l10n.configUpdateNotificationsDisabled,
+            ),
+            severity: InfoBarSeverity.success,
+            onClose: close,
+          ),
+        );
+      },
+      (failure) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.gsSectionUpdates,
+          message: failure.toDisplayMessage(),
+        );
+      },
+    );
+  }
+
+  Future<void> _onUseManualOnlyUpdateMode() async {
+    final l10n = AppLocalizations.of(context)!;
+    final orchestrator = getIt<IAutoUpdateOrchestrator>();
+    final result = await orchestrator.applyManualOnlyUpdateMode();
+    if (!mounted) {
+      return;
+    }
+
+    result.fold(
+      (_) {
+        unawaited(_refreshPendingUpdateState());
+        setState(() {});
+        displayInfoBar(
+          context,
+          builder: (context, close) => InfoBar(
+            title: Text(l10n.configManualOnlyUpdatesApplied),
+            severity: InfoBarSeverity.success,
+            onClose: close,
+          ),
+        );
+      },
+      (failure) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.gsSectionUpdates,
+          message: failure.toDisplayMessage(),
+        );
+      },
+    );
+  }
+
   Future<void> _onAutomaticSilentUpdatesChanged(bool value) async {
     final l10n = AppLocalizations.of(context)!;
     final orchestrator = getIt<IAutoUpdateOrchestrator>();
@@ -346,6 +462,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
     result.fold(
       (_) {
+        unawaited(_refreshPendingUpdateState());
         setState(() {});
         displayInfoBar(
           context,
@@ -357,6 +474,16 @@ class _ConfigPageState extends State<ConfigPage> {
             onClose: close,
           ),
         );
+        if (!value && orchestrator.updateNotificationsEnabled) {
+          displayInfoBar(
+            context,
+            builder: (context, close) => InfoBar(
+              title: Text(l10n.configAutomaticSilentUpdatesDisabled),
+              content: Text(l10n.configAutomaticSilentUpdatesDisableNotificationsHint),
+              onClose: close,
+            ),
+          );
+        }
       },
       (failure) {
         SettingsFeedback.showError(
@@ -411,6 +538,7 @@ class _ConfigPageState extends State<ConfigPage> {
     );
     final autoUpdateFeedStatusLabel = _buildAutoUpdateFeedStatusLabel(l10n);
     final autoUpdateUnavailableMessage = isAutoUpdateAvailable ? null : _getUpdateUnavailableMessage(l10n);
+    final pendingUpdateNotice = _resolvePendingUpdateNotice(l10n, orchestrator);
 
     return ScaffoldPage(
       header: PageHeader(
@@ -433,6 +561,7 @@ class _ConfigPageState extends State<ConfigPage> {
             lastBackgroundUpdateCheck: lastBackgroundUpdateLabel,
             lastAutomaticUpdateCheck: lastAutomaticUpdateLabel,
             autoUpdateFeedStatus: autoUpdateFeedStatusLabel,
+            updateNotificationsEnabled: orchestrator.updateNotificationsEnabled,
             automaticSilentUpdatesEnabled: orchestrator.automaticSilentUpdatesEnabled,
             isCheckingUpdates: _isCheckingUpdates,
             isCheckingAutomaticUpdates: orchestrator.isSilentCheckInProgress,
@@ -463,9 +592,16 @@ class _ConfigPageState extends State<ConfigPage> {
             onCheckUpdates: _checkUpdates,
             onCheckAutomaticUpdates: _checkAutomaticUpdatesNow,
             onCopyUpdateDiagnostics: _copyUpdateDiagnostics,
+            onUpdateNotificationsChanged: (value) {
+              unawaited(_onUpdateNotificationsChanged(value));
+            },
             onAutomaticSilentUpdatesChanged: (value) {
               unawaited(_onAutomaticSilentUpdatesChanged(value));
             },
+            onUseManualOnlyUpdateMode: () {
+              unawaited(_onUseManualOnlyUpdateMode());
+            },
+            pendingUpdateNotice: pendingUpdateNotice,
           ),
         ),
       ),
@@ -485,6 +621,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.lastBackgroundUpdateCheck,
     required this.lastAutomaticUpdateCheck,
     required this.autoUpdateFeedStatus,
+    required this.updateNotificationsEnabled,
     required this.automaticSilentUpdatesEnabled,
     required this.isCheckingUpdates,
     required this.isCheckingAutomaticUpdates,
@@ -507,7 +644,10 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.onCheckUpdates,
     required this.onCheckAutomaticUpdates,
     required this.onCopyUpdateDiagnostics,
+    required this.onUpdateNotificationsChanged,
     required this.onAutomaticSilentUpdatesChanged,
+    required this.onUseManualOnlyUpdateMode,
+    this.pendingUpdateNotice,
     this.releaseNotes,
     this.releaseNotesUrl,
   });
@@ -522,6 +662,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final String lastBackgroundUpdateCheck;
   final String lastAutomaticUpdateCheck;
   final String autoUpdateFeedStatus;
+  final bool updateNotificationsEnabled;
   final bool automaticSilentUpdatesEnabled;
   final bool isCheckingUpdates;
   final bool isCheckingAutomaticUpdates;
@@ -534,6 +675,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final SystemSettingsNoticeState? startupNotice;
   final bool isAutoUpdateAvailable;
   final String? autoUpdateUnavailableMessage;
+  final String? pendingUpdateNotice;
   final String? releaseNotes;
   final String? releaseNotesUrl;
   final ValueChanged<bool> onDarkThemeChanged;
@@ -546,7 +688,9 @@ class _ConfigTabbedContent extends StatefulWidget {
   final VoidCallback onCheckUpdates;
   final VoidCallback onCheckAutomaticUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
+  final ValueChanged<bool> onUpdateNotificationsChanged;
   final ValueChanged<bool> onAutomaticSilentUpdatesChanged;
+  final VoidCallback onUseManualOnlyUpdateMode;
 
   @override
   State<_ConfigTabbedContent> createState() => _ConfigTabbedContentState();
@@ -602,6 +746,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             lastBackgroundUpdateCheck: widget.lastBackgroundUpdateCheck,
             lastAutomaticUpdateCheck: widget.lastAutomaticUpdateCheck,
             autoUpdateFeedStatus: widget.autoUpdateFeedStatus,
+            updateNotificationsEnabled: widget.updateNotificationsEnabled,
             automaticSilentUpdatesEnabled: widget.automaticSilentUpdatesEnabled,
             isCheckingUpdates: widget.isCheckingUpdates,
             isCheckingAutomaticUpdates: widget.isCheckingAutomaticUpdates,
@@ -612,7 +757,10 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             onCheckUpdates: widget.onCheckUpdates,
             onCheckAutomaticUpdates: widget.onCheckAutomaticUpdates,
             onCopyUpdateDiagnostics: widget.onCopyUpdateDiagnostics,
+            onUpdateNotificationsChanged: widget.onUpdateNotificationsChanged,
             onAutomaticSilentUpdatesChanged: widget.onAutomaticSilentUpdatesChanged,
+            onUseManualOnlyUpdateMode: widget.onUseManualOnlyUpdateMode,
+            pendingUpdateNotice: widget.pendingUpdateNotice,
           ),
         ),
         AppFluentTabItem(

@@ -3021,6 +3021,49 @@ class AppLocalizationsEn extends AppLocalizations {
       'If you just published a new version, wait up to 5 minutes and try again.';
 
   @override
+  String get configUpdateNotificationsToggle => 'Notify about updates';
+
+  @override
+  String get configUpdateNotificationsDescription =>
+      'Shows in-app notices and checks for updates in the background when automatic installation is off. With automatic installation off and this option on, the app may still check for updates without installing. Manual check remains available.';
+
+  @override
+  String get configUpdateNotificationsEnabled => 'Update notifications enabled.';
+
+  @override
+  String get configUpdateNotificationsDisabled => 'Update notifications disabled.';
+
+  @override
+  String get configManualCheckSectionTitle => 'Manual check';
+
+  @override
+  String get configUseManualOnlyUpdatesLink => 'Use manual check only';
+
+  @override
+  String get configManualOnlyUpdatesApplied => 'Manual check mode enabled.';
+
+  @override
+  String get configUpdatePendingReadyNotice =>
+      'An update is ready to install. Re-enable notifications or use Check for updates to see details.';
+
+  @override
+  String get configUpdatePendingAwaitingConsentNotice =>
+      'An update is available and needs your confirmation. Re-enable notifications or use Check for updates.';
+
+  @override
+  String get configAutomaticSilentUpdatesDisableNotificationsHint =>
+      'Automatic installation was turned off. To avoid background update checks, also disable update notifications.';
+
+  @override
+  String get configUpdateTechnicalPreferencesTitle => 'Update preferences';
+
+  @override
+  String get configUpdateTechnicalNotificationsEnabled => 'Update notifications';
+
+  @override
+  String get configUpdateTechnicalAutomaticSilentEnabled => 'Automatic silent installation';
+
+  @override
   String get configAutomaticSilentUpdatesToggle => 'Install updates automatically';
 
   @override

@@ -441,6 +441,21 @@ void main() {
         expect(collector.autoUpdateCircuitOpenedCount, 1);
         expect(collector.autoUpdateCircuitOpenRejectedCount, 1);
       });
+
+      test('should increment auto-update preference counters', () {
+        collector.recordAutoUpdateNotificationsPreferenceEnabled();
+        collector.recordAutoUpdateNotificationsPreferenceDisabled();
+        collector.recordAutoUpdateAutomaticSilentPreferenceEnabled();
+        collector.recordAutoUpdateAutomaticSilentPreferenceDisabled();
+        collector.recordAutoUpdateManualOnlyModeApplied();
+
+        final snapshot = collector.getSnapshot();
+        expect(snapshot['auto_update_notifications_preference_enabled'], 1);
+        expect(snapshot['auto_update_notifications_preference_disabled'], 1);
+        expect(snapshot['auto_update_automatic_silent_preference_enabled'], 1);
+        expect(snapshot['auto_update_automatic_silent_preference_disabled'], 1);
+        expect(snapshot['auto_update_manual_only_mode_applied'], 1);
+      });
     });
 
     group('recordRpcAgentActionBatchReadLimitRejected', () {

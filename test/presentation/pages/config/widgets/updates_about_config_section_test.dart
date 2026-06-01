@@ -16,6 +16,7 @@ void main() {
     String lastBackgroundUpdateCheck = '',
     String lastAutomaticUpdateCheck = '',
     String? autoUpdateFeedStatus,
+    bool updateNotificationsEnabled = true,
     bool automaticSilentUpdatesEnabled = true,
     bool isCheckingUpdates = false,
     bool isAutoUpdateAvailable = true,
@@ -25,7 +26,10 @@ void main() {
     VoidCallback? onCheckUpdates,
     VoidCallback? onCheckAutomaticUpdates,
     VoidCallback? onCopyUpdateDiagnostics,
+    ValueChanged<bool>? onUpdateNotificationsChanged,
     ValueChanged<bool>? onAutomaticSilentUpdatesChanged,
+    VoidCallback? onUseManualOnlyUpdateMode,
+    String? pendingUpdateNotice,
     String? releaseNotes,
     String? releaseNotesUrl,
     bool settle = true,
@@ -43,6 +47,7 @@ void main() {
               lastBackgroundUpdateCheck: lastBackgroundUpdateCheck,
               lastAutomaticUpdateCheck: lastAutomaticUpdateCheck,
               autoUpdateFeedStatus: autoUpdateFeedStatus ?? ptL10n.configAutoUpdateFeedOfficial,
+              updateNotificationsEnabled: updateNotificationsEnabled,
               automaticSilentUpdatesEnabled: automaticSilentUpdatesEnabled,
               isCheckingUpdates: isCheckingUpdates,
               isAutoUpdateAvailable: isAutoUpdateAvailable,
@@ -52,7 +57,10 @@ void main() {
               onCheckUpdates: onCheckUpdates ?? () {},
               onCheckAutomaticUpdates: onCheckAutomaticUpdates ?? () {},
               onCopyUpdateDiagnostics: onCopyUpdateDiagnostics ?? () {},
+              onUpdateNotificationsChanged: onUpdateNotificationsChanged ?? (_) {},
               onAutomaticSilentUpdatesChanged: onAutomaticSilentUpdatesChanged ?? (_) {},
+              onUseManualOnlyUpdateMode: onUseManualOnlyUpdateMode ?? () {},
+              pendingUpdateNotice: pendingUpdateNotice,
             ),
           ),
         ),
@@ -82,11 +90,12 @@ void main() {
 
   group('UpdatesAboutConfigSection - updates section', () {
     testWidgets(
-      'shows refresh button when not checking and supports auto update',
+      'shows manual check button when not checking and supports auto update',
       (tester) async {
         await pumpSection(tester);
 
-        expect(find.byKey(const ValueKey('updates_refresh_button')), findsOneWidget);
+        expect(find.text(ptL10n.configManualCheckSectionTitle), findsOneWidget);
+        expect(find.byKey(const ValueKey('updates_check_now_button')), findsOneWidget);
         expect(find.byKey(const ValueKey('updates_progress_ring')), findsNothing);
       },
     );
@@ -94,7 +103,7 @@ void main() {
     testWidgets('shows progress ring when isCheckingUpdates is true', (tester) async {
       await pumpSection(tester, isCheckingUpdates: true, settle: false);
 
-      expect(find.byKey(const ValueKey('updates_refresh_button')), findsNothing);
+      expect(find.byKey(const ValueKey('updates_check_now_button')), findsOneWidget);
       expect(find.byKey(const ValueKey('updates_progress_ring')), findsOneWidget);
     });
 
@@ -108,7 +117,7 @@ void main() {
         );
 
         expect(find.text(ptL10n.configAutoUpdateNotSupported), findsOneWidget);
-        expect(find.byKey(const ValueKey('updates_refresh_button')), findsNothing);
+        expect(find.byKey(const ValueKey('updates_check_now_button')), findsNothing);
         expect(find.byKey(const ValueKey('updates_progress_ring')), findsNothing);
       },
     );
@@ -184,6 +193,20 @@ void main() {
       },
     );
 
+    testWidgets('update notifications toggle triggers callback', (tester) async {
+      bool? value;
+      await pumpSection(
+        tester,
+        onUpdateNotificationsChanged: (next) => value = next,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('update_notifications_toggle')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(value, isFalse);
+    });
+
     testWidgets('automatic updates toggle triggers callback', (tester) async {
       bool? value;
       await pumpSection(
@@ -191,21 +214,63 @@ void main() {
         onAutomaticSilentUpdatesChanged: (next) => value = next,
       );
 
-      await tester.tap(find.byType(ToggleSwitch));
+      await tester.tap(find.byKey(const ValueKey('automatic_silent_updates_toggle')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(value, isFalse);
     });
 
-    testWidgets('refresh button triggers onCheckUpdates callback', (tester) async {
+    testWidgets('manual check button triggers onCheckUpdates callback', (tester) async {
       var tapped = false;
       await pumpSection(tester, onCheckUpdates: () => tapped = true);
 
-      await tester.tap(find.byKey(const ValueKey('updates_refresh_button')));
+      await tester.tap(find.byKey(const ValueKey('updates_check_now_button')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(tapped, isTrue);
+    });
+
+    testWidgets('hides automatic update button when automatic install is disabled', (tester) async {
+      await pumpSection(tester, automaticSilentUpdatesEnabled: false);
+
+      expect(find.byKey(const ValueKey('automatic_updates_check_now_button')), findsNothing);
+    });
+
+    testWidgets('shows manual-only link when not already in manual-only mode', (tester) async {
+      await pumpSection(tester);
+
+      expect(find.byKey(const ValueKey('updates_manual_only_mode_link')), findsOneWidget);
+    });
+
+    testWidgets('hides manual-only link when already in manual-only mode', (tester) async {
+      await pumpSection(
+        tester,
+        updateNotificationsEnabled: false,
+        automaticSilentUpdatesEnabled: false,
+      );
+
+      expect(find.byKey(const ValueKey('updates_manual_only_mode_link')), findsNothing);
+    });
+
+    testWidgets('manual-only link triggers callback', (tester) async {
+      var tapped = false;
+      await pumpSection(tester, onUseManualOnlyUpdateMode: () => tapped = true);
+
+      await tester.tap(find.byKey(const ValueKey('updates_manual_only_mode_link')));
+      await tester.pumpAndSettle();
+
+      expect(tapped, isTrue);
+    });
+
+    testWidgets('shows pending update notice when provided', (tester) async {
+      await pumpSection(
+        tester,
+        pendingUpdateNotice: ptL10n.configUpdatePendingReadyNotice,
+      );
+
+      expect(find.byKey(const ValueKey('updates_pending_notice')), findsOneWidget);
+      expect(find.text(ptL10n.configUpdatePendingReadyNotice), findsOneWidget);
     });
 
     testWidgets('automatic update button triggers silent check callback', (tester) async {

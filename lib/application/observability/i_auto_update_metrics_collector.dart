@@ -57,6 +57,16 @@ abstract interface class IAutoUpdateSilentMetricsCollector {
   void recordAutoUpdateUserInitiatedApplyFailure();
 }
 
+/// Operator preference changes from Settings (notifications, silent
+/// install, manual-only preset).
+abstract interface class IAutoUpdatePreferenceMetricsCollector {
+  void recordAutoUpdateNotificationsPreferenceEnabled();
+  void recordAutoUpdateNotificationsPreferenceDisabled();
+  void recordAutoUpdateAutomaticSilentPreferenceEnabled();
+  void recordAutoUpdateAutomaticSilentPreferenceDisabled();
+  void recordAutoUpdateManualOnlyModeApplied();
+}
+
 /// Aggregate facade that bundles every auto-update metric surface. Kept
 /// as the primary type the application layer asks for, so production
 /// wiring stays a single dependency while consumers that only need a
@@ -67,4 +77,5 @@ abstract interface class IAutoUpdateMetricsCollector
     implements
         IAutoUpdateManualCheckMetricsCollector,
         IAutoUpdateBackgroundCheckMetricsCollector,
-        IAutoUpdateSilentMetricsCollector {}
+        IAutoUpdateSilentMetricsCollector,
+        IAutoUpdatePreferenceMetricsCollector {}

@@ -5636,6 +5636,84 @@ abstract class AppLocalizations {
   /// **'If you just published a new version, wait up to 5 minutes and try again.'**
   String get configUpdatesNotAvailableHint;
 
+  /// No description provided for @configUpdateNotificationsToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify about updates'**
+  String get configUpdateNotificationsToggle;
+
+  /// No description provided for @configUpdateNotificationsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Shows in-app notices and checks for updates in the background when automatic installation is off. With automatic installation off and this option on, the app may still check for updates without installing. Manual check remains available.'**
+  String get configUpdateNotificationsDescription;
+
+  /// No description provided for @configUpdateNotificationsEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Update notifications enabled.'**
+  String get configUpdateNotificationsEnabled;
+
+  /// No description provided for @configUpdateNotificationsDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Update notifications disabled.'**
+  String get configUpdateNotificationsDisabled;
+
+  /// No description provided for @configManualCheckSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual check'**
+  String get configManualCheckSectionTitle;
+
+  /// No description provided for @configUseManualOnlyUpdatesLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Use manual check only'**
+  String get configUseManualOnlyUpdatesLink;
+
+  /// No description provided for @configManualOnlyUpdatesApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual check mode enabled.'**
+  String get configManualOnlyUpdatesApplied;
+
+  /// No description provided for @configUpdatePendingReadyNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'An update is ready to install. Re-enable notifications or use Check for updates to see details.'**
+  String get configUpdatePendingReadyNotice;
+
+  /// No description provided for @configUpdatePendingAwaitingConsentNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'An update is available and needs your confirmation. Re-enable notifications or use Check for updates.'**
+  String get configUpdatePendingAwaitingConsentNotice;
+
+  /// No description provided for @configAutomaticSilentUpdatesDisableNotificationsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic installation was turned off. To avoid background update checks, also disable update notifications.'**
+  String get configAutomaticSilentUpdatesDisableNotificationsHint;
+
+  /// No description provided for @configUpdateTechnicalPreferencesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update preferences'**
+  String get configUpdateTechnicalPreferencesTitle;
+
+  /// No description provided for @configUpdateTechnicalNotificationsEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Update notifications'**
+  String get configUpdateTechnicalNotificationsEnabled;
+
+  /// No description provided for @configUpdateTechnicalAutomaticSilentEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic silent installation'**
+  String get configUpdateTechnicalAutomaticSilentEnabled;
+
   /// No description provided for @configAutomaticSilentUpdatesToggle.
   ///
   /// In en, this message translates to:

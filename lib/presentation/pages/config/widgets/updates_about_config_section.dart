@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
 class UpdatesAboutConfigSection extends StatelessWidget {
@@ -10,15 +11,19 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     required this.lastBackgroundUpdateCheck,
     required this.lastAutomaticUpdateCheck,
     required this.autoUpdateFeedStatus,
+    required this.updateNotificationsEnabled,
     required this.automaticSilentUpdatesEnabled,
     required this.onCheckUpdates,
     required this.onCheckAutomaticUpdates,
     required this.onCopyUpdateDiagnostics,
+    required this.onUpdateNotificationsChanged,
     required this.onAutomaticSilentUpdatesChanged,
+    required this.onUseManualOnlyUpdateMode,
     this.isAutoUpdateAvailable = true,
     this.unavailableMessage,
     this.isCheckingUpdates = false,
     this.isCheckingAutomaticUpdates = false,
+    this.pendingUpdateNotice,
     this.releaseNotes,
     this.releaseNotesUrl,
     super.key,
@@ -29,15 +34,22 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   final String lastBackgroundUpdateCheck;
   final String lastAutomaticUpdateCheck;
   final String autoUpdateFeedStatus;
+  final bool updateNotificationsEnabled;
   final bool automaticSilentUpdatesEnabled;
   final VoidCallback onCheckUpdates;
   final VoidCallback onCheckAutomaticUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
+  final ValueChanged<bool> onUpdateNotificationsChanged;
   final ValueChanged<bool> onAutomaticSilentUpdatesChanged;
+  final VoidCallback onUseManualOnlyUpdateMode;
   final bool isAutoUpdateAvailable;
   final String? unavailableMessage;
   final bool isCheckingUpdates;
   final bool isCheckingAutomaticUpdates;
+
+  /// Shown when an update is staged or awaiting consent but proactive
+  /// notifications are disabled.
+  final String? pendingUpdateNotice;
 
   /// Plain-text release notes from the appcast item description. When set,
   /// renders as a Fluent expander below the update status. Empty/null hides
@@ -48,6 +60,8 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   /// as a `Open in browser` link inside the expander when present.
   final String? releaseNotesUrl;
 
+  bool get _isManualOnlyMode => !updateNotificationsEnabled && !automaticSilentUpdatesEnabled;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -56,6 +70,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
         ? '${l10n.configLastAutomaticUpdatePrefix}${l10n.configLastUpdateNever}'
         : lastAutomaticUpdateCheck;
     final hasBackgroundUpdate = lastBackgroundUpdateCheck.trim().isNotEmpty;
+    final pendingNotice = pendingUpdateNotice?.trim();
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
@@ -67,30 +82,39 @@ class UpdatesAboutConfigSection extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    l10n.configManualCheckSectionTitle,
+                    style: context.bodyStrong,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    displayLastUpdate,
+                    key: const ValueKey('updates_last_check_label'),
+                    style: context.captionText,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          '${l10n.gsCheckUpdatesWithDate}\n$displayLastUpdate',
-                          style: context.bodyText,
+                      Button(
+                        key: const ValueKey('updates_check_now_button'),
+                        onPressed: isCheckingUpdates ? null : onCheckUpdates,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isCheckingUpdates)
+                              const SizedBox(
+                                key: ValueKey('updates_progress_ring'),
+                                width: 16,
+                                height: 16,
+                                child: ProgressRing(strokeWidth: 2),
+                              )
+                            else
+                              const Icon(FluentIcons.refresh),
+                            const SizedBox(width: AppSpacing.xs),
+                            Text(l10n.configCheckUpdatesNow),
+                          ],
                         ),
                       ),
-                      if (isCheckingUpdates)
-                        const SizedBox(
-                          key: ValueKey('updates_progress_ring'),
-                          width: 20,
-                          height: 20,
-                          child: ProgressRing(strokeWidth: 2),
-                        )
-                      else
-                        Tooltip(
-                          message: l10n.configCheckUpdatesNow,
-                          child: IconButton(
-                            key: const ValueKey('updates_refresh_button'),
-                            icon: const Icon(FluentIcons.refresh),
-                            onPressed: onCheckUpdates,
-                          ),
-                        ),
                     ],
                   ),
                   if (hasBackgroundUpdate) ...[
@@ -122,7 +146,31 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                       url: releaseNotesUrl,
                     ),
                   ],
+                  if (pendingNotice != null && pendingNotice.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    InlineFeedbackCard(
+                      key: const ValueKey('updates_pending_notice'),
+                      severity: InfoBarSeverity.warning,
+                      message: pendingNotice,
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.md),
+                  if (!_isManualOnlyMode) ...[
+                    HyperlinkButton(
+                      key: const ValueKey('updates_manual_only_mode_link'),
+                      onPressed: onUseManualOnlyUpdateMode,
+                      child: Text(l10n.configUseManualOnlyUpdatesLink),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  SettingsToggleTile(
+                    key: const ValueKey('update_notifications_toggle'),
+                    label: l10n.configUpdateNotificationsToggle,
+                    description: l10n.configUpdateNotificationsDescription,
+                    value: updateNotificationsEnabled,
+                    onChanged: onUpdateNotificationsChanged,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
                   SettingsToggleTile(
                     key: const ValueKey('automatic_silent_updates_toggle'),
                     label: l10n.configAutomaticSilentUpdatesToggle,
@@ -130,27 +178,29 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                     value: automaticSilentUpdatesEnabled,
                     onChanged: onAutomaticSilentUpdatesChanged,
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Button(
-                    key: const ValueKey('automatic_updates_check_now_button'),
-                    onPressed: isCheckingAutomaticUpdates ? null : onCheckAutomaticUpdates,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (isCheckingAutomaticUpdates)
-                          const SizedBox(
-                            key: ValueKey('automatic_updates_progress_ring'),
-                            width: 16,
-                            height: 16,
-                            child: ProgressRing(strokeWidth: 2),
-                          )
-                        else
-                          const Icon(FluentIcons.refresh),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text(l10n.configAutomaticSilentUpdatesCheckNow),
-                      ],
+                  if (automaticSilentUpdatesEnabled) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Button(
+                      key: const ValueKey('automatic_updates_check_now_button'),
+                      onPressed: isCheckingAutomaticUpdates ? null : onCheckAutomaticUpdates,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isCheckingAutomaticUpdates)
+                            const SizedBox(
+                              key: ValueKey('automatic_updates_progress_ring'),
+                              width: 16,
+                              height: 16,
+                              child: ProgressRing(strokeWidth: 2),
+                            )
+                          else
+                            const Icon(FluentIcons.refresh),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(l10n.configAutomaticSilentUpdatesCheckNow),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               )
             else
@@ -222,10 +272,6 @@ class _ReleaseNotesExpander extends StatelessWidget {
             ),
           if (trimmedNotes.isNotEmpty && trimmedUrl.isNotEmpty) const SizedBox(height: AppSpacing.sm),
           if (trimmedUrl.isNotEmpty)
-            // Show the URL as selectable plain text. We do not pull in a
-            // browser launcher dependency just for this single button; the
-            // user can copy and open the URL manually, and it is also
-            // captured in the diagnostics clipboard payload.
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [

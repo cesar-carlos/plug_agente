@@ -28,10 +28,12 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     this.onCheckManual,
     this.onCheckSilently,
     this.onSetAutomaticSilentUpdatesEnabled,
+    this.onSetUpdateNotificationsEnabled,
     this.lastManualDiagnostics,
     this.lastBackgroundDiagnostics,
     this.lastAutomaticDiagnostics,
     this.automaticSilentUpdatesEnabled = true,
+    this.updateNotificationsEnabled = true,
   });
 
   @override
@@ -39,6 +41,9 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
 
   @override
   bool automaticSilentUpdatesEnabled;
+
+  @override
+  bool updateNotificationsEnabled;
 
   @override
   bool isSilentCheckInProgress = false;
@@ -55,6 +60,7 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   Future<Result<ManualCheckOutcome>> Function()? onCheckManual;
   Future<Result<SilentUpdateOutcome>> Function()? onCheckSilently;
   Future<Result<void>> Function(bool value)? onSetAutomaticSilentUpdatesEnabled;
+  Future<Result<void>> Function(bool value)? onSetUpdateNotificationsEnabled;
   int silentCheckCount = 0;
 
   @override
@@ -90,7 +96,23 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   }
 
   @override
+  Future<Result<void>> setUpdateNotificationsEnabled(bool enabled) async {
+    updateNotificationsEnabled = enabled;
+    if (onSetUpdateNotificationsEnabled != null) {
+      return onSetUpdateNotificationsEnabled!.call(enabled);
+    }
+    return const Success(unit);
+  }
+
+  @override
   Future<void> startAutomaticChecks() async {}
+
+  @override
+  Future<Result<void>> applyManualOnlyUpdateMode() async {
+    updateNotificationsEnabled = false;
+    automaticSilentUpdatesEnabled = false;
+    return const Success(unit);
+  }
 
   bool hasPendingDownloadedUpdateValue = false;
 
@@ -202,17 +224,17 @@ void main() {
     await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('updates_refresh_button')));
+    await tester.tap(find.byKey(const ValueKey('updates_check_now_button')));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('updates_progress_ring')), findsOneWidget);
-    expect(find.byKey(const ValueKey('updates_refresh_button')), findsNothing);
+    expect(find.byKey(const ValueKey('updates_check_now_button')), findsOneWidget);
 
     completer.complete(const Success(ManualCheckOutcome.noUpdate));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('updates_progress_ring')), findsNothing);
-    expect(find.byKey(const ValueKey('updates_refresh_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('updates_check_now_button')), findsOneWidget);
   });
 
   testWidgets('shows failure technical details when manual check fails', (tester) async {
@@ -244,7 +266,7 @@ void main() {
     await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('updates_refresh_button')));
+    await tester.tap(find.byKey(const ValueKey('updates_check_now_button')));
     await tester.pumpAndSettle();
 
     expect(find.text(ptL10n.gsSectionUpdates), findsWidgets);
@@ -340,6 +362,61 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(ptL10n.configAutoUpdateFeedCustom), findsOneWidget);
+  });
+
+  testWidgets('manual-only link applies both preferences', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: true);
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('updates_manual_only_mode_link')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(orchestrator.updateNotificationsEnabled, isFalse);
+    expect(orchestrator.automaticSilentUpdatesEnabled, isFalse);
+    expect(find.byKey(const ValueKey('updates_manual_only_mode_link')), findsNothing);
+  });
+
+  testWidgets('shows pending notice when notifications are off and update is staged', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: true)
+      ..updateNotificationsEnabled = false
+      ..hasPendingDownloadedUpdateValue = true;
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.configUpdatePendingReadyNotice), findsOneWidget);
+  });
+
+  testWidgets('toggles update notifications preference', (tester) async {
+    bool? capturedValue;
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      onSetUpdateNotificationsEnabled: (value) async {
+        capturedValue = value;
+        return const Success(unit);
+      },
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.configUpdateNotificationsToggle), findsOneWidget);
+
+    await tester.tap(find.byType(ToggleSwitch).first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(capturedValue, isFalse);
+    expect(orchestrator.updateNotificationsEnabled, isFalse);
   });
 
   testWidgets('toggles automatic silent updates preference', (tester) async {
@@ -470,5 +547,31 @@ void main() {
     expect(clipboardPayload, contains('version: 10.0.26200'));
     expect(clipboardPayload, contains('is_server: false'));
     expect(clipboardPayload, contains('product_name: Windows 10/11'));
+    expect(clipboardPayload, contains(ptL10n.configUpdateTechnicalPreferencesTitle));
+    expect(clipboardPayload, contains(ptL10n.configUpdateTechnicalNotificationsEnabled));
+    expect(clipboardPayload, contains(ptL10n.configUpdateTechnicalAutomaticSilentEnabled));
+  });
+
+  testWidgets('manual check still works when manual-only mode is active', (tester) async {
+    var manualCheckCount = 0;
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      updateNotificationsEnabled: false,
+      automaticSilentUpdatesEnabled: false,
+      onCheckManual: () async {
+        manualCheckCount += 1;
+        return const Success(ManualCheckOutcome.noUpdate);
+      },
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('updates_check_now_button')));
+    await tester.pumpAndSettle();
+
+    expect(manualCheckCount, 1);
   });
 }

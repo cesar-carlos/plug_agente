@@ -486,6 +486,10 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   bool get automaticSilentUpdatesEnabled => _silentCoordinator.automaticSilentUpdatesEnabled;
 
   @override
+  bool get updateNotificationsEnabled =>
+      _settingsStore?.getBool(AppSettingsKeys.updateNotificationsEnabled) ?? true;
+
+  @override
   bool get isSilentCheckInProgress => _silentCoordinator.isSilentCheckInProgress;
 
   @override
@@ -704,6 +708,12 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
         );
   }
 
+  int _resolveWinSparkleIntervalSeconds() {
+    if (automaticSilentUpdatesEnabled) return 0;
+    if (!updateNotificationsEnabled) return 0;
+    return resolveAutoUpdateCheckIntervalSeconds(environment: AppEnvironment.snapshot());
+  }
+
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
@@ -727,10 +737,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
       );
       return;
     }
-    final intervalSeconds = resolveAutoUpdateCheckIntervalSeconds(
-      environment: AppEnvironment.snapshot(),
-    );
-    final updaterIntervalSeconds = automaticSilentUpdatesEnabled ? 0 : intervalSeconds;
+    final updaterIntervalSeconds = _resolveWinSparkleIntervalSeconds();
     try {
       _updaterEventsSubscription ??= _updaterGateway.events.listen(_handleUpdaterEvent);
       await _updaterGateway.setFeedURL(feedUrl);
@@ -766,10 +773,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     try {
       await settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, enabled);
       if (_isInitialized) {
-        final intervalSeconds = enabled
-            ? 0
-            : resolveAutoUpdateCheckIntervalSeconds(environment: AppEnvironment.snapshot());
-        await _updaterGateway.setScheduledCheckInterval(intervalSeconds);
+        await _updaterGateway.setScheduledCheckInterval(_resolveWinSparkleIntervalSeconds());
       }
       if (!enabled) {
         // Signal in-flight check (if any) to bail out at the next safe
@@ -777,9 +781,12 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
         // a no-op when no check is running.
         _silentCoordinator.requestCancellation();
         _silentCoordinator.stop();
+        _metricsCollector?.recordAutoUpdateAutomaticSilentPreferenceDisabled();
       } else {
         _silentCoordinator.scheduleAndStart();
+        _metricsCollector?.recordAutoUpdateAutomaticSilentPreferenceEnabled();
       }
+      _notifyChanges();
       return const Success(unit);
     } on Exception catch (error) {
       return Failure(
@@ -796,11 +803,62 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   }
 
   @override
+  Future<Result<void>> setUpdateNotificationsEnabled(bool enabled) async {
+    final settingsStore = _settingsStore;
+    if (settingsStore == null) {
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Settings store is not available',
+          context: <String, dynamic>{'operation': 'setUpdateNotificationsEnabled'},
+        ),
+      );
+    }
+    try {
+      await settingsStore.setBool(AppSettingsKeys.updateNotificationsEnabled, enabled);
+      if (_isInitialized) {
+        await _updaterGateway.setScheduledCheckInterval(_resolveWinSparkleIntervalSeconds());
+      }
+      if (enabled) {
+        _metricsCollector?.recordAutoUpdateNotificationsPreferenceEnabled();
+      } else {
+        _metricsCollector?.recordAutoUpdateNotificationsPreferenceDisabled();
+      }
+      _notifyChanges();
+      return const Success(unit);
+    } on Exception catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to update update notification preference',
+          cause: error,
+          context: <String, dynamic>{
+            'operation': 'setUpdateNotificationsEnabled',
+            'enabled': enabled,
+          },
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<Result<void>> applyManualOnlyUpdateMode() async {
+    final notificationsResult = await setUpdateNotificationsEnabled(false);
+    if (notificationsResult.isError()) {
+      return notificationsResult;
+    }
+    final automaticResult = await setAutomaticSilentUpdatesEnabled(false);
+    if (automaticResult.isError()) {
+      return automaticResult;
+    }
+    _metricsCollector?.recordAutoUpdateManualOnlyModeApplied();
+    return const Success(unit);
+  }
+
+  @override
   Future<void> startAutomaticChecks() async {
     if (!isAvailable) return;
     await initialize();
     await _silentCoordinator.reconcilePendingAndSchedule();
-    if (!automaticSilentUpdatesEnabled) {
+    if (!automaticSilentUpdatesEnabled && updateNotificationsEnabled) {
       unawaited(checkInBackground());
     }
   }
@@ -893,6 +951,9 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
       await _silentCoordinator.checkSilently();
       return;
     }
+    if (!updateNotificationsEnabled) {
+      return;
+    }
     if (_isBackgroundCheckInProgress) {
       developer.log(
         'Background update check skipped: another background check is already running',
@@ -963,11 +1024,12 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
             // silent path took over. Without this check we would wake
             // up and dispatch one extra `checkForUpdates` against an
             // updater that no longer makes sense to drive.
-            if (!isAvailable || automaticSilentUpdatesEnabled) {
+            if (!isAvailable || automaticSilentUpdatesEnabled || !updateNotificationsEnabled) {
               developer.log(
                 'Background update retry aborted after delay: '
                 'isAvailable=$isAvailable, '
-                'automaticSilentUpdatesEnabled=$automaticSilentUpdatesEnabled',
+                'automaticSilentUpdatesEnabled=$automaticSilentUpdatesEnabled, '
+                'updateNotificationsEnabled=$updateNotificationsEnabled',
                 name: 'auto_update_orchestrator',
                 level: 800,
               );

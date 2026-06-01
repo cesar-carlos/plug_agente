@@ -196,6 +196,15 @@ class MetricsCollector
   static const String _autoUpdateAwaitingUserConsentCounter = 'auto_update_awaiting_user_consent';
   static const String _autoUpdateUserInitiatedApplySuccessCounter = 'auto_update_user_initiated_apply_success';
   static const String _autoUpdateUserInitiatedApplyFailureCounter = 'auto_update_user_initiated_apply_failure';
+  static const String _autoUpdateNotificationsPreferenceEnabledCounter =
+      'auto_update_notifications_preference_enabled';
+  static const String _autoUpdateNotificationsPreferenceDisabledCounter =
+      'auto_update_notifications_preference_disabled';
+  static const String _autoUpdateAutomaticSilentPreferenceEnabledCounter =
+      'auto_update_automatic_silent_preference_enabled';
+  static const String _autoUpdateAutomaticSilentPreferenceDisabledCounter =
+      'auto_update_automatic_silent_preference_disabled';
+  static const String _autoUpdateManualOnlyModeAppliedCounter = 'auto_update_manual_only_mode_applied';
 
   static const int _maxMetrics = 10000;
 
@@ -1068,6 +1077,26 @@ class MetricsCollector
   @override
   void recordAutoUpdateBackgroundCheckUpdaterError() =>
       _incrementEventCounter(_autoUpdateBackgroundCheckUpdaterErrorCounter);
+
+  @override
+  void recordAutoUpdateNotificationsPreferenceEnabled() =>
+      _incrementEventCounter(_autoUpdateNotificationsPreferenceEnabledCounter);
+
+  @override
+  void recordAutoUpdateNotificationsPreferenceDisabled() =>
+      _incrementEventCounter(_autoUpdateNotificationsPreferenceDisabledCounter);
+
+  @override
+  void recordAutoUpdateAutomaticSilentPreferenceEnabled() =>
+      _incrementEventCounter(_autoUpdateAutomaticSilentPreferenceEnabledCounter);
+
+  @override
+  void recordAutoUpdateAutomaticSilentPreferenceDisabled() =>
+      _incrementEventCounter(_autoUpdateAutomaticSilentPreferenceDisabledCounter);
+
+  @override
+  void recordAutoUpdateManualOnlyModeApplied() =>
+      _incrementEventCounter(_autoUpdateManualOnlyModeAppliedCounter);
 
   final ListQueue<Duration> _autoUpdateProbeTimes = ListQueue<Duration>();
   final ListQueue<Duration> _autoUpdateDownloadTimes = ListQueue<Duration>();

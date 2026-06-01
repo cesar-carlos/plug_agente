@@ -3027,6 +3027,49 @@ class AppLocalizationsPt extends AppLocalizations {
       'Se você acabou de publicar uma nova versão, aguarde até 5 minutos e tente novamente.';
 
   @override
+  String get configUpdateNotificationsToggle => 'Notificar sobre atualizações';
+
+  @override
+  String get configUpdateNotificationsDescription =>
+      'Exibe avisos no aplicativo e verifica atualizações em segundo plano quando a instalação automática está desativada. Com a instalação automática desligada e esta opção ligada, o app ainda pode checar atualizações sem instalar. A verificação manual permanece disponível.';
+
+  @override
+  String get configUpdateNotificationsEnabled => 'Notificações de atualização ativadas.';
+
+  @override
+  String get configUpdateNotificationsDisabled => 'Notificações de atualização desativadas.';
+
+  @override
+  String get configManualCheckSectionTitle => 'Verificação manual';
+
+  @override
+  String get configUseManualOnlyUpdatesLink => 'Usar apenas verificação manual';
+
+  @override
+  String get configManualOnlyUpdatesApplied => 'Modo de verificação manual ativado.';
+
+  @override
+  String get configUpdatePendingReadyNotice =>
+      'Há uma atualização pronta para instalar. Reative as notificações ou use Verificar atualizações para ver os detalhes.';
+
+  @override
+  String get configUpdatePendingAwaitingConsentNotice =>
+      'Há uma atualização disponível que exige sua confirmação. Reative as notificações ou use Verificar atualizações.';
+
+  @override
+  String get configAutomaticSilentUpdatesDisableNotificationsHint =>
+      'A instalação automática foi desativada. Para evitar checagens em segundo plano, desative também as notificações de atualização.';
+
+  @override
+  String get configUpdateTechnicalPreferencesTitle => 'Preferências de atualização';
+
+  @override
+  String get configUpdateTechnicalNotificationsEnabled => 'Notificações de atualização';
+
+  @override
+  String get configUpdateTechnicalAutomaticSilentEnabled => 'Instalação automática silenciosa';
+
+  @override
   String get configAutomaticSilentUpdatesToggle => 'Instalar atualizações automaticamente';
 
   @override

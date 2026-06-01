@@ -8,6 +8,11 @@ class AppSettingsKeys {
   static const String closeToTray = 'settings.close_to_tray';
   static const String automaticSilentUpdatesEnabled = 'settings.automatic_silent_updates_enabled';
 
+  /// When false, hides proactive update UI (in-app banner) and disables
+  /// WinSparkle background checks while automatic silent updates are off.
+  /// Manual checks from Settings remain available.
+  static const String updateNotificationsEnabled = 'settings.update_notifications_enabled';
+
   /// Persists the operator's "remind me later" gesture for the in-app
   /// auto-update banner. Stored as a JSON object with the pending
   /// version that was dismissed and the wall-clock timestamp until

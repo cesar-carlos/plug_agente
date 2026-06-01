@@ -7,6 +7,11 @@ abstract class IAutoUpdateOrchestrator {
   bool get isAvailable;
   bool get automaticSilentUpdatesEnabled;
 
+  /// When false, proactive update UI (banner) is hidden and WinSparkle
+  /// background checks are skipped while [automaticSilentUpdatesEnabled]
+  /// is false. Silent install continues when automatic updates are on.
+  bool get updateNotificationsEnabled;
+
   /// `true` while a silent update download/install cycle is in progress.
   /// Useful for the UI to show a progress indicator without polling.
   bool get isSilentCheckInProgress;
@@ -41,6 +46,12 @@ abstract class IAutoUpdateOrchestrator {
   Future<void> initialize();
 
   Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled);
+
+  Future<Result<void>> setUpdateNotificationsEnabled(bool enabled);
+
+  /// Disables proactive notifications and automatic silent install so only
+  /// the Settings manual check remains active.
+  Future<Result<void>> applyManualOnlyUpdateMode();
 
   Future<void> startAutomaticChecks();
 

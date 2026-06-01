@@ -6,14 +6,50 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 class UpdateSupportDiagnosticsBuilder {
   const UpdateSupportDiagnosticsBuilder();
 
+  SupportDiagnosticsSection buildPreferencesSection({
+    required AppLocalizations l10n,
+    required bool updateNotificationsEnabled,
+    required bool automaticSilentUpdatesEnabled,
+  }) {
+    return SupportDiagnosticsSection(
+      title: l10n.configUpdateTechnicalPreferencesTitle,
+      fields: <SupportDiagnosticsField>[
+        SupportDiagnosticsField(
+          key: l10n.configUpdateTechnicalNotificationsEnabled,
+          value: updateNotificationsEnabled
+              ? l10n.configUpdateTechnicalOfficialFeedYes
+              : l10n.configUpdateTechnicalOfficialFeedNo,
+        ),
+        SupportDiagnosticsField(
+          key: l10n.configUpdateTechnicalAutomaticSilentEnabled,
+          value: automaticSilentUpdatesEnabled
+              ? l10n.configUpdateTechnicalOfficialFeedYes
+              : l10n.configUpdateTechnicalOfficialFeedNo,
+        ),
+      ],
+    );
+  }
+
   List<SupportDiagnosticsSection> buildSections({
     required AppLocalizations l10n,
     required String currentAppVersion,
     UpdateCheckDiagnostics? manualDiagnostics,
     UpdateCheckDiagnostics? backgroundDiagnostics,
     UpdateCheckDiagnostics? automaticDiagnostics,
+    bool? updateNotificationsEnabled,
+    bool? automaticSilentUpdatesEnabled,
   }) {
     final sections = <SupportDiagnosticsSection>[];
+
+    if (updateNotificationsEnabled != null && automaticSilentUpdatesEnabled != null) {
+      sections.add(
+        buildPreferencesSection(
+          l10n: l10n,
+          updateNotificationsEnabled: updateNotificationsEnabled,
+          automaticSilentUpdatesEnabled: automaticSilentUpdatesEnabled,
+        ),
+      );
+    }
 
     if (manualDiagnostics != null) {
       sections.add(

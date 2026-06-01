@@ -120,6 +120,10 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
   }
 
   bool get _shouldShow {
+    final orchestrator = _orchestrator;
+    if (orchestrator != null && !orchestrator.updateNotificationsEnabled) {
+      return false;
+    }
     final mode = _mode;
     if (mode == null) return false;
     final pendingVersion = _pendingVersion(_orchestrator!);
