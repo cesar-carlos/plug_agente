@@ -541,6 +541,7 @@
   "agentActionsSubsystemStatusDisabledMessage": "O guard de runtime reporta o subsistema como desativado. Verifique as feature flags e reinicie o agente se necessario.",
   "agentActionsSchedulerOperationalIssueTitle": "Gatilhos agendados nao estao em execucao",
   "agentActionsSchedulerInstanceLockedMessage": "Outro processo do Plug Agente ja esta executando o agendador de acoes nesta pasta de dados. Feche a outra instancia ou use um diretorio de dados separado. Execucoes manuais e acoes remotas podem continuar funcionando nesta janela.",
+  "agentActionsSchedulerStorageAccessDeniedMessage": "O agendador de acoes nao conseguiu acessar o arquivo de lock nesta pasta de dados. Revise permissoes de leitura/escrita ou execute o agente com privilegios adequados.",
   "agentActionsSchedulerBootstrapFailedMessage": "O agendador de acoes foi desativado apos falha na inicializacao. Reinicie o agente ou revise os gatilhos salvos. Execucoes manuais podem continuar ate corrigir a configuracao de agendamento.",
   "agentActionsComObjectHandlersMissingTitle": "Acoes COM nao estao prontas",
   "agentActionsComObjectHandlersMissingMessage": "Nenhum handler COM (ProgID/membro) esta registrado neste agente. Acoes COM falharao ate registrar handlers em ComObjectInvocationRegistry ou configurar o stub de homologacao (AGENT_ACTION_COM_STUB_ENABLED). Consulte agent.getHealth com_object_invocation_ready.",

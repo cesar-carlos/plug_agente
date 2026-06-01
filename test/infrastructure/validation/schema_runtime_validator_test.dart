@@ -103,6 +103,47 @@ void main() {
       expect(result.isError(), isTrue);
     });
 
+    test('accepts sql.execute offset pagination options', () async {
+      final ctx = await _buildValidator();
+      if (!ctx.validator.isLoaded(TransportSchemaIds.paramsSqlExecute)) {
+        return;
+      }
+
+      final result = ctx.validator.validate(
+        schemaId: TransportSchemaIds.paramsSqlExecute,
+        payload: const <String, dynamic>{
+          'sql': 'SELECT CodCliente, Nome FROM Cliente ORDER BY CodCliente',
+          'options': <String, dynamic>{
+            'page': 1,
+            'page_size': 10,
+          },
+        },
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test('rejects sql.execute preserve mode combined with pagination options', () async {
+      final ctx = await _buildValidator();
+      if (!ctx.validator.isLoaded(TransportSchemaIds.paramsSqlExecute)) {
+        return;
+      }
+
+      final result = ctx.validator.validate(
+        schemaId: TransportSchemaIds.paramsSqlExecute,
+        payload: const <String, dynamic>{
+          'sql': 'SELECT CodCliente, Nome FROM Cliente ORDER BY CodCliente',
+          'options': <String, dynamic>{
+            'page': 1,
+            'page_size': 10,
+            'execution_mode': 'preserve',
+          },
+        },
+      );
+
+      expect(result.isError(), isTrue);
+    });
+
     test('returns success when the schema is not loaded (fallback path)', () async {
       final loader = TransportSchemaLoader(
         assetLoader: (_) async => throw StateError('asset missing'),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
@@ -88,7 +89,11 @@ domain.Failure _withTransportRpcErrorCode(
 
 Object _jsonDecodeUtf8PayloadInIsolate(Uint8List bytes) {
   final jsonString = utf8.decode(bytes);
-  return jsonDecode(jsonString) as Object;
+  final decoded = jsonDecode(jsonString);
+  if (decoded == null) {
+    throw const FormatException('Top-level JSON payload must not be null');
+  }
+  return decoded as Object;
 }
 
 /// Top-level for [compute]: JSON-serializable values only.
@@ -127,6 +132,20 @@ bool _exceedsInflationRatio(
   double maxInflationRatio,
 ) {
   return compressedSize > 0 && originalSize / compressedSize > maxInflationRatio;
+}
+
+Uint8List? _payloadBytesFromFramePayload(dynamic payload) {
+  return switch (payload) {
+    final Uint8List value => value,
+    final ByteBuffer value => value.asUint8List(),
+    final TypedData value => Uint8List.view(
+      value.buffer,
+      value.offsetInBytes,
+      value.lengthInBytes,
+    ),
+    final List<int> value => Uint8List.fromList(value),
+    _ => null,
+  };
 }
 
 /// Transport pipeline for encoding/compressing and decoding/decompressing payloads.
@@ -309,7 +328,7 @@ class TransportPipeline {
         compressDurationUs: compressDurationUs,
       );
       return Success(frame);
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to prepare payload for sending',
@@ -482,26 +501,18 @@ class TransportPipeline {
         );
       }
 
-      Uint8List bytes;
-
-      // Ensure payload is bytes
-      if (frame.payload is! Uint8List) {
-        if (frame.payload is List<int>) {
-          bytes = Uint8List.fromList(frame.payload as List<int>);
-        } else {
-          final payloadType = frame.payload.runtimeType.toString();
-          return Failure(
-            domain.ValidationFailure.withContext(
-              message: 'Frame payload is not binary data',
-              context: _transportContext(
-                RpcErrorCode.invalidPayload,
-                {'payloadType': payloadType},
-              ),
+      final bytes = _payloadBytesFromFramePayload(frame.payload);
+      if (bytes == null) {
+        final payloadType = frame.payload.runtimeType.toString();
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Frame payload is not binary data',
+            context: _transportContext(
+              RpcErrorCode.invalidPayload,
+              {'payloadType': payloadType},
             ),
-          );
-        }
-      } else {
-        bytes = frame.payload as Uint8List;
+          ),
+        );
       }
 
       if (bytes.length != frame.compressedSize) {
@@ -618,7 +629,7 @@ class TransportPipeline {
         );
       }
 
-      final decoded = decodeResult.getOrThrow();
+      final decoded = decodeResult.getOrThrow() as Object;
       decodeStopwatch.stop();
       totalStopwatch.stop();
       _recordMetric(
@@ -631,8 +642,8 @@ class TransportPipeline {
         decodeDurationUs: decodeStopwatch.elapsedMicroseconds,
         decompressDurationUs: decompressDurationUs,
       );
-      return Success(decoded as Object);
-    } on Exception catch (error) {
+      return Success(decoded);
+    } on Object catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to process received payload',
@@ -672,25 +683,18 @@ class TransportPipeline {
         );
       }
 
-      Uint8List bytes;
-
-      if (frame.payload is! Uint8List) {
-        if (frame.payload is List<int>) {
-          bytes = Uint8List.fromList(frame.payload as List<int>);
-        } else {
-          final payloadType = frame.payload.runtimeType.toString();
-          return Failure(
-            domain.ValidationFailure.withContext(
-              message: 'Frame payload is not binary data',
-              context: _transportContext(
-                RpcErrorCode.invalidPayload,
-                {'payloadType': payloadType},
-              ),
+      final bytes = _payloadBytesFromFramePayload(frame.payload);
+      if (bytes == null) {
+        final payloadType = frame.payload.runtimeType.toString();
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Frame payload is not binary data',
+            context: _transportContext(
+              RpcErrorCode.invalidPayload,
+              {'payloadType': payloadType},
             ),
-          );
-        }
-      } else {
-        bytes = frame.payload as Uint8List;
+          ),
+        );
       }
 
       if (bytes.length != frame.compressedSize) {

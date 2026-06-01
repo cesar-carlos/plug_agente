@@ -85,6 +85,10 @@ bool ForwardDeepLinkToExistingInstance(const std::string& deep_link) {
   return send_status != 0 && send_result == 0;
 }
 
+bool IsRunnerWindowPresent() {
+  return ::FindWindowW(kRunnerWindowClassName, nullptr) != nullptr;
+}
+
 void HandleSecondInstance(const std::vector<std::string>& args,
                           bool is_autostart) {
   if (is_autostart) {
@@ -121,36 +125,109 @@ void HandleSecondInstance(const std::vector<std::string>& args,
                 MB_OK | MB_ICONINFORMATION);
 }
 
-HANDLE CreateSingleInstanceMutex() {
-  HANDLE h = ::CreateMutexW(nullptr, TRUE, kSingleInstanceMutexGlobal);
-  if (h != nullptr && ::GetLastError() != ERROR_ALREADY_EXISTS) {
-    return h;
+struct NamedMutexAcquireResult {
+  HANDLE handle = nullptr;
+  bool existing_instance_detected = false;
+  DWORD create_error = ERROR_SUCCESS;
+  DWORD open_error = ERROR_SUCCESS;
+};
+
+NamedMutexAcquireResult TryAcquireNamedMutex(
+    const wchar_t* mutex_name,
+    bool access_denied_has_existing_window_evidence = false) {
+  NamedMutexAcquireResult result{};
+  HANDLE handle = ::CreateMutexW(nullptr, TRUE, mutex_name);
+  if (handle != nullptr) {
+    if (::GetLastError() == ERROR_ALREADY_EXISTS) {
+      result.existing_instance_detected = true;
+      ::CloseHandle(handle);
+      return result;
+    }
+    result.handle = handle;
+    return result;
   }
-  if (h != nullptr) {
-    ::CloseHandle(h);
-    return nullptr;
+
+  result.create_error = ::GetLastError();
+  if (result.create_error != ERROR_ACCESS_DENIED) {
+    return result;
   }
-  h = ::CreateMutexW(nullptr, TRUE, kSingleInstanceMutexLocal);
-  if (h != nullptr && ::GetLastError() != ERROR_ALREADY_EXISTS) {
-    return h;
+
+  HANDLE existing = ::OpenMutexW(SYNCHRONIZE, FALSE, mutex_name);
+  if (existing != nullptr) {
+    result.existing_instance_detected = true;
+    ::CloseHandle(existing);
+    return result;
   }
-  if (h != nullptr) {
-    ::CloseHandle(h);
+
+  result.open_error = ::GetLastError();
+  if (access_denied_has_existing_window_evidence &&
+      result.open_error == ERROR_ACCESS_DENIED) {
+    // Cross-privilege scenario with runner-window evidence: another instance
+    // may own a mutex ACL that denies this process from opening it.
+    result.existing_instance_detected = true;
   }
-  return nullptr;
+  return result;
 }
 
-bool IsAnotherInstanceRunning() {
-  HANDLE h = ::CreateMutexW(nullptr, TRUE, kSingleInstanceMutexGlobal);
-  if (h == nullptr) {
-    h = ::CreateMutexW(nullptr, TRUE, kSingleInstanceMutexLocal);
+struct SingleInstanceMutexResult {
+  HANDLE handle = nullptr;
+  bool existing_instance_detected = false;
+  bool runner_window_detected = false;
+  NamedMutexAcquireResult global_attempt{};
+  NamedMutexAcquireResult local_attempt{};
+};
+
+SingleInstanceMutexResult CreateSingleInstanceMutexResult() {
+  SingleInstanceMutexResult result{};
+  result.runner_window_detected = IsRunnerWindowPresent();
+
+  result.global_attempt = TryAcquireNamedMutex(
+      kSingleInstanceMutexGlobal,
+      result.runner_window_detected);
+  if (result.global_attempt.handle != nullptr) {
+    result.handle = result.global_attempt.handle;
+    return result;
   }
-  if (h == nullptr) {
-    return false;
+  if (result.global_attempt.existing_instance_detected) {
+    result.existing_instance_detected = true;
+    return result;
   }
-  const bool already_exists = (::GetLastError() == ERROR_ALREADY_EXISTS);
-  ::CloseHandle(h);
-  return already_exists;
+
+  result.local_attempt = TryAcquireNamedMutex(kSingleInstanceMutexLocal);
+  if (result.local_attempt.handle != nullptr) {
+    result.handle = result.local_attempt.handle;
+    return result;
+  }
+  if (result.local_attempt.existing_instance_detected) {
+    result.existing_instance_detected = true;
+  }
+
+  return result;
+}
+
+void LogSingleInstanceMutexDiagnostics(
+    const SingleInstanceMutexResult& mutex_result,
+    const wchar_t* outcome) {
+  wchar_t buffer[512];
+  const int written = ::swprintf_s(
+      buffer,
+      L"[plug_agente] Single-instance mutex outcome=%ls "
+      L"runner_window_detected=%d "
+      L"global_create_error=%lu global_open_error=%lu "
+      L"local_create_error=%lu local_open_error=%lu\n",
+      outcome,
+      mutex_result.runner_window_detected ? 1 : 0,
+      static_cast<unsigned long>(mutex_result.global_attempt.create_error),
+      static_cast<unsigned long>(mutex_result.global_attempt.open_error),
+      static_cast<unsigned long>(mutex_result.local_attempt.create_error),
+      static_cast<unsigned long>(mutex_result.local_attempt.open_error));
+  if (written <= 0) {
+    return;
+  }
+  ::OutputDebugStringW(buffer);
+  if (::IsDebuggerPresent()) {
+    std::fwprintf(stderr, L"%ls", buffer);
+  }
 }
 
 }  // namespace
@@ -164,19 +241,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   // Single instance: only one app per machine.
-  HANDLE h_mutex = CreateSingleInstanceMutex();
+  const SingleInstanceMutexResult mutex_result = CreateSingleInstanceMutexResult();
+  HANDLE h_mutex = mutex_result.handle;
   if (h_mutex == nullptr) {
-    if (IsAnotherInstanceRunning()) {
+    if (mutex_result.existing_instance_detected) {
+      LogSingleInstanceMutexDiagnostics(mutex_result, L"existing_instance");
       std::vector<std::string> args = GetCommandLineArguments();
       const bool is_autostart = HasAutostartArg(args);
       HandleSecondInstance(args, is_autostart);
       return EXIT_SUCCESS;
     }
-    if (::IsDebuggerPresent()) {
-      std::fprintf(stderr,
-                   "[plug_agente] Single-instance mutex failed; continuing "
-                   "without protection.\n");
-    }
+    LogSingleInstanceMutexDiagnostics(mutex_result, L"degraded_no_mutex");
   } else {
     g_single_instance_mutex = new MutexGuard(h_mutex);
   }

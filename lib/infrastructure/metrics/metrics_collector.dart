@@ -79,6 +79,8 @@ class MetricsCollector
   static const String _rpcResponseAckDeliveredCounter = 'rpc_response_ack_delivered';
   static const String _rpcResponseAckAbortedConnectionChangeCounter = 'rpc_response_ack_aborted_connection_change';
   static const String _rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
+  static const String _rpcResponseAckSkippedSqlExecuteCounter = 'rpc_response_ack_skipped_sql_execute';
+  static const String _rpcResponseAckSkippedSqlExecuteBatchCounter = 'rpc_response_ack_skipped_sql_execute_batch';
   static const String _rpcClientTokenGetPolicySuccessCounter = 'rpc_client_token_get_policy_success';
   static const String _rpcClientTokenGetPolicyFailureCounter = 'rpc_client_token_get_policy_failure';
   static const String _rpcClientTokenGetPolicyFailureValidationCounter =
@@ -288,6 +290,9 @@ class MetricsCollector
   int get rpcResponseAckAbortedConnectionChangeCount =>
       _eventCounters[_rpcResponseAckAbortedConnectionChangeCounter] ?? 0;
   int get rpcResponseAckFallbackWithoutAckCount => _eventCounters[_rpcResponseAckFallbackWithoutAckCounter] ?? 0;
+  int get rpcResponseAckSkippedSqlExecuteCount => _eventCounters[_rpcResponseAckSkippedSqlExecuteCounter] ?? 0;
+  int get rpcResponseAckSkippedSqlExecuteBatchCount =>
+      _eventCounters[_rpcResponseAckSkippedSqlExecuteBatchCounter] ?? 0;
   int get rpcClientTokenGetPolicySuccessCount => _eventCounters[_rpcClientTokenGetPolicySuccessCounter] ?? 0;
   int get rpcClientTokenGetPolicyFailureCount => _eventCounters[_rpcClientTokenGetPolicyFailureCounter] ?? 0;
   int get rpcClientTokenGetPolicyRateLimitedCount => _eventCounters[_rpcClientTokenGetPolicyRateLimitedCounter] ?? 0;
@@ -837,6 +842,11 @@ class MetricsCollector
       _incrementEventCounter(_rpcResponseAckAbortedConnectionChangeCounter);
 
   void recordRpcResponseAckFallbackWithoutAck() => _incrementEventCounter(_rpcResponseAckFallbackWithoutAckCounter);
+
+  void recordRpcResponseAckSkippedSqlExecute() => _incrementEventCounter(_rpcResponseAckSkippedSqlExecuteCounter);
+
+  void recordRpcResponseAckSkippedSqlExecuteBatch() =>
+      _incrementEventCounter(_rpcResponseAckSkippedSqlExecuteBatchCounter);
 
   void recordClientTokenGetPolicySuccess() => _incrementEventCounter(_rpcClientTokenGetPolicySuccessCounter);
 

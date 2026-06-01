@@ -166,6 +166,40 @@ void main() {
       expect(result.isError(), isTrue);
     });
 
+    test('prepareSend returns failure when JSON encoding is unsupported', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+
+      final result = pipeline.prepareSend({'callback': () {}});
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<CompressionFailure>());
+    });
+
+    test('receiveProcess returns failure for top-level null JSON payload', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+      final bytes = Uint8List.fromList(utf8.encode('null'));
+      final frame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: const JsonPayloadCodec().contentType,
+        originalSize: bytes.length,
+        compressedSize: bytes.length,
+        payload: bytes,
+      );
+
+      final result = pipeline.receiveProcess(frame);
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<CompressionFailure>());
+    });
+
     test('should include trace ID in prepared frame', () {
       final pipeline = TransportPipeline(
         encoding: 'json',
@@ -435,6 +469,28 @@ void main() {
       expect(pipeline.receiveProcess(frame).getOrThrow(), equals(data));
     });
 
+    test('receiveProcess accepts ByteBuffer payload bytes', () {
+      final pipeline = TransportPipeline(
+        encoding: 'json',
+        compression: 'none',
+      );
+      final data = {'x': 1};
+      final prepared = pipeline.prepareSend(data).getOrThrow();
+      final frame = PayloadFrame(
+        schemaVersion: prepared.schemaVersion,
+        enc: prepared.enc,
+        cmp: prepared.cmp,
+        contentType: prepared.contentType,
+        originalSize: prepared.originalSize,
+        compressedSize: prepared.compressedSize,
+        payload: Uint8List.fromList(prepared.payload as Uint8List).buffer,
+        traceId: prepared.traceId,
+        requestId: prepared.requestId,
+      );
+
+      expect(pipeline.receiveProcess(frame).getOrThrow(), equals(data));
+    });
+
     test('receiveProcess fails when payload is not binary', () {
       final pipeline = TransportPipeline(
         encoding: 'json',
@@ -587,6 +643,47 @@ void main() {
         final failure = result.exceptionOrNull()! as CompressionFailure;
         expect(failure.message, contains('encode JSON'));
         expect(failure.context['operation'], 'jsonEncode');
+      },
+    );
+
+    test(
+      'prepareSendAsync returns failure when JSON encoding is unsupported in direct path',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'none',
+          compressionThreshold: 1 << 30,
+        );
+
+        final result = await pipeline.prepareSendAsync({'callback': () {}});
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<CompressionFailure>());
+      },
+    );
+
+    test(
+      'receiveProcessAsync returns failure for top-level null JSON payload',
+      () async {
+        final pipeline = TransportPipeline(
+          encoding: 'json',
+          compression: 'none',
+        );
+        final bytes = Uint8List.fromList(utf8.encode('null'));
+        final frame = PayloadFrame(
+          schemaVersion: '1.0',
+          enc: 'json',
+          cmp: 'none',
+          contentType: const JsonPayloadCodec().contentType,
+          originalSize: bytes.length,
+          compressedSize: bytes.length,
+          payload: bytes,
+        );
+
+        final result = await pipeline.receiveProcessAsync(frame);
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<CompressionFailure>());
       },
     );
   });

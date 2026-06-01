@@ -92,6 +92,7 @@ void main() {
   late _MockDispatcher dispatcher;
   late ProtocolConfig protocol;
   late List<dynamic> emittedResponses;
+  late List<Map<Object?, String>> emittedResponseMethodContexts;
   late List<({String event, dynamic payload})> emittedEvents;
   late List<bool> hubSqlCaptureTransitions;
   late RpcInboundHandler handler;
@@ -121,6 +122,7 @@ void main() {
       compression: 'none',
     );
     emittedResponses = [];
+    emittedResponseMethodContexts = <Map<Object?, String>>[];
     emittedEvents = [];
     hubSqlCaptureTransitions = <bool>[];
 
@@ -168,6 +170,10 @@ void main() {
       emitRpcResponse: (response) async {
         emittedResponses.add(response);
       },
+      emitRpcResponseWithMethodContext: (response, {methodsById = const <Object?, String>{}}) async {
+        emittedResponses.add(response);
+        emittedResponseMethodContexts.add(Map<Object?, String>.from(methodsById));
+      },
       emitEvent: (event, payload) async {
         emittedEvents.add((event: event, payload: payload));
       },
@@ -214,6 +220,22 @@ void main() {
         data['technical_message'],
         RpcInboundConstants.concurrentHandlersExceededTechnicalMessage(ConnectionConstants.maxConcurrentRpcHandlers),
       );
+    });
+
+    test('emitConcurrencyLimitedError preserves SQL method context for ACK bypass', () async {
+      await handler.emitConcurrencyLimitedError({
+        'jsonrpc': '2.0',
+        'id': 'req-sql-rate-limit',
+        'method': 'sql.execute',
+      });
+
+      expect(emittedResponses, hasLength(1));
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.error?.code, RpcErrorCode.rateLimited);
+      expect(response.id, 'req-sql-rate-limit');
+      expect(emittedResponseMethodContexts.single, <Object?, String>{
+        'req-sql-rate-limit': 'sql.execute',
+      });
     });
 
     test('handleRequestWithRelease frees slot before slow emit completes', () async {
@@ -389,6 +411,33 @@ void main() {
       expect(emittedResponses, hasLength(1));
       final response = emittedResponses.single as RpcResponse;
       expect(response.id, 'req-frame');
+      expect(response.error?.code, RpcErrorCode.rateLimited);
+    });
+
+    test('emitConcurrencyLimitedError calls socket ack once when framed payload cannot expose id', () async {
+      var ackCount = 0;
+      final requestBytes = Uint8List.fromList(utf8.encode('null'));
+      final frame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        originalSize: requestBytes.length,
+        compressedSize: requestBytes.length,
+        payload: requestBytes,
+      ).toJson();
+
+      await handler.emitConcurrencyLimitedError([
+        frame,
+        () {
+          ackCount++;
+        },
+      ]);
+
+      expect(ackCount, 1);
+      expect(emittedResponses, hasLength(1));
+      final response = emittedResponses.single as RpcResponse;
+      expect(response.id, isNull);
       expect(response.error?.code, RpcErrorCode.rateLimited);
     });
   });
@@ -625,6 +674,63 @@ void main() {
     });
   });
 
+  group('single SQL dashboard capture pause', () {
+    test('pauses and resumes dashboard capture for sql.executeBatch', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(
+          id: request.id,
+          result: const <String, dynamic>{
+            'items': <dynamic>[],
+            'total_commands': 0,
+            'successful_commands': 0,
+            'failed_commands': 0,
+          },
+        );
+      });
+
+      final pipelineCache = TransportPipelineCache(
+        protocolProvider: () => protocol,
+        hasReceivedCapabilities: () => true,
+        featureFlags: featureFlags,
+      );
+      final frameCodec = PayloadFrameCodec(
+        pipelineCache: pipelineCache,
+        protocolProvider: () => protocol,
+        localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
+        hasReceivedCapabilities: () => true,
+        localShouldSignOutgoing: () => false,
+        localRequiresIncomingSignature: () => false,
+      );
+      final wire = (await frameCodec.prepareOutgoing(
+        event: 'rpc:request',
+        logicalPayload: const {
+          'jsonrpc': '2.0',
+          'id': 'sql-batch-single',
+          'method': 'sql.executeBatch',
+          'params': {
+            'commands': [
+              {'sql': 'SELECT 1'},
+            ],
+          },
+        },
+      )).getOrThrow();
+
+      await handler.handleRequest(wire);
+
+      expect(hubSqlCaptureTransitions, [true, false]);
+    });
+  });
+
   group('handleBatchRequest', () {
     test('returns invalidRequest for empty batch', () async {
       await handler.handleBatchRequest([]);
@@ -658,6 +764,37 @@ void main() {
           'id': 'sql-batch-1',
           'method': 'sql.execute',
           'params': {'sql': 'SELECT 1'},
+        },
+      ]);
+
+      expect(hubSqlCaptureTransitions, [true, false]);
+    });
+
+    test('pauses and resumes dashboard capture for batch containing sql.executeBatch', () async {
+      when(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(id: request.id, result: const <String, dynamic>{'items': <dynamic>[]});
+      });
+
+      await handler.handleBatchRequest([
+        {
+          'jsonrpc': '2.0',
+          'id': 'sql-execute-batch-1',
+          'method': 'sql.executeBatch',
+          'params': {
+            'commands': [
+              {'sql': 'SELECT 1'},
+            ],
+          },
         },
       ]);
 

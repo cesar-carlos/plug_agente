@@ -8,15 +8,22 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
 import 'package:result_dart/result_dart.dart';
 
+typedef SchedulerLockDirectoryEnsurer = Future<void> Function(Directory directory);
+typedef SchedulerLockFileOpener = Future<RandomAccessFile> Function(File file);
+
 /// File-backed exclusive lock for the agent action trigger scheduler.
 class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceLock {
   AgentActionSchedulerInstanceLock({
     required GlobalStorageContext storageContext,
     AgentRuntimeIdentity? runtimeIdentity,
     int Function()? currentPid,
+    SchedulerLockDirectoryEnsurer? ensureParentDirectory,
+    SchedulerLockFileOpener? openLockFile,
   }) : _lockFilePath = p.join(storageContext.appDirectoryPath, _lockFileName),
        _runtimeIdentity = runtimeIdentity,
-       _currentPid = currentPid ?? _currentProcessPid;
+       _currentPid = currentPid ?? _currentProcessPid,
+       _ensureParentDirectory = ensureParentDirectory ?? _defaultEnsureParentDirectory,
+       _openLockFile = openLockFile ?? _defaultOpenLockFile;
 
   static const String _lockFileName = 'agent_action_scheduler.lock';
   static const int _windowsAccessDeniedErrorCode = 5;
@@ -26,10 +33,19 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
   static final Set<String> _heldLockFilePaths = <String>{};
 
   static int _currentProcessPid() => pid;
+  static Future<void> _defaultEnsureParentDirectory(Directory directory) async {
+    await directory.create(recursive: true);
+  }
+
+  static Future<RandomAccessFile> _defaultOpenLockFile(File file) async {
+    return file.open(mode: FileMode.write);
+  }
 
   final String _lockFilePath;
   final AgentRuntimeIdentity? _runtimeIdentity;
   final int Function() _currentPid;
+  final SchedulerLockDirectoryEnsurer _ensureParentDirectory;
+  final SchedulerLockFileOpener _openLockFile;
 
   RandomAccessFile? _handle;
 
@@ -45,12 +61,12 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
     final file = File(_lockFilePath);
     RandomAccessFile? handle;
     try {
-      await file.parent.create(recursive: true);
+      await _ensureParentDirectory(file.parent);
       if (_heldLockFilePaths.contains(_lockFilePath)) {
         return Failure(await _lockedFailure());
       }
 
-      handle = await file.open(mode: FileMode.write);
+      handle = await _openLockFile(file);
       await handle.lock();
       final identity = _runtimeIdentity;
       final payload = StringBuffer()

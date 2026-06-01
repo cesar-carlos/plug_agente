@@ -347,6 +347,12 @@ Uma **notification** e um request JSON-RPC 2.0 sem campo `id`. O agente
 - Notifications nao contam para idempotencia (`idempotency_key` ignorado).
 - Notifications nao recebem `rpc:request_ack` (delivery guarantee = best effort).
 - Em batch, notifications sao processadas mas nao geram item no array de response.
+- Quando o request passa pelo `plug_server` (`POST /agents/commands` ou
+  `agents:command`), o hub pode preencher `id` omitido com UUID para aguardar
+  resposta; esta extensao e do hub, nao do contrato direto agente.
+- Repetir um `command.id` string/number no hub dentro da janela process-local
+  de 2 minutos por `agentId + tipo + valor` retorna JSON-RPC `-32014`
+  (`replay_detected`) no envelope bridge, sem novo dispatch ao agente.
 
 ### Exemplo
 
@@ -584,6 +590,9 @@ apos normalizacao simples (`trim` + case-insensitive).
   modo que a mesma string em **outro** `method` nao reutiliza entrada de cache.
   Isso e independente de `request.id` (correlacao JSON-RPC 2.0 no envelope da
   resposta) e de `meta.request_id` (rastreio operacional no `meta` da resposta).
+  No bridge do `plug_server`, `command.id` repetido tambem passa por replay guard;
+  `idempotency_key` nao substitui `command.id` e deve ser usada para deduplicacao
+  de negocio/execucao quando aplicavel.
 - Reuso no **mesmo** `method` com `params` diferentes: rejeitado com `invalid_params`
   (fingerprint mismatch).
 - Com `enableSocketIdempotency` ativo, o cache fica em SQLite local (tabela
@@ -1361,7 +1370,7 @@ handlers concorrentes no transporte. O hub/cliente deve usar
 | Parametro      | Valor padrao                 | Descricao                          |
 | -------------- | ---------------------------- | ---------------------------------- |
 | `replayWindow` | 2 minutos                    | Janela de validade de `request.id` |
-| Codigo de erro | `-32014` (`replay_detected`) | HTTP 409                           |
+| Codigo de erro | `-32014` (`replay_detected`) | Erro JSON-RPC; no bridge REST do hub permanece HTTP 200 |
 
 
 ### Codigos de erro finais (transport)

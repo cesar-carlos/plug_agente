@@ -2666,6 +2666,12 @@ abstract class AppLocalizations {
   /// **'Another Plug Agente process is already running the action scheduler for this data folder. Close the other instance or use a separate data directory. Manual runs and remote actions may still work in this window.'**
   String get agentActionsSchedulerInstanceLockedMessage;
 
+  /// No description provided for @agentActionsSchedulerStorageAccessDeniedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The action scheduler could not access the lock file in this data folder. Review read/write permissions or run the agent with appropriate privileges.'**
+  String get agentActionsSchedulerStorageAccessDeniedMessage;
+
   /// No description provided for @agentActionsSchedulerBootstrapFailedMessage.
   ///
   /// In en, this message translates to:

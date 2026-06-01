@@ -36,6 +36,14 @@ abstract class IRpcDispatchMetricsCollector {
   /// because the ACK mechanism is unavailable or timed out.
   void recordRpcResponseAckFallbackWithoutAck();
 
+  /// Incremented when `sql.execute` intentionally bypasses Socket.IO ACK to
+  /// keep the inbound RPC flow non-blocking.
+  void recordRpcResponseAckSkippedSqlExecute();
+
+  /// Incremented when `sql.executeBatch` intentionally bypasses Socket.IO ACK
+  /// to keep the inbound RPC flow non-blocking.
+  void recordRpcResponseAckSkippedSqlExecuteBatch();
+
   void recordClientTokenGetPolicySuccess();
 
   void recordClientTokenGetPolicyFailure(Failure failure);

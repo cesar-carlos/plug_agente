@@ -43,6 +43,7 @@ class RpcBatchInboundHandler {
       int code,
       String technicalMessage, {
       String? errorReason,
+      Object? method,
     })
     sendSchemaValidationError,
     required Future<bool> Function(List<dynamic> data) validateBatchRequestJsonSchemasOrEmit,
@@ -90,6 +91,7 @@ class RpcBatchInboundHandler {
     int code,
     String technicalMessage, {
     String? errorReason,
+    Object? method,
   })
   _sendSchemaValidationError;
   final Future<bool> Function(List<dynamic> data) _validateBatchRequestJsonSchemasOrEmit;
@@ -144,9 +146,10 @@ class RpcBatchInboundHandler {
             final failure = validation.exceptionOrNull() as domain.Failure?;
             if (failure != null) {
               await _sendSchemaValidationError(
-                null,
+                data.whereType<Map<String, dynamic>>().firstOrNull?['id'],
                 rpcInboundValidationFailureCode(failure),
                 failure.message,
+                method: data.whereType<Map<String, dynamic>>().firstOrNull?['method'],
               );
               return;
             }
@@ -171,6 +174,7 @@ class RpcBatchInboundHandler {
               RpcErrorCode.authenticationFailed,
               RpcInboundConstants.invalidPayloadSignatureTechnicalMessage,
               errorReason: RpcErrorCode.reasonInvalidSignature,
+              method: item['method'],
             );
             return;
           }
@@ -184,6 +188,7 @@ class RpcBatchInboundHandler {
               null,
               RpcErrorCode.invalidRequest,
               RpcInboundConstants.nullIdNotificationsCompatibilityTechnicalMessage,
+              method: item['method'],
             );
             return;
           }
@@ -214,6 +219,7 @@ class RpcBatchInboundHandler {
                     ),
                   ),
                 ),
+                methodsById: _methodsByIdForSqlRequests(requests),
               );
               return;
             case RpcBatchExceedsLimit(:final size, :final limit):
@@ -231,6 +237,7 @@ class RpcBatchInboundHandler {
                     ),
                   ),
                 ),
+                methodsById: _methodsByIdForSqlRequests(requests),
               );
               return;
             case RpcBatchValid():
@@ -379,11 +386,25 @@ class RpcBatchInboundHandler {
       if (item is! Map) {
         continue;
       }
-      if (item['method'] == 'sql.execute') {
+      if (item['method'] == 'sql.execute' || item['method'] == 'sql.executeBatch') {
         return true;
       }
     }
     return false;
+  }
+
+  Map<Object?, String> _methodsByIdForSqlRequests(List<RpcRequest> requests) {
+    final methodsById = <Object?, String>{};
+    for (final request in requests) {
+      if (_isSqlAckBypassMethod(request.method)) {
+        methodsById[request.id] = request.method;
+      }
+    }
+    return methodsById;
+  }
+
+  bool _isSqlAckBypassMethod(String method) {
+    return method == 'sql.execute' || method == 'sql.executeBatch';
   }
 
   bool _isAgentActionBatchRejectedMethod(String method) {

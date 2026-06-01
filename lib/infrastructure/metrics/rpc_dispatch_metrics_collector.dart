@@ -47,6 +47,12 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
   void recordRpcResponseAckFallbackWithoutAck() => _metrics.recordRpcResponseAckFallbackWithoutAck();
 
   @override
+  void recordRpcResponseAckSkippedSqlExecute() => _metrics.recordRpcResponseAckSkippedSqlExecute();
+
+  @override
+  void recordRpcResponseAckSkippedSqlExecuteBatch() => _metrics.recordRpcResponseAckSkippedSqlExecuteBatch();
+
+  @override
   void recordClientTokenGetPolicySuccess() => _metrics.recordClientTokenGetPolicySuccess();
 
   @override

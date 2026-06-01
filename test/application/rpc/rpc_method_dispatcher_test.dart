@@ -1887,6 +1887,114 @@ void main() {
     );
 
     test(
+      'should materialize explicitly bounded sql.execute when DB streaming is enabled',
+      () async {
+        when(
+          () => mockFeatureFlags.enableSocketStreamingChunks,
+        ).thenReturn(true);
+        when(
+          () => mockFeatureFlags.enableSocketStreamingFromDb,
+        ).thenReturn(true);
+
+        final mockConfigRepo = MockAgentConfigRepository();
+        final config = Config(
+          id: 'cfg-bounded-query',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(
+          mockConfigRepo.getCurrentConfigMetadata,
+        ).thenAnswer((_) async => Success(config));
+        when(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).thenAnswer(
+          (_) async => Success(
+            QueryResponse(
+              id: 'exec-bounded-query',
+              requestId: 'req-codcliente-001',
+              agentId: 'agent-1',
+              data: const [
+                {'CodCliente': 1},
+              ],
+              timestamp: DateTime.now(),
+            ),
+          ),
+        );
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          configRepository: mockConfigRepo,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-codcliente-001',
+          params: {
+            'sql': 'SELECT TOP 1 * FROM Cliente ORDER BY CodCliente',
+            'options': {
+              'timeout_ms': 20000,
+              'max_rows': 1,
+            },
+          },
+        );
+
+        final response = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+
+        expect(response.isSuccess, isTrue);
+        final result = response.result as Map<String, dynamic>;
+        expect(result['rows'], [
+          {'CodCliente': 1},
+        ]);
+        expect(result['row_count'], 1);
+        expect(result['effective_max_rows'], 1);
+        verify(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).called(1);
+        verifyNever(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+          ),
+        );
+      },
+    );
+
+    test(
       'should cap DB streaming timeout with options.timeout_ms',
       () async {
         when(
@@ -2032,7 +2140,7 @@ void main() {
           id: 'req-explicit-db-stream',
           params: {
             'sql': 'SELECT * FROM users',
-            'options': {'prefer_db_streaming': true},
+            'options': {'prefer_db_streaming': true, 'max_rows': 10},
           },
         );
         final emitter = _stubRpcStreamEmitter();
@@ -2045,6 +2153,8 @@ void main() {
         );
 
         expect(response.isSuccess, isTrue);
+        final result = response.result as Map<String, dynamic>;
+        expect(result['effective_max_rows'], 10);
         expect(metrics.getSnapshot()['rpc_sql_execute_prefer_db_streaming_response'], 1);
         verify(
           () => mockStreamingGateway.executeQueryStream(

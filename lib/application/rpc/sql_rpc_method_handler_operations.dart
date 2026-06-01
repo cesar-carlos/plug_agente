@@ -359,6 +359,7 @@ class SqlRpcMethodHandlerOperations {
       timeoutMs: requestedTimeoutMs,
       negotiatedExtensions: negotiatedExtensions,
       preferDbStreaming: options?['prefer_db_streaming'] == true,
+      effectiveMaxRows: maxRows,
       clientToken: clientToken,
     );
     if (streamingFromDbResponse != null) {
@@ -536,8 +537,10 @@ class SqlRpcMethodHandlerOperations {
     required int timeoutMs,
     required Map<String, dynamic> negotiatedExtensions,
     required bool preferDbStreaming,
+    required int effectiveMaxRows,
     String? clientToken,
   }) async {
+    final normalizedSql = _normalizeSqlForDbStreaming(sql);
     final autoStreamingReason = _dbStreamingAutoReason(
       queryRequest: queryRequest,
       sql: sql,
@@ -561,6 +564,15 @@ class SqlRpcMethodHandlerOperations {
     }
     if (queryRequest.expectMultipleResults) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('multi_result_request');
+      return null;
+    }
+    if (!preferDbStreaming &&
+        _shouldMaterializeBoundedDbStreaming(
+          normalizedSql,
+          effectiveMaxRows: effectiveMaxRows,
+          limits: limits,
+        )) {
+      _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('bounded_request');
       return null;
     }
     final configResolver = _activeConfigResolver;
@@ -723,7 +735,7 @@ class SqlRpcMethodHandlerOperations {
           'finished_at': finishedAtIso,
           'sql_handling_mode': queryRequest.sqlHandlingMode.name,
           'max_rows_handling': 'response_truncation',
-          'effective_max_rows': limits.maxRows,
+          'effective_max_rows': effectiveMaxRows,
           'rows': <Map<String, dynamic>>[],
           'row_count': 0,
           'affected_rows': totalRows,
@@ -751,6 +763,14 @@ class SqlRpcMethodHandlerOperations {
     }
   }
 
+  bool _shouldMaterializeBoundedDbStreaming(
+    String normalizedSql, {
+    required int effectiveMaxRows,
+    required TransportLimits limits,
+  }) {
+    return _containsExplicitRowLimit(normalizedSql) || effectiveMaxRows <= limits.streamingRowThreshold;
+  }
+
   bool _isDbStreamingDriverAllowed(String driverName) {
     return switch (DatabaseDriver.fromString(driverName)) {
       DatabaseDriver.sqlServer => true,
@@ -775,7 +795,7 @@ class SqlRpcMethodHandlerOperations {
       return _DbStreamingAutoReason.none;
     }
 
-    final normalized = ' ${sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim()} ';
+    final normalized = _normalizeSqlForDbStreaming(sql);
     if (!normalized.startsWith(' select ') && !normalized.startsWith(' with ')) {
       return _DbStreamingAutoReason.none;
     }
@@ -853,8 +873,12 @@ class SqlRpcMethodHandlerOperations {
     return value.trim().toLowerCase().replaceAll(RegExp(r'^[\["]+|[\]"]+$'), '').replaceAll(RegExp(r'[\[\]"]'), '');
   }
 
+  String _normalizeSqlForDbStreaming(String sql) {
+    return ' ${sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim()} ';
+  }
+
   bool _containsExplicitRowLimit(String normalizedSql) {
-    return normalizedSql.contains(' top ') ||
+    return RegExp(r'\btop\b', caseSensitive: false).hasMatch(normalizedSql) ||
         normalizedSql.contains(' limit ') ||
         normalizedSql.contains(' fetch first ') ||
         normalizedSql.contains(' offset ') ||

@@ -120,7 +120,7 @@ void main() {
         emittedResponses.add(response);
       },
       emitEvent: (_, _) async {},
-      sendSchemaValidationError: (_, _, _, {errorReason}) async {},
+      sendSchemaValidationError: (_, _, _, {errorReason, method}) async {},
       validateBatchRequestJsonSchemasOrEmit: (_) async => true,
       hasNullIdCompatibilityViolation: (_) => false,
     );

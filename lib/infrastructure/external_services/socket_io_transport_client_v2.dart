@@ -10,6 +10,7 @@ import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/logger/log_rate_limiter.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
+import 'package:plug_agente/core/utils/sql_rpc_log_payload_compactor.dart';
 import 'package:plug_agente/domain/actions/action_local_runner.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
@@ -44,6 +45,11 @@ import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
+
+const Set<String> _sqlRpcResponseAckBypassMethods = <String>{
+  'sql.execute',
+  'sql.executeBatch',
+};
 
 /// Optional dependencies for [SocketIOTransportClientV2], grouped to reduce
 /// constructor arity. All fields are nullable/have defaults; pass a
@@ -311,9 +317,10 @@ class SocketIOTransportClientV2 implements ITransportClient {
     if (onMessage == null) {
       return;
     }
-    final traced = _featureFlags.enableSocketSummarizeLargePayloadLogs && data != null
-        ? _logSummarizer.summarize(direction, event, data)
-        : data;
+    final compacted = SqlRpcLogPayloadCompactor.compactSocketLogPayload(event, data);
+    final traced = _featureFlags.enableSocketSummarizeLargePayloadLogs && compacted != null
+        ? _logSummarizer.summarize(direction, event, compacted)
+        : compacted;
     scheduleMicrotask(() => onMessage(direction, event, traced));
   }
 
@@ -379,6 +386,22 @@ class SocketIOTransportClientV2 implements ITransportClient {
     return _currentProtocol.usesBinaryPayload && _currentProtocol.usesTransportFrame;
   }
 
+  bool _shouldEmitRpcResponseWithoutSocketAck(Map<Object?, String> methodsById) {
+    return methodsById.values.any(_sqlRpcResponseAckBypassMethods.contains);
+  }
+
+  void _recordSkippedSqlRpcResponseAck(Map<Object?, String> methodsById) {
+    if (methodsById.values.any((method) => method == 'sql.executeBatch')) {
+      _metricsCollector?.recordRpcResponseAckSkippedSqlExecuteBatch();
+      AppLogger.info('rpc:response emitted without Socket.IO ACK for sql.executeBatch response');
+      return;
+    }
+    if (methodsById.values.any((method) => method == 'sql.execute')) {
+      _metricsCollector?.recordRpcResponseAckSkippedSqlExecute();
+      AppLogger.info('rpc:response emitted without Socket.IO ACK for sql.execute response');
+    }
+  }
+
   Future<void> _emitRpcResponse(
     dynamic responseData, {
     Map<Object?, String> methodsById = const <Object?, String>{},
@@ -424,7 +447,8 @@ class SocketIOTransportClientV2 implements ITransportClient {
       AppLogger.warning('Skipping rpc:response emit because socket is disconnected');
       return;
     }
-    if (!_featureFlags.enableSocketDeliveryGuarantees) {
+    final shouldSkipSocketAck = _shouldEmitRpcResponseWithoutSocketAck(methodsById);
+    if (!_featureFlags.enableSocketDeliveryGuarantees || shouldSkipSocketAck) {
       try {
         deliverySocket.emit('rpc:response', outgoingPayload);
       } on Object catch (error, stackTrace) {
@@ -436,6 +460,9 @@ class SocketIOTransportClientV2 implements ITransportClient {
         Error.throwWithStackTrace(error, stackTrace);
       }
       _logMessage('SENT', 'rpc:response', validatedPayload);
+      if (_featureFlags.enableSocketDeliveryGuarantees && shouldSkipSocketAck) {
+        _recordSkippedSqlRpcResponseAck(methodsById);
+      }
       return;
     }
 

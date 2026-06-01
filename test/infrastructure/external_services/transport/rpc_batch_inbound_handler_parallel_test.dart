@@ -86,7 +86,7 @@ void main() {
         emittedResponses.add(response);
       },
       emitEvent: (_, _) async {},
-      sendSchemaValidationError: (_, _, _, {errorReason}) async {},
+      sendSchemaValidationError: (_, _, _, {errorReason, method}) async {},
       validateBatchRequestJsonSchemasOrEmit: (_) async => true,
       hasNullIdCompatibilityViolation: (_) => false,
       poolSizeProvider: () => testPoolSize,
@@ -666,7 +666,7 @@ void main() {
         emitEvent: (event, payload) async {
           emittedEvents.add((event: event, payload: payload));
         },
-        sendSchemaValidationError: (_, _, _, {errorReason}) async {},
+        sendSchemaValidationError: (_, _, _, {errorReason, method}) async {},
         validateBatchRequestJsonSchemasOrEmit: (_) async => true,
         hasNullIdCompatibilityViolation: (_) => false,
       );
@@ -732,7 +732,7 @@ void main() {
         emitEvent: (event, payload) async {
           emittedEvents.add((event: event, payload: payload));
         },
-        sendSchemaValidationError: (_, _, _, {errorReason}) async {},
+        sendSchemaValidationError: (_, _, _, {errorReason, method}) async {},
         validateBatchRequestJsonSchemasOrEmit: (_) async => true,
         hasNullIdCompatibilityViolation: (_) => false,
       );

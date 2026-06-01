@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
@@ -109,6 +112,7 @@ void main() {
       )).getOrThrow();
 
       expect(codec.looksLikePayloadFrame(wire), isTrue);
+      expect(wire['payload'], isA<ByteBuffer>());
 
       final decoded = codec.decodeIncoming(wire).getOrThrow();
       expect(decoded, original);
@@ -251,6 +255,70 @@ void main() {
           (failure) => failure.context['rpc_error_code'],
           'rpc_error_code',
           RpcErrorCode.invalidPayload,
+        ),
+      );
+    });
+
+    test('returns validation failure when decoded payload is top-level null', () {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'none',
+        ),
+      );
+      final bytes = Uint8List.fromList(utf8.encode('null'));
+      final frameJson = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        payload: bytes,
+        originalSize: bytes.length,
+        compressedSize: bytes.length,
+      ).toJson();
+
+      final result = codec.decodeIncoming(frameJson);
+
+      expect(result.isError(), isTrue);
+      expect(
+        result.exceptionOrNull(),
+        isA<domain.Failure>().having(
+          (failure) => failure.context['rpc_error_code'],
+          'rpc_error_code',
+          RpcErrorCode.decodingFailed,
+        ),
+      );
+    });
+
+    test('async decode returns validation failure when decoded payload is top-level null', () async {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'none',
+        ),
+      );
+      final bytes = Uint8List.fromList(utf8.encode('null'));
+      final frameJson = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        payload: bytes,
+        originalSize: bytes.length,
+        compressedSize: bytes.length,
+      ).toJson();
+
+      final result = await codec.decodeIncomingAsync(frameJson);
+
+      expect(result.isError(), isTrue);
+      expect(
+        result.exceptionOrNull(),
+        isA<domain.Failure>().having(
+          (failure) => failure.context['rpc_error_code'],
+          'rpc_error_code',
+          RpcErrorCode.decodingFailed,
         ),
       );
     });

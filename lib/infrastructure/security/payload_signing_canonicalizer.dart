@@ -50,6 +50,12 @@ final class PayloadSigningCanonicalizer {
   static Uint8List payloadBytesForFrame(dynamic payload) {
     return switch (payload) {
       final Uint8List value => value,
+      final ByteBuffer value => value.asUint8List(),
+      final TypedData value => Uint8List.view(
+        value.buffer,
+        value.offsetInBytes,
+        value.lengthInBytes,
+      ),
       final List<int> value => Uint8List.fromList(value),
       final List<dynamic> value when value.every((item) => item is int) => Uint8List.fromList(value.cast<int>()),
       final String value => _tryDecodeBase64(value) ?? Uint8List.fromList(utf8.encode(value)),

@@ -64,6 +64,19 @@ class PayloadFrame {
   final Map<String, dynamic>? signature;
 
   Map<String, dynamic> toJson() {
+    return _toMap(payload);
+  }
+
+  /// Returns the Socket.IO wire map with the binary payload represented as a
+  /// [ByteBuffer]. The Socket.IO client treats both [Uint8List] and
+  /// [ByteBuffer] as binary attachments, but [Uint8List.toString] expands every
+  /// byte when the package formats packets for debug logging. [ByteBuffer]
+  /// keeps that synchronous formatting bounded without changing the wire shape.
+  Map<String, dynamic> toSocketPayload() {
+    return _toMap(_socketPayload(payload));
+  }
+
+  Map<String, dynamic> _toMap(dynamic payloadValue) {
     return {
       'schemaVersion': schemaVersion,
       'enc': enc,
@@ -71,7 +84,7 @@ class PayloadFrame {
       'contentType': contentType,
       'originalSize': originalSize,
       'compressedSize': compressedSize,
-      'payload': payload,
+      'payload': payloadValue,
       if (traceId != null) 'traceId': traceId,
       if (requestId != null) 'requestId': requestId,
       if (signature != null) 'signature': signature,
@@ -106,6 +119,26 @@ class PayloadFrame {
   }
 
   bool get isCompressed => cmp != 'none';
-  bool get isBinary => payload is Uint8List || payload is List<int>;
+  bool get isBinary => payload is ByteBuffer || payload is Uint8List || payload is List<int>;
   double get compressionRatio => compressedSize / originalSize;
+
+  static dynamic _socketPayload(dynamic payload) {
+    if (payload is ByteBuffer) {
+      return payload;
+    }
+    if (payload is Uint8List) {
+      return _asTightByteBuffer(payload);
+    }
+    if (payload is List<int>) {
+      return Uint8List.fromList(payload).buffer;
+    }
+    return payload;
+  }
+
+  static ByteBuffer _asTightByteBuffer(Uint8List bytes) {
+    if (bytes.offsetInBytes == 0 && bytes.lengthInBytes == bytes.buffer.lengthInBytes) {
+      return bytes.buffer;
+    }
+    return Uint8List.fromList(bytes).buffer;
+  }
 }

@@ -150,6 +150,12 @@ void main() {
     when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
     when(() => mockFeatureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
     when(() => mockFeatureFlags.enableAgentActionRemoteAudit).thenReturn(false);
+    when(() => mockNormalizer.normalize(any())).thenAnswer(
+      (invocation) => invocation.positionalArguments[0] as QueryResponse,
+    );
+    when(() => mockNormalizer.normalizeAsync(any())).thenAnswer(
+      (invocation) async => invocation.positionalArguments[0] as QueryResponse,
+    );
 
     final classifier = SqlOperationClassifier();
     final tokenValidation = ClientTokenValidationService(mockResolver);
@@ -188,7 +194,11 @@ void main() {
           timestamp: DateTime.now(),
         );
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -317,7 +327,11 @@ void main() {
         timestamp: DateTime.now(),
       );
       when(
-        () => mockGateway.executeQuery(any()),
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
       ).thenAnswer((_) async => Success(queryResponse));
       when(
         () => mockNormalizer.normalize(any()),
@@ -470,7 +484,11 @@ void main() {
           timestamp: DateTime.now(),
         );
         when(
-          () => mockGateway.executeQuery(any()),
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
         ).thenAnswer((_) async => Success(queryResponse));
         when(
           () => mockNormalizer.normalize(any()),
@@ -499,7 +517,13 @@ void main() {
         check(response.isError).isFalse();
         verify(() => mockLocalDataSource.hashTokenForLookup(any())).called(1);
         verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
-        verify(() => mockGateway.executeQuery(any())).called(1);
+        verify(
+          () => mockGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+          ),
+        ).called(1);
       },
     );
 

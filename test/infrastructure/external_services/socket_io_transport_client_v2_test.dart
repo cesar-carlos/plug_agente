@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +17,8 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
+import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/actions/action_local_runner.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
@@ -34,6 +37,8 @@ import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
+import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
+import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:socket_io_client/src/manager.dart' as socket_io_manager;
@@ -182,6 +187,12 @@ void main() {
         }),
       );
       await Future<void>.delayed(Duration.zero);
+    }
+
+    Future<JsonSchemaContractValidator> buildJsonSchemaValidator() async {
+      final loader = TransportSchemaLoader();
+      await loader.loadAll();
+      return JsonSchemaContractValidator(loader: loader);
     }
 
     setUp(() {
@@ -478,11 +489,127 @@ void main() {
 
       final responseItems = emitted.where((item) => item.event == 'rpc:response').toList();
       expect(responseItems, isNotEmpty);
+      expect((responseItems.first.data as Map<String, dynamic>)['payload'], isA<ByteBuffer>());
       final payload = decodeWirePayload(responseItems.first.data) as Map<String, dynamic>;
       final result = payload['result'] as Map<String, dynamic>;
       expect(result['started_at'], startedAt.toIso8601String());
       expect(result['finished_at'], finishedAt.toIso8601String());
       expect(result['started_at'] != result['finished_at'], isTrue);
+    });
+
+    test('should omit materialized rpc:response rows from socket log callback', () async {
+      final logged = <({String direction, String event, dynamic data})>[];
+      client.setMessageCallback(
+        (String direction, String event, dynamic data) {
+          logged.add((direction: direction, event: event, data: data));
+        },
+      );
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+
+      await client.sendResponse(
+        QueryResponse(
+          id: 'exec-1',
+          requestId: 'req-codcliente-001',
+          agentId: 'agent-1',
+          data: const [
+            {'CodCliente': 1, 'raw_payload': 'raw-row-should-not-reach-log-callback'},
+          ],
+          timestamp: DateTime.utc(2026, 5, 1, 12),
+          affectedRows: 1,
+          columnMetadata: const [
+            {'name': 'CodCliente', 'type': 'int'},
+          ],
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final responseLog = logged.firstWhere((item) => item.event == 'rpc:response');
+      expect(responseLog.data.toString(), isNot(contains('raw-row-should-not-reach-log-callback')));
+      final payload = responseLog.data as Map<String, dynamic>;
+      final result = payload['result'] as Map<String, dynamic>;
+      expect(result['row_count'], 1);
+      expect(result['affected_rows'], 1);
+      expect(result['rows'], 'omitted_from_socket_log');
+      expect(result['column_metadata_count'], 1);
+    });
+
+    test('should omit sql.executeBatch item rows from socket log callback', () async {
+      final logged = <({String direction, String event, dynamic data})>[];
+      client.setMessageCallback(
+        (String direction, String event, dynamic data) {
+          logged.add((direction: direction, event: event, data: data));
+        },
+      );
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+
+      when(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer(
+        (_) async => RpcResponse.success(
+          id: 'batch-1',
+          result: <String, dynamic>{
+            'execution_id': 'exec-batch-1',
+            'items': [
+              {
+                'index': 0,
+                'ok': true,
+                'rows': [
+                  {'CodCliente': 1, 'raw_payload': 'raw-batch-row-should-not-reach-log-callback'},
+                ],
+                'row_count': 1,
+                'column_metadata': const [
+                  {'name': 'CodCliente'},
+                ],
+              },
+            ],
+            'total_commands': 1,
+            'successful_commands': 1,
+            'failed_commands': 0,
+          },
+        ),
+      );
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'batch-1',
+          'method': 'sql.executeBatch',
+          'params': {
+            'commands': const [
+              {'sql': 'SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente'},
+            ],
+            'client_token': 'token',
+          },
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      final responseLog = logged.firstWhere((item) => item.event == 'rpc:response');
+      expect(responseLog.data.toString(), isNot(contains('raw-batch-row-should-not-reach-log-callback')));
+      final payload = responseLog.data as Map<String, dynamic>;
+      final result = payload['result'] as Map<String, dynamic>;
+      expect(result['item_count'], 1);
+      expect(result['total_item_rows'], 1);
+      final items = result['items'] as List<dynamic>;
+      expect((items.single as Map)['rows'], 'omitted_from_socket_log');
+      expect((items.single as Map)['column_metadata_count'], 1);
     });
 
     test('should stop rpc:response ACK retries after socket generation changes', () async {
@@ -597,6 +724,593 @@ void main() {
       expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 0);
       expect(rpcMetricsCollector.rpcResponseAckAbortedConnectionChangeCount, 0);
       expect(emitted.where((item) => item.event == 'rpc:response'), hasLength(1));
+    });
+
+    test('should emit sql.execute rpc response without Socket.IO ACK when delivery guarantees are enabled', () async {
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      var ackAttempts = 0;
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        ackAttempts++;
+        throw StateError('sql.execute response should not wait for Socket.IO ACK');
+      });
+      when(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(
+          id: request.id,
+          result: <String, dynamic>{
+            'rows': const [
+              {'CodCliente': 1},
+            ],
+            'row_count': 1,
+          },
+        );
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'req-codcliente-001',
+          'method': 'sql.execute',
+          'params': {'sql': 'SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente'},
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ackAttempts, 0);
+      expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 0);
+      final responses = emitted.where((item) => item.event == 'rpc:response').toList();
+      expect(responses, hasLength(1));
+      final responsePayload = decodeWirePayload(responses.single.data) as Map<String, dynamic>;
+      expect(responsePayload['id'], 'req-codcliente-001');
+      final result = responsePayload['result'] as Map<String, dynamic>;
+      expect(result['row_count'], 1);
+      expect(result['rows'], [
+        {'CodCliente': 1},
+      ]);
+    });
+
+    test('should emit SQL concurrency-limit error without Socket.IO ACK', () async {
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      var ackAttempts = 0;
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        ackAttempts++;
+        throw StateError('sql.execute concurrency error should not wait for Socket.IO ACK');
+      });
+      final unblockDispatch = Completer<RpcResponse>();
+      when(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((_) => unblockDispatch.future);
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      for (var i = 0; i <= ConnectionConstants.maxConcurrentRpcHandlers; i++) {
+        emitEvent(
+          'rpc:request',
+          encodeWirePayload(<String, dynamic>{
+            'jsonrpc': '2.0',
+            'id': 'sql-concurrent-$i',
+            'method': 'sql.execute',
+            'params': {'sql': 'SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente'},
+          }),
+        );
+      }
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ackAttempts, 0);
+      expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 0);
+      final rateLimitedResponses = emitted
+          .where((item) => item.event == 'rpc:response')
+          .map((item) => decodeWirePayload(item.data) as Map<String, dynamic>)
+          .where((payload) => (payload['error'] as Map?)?['code'] == RpcErrorCode.rateLimited)
+          .toList();
+      expect(rateLimitedResponses, hasLength(1));
+      expect(rateLimitedResponses.single['id'], 'sql-concurrent-${ConnectionConstants.maxConcurrentRpcHandlers}');
+      expect(
+        ((rateLimitedResponses.single['error'] as Map<String, dynamic>)['data'] as Map<String, dynamic>)['reason'],
+        RpcInboundConstants.concurrentHandlersExceededReason,
+      );
+
+      unblockDispatch.complete(
+        RpcResponse.success(
+          id: 'sql-concurrent-complete',
+          result: const <String, dynamic>{
+            'execution_id': 'exec-sql-concurrent-complete',
+            'started_at': '2026-05-31T22:45:02.900Z',
+            'finished_at': '2026-05-31T22:45:02.965Z',
+            'row_count': 0,
+            'rows': <Map<String, dynamic>>[],
+          },
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+    });
+
+    test('should emit invalid sql.execute params response without Socket.IO ACK', () async {
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
+      var ackAttempts = 0;
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        ackAttempts++;
+        throw StateError('invalid sql.execute response should not wait for Socket.IO ACK');
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'insomnia-bridge-002',
+          'method': 'sql.execute',
+          'params': {
+            'sql': 'SELECT CodCliente, Nome FROM Cliente ORDER BY CodCliente',
+            'options': {'page_size': 10},
+          },
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ackAttempts, 0);
+      expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 0);
+      verifyNever(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      );
+      final responses = emitted.where((item) => item.event == 'rpc:response').toList();
+      expect(responses, hasLength(1));
+      final responsePayload = decodeWirePayload(responses.single.data) as Map<String, dynamic>;
+      expect(responsePayload['id'], 'insomnia-bridge-002');
+      final error = responsePayload['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.invalidParams);
+      expect((error['data'] as Map<String, dynamic>)['reason'], RpcErrorCode.getReason(RpcErrorCode.invalidParams));
+    });
+
+    test('should dispatch Insomnia-style paginated sql.execute with real JSON Schema validator without ACK', () async {
+      final schemaValidator = await buildJsonSchemaValidator();
+      client = SocketIOTransportClientV2(
+        dataSource: mockDataSource,
+        negotiator: mockNegotiator,
+        rpcDispatcher: mockDispatcher,
+        featureFlags: mockFeatureFlags,
+        options: SocketIOTransportClientV2Options(
+          protocolMetricsCollector: metricsCollector,
+          metricsCollector: rpcMetricsCollector,
+          jsonSchemaValidator: schemaValidator,
+        ),
+      );
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
+      var ackAttempts = 0;
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        ackAttempts++;
+        throw StateError('valid sql.execute response should not wait for Socket.IO ACK');
+      });
+      when(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(
+          id: request.id,
+          result: <String, dynamic>{
+            'execution_id': 'exec-insomnia-bridge-002',
+            'started_at': '2026-05-31T22:45:02.900Z',
+            'finished_at': '2026-05-31T22:45:02.965Z',
+            'rows': const [
+              {'CodCliente': 1, 'Nome': 'CONSUMIDOR'},
+            ],
+            'row_count': 1,
+          },
+        );
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'insomnia-bridge-002',
+          'method': 'sql.execute',
+          'api_version': '2.10',
+          'meta': {'trace_id': '00000000-0000-4000-8000-000000000002'},
+          'params': {
+            'sql': 'SELECT CodCliente, Nome FROM Cliente ORDER BY CodCliente',
+            'client_token': 'token',
+            'options': {'page': 1, 'page_size': 10},
+          },
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ackAttempts, 0);
+      expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      verify(
+        () => mockDispatcher.dispatch(
+          any(
+            that: isA<RpcRequest>()
+                .having((request) => request.id, 'id', 'insomnia-bridge-002')
+                .having((request) => request.method, 'method', 'sql.execute'),
+          ),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).called(1);
+
+      final responses = emitted.where((item) => item.event == 'rpc:response').toList();
+      expect(responses, hasLength(1));
+      final responsePayload = decodeWirePayload(responses.single.data) as Map<String, dynamic>;
+      expect(responsePayload['id'], 'insomnia-bridge-002');
+      expect(responsePayload['error'], isNull);
+      expect((responsePayload['result'] as Map<String, dynamic>)['row_count'], 1);
+    });
+
+    test('should reject preserve pagination with real JSON Schema validator without ACK', () async {
+      final schemaValidator = await buildJsonSchemaValidator();
+      client = SocketIOTransportClientV2(
+        dataSource: mockDataSource,
+        negotiator: mockNegotiator,
+        rpcDispatcher: mockDispatcher,
+        featureFlags: mockFeatureFlags,
+        options: SocketIOTransportClientV2Options(
+          protocolMetricsCollector: metricsCollector,
+          metricsCollector: rpcMetricsCollector,
+          jsonSchemaValidator: schemaValidator,
+        ),
+      );
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
+      var ackAttempts = 0;
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        ackAttempts++;
+        throw StateError('invalid sql.execute response should not wait for Socket.IO ACK');
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'preserve-pagination',
+          'method': 'sql.execute',
+          'params': {
+            'sql': 'SELECT CodCliente, Nome FROM Cliente ORDER BY CodCliente',
+            'options': {'page': 1, 'page_size': 10, 'execution_mode': 'preserve'},
+          },
+        }),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ackAttempts, 0);
+      expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      verifyNever(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      );
+      final responses = emitted.where((item) => item.event == 'rpc:response').toList();
+      expect(responses, hasLength(1));
+      final responsePayload = decodeWirePayload(responses.single.data) as Map<String, dynamic>;
+      expect(responsePayload['id'], 'preserve-pagination');
+      final error = responsePayload['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.invalidParams);
+      expect((error['data'] as Map<String, dynamic>)['reason'], RpcErrorCode.getReason(RpcErrorCode.invalidParams));
+    });
+
+    test(
+      'should emit sql.executeBatch rpc response without Socket.IO ACK when delivery guarantees are enabled',
+      () async {
+        when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+        var ackAttempts = 0;
+        when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+        when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+          ackAttempts++;
+          throw StateError('sql.executeBatch response should not wait for Socket.IO ACK');
+        });
+        when(
+          () => mockDispatcher.dispatch(
+            any(),
+            any(),
+            clientToken: any(named: 'clientToken'),
+            streamEmitter: any(named: 'streamEmitter'),
+            limits: any(named: 'limits'),
+            negotiatedExtensions: any(named: 'negotiatedExtensions'),
+          ),
+        ).thenAnswer((invocation) async {
+          final request = invocation.positionalArguments[0] as RpcRequest;
+          return RpcResponse.success(
+            id: request.id,
+            result: <String, dynamic>{
+              'execution_id': 'exec-batch-1',
+              'items': const [
+                {
+                  'index': 0,
+                  'ok': true,
+                  'rows': [
+                    {'CodCliente': 1},
+                  ],
+                  'row_count': 1,
+                },
+                {
+                  'index': 1,
+                  'ok': true,
+                  'rows': [
+                    {'Nome': 'CONSUMIDOR'},
+                  ],
+                  'row_count': 1,
+                },
+              ],
+              'total_commands': 2,
+              'successful_commands': 2,
+              'failed_commands': 0,
+            },
+          );
+        });
+
+        final connectFuture = client.connect('https://hub.test', 'agent-1');
+        emitEvent('connect');
+        await connectFuture;
+        await negotiateProtocol();
+        emitted.clear();
+
+        emitEvent(
+          'rpc:request',
+          encodeWirePayload(<String, dynamic>{
+            'jsonrpc': '2.0',
+            'id': 'insomnia-manual-batch-001',
+            'method': 'sql.executeBatch',
+            'params': {
+              'commands': const [
+                {'sql': 'SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente'},
+                {'sql': 'SELECT TOP 1 Nome FROM Cliente ORDER BY CodCliente'},
+              ],
+              'client_token': 'token',
+            },
+          }),
+        );
+
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(ackAttempts, 0);
+        expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteBatchCount, 1);
+        expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteCount, 0);
+        expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+        expect(rpcMetricsCollector.rpcResponseAckRetryCount, 0);
+        expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 0);
+        final responses = emitted.where((item) => item.event == 'rpc:response').toList();
+        expect(responses, hasLength(1));
+        final responsePayload = decodeWirePayload(responses.single.data) as Map<String, dynamic>;
+        expect(responsePayload['id'], 'insomnia-manual-batch-001');
+        final result = responsePayload['result'] as Map<String, dynamic>;
+        expect(result['total_commands'], 2);
+        expect(result['items'], hasLength(2));
+      },
+    );
+
+    test('should return replay error without Socket.IO ACK when sql.execute id is duplicated', () async {
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      var ackAttempts = 0;
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        ackAttempts++;
+        throw StateError('duplicate sql.execute response should not wait for Socket.IO ACK');
+      });
+      when(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).thenAnswer((invocation) async {
+        final request = invocation.positionalArguments[0] as RpcRequest;
+        return RpcResponse.success(
+          id: request.id,
+          result: <String, dynamic>{
+            'rows': const [
+              {'CodCliente': 1},
+            ],
+            'row_count': 1,
+          },
+        );
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      Map<String, dynamic> requestPayload() {
+        return <String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'duplicated-sql-id',
+          'method': 'sql.execute',
+          'params': {'sql': 'SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente'},
+        };
+      }
+
+      emitEvent('rpc:request', encodeWirePayload(requestPayload()));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      emitEvent('rpc:request', encodeWirePayload(requestPayload()));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ackAttempts, 0);
+      expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteCount, 2);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 0);
+      verify(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      ).called(1);
+
+      final responses = emitted.where((item) => item.event == 'rpc:response').toList();
+      expect(responses, hasLength(2));
+      final replayPayload = decodeWirePayload(responses.last.data) as Map<String, dynamic>;
+      expect(replayPayload['id'], 'duplicated-sql-id');
+      final error = replayPayload['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.replayDetected);
+      expect((error['data'] as Map<String, dynamic>)['reason'], RpcErrorCode.getReason(RpcErrorCode.replayDetected));
+    });
+
+    test('should return strict batch duplicate-id SQL error without Socket.IO ACK', () async {
+      when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
+      when(() => mockFeatureFlags.enableSocketBatchStrictValidation).thenReturn(true);
+      var ackAttempts = 0;
+      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
+      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        ackAttempts++;
+        throw StateError('duplicate batch sql.execute response should not wait for Socket.IO ACK');
+      });
+
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      emitted.clear();
+
+      emitEvent(
+        'rpc:request',
+        encodeWirePayload(<Map<String, dynamic>>[
+          {
+            'jsonrpc': '2.0',
+            'id': 'duplicated-batch-sql-id',
+            'method': 'sql.execute',
+            'params': {'sql': 'SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente'},
+          },
+          {
+            'jsonrpc': '2.0',
+            'id': 'duplicated-batch-sql-id',
+            'method': 'sql.execute',
+            'params': {'sql': 'SELECT TOP 1 Nome FROM Cliente ORDER BY CodCliente'},
+          },
+        ]),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ackAttempts, 0);
+      expect(rpcMetricsCollector.rpcResponseAckSkippedSqlExecuteCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 0);
+      verifyNever(
+        () => mockDispatcher.dispatch(
+          any(),
+          any(),
+          clientToken: any(named: 'clientToken'),
+          streamEmitter: any(named: 'streamEmitter'),
+          limits: any(named: 'limits'),
+          negotiatedExtensions: any(named: 'negotiatedExtensions'),
+        ),
+      );
+
+      final responses = emitted.where((item) => item.event == 'rpc:response').toList();
+      expect(responses, hasLength(1));
+      final responsePayload = decodeWirePayload(responses.single.data) as Map<String, dynamic>;
+      expect(responsePayload['id'], isNull);
+      final error = responsePayload['error'] as Map<String, dynamic>;
+      expect(error['code'], RpcErrorCode.invalidRequest);
+      expect((error['data'] as Map<String, dynamic>)['reason'], RpcBatchConstants.duplicateRequestIdsReason);
     });
 
     test('should register reconnect lifecycle handlers on Socket.IO manager', () async {

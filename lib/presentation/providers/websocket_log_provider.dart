@@ -6,6 +6,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/utils/log_sanitizer.dart';
+import 'package:plug_agente/core/utils/sql_rpc_log_payload_compactor.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 
 const int _maxMessagesDefault = AppConstants.dashboardDiagnosticFeedMaxItems;
@@ -36,13 +37,7 @@ String? _dashboardFormattedPreview(String event, dynamic data) {
       return 'stream_id=${data['stream_id']} total_rows=${data['total_rows']}'
           '${data['terminal_status'] != null ? ' terminal_status=${data['terminal_status']}' : ''}';
     case 'rpc:response':
-      final result = data['result'];
-      if (result is Map && result['stream_id'] != null) {
-        return 'stream_id=${result['stream_id']} row_count=${result['row_count']} '
-            'affected_rows=${result['affected_rows']} '
-            '(${result['started_at']} -> ${result['finished_at']})';
-      }
-      return null;
+      return SqlRpcLogPayloadCompactor.rpcResponsePreview(data);
     case 'rpc:request':
       final method = data['method'];
       if (method != 'sql.execute') {
@@ -64,53 +59,7 @@ String? _dashboardFormattedPreview(String event, dynamic data) {
 }
 
 Map<String, dynamic> _dashboardDataSnapshot(String event, dynamic data) {
-  if (data is! Map) {
-    return <String, dynamic>{'payload': 'omitted'};
-  }
-  switch (event) {
-    case 'rpc:chunk':
-      final rows = data['rows'];
-      return <String, dynamic>{
-        if (data['stream_id'] != null) 'stream_id': data['stream_id'],
-        if (data['request_id'] != null) 'request_id': data['request_id'],
-        'chunk_index': data['chunk_index'],
-        'row_count': rows is List ? rows.length : 0,
-        'rows': 'omitted',
-      };
-    case 'rpc:complete':
-      return <String, dynamic>{
-        if (data['stream_id'] != null) 'stream_id': data['stream_id'],
-        if (data['request_id'] != null) 'request_id': data['request_id'],
-        if (data['total_rows'] != null) 'total_rows': data['total_rows'],
-        if (data['terminal_status'] != null) 'terminal_status': data['terminal_status'],
-      };
-    case 'rpc:response':
-      final result = data['result'];
-      if (result is Map && result['stream_id'] != null) {
-        return <String, dynamic>{
-          if (data['id'] != null) 'id': data['id'],
-          'result': <String, dynamic>{
-            'stream_id': result['stream_id'],
-            if (result['row_count'] != null) 'row_count': result['row_count'],
-            if (result['affected_rows'] != null) 'affected_rows': result['affected_rows'],
-            if (result['started_at'] != null) 'started_at': result['started_at'],
-            if (result['finished_at'] != null) 'finished_at': result['finished_at'],
-          },
-        };
-      }
-      return <String, dynamic>{'payload': 'omitted'};
-    case 'rpc:request':
-      final params = data['params'];
-      final sql = params is Map ? params['sql'] : null;
-      final sqlPreview = sql is String && sql.length > 160 ? '${sql.substring(0, 160)}...' : sql;
-      return <String, dynamic>{
-        if (data['id'] != null) 'id': data['id'],
-        'method': data['method'],
-        'sql_preview': ?sqlPreview,
-      };
-    default:
-      return <String, dynamic>{'payload': 'omitted'};
-  }
+  return SqlRpcLogPayloadCompactor.dashboardDataSnapshot(event, data);
 }
 
 String _computeFormattedData(dynamic data, {required String event}) {

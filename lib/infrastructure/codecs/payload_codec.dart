@@ -37,7 +37,7 @@ class JsonPayloadCodec implements IPayloadCodec {
       final raw = JsonUtf8Encoder().convert(data);
       final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
       return Success(bytes);
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to encode JSON',
@@ -53,8 +53,20 @@ class JsonPayloadCodec implements IPayloadCodec {
     try {
       final jsonString = utf8.decode(bytes);
       final decoded = jsonDecode(jsonString);
+      if (decoded == null) {
+        return Failure(
+          domain.CompressionFailure.withContext(
+            message: 'Failed to decode JSON',
+            context: {
+              'operation': 'decode',
+              'encoding': 'json',
+              'reason': 'top_level_null_payload',
+            },
+          ),
+        );
+      }
       return Success(decoded as Object);
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         domain.CompressionFailure.withContext(
           message: 'Failed to decode JSON',

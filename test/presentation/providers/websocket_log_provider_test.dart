@@ -172,6 +172,123 @@ void main() {
       expect(chunkMessage.data.toString(), isNot(contains('raw-row-should-not-be-retained')));
     });
 
+    test('should not retain raw materialized rpc response rows', () async {
+      final transport = _RecordingTransport();
+      final provider = WebSocketLogProvider(transportClient: transport);
+
+      transport.messageCallback?.call('SENT', 'rpc:response', {
+        'id': 'req-codcliente-001',
+        'result': {
+          'execution_id': 'exec-1',
+          'started_at': '2026-05-31T21:09:00.000Z',
+          'finished_at': '2026-05-31T21:09:00.045Z',
+          'row_count': 1,
+          'affected_rows': 1,
+          'rows': [
+            {'CodCliente': 1, 'raw_payload': 'raw-row-should-not-be-retained'},
+          ],
+          'column_metadata': [
+            {'name': 'CodCliente', 'type': 'int'},
+          ],
+        },
+      });
+
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final responseMessage = provider.messages.single;
+      expect(responseMessage.formattedData, contains('row_count=1'));
+      expect(responseMessage.formattedData, contains('columns=1'));
+      expect(responseMessage.formattedData, contains('row payload omitted'));
+      expect(responseMessage.formattedData, isNot(contains('raw-row-should-not-be-retained')));
+      expect(responseMessage.data.toString(), isNot(contains('raw-row-should-not-be-retained')));
+      final data = responseMessage.data as Map;
+      final result = data['result'] as Map;
+      expect(result['rows'], 'omitted');
+      expect(result['column_metadata_count'], 1);
+    });
+
+    test('should not retain raw sql.executeBatch item rows', () async {
+      final transport = _RecordingTransport();
+      final provider = WebSocketLogProvider(transportClient: transport);
+
+      transport.messageCallback?.call('SENT', 'rpc:response', {
+        'id': 'batch-1',
+        'result': {
+          'execution_id': 'exec-batch-1',
+          'started_at': '2026-05-31T22:17:27.285Z',
+          'finished_at': '2026-05-31T22:17:27.402Z',
+          'items': [
+            {
+              'index': 0,
+              'ok': true,
+              'rows': [
+                {'CodCliente': 1, 'raw_payload': 'raw-batch-row-should-not-be-retained'},
+              ],
+              'row_count': 1,
+              'column_metadata': [
+                {'name': 'CodCliente'},
+              ],
+            },
+            {
+              'index': 1,
+              'ok': true,
+              'rows': [
+                {'Nome': 'CONSUMIDOR'},
+              ],
+              'row_count': 1,
+              'column_metadata': [
+                {'name': 'Nome'},
+              ],
+            },
+          ],
+          'total_commands': 2,
+          'successful_commands': 2,
+          'failed_commands': 0,
+        },
+      });
+
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final responseMessage = provider.messages.single;
+      expect(responseMessage.formattedData, contains('row_count=2'));
+      expect(responseMessage.formattedData, contains('items=2'));
+      expect(responseMessage.formattedData, isNot(contains('raw-batch-row-should-not-be-retained')));
+      expect(responseMessage.data.toString(), isNot(contains('raw-batch-row-should-not-be-retained')));
+      final data = responseMessage.data as Map;
+      final result = data['result'] as Map;
+      expect(result['item_count'], 2);
+      expect(result['total_item_rows'], 2);
+      final items = result['items'] as List<dynamic>;
+      expect((items.first as Map)['rows'], 'omitted');
+      expect((items.first as Map)['column_metadata_count'], 1);
+    });
+
+    test('should summarize rpc response rows already compacted by transport', () async {
+      final transport = _RecordingTransport();
+      final provider = WebSocketLogProvider(transportClient: transport);
+
+      transport.messageCallback?.call('SENT', 'rpc:response', {
+        'id': 'req-codcliente-001',
+        'result': {
+          'execution_id': 'exec-1',
+          'row_count': 1,
+          'affected_rows': 1,
+          'rows': 'omitted_from_socket_log',
+          'column_metadata_count': 3,
+        },
+      });
+
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final responseMessage = provider.messages.single;
+      expect(responseMessage.formattedData, contains('row_count=1'));
+      expect(responseMessage.formattedData, contains('columns=3'));
+      final data = responseMessage.data as Map;
+      final result = data['result'] as Map;
+      expect(result['rows'], 'omitted');
+      expect(result['column_metadata_count'], 3);
+    });
+
     test('should cap paused pending queue and publish synthetic overflow summary', () async {
       final transport = _RecordingTransport();
       final provider = WebSocketLogProvider(transportClient: transport)..setMaxMessages(2000);

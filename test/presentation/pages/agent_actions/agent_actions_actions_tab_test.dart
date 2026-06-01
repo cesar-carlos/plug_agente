@@ -12,6 +12,7 @@ import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart'
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/utils/powershell_command_line.dart';
@@ -2054,7 +2055,7 @@ void main() {
     final scheduler = AgentActionTriggerScheduler(
       repository,
       DispatchAgentActionTrigger(repository, runAction),
-      schedulerInstanceLock: HeldSchedulerInstanceLockForPageTest(),
+      schedulerInstanceLock: const HeldSchedulerInstanceLockForPageTest(),
     );
     await scheduler.start();
 
@@ -2066,6 +2067,40 @@ void main() {
 
     expect(find.byKey(const ValueKey<String>('agent_actions_scheduler_operational_issue')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsSchedulerInstanceLockedMessage), findsOneWidget);
+  });
+
+  testWidgets('shows scheduler storage access denied warning when scheduler lock is inaccessible', (tester) async {
+    final repository = FakeAgentActionRepository();
+    repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Scheduled action',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+    final runnerRegistry = AgentActionLocalRunnerRegistry([const FakeAgentActionLocalRunner()]);
+    final runAction = RunAgentActionLocally(
+      repository,
+      runnerRegistry,
+      const Uuid(),
+      featureFlags: FeatureFlags(InMemoryAppSettingsStore()),
+    );
+    final scheduler = AgentActionTriggerScheduler(
+      repository,
+      DispatchAgentActionTrigger(repository, runAction),
+      schedulerInstanceLock: const HeldSchedulerInstanceLockForPageTest(
+        reason: AgentActionTriggerConstants.schedulerStorageAccessDeniedReason,
+      ),
+    );
+    await scheduler.start();
+
+    final harness = AgentActionsPageHarness(triggerScheduler: scheduler);
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await tester.pumpWidget(harness.buildWidget());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey<String>('agent_actions_scheduler_operational_issue')), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsSchedulerStorageAccessDeniedMessage), findsOneWidget);
   });
 
   testWidgets('should clear execution highlight when remote audit runtime instance mismatches', (tester) async {

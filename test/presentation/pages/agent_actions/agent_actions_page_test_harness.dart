@@ -235,6 +235,12 @@ String triggerTypeTestLabel(AgentActionTriggerType type, AppLocalizations l10n) 
 }
 
 class HeldSchedulerInstanceLockForPageTest implements IAgentActionSchedulerInstanceLock {
+  const HeldSchedulerInstanceLockForPageTest({
+    this.reason = AgentActionTriggerConstants.schedulerInstanceLockedReason,
+  });
+
+  final String reason;
+
   @override
   bool get isHeld => true;
 
@@ -244,8 +250,8 @@ class HeldSchedulerInstanceLockForPageTest implements IAgentActionSchedulerInsta
       ActionAuthorizationFailure.withContext(
         message: 'Scheduler lock is held.',
         code: AgentActionFailureCode.schedulerBootstrapFailed,
-        context: const {
-          'reason': AgentActionTriggerConstants.schedulerInstanceLockedReason,
+        context: {
+          'reason': reason,
         },
       ),
     );

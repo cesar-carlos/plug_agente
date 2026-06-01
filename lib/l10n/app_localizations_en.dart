@@ -1438,6 +1438,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Another Plug Agente process is already running the action scheduler for this data folder. Close the other instance or use a separate data directory. Manual runs and remote actions may still work in this window.';
 
   @override
+  String get agentActionsSchedulerStorageAccessDeniedMessage =>
+      'The action scheduler could not access the lock file in this data folder. Review read/write permissions or run the agent with appropriate privileges.';
+
+  @override
   String get agentActionsSchedulerBootstrapFailedMessage =>
       'The action scheduler stopped after a startup failure. Restart the agent or review saved triggers. Manual runs may still work until you fix the schedule configuration.';
 

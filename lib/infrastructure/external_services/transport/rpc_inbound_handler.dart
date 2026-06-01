@@ -219,26 +219,11 @@ class RpcInboundHandler {
   /// can still echo the original request id whenever possible.
   Future<void> emitConcurrencyLimitedError(dynamic rawData) async {
     final wirePayload = _unwrapWirePayload(rawData);
-    final payload = wirePayload.payload;
-    dynamic id;
-    if (payload is Map<String, dynamic> && _frameCodec.looksLikePayloadFrame(payload)) {
-      final decodeResult = _frameCodec.decodeIncoming(payload, sourceEvent: 'rpc:request');
-      decodeResult.fold(
-        (dynamic decodedPayload) {
-          if (decodedPayload is Map<String, dynamic>) {
-            id = decodedPayload['id'];
-          }
-        },
-        (_) => id = null,
-      );
-    } else if (payload is Map<String, dynamic>) {
-      id = payload['id'];
-    }
-
     try {
+      final identity = _extractBestEffortRequestIdentityForRateLimit(wirePayload.payload);
       await _emitRpcResponse(
         _responsePreparer.buildErrorResponse(
-          id: id,
+          id: identity.id,
           code: RpcErrorCode.rateLimited,
           technicalMessage: RpcInboundConstants.concurrentHandlersExceededTechnicalMessage(
             ConnectionConstants.maxConcurrentRpcHandlers,
@@ -248,9 +233,55 @@ class RpcInboundHandler {
           // (see concurrentHandlersExceededReason).
           errorReason: RpcInboundConstants.concurrentHandlersExceededReason,
         ),
+        methodsById: _methodsByIdForValidationError(
+          id: identity.id,
+          method: identity.method,
+        ),
+      );
+    } on Object catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to emit rate-limited rpc:response',
+        error,
+        stackTrace,
       );
     } finally {
       wirePayload.socketAck?.call();
+    }
+  }
+
+  bool _shouldPauseDashboardCaptureForMethod(String method) {
+    return method == 'sql.execute' || method == 'sql.executeBatch';
+  }
+
+  _BestEffortRequestIdentity _extractBestEffortRequestIdentityForRateLimit(dynamic payload) {
+    try {
+      if (payload is Map<String, dynamic> && _frameCodec.looksLikePayloadFrame(payload)) {
+        final decodeResult = _frameCodec.decodeIncoming(payload, sourceEvent: 'rpc:request');
+        if (decodeResult.isSuccess()) {
+          final decodedPayload = decodeResult.getOrThrow();
+          if (decodedPayload is Map<String, dynamic>) {
+            return _BestEffortRequestIdentity(
+              id: decodedPayload['id'],
+              method: decodedPayload['method'],
+            );
+          }
+        }
+        return const _BestEffortRequestIdentity();
+      }
+      if (payload is Map<String, dynamic>) {
+        return _BestEffortRequestIdentity(
+          id: payload['id'],
+          method: payload['method'],
+        );
+      }
+      return const _BestEffortRequestIdentity();
+    } on Object catch (error, stackTrace) {
+      AppLogger.warning(
+        'Failed to extract request identity while building rate-limited response',
+        error,
+        stackTrace,
+      );
+      return const _BestEffortRequestIdentity();
     }
   }
 
@@ -258,6 +289,7 @@ class RpcInboundHandler {
   /// payload is parsed so the hub can release its in-flight slot quickly.
   Future<void> handleRequest(dynamic data) async {
     dynamic inboundRequestId;
+    Object? inboundRequestMethod;
     try {
       final wirePayload = _unwrapWirePayload(data);
       dynamic payload = wirePayload.payload;
@@ -310,11 +342,13 @@ class RpcInboundHandler {
 
       final requestMap = payload;
       inboundRequestId = requestMap['id'];
+      inboundRequestMethod = requestMap['method'];
       if (_exceedsPayloadLimit(requestMap)) {
         await _sendSchemaValidationError(
           requestMap['id'],
           RpcErrorCode.invalidPayload,
           RpcInboundConstants.requestExceedsPayloadLimitTechnicalMessage,
+          method: requestMap['method'],
         );
         socketAck?.call();
         return;
@@ -332,6 +366,7 @@ class RpcInboundHandler {
               requestMap['id'],
               rpcInboundValidationFailureCode(failure),
               failure.message,
+              method: requestMap['method'],
             );
             socketAck?.call();
             return;
@@ -349,6 +384,7 @@ class RpcInboundHandler {
           RpcErrorCode.authenticationFailed,
           RpcInboundConstants.invalidPayloadSignatureTechnicalMessage,
           errorReason: RpcErrorCode.reasonInvalidSignature,
+          method: requestMap['method'],
         );
         socketAck?.call();
         return;
@@ -360,6 +396,7 @@ class RpcInboundHandler {
           null,
           RpcErrorCode.invalidRequest,
           RpcInboundConstants.nullIdNotificationsCompatibilityTechnicalMessage,
+          method: requestMap['method'],
         );
         socketAck?.call();
         return;
@@ -378,7 +415,10 @@ class RpcInboundHandler {
           technicalMessage: rpcInboundGuardResultToTechnicalMessage(guardResult),
           errorReason: rpcInboundGuardResultToReason(guardResult),
         );
-        await _emitInboundRpcResponse(errorResponse);
+        await _emitInboundRpcResponse(
+          errorResponse,
+          methodsById: <Object?, String>{request.id: request.method},
+        );
         return;
       }
 
@@ -391,7 +431,7 @@ class RpcInboundHandler {
           )
           ? _streamEmitterFactory()
           : null;
-      final pauseDashboardCapture = request.method == 'sql.execute';
+      final pauseDashboardCapture = _shouldPauseDashboardCaptureForMethod(request.method);
       if (pauseDashboardCapture) {
         _setHubSqlDashboardCapturePaused?.call(true);
       }
@@ -453,7 +493,13 @@ class RpcInboundHandler {
         ),
       );
 
-      await _emitInboundRpcResponse(errorResponse);
+      await _emitInboundRpcResponse(
+        errorResponse,
+        methodsById: _methodsByIdForValidationError(
+          id: inboundRequestId,
+          method: inboundRequestMethod,
+        ),
+      );
     }
   }
 
@@ -544,6 +590,7 @@ class RpcInboundHandler {
         firstId,
         RpcErrorCode.invalidRequest,
         failure.message,
+        method: data.whereType<Map<String, dynamic>>().firstOrNull?['method'],
       );
       return false;
     }
@@ -570,6 +617,7 @@ class RpcInboundHandler {
         requestMap['id'],
         RpcErrorCode.invalidRequest,
         envelopeFailure.message,
+        method: requestMap['method'],
       );
       return false;
     }
@@ -580,6 +628,7 @@ class RpcInboundHandler {
         requestMap['id'],
         RpcErrorCode.invalidParams,
         paramsFailure.message,
+        method: requestMap['method'],
       );
       return false;
     }
@@ -642,6 +691,7 @@ class RpcInboundHandler {
     int code,
     String technicalMessage, {
     String? errorReason,
+    Object? method,
   }) async {
     final errorResponse = _responsePreparer.buildErrorResponse(
       id: id,
@@ -649,7 +699,23 @@ class RpcInboundHandler {
       technicalMessage: technicalMessage,
       errorReason: errorReason,
     );
-    await _emitInboundRpcResponse(errorResponse);
+    await _emitInboundRpcResponse(
+      errorResponse,
+      methodsById: _methodsByIdForValidationError(
+        id: id,
+        method: method,
+      ),
+    );
+  }
+
+  Map<Object?, String> _methodsByIdForValidationError({
+    required dynamic id,
+    required Object? method,
+  }) {
+    if (method is String && _shouldPauseDashboardCaptureForMethod(method)) {
+      return <Object?, String>{id: method};
+    }
+    return const <Object?, String>{};
   }
 
   bool _exceedsPayloadLimit(dynamic payload) {
@@ -692,6 +758,16 @@ class _WirePayloadWithAck {
 
   final dynamic payload;
   final void Function()? socketAck;
+}
+
+class _BestEffortRequestIdentity {
+  const _BestEffortRequestIdentity({
+    this.id,
+    this.method,
+  });
+
+  final dynamic id;
+  final Object? method;
 }
 
 /// Per-call slot-release flag carried in a Zone so concurrent invocations of

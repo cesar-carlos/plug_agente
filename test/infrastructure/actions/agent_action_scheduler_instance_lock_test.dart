@@ -72,5 +72,77 @@ void main() {
       expect((await second.tryAcquire()).isSuccess(), isTrue);
       await second.release();
     });
+
+    test('should classify sharing violation as scheduler_instance_locked', () async {
+      final lock = AgentActionSchedulerInstanceLock(
+        storageContext: storageContext,
+        openLockFile: (_) async {
+          throw const FileSystemException(
+            'Failed to open lock file.',
+            r'C:\agent_action_scheduler.lock',
+            OSError(
+              'The process cannot access the file because it is being used by another process.',
+              32,
+            ),
+          );
+        },
+      );
+
+      final acquire = await lock.tryAcquire();
+      expect(acquire.isError(), isTrue);
+      final failure = acquire.exceptionOrNull()! as ActionAuthorizationFailure;
+      expect(
+        failure.context['reason'],
+        AgentActionTriggerConstants.schedulerInstanceLockedReason,
+      );
+      expect(failure.context['os_error_code'], 32);
+      expect(failure.context['lock_file_path'], contains('agent_action_scheduler.lock'));
+    });
+
+    test('should classify access denied as scheduler_storage_access_denied', () async {
+      final lock = AgentActionSchedulerInstanceLock(
+        storageContext: storageContext,
+        openLockFile: (_) async {
+          throw const FileSystemException(
+            'Failed to open lock file.',
+            r'C:\agent_action_scheduler.lock',
+            OSError('Access is denied.', 5),
+          );
+        },
+      );
+
+      final acquire = await lock.tryAcquire();
+      expect(acquire.isError(), isTrue);
+      final failure = acquire.exceptionOrNull()! as ActionAuthorizationFailure;
+      expect(
+        failure.context['reason'],
+        AgentActionTriggerConstants.schedulerStorageAccessDeniedReason,
+      );
+      expect(failure.context['os_error_code'], 5);
+      expect(failure.context['lock_file_path'], contains('agent_action_scheduler.lock'));
+    });
+
+    test('should classify unexpected filesystem error as scheduler_bootstrap_failed', () async {
+      final lock = AgentActionSchedulerInstanceLock(
+        storageContext: storageContext,
+        openLockFile: (_) async {
+          throw const FileSystemException(
+            'Failed to open lock file.',
+            r'C:\agent_action_scheduler.lock',
+            OSError('The system cannot find the path specified.', 3),
+          );
+        },
+      );
+
+      final acquire = await lock.tryAcquire();
+      expect(acquire.isError(), isTrue);
+      final failure = acquire.exceptionOrNull()! as ActionAuthorizationFailure;
+      expect(
+        failure.context['reason'],
+        AgentActionTriggerConstants.schedulerBootstrapFailedReason,
+      );
+      expect(failure.context['os_error_code'], 3);
+      expect(failure.context['lock_file_path'], contains('agent_action_scheduler.lock'));
+    });
   });
 }

@@ -103,20 +103,9 @@
           }
         },
         {
-          "if": { "properties": { "preserve_sql": { "const": true } } },
-          "then": {
-            "not": {
-              "anyOf": [
-                { "required": ["page"] },
-                { "required": ["page_size"] },
-                { "required": ["cursor"] }
-              ]
-            }
-          }
-        },
-        {
           "if": {
-            "properties": { "execution_mode": { "const": "preserve" } }
+            "properties": { "preserve_sql": { "const": true } },
+            "required": ["preserve_sql"]
           },
           "then": {
             "not": {
@@ -129,7 +118,25 @@
           }
         },
         {
-          "if": { "properties": { "multi_result": { "const": true } } },
+          "if": {
+            "properties": { "execution_mode": { "const": "preserve" } },
+            "required": ["execution_mode"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["page"] },
+                { "required": ["page_size"] },
+                { "required": ["cursor"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "multi_result": { "const": true } },
+            "required": ["multi_result"]
+          },
           "then": {
             "not": {
               "anyOf": [

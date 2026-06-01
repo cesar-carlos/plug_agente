@@ -1439,6 +1439,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Outro processo do Plug Agente ja esta executando o agendador de acoes nesta pasta de dados. Feche a outra instancia ou use um diretorio de dados separado. Execucoes manuais e acoes remotas podem continuar funcionando nesta janela.';
 
   @override
+  String get agentActionsSchedulerStorageAccessDeniedMessage =>
+      'O agendador de acoes nao conseguiu acessar o arquivo de lock nesta pasta de dados. Revise permissoes de leitura/escrita ou execute o agente com privilegios adequados.';
+
+  @override
   String get agentActionsSchedulerBootstrapFailedMessage =>
       'O agendador de acoes foi desativado apos falha na inicializacao. Reinicie o agente ou revise os gatilhos salvos. Execucoes manuais podem continuar ate corrigir a configuracao de agendamento.';
 

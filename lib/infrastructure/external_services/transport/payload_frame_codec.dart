@@ -167,7 +167,7 @@ class PayloadFrameCodec {
         canonicalizeDurationUs: signingResult.metrics.canonicalizeDurationUs,
       );
     }
-    return Success(frame.toJson());
+    return Success(frame.toSocketPayload());
   }
 
   bool _supportsNegotiatedSignatureAlgorithm(ProtocolConfig protocol) =>
@@ -221,7 +221,7 @@ class PayloadFrameCodec {
       return _processedReceiveResult(processed, payload);
     } on domain.Failure catch (failure) {
       return Failure(failure);
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         domain.ValidationFailure.withContext(
           message: 'Failed to decode transport frame',
@@ -257,7 +257,7 @@ class PayloadFrameCodec {
       return _processedReceiveResult(processed, payload);
     } on domain.Failure catch (failure) {
       return Failure(failure);
-    } on Exception catch (error) {
+    } on Object catch (error) {
       return Failure(
         domain.ValidationFailure.withContext(
           message: 'Failed to decode transport frame',
@@ -288,7 +288,20 @@ class PayloadFrameCodec {
         ),
       );
     }
-    return Success(processed.getOrThrow() as Object);
+    try {
+      return Success(processed.getOrThrow() as Object);
+    } on Object catch (error) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'Failed to decode transport frame',
+          cause: error,
+          context: {
+            'payloadType': payload.runtimeType.toString(),
+            'rpc_error_code': RpcErrorCode.invalidPayload,
+          },
+        ),
+      );
+    }
   }
 
   Result<void> _ensureFrameShape(dynamic payload) {
