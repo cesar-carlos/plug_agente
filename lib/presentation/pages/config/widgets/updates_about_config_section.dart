@@ -1,6 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/config/models/update_check_inline_notice.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/update_check_inline_notice_bar.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
@@ -26,6 +28,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     this.pendingUpdateNotice,
     this.releaseNotes,
     this.releaseNotesUrl,
+    this.updateCheckNotice,
     super.key,
   });
 
@@ -59,6 +62,7 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   /// External "release notes link" from `sparkle:releaseNotesLink`. Shown
   /// as a `Open in browser` link inside the expander when present.
   final String? releaseNotesUrl;
+  final UpdateCheckInlineNotice? updateCheckNotice;
 
   bool get _isManualOnlyMode => !updateNotificationsEnabled && !automaticSilentUpdatesEnabled;
 
@@ -93,6 +97,10 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                     style: context.captionText,
                   ),
                   const SizedBox(height: AppSpacing.sm),
+                  if (updateCheckNotice != null) ...[
+                    UpdateCheckInlineNoticeBar(notice: updateCheckNotice!),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   Row(
                     children: [
                       Button(

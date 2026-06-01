@@ -1,9 +1,13 @@
-import 'package:fluent_ui/fluent_ui.dart';
+import 'dart:async';
 
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/window_constraints.dart';
+import 'package:plug_agente/core/support/support_diagnostics_section.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/app_content_dialog.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/support_diagnostics_panel.dart';
 
 enum MessageType { info, success, warning, error, confirmation }
 
@@ -18,6 +22,9 @@ class MessageModal extends StatelessWidget {
     this.onCancel,
     this.confirmText,
     this.cancelText,
+    this.diagnosticSections = const <SupportDiagnosticsSection>[],
+    this.onCopyDiagnostics,
+    this.collapseDiagnosticsByDefault = true,
   });
   final String? title;
   final String? message;
@@ -27,6 +34,9 @@ class MessageModal extends StatelessWidget {
   final VoidCallback? onCancel;
   final String? confirmText;
   final String? cancelText;
+  final List<SupportDiagnosticsSection> diagnosticSections;
+  final Future<void> Function()? onCopyDiagnostics;
+  final bool collapseDiagnosticsByDefault;
 
   static Future<T?> show<T>({
     required BuildContext context,
@@ -38,6 +48,9 @@ class MessageModal extends StatelessWidget {
     VoidCallback? onCancel,
     String? confirmText,
     String? cancelText,
+    List<SupportDiagnosticsSection> diagnosticSections = const <SupportDiagnosticsSection>[],
+    Future<void> Function()? onCopyDiagnostics,
+    bool collapseDiagnosticsByDefault = true,
   }) {
     return showDialog<T>(
       context: context,
@@ -50,6 +63,9 @@ class MessageModal extends StatelessWidget {
         onCancel: onCancel,
         confirmText: confirmText,
         cancelText: cancelText,
+        diagnosticSections: diagnosticSections,
+        onCopyDiagnostics: onCopyDiagnostics,
+        collapseDiagnosticsByDefault: collapseDiagnosticsByDefault,
       ),
     );
   }
@@ -60,6 +76,9 @@ class MessageModal extends StatelessWidget {
     required String message,
     VoidCallback? onConfirm,
     String? confirmText,
+    List<SupportDiagnosticsSection> diagnosticSections = const <SupportDiagnosticsSection>[],
+    Future<void> Function()? onCopyDiagnostics,
+    bool collapseDiagnosticsByDefault = true,
   }) {
     return show<T>(
       context: context,
@@ -67,6 +86,9 @@ class MessageModal extends StatelessWidget {
       message: message,
       onConfirm: onConfirm,
       confirmText: confirmText,
+      diagnosticSections: diagnosticSections,
+      onCopyDiagnostics: onCopyDiagnostics,
+      collapseDiagnosticsByDefault: collapseDiagnosticsByDefault,
     );
   }
 
@@ -76,6 +98,9 @@ class MessageModal extends StatelessWidget {
     required String message,
     VoidCallback? onConfirm,
     String? confirmText,
+    List<SupportDiagnosticsSection> diagnosticSections = const <SupportDiagnosticsSection>[],
+    Future<void> Function()? onCopyDiagnostics,
+    bool collapseDiagnosticsByDefault = true,
   }) {
     return show<T>(
       context: context,
@@ -84,6 +109,9 @@ class MessageModal extends StatelessWidget {
       type: MessageType.success,
       onConfirm: onConfirm,
       confirmText: confirmText,
+      diagnosticSections: diagnosticSections,
+      onCopyDiagnostics: onCopyDiagnostics,
+      collapseDiagnosticsByDefault: collapseDiagnosticsByDefault,
     );
   }
 
@@ -93,6 +121,9 @@ class MessageModal extends StatelessWidget {
     required String message,
     VoidCallback? onConfirm,
     String? confirmText,
+    List<SupportDiagnosticsSection> diagnosticSections = const <SupportDiagnosticsSection>[],
+    Future<void> Function()? onCopyDiagnostics,
+    bool collapseDiagnosticsByDefault = true,
   }) {
     return show<T>(
       context: context,
@@ -101,6 +132,9 @@ class MessageModal extends StatelessWidget {
       type: MessageType.warning,
       onConfirm: onConfirm,
       confirmText: confirmText,
+      diagnosticSections: diagnosticSections,
+      onCopyDiagnostics: onCopyDiagnostics,
+      collapseDiagnosticsByDefault: collapseDiagnosticsByDefault,
     );
   }
 
@@ -112,6 +146,9 @@ class MessageModal extends StatelessWidget {
     VoidCallback? onCancel,
     String? confirmText,
     String? cancelText,
+    List<SupportDiagnosticsSection> diagnosticSections = const <SupportDiagnosticsSection>[],
+    Future<void> Function()? onCopyDiagnostics,
+    bool collapseDiagnosticsByDefault = true,
   }) {
     return show<T>(
       context: context,
@@ -122,6 +159,9 @@ class MessageModal extends StatelessWidget {
       onCancel: onCancel,
       confirmText: confirmText,
       cancelText: cancelText,
+      diagnosticSections: diagnosticSections,
+      onCopyDiagnostics: onCopyDiagnostics,
+      collapseDiagnosticsByDefault: collapseDiagnosticsByDefault,
     );
   }
 
@@ -150,8 +190,10 @@ class MessageModal extends StatelessWidget {
     }
 
     final l10n = AppLocalizations.of(context)!;
+    final hasDiagnostics = diagnosticSections.isNotEmpty;
 
     return AppContentDialog(
+      constraints: WindowConstraints.resolveMessageModalConstraints(context),
       leading: Icon(iconData, color: feedbackColors.accent, size: 24),
       title: Text(title ?? ''),
       closeTooltip: l10n.btnClose,
@@ -159,32 +201,51 @@ class MessageModal extends StatelessWidget {
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (message != null)
-              type == MessageType.error
-                  ? SelectableText(
-                      message!,
-                      style: context.bodyText,
-                    )
-                  : Text(message!, style: context.bodyText),
-            if (content != null) ...[
+              SelectableText(
+                message!,
+                style: context.bodyText,
+              ),
+            if (hasDiagnostics) ...[
               if (message != null) const SizedBox(height: AppSpacing.md),
+              SupportDiagnosticsExpander(
+                header: l10n.configUpdateTechnicalTitle,
+                sections: diagnosticSections,
+                initiallyExpanded: !collapseDiagnosticsByDefault,
+              ),
+            ],
+            if (content != null) ...[
+              if (message != null || hasDiagnostics) const SizedBox(height: AppSpacing.md),
               content!,
             ],
           ],
         ),
       ),
-      actions: _buildActions(context, feedbackColors),
+      actions: _buildActions(context, feedbackColors, l10n),
     );
   }
 
   List<Widget> _buildActions(
     BuildContext context,
     AppFeedbackColors feedbackColors,
+    AppLocalizations l10n,
   ) {
-    final l10n = AppLocalizations.of(context)!;
     final actions = <Widget>[];
+
+    if (onCopyDiagnostics != null) {
+      actions.add(
+        AppButton(
+          label: l10n.configCopyUpdateDiagnostics,
+          isPrimary: false,
+          labelStyle: context.bodyText,
+          onPressed: () {
+            unawaited(onCopyDiagnostics!());
+          },
+        ),
+      );
+    }
 
     if (onCancel != null || type == MessageType.confirmation || cancelText != null) {
       actions.add(

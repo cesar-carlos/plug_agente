@@ -1,8 +1,33 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/support/support_diagnostics_section.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 
 class SettingsFeedback {
   const SettingsFeedback._();
+
+  static Future<void> showWithDiagnostics({
+    required BuildContext context,
+    required String title,
+    required String message,
+    MessageType type = MessageType.info,
+    List<SupportDiagnosticsSection> diagnosticSections = const <SupportDiagnosticsSection>[],
+    Future<void> Function()? onCopyDiagnostics,
+    bool collapseDiagnosticsByDefault = true,
+    VoidCallback? onConfirm,
+    String? confirmText,
+  }) {
+    return MessageModal.show<void>(
+      context: context,
+      title: title,
+      message: message,
+      type: type,
+      diagnosticSections: diagnosticSections,
+      onCopyDiagnostics: onCopyDiagnostics,
+      collapseDiagnosticsByDefault: collapseDiagnosticsByDefault,
+      onConfirm: onConfirm,
+      confirmText: confirmText,
+    );
+  }
 
   static Future<void> showInfo({
     required BuildContext context,

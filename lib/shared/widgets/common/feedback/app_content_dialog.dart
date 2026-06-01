@@ -13,6 +13,7 @@ class AppContentDialog extends StatelessWidget {
     this.actions,
     this.maxWidth,
     this.maxHeight,
+    this.constraints,
     this.contentWidth,
     this.contentHeight,
   });
@@ -26,6 +27,7 @@ class AppContentDialog extends StatelessWidget {
   final List<Widget>? actions;
   final double? maxWidth;
   final double? maxHeight;
+  final BoxConstraints? constraints;
   final double? contentWidth;
   final double? contentHeight;
 
@@ -40,13 +42,16 @@ class AppContentDialog extends StatelessWidget {
       );
     }
 
+    final dialogConstraints = constraints ??
+        (maxWidth == null && maxHeight == null
+            ? kDefaultContentDialogConstraints
+            : BoxConstraints(
+                maxWidth: maxWidth ?? double.infinity,
+                maxHeight: maxHeight ?? double.infinity,
+              ));
+
     return ContentDialog(
-      constraints: maxWidth == null && maxHeight == null
-          ? kDefaultContentDialogConstraints
-          : BoxConstraints(
-              maxWidth: maxWidth ?? double.infinity,
-              maxHeight: maxHeight ?? double.infinity,
-            ),
+      constraints: dialogConstraints,
       title: AppDialogTitleBar(
         leading: leading,
         title: title,

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
+import 'package:plug_agente/application/services/manual_check_outcome.dart';
+import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
@@ -17,6 +19,7 @@ import 'package:plug_agente/core/support/support_diagnostics_text_formatter.dart
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/config/models/update_check_inline_notice.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/backup_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/preferences_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/updates_about_config_section.dart';
@@ -24,6 +27,7 @@ import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/presentation/support/update_support_diagnostics_builder.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
@@ -45,6 +49,7 @@ class _ConfigPageState extends State<ConfigPage> {
   String _lastUpdateCheck = '';
   bool _isCheckingUpdates = false;
   bool _hasPendingDownloadedUpdate = false;
+  UpdateCheckInlineNotice? _updateCheckInlineNotice;
   StreamSubscription<void>? _orchestratorChangesSubscription;
 
   @override
@@ -161,25 +166,43 @@ class _ConfigPageState extends State<ConfigPage> {
     return l10n.configAutoUpdateFeedCustom;
   }
 
-  String _formatTechnicalDetails(
+  List<SupportDiagnosticsSection> _buildUpdateDiagnosticSections(
     AppLocalizations l10n,
+    IAutoUpdateOrchestrator orchestrator, {
     UpdateCheckDiagnostics? manualDiagnostics,
     UpdateCheckDiagnostics? backgroundDiagnostics,
     UpdateCheckDiagnostics? automaticDiagnostics,
-  ) {
-    final sections = _updateDiagnosticsBuilder.buildSections(
+  }) {
+    return _updateDiagnosticsBuilder.buildSections(
       l10n: l10n,
       currentAppVersion: _appVersion,
-      manualDiagnostics: manualDiagnostics,
-      backgroundDiagnostics: backgroundDiagnostics,
-      automaticDiagnostics: automaticDiagnostics,
+      manualDiagnostics: manualDiagnostics ?? orchestrator.lastManualDiagnostics,
+      backgroundDiagnostics: backgroundDiagnostics ?? orchestrator.lastBackgroundDiagnostics,
+      automaticDiagnostics: automaticDiagnostics ?? orchestrator.lastAutomaticDiagnostics,
     );
+  }
 
-    if (sections.isEmpty) {
-      return l10n.configUpdateTechnicalNoData;
-    }
+  Future<void> _showUpdateDiagnosticsDialog({
+    required AppLocalizations l10n,
+    required String message,
+    required List<SupportDiagnosticsSection> sections,
+    MessageType type = MessageType.info,
+  }) {
+    return SettingsFeedback.showWithDiagnostics(
+      context: context,
+      title: l10n.gsSectionUpdates,
+      message: message,
+      type: type,
+      diagnosticSections: sections,
+      onCopyDiagnostics: _copyUpdateDiagnostics,
+      collapseDiagnosticsByDefault: type == MessageType.info,
+    );
+  }
 
-    return _supportTextFormatter.formatSections(sections);
+  void _setUpdateCheckInlineNotice(UpdateCheckInlineNotice notice) {
+    setState(() {
+      _updateCheckInlineNotice = notice;
+    });
   }
 
   String _buildUpdateSupportDiagnostics(
@@ -262,6 +285,7 @@ class _ConfigPageState extends State<ConfigPage> {
     setState(() {
       _lastUpdateCheck = l10n.configUpdatesChecking;
       _isCheckingUpdates = true;
+      _updateCheckInlineNotice = null;
     });
 
     final result = await orchestrator.checkManual();
@@ -278,32 +302,49 @@ class _ConfigPageState extends State<ConfigPage> {
 
     result.fold(
       (outcome) {
-        final message = outcome.isUpdateAvailable
-            ? l10n.configUpdatesAvailable
-            : '${l10n.configUpdatesNotAvailable}\n${l10n.configUpdatesNotAvailableHint}';
-        final technicalDetails = _formatTechnicalDetails(
-          l10n,
-          orchestrator.lastManualDiagnostics,
-          null,
-          null,
-        );
-        return SettingsFeedback.showInfo(
-          context: context,
-          title: l10n.gsSectionUpdates,
-          message: '$message\n\n$technicalDetails',
-        );
+        final sections = _buildUpdateDiagnosticSections(l10n, orchestrator);
+        switch (outcome) {
+          case ManualCheckOutcome.updateAvailable:
+            return _showUpdateDiagnosticsDialog(
+              l10n: l10n,
+              message: l10n.configUpdatesAvailable,
+              sections: sections,
+              type: MessageType.success,
+            );
+          case ManualCheckOutcome.noUpdate:
+            _setUpdateCheckInlineNotice(
+              UpdateCheckInlineNotice(
+                message: l10n.configUpdatesNotAvailable,
+                hint: l10n.configUpdatesNotAvailableHint,
+                severity: InfoBarSeverity.success,
+                diagnosticSections: sections,
+              ),
+            );
+            return Future<void>.value();
+          case ManualCheckOutcome.triggerTimeout:
+          case ManualCheckOutcome.completionTimeout:
+          case ManualCheckOutcome.circuitOpen:
+          case ManualCheckOutcome.notInitialized:
+          case ManualCheckOutcome.disabled:
+            final completionMessage = UpdateSupportDiagnosticsBuilder.formatCompletionSource(
+              l10n,
+              orchestrator.lastManualDiagnostics?.completionSource,
+            );
+            return _showUpdateDiagnosticsDialog(
+              l10n: l10n,
+              message: completionMessage,
+              sections: sections,
+              type: MessageType.warning,
+            );
+        }
       },
       (failure) {
-        final technicalDetails = _formatTechnicalDetails(
-          l10n,
-          orchestrator.lastManualDiagnostics,
-          null,
-          null,
-        );
-        return SettingsFeedback.showError(
-          context: context,
-          title: l10n.gsSectionUpdates,
-          message: '${failure.toDisplayMessage()}\n\n$technicalDetails',
+        final sections = _buildUpdateDiagnosticSections(l10n, orchestrator);
+        return _showUpdateDiagnosticsDialog(
+          l10n: l10n,
+          message: failure.toDisplayMessage(),
+          sections: sections,
+          type: MessageType.error,
         );
       },
     );
@@ -324,8 +365,9 @@ class _ConfigPageState extends State<ConfigPage> {
       return;
     }
 
-    // Trigger a rebuild so the button reflects isSilentCheckInProgress = true.
-    setState(() {});
+    setState(() {
+      _updateCheckInlineNotice = null;
+    });
 
     final result = await orchestrator.checkSilently();
 
@@ -337,34 +379,64 @@ class _ConfigPageState extends State<ConfigPage> {
     setState(() {});
 
     result.fold(
-      (_) {
-        final technicalDetails = _formatTechnicalDetails(
+      (outcome) {
+        final sections = _buildUpdateDiagnosticSections(
           l10n,
-          null,
-          null,
-          orchestrator.lastAutomaticDiagnostics,
+          orchestrator,
+          automaticDiagnostics: orchestrator.lastAutomaticDiagnostics,
         );
-        final source = UpdateSupportDiagnosticsBuilder.formatCompletionSource(
+        final completionMessage = UpdateSupportDiagnosticsBuilder.formatCompletionSource(
           l10n,
           orchestrator.lastAutomaticDiagnostics?.completionSource,
         );
-        return SettingsFeedback.showInfo(
-          context: context,
-          title: l10n.gsSectionUpdates,
-          message: '$source\n\n$technicalDetails',
-        );
+
+        switch (outcome) {
+          case SilentUpdateOutcome.installerReady:
+          case SilentUpdateOutcome.requiresUserConsent:
+            return _showUpdateDiagnosticsDialog(
+              l10n: l10n,
+              message: completionMessage,
+              sections: sections,
+              type: MessageType.warning,
+            );
+          case SilentUpdateOutcome.noNewVersion:
+            _setUpdateCheckInlineNotice(
+              UpdateCheckInlineNotice(
+                message: l10n.configUpdatesNotAvailable,
+                hint: l10n.configUpdatesNotAvailableHint,
+                severity: InfoBarSeverity.success,
+                diagnosticSections: sections,
+              ),
+            );
+            return Future<void>.value();
+          case SilentUpdateOutcome.silentDisabled:
+          case SilentUpdateOutcome.rolloutSkipped:
+          case SilentUpdateOutcome.cooldownActive:
+          case SilentUpdateOutcome.pendingInProgress:
+          case SilentUpdateOutcome.alreadyInProgress:
+          case SilentUpdateOutcome.cancelled:
+          case SilentUpdateOutcome.skippedByQuietHours:
+            _setUpdateCheckInlineNotice(
+              UpdateCheckInlineNotice(
+                message: completionMessage,
+                severity: InfoBarSeverity.info,
+                diagnosticSections: sections,
+              ),
+            );
+            return Future<void>.value();
+        }
       },
       (failure) {
-        final technicalDetails = _formatTechnicalDetails(
+        final sections = _buildUpdateDiagnosticSections(
           l10n,
-          null,
-          null,
-          orchestrator.lastAutomaticDiagnostics,
+          orchestrator,
+          automaticDiagnostics: orchestrator.lastAutomaticDiagnostics,
         );
-        return SettingsFeedback.showError(
-          context: context,
-          title: l10n.gsSectionUpdates,
-          message: '${failure.toDisplayMessage()}\n\n$technicalDetails',
+        return _showUpdateDiagnosticsDialog(
+          l10n: l10n,
+          message: failure.toDisplayMessage(),
+          sections: sections,
+          type: MessageType.error,
         );
       },
     );
@@ -605,6 +677,7 @@ class _ConfigPageState extends State<ConfigPage> {
               unawaited(_onUseManualOnlyUpdateMode());
             },
             pendingUpdateNotice: pendingUpdateNotice,
+            updateCheckNotice: _updateCheckInlineNotice,
           ),
         ),
       ),
@@ -654,6 +727,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     this.pendingUpdateNotice,
     this.releaseNotes,
     this.releaseNotesUrl,
+    this.updateCheckNotice,
   });
 
   final String appVersion;
@@ -682,6 +756,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final String? pendingUpdateNotice;
   final String? releaseNotes;
   final String? releaseNotesUrl;
+  final UpdateCheckInlineNotice? updateCheckNotice;
   final ValueChanged<bool> onDarkThemeChanged;
   final ValueChanged<bool> onStartWithWindowsChanged;
   final ValueChanged<bool> onStartMinimizedChanged;
@@ -767,6 +842,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             onAutomaticSilentUpdatesChanged: widget.onAutomaticSilentUpdatesChanged,
             onUseManualOnlyUpdateMode: widget.onUseManualOnlyUpdateMode,
             pendingUpdateNotice: widget.pendingUpdateNotice,
+            updateCheckNotice: widget.updateCheckNotice,
           ),
         ),
         AppFluentTabItem(

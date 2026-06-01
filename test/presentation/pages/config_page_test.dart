@@ -272,18 +272,51 @@ void main() {
     expect(find.text(ptL10n.gsSectionUpdates), findsWidgets);
     expect(
       find.textContaining('Update check timed out while waiting for updater completion'),
-      findsOneWidget,
+      findsWidgets,
     );
+    expect(find.text(ptL10n.configUpdateTechnicalTitle), findsOneWidget);
     expect(
-      find.textContaining(
-        '${ptL10n.configUpdateTechnicalCompletionSource}: ${ptL10n.configUpdateCompletionSourceCompletionTimeout}',
+      find.descendant(
+        of: find.byType(ContentDialog),
+        matching: find.text(ptL10n.configCopyUpdateDiagnostics),
       ),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('${ptL10n.configUpdateTechnicalProbeRequestUrl}: https://example.com/appcast.xml?cb=1'),
-      findsOneWidget,
+
+    await tester.tap(find.text(ptL10n.configUpdateTechnicalTitle));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('${ptL10n.configUpdateTechnicalProbeRequestUrl}:'), findsOneWidget);
+    expect(find.textContaining('https://example.com/appcast.xml?cb=1'), findsWidgets);
+    expect(find.textContaining(ptL10n.configUpdateCompletionSourceCompletionTimeout), findsOneWidget);
+  });
+
+  testWidgets('shows inline notice when manual check reports no update', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      lastManualDiagnostics: UpdateCheckDiagnostics(
+        checkedAt: DateTime(2026, 6, 1, 10, 30),
+        configuredFeedUrl: officialAutoUpdateFeedUrl,
+        requestedFeedUrl: officialAutoUpdateFeedUrl,
+        currentVersion: '1.8.1+1',
+        completedAt: DateTime(2026, 6, 1, 10, 31),
+        completionSource: UpdateCheckCompletionSource.updateNotAvailable,
+        updateAvailable: false,
+      ),
+      onCheckManual: () async => const Success(ManualCheckOutcome.noUpdate),
     );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('updates_check_now_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('updates_check_inline_notice')), findsOneWidget);
+    expect(find.text(ptL10n.configUpdatesNotAvailable), findsOneWidget);
+    expect(find.text(ptL10n.btnOk), findsNothing);
   });
 
   testWidgets('shows invalid override guidance when auto update feed is not xml', (tester) async {

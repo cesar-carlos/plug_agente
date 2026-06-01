@@ -7,3 +7,4 @@ export 'feedback/inline_feedback_card.dart';
 export 'feedback/loading_indicator.dart';
 export 'feedback/message_modal.dart';
 export 'feedback/settings_feedback.dart';
+export 'feedback/support_diagnostics_panel.dart';
