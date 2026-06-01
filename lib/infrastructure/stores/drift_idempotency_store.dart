@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
@@ -79,7 +80,7 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     }
 
     return IdempotencyRecord(
-      response: parsed,
+      response: RpcWireMap.sanitizeRpcResponse(parsed),
       requestFingerprint: row.requestFingerprint,
     );
   }

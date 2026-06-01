@@ -7,6 +7,7 @@ import 'package:plug_agente/application/rpc/agent_action_rpc_method_handler_oper
 import 'package:plug_agente/application/rpc/agent_metadata_rpc_method_handler_operations.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_idempotency_coordinator.dart';
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_method_handler_operations.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
@@ -569,7 +570,7 @@ class DefaultRpcMethodHandlerOperations {
     final namespacedKey = _namespacedRpcIdempotencyStoreKey(request, idempotencyKey);
     await store.set(
       namespacedKey,
-      response,
+      RpcWireMap.sanitizeRpcResponse(response),
       _rpcIdempotencyEntryTtl(request),
       requestFingerprint: idempotencyFingerprint,
     );

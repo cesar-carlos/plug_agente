@@ -2831,6 +2831,7 @@ void main() {
         expect(result['stream_id'], isNotNull);
         expect(result['rows'], isEmpty);
         expect(result['row_count'], equals(0));
+        expect(result.containsKey('affected_rows'), isFalse);
 
         verify(() => mockEmitter.emitChunk(any())).called(greaterThan(1));
         verify(() => mockEmitter.emitComplete(any())).called(1);

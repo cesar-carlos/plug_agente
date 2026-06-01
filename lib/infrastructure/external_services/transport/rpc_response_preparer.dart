@@ -1,4 +1,5 @@
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
 import 'package:plug_agente/core/constants/rpc_response_constants.dart';
@@ -127,18 +128,19 @@ class RpcResponsePreparer {
       return Success(payload as Object);
     }
 
-    final validation = payload is List<dynamic>
-        ? _contractValidator.validateBatchResponse(payload)
-        : payload is Map<String, dynamic>
-        ? _contractValidator.validateResponse(payload)
+    final sanitizedPayload = RpcWireMap.sanitizeRpcResponseWirePayload(payload);
+    final validation = sanitizedPayload is List<dynamic>
+        ? _contractValidator.validateBatchResponse(sanitizedPayload)
+        : sanitizedPayload is Map<String, dynamic>
+        ? _contractValidator.validateResponse(sanitizedPayload)
         : _contractValidator.validateResponse(const <String, dynamic>{});
     if (validation.isSuccess()) {
       final schemaValidation = _validateOutgoingWithJsonSchemas(
-        payload,
+        sanitizedPayload,
         methodsById: methodsById,
       );
       if (schemaValidation == null) {
-        return Success(payload as Object);
+        return Success(sanitizedPayload as Object);
       }
       return _fallbackForInvalidOutgoingPayload(schemaValidation);
     }

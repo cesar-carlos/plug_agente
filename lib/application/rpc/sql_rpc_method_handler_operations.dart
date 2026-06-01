@@ -16,6 +16,7 @@ import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
@@ -475,7 +476,7 @@ class SqlRpcMethodHandlerOperations {
                 ),
               );
 
-              final resultData = {
+              final resultData = <String, dynamic>{
                 'stream_id': streamId,
                 'execution_id': normalized.id,
                 'started_at': _executionTimestampUtcIso(queryRequest.timestamp),
@@ -485,12 +486,12 @@ class SqlRpcMethodHandlerOperations {
                 'effective_max_rows': maxRows,
                 'rows': <Map<String, dynamic>>[],
                 'row_count': 0,
-                'affected_rows': normalized.affectedRows,
                 'returned_rows': rows.length,
                 if (wasTruncated) 'truncated': true,
                 if (normalized.columnMetadata != null) 'column_metadata': normalized.columnMetadata,
                 if (normalized.pagination != null) 'pagination': _buildPaginationResult(normalized.pagination!),
               };
+              RpcWireMap.putOptionalInt(resultData, 'affected_rows', normalized.affectedRows);
 
               return RpcResponse.success(id: request.id, result: resultData);
             }
@@ -1123,8 +1124,8 @@ class SqlRpcMethodHandlerOperations {
 
         final resultData = {
           'execution_id': _uuid.v4(),
-          'started_at': batchStartedAt.toIso8601String(),
-          'finished_at': batchFinishedAt.toIso8601String(),
+          'started_at': _executionTimestampUtcIso(batchStartedAt),
+          'finished_at': _executionTimestampUtcIso(batchFinishedAt),
           'items': items.map((r) => r.toJson()).toList(growable: false),
           'total_commands': commands.length,
           'successful_commands': items.where((r) => r.ok).length,
@@ -1266,8 +1267,8 @@ class SqlRpcMethodHandlerOperations {
           id: request.id,
           result: {
             'execution_id': _uuid.v4(),
-            'started_at': startedAt.toIso8601String(),
-            'finished_at': finishedAt.toIso8601String(),
+            'started_at': _executionTimestampUtcIso(startedAt),
+            'finished_at': _executionTimestampUtcIso(finishedAt),
             'table': bulkRequest.table,
             'row_count': bulkRequest.rowCount,
             'inserted_rows': insertedRows,
@@ -1972,9 +1973,7 @@ class SqlRpcMethodHandlerOperations {
       'row_count': limitedRows.length,
     };
 
-    if (response.affectedRows != null) {
-      resultData['affected_rows'] = response.affectedRows;
-    }
+    RpcWireMap.putOptionalInt(resultData, 'affected_rows', response.affectedRows);
     if (wasTruncated) {
       resultData['truncated'] = true;
     }
@@ -1999,13 +1998,14 @@ class SqlRpcMethodHandlerOperations {
     QueryResultSet resultSet, {
     bool includeIndex = true,
   }) {
-    return {
+    final payload = <String, dynamic>{
       if (includeIndex) 'index': resultSet.index,
       'rows': resultSet.rows,
       'row_count': resultSet.rowCount,
-      if (resultSet.affectedRows != null) 'affected_rows': resultSet.affectedRows,
       if (resultSet.columnMetadata != null) 'column_metadata': resultSet.columnMetadata,
     };
+    RpcWireMap.putOptionalInt(payload, 'affected_rows', resultSet.affectedRows);
+    return payload;
   }
 
   Map<String, dynamic> _buildResponseItemPayload(QueryResponseItem item) {
@@ -2017,11 +2017,12 @@ class SqlRpcMethodHandlerOperations {
         ..._buildResultSetPayload(item.resultSet!, includeIndex: false),
       };
     }
-    return {
+    final payload = <String, dynamic>{
       'type': 'row_count',
       'index': item.index,
-      'affected_rows': item.rowCount,
     };
+    RpcWireMap.putOptionalInt(payload, 'affected_rows', item.rowCount);
+    return payload;
   }
 
   QueryResponse _applyMaxRowsToMultiResultSets(

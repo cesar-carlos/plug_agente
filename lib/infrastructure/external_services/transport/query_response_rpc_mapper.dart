@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
@@ -15,49 +16,20 @@ abstract final class QueryResponseRpcMapper {
     final finishedAt = response.timestamp;
     final startedAt = response.startedAt ?? finishedAt;
 
-    return {
+    final result = <String, dynamic>{
       'execution_id': response.id,
-      'started_at': startedAt.toIso8601String(),
-      'finished_at': finishedAt.toIso8601String(),
+      'started_at': startedAt.toUtc().toIso8601String(),
+      'finished_at': finishedAt.toUtc().toIso8601String(),
       'rows': response.data,
       'row_count': response.data.length,
       if (response.wasTruncated) 'truncated': true,
-      if (response.affectedRows != null) 'affected_rows': response.affectedRows,
       if (response.columnMetadata != null) 'column_metadata': response.columnMetadata,
       if (response.hasMultiResult) ...{
         'multi_result': true,
         'result_set_count': response.resultSets.length,
         'item_count': response.items.length,
-        'result_sets': response.resultSets
-            .map(
-              (resultSet) => {
-                'index': resultSet.index,
-                'rows': resultSet.rows,
-                'row_count': resultSet.rowCount,
-                if (resultSet.affectedRows != null) 'affected_rows': resultSet.affectedRows,
-                if (resultSet.columnMetadata != null) 'column_metadata': resultSet.columnMetadata,
-              },
-            )
-            .toList(growable: false),
-        'items': response.items
-            .map(
-              (item) => item.resultSet != null
-                  ? {
-                      'type': 'result_set',
-                      'index': item.index,
-                      'result_set_index': item.resultSet!.index,
-                      'rows': item.resultSet!.rows,
-                      'row_count': item.resultSet!.rowCount,
-                      if (item.resultSet!.affectedRows != null) 'affected_rows': item.resultSet!.affectedRows,
-                      if (item.resultSet!.columnMetadata != null) 'column_metadata': item.resultSet!.columnMetadata,
-                    }
-                  : {
-                      'type': 'row_count',
-                      'index': item.index,
-                      'affected_rows': item.rowCount,
-                    },
-            )
-            .toList(growable: false),
+        'result_sets': response.resultSets.map(_resultSetToRpcMap).toList(growable: false),
+        'items': response.items.map(_responseItemToRpcMap).toList(growable: false),
       },
       if (response.pagination != null)
         'pagination': {
@@ -70,6 +42,41 @@ abstract final class QueryResponseRpcMapper {
           if (response.pagination!.nextCursor != null) 'next_cursor': response.pagination!.nextCursor,
         },
     };
+    RpcWireMap.putOptionalInt(result, 'affected_rows', response.affectedRows);
+    return result;
+  }
+
+  static Map<String, dynamic> _resultSetToRpcMap(QueryResultSet resultSet) {
+    final map = <String, dynamic>{
+      'index': resultSet.index,
+      'rows': resultSet.rows,
+      'row_count': resultSet.rowCount,
+      if (resultSet.columnMetadata != null) 'column_metadata': resultSet.columnMetadata,
+    };
+    RpcWireMap.putOptionalInt(map, 'affected_rows', resultSet.affectedRows);
+    return map;
+  }
+
+  static Map<String, dynamic> _responseItemToRpcMap(QueryResponseItem item) {
+    if (item.resultSet != null) {
+      final resultSet = item.resultSet!;
+      final map = <String, dynamic>{
+        'type': 'result_set',
+        'index': item.index,
+        'result_set_index': resultSet.index,
+        'rows': resultSet.rows,
+        'row_count': resultSet.rowCount,
+        if (resultSet.columnMetadata != null) 'column_metadata': resultSet.columnMetadata,
+      };
+      RpcWireMap.putOptionalInt(map, 'affected_rows', resultSet.affectedRows);
+      return map;
+    }
+    final map = <String, dynamic>{
+      'type': 'row_count',
+      'index': item.index,
+    };
+    RpcWireMap.putOptionalInt(map, 'affected_rows', item.rowCount);
+    return map;
   }
 
   /// Builds the full [RpcResponse] (success or error) for a [QueryResponse].

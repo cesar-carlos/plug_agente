@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/utils/json_primitive_coercion.dart';
 
 /// SQL command with optional parameters.
@@ -108,15 +109,16 @@ class SqlCommandResult {
   final List<Map<String, dynamic>>? columnMetadata;
 
   Map<String, dynamic> toJson() {
-    return {
+    final json = <String, dynamic>{
       'index': index,
       'ok': ok,
       if (rows != null) 'rows': rows,
-      if (rowCount != null) 'row_count': rowCount,
-      if (affectedRows != null) 'affected_rows': affectedRows,
       if (error != null) 'error': error,
       if (columnMetadata != null) 'column_metadata': columnMetadata,
     };
+    RpcWireMap.putOptionalInt(json, 'row_count', rowCount);
+    RpcWireMap.putOptionalInt(json, 'affected_rows', affectedRows);
+    return json;
   }
 }
 

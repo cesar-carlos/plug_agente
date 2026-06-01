@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
@@ -181,6 +182,59 @@ void main() {
       );
 
       expect(result.getOrThrow(), wire);
+    });
+
+    test('validateOutgoing sanitizes null optional fields before schema validation', () {
+      final now = DateTime.utc(2026).toIso8601String();
+      final response = RpcResponse.success(
+        id: 'req-1',
+        result: {
+          'stream_id': 'stream-1',
+          'execution_id': 'exec-1',
+          'started_at': now,
+          'finished_at': now,
+          'sql_handling_mode': 'managed',
+          'max_rows_handling': 'response_truncation',
+          'effective_max_rows': 500,
+          'rows': const <Map<String, dynamic>>[],
+          'row_count': 0,
+          'affected_rows': null,
+          'returned_rows': 600,
+        },
+      );
+      final wire = preparer.prepareForSend(response);
+
+      final validated =
+          preparer
+                  .validateOutgoing(
+                    wire,
+                    methodsById: const <Object?, String>{'req-1': 'sql.execute'},
+                  )
+                  .getOrThrow()
+              as Map<String, dynamic>;
+
+      final result = validated['result'] as Map<String, dynamic>;
+      expect(result.containsKey('affected_rows'), isFalse);
+      expect(validated['id'], 'req-1');
+    });
+
+    test('sanitizeRpcResponseWirePayload removes null affected_rows from wire', () {
+      final wire = <String, dynamic>{
+        'jsonrpc': '2.0',
+        'id': 'req-1',
+        'result': <String, dynamic>{
+          'execution_id': 'exec-1',
+          'started_at': DateTime.utc(2026).toIso8601String(),
+          'finished_at': DateTime.utc(2026).toIso8601String(),
+          'rows': const <Map<String, dynamic>>[],
+          'row_count': 0,
+          'affected_rows': null,
+        },
+      };
+
+      final sanitized = RpcWireMap.sanitizeRpcResponseWirePayload(wire) as Map<String, dynamic>;
+      final result = sanitized['result'] as Map<String, dynamic>;
+      expect(result.containsKey('affected_rows'), isFalse);
     });
   });
 

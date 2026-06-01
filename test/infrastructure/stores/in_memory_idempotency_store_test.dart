@@ -10,6 +10,27 @@ void main() {
       expect(await store.get('missing'), isNull);
     });
 
+    test('should strip null optional fields from cached result on read', () async {
+      final store = InMemoryIdempotencyStore();
+      await store.set(
+        'key-null-field',
+        RpcResponse.success(
+          id: 'req-1',
+          result: <String, dynamic>{
+            'row_count': 0,
+            'affected_rows': null,
+          },
+        ),
+        const Duration(minutes: 5),
+      );
+
+      final cached = await store.get('key-null-field');
+      final result = cached!.result as Map<String, dynamic>;
+
+      expect(result.containsKey('affected_rows'), isFalse);
+      expect(result['row_count'], 0);
+    });
+
     test('should return cached response within TTL', () async {
       final now = DateTime.utc(2026, 3, 12, 10);
       final store = InMemoryIdempotencyStore(

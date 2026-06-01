@@ -72,6 +72,29 @@ void main() {
     });
   });
 
+  group('RpcContractValidator sql.execute result optional fields', () {
+    test('should reject sql.execute result when affected_rows is null', () {
+      final payload = <String, dynamic>{
+        'jsonrpc': '2.0',
+        'id': 'r-null',
+        'result': <String, dynamic>{
+          'execution_id': 'e1',
+          'started_at': '2026-01-01T00:00:00Z',
+          'finished_at': '2026-01-01T00:00:01Z',
+          'rows': <Map<String, dynamic>>[],
+          'row_count': 0,
+          'affected_rows': null,
+        },
+      };
+
+      final result = validator.validateResponse(payload);
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull()!.toString(), contains('affected_rows'));
+      expect(result.exceptionOrNull()!.toString(), contains('must not be null'));
+    });
+  });
+
   group('RpcContractValidator validateStreamComplete terminal_status', () {
     test('should accept rpc:complete without terminal_status', () {
       final result = validator.validateStreamComplete(<String, dynamic>{

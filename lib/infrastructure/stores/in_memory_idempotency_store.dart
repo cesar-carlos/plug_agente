@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 
@@ -38,7 +39,7 @@ class InMemoryIdempotencyStore implements IIdempotencyStore {
     }
     _markAsRecentlyUsed(key, entry);
     return IdempotencyRecord(
-      response: entry.response,
+      response: RpcWireMap.sanitizeRpcResponse(entry.response),
       requestFingerprint: entry.requestFingerprint,
     );
   }

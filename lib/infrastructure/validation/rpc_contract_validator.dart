@@ -163,10 +163,15 @@ class RpcContractValidator {
       return _invalid('Field "rows" must contain objects only');
     }
 
-    final totalChunksRaw = data['total_chunks'];
-    final totalChunks = totalChunksRaw != null ? _toInt(totalChunksRaw) : null;
-    if (totalChunksRaw != null && (totalChunks == null || totalChunks < 1)) {
-      return _invalid('Field "total_chunks" must be >= 1');
+    if (data.containsKey('total_chunks')) {
+      final totalChunksRaw = data['total_chunks'];
+      if (totalChunksRaw == null) {
+        return _invalid('Field "total_chunks" must not be null when present');
+      }
+      final totalChunks = _toInt(totalChunksRaw);
+      if (totalChunks == null || totalChunks < 1) {
+        return _invalid('Field "total_chunks" must be >= 1');
+      }
     }
 
     final columnMetadata = data['column_metadata'];
@@ -191,12 +196,13 @@ class RpcContractValidator {
       return _invalid('Field "total_rows" must be >= 0');
     }
 
-    for (final key in ['affected_rows']) {
-      final raw = data[key];
-      final value = raw != null ? _toInt(raw) : null;
-      if (raw != null && (value == null || value < 0)) {
-        return _invalid('Field "$key" must be >= 0');
-      }
+    final affectedRowsValidation = _validateOptionalNonNegativeIntField(
+      data,
+      'affected_rows',
+      fieldPath: 'affected_rows',
+    );
+    if (affectedRowsValidation.isError()) {
+      return affectedRowsValidation;
     }
 
     for (final key in ['started_at', 'finished_at']) {
@@ -252,22 +258,32 @@ class RpcContractValidator {
     }
 
     for (final key in ['row_count', 'returned_rows', 'affected_rows']) {
-      final raw = result[key];
-      final value = raw != null ? _toInt(raw) : null;
-      if (raw != null && (value == null || value < 0)) {
-        return _invalid('Field "$key" must be >= 0');
+      final validation = _validateOptionalNonNegativeIntField(
+        result,
+        key,
+        fieldPath: key,
+      );
+      if (validation.isError()) {
+        return validation;
       }
     }
 
-    final multiResult = result['multi_result'];
-    if (multiResult != null && multiResult is! bool) {
-      return _invalid('Field "multi_result" must be a boolean');
+    final multiResultValidation = _validateOptionalBoolField(
+      result,
+      'multi_result',
+      fieldPath: 'multi_result',
+    );
+    if (multiResultValidation.isError()) {
+      return multiResultValidation;
     }
     for (final key in ['result_set_count', 'item_count']) {
-      final raw = result[key];
-      final value = raw != null ? _toInt(raw) : null;
-      if (raw != null && (value == null || value < 0)) {
-        return _invalid('Field "$key" must be >= 0');
+      final validation = _validateOptionalNonNegativeIntField(
+        result,
+        key,
+        fieldPath: key,
+      );
+      if (validation.isError()) {
+        return validation;
       }
     }
 
@@ -282,9 +298,13 @@ class RpcContractValidator {
       return _invalid('Field "column_metadata" must be an array of objects');
     }
 
-    final truncated = result['truncated'];
-    if (truncated != null && truncated is! bool) {
-      return _invalid('Field "truncated" must be a boolean');
+    final truncatedValidation = _validateOptionalBoolField(
+      result,
+      'truncated',
+      fieldPath: 'truncated',
+    );
+    if (truncatedValidation.isError()) {
+      return truncatedValidation;
     }
 
     for (final key in ['started_at', 'finished_at']) {
@@ -314,9 +334,13 @@ class RpcContractValidator {
         }
       }
       for (final key in ['current_cursor', 'next_cursor']) {
-        final value = pagination[key];
-        if (value != null && value is! String) {
-          return _invalid('Field "pagination.$key" must be a string');
+        final validation = _validateOptionalStringField(
+          pagination,
+          key,
+          fieldPath: 'pagination.$key',
+        );
+        if (validation.isError()) {
+          return validation;
         }
       }
     }
@@ -384,9 +408,13 @@ class RpcContractValidator {
     }
 
     for (final key in ['row_count', 'affected_rows']) {
-      final value = item[key];
-      if (value != null && (value is! int || value < 0)) {
-        return _invalid('Field "items[].$key" must be an integer >= 0');
+      final validation = _validateOptionalNonNegativeIntField(
+        item,
+        key,
+        fieldPath: 'items[].$key',
+      );
+      if (validation.isError()) {
+        return validation;
       }
     }
 
@@ -417,9 +445,13 @@ class RpcContractValidator {
     }
 
     for (final key in ['row_count', 'affected_rows']) {
-      final value = item[key];
-      if (value != null && (value is! int || value < 0)) {
-        return _invalid('Field "result_sets[].$key" must be >= 0');
+      final validation = _validateOptionalNonNegativeIntField(
+        item,
+        key,
+        fieldPath: 'result_sets[].$key',
+      );
+      if (validation.isError()) {
+        return validation;
       }
     }
 
@@ -450,11 +482,11 @@ class RpcContractValidator {
     }
 
     if (type == 'row_count') {
-      final affectedRows = item['affected_rows'];
-      if (affectedRows != null && (affectedRows is! int || affectedRows < 0)) {
-        return _invalid('Field "items[].affected_rows" must be >= 0');
-      }
-      return const Success(unit);
+      return _validateOptionalNonNegativeIntField(
+        item,
+        'affected_rows',
+        fieldPath: 'items[].affected_rows',
+      );
     }
 
     final resultSetIndex = item['result_set_index'];
@@ -507,6 +539,61 @@ class RpcContractValidator {
 
   bool _isNonEmptyString(dynamic value) {
     return value is String && value.trim().isNotEmpty;
+  }
+
+  Result<void> _validateOptionalNonNegativeIntField(
+    Map<String, dynamic> map,
+    String key, {
+    required String fieldPath,
+  }) {
+    if (!map.containsKey(key)) {
+      return const Success(unit);
+    }
+    final raw = map[key];
+    if (raw == null) {
+      return _invalid('Field "$fieldPath" must not be null when present');
+    }
+    final value = _toInt(raw);
+    if (value == null || value < 0) {
+      return _invalid('Field "$fieldPath" must be >= 0');
+    }
+    return const Success(unit);
+  }
+
+  Result<void> _validateOptionalBoolField(
+    Map<String, dynamic> map,
+    String key, {
+    required String fieldPath,
+  }) {
+    if (!map.containsKey(key)) {
+      return const Success(unit);
+    }
+    final raw = map[key];
+    if (raw == null) {
+      return _invalid('Field "$fieldPath" must not be null when present');
+    }
+    if (raw is! bool) {
+      return _invalid('Field "$fieldPath" must be a boolean');
+    }
+    return const Success(unit);
+  }
+
+  Result<void> _validateOptionalStringField(
+    Map<String, dynamic> map,
+    String key, {
+    required String fieldPath,
+  }) {
+    if (!map.containsKey(key)) {
+      return const Success(unit);
+    }
+    final raw = map[key];
+    if (raw == null) {
+      return _invalid('Field "$fieldPath" must not be null when present');
+    }
+    if (raw is! String) {
+      return _invalid('Field "$fieldPath" must be a string');
+    }
+    return const Success(unit);
   }
 
   Result<void> _invalid(String message) {
