@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/preferences_config_section.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
@@ -35,6 +36,7 @@ void main() {
     void Function(bool)? onCloseToTrayChanged,
     VoidCallback? onOpenStartupSettings,
     VoidCallback? onRepairStartupLaunchConfiguration,
+    VoidCallback? onCopyStartupDiagnostic,
     bool settle = true,
   }) async {
     await tester.pumpWidget(
@@ -64,6 +66,7 @@ void main() {
               onCloseToTrayChanged: onCloseToTrayChanged ?? (_) {},
               onOpenStartupSettings: onOpenStartupSettings ?? () {},
               onRepairStartupLaunchConfiguration: onRepairStartupLaunchConfiguration ?? () {},
+              onCopyStartupDiagnostic: onCopyStartupDiagnostic ?? () {},
             ),
           ),
         ),
@@ -247,20 +250,17 @@ void main() {
       expect(find.text(ptL10n.gsButtonOpenSettings), findsOneWidget);
     });
 
-    testWidgets('translates startupToggleFailed with detail using gsErrorWithDetail', (tester) async {
+    testWidgets('translates startupToggleFailed with localized failure hint', (tester) async {
       await pumpSection(
         tester,
         startupError: const SystemSettingsErrorState(
           code: SystemSettingsErrorCode.startupToggleFailed,
-          detail: 'Registry access denied',
+          startupFailureCode: StartupServiceFailureCode.accessDenied,
         ),
       );
 
-      final expected = ptL10n.gsErrorWithDetail(
-        ptL10n.gsErrorStartupToggleFailed,
-        'Registry access denied',
-      );
-      expect(find.text(expected), findsOneWidget);
+      expect(find.textContaining(ptL10n.gsErrorStartupToggleFailed), findsOneWidget);
+      expect(find.textContaining(ptL10n.gsStartupFailureAccessDenied), findsOneWidget);
     });
 
     testWidgets('translates startupServiceUnavailable', (tester) async {
@@ -336,28 +336,46 @@ void main() {
       expect(find.text(ptL10n.gsButtonRepairStartup), findsNothing);
     });
 
-    testWidgets('renders repair failed notice with repair action', (tester) async {
-      var tapped = false;
+    testWidgets('renders repair failed notice with repair and diagnostic actions', (tester) async {
+      var repairTapped = false;
+      var diagnosticTapped = false;
       await pumpSection(
         tester,
         startupNotice: const SystemSettingsNoticeState(
           code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-          detail: 'Access denied',
+          startupFailureCode: StartupServiceFailureCode.accessDenied,
         ),
-        onRepairStartupLaunchConfiguration: () => tapped = true,
+        onRepairStartupLaunchConfiguration: () => repairTapped = true,
+        onCopyStartupDiagnostic: () => diagnosticTapped = true,
       );
 
-      final expected = ptL10n.gsErrorWithDetail(
-        ptL10n.gsStartupLaunchConfigurationRepairFailed,
-        'Access denied',
-      );
-      expect(find.text(expected), findsOneWidget);
+      expect(find.textContaining(ptL10n.gsStartupLaunchConfigurationRepairFailed), findsOneWidget);
+      expect(find.textContaining(ptL10n.gsStartupFailureAccessDenied), findsOneWidget);
+      expect(find.text(ptL10n.gsButtonRepairStartup), findsOneWidget);
+      expect(find.text(ptL10n.gsButtonCopyStartupDiagnostic), findsOneWidget);
 
       await tester.tap(find.text(ptL10n.gsButtonRepairStartup));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
+      expect(repairTapped, isTrue);
 
-      expect(tapped, isTrue);
+      await tester.tap(find.text(ptL10n.gsButtonCopyStartupDiagnostic));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(diagnosticTapped, isTrue);
+    });
+
+    testWidgets('renders legacy machine entry notice as informational feedback', (tester) async {
+      await pumpSection(
+        tester,
+        startupNotice: const SystemSettingsNoticeState(
+          code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry,
+        ),
+      );
+
+      expect(find.text(ptL10n.gsStartupLaunchConfigurationRepairedWithLegacyEntry), findsOneWidget);
+      expect(find.byIcon(FluentIcons.info), findsOneWidget);
+      expect(find.text(ptL10n.gsButtonRepairStartup), findsOneWidget);
     });
 
     testWidgets('open settings button triggers callback', (tester) async {

@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
@@ -19,6 +20,7 @@ class PreferencesConfigSection extends StatelessWidget {
     required this.onCloseToTrayChanged,
     required this.onOpenStartupSettings,
     required this.onRepairStartupLaunchConfiguration,
+    required this.onCopyStartupDiagnostic,
     this.startupSupported = true,
     this.startMinimizedSupported = true,
     this.trayBehaviorSupported = true,
@@ -41,6 +43,7 @@ class PreferencesConfigSection extends StatelessWidget {
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onOpenStartupSettings;
   final VoidCallback onRepairStartupLaunchConfiguration;
+  final VoidCallback onCopyStartupDiagnostic;
   final bool startupSupported;
   final bool startMinimizedSupported;
   final bool trayBehaviorSupported;
@@ -52,10 +55,6 @@ class PreferencesConfigSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    // "Start minimized" only takes effect when the app is launched by the
-    // Windows auto-start entry, which exists only while "Start with Windows"
-    // is enabled. Gate the toggle on both tray support and startup being on,
-    // and explain the active constraint instead of leaving a dead setting.
     final startMinimizedEnabled = startMinimizedSupported && startWithWindows;
     final startMinimizedDescription = !startMinimizedSupported
         ? l10n.gsToggleStartMinimizedRequiresTray
@@ -108,12 +107,12 @@ class PreferencesConfigSection extends StatelessWidget {
                 message: _translateNotice(l10n, startupNotice!),
                 tone: _noticeTone(startupNotice!),
                 icon: _noticeIcon(startupNotice!),
-                actionLabel: startupNotice!.code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed
-                    ? l10n.gsButtonRepairStartup
+                actionLabel: _showsRepairAction(startupNotice!.code) ? l10n.gsButtonRepairStartup : null,
+                onAction: _showsRepairAction(startupNotice!.code) ? onRepairStartupLaunchConfiguration : null,
+                secondaryActionLabel: _showsDiagnosticAction(startupNotice!.code)
+                    ? l10n.gsButtonCopyStartupDiagnostic
                     : null,
-                onAction: startupNotice!.code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed
-                    ? onRepairStartupLaunchConfiguration
-                    : null,
+                onSecondaryAction: _showsDiagnosticAction(startupNotice!.code) ? onCopyStartupDiagnostic : null,
               ),
             ],
             const SizedBox(height: AppSpacing.md),
@@ -159,6 +158,8 @@ class _SystemSettingsFeedbackMessage extends StatelessWidget {
     required this.icon,
     this.actionLabel,
     this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
   });
 
   final String message;
@@ -166,12 +167,16 @@ class _SystemSettingsFeedbackMessage extends StatelessWidget {
   final IconData icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
     final feedbackColors = context.appColors.feedback(tone);
     final actionLabel = this.actionLabel;
     final onAction = this.onAction;
+    final secondaryActionLabel = this.secondaryActionLabel;
+    final onSecondaryAction = this.onSecondaryAction;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -183,6 +188,7 @@ class _SystemSettingsFeedbackMessage extends StatelessWidget {
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
@@ -207,10 +213,29 @@ class _SystemSettingsFeedbackMessage extends StatelessWidget {
               onPressed: onAction,
             ),
           ],
+          if (secondaryActionLabel != null && onSecondaryAction != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            AppButton(
+              label: secondaryActionLabel,
+              filledBackgroundColor: feedbackColors.background,
+              filledForegroundColor: feedbackColors.accent,
+              onPressed: onSecondaryAction,
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+bool _showsRepairAction(SystemSettingsNoticeCode code) {
+  return code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed ||
+      code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry;
+}
+
+bool _showsDiagnosticAction(SystemSettingsNoticeCode code) {
+  return code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed ||
+      code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry;
 }
 
 String _translateError(AppLocalizations l10n, SystemSettingsErrorState error) {
@@ -220,6 +245,9 @@ String _translateError(AppLocalizations l10n, SystemSettingsErrorState error) {
     SystemSettingsErrorCode.startupOpenSystemSettingsFailed => l10n.gsErrorStartupOpenSystemSettingsFailed,
     SystemSettingsErrorCode.settingsPersistenceFailed => l10n.gsErrorSettingsPersistenceFailed,
   };
+  if (error.code == SystemSettingsErrorCode.startupToggleFailed) {
+    return _appendStartupFailureHint(l10n, base, error.startupFailureCode);
+  }
   final detail = error.detail;
   if (detail == null || detail.trim().isEmpty) {
     return base;
@@ -232,12 +260,40 @@ String _translateNotice(AppLocalizations l10n, SystemSettingsNoticeState notice)
     SystemSettingsNoticeCode.startupLaunchConfigurationReady => l10n.gsStartupLaunchConfigurationReady,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => l10n.gsStartupLaunchConfigurationRepaired,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => l10n.gsStartupLaunchConfigurationRepairFailed,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry =>
+      l10n.gsStartupLaunchConfigurationRepairedWithLegacyEntry,
   };
-  final detail = notice.detail;
-  if (detail == null || detail.trim().isEmpty) {
+  final withHint = _appendStartupFailureHint(l10n, base, notice.startupFailureCode);
+  if (notice.code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed &&
+      notice.startupFailureCode == null) {
+    return '$withHint ${l10n.gsStartupFailureDuplicateEntryHint}';
+  }
+  return withHint;
+}
+
+String _appendStartupFailureHint(
+  AppLocalizations l10n,
+  String base,
+  StartupServiceFailureCode? failureCode,
+) {
+  final hint = _startupFailureHint(l10n, failureCode);
+  if (hint == null) {
     return base;
   }
-  return l10n.gsErrorWithDetail(base, detail);
+  return '$base $hint';
+}
+
+String? _startupFailureHint(AppLocalizations l10n, StartupServiceFailureCode? code) {
+  return switch (code) {
+    StartupServiceFailureCode.uacCancelled => l10n.gsStartupFailureUacCancelled,
+    StartupServiceFailureCode.accessDenied => l10n.gsStartupFailureAccessDenied,
+    StartupServiceFailureCode.registryDeleteFailed => l10n.gsStartupFailureRegistryDelete,
+    StartupServiceFailureCode.registryWriteFailed => l10n.gsStartupFailureRegistryWrite,
+    StartupServiceFailureCode.unknown ||
+    StartupServiceFailureCode.unsupportedPlatform ||
+    null =>
+      null,
+  };
 }
 
 AppFeedbackTone _noticeTone(SystemSettingsNoticeState notice) {
@@ -245,6 +301,7 @@ AppFeedbackTone _noticeTone(SystemSettingsNoticeState notice) {
     SystemSettingsNoticeCode.startupLaunchConfigurationReady => AppFeedbackTone.info,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => AppFeedbackTone.success,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => AppFeedbackTone.warning,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry => AppFeedbackTone.info,
   };
 }
 
@@ -253,5 +310,6 @@ IconData _noticeIcon(SystemSettingsNoticeState notice) {
     SystemSettingsNoticeCode.startupLaunchConfigurationReady => FluentIcons.info,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => FluentIcons.completed,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => FluentIcons.warning,
+    SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry => FluentIcons.info,
   };
 }

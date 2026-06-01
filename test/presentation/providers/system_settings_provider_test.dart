@@ -318,8 +318,26 @@ void main() {
 
       check(provider.lastError).isNotNull();
       check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupToggleFailed);
-      check(provider.lastError!.detail!).equals('Registry access denied');
+      check(provider.lastError!.startupFailureCode).equals(StartupServiceFailureCode.unknown);
       check(provider.startWithWindows).equals(false);
+    });
+
+    test('should run launch configuration repair after enabling startup', () async {
+      when(() => mockStartupService.enable()).thenAnswer((_) async => const Success(unit));
+      when(
+        () => mockStartupService.ensureLaunchConfiguration(),
+      ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
+
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await provider.setStartWithWindows(true);
+
+      verify(() => mockStartupService.enable()).called(1);
+      verify(() => mockStartupService.ensureLaunchConfiguration()).called(1);
+      check(provider.startWithWindows).equals(true);
     });
 
     test('should expose warning notice when automatic startup launch repair fails', () async {
@@ -342,7 +360,7 @@ void main() {
       check(provider.lastError).isNull();
       check(provider.startupNotice).isNotNull();
       check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed);
-      check(provider.startupNotice!.detail).equals('Missing launch argument');
+      check(provider.startupNotice!.startupFailureCode).equals(StartupServiceFailureCode.unknown);
     });
 
     test('should expose warning notice when automatic startup launch repair throws', () async {
@@ -363,7 +381,7 @@ void main() {
       check(provider.lastError).isNull();
       check(provider.startupNotice).isNotNull();
       check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed);
-      check(provider.startupNotice!.detail!).contains('repair failed unexpectedly');
+      check(provider.startupNotice!.detail).isNull();
     });
 
     test('should expose repaired notice when automatic startup launch repair succeeds', () async {
@@ -421,7 +439,11 @@ void main() {
       check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepaired);
     });
 
-    test('should expose ready notice when startup launch repair is already valid', () async {
+    test('should clear notice when startup launch repair finds healthy configuration', () async {
+      when(
+        () => mockStartupService.ensureLaunchConfiguration(),
+      ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.unchanged));
+
       final provider = SystemSettingsProvider(
         prefs,
         startupService: mockStartupService,
@@ -429,8 +451,7 @@ void main() {
 
       await provider.repairStartupLaunchConfiguration();
 
-      check(provider.startupNotice).isNotNull();
-      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationReady);
+      check(provider.startupNotice).isNull();
     });
 
     test('should keep startMinimized unchanged when persistence fails', () async {
@@ -522,7 +543,7 @@ void main() {
       check(provider.lastError).isNotNull();
       check(provider.startupError).isNotNull();
       check(provider.lastError!.code).equals(SystemSettingsErrorCode.startupOpenSystemSettingsFailed);
-      check(provider.lastError!.detail!).equals('Cannot launch shell');
+      check(provider.lastError!.detail).isNull();
     });
 
     test(

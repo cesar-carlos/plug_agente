@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 
 /// Tipo de erro emitido pelo `SystemSettingsProvider`. Cada caso mapeia para
 /// uma chave ARB na camada de apresentação, mantendo o provider livre de
@@ -24,6 +25,7 @@ enum SystemSettingsNoticeCode {
   startupLaunchConfigurationReady,
   startupLaunchConfigurationRepaired,
   startupLaunchConfigurationRepairFailed,
+  startupLaunchConfigurationRepairedWithLegacyEntry,
 }
 
 /// Estado de erro estruturado exposto pelo `SystemSettingsProvider`.
@@ -36,19 +38,24 @@ class SystemSettingsErrorState {
   const SystemSettingsErrorState({
     required this.code,
     this.detail,
+    this.startupFailureCode,
   });
 
   final SystemSettingsErrorCode code;
   final String? detail;
+  final StartupServiceFailureCode? startupFailureCode;
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is SystemSettingsErrorState && other.code == code && other.detail == detail;
+    return other is SystemSettingsErrorState &&
+        other.code == code &&
+        other.detail == detail &&
+        other.startupFailureCode == startupFailureCode;
   }
 
   @override
-  int get hashCode => Object.hash(code, detail);
+  int get hashCode => Object.hash(code, detail, startupFailureCode);
 
   @override
   String toString() => 'SystemSettingsErrorState(code: $code, detail: $detail)';
@@ -59,19 +66,24 @@ class SystemSettingsNoticeState {
   const SystemSettingsNoticeState({
     required this.code,
     this.detail,
+    this.startupFailureCode,
   });
 
   final SystemSettingsNoticeCode code;
   final String? detail;
+  final StartupServiceFailureCode? startupFailureCode;
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is SystemSettingsNoticeState && other.code == code && other.detail == detail;
+    return other is SystemSettingsNoticeState &&
+        other.code == code &&
+        other.detail == detail &&
+        other.startupFailureCode == startupFailureCode;
   }
 
   @override
-  int get hashCode => Object.hash(code, detail);
+  int get hashCode => Object.hash(code, detail, startupFailureCode);
 
   @override
   String toString() => 'SystemSettingsNoticeState(code: $code, detail: $detail)';

@@ -4,6 +4,7 @@ enum StartupLaunchConfigurationStatus {
   unchanged,
   repaired,
   needsRepair,
+  repairedWithLegacyMachineEntry,
 }
 
 abstract interface class IStartupService {
@@ -18,4 +19,6 @@ abstract interface class IStartupService {
   Future<Result<Unit>> disable();
 
   Future<Result<Unit>> openSystemSettings();
+
+  Future<Result<String>> buildStartupDiagnosticReport();
 }

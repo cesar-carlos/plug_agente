@@ -3523,6 +3523,28 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gsStartupLaunchConfigurationRepairFailed => 'Entrada de inicialização precisa de reparo';
 
   @override
+  String get gsStartupLaunchConfigurationRepairedWithLegacyEntry =>
+      'Inicialização ativa. Não foi possível remover uma entrada legada do instalador; pode ser necessário administrador.';
+
+  @override
+  String get gsStartupFailureUacCancelled => 'Autorização de administrador cancelada.';
+
+  @override
+  String get gsStartupFailureAccessDenied => 'Permissão de administrador necessária.';
+
+  @override
+  String get gsStartupFailureRegistryDelete => 'Não foi possível remover a entrada legada de inicialização.';
+
+  @override
+  String get gsStartupFailureRegistryWrite => 'Não foi possível gravar a entrada de inicialização.';
+
+  @override
+  String get gsStartupFailureDuplicateEntryHint => 'Pode existir uma entrada antiga do instalador duplicada.';
+
+  @override
+  String get gsButtonCopyStartupDiagnostic => 'Copiar diagnóstico';
+
+  @override
   String get gsErrorStartupToggleFailed => 'Falha ao alterar configuração de inicialização';
 
   @override

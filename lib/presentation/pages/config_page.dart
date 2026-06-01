@@ -589,6 +589,9 @@ class _ConfigPageState extends State<ConfigPage> {
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,
             onOpenStartupSettings: systemSettingsProvider.openStartupSettings,
             onRepairStartupLaunchConfiguration: systemSettingsProvider.repairStartupLaunchConfiguration,
+            onCopyStartupDiagnostic: () {
+              unawaited(systemSettingsProvider.copyStartupDiagnosticToClipboard());
+            },
             onCheckUpdates: _checkUpdates,
             onCheckAutomaticUpdates: _checkAutomaticUpdatesNow,
             onCopyUpdateDiagnostics: _copyUpdateDiagnostics,
@@ -641,6 +644,7 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.onCloseToTrayChanged,
     required this.onOpenStartupSettings,
     required this.onRepairStartupLaunchConfiguration,
+    required this.onCopyStartupDiagnostic,
     required this.onCheckUpdates,
     required this.onCheckAutomaticUpdates,
     required this.onCopyUpdateDiagnostics,
@@ -685,6 +689,7 @@ class _ConfigTabbedContent extends StatefulWidget {
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onOpenStartupSettings;
   final VoidCallback onRepairStartupLaunchConfiguration;
+  final VoidCallback onCopyStartupDiagnostic;
   final VoidCallback onCheckUpdates;
   final VoidCallback onCheckAutomaticUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
@@ -735,6 +740,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             onCloseToTrayChanged: widget.onCloseToTrayChanged,
             onOpenStartupSettings: widget.onOpenStartupSettings,
             onRepairStartupLaunchConfiguration: widget.onRepairStartupLaunchConfiguration,
+            onCopyStartupDiagnostic: widget.onCopyStartupDiagnostic,
           ),
         ),
         AppFluentTabItem(

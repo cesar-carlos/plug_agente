@@ -7,7 +7,6 @@ import 'package:plug_agente/application/rpc/agent_action_rpc_method_handler_oper
 import 'package:plug_agente/application/rpc/agent_metadata_rpc_method_handler_operations.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_idempotency_coordinator.dart';
-import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_method_handler_operations.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
@@ -29,6 +28,7 @@ import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
+import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';

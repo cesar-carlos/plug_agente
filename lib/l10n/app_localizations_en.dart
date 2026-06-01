@@ -3515,6 +3515,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gsStartupLaunchConfigurationRepairFailed => 'Startup entry needs repair';
 
   @override
+  String get gsStartupLaunchConfigurationRepairedWithLegacyEntry =>
+      'Startup is active. A legacy installer entry could not be removed; administrator approval may be required.';
+
+  @override
+  String get gsStartupFailureUacCancelled => 'Administrator authorization was cancelled.';
+
+  @override
+  String get gsStartupFailureAccessDenied => 'Administrator permission is required.';
+
+  @override
+  String get gsStartupFailureRegistryDelete => 'Could not remove the legacy startup entry.';
+
+  @override
+  String get gsStartupFailureRegistryWrite => 'Could not write the startup entry.';
+
+  @override
+  String get gsStartupFailureDuplicateEntryHint => 'A duplicate legacy installer entry may exist.';
+
+  @override
+  String get gsButtonCopyStartupDiagnostic => 'Copy diagnostic';
+
+  @override
   String get gsErrorStartupToggleFailed => 'Failed to change startup configuration';
 
   @override

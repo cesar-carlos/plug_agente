@@ -36,6 +36,16 @@ Em modo degradado, recursos de desktop podem ficar indisponíveis, como tray,
 notificações locais e auto-update. O core do agente, ODBC, Socket.IO e
 Playground SQL devem continuar funcionando quando o runtime permitir.
 
+## Inicialização com o Windows
+
+- Instalações novas gravam a entrada de auto-start em **HKCU** (por usuário),
+  alinhado ao aplicativo.
+- Upgrades de instalações antigas podem deixar uma entrada legada em **HKLM** ou
+  **WOW6432Node**; o app oferece reparo nas preferências e pode solicitar UAC
+  **uma vez** para remover a duplicata.
+- Windows Server 2016 ou superior segue suportado; Server 2012 / 2012 R2
+  permanecem fora do escopo do instalador.
+
 ## ODBC
 
 O Plug Agente usa ODBC para conectar aos bancos locais. Instale o driver ODBC

@@ -28,7 +28,7 @@ abstract final class RpcWireMap {
   /// Removes entries whose value is `null` from [source] and nested maps/lists.
   static Map<String, dynamic> omitNullEntriesDeep(Map<String, dynamic> source) {
     final sanitized = <String, dynamic>{};
-    for (final MapEntry<String, dynamic> entry in source.entries) {
+    for (final entry in source.entries) {
       final value = entry.value;
       if (value == null) {
         continue;

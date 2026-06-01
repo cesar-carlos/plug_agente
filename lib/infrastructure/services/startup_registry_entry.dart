@@ -2,19 +2,38 @@ import 'package:plug_agente/core/utils/launch_args.dart';
 
 enum StartupRegistryScope {
   currentUser,
-  localMachine;
+  localMachine,
+  localMachineWow6432;
 
   String get runKeyPath => switch (this) {
     StartupRegistryScope.currentUser => r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run',
     StartupRegistryScope.localMachine => r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run',
+    StartupRegistryScope.localMachineWow6432 =>
+      r'HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run',
   };
 
-  bool get requiresElevation => this == StartupRegistryScope.localMachine;
+  String get powershellLiteralPath => switch (this) {
+    StartupRegistryScope.currentUser => r'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
+    StartupRegistryScope.localMachine => r'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
+    StartupRegistryScope.localMachineWow6432 =>
+      r'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run',
+  };
+
+  bool get requiresElevation =>
+      this == StartupRegistryScope.localMachine || this == StartupRegistryScope.localMachineWow6432;
+
+  bool get isMachineScope => requiresElevation;
 
   String get label => switch (this) {
     StartupRegistryScope.currentUser => 'HKCU',
     StartupRegistryScope.localMachine => 'HKLM',
+    StartupRegistryScope.localMachineWow6432 => 'HKLM_WOW64',
   };
+
+  static Iterable<StartupRegistryScope> get machineScopes => [
+    StartupRegistryScope.localMachine,
+    StartupRegistryScope.localMachineWow6432,
+  ];
 }
 
 class StartupRegistryEntry {
@@ -120,6 +139,10 @@ class StartupRegistryEntry {
     }
     return trimmed.substring(whitespaceMatch.end).trim();
   }
+}
+
+String normalizeStartupExecutablePath(String value) {
+  return _normalizeExecutablePath(value);
 }
 
 String _normalizeExecutablePath(String value) {

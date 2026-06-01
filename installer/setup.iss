@@ -42,7 +42,7 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"; Flags: unchecked
+Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Excludes: "*.pdb,*.ilk,*.exp,*.lib,*.log"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -57,12 +57,10 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldLaunchAfterSilentUpdate
 
 [Registry]
-; HKA maps to HKLM for /ALLUSERS installs (default, admin) and to HKCU for
-; /CURRENTUSER installs (silent update reinstall path without admin), so the
-; autostart entry never tries to write to HKLM without privileges. The silent
-; update flow passes /MERGETASKS="!desktopicon,!startup" so this Task is not
-; reprocessed by auto-update; the original install's value is preserved.
-Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
+; Per-user Run key only, aligned with the app's AutoStartService (HKCU). Avoids
+; duplicate HKLM entries that require UAC to clean up. Silent update passes
+; /MERGETASKS="!desktopicon,!startup" so this Task is not reprocessed.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
 
 [UninstallDelete]
 Type: dirifempty; Name: "{commonappdata}\PlugAgente"

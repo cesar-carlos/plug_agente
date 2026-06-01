@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
+import 'package:result_dart/result_dart.dart';
 
 /// Resultado emitido após uma alteração de inicialização automática. Permite
 /// que a UI apresente feedback de sucesso de forma desacoplada do provider.
@@ -136,38 +138,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       if (_isDisposed) {
         return;
       }
-      result.fold(
-        (status) {
-          if (status == StartupLaunchConfigurationStatus.repaired) {
-            _startupError = null;
-            _startupNotice = const SystemSettingsNoticeState(
-              code: SystemSettingsNoticeCode.startupLaunchConfigurationRepaired,
-            );
-            _notifyIfActive();
-            return;
-          }
-          if (status == StartupLaunchConfigurationStatus.needsRepair) {
-            _startupError = null;
-            _startupNotice = const SystemSettingsNoticeState(
-              code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-            );
-            _notifyIfActive();
-          }
-        },
-        (failure) {
-          developer.log(
-            'Failed to repair startup launch configuration: $failure',
-            name: 'system_settings_provider',
-            level: 900,
-          );
-          _startupError = null;
-          _startupNotice = SystemSettingsNoticeState(
-            code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-            detail: failure is StartupServiceFailure ? failure.message : null,
-          );
-          _notifyIfActive();
-        },
-      );
+      _mapLaunchConfigurationResult(result);
     } on Object catch (error, stackTrace) {
       developer.log(
         'Startup launch configuration validation threw',
@@ -180,12 +151,87 @@ class SystemSettingsProvider extends ChangeNotifier {
         return;
       }
       _startupError = null;
-      _startupNotice = SystemSettingsNoticeState(
+      _startupNotice = const SystemSettingsNoticeState(
         code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-        detail: error.toString(),
       );
       _notifyIfActive();
     }
+  }
+
+  void _mapLaunchConfigurationResult(Result<StartupLaunchConfigurationStatus> result) {
+    result.fold(
+      (status) {
+        _startupError = null;
+        final notice = _noticeForLaunchConfigurationStatus(status);
+        if (notice == null) {
+          _startupNotice = null;
+        } else {
+          _startupNotice = notice;
+        }
+        _notifyIfActive();
+      },
+      (failure) {
+        developer.log(
+          'Startup launch configuration failed: $failure',
+          name: 'system_settings_provider',
+          level: 900,
+        );
+        _startupError = null;
+        _startupNotice = _noticeForLaunchConfigurationFailure(failure);
+        _notifyIfActive();
+      },
+    );
+  }
+
+  SystemSettingsNoticeState? _noticeForLaunchConfigurationStatus(
+    StartupLaunchConfigurationStatus status,
+  ) {
+    return switch (status) {
+      StartupLaunchConfigurationStatus.unchanged => null,
+      StartupLaunchConfigurationStatus.repaired => const SystemSettingsNoticeState(
+        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepaired,
+      ),
+      StartupLaunchConfigurationStatus.needsRepair => const SystemSettingsNoticeState(
+        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
+      ),
+      StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry => const SystemSettingsNoticeState(
+        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry,
+      ),
+    };
+  }
+
+  SystemSettingsNoticeState _noticeForLaunchConfigurationFailure(Object failure) {
+    if (failure is StartupServiceFailure) {
+      developer.log(
+        failure.message,
+        name: 'system_settings_provider',
+        level: 900,
+      );
+      return SystemSettingsNoticeState(
+        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
+        startupFailureCode: failure.code,
+      );
+    }
+    return const SystemSettingsNoticeState(
+      code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
+    );
+  }
+
+  SystemSettingsErrorState _errorForStartupFailure(Object failure) {
+    if (failure is StartupServiceFailure) {
+      developer.log(
+        failure.message,
+        name: 'system_settings_provider',
+        level: 900,
+      );
+      return SystemSettingsErrorState(
+        code: SystemSettingsErrorCode.startupToggleFailed,
+        startupFailureCode: failure.code,
+      );
+    }
+    return const SystemSettingsErrorState(
+      code: SystemSettingsErrorCode.startupToggleFailed,
+    );
   }
 
   bool get startWithWindows => _startWithWindows;
@@ -231,10 +277,7 @@ class SystemSettingsProvider extends ChangeNotifier {
             level: 900,
           );
 
-          _startupError = SystemSettingsErrorState(
-            code: SystemSettingsErrorCode.startupToggleFailed,
-            detail: failure is StartupServiceFailure ? failure.message : null,
-          );
+          _startupError = _errorForStartupFailure(failure);
           _notifyIfActive();
 
           return false;
@@ -243,6 +286,14 @@ class SystemSettingsProvider extends ChangeNotifier {
 
       if (!success) {
         return null;
+      }
+
+      if (value) {
+        final repairResult = await startupService.ensureLaunchConfiguration();
+        if (_isDisposed) {
+          return null;
+        }
+        _mapLaunchConfigurationResult(repairResult);
       }
     }
 
@@ -286,25 +337,37 @@ class SystemSettingsProvider extends ChangeNotifier {
     if (_isDisposed) {
       return;
     }
-    result.fold(
-      (status) {
-        _startupError = null;
-        _startupNotice = SystemSettingsNoticeState(
-          code: switch (status) {
-            StartupLaunchConfigurationStatus.repaired => SystemSettingsNoticeCode.startupLaunchConfigurationRepaired,
-            StartupLaunchConfigurationStatus.unchanged => SystemSettingsNoticeCode.startupLaunchConfigurationReady,
-            StartupLaunchConfigurationStatus.needsRepair =>
-              SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-          },
+    _mapLaunchConfigurationResult(result);
+  }
+
+  Future<bool> copyStartupDiagnosticToClipboard() async {
+    final startupService = _startupService;
+    if (startupService == null) {
+      return false;
+    }
+
+    final result = await startupService.buildStartupDiagnosticReport();
+    if (_isDisposed) {
+      return false;
+    }
+
+    return result.fold(
+      (report) async {
+        await Clipboard.setData(ClipboardData(text: report));
+        developer.log(
+          'Startup diagnostic copied to clipboard',
+          name: 'system_settings_provider',
+          level: 800,
         );
-        _notifyIfActive();
+        return true;
       },
       (failure) {
-        _startupNotice = SystemSettingsNoticeState(
-          code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-          detail: failure is StartupServiceFailure ? failure.message : null,
+        developer.log(
+          'Failed to build startup diagnostic: $failure',
+          name: 'system_settings_provider',
+          level: 900,
         );
-        _notifyIfActive();
+        return false;
       },
     );
   }
@@ -334,8 +397,15 @@ class SystemSettingsProvider extends ChangeNotifier {
       (failure) {
         _startupError = SystemSettingsErrorState(
           code: SystemSettingsErrorCode.startupOpenSystemSettingsFailed,
-          detail: failure is StartupServiceFailure ? failure.message : null,
+          startupFailureCode: failure is StartupServiceFailure ? failure.code : null,
         );
+        if (failure is StartupServiceFailure) {
+          developer.log(
+            failure.message,
+            name: 'system_settings_provider',
+            level: 900,
+          );
+        }
         _notifyIfActive();
       },
     );

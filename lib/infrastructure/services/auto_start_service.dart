@@ -5,6 +5,7 @@ import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
+import 'package:plug_agente/infrastructure/services/windows_elevated_registry_executor.dart';
 import 'package:result_dart/result_dart.dart';
 
 typedef ProcessRunner =
@@ -30,17 +31,20 @@ class AutoStartService implements IStartupService {
     DetachedProcessStarter? processStarter,
     WindowsPlatformResolver? isWindows,
     ExecutablePathProvider? executablePathProvider,
+    WindowsElevatedRegistryExecutor? elevatedRegistryExecutor,
   }) : _processRunner = processRunner ?? Process.run,
        _processStarter = processStarter ?? _defaultProcessStarter,
        _isWindows = isWindows ?? (() => Platform.isWindows),
-       _executablePathProvider = executablePathProvider ?? (() => Platform.resolvedExecutable);
+       _executablePathProvider = executablePathProvider ?? (() => Platform.resolvedExecutable),
+       _elevatedRegistryExecutor = elevatedRegistryExecutor ?? WindowsElevatedRegistryExecutor(processRunner: processRunner);
 
-  static const String _runValueName = 'Plug Agente';
+  static const String runValueName = 'Plug Agente';
 
   final ProcessRunner _processRunner;
   final DetachedProcessStarter _processStarter;
   final WindowsPlatformResolver _isWindows;
   final ExecutablePathProvider _executablePathProvider;
+  final WindowsElevatedRegistryExecutor _elevatedRegistryExecutor;
 
   @override
   Future<Result<bool>> isEnabled() async {
@@ -85,34 +89,7 @@ class AutoStartService implements IStartupService {
     }
 
     try {
-      final queryResults = await _queryStartupRegistry();
-      final existingEntries = queryResults.where((result) => result.exists).toList();
-      if (existingEntries.isEmpty) {
-        return const Success(StartupLaunchConfigurationStatus.unchanged);
-      }
-
-      if (!_needsRepair(existingEntries)) {
-        return const Success(StartupLaunchConfigurationStatus.unchanged);
-      }
-
-      if (!allowElevation) {
-        developer.log(
-          'Auto-start entry needs repair, but elevation is disabled for this validation pass.',
-          name: 'startup_service',
-          level: 800,
-        );
-        return const Success(StartupLaunchConfigurationStatus.needsRepair);
-      }
-      developer.log(
-        'Auto-start entry is stale, duplicated, or missing launch arguments. Repairing.',
-        name: 'startup_service',
-        level: 800,
-      );
-      final repairResult = await _repairStartupEntries(existingEntries);
-      return repairResult.fold(
-        (_) => const Success(StartupLaunchConfigurationStatus.repaired),
-        Failure.new,
-      );
+      return _evaluateLaunchConfiguration(allowElevation: allowElevation);
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to validate auto-start launch configuration',
@@ -130,12 +107,48 @@ class AutoStartService implements IStartupService {
     }
   }
 
+  Future<Result<StartupLaunchConfigurationStatus>> _evaluateLaunchConfiguration({
+    required bool allowElevation,
+  }) async {
+    final queryResults = await _queryStartupRegistry();
+    final existingEntries = queryResults.where((result) => result.exists).toList();
+    if (existingEntries.isEmpty) {
+      return const Success(StartupLaunchConfigurationStatus.unchanged);
+    }
+
+    if (!_needsRepair(existingEntries)) {
+      return const Success(StartupLaunchConfigurationStatus.unchanged);
+    }
+
+    if (!allowElevation) {
+      developer.log(
+        'Auto-start entry needs repair, but elevation is disabled for this validation pass.',
+        name: 'startup_service',
+        level: 800,
+      );
+      return const Success(StartupLaunchConfigurationStatus.needsRepair);
+    }
+
+    developer.log(
+      'Auto-start entry is stale, duplicated, or missing launch arguments. Repairing.',
+      name: 'startup_service',
+      level: 800,
+    );
+
+    final repairResult = await _repairStartupEntries(existingEntries);
+    return repairResult.fold(
+      Success.new,
+      Failure.new,
+    );
+  }
+
   @override
   Future<Result<Unit>> enable() async {
     if (!_isWindows()) {
       return const Failure(
         StartupServiceFailure(
           message: 'Auto-start is not supported on this platform.',
+          code: StartupServiceFailureCode.unsupportedPlatform,
         ),
       );
     }
@@ -180,7 +193,10 @@ class AutoStartService implements IStartupService {
     }
 
     try {
-      for (final scope in StartupRegistryScope.values) {
+      final queryResults = await _queryStartupRegistry();
+      final existingScopes = queryResults.where((result) => result.exists).map((result) => result.scope);
+
+      for (final scope in existingScopes) {
         final deleteResult = await _deleteStartupEntry(scope);
         if (deleteResult.isError()) {
           return deleteResult;
@@ -246,6 +262,61 @@ class AutoStartService implements IStartupService {
     }
   }
 
+  @override
+  Future<Result<String>> buildStartupDiagnosticReport() async {
+    if (!_isWindows()) {
+      return const Failure(
+        StartupServiceFailure(
+          message: 'Startup diagnostics are only available on Windows.',
+          code: StartupServiceFailureCode.unsupportedPlatform,
+        ),
+      );
+    }
+
+    try {
+      final expectedExecutable = _executablePathProvider();
+      final queryResults = await _queryStartupRegistry();
+      final buffer = StringBuffer('Plug Agente startup diagnostic\n')
+        ..writeln('Expected executable: $expectedExecutable')
+        ..writeln('Expected autostart arg: ${AppStrings.singleInstanceArgAutostart}')
+        ..writeln();
+
+      for (final result in queryResults) {
+        buffer
+          ..writeln('Scope: ${result.scope.label}')
+          ..writeln('  Exists: ${result.exists}');
+        final entry = result.entry;
+        if (entry != null) {
+          buffer
+            ..writeln('  Executable: ${entry.executablePath}')
+            ..writeln('  Has autostart arg: ${entry.hasAutostartArgument}')
+            ..writeln('  Healthy for current exe: ${entry.isHealthyFor(expectedExecutable)}')
+            ..writeln('  Raw value: ${entry.rawValue}');
+        }
+        buffer.writeln();
+      }
+
+      final existing = queryResults.where((result) => result.exists).toList();
+      buffer.writeln('Needs repair: ${_needsRepair(existing)}');
+
+      return Success(buffer.toString().trimRight());
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to build startup diagnostic report',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        StartupServiceFailure(
+          message: 'Failed to build startup diagnostic report',
+          cause: error,
+        ),
+      );
+    }
+  }
+
   Future<List<_StartupRegistryQueryResult>> _queryStartupRegistry() async {
     final results = <_StartupRegistryQueryResult>[];
     for (final scope in StartupRegistryScope.values) {
@@ -253,7 +324,7 @@ class AutoStartService implements IStartupService {
         'query',
         scope.runKeyPath,
         '/v',
-        _runValueName,
+        runValueName,
       ]);
       final output = '${result.stdout}\n${result.stderr}';
       results.add(
@@ -263,7 +334,7 @@ class AutoStartService implements IStartupService {
           entry: result.exitCode == 0
               ? StartupRegistryEntry.tryParse(
                   scope: scope,
-                  valueName: _runValueName,
+                  valueName: runValueName,
                   output: output,
                 )
               : null,
@@ -283,30 +354,87 @@ class AutoStartService implements IStartupService {
     return existingEntries.length != 1 || healthyEntries.length != 1;
   }
 
-  Future<Result<Unit>> _repairStartupEntries(
+  bool _hasHealthyCurrentUserEntry(List<_StartupRegistryQueryResult> entries) {
+    final expectedExecutable = _executablePathProvider();
+    return entries.any(
+      (result) =>
+          result.scope == StartupRegistryScope.currentUser &&
+          (result.entry?.isHealthyFor(expectedExecutable) ?? false),
+    );
+  }
+
+  Future<Result<StartupLaunchConfigurationStatus>> _repairStartupEntries(
     List<_StartupRegistryQueryResult> existingEntries,
   ) async {
-    final expectedExecutable = _executablePathProvider();
-    final hasHealthyCurrentUserEntry = existingEntries.any(
-      (result) =>
-          result.scope == StartupRegistryScope.currentUser && (result.entry?.isHealthyFor(expectedExecutable) ?? false),
-    );
+    final hasHealthyCurrentUserEntry = _hasHealthyCurrentUserEntry(existingEntries);
 
     if (!hasHealthyCurrentUserEntry) {
       final writeResult = await _writeStartupEntry(StartupRegistryScope.currentUser);
       if (writeResult.isError()) {
-        return writeResult;
+        return Failure(writeResult.exceptionOrNull()! as StartupServiceFailure);
       }
     }
 
-    if (existingEntries.any((result) => result.scope == StartupRegistryScope.localMachine)) {
-      final deleteResult = await _deleteStartupEntry(StartupRegistryScope.localMachine);
+    var legacyMachineEntryRemains = false;
+    for (final scope in StartupRegistryScope.machineScopes) {
+      final hasMachineEntry = existingEntries.any((result) => result.scope == scope);
+      if (!hasMachineEntry) {
+        continue;
+      }
+
+      final deleteResult = await _deleteStartupEntry(scope);
       if (deleteResult.isError()) {
-        return deleteResult;
+        if (_hasHealthyCurrentUserEntry(existingEntries) ||
+            await _hasHealthyCurrentUserEntryAfterQuery()) {
+          legacyMachineEntryRemains = true;
+          developer.log(
+            'Could not remove legacy machine startup entry (${scope.label}); HKCU entry is healthy.',
+            name: 'startup_service',
+            level: 800,
+          );
+          continue;
+        }
+        return Failure(deleteResult.exceptionOrNull()! as StartupServiceFailure);
       }
     }
 
-    return const Success(unit);
+    final postRepairStatus = await _resolveStatusAfterRepair(legacyMachineEntryRemains: legacyMachineEntryRemains);
+    return Success(postRepairStatus);
+  }
+
+  Future<bool> _hasHealthyCurrentUserEntryAfterQuery() async {
+    final queryResults = await _queryStartupRegistry();
+    final existingEntries = queryResults.where((result) => result.exists).toList();
+    return _hasHealthyCurrentUserEntry(existingEntries);
+  }
+
+  Future<StartupLaunchConfigurationStatus> _resolveStatusAfterRepair({
+    required bool legacyMachineEntryRemains,
+  }) async {
+    final validation = await _evaluateLaunchConfiguration(allowElevation: false);
+    return validation.fold(
+      (status) {
+        if (status == StartupLaunchConfigurationStatus.needsRepair) {
+          if (legacyMachineEntryRemains) {
+            return StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry;
+          }
+          return StartupLaunchConfigurationStatus.needsRepair;
+        }
+        if (legacyMachineEntryRemains && status == StartupLaunchConfigurationStatus.unchanged) {
+          return StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry;
+        }
+        if (status == StartupLaunchConfigurationStatus.unchanged) {
+          return StartupLaunchConfigurationStatus.repaired;
+        }
+        return status;
+      },
+      (_) {
+        if (legacyMachineEntryRemains) {
+          return StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry;
+        }
+        return StartupLaunchConfigurationStatus.repaired;
+      },
+    );
   }
 
   Future<Result<Unit>> _writeStartupEntry(StartupRegistryScope scope) async {
@@ -314,20 +442,41 @@ class AutoStartService implements IStartupService {
         '"${_executablePathProvider()}" '
         '"${AppStrings.singleInstanceArgAutostart}"';
 
-    final result = await _runRegCommandWithUacFallback(
-      <String>[
-        'add',
-        scope.runKeyPath,
-        '/v',
-        _runValueName,
-        '/t',
-        'REG_SZ',
-        '/d',
-        valueData,
-        '/f',
-      ],
-      allowElevation: scope.requiresElevation,
-    );
+    if (scope.requiresElevation) {
+      final result = await _elevatedRegistryExecutor.setRunValue(
+        scope: scope,
+        valueName: runValueName,
+        rawValueData: valueData,
+      );
+      if (result.exitCode == 0) {
+        developer.log(
+          'Auto-start enabled successfully (${scope.label})',
+          name: 'startup_service',
+          level: 800,
+        );
+        return const Success(unit);
+      }
+      return Failure(
+        _failureFromProcessResult(
+          result: result,
+          action: 'enabling auto-start',
+          scope: scope,
+          isWrite: true,
+        ),
+      );
+    }
+
+    final result = await _runRegCommand(<String>[
+      'add',
+      scope.runKeyPath,
+      '/v',
+      runValueName,
+      '/t',
+      'REG_SZ',
+      '/d',
+      valueData,
+      '/f',
+    ]);
 
     if (result.exitCode == 0) {
       developer.log(
@@ -339,27 +488,68 @@ class AutoStartService implements IStartupService {
     }
 
     return Failure(
-      StartupServiceFailure(
-        message: _failureMessage(
-          result: result,
-          action: 'enabling auto-start',
-          scope: scope,
-        ),
+      _failureFromProcessResult(
+        result: result,
+        action: 'enabling auto-start',
+        scope: scope,
+        isWrite: true,
       ),
     );
   }
 
   Future<Result<Unit>> _deleteStartupEntry(StartupRegistryScope scope) async {
-    final result = await _runRegCommandWithUacFallback(
-      <String>[
+    if (scope.requiresElevation) {
+      final initialResult = await _runRegCommand(<String>[
         'delete',
         scope.runKeyPath,
         '/v',
-        _runValueName,
+        runValueName,
         '/f',
-      ],
-      allowElevation: scope.requiresElevation,
-    );
+      ]);
+
+      if (initialResult.exitCode == 0 || _isValueNotFound(initialResult)) {
+        developer.log(
+          'Auto-start disabled successfully (${scope.label})',
+          name: 'startup_service',
+          level: 800,
+        );
+        return const Success(unit);
+      }
+
+      if (!_isAccessDenied(initialResult)) {
+        return Failure(_failureFromProcessResult(result: initialResult, action: 'disabling auto-start', scope: scope));
+      }
+
+      developer.log(
+        'Admin privileges required. Requesting UAC elevation (${scope.label}).',
+        name: 'startup_service',
+        level: 800,
+      );
+
+      final elevatedResult = await _elevatedRegistryExecutor.deleteRunValue(
+        scope: scope,
+        valueName: runValueName,
+      );
+
+      if (elevatedResult.exitCode == 0) {
+        developer.log(
+          'Auto-start disabled successfully (${scope.label})',
+          name: 'startup_service',
+          level: 800,
+        );
+        return const Success(unit);
+      }
+
+      return Failure(_failureFromProcessResult(result: elevatedResult, action: 'disabling auto-start', scope: scope));
+    }
+
+    final result = await _runRegCommand(<String>[
+      'delete',
+      scope.runKeyPath,
+      '/v',
+      runValueName,
+      '/f',
+    ]);
 
     if (result.exitCode == 0 || _isValueNotFound(result)) {
       developer.log(
@@ -370,73 +560,11 @@ class AutoStartService implements IStartupService {
       return const Success(unit);
     }
 
-    return Failure(
-      StartupServiceFailure(
-        message: _failureMessage(
-          result: result,
-          action: 'disabling auto-start',
-          scope: scope,
-        ),
-      ),
-    );
-  }
-
-  Future<ProcessResult> _runRegCommandWithUacFallback(
-    List<String> args, {
-    required bool allowElevation,
-  }) async {
-    final initialResult = await _runRegCommand(args);
-    if (initialResult.exitCode == 0 || !allowElevation || !_isAccessDenied(initialResult)) {
-      return initialResult;
-    }
-
-    developer.log(
-      'Admin privileges required. Requesting UAC elevation.',
-      name: 'startup_service',
-      level: 800,
-    );
-
-    return _runRegCommandElevated(args);
+    return Failure(_failureFromProcessResult(result: result, action: 'disabling auto-start', scope: scope));
   }
 
   Future<ProcessResult> _runRegCommand(List<String> args) {
     return _processRunner('reg', args);
-  }
-
-  Future<ProcessResult> _runRegCommandElevated(List<String> args) {
-    final script = _buildElevatedPowerShellScript(
-      executable: 'reg.exe',
-      arguments: args,
-    );
-    return _processRunner('powershell', <String>[
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      script,
-    ]);
-  }
-
-  String _buildElevatedPowerShellScript({
-    required String executable,
-    required List<String> arguments,
-  }) {
-    final psExecutable = _quotePowerShellSingle(executable);
-    final psArgs = arguments.map(_quotePowerShellSingle).join(', ');
-    final startProcessLine = StringBuffer(r'$p = Start-Process -FilePath ')
-      ..write(psExecutable)
-      ..write(r' -ArgumentList $arguments -Verb RunAs -Wait -PassThru');
-
-    final script = StringBuffer()
-      ..writeln(r'$ErrorActionPreference = "Stop"')
-      ..writeln('\$arguments = @($psArgs)')
-      ..writeln(startProcessLine.toString())
-      ..writeln(r'exit $p.ExitCode');
-
-    return script.toString();
-  }
-
-  String _quotePowerShellSingle(String value) {
-    return "'${value.replaceAll("'", "''")}'";
   }
 
   static Future<Process> _defaultProcessStarter(
@@ -447,13 +575,43 @@ class AutoStartService implements IStartupService {
     return Process.start(executable, arguments, mode: mode);
   }
 
+  StartupServiceFailure _failureFromProcessResult({
+    required ProcessResult result,
+    required String action,
+    required StartupRegistryScope scope,
+    bool isWrite = false,
+  }) {
+    final message = _failureMessage(result: result, action: action, scope: scope);
+    final code = _failureCode(result, isWrite: isWrite);
+    developer.log(
+      message,
+      name: 'startup_service',
+      level: 900,
+    );
+    return StartupServiceFailure(
+      message: message,
+      code: code,
+      registryScopeLabel: scope.label,
+    );
+  }
+
+  StartupServiceFailureCode _failureCode(ProcessResult result, {required bool isWrite}) {
+    if (_isUacCancelled(result)) {
+      return StartupServiceFailureCode.uacCancelled;
+    }
+    if (_isAccessDenied(result)) {
+      return StartupServiceFailureCode.accessDenied;
+    }
+    return isWrite ? StartupServiceFailureCode.registryWriteFailed : StartupServiceFailureCode.registryDeleteFailed;
+  }
+
   String _failureMessage({
     required ProcessResult result,
     required String action,
     required StartupRegistryScope scope,
   }) {
     if (_isUacCancelled(result)) {
-      return 'UAC authorization cancelled.';
+      return 'UAC authorization cancelled when $action in ${scope.label}.';
     }
     if (_isAccessDenied(result)) {
       return 'Permission denied when $action in ${scope.label}.';
@@ -461,21 +619,12 @@ class AutoStartService implements IStartupService {
     return 'Failed when $action in ${scope.label}.';
   }
 
-  bool _isAccessDenied(ProcessResult result) {
-    final output = _normalizedProcessOutput(result);
-    return output.contains('access is denied') || output.contains('acesso negado');
-  }
+  bool _isAccessDenied(ProcessResult result) => WindowsElevatedRegistryExecutor.isAccessDenied(result);
 
-  bool _isUacCancelled(ProcessResult result) {
-    final output = _normalizedProcessOutput(result);
-    return output.contains('operation was canceled by the user') ||
-        output.contains('operation was cancelled by the user') ||
-        output.contains('operacao foi cancelada pelo usuario') ||
-        output.contains('a operacao foi cancelada pelo usuario');
-  }
+  bool _isUacCancelled(ProcessResult result) => WindowsElevatedRegistryExecutor.isUacCancelled(result);
 
   bool _isValueNotFound(ProcessResult result) {
-    final output = _normalizedProcessOutput(result);
+    final output = WindowsElevatedRegistryExecutor.normalizedProcessOutput(result);
     return output.contains(
           'unable to find the specified registry key or value',
         ) ||
@@ -483,45 +632,6 @@ class AutoStartService implements IStartupService {
         output.contains('o sistema nao pode encontrar a chave') ||
         output.contains('o sistema nao pode encontrar o valor');
   }
-
-  String _normalizedProcessOutput(ProcessResult result) {
-    final output = '${result.stdout}\n${result.stderr}'.toLowerCase();
-    return _stripDiacritics(output);
-  }
-}
-
-String _stripDiacritics(String value) {
-  const replacements = <String, String>{
-    'á': 'a',
-    'à': 'a',
-    'ã': 'a',
-    'â': 'a',
-    'ä': 'a',
-    'é': 'e',
-    'è': 'e',
-    'ê': 'e',
-    'ë': 'e',
-    'í': 'i',
-    'ì': 'i',
-    'î': 'i',
-    'ï': 'i',
-    'ó': 'o',
-    'ò': 'o',
-    'õ': 'o',
-    'ô': 'o',
-    'ö': 'o',
-    'ú': 'u',
-    'ù': 'u',
-    'û': 'u',
-    'ü': 'u',
-    'ç': 'c',
-  };
-  final buffer = StringBuffer();
-  for (final rune in value.runes) {
-    final character = String.fromCharCode(rune);
-    buffer.write(replacements[character] ?? character);
-  }
-  return buffer.toString();
 }
 
 class _StartupRegistryQueryResult {

@@ -6578,6 +6578,48 @@ abstract class AppLocalizations {
   /// **'Startup entry needs repair'**
   String get gsStartupLaunchConfigurationRepairFailed;
 
+  /// No description provided for @gsStartupLaunchConfigurationRepairedWithLegacyEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup is active. A legacy installer entry could not be removed; administrator approval may be required.'**
+  String get gsStartupLaunchConfigurationRepairedWithLegacyEntry;
+
+  /// No description provided for @gsStartupFailureUacCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Administrator authorization was cancelled.'**
+  String get gsStartupFailureUacCancelled;
+
+  /// No description provided for @gsStartupFailureAccessDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Administrator permission is required.'**
+  String get gsStartupFailureAccessDenied;
+
+  /// No description provided for @gsStartupFailureRegistryDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove the legacy startup entry.'**
+  String get gsStartupFailureRegistryDelete;
+
+  /// No description provided for @gsStartupFailureRegistryWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not write the startup entry.'**
+  String get gsStartupFailureRegistryWrite;
+
+  /// No description provided for @gsStartupFailureDuplicateEntryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A duplicate legacy installer entry may exist.'**
+  String get gsStartupFailureDuplicateEntryHint;
+
+  /// No description provided for @gsButtonCopyStartupDiagnostic.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy diagnostic'**
+  String get gsButtonCopyStartupDiagnostic;
+
   /// No description provided for @gsErrorStartupToggleFailed.
   ///
   /// In en, this message translates to:
