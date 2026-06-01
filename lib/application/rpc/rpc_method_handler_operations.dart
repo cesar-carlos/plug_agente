@@ -488,13 +488,14 @@ class DefaultRpcMethodHandlerOperations {
           return cached;
         }
         final executed = await execute();
+        final sanitized = RpcWireMap.sanitizeRpcResponse(executed);
         await _storeIdempotentSuccessIfApplicable(
           request: request,
           idempotencyKey: idempotencyKey,
           idempotencyFingerprint: idempotencyFingerprint,
-          response: executed,
+          response: sanitized,
         );
-        return executed;
+        return sanitized;
       },
     );
     return _idempotencyCoordinator.remapResponseId(response, request.id);
@@ -570,7 +571,7 @@ class DefaultRpcMethodHandlerOperations {
     final namespacedKey = _namespacedRpcIdempotencyStoreKey(request, idempotencyKey);
     await store.set(
       namespacedKey,
-      RpcWireMap.sanitizeRpcResponse(response),
+      response,
       _rpcIdempotencyEntryTtl(request),
       requestFingerprint: idempotencyFingerprint,
     );

@@ -65,6 +65,9 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   startup diagnostics in Config preferences.
 - SQL RPC responses omit null optional fields so hub JSON Schema validation
   no longer fails on nullable properties sent as explicit `null`.
+- RPC idempotency replay now returns the same sanitized result map instance
+  stored on the first success, so replayed agent action payloads match byte
+  for byte on the wire.
 
 ### Added
 
