@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.8.1+1</title>
+   <pubDate>Mon, 01 Jun 2026 01:01:57 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.8.0...v1.8.1</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.8.1/PlugAgente-Setup-1.8.1.exe" sparkle:version="1.8.1+1" sparkle:os="windows" plug:sha256="467d8c2615dcb62bc952f31ffe029cb9e9458830ad20bece24dded659a4c4a62" plug:channel="stable" plug:rolloutPercentage="100" length="21300255" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.8.0+1</title>
    <pubDate>Thu, 28 May 2026 18:57:30 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.7.2...v1.8.0</description>
