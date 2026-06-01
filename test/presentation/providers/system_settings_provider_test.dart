@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -145,6 +147,25 @@ void main() {
       check(prefs.getBool(AppSettingsKeys.startWithWindows)).isNull();
     });
 
+    test('should keep Windows startup truth when preference persistence fails after enabling', () async {
+      final failingPrefs = FailingAppSettingsStore();
+      when(
+        () => mockStartupService.enable(),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final provider = SystemSettingsProvider(
+        failingPrefs,
+        startupService: mockStartupService,
+      );
+
+      final outcome = await provider.setStartWithWindows(true);
+
+      check(outcome).equals(StartupChangeOutcome.enabled);
+      check(provider.startWithWindows).equals(true);
+      check(provider.preferenceError).isNotNull();
+      check(provider.preferenceError!.code).equals(SystemSettingsErrorCode.settingsPersistenceFailed);
+    });
+
     test(
       'should update startMinimized and persist to settings store',
       () async {
@@ -233,6 +254,30 @@ void main() {
       verify(() => mockStartupService.ensureLaunchConfiguration(allowElevation: false)).called(1);
     });
 
+    test('should not notify after dispose when startup status sync completes', () async {
+      final syncCompleter = Completer<Result<bool>>();
+      when(
+        () => mockStartupService.isEnabled(),
+      ).thenAnswer((_) => syncCompleter.future);
+
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+      var notificationCount = 0;
+      provider.addListener(() {
+        notificationCount += 1;
+      });
+
+      provider.dispose();
+      syncCompleter.complete(const Success(true));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      check(notificationCount).equals(0);
+      check(provider.startWithWindows).equals(false);
+    });
+
     test(
       'should not update settings when startup status sync fails with error',
       () async {
@@ -298,6 +343,27 @@ void main() {
       check(provider.startupNotice).isNotNull();
       check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed);
       check(provider.startupNotice!.detail).equals('Missing launch argument');
+    });
+
+    test('should expose warning notice when automatic startup launch repair throws', () async {
+      when(
+        () => mockStartupService.isEnabled(),
+      ).thenAnswer((_) async => const Success(true));
+      when(
+        () => mockStartupService.ensureLaunchConfiguration(allowElevation: false),
+      ).thenThrow(StateError('repair failed unexpectedly'));
+
+      final provider = SystemSettingsProvider(
+        prefs,
+        startupService: mockStartupService,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      check(provider.lastError).isNull();
+      check(provider.startupNotice).isNotNull();
+      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed);
+      check(provider.startupNotice!.detail!).contains('repair failed unexpectedly');
     });
 
     test('should expose repaired notice when automatic startup launch repair succeeds', () async {

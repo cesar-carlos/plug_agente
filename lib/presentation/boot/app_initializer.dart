@@ -661,6 +661,8 @@ class AppInitializer {
 
     if (capabilities.supportsWindowManager) {
       windowManagerService = await _initializeWindowManager(capabilities);
+    } else {
+      await _restoreNativeWindowWhenWindowManagerUnavailable();
     }
 
     if (capabilities.supportsTray && windowManagerService != null) {
@@ -770,6 +772,24 @@ class AppInitializer {
     } on Exception catch (e, stackTrace) {
       developer.log(
         'Failed to restore native window after window manager initialization failure',
+        name: 'app_initializer',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _restoreNativeWindowWhenWindowManagerUnavailable() async {
+    if (!_isAutostartLaunch) {
+      return;
+    }
+
+    try {
+      await _nativeWindowVisibilityFallback();
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to restore native window when window manager is unavailable',
         name: 'app_initializer',
         level: 900,
         error: e,
