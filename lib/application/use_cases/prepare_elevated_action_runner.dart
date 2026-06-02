@@ -4,6 +4,11 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_elevated_action_runner_installer.dart';
 import 'package:result_dart/result_dart.dart';
 
+/// Installs the Windows scheduled task for elevated agent actions.
+///
+/// This use case is **only** invoked from the Agent Actions UI (manual prepare).
+/// It must not run during app bootstrap; hub, SQL RPC, and the temporal scheduler
+/// keep working when installation fails or UAC is denied.
 class PrepareElevatedActionRunner {
   PrepareElevatedActionRunner(
     this._installer,

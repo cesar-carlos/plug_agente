@@ -165,6 +165,8 @@ class SqlRpcMethodHandlerOperations {
          normalizerService,
        );
 
+  static bool _loggedMissingClientTokenThisSession = false;
+
   final IDatabaseGateway _databaseGateway;
   final QueryNormalizerService _normalizerService;
   final Uuid _uuid;
@@ -291,6 +293,7 @@ class SqlRpcMethodHandlerOperations {
     }
 
     if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+      _logMissingClientTokenOnce(request);
       _authMetrics?.recordDenied(
         requestId: request.id?.toString(),
         method: request.method,
@@ -993,6 +996,7 @@ class SqlRpcMethodHandlerOperations {
     final commands = commandPlans.map((plan) => plan.command).toList(growable: false);
 
     if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+      _logMissingClientTokenOnce(request);
       _authMetrics?.recordDenied(
         requestId: request.id?.toString(),
         method: request.method,
@@ -1175,6 +1179,7 @@ class SqlRpcMethodHandlerOperations {
     }
 
     if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
+      _logMissingClientTokenOnce(request);
       _authMetrics?.recordDenied(
         requestId: request.id?.toString(),
         method: request.method,
@@ -2216,6 +2221,23 @@ class SqlRpcMethodHandlerOperations {
       clientId: clientId,
       operation: operation,
       resource: resource,
+    );
+  }
+
+  void _logMissingClientTokenOnce(RpcRequest request) {
+    if (_loggedMissingClientTokenThisSession) {
+      return;
+    }
+    _loggedMissingClientTokenThisSession = true;
+    developer.log(
+      'Hub SQL RPC rejected: missing client_token (logged once per app session)',
+      name: 'sql_rpc_method_handler',
+      level: 900,
+      error: <String, Object?>{
+        'method': request.method,
+        'request_id': request.id?.toString(),
+        'reason': RpcClientTokenConstants.missingClientTokenReason,
+      },
     );
   }
 }

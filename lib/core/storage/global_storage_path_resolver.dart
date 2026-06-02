@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
 
 class GlobalStorageContext {
   const GlobalStorageContext({required this.appDirectoryPath});
@@ -58,10 +59,12 @@ class GlobalStoragePathResolver {
   static Future<GlobalStorageContext> resolveContext({
     String appFolderName = defaultAppFolderName,
     List<String>? candidateDirectories,
+    GlobalStorageAclBootstrap? directoryAclBootstrap,
   }) async {
     final appDirectoryPath = await resolveWritableAppDirectory(
       appFolderName: appFolderName,
       candidateDirectories: candidateDirectories,
+      directoryAclBootstrap: directoryAclBootstrap,
     );
     return GlobalStorageContext(appDirectoryPath: appDirectoryPath);
   }
@@ -69,13 +72,16 @@ class GlobalStoragePathResolver {
   static Future<String> resolveWritableAppDirectory({
     String appFolderName = defaultAppFolderName,
     List<String>? candidateDirectories,
+    GlobalStorageAclBootstrap? directoryAclBootstrap,
   }) async {
     final candidates = candidateDirectories ?? _buildCandidateDirectories(appFolderName);
     final failures = <String>[];
+    final aclBootstrap = directoryAclBootstrap ?? GlobalStorageAclBootstrap();
 
     for (final candidate in candidates) {
       try {
         await _ensureWritableDirectory(candidate);
+        await aclBootstrap.ensureDirectoryAcls(candidate);
         return candidate;
       } on FileSystemException catch (error) {
         failures.add('$candidate -> ${error.message}');

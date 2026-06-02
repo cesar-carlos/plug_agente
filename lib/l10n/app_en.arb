@@ -517,11 +517,24 @@
   "agentActionsMaintenanceModeInfoMessage": "Scheduled runs, app start/close triggers, and remote runs are paused. You can still run actions from this screen and edit definitions.",
   "agentActionsMaintenanceStrictMode": "Block manual execution too",
   "agentActionsElevatedRunnerNotReadyTitle": "Elevated runner not prepared",
-  "agentActionsElevatedRunnerNotReadyMessage": "To use elevated execution, register the helper scheduled task with high privilege. Windows may prompt for UAC once.",
+  "agentActionsElevatedRunnerNotReadyMessage": "To use elevated execution, register the helper scheduled task with high privilege. Windows may prompt for UAC once. Hub, remote SQL, and other agent features keep working normally.",
   "agentActionsElevatedRunnerDegradedTitle": "Elevated runner unavailable",
-  "agentActionsElevatedRunnerDegradedMessage": "The elevated helper failed recently. Prepare it again before running actions with high privilege.",
+  "agentActionsElevatedRunnerDegradedMessage": "The elevated helper failed recently. Prepare it again before running actions with high privilege. Hub, remote SQL, and other agent features keep working normally.",
   "agentActionsElevatedRunnerPrepare": "Prepare elevated runner",
   "agentActionsElevatedRunnerPreparing": "Preparing elevated runner...",
+  "agentOperationalReadinessHubConnected": "Hub: connected",
+  "agentOperationalReadinessHubConnecting": "Hub: connecting",
+  "agentOperationalReadinessHubDisconnected": "Hub: disconnected",
+  "agentOperationalReadinessHubError": "Hub: error",
+  "agentOperationalReadinessActiveClientTokens": "{count, plural, =0{No active client tokens} =1{1 active client token} other{{count} active client tokens}}",
+  "@agentOperationalReadinessActiveClientTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "agentOperationalReadinessSchedulerIssue": "Scheduled triggers issue",
   "agentActionsFormRunElevated": "Run with elevated privilege (Windows helper)",
   "agentActionsFormRunElevatedHint": "Requires the helper executable and a prepared scheduled task on this agent.",
   "agentActionsSubsystemStatusStartingTitle": "Agent actions are starting",

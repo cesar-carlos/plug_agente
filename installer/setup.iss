@@ -56,6 +56,9 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldLaunchAfterSilentUpdate
 
+; Grant standard users Modify on shared ProgramData so the agent works without
+; requiring "Run as administrator" after install (matches GlobalStorageAclConstants).
+
 [Registry]
 ; Per-user Run key only, aligned with the app's AutoStartService (HKCU). Avoids
 ; duplicate HKLM entries that require UAC to clean up. Silent update passes
@@ -74,6 +77,30 @@ end;
 function ShouldLaunchAfterSilentUpdate(): Boolean;
 begin
   Result := WizardSilent() and (ExpandConstant('{param:LAUNCHAFTERUPDATE|0}') = '1');
+end;
+
+procedure ConfigureSharedProgramDataPermissions;
+var
+  ResultCode: Integer;
+  DataDir: String;
+begin
+  DataDir := ExpandConstant('{commonappdata}\PlugAgente');
+  if not DirExists(DataDir) then
+    CreateDir(DataDir);
+  Exec(
+    'icacls.exe',
+    AddQuotes(DataDir) + ' /grant *S-1-5-11:(OI)(CI)(M) /grant *S-1-5-32-545:(OI)(CI)(M)',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    ConfigureSharedProgramDataPermissions;
 end;
 
 function IsVCRedistInstalled(): Boolean;

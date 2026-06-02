@@ -1,15 +1,20 @@
+import 'package:path/path.dart' as p;
+
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
+import 'package:plug_agente/application/services/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/app_uptime.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
+import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -42,6 +47,8 @@ class HealthService {
     AgentActionRetentionSettings? agentActionRetentionSettings,
     AgentActionTriggerScheduler? agentActionTriggerScheduler,
     IAgentActionSchedulerInstanceLock? agentActionSchedulerInstanceLock,
+    GlobalStorageHealthSnapshotBuilder? globalStorageHealthSnapshotBuilder,
+    GlobalStorageContext? globalStorageContext,
     IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
     Duration poolSnapshotTtl = const Duration(seconds: 2),
   }) : _metrics = metricsCollector,
@@ -61,6 +68,8 @@ class HealthService {
        _agentActionRetentionSettings = agentActionRetentionSettings,
        _agentActionTriggerScheduler = agentActionTriggerScheduler,
        _agentActionSchedulerInstanceLock = agentActionSchedulerInstanceLock,
+       _globalStorageHealthSnapshotBuilder = globalStorageHealthSnapshotBuilder,
+       _globalStorageContext = globalStorageContext,
        _comObjectInvocationDiagnostics = comObjectInvocationDiagnostics,
        _poolSnapshotTtl = poolSnapshotTtl;
 
@@ -81,6 +90,8 @@ class HealthService {
   final AgentActionRetentionSettings? _agentActionRetentionSettings;
   final AgentActionTriggerScheduler? _agentActionTriggerScheduler;
   final IAgentActionSchedulerInstanceLock? _agentActionSchedulerInstanceLock;
+  final GlobalStorageHealthSnapshotBuilder? _globalStorageHealthSnapshotBuilder;
+  final GlobalStorageContext? _globalStorageContext;
   final IComObjectInvocationDiagnostics? _comObjectInvocationDiagnostics;
   final Duration _poolSnapshotTtl;
   Future<String?>? _driverTypeResolution;
@@ -319,6 +330,7 @@ class HealthService {
         'recent_reasons': metrics['recent_diagnostic_reasons'] ?? const <String>[],
       },
       if (_buildAgentActionsHealth(metrics) case final Map<String, Object?> agentActions) 'agent_actions': agentActions,
+      if (_buildGlobalStorageHealth() case final Map<String, Object?> globalStorage) 'global_storage': globalStorage,
       'uptime_seconds': AppUptime.uptimeSeconds,
     };
   }
@@ -479,13 +491,28 @@ class HealthService {
 
     final lock = _agentActionSchedulerInstanceLock;
 
+    final storageContext = _globalStorageContext;
+    final lockFilePath = storageContext == null || scheduler.lastStartIssueReason == null
+        ? null
+        : p.join(storageContext.appDirectoryPath, AgentActionTriggerConstants.schedulerLockFileName);
+
     return <String, Object?>{
       'started': scheduler.isTemporalSchedulerStarted,
       'bootstrap_disabled': scheduler.isBootstrapDisabled,
       'temporal_timer_count': scheduler.scheduledTimerCount,
       if (lock != null) 'instance_lock_held': lock.isHeld,
       if (scheduler.lastStartIssueReason case final String reason) 'last_start_issue_reason': reason,
+      if (scheduler.lastStartIssueReason != null && lockFilePath != null) 'lock_file_path': lockFilePath,
     };
+  }
+
+  Map<String, Object?>? _buildGlobalStorageHealth() {
+    final builder = _globalStorageHealthSnapshotBuilder;
+    final context = _globalStorageContext;
+    if (builder == null || context == null) {
+      return null;
+    }
+    return builder.build(context);
   }
 
   Map<String, Object?>? _buildAgentActionRetentionHealth() {

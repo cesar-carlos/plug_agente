@@ -45,6 +45,7 @@ import 'package:plug_agente/application/services/client_token_validation_service
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
+import 'package:plug_agente/application/services/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
@@ -189,6 +190,10 @@ import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
 import 'package:plug_agente/infrastructure/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gateway.dart';
+import 'package:plug_agente/infrastructure/actions/scheduler_lock_failure_resolver.dart';
+import 'package:plug_agente/infrastructure/actions/scheduler_lock_metadata_reader.dart';
+import 'package:plug_agente/infrastructure/actions/scheduler_stale_lock_recovery.dart';
+import 'package:plug_agente/infrastructure/actions/windows_process_lifetime_checker.dart';
 import 'package:plug_agente/infrastructure/backup/local_app_data_backup_service.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
@@ -232,6 +237,10 @@ import 'package:plug_agente/infrastructure/services/file_silent_update_launcher_
 import 'package:plug_agente/infrastructure/services/http_silent_update_installer.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_marker_store.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_directory_acl_normalizer.dart';
+import 'package:plug_agente/infrastructure/storage/icacls_command_runner.dart';
 import 'package:plug_agente/infrastructure/stores/agent_action_remote_audit_drift_store.dart';
 import 'package:plug_agente/infrastructure/stores/drift_idempotency_store.dart';
 import 'package:plug_agente/infrastructure/stores/file_token_audit_store.dart';
@@ -279,6 +288,26 @@ void registerPlugDependencyGraph(
   }
 
   getIt
+    ..registerLazySingleton(IcaclsCommandRunner.new)
+    ..registerLazySingleton(GlobalStorageAclMarkerStore.new)
+    ..registerLazySingleton(
+      () => GlobalStorageDirectoryAclNormalizer(
+        commandRunner: getIt<IcaclsCommandRunner>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => GlobalStorageAclBootstrap(
+        normalizer: getIt<GlobalStorageDirectoryAclNormalizer>(),
+        markerStore: getIt<GlobalStorageAclMarkerStore>(),
+      ),
+    )
+    ..registerLazySingleton(WindowsProcessLifetimeChecker.new)
+    ..registerLazySingleton(
+      () => GlobalStorageHealthSnapshotBuilder(
+        aclBootstrap: getIt<GlobalStorageAclBootstrap>(),
+        markerStore: getIt<GlobalStorageAclMarkerStore>(),
+      ),
+    )
     ..registerLazySingleton<odbc.OdbcService>(
       () => odbcWorkerLocator.asyncService,
     )
@@ -644,6 +673,10 @@ void registerPlugDependencyGraph(
         agentActionSchedulerInstanceLock: getIt.isRegistered<IAgentActionSchedulerInstanceLock>()
             ? getIt<IAgentActionSchedulerInstanceLock>()
             : null,
+        globalStorageHealthSnapshotBuilder: getIt.isRegistered<GlobalStorageHealthSnapshotBuilder>()
+            ? getIt<GlobalStorageHealthSnapshotBuilder>()
+            : null,
+        globalStorageContext: getIt.isRegistered<GlobalStorageContext>() ? getIt<GlobalStorageContext>() : null,
         comObjectInvocationDiagnostics: getIt<IComObjectInvocationDiagnostics>(),
       ),
     )
@@ -1295,6 +1328,17 @@ void registerPlugDependencyGraph(
       () => AgentActionSchedulerInstanceLock(
         storageContext: getIt<GlobalStorageContext>(),
         runtimeIdentity: getIt<AgentRuntimeIdentity>(),
+        aclBootstrap: getIt<GlobalStorageAclBootstrap>(),
+        metadataReader: const SchedulerLockMetadataReader(),
+        processLifetimeChecker: getIt<WindowsProcessLifetimeChecker>(),
+        staleLockRecovery: SchedulerStaleLockRecovery(
+          metadataReader: const SchedulerLockMetadataReader(),
+          processLifetimeChecker: getIt<WindowsProcessLifetimeChecker>(),
+          aclBootstrap: getIt<GlobalStorageAclBootstrap>(),
+        ),
+        failureResolver: SchedulerLockFailureResolver(
+          metadataReader: const SchedulerLockMetadataReader(),
+        ),
       ),
     )
     ..registerLazySingleton(

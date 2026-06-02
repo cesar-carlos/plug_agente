@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_directory_acl_normalizer.dart';
+import 'package:plug_agente/infrastructure/storage/icacls_command_runner.dart';
 
 void main() {
   group('GlobalStoragePathResolver', () {
@@ -66,6 +69,30 @@ void main() {
         fail('Expected GlobalStorageAccessException');
       } on GlobalStorageAccessException catch (error) {
         expect(error.attempts, isNotEmpty);
+      }
+    });
+
+    test('should run ACL bootstrap after resolving writable path', () async {
+      final writableCandidate = p.join(tempDir.path, 'acl_candidate');
+      var bootstrapCalled = false;
+
+      final resolvedDirectory = await GlobalStoragePathResolver.resolveWritableAppDirectory(
+        candidateDirectories: <String>[writableCandidate],
+        directoryAclBootstrap: GlobalStorageAclBootstrap(
+          normalizer: GlobalStorageDirectoryAclNormalizer(
+            commandRunner: IcaclsCommandRunner(
+              processRunner: (executable, arguments) async {
+                bootstrapCalled = true;
+                return ProcessResult(0, 0, '', '');
+              },
+            ),
+          ),
+        ),
+      );
+
+      expect(resolvedDirectory, writableCandidate);
+      if (Platform.isWindows) {
+        expect(bootstrapCalled, isTrue);
       }
     });
 

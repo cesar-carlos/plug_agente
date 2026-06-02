@@ -1379,20 +1379,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsElevatedRunnerNotReadyMessage =>
-      'To use elevated execution, register the helper scheduled task with high privilege. Windows may prompt for UAC once.';
+      'To use elevated execution, register the helper scheduled task with high privilege. Windows may prompt for UAC once. Hub, remote SQL, and other agent features keep working normally.';
 
   @override
   String get agentActionsElevatedRunnerDegradedTitle => 'Elevated runner unavailable';
 
   @override
   String get agentActionsElevatedRunnerDegradedMessage =>
-      'The elevated helper failed recently. Prepare it again before running actions with high privilege.';
+      'The elevated helper failed recently. Prepare it again before running actions with high privilege. Hub, remote SQL, and other agent features keep working normally.';
 
   @override
   String get agentActionsElevatedRunnerPrepare => 'Prepare elevated runner';
 
   @override
   String get agentActionsElevatedRunnerPreparing => 'Preparing elevated runner...';
+
+  @override
+  String get agentOperationalReadinessHubConnected => 'Hub: connected';
+
+  @override
+  String get agentOperationalReadinessHubConnecting => 'Hub: connecting';
+
+  @override
+  String get agentOperationalReadinessHubDisconnected => 'Hub: disconnected';
+
+  @override
+  String get agentOperationalReadinessHubError => 'Hub: error';
+
+  @override
+  String agentOperationalReadinessActiveClientTokens(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count active client tokens',
+      one: '1 active client token',
+      zero: 'No active client tokens',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get agentOperationalReadinessSchedulerIssue => 'Scheduled triggers issue';
 
   @override
   String get agentActionsFormRunElevated => 'Run with elevated privilege (Windows helper)';

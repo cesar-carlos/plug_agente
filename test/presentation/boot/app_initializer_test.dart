@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
@@ -237,6 +240,16 @@ void main() {
     await showNativeRuntimeWindow();
 
     expect(capturedCall?.method, 'showWindow');
+  });
+
+  test('bootstrap source should not invoke PrepareElevatedActionRunner', () {
+    final initializerSource = File(
+      p.join('lib', 'presentation', 'boot', 'app_initializer.dart'),
+    ).readAsStringSync();
+
+    expect(initializerSource.contains('PrepareElevatedActionRunner'), isFalse);
+    expect(initializerSource.contains('prepareElevatedActionRunner'), isFalse);
+    expect(initializerSource.contains('_refreshElevatedActionRunnerReadiness'), isTrue);
   });
 }
 

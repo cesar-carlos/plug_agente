@@ -2567,7 +2567,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsElevatedRunnerNotReadyMessage.
   ///
   /// In en, this message translates to:
-  /// **'To use elevated execution, register the helper scheduled task with high privilege. Windows may prompt for UAC once.'**
+  /// **'To use elevated execution, register the helper scheduled task with high privilege. Windows may prompt for UAC once. Hub, remote SQL, and other agent features keep working normally.'**
   String get agentActionsElevatedRunnerNotReadyMessage;
 
   /// No description provided for @agentActionsElevatedRunnerDegradedTitle.
@@ -2579,7 +2579,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsElevatedRunnerDegradedMessage.
   ///
   /// In en, this message translates to:
-  /// **'The elevated helper failed recently. Prepare it again before running actions with high privilege.'**
+  /// **'The elevated helper failed recently. Prepare it again before running actions with high privilege. Hub, remote SQL, and other agent features keep working normally.'**
   String get agentActionsElevatedRunnerDegradedMessage;
 
   /// No description provided for @agentActionsElevatedRunnerPrepare.
@@ -2593,6 +2593,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preparing elevated runner...'**
   String get agentActionsElevatedRunnerPreparing;
+
+  /// No description provided for @agentOperationalReadinessHubConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: connected'**
+  String get agentOperationalReadinessHubConnected;
+
+  /// No description provided for @agentOperationalReadinessHubConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: connecting'**
+  String get agentOperationalReadinessHubConnecting;
+
+  /// No description provided for @agentOperationalReadinessHubDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: disconnected'**
+  String get agentOperationalReadinessHubDisconnected;
+
+  /// No description provided for @agentOperationalReadinessHubError.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: error'**
+  String get agentOperationalReadinessHubError;
+
+  /// No description provided for @agentOperationalReadinessActiveClientTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No active client tokens} =1{1 active client token} other{{count} active client tokens}}'**
+  String agentOperationalReadinessActiveClientTokens(int count);
+
+  /// No description provided for @agentOperationalReadinessSchedulerIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled triggers issue'**
+  String get agentOperationalReadinessSchedulerIssue;
 
   /// No description provided for @agentActionsFormRunElevated.
   ///

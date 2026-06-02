@@ -1381,20 +1381,47 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsElevatedRunnerNotReadyMessage =>
-      'Para usar execucao elevada, registre a tarefa do helper com privilegio alto. O Windows pode solicitar UAC uma vez.';
+      'Para usar execucao elevada, registre a tarefa do helper com privilegio alto. O Windows pode solicitar UAC uma vez. Hub, SQL remoto e demais funcoes do agente continuam normais.';
 
   @override
   String get agentActionsElevatedRunnerDegradedTitle => 'Executor elevado indisponivel';
 
   @override
   String get agentActionsElevatedRunnerDegradedMessage =>
-      'O helper elevado falhou recentemente. Prepare novamente antes de executar acoes com privilegio alto.';
+      'O helper elevado falhou recentemente. Prepare novamente antes de executar acoes com privilegio alto. Hub, SQL remoto e demais funcoes do agente continuam normais.';
 
   @override
   String get agentActionsElevatedRunnerPrepare => 'Preparar executor elevado';
 
   @override
   String get agentActionsElevatedRunnerPreparing => 'Preparando executor elevado...';
+
+  @override
+  String get agentOperationalReadinessHubConnected => 'Hub: conectado';
+
+  @override
+  String get agentOperationalReadinessHubConnecting => 'Hub: conectando';
+
+  @override
+  String get agentOperationalReadinessHubDisconnected => 'Hub: desconectado';
+
+  @override
+  String get agentOperationalReadinessHubError => 'Hub: erro';
+
+  @override
+  String agentOperationalReadinessActiveClientTokens(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tokens de cliente ativos',
+      one: '1 token de cliente ativo',
+      zero: 'Nenhum token de cliente ativo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get agentOperationalReadinessSchedulerIssue => 'Gatilhos agendados com problema';
 
   @override
   String get agentActionsFormRunElevated => 'Executar com privilegio elevado (helper Windows)';

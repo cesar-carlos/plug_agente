@@ -19,6 +19,18 @@
       "type": "string",
       "description": "Application version string"
     },
+    "global_storage": {
+      "type": "object",
+      "description": "Shared ProgramData storage diagnostics for multi-user access.",
+      "additionalProperties": false,
+      "properties": {
+        "app_directory_path": { "type": "string" },
+        "acl_marker_present": { "type": "boolean" },
+        "acl_normalized_at": { "type": "string", "format": "date-time" },
+        "acl_marker_outcome": { "type": "string" },
+        "acl_last_outcome": { "type": "string" }
+      }
+    },
     "agent_runtime": {
       "type": "object",
       "description": "Stable runtime identity for correlating executions and remote audit (when injected).",
@@ -310,6 +322,10 @@
             "last_start_issue_reason": {
               "type": "string",
               "description": "Stable reason when temporal scheduling did not start (e.g. scheduler_instance_locked, scheduler_bootstrap_failed)."
+            },
+            "lock_file_path": {
+              "type": "string",
+              "description": "Absolute path to agent_action_scheduler.lock when scheduling did not start."
             }
           }
         }

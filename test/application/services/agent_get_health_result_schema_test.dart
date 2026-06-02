@@ -3,6 +3,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
+import 'package:plug_agente/application/services/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
@@ -12,10 +13,13 @@ import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_marker_store.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
@@ -124,6 +128,9 @@ void main() {
         final lock = _MockAgentActionSchedulerInstanceLock();
         when(() => lock.isHeld).thenReturn(false);
 
+        const storagePath = r'C:\ProgramData\PlugAgente';
+        final markerStore = GlobalStorageAclMarkerStore(appVersionReader: () => 'schema-test');
+        final aclBootstrap = GlobalStorageAclBootstrap(markerStore: markerStore);
         final service = HealthService(
           metricsCollector: MetricsCollector(),
           gateway: _MockDatabaseGateway(),
@@ -131,15 +138,22 @@ void main() {
           agentActionRetentionSettings: retention,
           agentActionTriggerScheduler: scheduler,
           agentActionSchedulerInstanceLock: lock,
+          globalStorageContext: const GlobalStorageContext(appDirectoryPath: storagePath),
+          globalStorageHealthSnapshotBuilder: GlobalStorageHealthSnapshotBuilder(
+            aclBootstrap: aclBootstrap,
+            markerStore: markerStore,
+          ),
         );
 
-        final agentActions = service.getHealthStatus()['agent_actions'] as Map<String, Object?>?;
+        final status = service.getHealthStatus();
+        final agentActions = status['agent_actions'] as Map<String, Object?>?;
         final schedulerBlock = agentActions?['scheduler'] as Map<String, Object?>?;
         expect(schedulerBlock?['started'], isFalse);
         expect(
           schedulerBlock?['last_start_issue_reason'],
           AgentActionTriggerConstants.schedulerInstanceLockedReason,
         );
+        expect(schedulerBlock?['lock_file_path'], contains('agent_action_scheduler.lock'));
 
         final minimalHealth = <String, Object?>{
           'status': 'healthy',
@@ -157,6 +171,7 @@ void main() {
           },
           'uptime_seconds': 1,
           'agent_actions': agentActions,
+          if (status['global_storage'] case final Map<String, Object?> globalStorage) 'global_storage': globalStorage,
         };
 
         final validation = validator.validate(

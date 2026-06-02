@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
@@ -5,6 +7,7 @@ import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.d
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/application/services/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
@@ -13,6 +16,7 @@ import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
@@ -23,6 +27,8 @@ import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_marker_store.dart';
 import 'package:result_dart/result_dart.dart';
 
 import '../../helpers/mock_odbc_connection_settings.dart';
@@ -143,6 +149,57 @@ void main() {
       expect(schedulerHealth['bootstrap_disabled'], isFalse);
       expect(schedulerHealth['temporal_timer_count'], 3);
       expect(schedulerHealth['instance_lock_held'], isTrue);
+    });
+
+    test('should expose global_storage when builder and context are wired', () async {
+      final tempDir = await Directory.systemTemp.createTemp('plug_health_storage_');
+      addTearDown(() async {
+        if (tempDir.existsSync()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final markerStore = GlobalStorageAclMarkerStore(appVersionReader: () => 'test-version');
+      final aclBootstrap = GlobalStorageAclBootstrap(markerStore: markerStore);
+      await aclBootstrap.ensureDirectoryAcls(tempDir.path);
+
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        globalStorageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
+        globalStorageHealthSnapshotBuilder: GlobalStorageHealthSnapshotBuilder(
+          aclBootstrap: aclBootstrap,
+          markerStore: markerStore,
+        ),
+      );
+
+      final globalStorage = service.getHealthStatus()['global_storage']! as Map<String, Object?>;
+      expect(globalStorage['app_directory_path'], tempDir.path);
+      expect(globalStorage['acl_marker_present'], isA<bool>());
+    });
+
+    test('should expose lock_file_path when scheduler reports start issue', () {
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      final scheduler = _MockAgentActionTriggerScheduler();
+      when(() => scheduler.isTemporalSchedulerStarted).thenReturn(false);
+      when(() => scheduler.isBootstrapDisabled).thenReturn(false);
+      when(() => scheduler.scheduledTimerCount).thenReturn(0);
+      when(() => scheduler.lastStartIssueReason).thenReturn(
+        AgentActionTriggerConstants.schedulerStorageAccessDeniedReason,
+      );
+      const storagePath = r'C:\ProgramData\PlugAgente';
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        featureFlags: flags,
+        agentActionTriggerScheduler: scheduler,
+        globalStorageContext: const GlobalStorageContext(appDirectoryPath: storagePath),
+      );
+
+      final schedulerHealth =
+          (service.getHealthStatus()['agent_actions']! as Map<String, Object?>)['scheduler']! as Map<String, Object?>;
+      expect(schedulerHealth['lock_file_path'], contains('agent_action_scheduler.lock'));
+      expect(schedulerHealth['lock_file_path'], contains(storagePath));
     });
 
     test('should expose last_start_issue_reason when temporal scheduler did not start', () {

@@ -47,4 +47,6 @@ abstract final class AgentActionTriggerConstants {
   static const String schedulerInstanceLockedReason = 'scheduler_instance_locked';
 
   static const String schedulerStorageAccessDeniedReason = 'scheduler_storage_access_denied';
+
+  static const String schedulerLockFileName = 'agent_action_scheduler.lock';
 }

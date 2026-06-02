@@ -69,6 +69,7 @@ import 'package:plug_agente/presentation/adapters/hub_recovery_auth_bridge.dart'
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/boot/startup_auto_session_initializer.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/providers/agent_operational_readiness_provider.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -154,6 +155,20 @@ class AppRoot extends StatelessWidget {
             getIt<DeleteClientToken>(),
             tokenAuditStore: getIt<ITokenAuditStore>(),
           ),
+        ),
+        ChangeNotifierProxyProvider2<ConnectionProvider, ClientTokenProvider, AgentOperationalReadinessProvider>(
+          create: (context) => AgentOperationalReadinessProvider(
+            triggerScheduler: getIt.isRegistered<AgentActionTriggerScheduler>()
+                ? getIt<AgentActionTriggerScheduler>()
+                : null,
+          ),
+          update: (context, connection, clientTokens, readiness) {
+            readiness!.bind(
+              connectionProvider: connection,
+              clientTokenProvider: clientTokens,
+            );
+            return readiness;
+          },
         ),
         ChangeNotifierProvider(
           create: (context) => NotificationProvider(

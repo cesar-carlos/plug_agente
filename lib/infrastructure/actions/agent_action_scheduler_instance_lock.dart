@@ -6,6 +6,11 @@ import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
+import 'package:plug_agente/infrastructure/actions/scheduler_lock_failure_resolver.dart';
+import 'package:plug_agente/infrastructure/actions/scheduler_lock_metadata_reader.dart';
+import 'package:plug_agente/infrastructure/actions/scheduler_stale_lock_recovery.dart';
+import 'package:plug_agente/infrastructure/actions/windows_process_lifetime_checker.dart';
+import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
 import 'package:result_dart/result_dart.dart';
 
 typedef SchedulerLockDirectoryEnsurer = Future<void> Function(Directory directory);
@@ -19,17 +24,33 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
     int Function()? currentPid,
     SchedulerLockDirectoryEnsurer? ensureParentDirectory,
     SchedulerLockFileOpener? openLockFile,
-  }) : _lockFilePath = p.join(storageContext.appDirectoryPath, _lockFileName),
+    GlobalStorageAclBootstrap? aclBootstrap,
+    SchedulerLockMetadataReader? metadataReader,
+    SchedulerStaleLockRecovery? staleLockRecovery,
+    SchedulerLockFailureResolver? failureResolver,
+    WindowsProcessLifetimeChecker? processLifetimeChecker,
+  }) : _lockFilePath = p.join(storageContext.appDirectoryPath, AgentActionTriggerConstants.schedulerLockFileName),
+       _appDirectoryPath = storageContext.appDirectoryPath,
        _runtimeIdentity = runtimeIdentity,
        _currentPid = currentPid ?? _currentProcessPid,
        _ensureParentDirectory = ensureParentDirectory ?? _defaultEnsureParentDirectory,
-       _openLockFile = openLockFile ?? _defaultOpenLockFile;
+       _openLockFile = openLockFile ?? _defaultOpenLockFile,
+       _aclBootstrap = aclBootstrap ?? GlobalStorageAclBootstrap(),
+       _metadataReader = metadataReader ?? const SchedulerLockMetadataReader(),
+       _processLifetimeChecker = processLifetimeChecker ?? WindowsProcessLifetimeChecker(),
+       _staleLockRecovery =
+           staleLockRecovery ??
+           SchedulerStaleLockRecovery(
+             metadataReader: metadataReader,
+             processLifetimeChecker: processLifetimeChecker,
+             aclBootstrap: aclBootstrap,
+             currentPid: currentPid,
+           ),
+       _failureResolver = failureResolver ?? SchedulerLockFailureResolver(metadataReader: metadataReader);
 
-  static const String _lockFileName = 'agent_action_scheduler.lock';
   static const int _windowsAccessDeniedErrorCode = 5;
   static const int _posixAccessDeniedErrorCode = 13;
-  static const int _windowsSharingViolationErrorCode = 32;
-  static const int _windowsLockViolationErrorCode = 33;
+
   static final Set<String> _heldLockFilePaths = <String>{};
 
   static int _currentProcessPid() => pid;
@@ -42,18 +63,28 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
   }
 
   final String _lockFilePath;
+  final String _appDirectoryPath;
   final AgentRuntimeIdentity? _runtimeIdentity;
   final int Function() _currentPid;
   final SchedulerLockDirectoryEnsurer _ensureParentDirectory;
   final SchedulerLockFileOpener _openLockFile;
+  final GlobalStorageAclBootstrap _aclBootstrap;
+  final SchedulerLockMetadataReader _metadataReader;
+  final WindowsProcessLifetimeChecker _processLifetimeChecker;
+  final SchedulerStaleLockRecovery _staleLockRecovery;
+  final SchedulerLockFailureResolver _failureResolver;
 
   RandomAccessFile? _handle;
 
   @override
   bool get isHeld => _handle != null;
 
+  String get lockFilePath => _lockFilePath;
+
   @override
-  Future<Result<Unit>> tryAcquire() async {
+  Future<Result<Unit>> tryAcquire() => _tryAcquireOnce();
+
+  Future<Result<Unit>> _tryAcquireOnce({bool isRetry = false}) async {
     if (_handle != null) {
       return const Success(unit);
     }
@@ -63,7 +94,12 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
     try {
       await _ensureParentDirectory(file.parent);
       if (_heldLockFilePaths.contains(_lockFilePath)) {
-        return Failure(await _lockedFailure());
+        return Failure(
+          await _resolveFailure(
+            const FileSystemException('Scheduler lock is already held in-process.'),
+            lockHolderAlive: true,
+          ),
+        );
       }
 
       handle = await _openLockFile(file);
@@ -81,11 +117,64 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
       await handle.flush();
       _handle = handle;
       _heldLockFilePaths.add(_lockFilePath);
+      await _aclBootstrap.normalizeLockFile(_lockFilePath);
       return const Success(unit);
     } on FileSystemException catch (error) {
       await _closeQuietly(handle);
-      return Failure(await _classifyFileSystemFailure(error));
+      if (!isRetry && _isAccessDenied(error)) {
+        final lockHolderAlive = await _isForeignLockHolderAlive();
+        if (lockHolderAlive) {
+          return Failure(await _resolveFailure(error, lockHolderAlive: true));
+        }
+        if (await _staleLockRecovery.tryRemoveStaleLock(
+          lockFilePath: _lockFilePath,
+          appDirectoryPath: _appDirectoryPath,
+        )) {
+          return _tryAcquireOnce(isRetry: true);
+        }
+      }
+      return Failure(
+        await _resolveFailure(
+          error,
+          lockHolderAlive: await _isForeignLockHolderAlive(),
+        ),
+      );
     }
+  }
+
+  Future<bool> _isForeignLockHolderAlive() async {
+    final metadata = await _metadataReader.read(_lockFilePath);
+    final lockPid = metadata?.pid;
+    if (lockPid == null || lockPid == _currentPid()) {
+      return false;
+    }
+    return _processLifetimeChecker.isProcessRunning(lockPid);
+  }
+
+  Future<ActionAuthorizationFailure> _resolveFailure(
+    FileSystemException error, {
+    required bool lockHolderAlive,
+  }) async {
+    final metadata = await _metadataReader.read(_lockFilePath);
+    return _failureResolver.resolve(
+      error,
+      lockFilePath: _lockFilePath,
+      metadata: metadata,
+      lockHolderAlive: lockHolderAlive,
+    );
+  }
+
+  bool _isAccessDenied(FileSystemException error) {
+    final code = error.osError?.errorCode;
+    if (code == _windowsAccessDeniedErrorCode || code == _posixAccessDeniedErrorCode) {
+      return true;
+    }
+
+    final message = '${error.message} ${error.osError?.message ?? ''}'.toLowerCase();
+    return message.contains('access is denied') ||
+        message.contains('permission denied') ||
+        message.contains('acesso negado') ||
+        message.contains('permissao negada');
   }
 
   @override
@@ -108,143 +197,6 @@ class AgentActionSchedulerInstanceLock implements IAgentActionSchedulerInstanceL
       File(_lockFilePath).deleteSync();
     } on FileSystemException {
       // Lock file may already be gone after crash recovery.
-    }
-  }
-
-  Future<ActionAuthorizationFailure> _classifyFileSystemFailure(
-    FileSystemException error,
-  ) async {
-    if (_isLockConflict(error)) {
-      return _lockedFailure(error);
-    }
-
-    if (_isAccessDenied(error)) {
-      return _storageAccessDeniedFailure(error);
-    }
-
-    return _bootstrapFailure(error);
-  }
-
-  bool _isLockConflict(FileSystemException error) {
-    final code = error.osError?.errorCode;
-    if (code == _windowsSharingViolationErrorCode || code == _windowsLockViolationErrorCode) {
-      return true;
-    }
-
-    final message = '${error.message} ${error.osError?.message ?? ''}'.toLowerCase();
-    return message.contains('sharing violation') ||
-        message.contains('lock violation') ||
-        message.contains('has locked a portion of the file') ||
-        message.contains('cannot access the file because it is being used by another process');
-  }
-
-  bool _isAccessDenied(FileSystemException error) {
-    final code = error.osError?.errorCode;
-    if (code == _windowsAccessDeniedErrorCode || code == _posixAccessDeniedErrorCode) {
-      return true;
-    }
-
-    final message = '${error.message} ${error.osError?.message ?? ''}'.toLowerCase();
-    return message.contains('access is denied') ||
-        message.contains('permission denied') ||
-        message.contains('acesso negado') ||
-        message.contains('permissao negada');
-  }
-
-  Future<ActionAuthorizationFailure> _lockedFailure([Object? cause]) async {
-    return ActionAuthorizationFailure.withContext(
-      message: 'Another Plug Agente process is already running the action scheduler.',
-      code: AgentActionFailureCode.schedulerBootstrapFailed,
-      cause: cause,
-      context: await _buildFailureContext(
-        reason: AgentActionTriggerConstants.schedulerInstanceLockedReason,
-        userMessage: 'Outro processo do Plug Agente ja esta executando o agendador de acoes nesta pasta de dados.',
-        cause: cause,
-      ),
-    );
-  }
-
-  Future<ActionAuthorizationFailure> _storageAccessDeniedFailure([Object? cause]) async {
-    return ActionAuthorizationFailure.withContext(
-      message: 'Agent action scheduler lock storage is not accessible.',
-      code: AgentActionFailureCode.schedulerBootstrapFailed,
-      cause: cause,
-      context: await _buildFailureContext(
-        reason: AgentActionTriggerConstants.schedulerStorageAccessDeniedReason,
-        userMessage:
-            'O agendador de acoes nao conseguiu acessar o arquivo de lock nesta pasta de dados. Revise permissoes de leitura/escrita ou execute o agente com privilegios adequados.',
-        cause: cause,
-      ),
-    );
-  }
-
-  Future<ActionAuthorizationFailure> _bootstrapFailure([Object? cause]) async {
-    return ActionAuthorizationFailure.withContext(
-      message: 'Agent action scheduler lock bootstrap failed.',
-      code: AgentActionFailureCode.schedulerBootstrapFailed,
-      cause: cause,
-      context: await _buildFailureContext(
-        reason: AgentActionTriggerConstants.schedulerBootstrapFailedReason,
-        userMessage:
-            'O agendador de acoes falhou ao inicializar nesta pasta de dados. Reinicie o agente ou revise o estado do arquivo de lock.',
-        cause: cause,
-      ),
-    );
-  }
-
-  Future<Map<String, Object?>> _buildFailureContext({
-    required String reason,
-    required String userMessage,
-    Object? cause,
-  }) async {
-    final context = <String, Object?>{
-      'reason': reason,
-      'user_message': userMessage,
-      'lock_file_path': _lockFilePath,
-    };
-    if (cause is FileSystemException) {
-      final osError = cause.osError;
-      if (osError != null) {
-        context['os_error_code'] = osError.errorCode;
-        if (osError.message.isNotEmpty) {
-          context['os_error_message'] = osError.message;
-        }
-      }
-      if (cause.path case final String path when path.trim().isNotEmpty) {
-        context['os_error_path'] = path.trim();
-      }
-    }
-    context.addAll(await _readLockFileMetadata());
-    return context;
-  }
-
-  Future<Map<String, Object?>> _readLockFileMetadata() async {
-    final file = File(_lockFilePath);
-    if (!file.existsSync()) {
-      return const <String, Object?>{};
-    }
-
-    try {
-      final lines = await file.readAsLines();
-      if (lines.isEmpty) {
-        return const <String, Object?>{};
-      }
-      final metadata = <String, Object?>{};
-      for (final line in lines) {
-        final separatorIndex = line.indexOf('=');
-        if (separatorIndex <= 0 || separatorIndex >= line.length - 1) {
-          continue;
-        }
-        final key = line.substring(0, separatorIndex).trim();
-        final value = line.substring(separatorIndex + 1).trim();
-        if (key.isEmpty || value.isEmpty) {
-          continue;
-        }
-        metadata['lock_$key'] = value;
-      }
-      return metadata;
-    } on FileSystemException {
-      return const <String, Object?>{};
     }
   }
 

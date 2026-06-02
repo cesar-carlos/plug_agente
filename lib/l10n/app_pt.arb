@@ -517,11 +517,24 @@
   "agentActionsMaintenanceModeInfoMessage": "Execucoes agendadas, gatilhos de inicio/fechamento do app e execucoes remotas ficam pausadas. Voce ainda pode executar acoes nesta tela e editar definicoes.",
   "agentActionsMaintenanceStrictMode": "Bloquear execucao manual tambem",
   "agentActionsElevatedRunnerNotReadyTitle": "Executor elevado nao preparado",
-  "agentActionsElevatedRunnerNotReadyMessage": "Para usar execucao elevada, registre a tarefa do helper com privilegio alto. O Windows pode solicitar UAC uma vez.",
+  "agentActionsElevatedRunnerNotReadyMessage": "Para usar execucao elevada, registre a tarefa do helper com privilegio alto. O Windows pode solicitar UAC uma vez. Hub, SQL remoto e demais funcoes do agente continuam normais.",
   "agentActionsElevatedRunnerDegradedTitle": "Executor elevado indisponivel",
-  "agentActionsElevatedRunnerDegradedMessage": "O helper elevado falhou recentemente. Prepare novamente antes de executar acoes com privilegio alto.",
+  "agentActionsElevatedRunnerDegradedMessage": "O helper elevado falhou recentemente. Prepare novamente antes de executar acoes com privilegio alto. Hub, SQL remoto e demais funcoes do agente continuam normais.",
   "agentActionsElevatedRunnerPrepare": "Preparar executor elevado",
   "agentActionsElevatedRunnerPreparing": "Preparando executor elevado...",
+  "agentOperationalReadinessHubConnected": "Hub: conectado",
+  "agentOperationalReadinessHubConnecting": "Hub: conectando",
+  "agentOperationalReadinessHubDisconnected": "Hub: desconectado",
+  "agentOperationalReadinessHubError": "Hub: erro",
+  "agentOperationalReadinessActiveClientTokens": "{count, plural, =0{Nenhum token de cliente ativo} =1{1 token de cliente ativo} other{{count} tokens de cliente ativos}}",
+  "@agentOperationalReadinessActiveClientTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "agentOperationalReadinessSchedulerIssue": "Gatilhos agendados com problema",
   "agentActionsFormRunElevated": "Executar com privilegio elevado (helper Windows)",
   "agentActionsFormRunElevatedHint": "Requer o helper instalado e a tarefa agendada preparada neste agente.",
   "agentActionsSubsystemStatusStartingTitle": "Acoes do agente em inicializacao",
