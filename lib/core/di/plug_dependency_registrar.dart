@@ -45,7 +45,8 @@ import 'package:plug_agente/application/services/client_token_validation_service
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
-import 'package:plug_agente/application/services/global_storage_health_snapshot_builder.dart';
+import 'package:plug_agente/domain/repositories/i_global_storage_health_snapshot_builder.dart';
+import 'package:plug_agente/infrastructure/health/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
@@ -302,7 +303,7 @@ void registerPlugDependencyGraph(
       ),
     )
     ..registerLazySingleton(WindowsProcessLifetimeChecker.new)
-    ..registerLazySingleton(
+    ..registerLazySingleton<IGlobalStorageHealthSnapshotBuilder>(
       () => GlobalStorageHealthSnapshotBuilder(
         aclBootstrap: getIt<GlobalStorageAclBootstrap>(),
         markerStore: getIt<GlobalStorageAclMarkerStore>(),
@@ -673,8 +674,8 @@ void registerPlugDependencyGraph(
         agentActionSchedulerInstanceLock: getIt.isRegistered<IAgentActionSchedulerInstanceLock>()
             ? getIt<IAgentActionSchedulerInstanceLock>()
             : null,
-        globalStorageHealthSnapshotBuilder: getIt.isRegistered<GlobalStorageHealthSnapshotBuilder>()
-            ? getIt<GlobalStorageHealthSnapshotBuilder>()
+        globalStorageHealthSnapshotBuilder: getIt.isRegistered<IGlobalStorageHealthSnapshotBuilder>()
+            ? getIt<IGlobalStorageHealthSnapshotBuilder>()
             : null,
         globalStorageContext: getIt.isRegistered<GlobalStorageContext>() ? getIt<GlobalStorageContext>() : null,
         comObjectInvocationDiagnostics: getIt<IComObjectInvocationDiagnostics>(),

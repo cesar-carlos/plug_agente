@@ -1,9 +1,9 @@
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_marker_store.dart';
 
-/// Builds the `global_storage` block for agent health responses.
-class GlobalStorageHealthSnapshotBuilder {
+class GlobalStorageHealthSnapshotBuilder implements IGlobalStorageHealthSnapshotBuilder {
   GlobalStorageHealthSnapshotBuilder({
     required GlobalStorageAclBootstrap aclBootstrap,
     required GlobalStorageAclMarkerStore markerStore,
@@ -13,6 +13,7 @@ class GlobalStorageHealthSnapshotBuilder {
   final GlobalStorageAclBootstrap _aclBootstrap;
   final GlobalStorageAclMarkerStore _markerStore;
 
+  @override
   Map<String, Object?> build(GlobalStorageContext context) {
     final marker = _markerStore.read(context.appDirectoryPath);
     final lastOutcome = _aclBootstrap.lastOutcome;

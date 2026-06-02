@@ -12,6 +12,9 @@ import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/websocket_config_section.dart';
 import 'package:plug_agente/presentation/pages/websocket_settings/websocket_config_form_controller.dart';
+import 'package:plug_agente/application/services/agent_operational_readiness_snapshot.dart';
+import 'package:plug_agente/domain/value_objects/hub_connection_phase.dart';
+import 'package:plug_agente/presentation/providers/agent_operational_readiness_provider.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -23,6 +26,10 @@ class MockConfigProvider extends Mock with ChangeNotifier implements ConfigProvi
 class MockAuthProvider extends Mock with ChangeNotifier implements AuthProvider {}
 
 class MockConnectionProvider extends Mock with ChangeNotifier implements ConnectionProvider {}
+
+class MockAgentOperationalReadinessProvider extends Mock
+    with ChangeNotifier
+    implements AgentOperationalReadinessProvider {}
 
 void main() {
   late AppLocalizations ptL10n;
@@ -477,6 +484,18 @@ ConnectionProvider _idleConnectionProvider() {
   return mock;
 }
 
+AgentOperationalReadinessProvider _idleAgentOperationalReadinessProvider() {
+  final mock = MockAgentOperationalReadinessProvider();
+  when(() => mock.snapshot).thenReturn(
+    const AgentOperationalReadinessSnapshot(
+      hubConnected: false,
+      hubPhase: HubConnectionPhase.disconnected,
+      activeClientTokenCount: 0,
+    ),
+  );
+  return mock;
+}
+
 Widget _buildWidget({
   required ConfigProvider configProvider,
   required AuthProvider authProvider,
@@ -500,6 +519,9 @@ Widget _buildWidget({
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
         ChangeNotifierProvider<ConnectionProvider>.value(
           value: connectionProvider,
+        ),
+        ChangeNotifierProvider<AgentOperationalReadinessProvider>.value(
+          value: _idleAgentOperationalReadinessProvider(),
         ),
       ],
       child: MediaQuery(

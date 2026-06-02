@@ -10,6 +10,9 @@ import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/websocket_settings_page.dart';
+import 'package:plug_agente/application/services/agent_operational_readiness_snapshot.dart';
+import 'package:plug_agente/domain/value_objects/hub_connection_phase.dart';
+import 'package:plug_agente/presentation/providers/agent_operational_readiness_provider.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -21,6 +24,10 @@ class MockHubSessionCoordinator extends Mock implements HubSessionCoordinator {}
 class MockConfigProvider extends Mock with ChangeNotifier implements ConfigProvider {}
 
 class MockConnectionProvider extends Mock with ChangeNotifier implements ConnectionProvider {}
+
+class MockAgentOperationalReadinessProvider extends Mock
+    with ChangeNotifier
+    implements AgentOperationalReadinessProvider {}
 
 void main() {
   late AppLocalizations enL10n;
@@ -76,6 +83,9 @@ void main() {
             ChangeNotifierProvider<ConfigProvider>.value(value: configProvider),
             ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
             ChangeNotifierProvider<ConnectionProvider>.value(value: connectionProvider),
+            ChangeNotifierProvider<AgentOperationalReadinessProvider>.value(
+              value: _idleAgentOperationalReadinessProvider(),
+            ),
           ],
           child: const WebSocketSettingsPage(),
         ),
@@ -93,6 +103,18 @@ void main() {
 
     expect(find.text(enL10n.msgAuthenticatedSuccessfully), findsNothing);
   });
+}
+
+AgentOperationalReadinessProvider _idleAgentOperationalReadinessProvider() {
+  final mock = MockAgentOperationalReadinessProvider();
+  when(() => mock.snapshot).thenReturn(
+    const AgentOperationalReadinessSnapshot(
+      hubConnected: false,
+      hubPhase: HubConnectionPhase.disconnected,
+      activeClientTokenCount: 0,
+    ),
+  );
+  return mock;
 }
 
 final Config _savedConfig = Config(
