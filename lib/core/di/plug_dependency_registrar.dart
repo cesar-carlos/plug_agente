@@ -45,8 +45,6 @@ import 'package:plug_agente/application/services/client_token_validation_service
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
-import 'package:plug_agente/domain/repositories/i_global_storage_health_snapshot_builder.dart';
-import 'package:plug_agente/infrastructure/health/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
@@ -168,6 +166,7 @@ import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.
 import 'package:plug_agente/domain/repositories/i_developer_data7_connection_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_elevated_action_execution_canceller.dart';
 import 'package:plug_agente/domain/repositories/i_elevated_action_runner_bridge.dart';
+import 'package:plug_agente/domain/repositories/i_global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_hub_availability_probe.dart';
 import 'package:plug_agente/domain/repositories/i_hub_session_store.dart';
@@ -213,6 +212,7 @@ import 'package:plug_agente/infrastructure/external_services/socket_io_transport
 import 'package:plug_agente/infrastructure/external_services/throttled_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/open_rpc_document_loader.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
+import 'package:plug_agente/infrastructure/health/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_cache_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/deprecation_metrics.dart';
