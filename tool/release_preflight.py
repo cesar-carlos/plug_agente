@@ -229,11 +229,121 @@ def ensure_github_pages_workflow_ready(repo: str) -> None:
         )
 
 
+def ensure_appcast_signing_tests_not_skipped() -> None:
+    result = run(
+        ["python", "-m", "unittest", "tool.test_appcast_signing", "-v"],
+        check=False,
+    )
+    combined = f"{result.stdout}\n{result.stderr}"
+    if result.returncode != 0:
+        raise RuntimeError(
+            "tool.test_appcast_signing failed. Install cryptography and re-run preflight."
+            + (f"\n{combined.strip()}" if combined.strip() else "")
+        )
+    if "skipped=" in combined:
+        raise RuntimeError(
+            "tool.test_appcast_signing reported skipped tests "
+            "(cryptography missing or suite disabled)."
+        )
+
+
+def run_early_checks(args: argparse.Namespace, version_short: str) -> None:
+    """Fast checks before bumping pubspec in CI (tag + toolchain only)."""
+    ensure_tools(require_iscc=args.require_iscc, check_pages=False)
+    if not args.allow_existing_tag:
+        ensure_tag_available(f"v{version_short}")
+
+
 def run_optional_checks(args: argparse.Namespace) -> None:
     if args.analyze:
         run(["flutter", "analyze"])
     if args.tests:
         run(["flutter", "test"])
+    if args.tests_ci:
+        run(["flutter", "test", "--exclude-tags", "live || slow || perf"])
+    if args.architecture:
+        run(["flutter", "test", "test/architecture/layer_boundaries_test.dart"])
+    if args.appcast_tooling:
+        run(
+            [
+                "python",
+                "-m",
+                "unittest",
+                "tool.test_appcast_manager",
+                "tool.test_validate_release",
+                "tool.test_appcast_signing",
+                "-v",
+            ]
+        )
+        ensure_appcast_signing_tests_not_skipped()
+
+
+def list_github_actions_secrets(repo: str) -> set[str]:
+    result = run(["gh", "secret", "list", "--repo", repo], check=False)
+    if result.returncode != 0:
+        return set()
+    return {line.split()[0] for line in result.stdout.splitlines() if line.strip()}
+
+
+def collect_publish_secret_warnings(repo: str) -> list[str]:
+    secrets = list_github_actions_secrets(repo)
+    warnings: list[str] = []
+    if "RELEASE_PUBLISH_TOKEN" not in secrets:
+        warnings.append(
+            "RELEASE_PUBLISH_TOKEN is not configured: update-appcast.yml will not run "
+            "automatically after publish (the publish workflow dispatches it as fallback)."
+        )
+    if "WINDOWS_CODE_SIGNING_CERT_BASE64" not in secrets:
+        warnings.append(
+            "WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured: builds are unsigned and "
+            "Authenticode verification is skipped in CI."
+        )
+    if "AUTO_UPDATE_FEED_PUBLIC_KEY" not in secrets:
+        warnings.append(
+            "AUTO_UPDATE_FEED_PUBLIC_KEY is not configured: feed signature embedding checks "
+            "are skipped unless you pass --feed-public-key."
+        )
+    return warnings
+
+
+def print_publish_workflow_hints(
+    *,
+    version_short: str,
+    build_number: str,
+    repo: str,
+    skip_authenticode: bool,
+) -> None:
+    secrets = list_github_actions_secrets(repo)
+    has_signing = "WINDOWS_CODE_SIGNING_CERT_BASE64" in secrets
+    has_publish_token = "RELEASE_PUBLISH_TOKEN" in secrets
+
+    print("\nPublish workflow hints:")
+    print(f"  1. Optional dry run: gh workflow run \"Publish Windows Release\" --ref main")
+    print(f"     -f version={version_short} -f build_number={build_number} -f dry_run=true")
+    print("  2. Production publish:")
+    authode_flag = "true" if skip_authenticode or not has_signing else "false"
+    print(
+        f"     gh workflow run \"Publish Windows Release\" --ref main "
+        f"-f version={version_short} -f build_number={build_number} "
+        f"-f run_tests=true -f require_signing=false -f dry_run=false "
+        f"-f skip_authenticode_check={authode_flag}"
+    )
+    if not has_signing:
+        print(
+            "  WARN: WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured; "
+            "use skip_authenticode_check=true or the publish job will fail after the build."
+        )
+    if not has_publish_token:
+        print(
+            "  WARN: RELEASE_PUBLISH_TOKEN is not configured; "
+            "update-appcast.yml will not run automatically after publish."
+        )
+        print(
+            f"     After publish: gh workflow run \"Update Appcast on Release\" --ref main "
+            f"-f release_tag=v{version_short} -f rollout_percentage=100 -f channel=stable"
+        )
+    else:
+        print("  OK: RELEASE_PUBLISH_TOKEN is configured (appcast should auto-update).")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -247,6 +357,46 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo", default="cesar-carlos/plug_agente", help="GitHub repository used by --check-pages.")
     parser.add_argument("--analyze", action="store_true", help="Run flutter analyze.")
     parser.add_argument("--tests", action="store_true", help="Run flutter test.")
+    parser.add_argument(
+        "--tests-ci",
+        action="store_true",
+        help='Run flutter test with the same --exclude-tags filter used by Publish Windows Release.',
+    )
+    parser.add_argument(
+        "--architecture",
+        action="store_true",
+        help="Run architecture/layer boundary tests.",
+    )
+    parser.add_argument(
+        "--appcast-tooling",
+        action="store_true",
+        help="Run Python appcast/release validator unit tests (CI parity).",
+    )
+    parser.add_argument(
+        "--gate",
+        action="store_true",
+        help="CI parity gate: --analyze --tests-ci --architecture --appcast-tooling.",
+    )
+    parser.add_argument(
+        "--early",
+        action="store_true",
+        help="Fast CI check before version bump: --require-iscc, tag availability (--version required).",
+    )
+    parser.add_argument(
+        "--build-number",
+        default="1",
+        help="Build suffix for publish workflow hints (default: 1).",
+    )
+    parser.add_argument(
+        "--print-publish-hints",
+        action="store_true",
+        help="Print gh workflow commands and signing/appcast warnings after checks pass.",
+    )
+    parser.add_argument(
+        "--check-secrets",
+        action="store_true",
+        help="Print GitHub Actions secret warnings (never fails; use with --gate or --print-publish-hints).",
+    )
     parser.add_argument(
         "--feed-public-key",
         default="",
@@ -263,7 +413,26 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.gate:
+        args.analyze = True
+        args.tests_ci = True
+        args.architecture = True
+        args.appcast_tooling = True
     try:
+        if args.check_secrets or args.print_publish_hints or args.early:
+            for warning in collect_publish_secret_warnings(args.repo):
+                print(f"WARN: {warning}", file=sys.stderr)
+
+        if args.early:
+            if not args.version:
+                raise RuntimeError("--early requires --version (target short version).")
+            run_early_checks(args, args.version)
+            print(
+                f"Early release preflight passed (target=v{args.version}, "
+                f"tag_available={args.allow_existing_tag})."
+            )
+            return 0
+
         state = load_version_state()
         ensure_clean_worktree(allow_dirty=args.allow_dirty)
         ensure_version_sync(state, args.version)
@@ -285,6 +454,16 @@ def main(argv: list[str] | None = None) -> int:
         "Release preflight passed "
         f"(version={state.full_version}, tag=v{state.short_version}, setup={state.setup_version})."
     )
+    if args.print_publish_hints:
+        expected = args.version or state.short_version
+        secrets = list_github_actions_secrets(args.repo)
+        has_signing = "WINDOWS_CODE_SIGNING_CERT_BASE64" in secrets
+        print_publish_workflow_hints(
+            version_short=expected,
+            build_number=args.build_number.strip() or "1",
+            repo=args.repo,
+            skip_authenticode=not has_signing,
+        )
     return 0
 
 

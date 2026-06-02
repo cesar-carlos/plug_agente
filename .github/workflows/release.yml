@@ -45,7 +45,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: publish-windows-release-${{ inputs.version }}
@@ -71,18 +71,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --yes --no-progress
 
       - name: Install Python dependencies
         run: python -m pip install --quiet "cryptography>=42.0.0"
+
+      - name: Early release preflight
+        shell: bash
+        run: |
+          ARGS=(--early --version "${{ env.VERSION_SHORT }}" --require-iscc --check-secrets)
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--allow-existing-tag)
+          fi
+          python tool/release_preflight.py "${ARGS[@]}"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
       - name: Install Flutter dependencies
         run: flutter pub get
@@ -114,38 +123,18 @@ jobs:
       - name: Synchronize version files
         run: python installer/update_version.py
 
-      - name: Release preflight
-        if: ${{ !inputs.dry_run }}
-        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --require-iscc
-
-      - name: Release preflight dry run
-        if: inputs.dry_run
-        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --allow-existing-tag --require-iscc
-
-      - name: Analyze
-        if: inputs.run_tests
-        run: flutter analyze
-
-      - name: Test
-        if: inputs.run_tests
-        run: flutter test --exclude-tags "live || slow || perf"
-
-      - name: Validate appcast tooling
-        if: inputs.run_tests
-        run: python -m unittest tool.test_appcast_manager tool.test_validate_release tool.test_appcast_signing -v
-
-      - name: Ensure appcast signing tests did not skip
-        if: inputs.run_tests
-        shell: pwsh
+      - name: Verify version synchronization
+        shell: bash
         run: |
-          # A skip would mean cryptography failed to install or the suite
-          # silently disabled itself. unittest prints `OK (skipped=N)` when
-          # tests skipped and a plain `OK` otherwise.
-          $output = python -m unittest tool.test_appcast_signing -v 2>&1 | Out-String
-          if ($output -match 'skipped=') {
-            Write-Error "tool.test_appcast_signing reported skipped tests: $output"
-            exit 1
-          }
+          ARGS=(--version "${{ env.VERSION_SHORT }}" --allow-dirty)
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--allow-existing-tag)
+          fi
+          python tool/release_preflight.py "${ARGS[@]}"
+
+      - name: Release quality gate
+        if: inputs.run_tests
+        run: python tool/release_preflight.py --gate --allow-dirty --allow-existing-tag
 
       - name: Prepare signing certificate
         id: signing
@@ -160,6 +149,26 @@ jobs:
           $certPath = Join-Path $env:RUNNER_TEMP "plug-agente-code-signing.pfx"
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CERT_BASE64))
           "cert_path=$certPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Resolve Authenticode verification
+        id: authenticode
+        shell: pwsh
+        env:
+          CERT_PATH: ${{ steps.signing.outputs.cert_path }}
+          REQUIRE_SIGNING: ${{ inputs.require_signing }}
+          SKIP_INPUT: ${{ inputs.skip_authenticode_check }}
+        run: |
+          $hasCert = -not [string]::IsNullOrWhiteSpace($env:CERT_PATH)
+          $requireSigning = $env:REQUIRE_SIGNING -eq 'true'
+          $skipInput = $env:SKIP_INPUT -eq 'true'
+          if ($requireSigning -and -not $hasCert) {
+            throw "require_signing=true but WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured."
+          }
+          $skip = $skipInput -or -not $hasCert
+          if (-not $hasCert -and -not $skipInput) {
+            Write-Host "::warning::No code signing certificate configured; skipping Authenticode verification (unsigned build)."
+          }
+          "skip=$($skip.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Build installer
         env:
@@ -184,7 +193,7 @@ jobs:
         shell: bash
 
       - name: Verify Authenticode signatures
-        if: ${{ !inputs.skip_authenticode_check }}
+        if: steps.authenticode.outputs.skip != 'true'
         shell: pwsh
         env:
           INSTALLER_PATH: installer/dist/PlugAgente-Setup-${{ env.VERSION_SHORT }}.exe
@@ -282,6 +291,22 @@ jobs:
             --verify-tag \
             ${LATEST_FLAG} \
             ${PRERELEASE_FLAG}
+
+      - name: Dispatch appcast update without PAT
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "${{ secrets.RELEASE_PUBLISH_TOKEN }}" ]; then
+            echo "RELEASE_PUBLISH_TOKEN is configured; appcast should update via release.published webhook."
+            exit 0
+          fi
+          echo "::warning::RELEASE_PUBLISH_TOKEN not set; dispatching Update Appcast on Release."
+          gh workflow run "Update Appcast on Release" --ref main \
+            -f "release_tag=${RELEASE_TAG}" \
+            -f rollout_percentage=100 \
+            -f channel=stable
 
       - name: Dry run summary
         if: inputs.dry_run

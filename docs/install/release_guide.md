@@ -14,15 +14,48 @@ Plug Agente.
 - O CI falha se `pubspec.yaml`, `installer/setup.iss` e
   `lib/core/constants/app_version.g.dart` estiverem fora de sincronia.
 
+## Pre-validacao local (antes do CI)
+
+Rode o gate local com paridade ao publish workflow **antes** de disparar o CI:
+
+```powershell
+.\tool\pre_publish_release.ps1 -Version 1.8.4
+```
+
+Equivalente manual:
+
+```bash
+python tool/release_preflight.py --version 1.8.4 --gate --check-secrets --print-publish-hints
+```
+
+O gate executa `flutter analyze`, `flutter test --exclude-tags "live || slow || perf"`,
+`test/architecture/layer_boundaries_test.dart` e os testes Python de appcast.
+Tambem imprime avisos sobre secrets (`RELEASE_PUBLISH_TOKEN`, assinatura, feed key)
+e os comandos `gh workflow run` sugeridos.
+
+Hook git opcional (pre-push em `main` quando `pubspec.yaml`, `lib/` ou `test/` mudam):
+
+```powershell
+.\tool\install_git_hooks.ps1
+# pular uma vez: $env:SKIP_RELEASE_GATE = '1'
+```
+
 ## Processo Recomendado
 
 O caminho preferencial e o workflow manual **Publish Windows Release** em
 GitHub Actions. Ele atualiza a versao, valida sincronizacao, gera o instalador
 Windows, cria commit/tag/release e anexa o asset correto.
 
-1. Acesse `Actions` > `Publish Windows Release`.
-2. Execute `Run workflow` em `main`.
-3. Informe:
+Ordem sugerida:
+
+1. `.\tool\pre_publish_release.ps1 -Version X.Y.Z` (local).
+2. (Opcional) `Actions` > **Release Preflight** com a mesma versao (build no CI
+   sem publicar).
+3. (Opcional) **Publish Windows Release** com `dry_run=true`.
+4. **Publish Windows Release** em producao (`dry_run=false`):
+   - Acesse `Actions` > `Publish Windows Release`.
+   - Execute `Run workflow` em `main`.
+   - Informe:
    - `version`: versao curta, exemplo `1.6.6`;
    - `build_number`: sufixo do `pubspec.yaml`, exemplo `1`;
    - `run_tests`: mantenha ativo para release estavel;
@@ -30,8 +63,9 @@ Windows, cria commit/tag/release e anexa o asset correto.
      configurados;
    - `prerelease`: use apenas para versoes de validacao;
    - `dry_run`: gera e valida o instalador sem criar commit, tag ou release.
-4. Apos a publicacao, confirme que o workflow **Update Appcast on Release**
-   terminou com sucesso.
+5. Apos a publicacao, confirme que o workflow **Update Appcast on Release**
+   terminou com sucesso (disparo automatico com `RELEASE_PUBLISH_TOKEN`, ou
+   fallback disparado pelo proprio publish workflow).
 
 Use `dry_run=true` para validar uma versao antes de publica-la. O workflow
 continua atualizando a versao no workspace temporario do runner, rodando
@@ -44,7 +78,14 @@ Secrets opcionais para assinatura:
 
 Quando `require_signing=true`, a release falha se o certificado nao estiver
 disponivel. Quando `false`, a assinatura e aplicada apenas se os secrets
-existirem.
+existirem. Sem certificado, o workflow **pula automaticamente** a verificacao
+Authenticode (nao e mais necessario marcar `skip_authenticode_check=true`).
+
+Secrets recomendados:
+
+- `RELEASE_PUBLISH_TOKEN`: PAT classico com escopo `repo` para o appcast disparar
+  sozinho apos a release. Sem ele, o workflow **Publish Windows Release** dispara
+  **Update Appcast on Release** como fallback.
 
 ## Processo Local Manual
 

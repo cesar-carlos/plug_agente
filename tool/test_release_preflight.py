@@ -178,6 +178,78 @@ class ReleasePreflightTests(unittest.TestCase):
         with patch.object(release_preflight, "run", return_value=result):
             release_preflight.ensure_github_pages_workflow_ready("owner/repo")
 
+    def test_main_with_gate_invokes_ci_parity_checks(self) -> None:
+        state = release_preflight.VersionState(
+            full_version="1.6.6+1",
+            short_version="1.6.6",
+            setup_version="1.6.6",
+            generated_version="1.6.6+1",
+        )
+        with (
+            patch.object(release_preflight, "load_version_state", return_value=state),
+            patch.object(release_preflight, "ensure_clean_worktree"),
+            patch.object(release_preflight, "ensure_version_sync"),
+            patch.object(release_preflight, "ensure_tools"),
+            patch.object(release_preflight, "ensure_tag_available"),
+            patch.object(release_preflight, "run_optional_checks") as optional_checks,
+        ):
+            code = release_preflight.main(
+                ["--gate", "--version", "1.6.6", "--allow-dirty", "--allow-existing-tag"]
+            )
+
+        self.assertEqual(code, 0)
+        args = optional_checks.call_args.args[0]
+        self.assertTrue(args.analyze)
+        self.assertTrue(args.tests_ci)
+        self.assertTrue(args.architecture)
+        self.assertTrue(args.appcast_tooling)
+
+    def test_ensure_appcast_signing_tests_not_skipped_rejects_skipped_suite(self) -> None:
+        result = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="OK (skipped=1)",
+            stderr="",
+        )
+        with patch.object(release_preflight, "run", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "skipped tests"):
+                release_preflight.ensure_appcast_signing_tests_not_skipped()
+
+    def test_early_checks_validates_tag_without_version_sync(self) -> None:
+        with (
+            patch.object(release_preflight, "ensure_tools"),
+            patch.object(release_preflight, "ensure_tag_available") as tag_check,
+        ):
+            release_preflight.run_early_checks(
+                release_preflight.build_parser().parse_args(
+                    ["--early", "--version", "1.6.7", "--require-iscc"]
+                ),
+                "1.6.7",
+            )
+        tag_check.assert_called_once_with("v1.6.7")
+
+    def test_collect_publish_secret_warnings_lists_missing_secrets(self) -> None:
+        with patch.object(release_preflight, "list_github_actions_secrets", return_value=set()):
+            warnings = release_preflight.collect_publish_secret_warnings("owner/repo")
+        self.assertGreaterEqual(len(warnings), 2)
+        joined = " ".join(warnings)
+        self.assertIn("RELEASE_PUBLISH_TOKEN", joined)
+        self.assertIn("WINDOWS_CODE_SIGNING_CERT_BASE64", joined)
+
+    def test_list_github_actions_secrets_parses_names(self) -> None:
+        result = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="RELEASE_PUBLISH_TOKEN\t2026-01-01\nWINDOWS_CODE_SIGNING_CERT_BASE64\t2026-01-01\n",
+            stderr="",
+        )
+        with patch.object(release_preflight, "run", return_value=result):
+            names = release_preflight.list_github_actions_secrets("owner/repo")
+        self.assertEqual(
+            names,
+            {"RELEASE_PUBLISH_TOKEN", "WINDOWS_CODE_SIGNING_CERT_BASE64"},
+        )
+
     def test_ensure_github_pages_workflow_ready_rejects_missing_pages(self) -> None:
         result = subprocess.CompletedProcess(
             args=[],

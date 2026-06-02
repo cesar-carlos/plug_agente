@@ -71,18 +71,24 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --yes --no-progress
 
       - name: Install Python dependencies
         run: python -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
+
+      - name: Early release preflight
+        run: >
+          python tool/release_preflight.py
+          --early --version "${{ env.VERSION_SHORT }}"
+          --allow-existing-tag --require-iscc --check-secrets
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
       - name: Install Flutter dependencies
         run: flutter pub get
@@ -128,30 +134,15 @@ jobs:
           if value < 0 or value > 100:
               raise SystemExit(f"rollout_percentage must be from 0 to 100, got {value}")
 
-      - name: Release preflight checks
-        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --allow-existing-tag --require-iscc
+      - name: Verify version synchronization
+        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --allow-existing-tag
 
-      - name: Analyze
+      - name: Release quality gate
         if: inputs.run_full_tests
-        run: flutter analyze
+        run: python tool/release_preflight.py --gate --allow-dirty --allow-existing-tag
 
-      - name: Dart tests
-        if: inputs.run_full_tests
-        run: flutter test --exclude-tags "live || slow || perf"
-
-      - name: Focused release tests
-        run: |
-          flutter test test/installer/setup_script_test.dart
-          python -m unittest tool.test_appcast_manager tool.test_validate_release tool.test_appcast_signing -v
-
-      - name: Ensure appcast signing tests did not skip
-        shell: pwsh
-        run: |
-          $output = python -m unittest tool.test_appcast_signing -v 2>&1 | Out-String
-          if ($output -match 'skipped=') {
-            Write-Error "tool.test_appcast_signing reported skipped tests: $output"
-            exit 1
-          }
+      - name: Installer contract test
+        run: flutter test test/installer/setup_script_test.dart
 
       - name: Prepare signing certificate
         id: signing
