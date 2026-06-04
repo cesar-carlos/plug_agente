@@ -49,12 +49,14 @@ class ConnectionStatusWidget extends StatelessWidget {
             statusText = l10n.connectionStatusHubDisconnected;
         }
 
+        final sessionAuthError = authProvider.error.trim();
         final sessionText = _sessionLine(l10n, authProvider);
         final sessionColor = switch (authProvider.status) {
           AuthStatus.error => colors.error,
           AuthStatus.authenticated => colors.success,
           _ => colors.disabled,
         };
+        final sessionTooltip = sessionAuthError.isNotEmpty ? sessionAuthError : sessionText;
 
         final dbShort = connectionProvider.isDbConnected
             ? l10n.connectionStatusDatabaseConnected
@@ -128,7 +130,10 @@ class ConnectionStatusWidget extends StatelessWidget {
               ),
               Padding(
                 padding: EdgeInsets.only(left: iconSize + (compact ? AppSpacing.xs : AppSpacing.sm)),
-                child: Text(sessionText, style: sessionStyle),
+                child: Tooltip(
+                  message: sessionTooltip,
+                  child: Text(sessionText, style: sessionStyle),
+                ),
               ),
             ],
           ),

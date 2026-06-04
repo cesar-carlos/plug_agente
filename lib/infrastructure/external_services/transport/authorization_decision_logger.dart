@@ -72,7 +72,6 @@ class AuthorizationDecisionLogger {
         'method': request.method,
         ...?reason != null ? {'reason': reason} : null,
       });
-      _requestTokenRefresh('authentication_failed');
       return;
     }
 

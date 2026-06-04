@@ -81,6 +81,7 @@ void main() {
         accessToken: any(named: 'accessToken'),
         isHubConnected: any(named: 'isHubConnected'),
         expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        configId: any(named: 'configId'),
       ),
     );
   });
@@ -102,6 +103,7 @@ void main() {
         accessToken: any(named: 'accessToken'),
         isHubConnected: false,
         expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        configId: any(named: 'configId'),
       ),
     ).thenAnswer(
       (_) async => const AgentProfileHubSyncSkipped(AgentProfileHubSyncSkipReason.hubNotConnected),
@@ -118,6 +120,7 @@ void main() {
         agentId: any(named: 'agentId'),
         accessToken: any(named: 'accessToken'),
         expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        configId: any(named: 'configId'),
       ),
     ).called(1);
   });
@@ -150,6 +153,7 @@ void main() {
         accessToken: any(named: 'accessToken'),
         isHubConnected: any(named: 'isHubConnected'),
         expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        configId: any(named: 'configId'),
       ),
     ).thenAnswer(
       (_) async => const AgentProfileHubSyncSucceeded(
@@ -175,6 +179,7 @@ void main() {
         accessToken: 'token-1',
         isHubConnected: true,
         expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        configId: _baseConfig.id,
       ),
     ).called(1);
   });
@@ -195,6 +200,7 @@ void main() {
         accessToken: any(named: 'accessToken'),
         isHubConnected: any(named: 'isHubConnected'),
         expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        configId: any(named: 'configId'),
       ),
     ).thenAnswer(
       (_) async => const AgentProfileHubSyncSucceeded(profileVersion: 9),
@@ -231,6 +237,7 @@ void main() {
         accessToken: any(named: 'accessToken'),
         isHubConnected: any(named: 'isHubConnected'),
         expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        configId: any(named: 'configId'),
       ),
     ).thenAnswer(
       (_) async => AgentProfileHubSyncPushFailed(
@@ -262,6 +269,7 @@ void main() {
         accessToken: any(named: 'accessToken'),
         isHubConnected: any(named: 'isHubConnected'),
         expectedProfileVersion: any(named: 'expectedProfileVersion'),
+        configId: any(named: 'configId'),
       ),
     ).thenAnswer(
       (_) async => AgentProfileHubSyncPushFailed(

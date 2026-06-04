@@ -6,6 +6,8 @@ import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/application/validation/agent_profile_validation_messages.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/mappers/hub_auth_failure_l10n.dart';
 import 'package:plug_agente/presentation/pages/agent_profile/agent_profile_save_outcome.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
@@ -40,6 +42,7 @@ class AgentProfileSaveCoordinator {
   Future<AgentProfileSaveOutcome> save(
     AgentProfile profile, {
     AgentProfileValidationMessages? validationMessages,
+    AppLocalizations? localizations,
   }) async {
     _configProvider.updateAgentProfile(profile);
     final saveResult = await _configProvider.saveConfig();
@@ -51,21 +54,31 @@ class AgentProfileSaveCoordinator {
     }
 
     _registerProfileProvider.clearCache();
-    return _syncAfterLocalSave(profile, validationMessages: validationMessages);
+    return _syncAfterLocalSave(
+      profile,
+      validationMessages: validationMessages,
+      localizations: localizations,
+    );
   }
 
   /// Retries hub PATCH only (local profile already saved).
   Future<AgentProfileSaveOutcome> retryHubSync(
     AgentProfile profile, {
     AgentProfileValidationMessages? validationMessages,
+    AppLocalizations? localizations,
   }) {
-    return _syncAfterLocalSave(profile, validationMessages: validationMessages);
+    return _syncAfterLocalSave(
+      profile,
+      validationMessages: validationMessages,
+      localizations: localizations,
+    );
   }
 
   /// Loads catalog from hub, updates local version, and returns profile for the form.
   Future<AgentProfileSaveOutcome> reloadProfileFromHub({
     required AgentProfile fallbackProfile,
     AgentProfileValidationMessages? validationMessages,
+    AppLocalizations? localizations,
   }) async {
     final credentials = _readSyncCredentials();
     if (credentials == null) {
@@ -76,14 +89,15 @@ class AgentProfileSaveCoordinator {
       serverUrl: credentials.serverUrl,
       agentId: credentials.agentId,
       accessToken: credentials.accessToken,
-      validationMessages:
-          validationMessages ?? AgentProfileValidationMessages.english,
+      configId: credentials.configId,
+      validationMessages: validationMessages ?? AgentProfileValidationMessages.english,
     );
 
     if (fetchResult.isError()) {
       final failure = _asFailure(fetchResult.exceptionOrNull()!);
+      _surfaceHubAuthFailureIfNeeded(failure, localizations);
       return AgentProfileSaveHubPartialFailure(
-        hubErrorMessage: failure.message,
+        hubErrorMessage: _hubErrorMessage(failure, localizations),
         failure: failure,
         profile: fallbackProfile,
       );
@@ -110,6 +124,7 @@ class AgentProfileSaveCoordinator {
   Future<AgentProfileSaveOutcome> _syncAfterLocalSave(
     AgentProfile profile, {
     AgentProfileValidationMessages? validationMessages,
+    AppLocalizations? localizations,
   }) async {
     final credentials = _readSyncCredentials();
     if (credentials == null) {
@@ -123,21 +138,24 @@ class AgentProfileSaveCoordinator {
       accessToken: credentials.accessToken,
       isHubConnected: _connectionProvider.isConnected,
       expectedProfileVersion: credentials.hubProfileVersion,
+      configId: credentials.configId,
     );
 
-    return _mapSyncResult(syncResult, profile);
+    return _mapSyncResult(syncResult, profile, localizations: localizations);
   }
 
   Future<AgentProfileSaveOutcome> _mapSyncResult(
     AgentProfileHubSyncResult syncResult,
-    AgentProfile profile,
-  ) async {
+    AgentProfile profile, {
+    AppLocalizations? localizations,
+  }) async {
     switch (syncResult) {
       case AgentProfileHubSyncSkipped():
         return const AgentProfileSaveLocalOnly();
       case AgentProfileHubSyncPushFailed(failure: final failure):
+        _surfaceHubAuthFailureIfNeeded(failure, localizations);
         return AgentProfileSaveHubPartialFailure(
-          hubErrorMessage: failure.message,
+          hubErrorMessage: _hubErrorMessage(failure, localizations),
           failure: failure,
           profile: profile,
         );
@@ -174,18 +192,32 @@ class AgentProfileSaveCoordinator {
     }
 
     final accessToken = _resolveAccessToken(savedConfig.id, savedConfig.authToken);
-    if (accessToken.isEmpty ||
-        savedConfig.serverUrl.trim().isEmpty ||
-        savedConfig.agentId.trim().isEmpty) {
+    if (accessToken.isEmpty || savedConfig.serverUrl.trim().isEmpty || savedConfig.agentId.trim().isEmpty) {
       return null;
     }
 
     return _SyncCredentials(
+      configId: savedConfig.id,
       serverUrl: savedConfig.serverUrl,
       agentId: savedConfig.agentId,
       accessToken: accessToken,
       hubProfileVersion: savedConfig.hubProfileVersion,
     );
+  }
+
+  void _surfaceHubAuthFailureIfNeeded(Failure failure, AppLocalizations? localizations) {
+    if (!isHubSessionAuthFailure(failure)) {
+      return;
+    }
+    final message = localizations == null ? failure.message : hubAuthFailureDisplayMessage(failure, localizations);
+    _authProvider.setRecoveryError(message);
+  }
+
+  String _hubErrorMessage(Failure failure, AppLocalizations? localizations) {
+    if (localizations == null) {
+      return failure.message;
+    }
+    return hubAuthFailureDisplayMessage(failure, localizations);
   }
 
   String _resolveAccessToken(String? configId, String? configStoredToken) {
@@ -209,9 +241,11 @@ class _SyncCredentials {
     required this.serverUrl,
     required this.agentId,
     required this.accessToken,
+    this.configId,
     this.hubProfileVersion,
   });
 
+  final String? configId;
   final String serverUrl;
   final String agentId;
   final String accessToken;

@@ -8444,6 +8444,12 @@ abstract class AppLocalizations {
   /// **'Session: error'**
   String get connectionStatusSessionError;
 
+  /// No description provided for @hubSessionExpiredSignInAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Your hub session has expired. Sign in again.'**
+  String get hubSessionExpiredSignInAgain;
+
   /// No description provided for @wsSubtitleSessionWaitingForHub.
   ///
   /// In en, this message translates to:

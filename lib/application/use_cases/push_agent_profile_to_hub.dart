@@ -20,6 +20,7 @@ class PushAgentProfileToHub {
     required String accessToken,
     required AgentProfile profile,
     int? expectedProfileVersion,
+    String? configId,
   }) {
     final idempotencyKey = _uuid.v4();
     final body = agentProfileToHubPatchBody(
@@ -34,6 +35,7 @@ class PushAgentProfileToHub {
       accessToken: accessToken,
       body: body,
       idempotencyKey: idempotencyKey,
+      configId: configId,
     );
   }
 }

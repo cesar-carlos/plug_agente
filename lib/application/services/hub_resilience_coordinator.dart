@@ -3,12 +3,15 @@ import 'dart:math';
 
 import 'package:plug_agente/application/ports/i_connection_context_source.dart';
 import 'package:plug_agente/application/ports/i_hub_recovery_auth_bridge.dart';
+import 'package:plug_agente/application/services/hub_access_token_refresh_gate.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/async_operation_gate.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/value_objects/hub_connection_context.dart';
+import 'package:result_dart/result_dart.dart';
 
 enum TokenRefreshResultKind {
   refreshed,
@@ -89,6 +92,7 @@ class HubResilienceCoordinator {
     required HubResilienceEnvironment environment,
     IConnectionContextSource? connectionContextSource,
     IHubRecoveryAuthBridge? recoveryAuthBridge,
+    HubAccessTokenRefreshGate? tokenRefreshGate,
     Duration tokenRefreshMinInterval = ConnectionConstants.hubTokenRefreshMinInterval,
     Duration? capabilitiesNegotiationWatchdogOverride,
     Random? random,
@@ -97,7 +101,7 @@ class HubResilienceCoordinator {
   }) : _environment = environment,
        _connectionContextSource = connectionContextSource,
        _recoveryAuthBridge = recoveryAuthBridge,
-       _tokenRefreshMinInterval = tokenRefreshMinInterval,
+       _tokenRefreshGate = tokenRefreshGate ?? HubAccessTokenRefreshGate(minInterval: tokenRefreshMinInterval),
        _capabilitiesNegotiationWatchdogOverride = capabilitiesNegotiationWatchdogOverride,
        _random = random,
        _hubConnectGate = hubConnectGate ?? AsyncOperationGate(),
@@ -106,7 +110,7 @@ class HubResilienceCoordinator {
   final HubResilienceEnvironment _environment;
   final IConnectionContextSource? _connectionContextSource;
   IHubRecoveryAuthBridge? _recoveryAuthBridge;
-  final Duration _tokenRefreshMinInterval;
+  final HubAccessTokenRefreshGate _tokenRefreshGate;
   final Duration? _capabilitiesNegotiationWatchdogOverride;
   final Random? _random;
   final AsyncOperationGate _hubConnectGate;
@@ -114,7 +118,6 @@ class HubResilienceCoordinator {
 
   Timer? _negotiatingWatchdog;
   String? _resilienceRecoveryId;
-  DateTime? _lastHubRefreshHttpCompletedAt;
   DateTime? _lastHardReloginEndedAt;
 
   String? get recoveryId => _resilienceRecoveryId;
@@ -263,31 +266,26 @@ class HubResilienceCoordinator {
       return const TokenRefreshResult.terminalFailure();
     }
 
-    final minGap = _tokenRefreshMinInterval;
-    final last = _lastHubRefreshHttpCompletedAt;
-    if (minGap > Duration.zero && last != null && DateTime.now().difference(last) < minGap) {
-      AppLogger.debug(
-        'resilience: ${resilienceLogPrefix()}token_refresh event=skipped_min_interval '
-        'min_interval_ms=${minGap.inMilliseconds} '
-        'elapsed_ms=${DateTime.now().difference(last).inMilliseconds}',
-      );
+    final refreshResult = await _tokenRefreshGate.runExclusive<Result<AuthToken>>(
+      () => bridge.refreshSession(
+        context.serverUrl,
+        configId: context.configId,
+        currentToken: bridge.currentTokenForConfig(context.configId),
+      ),
+      logContext: 'resilience: ${resilienceLogPrefix()}token_refresh',
+    );
+
+    if (refreshResult == null) {
       return const TokenRefreshResult.skippedByCooldown();
     }
 
-    final refreshResult = await bridge.refreshSession(
-      context.serverUrl,
-      configId: context.configId,
-      currentToken: bridge.currentTokenForConfig(context.configId),
-    );
     return refreshResult.fold(
       (token) {
         bridge.restoreToken(token, configId: context.configId, silent: true);
-        _lastHubRefreshHttpCompletedAt = DateTime.now();
         final normalizedToken = token.token.trim();
         return TokenRefreshResult.refreshed(normalizedToken);
       },
       (Object failure) {
-        _lastHubRefreshHttpCompletedAt = DateTime.now();
         if (failure is domain_errors.Failure && failure.isTransient) {
           AppLogger.warning(
             'resilience: ${resilienceLogPrefix()}token_refresh event=transient_failure '
@@ -366,7 +364,7 @@ class HubResilienceCoordinator {
   }
 
   void resetAuthRecoveryState() {
-    _lastHubRefreshHttpCompletedAt = null;
+    _tokenRefreshGate.reset();
     _lastHardReloginEndedAt = null;
   }
 

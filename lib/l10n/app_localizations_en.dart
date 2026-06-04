@@ -4511,6 +4511,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionStatusSessionError => 'Session: error';
 
   @override
+  String get hubSessionExpiredSignInAgain => 'Your hub session has expired. Sign in again.';
+
+  @override
   String get wsSubtitleSessionWaitingForHub => 'You are signed in; waiting for the hub connection to finish.';
 
   @override

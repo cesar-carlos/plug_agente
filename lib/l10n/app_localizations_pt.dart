@@ -4523,6 +4523,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get connectionStatusSessionError => 'Sessão: erro';
 
   @override
+  String get hubSessionExpiredSignInAgain => 'A sessão com o hub expirou. Inicie sessão novamente.';
+
+  @override
   String get wsSubtitleSessionWaitingForHub => 'Sessão ativa; a aguardar a ligação ao hub.';
 
   @override

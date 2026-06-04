@@ -292,7 +292,10 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     _isSaving.value = true;
     AgentProfileSaveOutcome? outcome;
     try {
-      outcome = await _resolveSaveCoordinator().save(profile);
+      outcome = await _resolveSaveCoordinator().save(
+        profile,
+        localizations: l10n,
+      );
     } on Object catch (error, stackTrace) {
       AppLogger.error('Agent profile save failed unexpectedly', '$error\n$stackTrace');
       if (mounted) {
@@ -406,6 +409,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       final outcome = await _resolveSaveCoordinator().retryHubSync(
         profile,
         validationMessages: agentProfileValidationMessages(l10n),
+        localizations: l10n,
       );
       if (mounted) {
         await _showSaveFeedback(l10n, outcome);
@@ -423,6 +427,7 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       final outcome = await _resolveSaveCoordinator().reloadProfileFromHub(
         fallbackProfile: fallbackProfile,
         validationMessages: agentProfileValidationMessages(l10n),
+        localizations: l10n,
       );
       if (mounted) {
         await _showSaveFeedback(l10n, outcome);

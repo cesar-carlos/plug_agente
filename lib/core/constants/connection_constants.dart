@@ -347,6 +347,9 @@ class ConnectionConstants {
   /// recovery (reduces auth endpoint load when the transport is still failing).
   static const Duration hubTokenRefreshMinInterval = Duration(seconds: 5);
 
+  /// Refresh hub access JWT this long before JWT `exp` (server default ~4h).
+  static const Duration hubAccessTokenProactiveRefreshMargin = Duration(minutes: 10);
+
   /// When hub reconnect logs omit user-facing error text (`recordErrorMessage: false`),
   /// emit a warning every N failures to avoid log storms during persistent retry.
   static const int hubReconnectFailureLogThrottleStride = 10;

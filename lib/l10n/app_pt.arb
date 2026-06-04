@@ -1771,6 +1771,7 @@
   "connectionStatusSessionAuthenticated": "Sessão: autenticado",
   "connectionStatusSessionUnauthenticated": "Sessão: sem autenticação",
   "connectionStatusSessionError": "Sessão: erro",
+  "hubSessionExpiredSignInAgain": "A sessão com o hub expirou. Inicie sessão novamente.",
   "wsSubtitleSessionWaitingForHub": "Sessão ativa; a aguardar a ligação ao hub.",
   "diagnosticsHubRecoverySnapshotTitle": "Recuperação do hub (em tempo real)",
   "diagnosticsHubRecoveryRecoveryId": "recovery_id",

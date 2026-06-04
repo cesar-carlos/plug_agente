@@ -1771,6 +1771,7 @@
   "connectionStatusSessionAuthenticated": "Session: signed in",
   "connectionStatusSessionUnauthenticated": "Session: not signed in",
   "connectionStatusSessionError": "Session: error",
+  "hubSessionExpiredSignInAgain": "Your hub session has expired. Sign in again.",
   "wsSubtitleSessionWaitingForHub": "You are signed in; waiting for the hub connection to finish.",
   "diagnosticsHubRecoverySnapshotTitle": "Hub recovery (live)",
   "diagnosticsHubRecoveryRecoveryId": "recovery_id",

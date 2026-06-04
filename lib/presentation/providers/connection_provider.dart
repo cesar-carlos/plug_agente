@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/ports/hub_recovery_ui_sink.dart';
 import 'package:plug_agente/application/ports/i_connection_context_source.dart';
 import 'package:plug_agente/application/ports/i_hub_recovery_auth_bridge.dart';
+import 'package:plug_agente/application/services/hub_access_token_refresh_gate.dart';
+import 'package:plug_agente/application/services/hub_access_token_renewer.dart';
+import 'package:plug_agente/application/services/hub_proactive_token_refresh_scheduler.dart';
 import 'package:plug_agente/application/services/hub_recovery_orchestrator.dart';
 import 'package:plug_agente/application/services/hub_recovery_runtime_dependencies.dart';
 import 'package:plug_agente/application/services/hub_resilience_coordinator.dart';
@@ -69,6 +72,8 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
     Duration? capabilitiesNegotiationWatchdogOverride,
     Random? random,
     HubResilienceCoordinator? hubResilienceCoordinator,
+    HubAccessTokenRefreshGate? hubAccessTokenRefreshGate,
+    HubAccessTokenRenewer? hubAccessTokenRenewer,
   }) : _checkHubAvailabilityUseCase = checkHubAvailabilityUseCase,
        _hubSessionCoordinator = hubSessionCoordinator ?? hubRecoveryAuthCoordinator,
        _authProvider = authProvider,
@@ -82,7 +87,8 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
        _enableHardReloginRecoveryOverride = enableHardReloginRecovery,
        _hubPersistentRetryIntervalOverride = hubPersistentRetryInterval,
        _hubPersistentRetryMaxFailedTicksOverride = hubPersistentRetryMaxFailedTicks,
-       _hubHardReloginCooldownOverride = hubHardReloginCooldown {
+       _hubHardReloginCooldownOverride = hubHardReloginCooldown,
+       _hubAccessTokenRenewer = hubAccessTokenRenewer {
     _connectionTrackingState = HubConnectionTrackingState();
     _contextSource =
         connectionContextSource ??
@@ -92,6 +98,9 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
           configProvider: () => _configProvider,
         );
     _hubRecoveryAuthBridge = hubRecoveryAuthBridge ?? _buildRecoveryAuthBridge(_hubSessionCoordinator, _authProvider);
+    _hubAccessTokenRefreshGate = hubAccessTokenRefreshGate ?? HubAccessTokenRefreshGate(
+      minInterval: hubTokenRefreshMinInterval ?? ConnectionConstants.hubTokenRefreshMinInterval,
+    );
     _resilienceCoordinator =
         hubResilienceCoordinator ??
         HubResilienceCoordinator(
@@ -110,7 +119,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
           ),
           connectionContextSource: _contextSource,
           recoveryAuthBridge: _hubRecoveryAuthBridge,
-          tokenRefreshMinInterval: hubTokenRefreshMinInterval ?? ConnectionConstants.hubTokenRefreshMinInterval,
+          tokenRefreshGate: _hubAccessTokenRefreshGate,
           capabilitiesNegotiationWatchdogOverride: capabilitiesNegotiationWatchdogOverride,
           random: random,
         );
@@ -133,6 +142,11 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
         isStatusError: () => _status == ConnectionStatus.error,
         cancelPersistentRetryTimer: _cancelPersistentRetryTimer,
       ),
+    );
+    _proactiveTokenRefreshScheduler = HubProactiveTokenRefreshScheduler(
+      refreshBeforeExpiry: ConnectionConstants.hubAccessTokenProactiveRefreshMargin,
+      accessTokenProvider: _resolveProactiveRefreshAccessToken,
+      onRefreshDue: _runProactiveTokenRefresh,
     );
     if (_tokenRefreshIntervalAttempts < 1) {
       throw ArgumentError.value(
@@ -220,6 +234,17 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
   void setHubRecoveryAuthBridge(IHubRecoveryAuthBridge bridge) {
     _hubRecoveryAuthBridge = bridge;
     _resilienceCoordinator.attachRecoveryAuthBridge(bridge);
+    final renewer = _hubAccessTokenRenewer;
+    if (renewer != null) {
+      renewer.bindAuthBridge(bridge);
+      renewer.setOnAccessTokenRestored(_onHubAccessTokenRestored);
+    }
+  }
+
+  void _onHubAccessTokenRestored() {
+    if (!_isDisconnectRequested && isConnected) {
+      _startProactiveTokenRefreshSchedule();
+    }
   }
 
   ConnectionStatus _status = ConnectionStatus.disconnected;
@@ -232,8 +257,11 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
   bool _persistentRetryInFlight = false;
   int _reconnectQuietFailureLogCount = 0;
   HubRecoveryUiHint _hubRecoveryUiHint = HubRecoveryUiHint.none;
+  late final HubAccessTokenRefreshGate _hubAccessTokenRefreshGate;
+  final HubAccessTokenRenewer? _hubAccessTokenRenewer;
   late final HubResilienceCoordinator _resilienceCoordinator;
   late final HubRecoveryOrchestrator _hubRecoveryOrchestrator;
+  late final HubProactiveTokenRefreshScheduler _proactiveTokenRefreshScheduler;
 
   static const Duration _defaultInitialReconnectDelay = Duration(
     seconds: AppConstants.reconnectIntervalSeconds,
@@ -483,11 +511,13 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
 
   Future<void> disconnect() async {
     _isDisconnectRequested = true;
+    _hubAccessTokenRenewer?.clearAuthBridge();
     _resilienceCoordinator.invalidateHubConnectEpoch();
     _resilienceCoordinator.cancelNegotiatingWatchdog();
     _resilienceCoordinator.clearResilienceRecovery();
     clearHubRecoveryUiHint();
     _cancelPersistentRetryTimer();
+    _cancelProactiveTokenRefreshSchedule();
     _hubRecoveryOrchestrator.resetForDisconnect();
     _resilienceCoordinator.resetAuthRecoveryState();
     _reconnectQuietFailureLogCount = 0;
@@ -609,12 +639,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
         AppLogger.error('Cannot refresh token without connection context');
       } else {
         final refreshResult = await _tryRefreshToken(context);
-        final reconnectToken = switch (refreshResult.kind) {
-          TokenRefreshResultKind.refreshed => refreshResult.token,
-          TokenRefreshResultKind.skippedByCooldown => _contextSource.resolveAuthTokenForReconnect(),
-          TokenRefreshResultKind.transientFailure => _contextSource.resolveAuthTokenForReconnect(),
-          TokenRefreshResultKind.terminalFailure => null,
-        };
+        final reconnectToken = await _resolveReconnectTokenAfterRefresh(context, refreshResult);
         if (reconnectToken == null) {
           _resilienceCoordinator.clearResilienceRecovery();
           _status = ConnectionStatus.error;
@@ -984,6 +1009,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
         // _handleReconnectionNeeded to return and clear it at its finally.
         _isReconnecting = false;
         _error = '';
+        _startProactiveTokenRefreshSchedule();
         notifyListeners();
       case HubTransportAutoReconnectSucceeded():
         if (_status != ConnectionStatus.negotiating &&
@@ -1006,7 +1032,120 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
         _status = ConnectionStatus.connected;
         _isReconnecting = false;
         _error = '';
+        _startProactiveTokenRefreshSchedule();
         notifyListeners();
+    }
+  }
+
+  String? _resolveProactiveRefreshAccessToken() {
+    final configId = _connectionTrackingState.lastConfigId;
+    final authToken = _authProvider?.currentTokenForConfig(configId)?.token.trim();
+    if (authToken != null && authToken.isNotEmpty) {
+      return authToken;
+    }
+    final trackedToken = _connectionTrackingState.lastAuthToken?.trim();
+    if (trackedToken != null && trackedToken.isNotEmpty) {
+      return trackedToken;
+    }
+    return _contextSource.resolveAuthTokenForReconnect()?.trim();
+  }
+
+  void _startProactiveTokenRefreshSchedule() {
+    _proactiveTokenRefreshScheduler.reschedule();
+  }
+
+  void _cancelProactiveTokenRefreshSchedule() {
+    _proactiveTokenRefreshScheduler.cancel();
+  }
+
+  Future<void> _runProactiveTokenRefresh() async {
+    if (_isDisconnectRequested || !isConnected) {
+      return;
+    }
+
+    final context = _contextSource.resolveConnectionContext();
+    if (context == null) {
+      return;
+    }
+
+    AppLogger.info('Proactive hub access token refresh due');
+    final refreshResult = await _tryRefreshToken(context);
+    switch (refreshResult.kind) {
+      case TokenRefreshResultKind.refreshed:
+        AppLogger.info('Proactive hub access token refresh succeeded');
+        final token = refreshResult.token;
+        if (token != null && token.isNotEmpty) {
+          await _reconnectTransportWithRefreshedToken(context, token);
+        }
+      case TokenRefreshResultKind.skippedByCooldown:
+        AppLogger.debug('Proactive hub access token refresh skipped (cooldown)');
+      case TokenRefreshResultKind.transientFailure:
+        AppLogger.warning('Proactive hub access token refresh transient failure');
+        _kickHubTransportRecovery(trigger: 'proactive_refresh_transient');
+      case TokenRefreshResultKind.terminalFailure:
+        AppLogger.warning('Proactive hub access token refresh failed');
+        if (!_isDisconnectRequested) {
+          _status = ConnectionStatus.error;
+          _error = _hubRecoveryAuthBridge == null
+              ? 'Failed to refresh authentication token'
+              : _authProvider?.error ?? 'Failed to refresh authentication token';
+          _kickHubTransportRecovery(trigger: 'proactive_refresh_terminal');
+          notifyListeners();
+        }
+    }
+
+    if (!_isDisconnectRequested && isConnected) {
+      _startProactiveTokenRefreshSchedule();
+    }
+  }
+
+  Future<String?> _resolveReconnectTokenAfterRefresh(
+    HubConnectionContext context,
+    TokenRefreshResult refreshResult,
+  ) async {
+    switch (refreshResult.kind) {
+      case TokenRefreshResultKind.refreshed:
+        return refreshResult.token;
+      case TokenRefreshResultKind.skippedByCooldown:
+        await _hubAccessTokenRefreshGate.waitForCooldownOrInFlight();
+        final retry = await _tryRefreshToken(context);
+        if (retry.kind == TokenRefreshResultKind.refreshed) {
+          return retry.token;
+        }
+        if (_connectionTrackingState.sessionAuthInvalid) {
+          return null;
+        }
+        return _contextSource.resolveAuthTokenForReconnect();
+      case TokenRefreshResultKind.transientFailure:
+        return _contextSource.resolveAuthTokenForReconnect();
+      case TokenRefreshResultKind.terminalFailure:
+        return null;
+    }
+  }
+
+  Future<void> _reconnectTransportWithRefreshedToken(
+    HubConnectionContext context,
+    String token,
+  ) async {
+    if (_isDisconnectRequested || !isConnected) {
+      return;
+    }
+    try {
+      await _transportClient.disconnect();
+      _configureTransportCallbacks();
+      await _attemptReconnect(
+        context.serverUrl,
+        context.agentId,
+        authToken: token,
+        recordErrorMessage: false,
+      );
+    } on Exception catch (error, stackTrace) {
+      AppLogger.warning(
+        'Proactive refresh reconnect failed: $error',
+        error,
+        stackTrace,
+      );
+      _kickHubTransportRecovery(trigger: 'proactive_refresh_reconnect');
     }
   }
 
@@ -1049,6 +1188,8 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
 
   @override
   void dispose() {
+    _proactiveTokenRefreshScheduler.dispose();
+    _hubAccessTokenRenewer?.clearAuthBridge();
     _resilienceCoordinator.dispose();
     _cancelPersistentRetryTimer();
     clearHubRecoveryUiHint();
@@ -1061,6 +1202,9 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
       case TokenRefreshResultKind.refreshed:
         _connectionTrackingState.sessionAuthInvalid = false;
         _connectionTrackingState.lastAuthToken = result.token;
+        if (!_isDisconnectRequested && isConnected) {
+          _startProactiveTokenRefreshSchedule();
+        }
       case TokenRefreshResultKind.terminalFailure:
         _connectionTrackingState.lastAuthToken = null;
         _connectionTrackingState.sessionAuthInvalid = true;

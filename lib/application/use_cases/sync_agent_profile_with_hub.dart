@@ -18,6 +18,7 @@ class SyncAgentProfileWithHub {
     required String accessToken,
     required bool isHubConnected,
     int? expectedProfileVersion,
+    String? configId,
   }) async {
     if (!isHubConnected) {
       return const AgentProfileHubSyncSkipped(AgentProfileHubSyncSkipReason.hubNotConnected);
@@ -37,6 +38,7 @@ class SyncAgentProfileWithHub {
       accessToken: accessToken,
       profile: profile,
       expectedProfileVersion: expectedProfileVersion,
+      configId: configId,
     );
 
     if (pushResult.isError()) {

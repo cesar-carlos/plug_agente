@@ -146,6 +146,7 @@ void main() {
           accessToken: any(named: 'accessToken'),
           isHubConnected: true,
           expectedProfileVersion: any(named: 'expectedProfileVersion'),
+          configId: any(named: 'configId'),
         ),
       ).thenAnswer(
         (_) async => const AgentProfileHubSyncSucceeded(
@@ -180,6 +181,7 @@ void main() {
           isHubConnected: true,
           profile: any(named: 'profile'),
           expectedProfileVersion: any(named: 'expectedProfileVersion'),
+          configId: 'config-1',
         ),
       ).called(1);
       expect(find.text(ptL10n.agentProfileSaveSuccessSynced), findsOneWidget);
@@ -198,6 +200,7 @@ void main() {
           accessToken: any(named: 'accessToken'),
           isHubConnected: any(named: 'isHubConnected'),
           expectedProfileVersion: any(named: 'expectedProfileVersion'),
+          configId: any(named: 'configId'),
         ),
       ).thenAnswer(
         (_) async => AgentProfileHubSyncPushFailed(
@@ -263,6 +266,7 @@ void main() {
             accessToken: any(named: 'accessToken'),
             isHubConnected: any(named: 'isHubConnected'),
             expectedProfileVersion: any(named: 'expectedProfileVersion'),
+            configId: any(named: 'configId'),
           ),
         );
       },

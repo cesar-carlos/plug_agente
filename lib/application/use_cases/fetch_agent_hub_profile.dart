@@ -14,12 +14,14 @@ class FetchAgentHubProfile {
     required String serverUrl,
     required String agentId,
     required String accessToken,
+    String? configId,
     AgentProfileValidationMessages? validationMessages,
   }) async {
     final catalogResult = await _gateway.fetchProfileCatalog(
       serverUrl: serverUrl,
       agentId: agentId,
       accessToken: accessToken,
+      configId: configId,
     );
 
     if (catalogResult.isError()) {

@@ -13,11 +13,13 @@ abstract class IAgentHubProfileGateway {
     required String accessToken,
     required Map<String, dynamic> body,
     String? idempotencyKey,
+    String? configId,
   });
 
   Future<Result<AgentHubProfileCatalogSnapshot>> fetchProfileCatalog({
     required String serverUrl,
     required String agentId,
     required String accessToken,
+    String? configId,
   });
 }

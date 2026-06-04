@@ -4,5 +4,6 @@ abstract class IConnectedAgentsGateway {
   Future<Result<String>> fetchAgentsList({
     required String serverUrl,
     required String accessToken,
+    String? configId,
   });
 }

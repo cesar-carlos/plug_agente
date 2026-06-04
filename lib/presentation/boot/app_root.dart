@@ -9,6 +9,8 @@ import 'package:plug_agente/application/actions/i_action_command_safety_assessor
 import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/services/hub_access_token_refresh_gate.dart';
+import 'package:plug_agente/application/services/hub_access_token_renewer.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
@@ -134,14 +136,16 @@ class AppRoot extends StatelessWidget {
             checkHubAvailabilityUseCase: getIt<CheckHubAvailability>(),
             hubResilience: getIt<HubResilienceConfig>(),
             featureFlags: getIt<FeatureFlags>(),
+            hubAccessTokenRefreshGate: getIt<HubAccessTokenRefreshGate>(),
+            hubAccessTokenRenewer: getIt<HubAccessTokenRenewer>(),
           ),
           update: (context, auth, connection) {
-            connection!.setHubRecoveryAuthBridge(
-              HubRecoveryAuthBridge(
-                sessionCoordinator: getIt<HubSessionCoordinator>(),
-                authProvider: auth,
-              ),
+            final bridge = HubRecoveryAuthBridge(
+              sessionCoordinator: getIt<HubSessionCoordinator>(),
+              authProvider: auth,
             );
+            connection!.setHubRecoveryAuthBridge(bridge);
+            getIt<HubAccessTokenRenewer>().bindAuthBridge(bridge);
             return connection;
           },
         ),

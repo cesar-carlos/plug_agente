@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -1372,6 +1373,126 @@ void main() {
       expect(provider.hubRecoveryDiagnostics.consecutiveReconnectFailures, greaterThanOrEqualTo(3));
 
       await provider.disconnect();
+    });
+  });
+
+  group('ConnectionProvider proactive token refresh', () {
+    String jwtWithExp(int expSeconds) {
+      final header = base64Url.encode(utf8.encode('{"alg":"none"}')).replaceAll('=', '');
+      final payload = base64Url.encode(utf8.encode('{"exp":$expSeconds}')).replaceAll('=', '');
+      return '$header.$payload.signature';
+    }
+
+    test('should refresh hub token when proactive scheduler fires', () async {
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final exp = DateTime.now().toUtc().add(const Duration(minutes: 5));
+      final nearExpiryToken = jwtWithExp(exp.millisecondsSinceEpoch ~/ 1000);
+
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
+        AuthToken(token: nearExpiryToken, refreshToken: 'refresh-1'),
+      );
+      when(
+        () => mockAuth.restoreToken(
+          any(),
+          authenticated: any(named: 'authenticated'),
+          configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
+        ),
+      ).thenReturn(null);
+
+      var refreshCalls = 0;
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
+        ),
+      ).thenAnswer(
+        (_) async {
+          refreshCalls++;
+          return const Success(
+            AuthToken(token: 'refreshed-access', refreshToken: 'refresh-2'),
+          );
+        },
+      );
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        configProvider: configProvider,
+        authProvider: mockAuth,
+        transportClient: transport,
+        hubTokenRefreshMinInterval: Duration.zero,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: nearExpiryToken);
+      transport.triggerProtocolReady();
+
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (DateTime.now().isBefore(deadline) && refreshCalls == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      }
+
+      expect(refreshCalls, greaterThanOrEqualTo(1));
+
+      await provider.disconnect();
+    });
+
+    test('should cancel proactive refresh schedule on disconnect', () async {
+      when(
+        () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final exp = DateTime.now().toUtc().add(const Duration(minutes: 5));
+      final nearExpiryToken = jwtWithExp(exp.millisecondsSinceEpoch ~/ 1000);
+
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
+        AuthToken(token: nearExpiryToken, refreshToken: 'refresh-1'),
+      );
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        configProvider: configProvider,
+        authProvider: mockAuth,
+        transportClient: transport,
+        hubTokenRefreshMinInterval: Duration.zero,
+      );
+
+      await provider.connect('https://hub.test', 'agent-1', authToken: nearExpiryToken);
+      transport.triggerProtocolReady();
+      await provider.disconnect();
+
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
+        ),
+      ).thenAnswer(
+        (_) async => const Success(
+          AuthToken(token: 'late-refresh', refreshToken: 'refresh-2'),
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      verifyNever(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any<String>(),
+          configId: any(named: 'configId'),
+          currentToken: any<AuthToken>(named: 'currentToken'),
+        ),
+      );
     });
   });
 }

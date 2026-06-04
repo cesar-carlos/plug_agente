@@ -1,11 +1,16 @@
 import 'package:checks/checks.dart';
 import 'package:dio/dio.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/ports/i_hub_access_token_renewer.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/agent_hub_profile_rest_client.dart';
+import 'package:result_dart/result_dart.dart';
 import 'package:test/test.dart';
 
 class _MockDio extends Mock implements Dio {}
+
+class _MockRenewer extends Mock implements IHubAccessTokenRenewer {}
 
 void main() {
   late _MockDio dio;
@@ -86,6 +91,129 @@ void main() {
       result.exceptionOrNull().toString(),
       contains('Unauthorized'),
     );
+  });
+
+  test('should refresh access token and retry PATCH once on 401', () async {
+    final renewer = _MockRenewer();
+    final retryClient = AgentHubProfileRestClient(dio, accessTokenRenewer: renewer);
+    var patchCalls = 0;
+
+    when(
+      () => renewer.renew(
+        serverUrl: any(named: 'serverUrl'),
+        accessToken: any(named: 'accessToken'),
+        configId: any(named: 'configId'),
+      ),
+    ).thenAnswer(
+      (_) async => const Success(
+        AuthToken(token: 'fresh-jwt', refreshToken: 'refresh-2'),
+      ),
+    );
+
+    when(
+      () => dio.patch<dynamic>(
+        any(),
+        data: any(named: 'data'),
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((invocation) async {
+      patchCalls++;
+      final options = invocation.namedArguments[#options] as Options;
+      final authorization = options.headers?['Authorization'] as String?;
+      if (authorization == 'Bearer jwt') {
+        throw DioException(
+          requestOptions: RequestOptions(path: '/'),
+          response: Response<Map<String, dynamic>>(
+            requestOptions: RequestOptions(path: '/'),
+            statusCode: 401,
+            data: <String, dynamic>{'message': 'jwt expired'},
+          ),
+          type: DioExceptionType.badResponse,
+        );
+      }
+
+      return Response<Map<String, dynamic>>(
+        requestOptions: RequestOptions(path: '/api/v1/agents/x/profile'),
+        statusCode: 200,
+        data: <String, dynamic>{
+          'agent': <String, dynamic>{'profileVersion': 2},
+        },
+      );
+    });
+
+    final result = await retryClient.patchProfile(
+      serverUrl: 'https://hub.example',
+      agentId: '3183a9f2-429b-46d6-a339-3580e5e5cb31',
+      accessToken: 'jwt',
+      body: <String, dynamic>{'name': 'A'},
+    );
+
+    check(result.isSuccess()).isTrue();
+    check(result.getOrNull()?.profileVersion).equals(2);
+    check(patchCalls).equals(2);
+    verify(
+      () => renewer.renew(
+        serverUrl: 'https://hub.example',
+        accessToken: 'jwt',
+      ),
+    ).called(1);
+  });
+
+  test('should pass configId to token renewer on GET 401 retry', () async {
+    final renewer = _MockRenewer();
+    final retryClient = AgentHubProfileRestClient(dio, accessTokenRenewer: renewer);
+
+    when(
+      () => renewer.renew(
+        serverUrl: any(named: 'serverUrl'),
+        accessToken: any(named: 'accessToken'),
+        configId: any(named: 'configId'),
+      ),
+    ).thenAnswer(
+      (_) async => const Success(
+        AuthToken(token: 'fresh-jwt', refreshToken: 'refresh-2'),
+      ),
+    );
+
+    when(
+      () => dio.get<dynamic>(
+        any(),
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((invocation) async {
+      final options = invocation.namedArguments[#options] as Options;
+      final authorization = options.headers?['Authorization'] as String?;
+      if (authorization == 'Bearer jwt') {
+        return Response(
+          requestOptions: RequestOptions(path: '/'),
+          statusCode: 401,
+          data: <String, dynamic>{'message': 'jwt expired'},
+        );
+      }
+      return Response(
+        requestOptions: RequestOptions(path: '/api/v1/agents/agent-1/profile'),
+        statusCode: 200,
+        data: <String, dynamic>{
+          'agent': <String, dynamic>{'profileVersion': 1},
+        },
+      );
+    });
+
+    final result = await retryClient.fetchProfileCatalog(
+      serverUrl: 'https://hub.example',
+      agentId: 'agent-1',
+      accessToken: 'jwt',
+      configId: 'cfg-profile',
+    );
+
+    check(result.isSuccess()).isTrue();
+    verify(
+      () => renewer.renew(
+        serverUrl: 'https://hub.example',
+        accessToken: 'jwt',
+        configId: 'cfg-profile',
+      ),
+    ).called(1);
   });
 
   test('should parse profileVersion when JSON numeric is double', () async {
@@ -265,13 +393,15 @@ void main() {
       body: <String, dynamic>{'name': 'A'},
     );
 
-    final capturedUrl = verify(
-      () => dio.patch<dynamic>(
-        captureAny(),
-        data: any(named: 'data'),
-        options: any(named: 'options'),
-      ),
-    ).captured.first as String;
+    final capturedUrl =
+        verify(
+              () => dio.patch<dynamic>(
+                captureAny(),
+                data: any(named: 'data'),
+                options: any(named: 'options'),
+              ),
+            ).captured.first
+            as String;
 
     check(capturedUrl).equals(
       'https://hub.example/api/v1/agents/3183a9f2-429b-46d6-a339-3580e5e5cb31/profile',
@@ -634,13 +764,15 @@ void main() {
       body: <String, dynamic>{'name': 'A'},
     );
 
-    final capturedUrl = verify(
-      () => dio.patch<dynamic>(
-        captureAny(),
-        data: any(named: 'data'),
-        options: any(named: 'options'),
-      ),
-    ).captured.first as String;
+    final capturedUrl =
+        verify(
+              () => dio.patch<dynamic>(
+                captureAny(),
+                data: any(named: 'data'),
+                options: any(named: 'options'),
+              ),
+            ).captured.first
+            as String;
 
     check(capturedUrl).equals('https://hub.example/api/v1/agents/agent-1/profile');
   });

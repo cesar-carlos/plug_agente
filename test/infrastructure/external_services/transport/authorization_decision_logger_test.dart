@@ -83,8 +83,8 @@ void main() {
     });
   });
 
-  group('log - authentication failure triggers refresh', () {
-    test('logs authentication_failed and triggers refresh once', () {
+  group('log - client_token authentication failure', () {
+    test('logs authentication_failed without triggering hub JWT refresh', () {
       final errorResponse = RpcResponse.error(
         id: 'req-1',
         error: const RpcError(
@@ -105,31 +105,13 @@ void main() {
         clientToken: 'tok',
       );
 
-      expect(refreshCalls, 1);
-      final refreshLogs = logs.where((l) => l.event == 'authorization.token_refresh_requested');
-      expect(refreshLogs, hasLength(1));
-    });
-
-    test('resetSessionState allows another refresh trigger', () {
-      final errorResponse = RpcResponse.error(
-        id: 'req-1',
-        error: const RpcError(
-          code: RpcErrorCode.authenticationFailed,
-          message: 'Authentication failed',
-        ),
+      expect(refreshCalls, 0);
+      final authFailed = logs.where((l) => l.event == 'authorization.authentication_failed');
+      expect(authFailed, hasLength(2));
+      expect(
+        logs.where((l) => l.event == 'authorization.token_refresh_requested'),
+        isEmpty,
       );
-
-      logger.log(request: sqlRequest(), response: errorResponse, clientToken: 'tok');
-      expect(refreshCalls, 1);
-
-      logger.resetSessionState();
-
-      logger.log(
-        request: sqlRequest(id: 'req-2'),
-        response: errorResponse,
-        clientToken: 'tok',
-      );
-      expect(refreshCalls, 2);
     });
   });
 

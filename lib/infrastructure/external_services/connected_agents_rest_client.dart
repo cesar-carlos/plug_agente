@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
+import 'package:plug_agente/application/ports/i_hub_access_token_renewer.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connected_agents_gateway.dart';
+import 'package:plug_agente/infrastructure/external_services/hub_http_auth_retry.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// REST client for hub agent listing used during backup restore (duplicate-session probe).
@@ -15,14 +17,19 @@ import 'package:result_dart/result_dart.dart';
 /// Uses a short Dio timeout from dependency registration and per-request caps
 /// from ConnectionConstants.backupRestoreAgentsListTimeout.
 class ConnectedAgentsRestClient implements IConnectedAgentsGateway {
-  ConnectedAgentsRestClient(this._dio);
+  ConnectedAgentsRestClient(
+    this._dio, {
+    IHubAccessTokenRenewer? accessTokenRenewer,
+  }) : _accessTokenRenewer = accessTokenRenewer;
 
   final Dio _dio;
+  final IHubAccessTokenRenewer? _accessTokenRenewer;
 
   @override
   Future<Result<String>> fetchAgentsList({
     required String serverUrl,
     required String accessToken,
+    String? configId,
   }) async {
     final trimmedUrl = serverUrl.trim();
     final token = accessToken.trim();
@@ -34,13 +41,29 @@ class ConnectedAgentsRestClient implements IConnectedAgentsGateway {
     }
 
     final url = joinServerUrlAndPath(trimmedUrl, AppConstants.agentsListPath);
+    return HubHttpAuthRetry.execute<String>(
+      serverUrl: trimmedUrl,
+      accessToken: token,
+      configId: configId,
+      accessTokenRenewer: _accessTokenRenewer,
+      request: (resolvedToken) => _fetchAgentsListOnce(
+        url: url,
+        accessToken: resolvedToken,
+      ),
+    );
+  }
+
+  Future<Result<String>> _fetchAgentsListOnce({
+    required String url,
+    required String accessToken,
+  }) async {
     try {
       final response = await _dio
           .get<dynamic>(
             url,
             options: Options(
               headers: <String, dynamic>{
-                'Authorization': 'Bearer $token',
+                'Authorization': 'Bearer $accessToken',
               },
               receiveTimeout: ConnectionConstants.backupRestoreAgentsListTimeout,
               sendTimeout: ConnectionConstants.backupRestoreAgentsListTimeout,
@@ -90,7 +113,10 @@ class ConnectedAgentsRestClient implements IConnectedAgentsGateway {
         return Failure(
           domain.ServerFailure.withContext(
             message: 'Session expired or invalid for agent list',
-            context: const {'operation': 'fetchAgentsList'},
+            context: {
+              'operation': 'fetchAgentsList',
+              'statusCode': status,
+            },
           ),
         );
       }

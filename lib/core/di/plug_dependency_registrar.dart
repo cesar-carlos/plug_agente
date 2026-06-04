@@ -46,6 +46,8 @@ import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/connection_service.dart';
 import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
 import 'package:plug_agente/application/services/health_service.dart';
+import 'package:plug_agente/application/services/hub_access_token_refresh_gate.dart';
+import 'package:plug_agente/application/services/hub_access_token_renewer.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/protocol_negotiator.dart';
@@ -943,6 +945,7 @@ void registerPlugDependencyGraph(
         DioFactory.createDio(
           requestTimeout: ConnectionConstants.backupRestoreAgentsListTimeout,
         ),
+        accessTokenRenewer: getIt<HubAccessTokenRenewer>(),
       ),
     )
     ..registerLazySingleton<ILocalAppDataBackupService>(
@@ -964,11 +967,19 @@ void registerPlugDependencyGraph(
         );
       },
     )
+    ..registerLazySingleton(HubAccessTokenRefreshGate.new)
+    ..registerLazySingleton(
+      () => HubAccessTokenRenewer(
+        getIt<HubSessionCoordinator>(),
+        getIt<HubAccessTokenRefreshGate>(),
+      ),
+    )
     ..registerLazySingleton<IAgentHubProfileGateway>(
       () => AgentHubProfileRestClient(
         DioFactory.createDio(
           requestTimeout: ConnectionConstants.agentHubProfileHttpTimeout,
         ),
+        accessTokenRenewer: getIt<HubAccessTokenRenewer>(),
       ),
     )
     ..registerLazySingleton(
