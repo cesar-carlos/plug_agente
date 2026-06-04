@@ -247,9 +247,18 @@ def ensure_appcast_signing_tests_not_skipped() -> None:
         )
 
 
+def ensure_early_tools(*, require_iscc: bool) -> None:
+    """Toolchain for --early: tag/ISCC only; Flutter is installed later in CI."""
+    missing = [command for command in ("git", "python") if not command_exists(command)]
+    if require_iscc and find_iscc() is None:
+        missing.append("ISCC")
+    if missing:
+        raise RuntimeError(f"Missing required command(s): {', '.join(missing)}")
+
+
 def run_early_checks(args: argparse.Namespace, version_short: str) -> None:
     """Fast checks before bumping pubspec in CI (tag + toolchain only)."""
-    ensure_tools(require_iscc=args.require_iscc, check_pages=False)
+    ensure_early_tools(require_iscc=args.require_iscc)
     if not args.allow_existing_tag:
         ensure_tag_available(f"v{version_short}")
 
