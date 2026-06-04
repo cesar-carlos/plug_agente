@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.8.4+1</title>
+   <pubDate>Thu, 04 Jun 2026 18:10:30 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.8.3...v1.8.4</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.8.4/PlugAgente-Setup-1.8.4.exe" sparkle:version="1.8.4+1" sparkle:os="windows" plug:sha256="973688bd0a1193983ac011b715946a023cb585f6f511f29fcec4c2049e20fcaa" plug:channel="stable" plug:rolloutPercentage="100" length="21334698" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.8.3+1</title>
    <pubDate>Tue, 02 Jun 2026 15:45:58 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.8.2...v1.8.3</description>
@@ -62,12 +68,6 @@ Highlights:
 - JSON-RPC batch parallel transport improvements.
 - Transport hardening, silent update diagnostics, startup/socket resilience, and agent actions improvements.</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.8/PlugAgente-Setup-1.6.8.exe" sparkle:version="1.6.8+1" sparkle:os="windows" plug:sha256="c48c70b73b9e87b1b78d352644187e600d76179c3886b79cf8310fa9660a06cb" plug:channel="stable" plug:rolloutPercentage="100" length="41300361" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.6.7+1</title>
-   <pubDate>Thu, 14 May 2026 20:58:16 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.6...v1.6.7</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.7/PlugAgente-Setup-1.6.7.exe" sparkle:version="1.6.7+1" sparkle:os="windows" plug:sha256="e985accfff38d309501f3f276d25a7e240f60b51ce05aad519d73827022f403b" plug:channel="stable" plug:rolloutPercentage="100" length="17983164" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
