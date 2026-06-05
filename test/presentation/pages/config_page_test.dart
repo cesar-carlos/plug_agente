@@ -531,6 +531,66 @@ void main() {
     expect(find.byKey(const ValueKey('updates_copy_diagnostics_button')), findsOneWidget);
   });
 
+  testWidgets('suppresses automatic failure suffix when update notifications are off', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      updateNotificationsEnabled: false,
+      automaticSilentUpdatesEnabled: true,
+      lastAutomaticDiagnostics: UpdateCheckDiagnostics(
+        checkedAt: DateTime(2026, 5, 14, 11, 20),
+        configuredFeedUrl: officialAutoUpdateFeedUrl,
+        requestedFeedUrl: officialAutoUpdateFeedUrl,
+        currentVersion: '1.6.7+1',
+        completedAt: DateTime(2026, 5, 14, 11, 21),
+        completionSource: UpdateCheckCompletionSource.automaticDownloadFailure,
+      ),
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('${ptL10n.configLastAutomaticUpdatePrefix}14/05/2026 11:20'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(ptL10n.configUpdateCompletionSourceAutomaticDownloadFailure),
+      findsNothing,
+    );
+  });
+
+  testWidgets('manual-only mode shows neutral automatic status despite stale diagnostics', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      updateNotificationsEnabled: false,
+      automaticSilentUpdatesEnabled: false,
+      lastAutomaticDiagnostics: UpdateCheckDiagnostics(
+        checkedAt: DateTime(2026, 5, 14, 11, 20),
+        configuredFeedUrl: officialAutoUpdateFeedUrl,
+        requestedFeedUrl: officialAutoUpdateFeedUrl,
+        currentVersion: '1.6.7+1',
+        completedAt: DateTime(2026, 5, 14, 11, 21),
+        completionSource: UpdateCheckCompletionSource.automaticDownloadFailure,
+      ),
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('${ptL10n.configLastAutomaticUpdatePrefix}${ptL10n.configLastUpdateNever}'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(ptL10n.configUpdateCompletionSourceAutomaticDownloadFailure),
+      findsNothing,
+    );
+  });
+
   testWidgets('copies update diagnostics with runtime detection details', (tester) async {
     String? clipboardPayload;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(

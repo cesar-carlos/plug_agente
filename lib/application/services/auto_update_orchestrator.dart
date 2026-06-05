@@ -782,6 +782,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
         _silentCoordinator.requestCancellation();
         _silentCoordinator.stop();
         _metricsCollector?.recordAutoUpdateAutomaticSilentPreferenceDisabled();
+        await _clearAutomaticDiagnosticsIfFullyManual();
       } else {
         _silentCoordinator.scheduleAndStart();
         _metricsCollector?.recordAutoUpdateAutomaticSilentPreferenceEnabled();
@@ -822,6 +823,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
         _metricsCollector?.recordAutoUpdateNotificationsPreferenceEnabled();
       } else {
         _metricsCollector?.recordAutoUpdateNotificationsPreferenceDisabled();
+        await _clearAutomaticDiagnosticsIfFullyManual();
       }
       _notifyChanges();
       return const Success(unit);
@@ -849,8 +851,16 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     if (automaticResult.isError()) {
       return automaticResult;
     }
+    await _clearAutomaticDiagnosticsIfFullyManual();
     _metricsCollector?.recordAutoUpdateManualOnlyModeApplied();
     return const Success(unit);
+  }
+
+  Future<void> _clearAutomaticDiagnosticsIfFullyManual() async {
+    if (updateNotificationsEnabled || automaticSilentUpdatesEnabled) {
+      return;
+    }
+    await _silentCoordinator.clearPersistedAutomaticDiagnostics();
   }
 
   @override

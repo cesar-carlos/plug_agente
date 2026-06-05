@@ -42,6 +42,9 @@ abstract interface class ISilentUpdateCoordinator {
 
   void hydratePersistedDiagnostics();
 
+  /// Clears in-memory and persisted automatic silent-update diagnostics.
+  Future<void> clearPersistedAutomaticDiagnostics();
+
   /// Reconciles any pending install from a previous session, then schedules
   /// the periodic silent check timer when automatic silent updates are enabled.
   Future<void> reconcilePendingAndSchedule();
@@ -293,6 +296,24 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     } on FormatException catch (error, stackTrace) {
       developer.log(
         'Failed to parse persisted automatic silent update diagnostics',
+        name: 'silent_update_coordinator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  @override
+  Future<void> clearPersistedAutomaticDiagnostics() async {
+    _lastAutomaticDiagnostics = null;
+    final settingsStore = _settingsStore;
+    if (settingsStore == null) return;
+    try {
+      await settingsStore.remove(_lastAutomaticDiagnosticsKey);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to clear persisted automatic silent update diagnostics',
         name: 'silent_update_coordinator',
         level: 900,
         error: error,

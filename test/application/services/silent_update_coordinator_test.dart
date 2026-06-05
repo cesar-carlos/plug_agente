@@ -771,6 +771,32 @@ void main() {
         expect(probe.callCount, countAfterStart);
       });
     });
+
+    group('clearPersistedAutomaticDiagnostics', () {
+      test('clears in-memory and persisted automatic diagnostics', () async {
+        final store = InMemoryAppSettingsStore();
+        final coordinator = _makeCoordinator(store: store);
+        final diagnostics = UpdateCheckDiagnostics(
+          checkedAt: DateTime(2026, 5, 14, 11, 20),
+          configuredFeedUrl: 'https://example.com/appcast.xml',
+          requestedFeedUrl: 'https://example.com/appcast.xml',
+          currentVersion: '1.6.7+1',
+          completedAt: DateTime(2026, 5, 14, 11, 21),
+          completionSource: UpdateCheckCompletionSource.automaticDownloadFailure,
+        );
+        await store.setString(
+          'auto_update.last_automatic_diagnostics',
+          jsonEncode(diagnostics.toJson()),
+        );
+        coordinator.hydratePersistedDiagnostics();
+        expect(coordinator.lastAutomaticDiagnostics, isNotNull);
+
+        await coordinator.clearPersistedAutomaticDiagnostics();
+
+        expect(coordinator.lastAutomaticDiagnostics, isNull);
+        expect(store.getString('auto_update.last_automatic_diagnostics'), isNull);
+      });
+    });
   });
 }
 

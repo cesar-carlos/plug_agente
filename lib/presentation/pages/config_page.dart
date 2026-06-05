@@ -130,32 +130,30 @@ class _ConfigPageState extends State<ConfigPage> {
 
   String _buildBackgroundUpdateLabel(
     AppLocalizations l10n,
+    IAutoUpdateOrchestrator orchestrator,
     UpdateCheckDiagnostics? diagnostics,
   ) {
-    if (diagnostics == null) {
-      return '';
-    }
-
-    final checkedAt = _formatLastUpdateCheck(diagnostics.checkedAt);
-    final completion = diagnostics.completionSource == null
-        ? ''
-        : ' - ${UpdateSupportDiagnosticsBuilder.formatCompletionSource(l10n, diagnostics.completionSource)}';
-    return '${l10n.configLastBackgroundUpdatePrefix}$checkedAt$completion';
+    return UpdateSupportDiagnosticsBuilder.buildBackgroundUpdateStatusLabel(
+      l10n: l10n,
+      diagnostics: diagnostics,
+      updateNotificationsEnabled: orchestrator.updateNotificationsEnabled,
+      automaticSilentUpdatesEnabled: orchestrator.automaticSilentUpdatesEnabled,
+      formatCheckedAt: _formatLastUpdateCheck,
+    );
   }
 
   String _buildAutomaticUpdateLabel(
     AppLocalizations l10n,
+    IAutoUpdateOrchestrator orchestrator,
     UpdateCheckDiagnostics? diagnostics,
   ) {
-    if (diagnostics == null) {
-      return '${l10n.configLastAutomaticUpdatePrefix}${l10n.configLastUpdateNever}';
-    }
-
-    final checkedAt = _formatLastUpdateCheck(diagnostics.checkedAt);
-    final completion = diagnostics.completionSource == null
-        ? ''
-        : ' - ${UpdateSupportDiagnosticsBuilder.formatCompletionSource(l10n, diagnostics.completionSource)}';
-    return '${l10n.configLastAutomaticUpdatePrefix}$checkedAt$completion';
+    return UpdateSupportDiagnosticsBuilder.buildAutomaticUpdateStatusLabel(
+      l10n: l10n,
+      diagnostics: diagnostics,
+      updateNotificationsEnabled: orchestrator.updateNotificationsEnabled,
+      automaticSilentUpdatesEnabled: orchestrator.automaticSilentUpdatesEnabled,
+      formatCheckedAt: _formatLastUpdateCheck,
+    );
   }
 
   String _buildAutoUpdateFeedStatusLabel(AppLocalizations l10n) {
@@ -602,10 +600,12 @@ class _ConfigPageState extends State<ConfigPage> {
     final lastUpdateLabel = _resolveLastUpdateLabel(l10n, orchestrator);
     final lastBackgroundUpdateLabel = _buildBackgroundUpdateLabel(
       l10n,
+      orchestrator,
       orchestrator.lastBackgroundDiagnostics,
     );
     final lastAutomaticUpdateLabel = _buildAutomaticUpdateLabel(
       l10n,
+      orchestrator,
       orchestrator.lastAutomaticDiagnostics,
     );
     final autoUpdateFeedStatusLabel = _buildAutoUpdateFeedStatusLabel(l10n);

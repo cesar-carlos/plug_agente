@@ -338,6 +338,59 @@ class UpdateSupportDiagnosticsBuilder {
     return completedAt.difference(startedAt).inMilliseconds.toString();
   }
 
+  /// Proactive status line for the last automatic silent-update attempt in
+  /// Settings. Suppresses completion suffixes when the operator opted out of
+  /// update notifications so failures are not surfaced as unsolicited warnings.
+  /// Full diagnostics remain available via copy/manual check flows.
+  static String buildAutomaticUpdateStatusLabel({
+    required AppLocalizations l10n,
+    required UpdateCheckDiagnostics? diagnostics,
+    required bool updateNotificationsEnabled,
+    required bool automaticSilentUpdatesEnabled,
+    required String Function(DateTime dateTime) formatCheckedAt,
+  }) {
+    final isManualOnlyMode = !updateNotificationsEnabled && !automaticSilentUpdatesEnabled;
+    if (isManualOnlyMode || diagnostics == null) {
+      return '${l10n.configLastAutomaticUpdatePrefix}${l10n.configLastUpdateNever}';
+    }
+
+    final checkedAt = formatCheckedAt(diagnostics.checkedAt);
+    if (!updateNotificationsEnabled) {
+      return '${l10n.configLastAutomaticUpdatePrefix}$checkedAt';
+    }
+
+    final completion = diagnostics.completionSource == null
+        ? ''
+        : ' - ${formatCompletionSource(l10n, diagnostics.completionSource)}';
+    return '${l10n.configLastAutomaticUpdatePrefix}$checkedAt$completion';
+  }
+
+  /// Proactive status line for the last WinSparkle background check in
+  /// Settings. Follows the same notification-preference suppression rules as
+  /// [buildAutomaticUpdateStatusLabel].
+  static String buildBackgroundUpdateStatusLabel({
+    required AppLocalizations l10n,
+    required UpdateCheckDiagnostics? diagnostics,
+    required bool updateNotificationsEnabled,
+    required bool automaticSilentUpdatesEnabled,
+    required String Function(DateTime dateTime) formatCheckedAt,
+  }) {
+    final isManualOnlyMode = !updateNotificationsEnabled && !automaticSilentUpdatesEnabled;
+    if (isManualOnlyMode || diagnostics == null) {
+      return '';
+    }
+
+    final checkedAt = formatCheckedAt(diagnostics.checkedAt);
+    if (!updateNotificationsEnabled) {
+      return '${l10n.configLastBackgroundUpdatePrefix}$checkedAt';
+    }
+
+    final completion = diagnostics.completionSource == null
+        ? ''
+        : ' - ${formatCompletionSource(l10n, diagnostics.completionSource)}';
+    return '${l10n.configLastBackgroundUpdatePrefix}$checkedAt$completion';
+  }
+
   /// Formats a [UpdateCheckCompletionSource] to a localized display string.
   ///
   /// Exposed as `static` so callers (e.g. `ConfigPage`) can reuse it without

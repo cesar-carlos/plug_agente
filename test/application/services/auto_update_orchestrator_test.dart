@@ -207,6 +207,14 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   @override
   void hydratePersistedDiagnostics() => hydrateCallCount++;
 
+  int clearPersistedAutomaticDiagnosticsCallCount = 0;
+
+  @override
+  Future<void> clearPersistedAutomaticDiagnostics() async {
+    clearPersistedAutomaticDiagnosticsCallCount++;
+    lastAutomaticDiagnosticsValue = null;
+  }
+
   @override
   Future<void> reconcilePendingAndSchedule() async => reconcilePendingAndScheduleCallCount++;
 
@@ -1840,6 +1848,45 @@ void main() {
           metricsCollector.getSnapshot()['auto_update_manual_only_mode_applied'],
           1,
         );
+      });
+
+      test('applyManualOnlyUpdateMode clears stale automatic diagnostics', () async {
+        final fakeGateway = FakeAutoUpdaterGateway();
+        final diagnostics = UpdateCheckDiagnostics(
+          checkedAt: DateTime(2026, 5, 14, 11, 20),
+          configuredFeedUrl: 'https://example.com/appcast.xml',
+          requestedFeedUrl: 'https://example.com/appcast.xml',
+          currentVersion: '1.6.7+1',
+          completedAt: DateTime(2026, 5, 14, 11, 21),
+          completionSource: UpdateCheckCompletionSource.automaticDownloadFailure,
+        );
+        await settingsStore.setString(
+          'auto_update.last_automatic_diagnostics',
+          jsonEncode(diagnostics.toJson()),
+        );
+        final coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+        );
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          appcastProbeService: FakeAppcastProbeService(),
+          settingsStore: settingsStore,
+          silentUpdateCoordinator: coordinator,
+        );
+
+        await orchestrator.initialize();
+        expect(orchestrator.lastAutomaticDiagnostics?.completionSource,
+            UpdateCheckCompletionSource.automaticDownloadFailure);
+
+        final result = await orchestrator.applyManualOnlyUpdateMode();
+
+        expect(result.isSuccess(), isTrue);
+        expect(orchestrator.lastAutomaticDiagnostics, isNull);
+        expect(settingsStore.getString('auto_update.last_automatic_diagnostics'), isNull);
       });
 
       test('setAutomaticSilentUpdatesEnabled notifies listeners', () async {
