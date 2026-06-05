@@ -173,21 +173,20 @@ valida contagem de linhas e ausencia de leases no pool, e faz **DROP** no
 | Variavel | Obrigatoria | Descricao |
 | -------- | ----------- | --------- |
 | `ODBC_E2E_DML_STRESS_TESTS` | Sim | `true` para correr |
-| `ODBC_E2E_DML_STRESS_ROW_COUNT` | Nao | Linhas por iteracao (default 5000, limite 100-100k) |
-| `ODBC_E2E_DML_STRESS_ITERATIONS` | Nao | Ciclos insert/update/delete (default 3, limite 1-50) |
+| `ODBC_E2E_DML_STRESS_ROW_COUNT` | Nao | Linhas por iteracao (default 100, limite 100-100k) |
+| `ODBC_E2E_DML_STRESS_ITERATIONS` | Nao | Ciclos insert/update/delete (default 1, limite 1-50) |
 | `ODBC_E2E_DML_STRESS_CONCURRENCY` | Nao | Workers paralelos por fase (default 4, limite 1-32) |
-| `ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE` | Nao | Comandos por `sql.executeBatch` (default 250, limite 32-2000) |
+| `ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE` | Nao | Comandos por `sql.executeBatch` (default 1000, limite 32-2000) |
 | `ODBC_E2E_DML_STRESS_QUEUE_SIZE` | Nao | Fila do gateway enfileirado (default 8) |
 | `ODBC_E2E_DML_STRESS_WORKERS` | Nao | Workers do gateway enfileirado (default 4) |
 | `ODBC_E2E_DML_STRESS_MAX_MS_PER_ITERATION` | Nao | Teto (ms) por iteracao completa (opcional) |
 
 O cenario com `QueuedDatabaseGateway` limita a 2000 linhas (ou menos, se
-`ODBC_E2E_DML_STRESS_ROW_COUNT` for menor) porque cada insert e um
-`executeNonQuery` individual — volume completo (ex.: 20k) ficaria desproporcional
-ao teste batched paralelo.
+`ODBC_E2E_DML_STRESS_ROW_COUNT` for menor) e usa `executeBatch` transacional
+por chunk para manter o stress da fila sem um `executeNonQuery` por linha.
 
-Tempos por iteracao sao emitidos no log `e2e.odbc_dml_stress` como
-`E2E_DML_STRESS_ITERATION_TIMINGS`.
+Tempos por iteracao aparecem no stdout do `flutter test` (`[odbc_dml_stress]`)
+e no log `e2e.odbc_dml_stress` como `E2E_DML_STRESS_ITERATION_TIMINGS`.
 
 ## SQL queue burst (`sql_queue_burst_test.dart`)
 

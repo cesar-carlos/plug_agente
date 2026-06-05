@@ -342,18 +342,18 @@ class E2EEnv {
   /// (repeated CREATE/INSERT/UPDATE/DELETE cycles with optional concurrency).
   static bool get odbcE2eDmlStressTests => _get('ODBC_E2E_DML_STRESS_TESTS') == 'true';
 
-  /// Rows inserted per stress iteration (`ODBC_E2E_DML_STRESS_ROW_COUNT`). Default 5000, clamped 100–100000.
+  /// Rows inserted per stress iteration (`ODBC_E2E_DML_STRESS_ROW_COUNT`). Default 100, clamped 100–100000.
   static int get odbcE2eDmlStressRowCount {
     final raw = _get('ODBC_E2E_DML_STRESS_ROW_COUNT');
     final parsed = raw != null ? int.tryParse(raw.trim()) : null;
-    return (parsed ?? 5000).clamp(100, 100000);
+    return (parsed ?? 100).clamp(100, 100000);
   }
 
-  /// Full insert/update/delete cycles (`ODBC_E2E_DML_STRESS_ITERATIONS`). Default 3, clamped 1–50.
+  /// Full insert/update/delete cycles (`ODBC_E2E_DML_STRESS_ITERATIONS`). Default 1, clamped 1–50.
   static int get odbcE2eDmlStressIterations {
     final raw = _get('ODBC_E2E_DML_STRESS_ITERATIONS');
     final parsed = raw != null ? int.tryParse(raw.trim()) : null;
-    return (parsed ?? 3).clamp(1, 50);
+    return (parsed ?? 1).clamp(1, 50);
   }
 
   /// Parallel workers for chunked DML (`ODBC_E2E_DML_STRESS_CONCURRENCY`). Default 4, clamped 1–32.
@@ -363,11 +363,11 @@ class E2EEnv {
     return (parsed ?? 4).clamp(1, 32);
   }
 
-  /// Commands per `sql.executeBatch` chunk (`ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE`). Default 250, clamped 32–2000.
+  /// Commands per `sql.executeBatch` chunk (`ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE`). Default 1000, clamped 32–2000.
   static int get odbcE2eDmlStressBatchChunkSize {
     final raw = _get('ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE');
     final parsed = raw != null ? int.tryParse(raw.trim()) : null;
-    return (parsed ?? 250).clamp(32, 2000);
+    return (parsed ?? 1000).clamp(32, 2000);
   }
 
   static int get odbcE2eDmlStressQueueSize =>

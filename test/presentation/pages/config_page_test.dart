@@ -535,7 +535,6 @@ void main() {
     final orchestrator = FakeAutoUpdateOrchestrator(
       isAvailable: true,
       updateNotificationsEnabled: false,
-      automaticSilentUpdatesEnabled: true,
       lastAutomaticDiagnostics: UpdateCheckDiagnostics(
         checkedAt: DateTime(2026, 5, 14, 11, 20),
         configuredFeedUrl: officialAutoUpdateFeedUrl,

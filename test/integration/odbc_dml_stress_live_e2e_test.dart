@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
 import '../helpers/e2e_env.dart';
@@ -16,8 +17,7 @@ import '../helpers/odbc_e2e_rpc_harness.dart';
 /// INSERT / UPDATE / DELETE cycles, DROP TABLE. Opt-in via
 /// `ODBC_E2E_DML_STRESS_TESTS=true`.
 ///
-/// The queued-gateway scenario caps rows below [E2EEnv.odbcE2eDmlStressRowCount]
-/// because it issues one `executeNonQuery` per row (much slower than batched RPC).
+/// Rows for the queued-gateway scenario (batched via `executeBatch`, not per-row RPC).
 const int _queuedGatewayStressRowCap = 2000;
 
 void main() async {
@@ -170,11 +170,15 @@ void main() async {
           };
           iterationTimings.add(timing);
 
+          final insertMs = swInsert.elapsedMilliseconds;
+          final updateMs = swUpdate.elapsedMilliseconds;
+          final deleteMs = swDelete.elapsedMilliseconds;
+
           developer.log(
             'DML stress iteration $iteration: '
-            'insert=${swInsert.elapsedMilliseconds}ms '
-            'update=${swUpdate.elapsedMilliseconds}ms '
-            'delete=${swDelete.elapsedMilliseconds}ms',
+            'insert=${insertMs}ms '
+            'update=${updateMs}ms '
+            'delete=${deleteMs}ms',
             name: 'e2e.odbc_dml_stress',
           );
 
@@ -182,8 +186,7 @@ void main() async {
             expect(
               swIteration.elapsedMilliseconds,
               lessThanOrEqualTo(maxMsPerIteration),
-              reason:
-                  'iteration $iteration exceeded ODBC_E2E_DML_STRESS_MAX_MS_PER_ITERATION=$maxMsPerIteration',
+              reason: 'iteration $iteration exceeded ODBC_E2E_DML_STRESS_MAX_MS_PER_ITERATION=$maxMsPerIteration',
             );
           }
         }
@@ -221,6 +224,7 @@ void main() async {
           _queuedGatewayStressRowCap,
         );
         final concurrency = E2EEnv.odbcE2eDmlStressConcurrency;
+        final chunkSize = E2EEnv.odbcE2eDmlStressBatchChunkSize;
         final queuedGateway = QueuedDatabaseGateway(
           delegate: h.gateway,
           queue: SqlExecutionQueue(
@@ -233,19 +237,36 @@ void main() async {
         try {
           final sw = Stopwatch()..start();
           final insertFutures = _buildIdRanges(rowCount, concurrency).map((range) async {
+            final commands = <SqlCommand>[];
             for (var id = range.start; id <= range.end; id++) {
-              final result = await queuedGateway.executeNonQuery(
-                sql.insertRow(
-                  id: id,
-                  code: 'q$id',
-                  amt: 1.0 + (id % 50) * 0.01,
-                  birthDate: '2024-02-${(id % 28) + 1}',
-                  ts: '2024-06-01 12:00:00',
-                  isActive: id.isEven,
+              commands.add(
+                SqlCommand(
+                  sql: sql.insertRow(
+                    id: id,
+                    code: 'q$id',
+                    amt: 1.0 + (id % 50) * 0.01,
+                    birthDate: '2024-02-${(id % 28) + 1}',
+                    ts: '2024-06-01 12:00:00',
+                    isActive: id.isEven,
+                  ),
                 ),
-                null,
               );
-              expect(result.isSuccess(), isTrue, reason: 'insert id=$id: $result');
+            }
+
+            for (var offset = 0; offset < commands.length; offset += chunkSize) {
+              final end = math.min(offset + chunkSize, commands.length);
+              final chunk = commands.sublist(offset, end);
+              final result = await queuedGateway.executeBatch(
+                'e2e-agent',
+                chunk,
+                options: SqlExecutionOptions(
+                  transaction: true,
+                  maxRows: chunk.length + 16,
+                ),
+              );
+              expect(result.isSuccess(), isTrue, reason: 'insert range ${range.start}: $result');
+              final outcomes = result.getOrThrow();
+              expect(outcomes.every((item) => item.ok), isTrue, reason: '$outcomes');
             }
           }).toList();
 
@@ -373,7 +394,7 @@ Future<void> _parallelInsertBatch({
         params: {
           'commands': chunk,
           'options': {
-            'transaction': false,
+            'transaction': true,
             'max_rows': chunk.length + 16,
           },
         },
