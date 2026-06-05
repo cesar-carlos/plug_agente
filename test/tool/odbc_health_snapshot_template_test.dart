@@ -22,7 +22,7 @@ void main() {
       expect(runtime['result_encoding'], 'rowMajor');
       expect(pool['size'], 4);
       expect(sqlQueue['enabled'], isTrue);
-      expect(sqlQueue['max_size'], 50);
+      expect(sqlQueue['max_size'], 500);
       expect(sqlQueue['max_workers'], 4);
       expect(sqlQueue['enqueue_timeout_seconds'], 5);
       expect(timeouts['pool_total'], 0);

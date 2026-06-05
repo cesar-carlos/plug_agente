@@ -338,6 +338,48 @@ class E2EEnv {
 
   static int? get odbcE2eDmlBulkMaxMsDrop => _parsePositiveInt('ODBC_E2E_DML_BULK_MAX_MS_DROP');
 
+  /// When true (`ODBC_E2E_DML_STRESS_TESTS=true`), runs `odbc_dml_stress_live_e2e_test`
+  /// (repeated CREATE/INSERT/UPDATE/DELETE cycles with optional concurrency).
+  static bool get odbcE2eDmlStressTests => _get('ODBC_E2E_DML_STRESS_TESTS') == 'true';
+
+  /// Rows inserted per stress iteration (`ODBC_E2E_DML_STRESS_ROW_COUNT`). Default 5000, clamped 100–100000.
+  static int get odbcE2eDmlStressRowCount {
+    final raw = _get('ODBC_E2E_DML_STRESS_ROW_COUNT');
+    final parsed = raw != null ? int.tryParse(raw.trim()) : null;
+    return (parsed ?? 5000).clamp(100, 100000);
+  }
+
+  /// Full insert/update/delete cycles (`ODBC_E2E_DML_STRESS_ITERATIONS`). Default 3, clamped 1–50.
+  static int get odbcE2eDmlStressIterations {
+    final raw = _get('ODBC_E2E_DML_STRESS_ITERATIONS');
+    final parsed = raw != null ? int.tryParse(raw.trim()) : null;
+    return (parsed ?? 3).clamp(1, 50);
+  }
+
+  /// Parallel workers for chunked DML (`ODBC_E2E_DML_STRESS_CONCURRENCY`). Default 4, clamped 1–32.
+  static int get odbcE2eDmlStressConcurrency {
+    final raw = _get('ODBC_E2E_DML_STRESS_CONCURRENCY');
+    final parsed = raw != null ? int.tryParse(raw.trim()) : null;
+    return (parsed ?? 4).clamp(1, 32);
+  }
+
+  /// Commands per `sql.executeBatch` chunk (`ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE`). Default 250, clamped 32–2000.
+  static int get odbcE2eDmlStressBatchChunkSize {
+    final raw = _get('ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE');
+    final parsed = raw != null ? int.tryParse(raw.trim()) : null;
+    return (parsed ?? 250).clamp(32, 2000);
+  }
+
+  static int get odbcE2eDmlStressQueueSize =>
+      (_parsePositiveInt('ODBC_E2E_DML_STRESS_QUEUE_SIZE') ?? 8).clamp(4, 100);
+
+  static int get odbcE2eDmlStressWorkers =>
+      (_parsePositiveInt('ODBC_E2E_DML_STRESS_WORKERS') ?? 4).clamp(1, 32);
+
+  /// Optional ceiling (ms) per full iteration; null = do not assert on time.
+  static int? get odbcE2eDmlStressMaxMsPerIteration =>
+      _parsePositiveInt('ODBC_E2E_DML_STRESS_MAX_MS_PER_ITERATION');
+
   /// Long-running query for cancellation test.
   /// Uses DB-specific var when available, else generic ODBC_INTEGRATION_LONG_QUERY.
   static String? get odbcLongQuery {

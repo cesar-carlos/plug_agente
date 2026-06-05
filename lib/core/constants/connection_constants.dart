@@ -131,7 +131,7 @@ class ConnectionConstants {
   }
 
   /// SQL execution queue maximum size (configurable via SQL_QUEUE_MAX_SIZE env var).
-  static int get sqlQueueMaxSize => int.tryParse(_optionalEnv('SQL_QUEUE_MAX_SIZE') ?? '') ?? 50;
+  static int get sqlQueueMaxSize => int.tryParse(_optionalEnv('SQL_QUEUE_MAX_SIZE') ?? '') ?? 500;
 
   /// SQL execution queue maximum concurrent workers.
   ///
@@ -239,12 +239,12 @@ class ConnectionConstants {
   static const int playgroundStreamingMaxResultRows = 100000;
 
   /// Max in-flight `rpc:request` handlers per socket connection (backpressure).
-  static const int maxConcurrentRpcHandlers = 32;
+  static const int maxConcurrentRpcHandlers = 320;
 
   /// Max simultaneously registered RPC streaming emitters per socket connection.
   /// Each emitter holds buffered chunks awaiting `rpc:stream.pull` from the hub;
   /// the cap protects memory if streams never receive a final pull/complete.
-  static const int maxConcurrentRpcStreams = 64;
+  static const int maxConcurrentRpcStreams = 640;
 
   /// Idle timeout for an RPC streaming emitter. If the hub does not call
   /// `rpc:stream.pull` within this window after the last activity, the emitter
@@ -337,7 +337,7 @@ class ConnectionConstants {
 
   /// Default max successful `client_token.getPolicy` calls per minute per agent+credential scope.
   /// Override with env `CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE` (`0` = unlimited).
-  static const int clientTokenGetPolicyDefaultMaxPerMinute = 120;
+  static const int clientTokenGetPolicyDefaultMaxPerMinute = 1200;
 
   /// Max distinct agent+credential scopes tracked by the getPolicy rate limiter at once.
   /// Override with env `CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS` (`0` = no cap on distinct keys).

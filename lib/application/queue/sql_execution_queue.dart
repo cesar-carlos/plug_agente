@@ -16,7 +16,7 @@ import 'package:result_dart/result_dart.dart';
 /// Usage:
 /// ```dart
 /// final queue = SqlExecutionQueue(
-///   maxQueueSize: 50,
+///   maxQueueSize: 500,
 ///   maxConcurrentWorkers: 4,
 ///   metricsCollector: metrics,
 /// );

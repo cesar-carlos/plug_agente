@@ -35,24 +35,24 @@ class RpcMethodConcurrencyLimiter {
   }
 
   static const Map<String, int> _defaultLimits = <String, int>{
-    'sql.bulkInsert': 1,
-    'sql.executeBatch': 2,
-    'sql.execute': 4,
-    AgentActionRpcConstants.agentActionRunRpcMethodName: 2,
-    AgentActionRpcConstants.agentActionValidateRunRpcMethodName: 4,
-    'sql.cancel': 8,
-    'agent.getProfile': 8,
-    'agent.getHealth': 8,
-    'client_token.getPolicy': 8,
-    AgentActionRpcConstants.agentActionCancelRpcMethodName: 8,
-    AgentActionRpcConstants.agentActionGetExecutionRpcMethodName: 8,
+    'sql.bulkInsert': 10,
+    'sql.executeBatch': 20,
+    'sql.execute': 40,
+    AgentActionRpcConstants.agentActionRunRpcMethodName: 20,
+    AgentActionRpcConstants.agentActionValidateRunRpcMethodName: 40,
+    'sql.cancel': 80,
+    'agent.getProfile': 80,
+    'agent.getHealth': 80,
+    'client_token.getPolicy': 80,
+    AgentActionRpcConstants.agentActionCancelRpcMethodName: 80,
+    AgentActionRpcConstants.agentActionGetExecutionRpcMethodName: 80,
   };
 
   final Map<String, int> _methodLimits;
   final bool enabled;
   final Map<String, int> _activeByKey = <String, int>{};
 
-  int limitFor(String method) => _methodLimits[method] ?? 8;
+  int limitFor(String method) => _methodLimits[method] ?? 80;
 
   RpcMethodConcurrencyAcquireResult tryAcquire({
     required String method,

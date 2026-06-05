@@ -1173,7 +1173,7 @@ Quando `enableClientTokenPolicyIntrospection` esta **desligado** (default
 **true**), responde `-32602` com `reason` `client_token_introspection_disabled`.
 - **Rate limit:** por escopo `agent_id` + hash do credential (mesmo minuto UTC);
 limite configuravel por env `CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE` (default
-**120**; **0** = sem limite). Para limitar crescimento do mapa interno com
+**1200**; **0** = sem limite). Para limitar crescimento do mapa interno com
 muitos tokens distintos no mesmo minuto, use `CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`
 (default **8192**; **0** = sem teto por quantidade de escopos). Excesso de
 chamadas retorna `-32013` com `reason` `client_token_get_policy_rate_limited`
@@ -1353,8 +1353,8 @@ em 2 janelas consecutivas aciona reconexao.
 | Parametro                  | Valor padrao              | Descricao                                                              |
 | -------------------------- | ------------------------- | ---------------------------------------------------------------------- |
 | `rateLimitWindow`          | 1 minuto                  | Janela deslizante para contagem de eventos recebidos                   |
-| `maxRequestsPerWindow`     | 120                       | Maximo de eventos contados na janela antes do guard de taxa            |
-| `maxConcurrentRpcHandlers` | 32                        | Maximo de `rpc:request` **em processamento assincrono** ao mesmo tempo |
+| `maxRequestsPerWindow`     | 1200                      | Maximo de eventos contados na janela antes do guard de taxa            |
+| `maxConcurrentRpcHandlers` | 320                     | Maximo de `rpc:request` **em processamento assincrono** ao mesmo tempo |
 | Codigo de erro (ambos)     | `-32013` (`rate_limited`) | HTTP 429; `error.data.reason` permanece `rate_limited`                 |
 
 
@@ -2134,7 +2134,7 @@ metodo sem desativar autorizacao SQL.
 - Resultado com `token_id` / `issued_at` / `updated_at` quando aplicavel; `payload`
 com redacao de chaves sensiveis na resposta RPC.
 - Rate limit por agente+credential (`CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE`,
-default 120) e teto de escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`,
+default 1200) e teto de escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`,
 default 8192); erro `-32013` com `retry_after_ms` e `reset_at` em `error.data`.
 - Redacao de `payload` com allowlist para chaves operacionais (`token_scope`, etc.).
 - Metricas de dispatch para sucesso, falha agregada, falha por tipo de `Failure`, e rate limit.
@@ -2197,7 +2197,7 @@ documentado no OpenRPC e retornado via `rpc:response`.
 - Compressao outbound `none` / `gzip` / `auto` (politica local); fio apenas
 `cmp: none` ou `cmp: gzip`; anuncio `compressions` conforme modo.
 - `-32013`: janela de taxa (`RpcRequestGuard`) e limite de handlers concorrentes
-(`maxConcurrentRpcHandlers`, default 32).
+(`maxConcurrentRpcHandlers`, default 320).
 - Feature flags `enableSocketOutgoingContractValidation` e
 `enableSocketSummarizeLargePayloadLogs`; isolate JSON ~384 KiB e fingerprint
 de idempotencia para cargas grandes.

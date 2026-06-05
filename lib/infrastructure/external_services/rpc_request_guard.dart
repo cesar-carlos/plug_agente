@@ -12,7 +12,7 @@ class RpcRequestGuard {
   RpcRequestGuard({
     DateTime Function()? nowProvider,
     Duration rateLimitWindow = const Duration(minutes: 1),
-    int maxRequestsPerWindow = 120,
+    int maxRequestsPerWindow = 1200,
     Duration replayWindow = const Duration(minutes: 2),
   }) : _nowProvider = nowProvider ?? DateTime.now,
        _rateLimitWindow = rateLimitWindow,

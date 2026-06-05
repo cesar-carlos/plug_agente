@@ -44,6 +44,11 @@ OdbcE2eSqlDialect detectOdbcE2eDialect(String dsn) {
 /// may run in parallel against the same DSN (e.g. `flutter test` default concurrency).
 const odbcE2eCoverageTableName = 'plug_agente_e2e_cov';
 
+/// Unique table name for a single stress run (avoids collisions across parallel tests).
+String odbcE2eUniqueTableName({String prefix = 'plug_agente_e2e_dml_stress'}) {
+  return '${prefix}_${DateTime.now().millisecondsSinceEpoch}';
+}
+
 class OdbcE2eCoverageSql {
   OdbcE2eCoverageSql(
     this.dialect, {

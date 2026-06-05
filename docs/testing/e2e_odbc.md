@@ -162,6 +162,33 @@ Tempos tambem sao emitidos no log `e2e.odbc_dml_bulk` como
 `timeout` de 30 minutos; aumente o timeout do runner se 200k linhas for
 insuficiente.
 
+## ODBC DML stress (`odbc_dml_stress_live_e2e_test.dart`)
+
+Cria tabela com nome unico por execucao, repete ciclos **INSERT** (lotes
+paralelos via `sql.executeBatch`), **UPDATE** e **DELETE** por faixas de `id`,
+valida contagem de linhas e ausencia de leases no pool, e faz **DROP** no
+`tearDownAll`. Inclui cenario com `QueuedDatabaseGateway` e DML concorrente.
+**Opt-in.**
+
+| Variavel | Obrigatoria | Descricao |
+| -------- | ----------- | --------- |
+| `ODBC_E2E_DML_STRESS_TESTS` | Sim | `true` para correr |
+| `ODBC_E2E_DML_STRESS_ROW_COUNT` | Nao | Linhas por iteracao (default 5000, limite 100-100k) |
+| `ODBC_E2E_DML_STRESS_ITERATIONS` | Nao | Ciclos insert/update/delete (default 3, limite 1-50) |
+| `ODBC_E2E_DML_STRESS_CONCURRENCY` | Nao | Workers paralelos por fase (default 4, limite 1-32) |
+| `ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE` | Nao | Comandos por `sql.executeBatch` (default 250, limite 32-2000) |
+| `ODBC_E2E_DML_STRESS_QUEUE_SIZE` | Nao | Fila do gateway enfileirado (default 8) |
+| `ODBC_E2E_DML_STRESS_WORKERS` | Nao | Workers do gateway enfileirado (default 4) |
+| `ODBC_E2E_DML_STRESS_MAX_MS_PER_ITERATION` | Nao | Teto (ms) por iteracao completa (opcional) |
+
+O cenario com `QueuedDatabaseGateway` limita a 2000 linhas (ou menos, se
+`ODBC_E2E_DML_STRESS_ROW_COUNT` for menor) porque cada insert e um
+`executeNonQuery` individual — volume completo (ex.: 20k) ficaria desproporcional
+ao teste batched paralelo.
+
+Tempos por iteracao sao emitidos no log `e2e.odbc_dml_stress` como
+`E2E_DML_STRESS_ITERATION_TIMINGS`.
+
 ## SQL queue burst (`sql_queue_burst_test.dart`)
 
 Dispara pedidos `executeQuery` em paralelo (`Future.wait`) contra um
@@ -211,6 +238,9 @@ flutter test test/integration/odbc_dml_perf_live_e2e_test.dart
 
 # DML bulk load (opt-in, perf)
 flutter test --tags perf test/integration/odbc_dml_bulk_load_live_e2e_test.dart
+
+# DML stress (opt-in, perf)
+flutter test test/integration/odbc_dml_stress_live_e2e_test.dart
 
 # Queue burst (opt-in)
 flutter test test/integration/sql_queue_burst_test.dart

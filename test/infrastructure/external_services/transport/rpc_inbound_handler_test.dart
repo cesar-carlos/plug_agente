@@ -186,21 +186,21 @@ void main() {
   group('concurrency slots', () {
     test('tryAcquireSlot returns true up to the cap', () {
       final acquired = <bool>[];
-      for (var i = 0; i < 32; i++) {
+      for (var i = 0; i < ConnectionConstants.maxConcurrentRpcHandlers; i++) {
         acquired.add(handler.tryAcquireSlot());
       }
       expect(acquired.every((b) => b), isTrue);
     });
 
     test('tryAcquireSlot returns false past the cap', () {
-      for (var i = 0; i < 32; i++) {
+      for (var i = 0; i < ConnectionConstants.maxConcurrentRpcHandlers; i++) {
         handler.tryAcquireSlot();
       }
       expect(handler.tryAcquireSlot(), isFalse);
     });
 
     test('releaseSlot frees a slot for reuse', () {
-      for (var i = 0; i < 32; i++) {
+      for (var i = 0; i < ConnectionConstants.maxConcurrentRpcHandlers; i++) {
         handler.tryAcquireSlot();
       }
       handler.releaseSlot();
