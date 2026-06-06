@@ -1,6 +1,7 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/direct_odbc_operation_class.dart';
 
 void main() {
   group('ConnectionConstants', () {
@@ -128,10 +129,109 @@ void main() {
       expect(ConnectionConstants.directOdbcConnectionCapacityStrategy(), 'half_pool_reserved');
     });
 
+    test('should align SQL queue per-kind worker caps with direct ODBC class budgets', () {
+      expect(ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(8), 2);
+      expect(ConnectionConstants.sqlQueueMaxLongQueryWorkersForWorkers(8), 2);
+      expect(ConnectionConstants.sqlQueueMaxNonQueryWorkersForWorkers(8), 4);
+      expect(ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(1), 1);
+    });
+
+    test('should use persisted pool size for direct ODBC budget when workers override differs', () {
+      expect(
+        ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(
+          12,
+          persistedPoolSize: 8,
+        ),
+        2,
+      );
+    });
+
+    test('should default SQL queue max size to 16', () {
+      expect(ConnectionConstants.sqlQueueMaxSize, ConnectionConstants.defaultSqlQueueMaxSize);
+    });
+
+    test('should use valid SQL_QUEUE_MAX_SIZE override', () {
+      dotenv.loadFromString(envString: 'SQL_QUEUE_MAX_SIZE=32');
+
+      expect(ConnectionConstants.sqlQueueMaxSize, 32);
+    });
+
+    test('should ignore invalid SQL_QUEUE_MAX_SIZE override', () {
+      dotenv.loadFromString(envString: 'SQL_QUEUE_MAX_SIZE=invalid');
+
+      expect(ConnectionConstants.sqlQueueMaxSize, ConnectionConstants.defaultSqlQueueMaxSize);
+
+      dotenv.clean();
+      dotenv.loadFromString(envString: 'SQL_QUEUE_MAX_SIZE=0');
+
+      expect(ConnectionConstants.sqlQueueMaxSize, ConnectionConstants.defaultSqlQueueMaxSize);
+    });
+
+    test('should default rpc sql.execute soft limit to queue workers plus queue depth', () {
+      expect(ConnectionConstants.rpcSqlExecuteConcurrencySoftLimit, 24);
+    });
+
+    test('should use SQL_QUEUE_MAX_BATCH_WORKERS override when valid', () {
+      dotenv.loadFromString(envString: 'SQL_QUEUE_MAX_BATCH_WORKERS=3');
+
+      expect(ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(8), 3);
+    });
+
+    test('should derive direct ODBC operation class caps from global budget', () {
+      expect(
+        ConnectionConstants.directOdbcOperationClassCap(
+          DirectOdbcOperationClass.streaming,
+          4,
+        ),
+        2,
+      );
+      expect(
+        ConnectionConstants.directOdbcOperationClassCap(
+          DirectOdbcOperationClass.bulk,
+          4,
+        ),
+        2,
+      );
+      expect(
+        ConnectionConstants.directOdbcOperationClassCap(
+          DirectOdbcOperationClass.batchTransaction,
+          2,
+        ),
+        1,
+      );
+    });
+
     test('should reserve half of pool for read-only batch parallelism by default', () {
       expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(7), 3);
       expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(1), 1);
       expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(0), 1);
+      expect(ConnectionConstants.bulkInsertParallelismForPoolSize(8), 4);
+    });
+
+    test('should default benchmark-tuned ODBC pool and bulk insert settings', () {
+      expect(ConnectionConstants.defaultPoolSize, 8);
+      expect(ConnectionConstants.defaultSqlQueueMaxSize, 16);
+      expect(ConnectionConstants.bulkInsertParallelEnabled, isTrue);
+      expect(ConnectionConstants.nativeWarmUpEnabled, isTrue);
+      expect(ConnectionConstants.bulkInsertParallelRowThreshold, 50000);
+      expect(ConnectionConstants.bulkInsertChunkRowCount, 10000);
+      expect(ConnectionConstants.batchBulkInsertRouteThreshold, 50);
+    });
+
+    test('should read bulk insert parallel env overrides', () {
+      dotenv.loadFromString(
+        envString: 'ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD=25000\n'
+            'ODBC_BULK_INSERT_PARALLEL_ENABLED=false',
+      );
+      expect(ConnectionConstants.bulkInsertParallelRowThreshold, 25000);
+      expect(ConnectionConstants.bulkInsertParallelEnabled, isFalse);
+      dotenv.clean();
+    });
+
+    test('should read native warm-up env override', () {
+      dotenv.loadFromString(envString: 'ODBC_NATIVE_WARMUP_ENABLED=false');
+      expect(ConnectionConstants.nativeWarmUpEnabled, isFalse);
+      dotenv.clean();
     });
 
     test('should use ODBC_DIRECT_CONNECTION_MAX_CONCURRENT when override is valid', () {

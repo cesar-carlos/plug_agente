@@ -3118,7 +3118,7 @@ void main() {
       },
     );
 
-    test('should forward read-only batch parallelism option to gateway', () async {
+    test('should cap read-only batch parallelism to pool policy before gateway', () async {
       SqlExecutionOptions? capturedOptions;
       when(
         () => mockGateway.executeBatch(

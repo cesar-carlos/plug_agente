@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
+import 'package:plug_agente/application/rpc/sql_batch_handler.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
@@ -23,13 +24,13 @@ import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
-import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
@@ -138,6 +139,7 @@ class SqlRpcMethodHandlerOperations {
     Duration queryStageBudget = _defaultQueryStageBudget,
     Duration batchExecutionStageBudget = _defaultBatchExecutionStageBudget,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
+    IOdbcConnectionSettings? odbcConnectionSettings,
   }) : _databaseGateway = databaseGateway,
        _normalizerService = normalizerService,
        _uuid = uuid,
@@ -163,7 +165,23 @@ class SqlRpcMethodHandlerOperations {
        _executeSqlBatch = ExecuteSqlBatch(
          databaseGateway,
          normalizerService,
-       );
+         poolSizeProvider: odbcConnectionSettings == null
+             ? null
+             : () => odbcConnectionSettings.poolSize,
+       ) {
+    _batchHandler = SqlBatchHandler(
+      featureFlags: featureFlags,
+      support: support,
+      uuid: uuid,
+      executeSqlBatch: _executeSqlBatch,
+      sqlBatchTotalBudget: sqlBatchTotalBudget,
+      batchExecutionStageBudget: batchExecutionStageBudget,
+      authMetrics: authMetrics,
+      recordAuthSqlDenied: _recordAuthSqlDenied,
+      supportsPageOffsetPagination: _supportsPageOffsetPagination,
+      logMissingClientToken: _logMissingClientTokenOnce,
+    );
+  }
 
   static bool _loggedMissingClientTokenThisSession = false;
 
@@ -185,6 +203,7 @@ class SqlRpcMethodHandlerOperations {
   final Duration _batchExecutionStageBudgetDuration;
   final SqlStreamingCoordinator _sqlStreamingCoordinator;
   final ExecuteSqlBatch _executeSqlBatch;
+  late final SqlBatchHandler _batchHandler;
   String? _cachedDbStreamingAutoTableAllowlistRaw;
   Set<String> _cachedDbStreamingAutoTableAllowlist = const <String>{};
   DateTime? _cachedDbStreamingAutoTableAllowlistExpiresAt;
@@ -206,7 +225,6 @@ class SqlRpcMethodHandlerOperations {
     ' group by ',
     ' order by ',
   ];
-  static const int _sqlInvestigationBatchPreviewMaxChars = 8000;
 
   /// Handles sql.execute method (single command).
   Future<RpcResponse> handleSqlExecute(
@@ -896,253 +914,13 @@ class SqlRpcMethodHandlerOperations {
     String? clientToken, {
     required TransportLimits limits,
     required Map<String, dynamic> negotiatedExtensions,
-  }) async {
-    // Validate params
-    if (request.params is! Map<String, dynamic>) {
-      return _support.invalidParams(request, 'params must be an object');
-    }
-
-    final params = request.params as Map<String, dynamic>;
-    final commandsJson = params['commands'] as List<dynamic>?;
-    final deadline = DateTime.now().add(_sqlBatchTotalBudgetDuration);
-    if (!_supportsPageOffsetPagination(negotiatedExtensions)) {
-      final options = params['options'] as Map<String, dynamic>?;
-      if (options?['page'] != null || options?['page_size'] != null) {
-        return _support.invalidParams(
-          request,
-          'Negotiated protocol does not allow page-offset pagination',
-        );
-      }
-    }
-
-    if (commandsJson == null || commandsJson.isEmpty) {
-      return _support.invalidParams(
-        request,
-        'commands is required and must not be empty',
-      );
-    }
-
-    if (commandsJson.length > limits.maxBatchSize) {
-      return _support.invalidParams(
-        request,
-        'commands exceeds negotiated limit: '
-        '${commandsJson.length} > ${limits.maxBatchSize}',
-      );
-    }
-
-    final idempotencyKey = params['idempotency_key'] as String?;
-    final idempotencyFingerprint = await resolveIdempotencyFingerprint(
-      request.method,
-      params,
-    );
-    final idempotentEarly = await _support.consumeIdempotentCacheIfAny(
-      request,
-      idempotencyKey,
-      idempotencyFingerprint,
-    );
-    if (idempotentEarly != null) {
-      return idempotentEarly;
-    }
-
-    // Parse commands and build execution plan
-    final commandPlans = <_BatchCommandExecutionPlan>[];
-    for (var i = 0; i < commandsJson.length; i++) {
-      final commandJson = commandsJson[i];
-      if (commandJson is! Map<String, dynamic>) {
-        return _support.invalidParams(request, 'commands[$i] must be an object');
-      }
-
-      final executionOrderRaw = commandJson['execution_order'];
-      final executionOrder = executionOrderRaw != null ? jsonNonNegativeInt(executionOrderRaw) : null;
-      if (executionOrderRaw != null && executionOrder == null) {
-        return _support.invalidParams(
-          request,
-          'commands[$i].execution_order must be an integer >= 0',
-        );
-      }
-
-      commandPlans.add(
-        _BatchCommandExecutionPlan(
-          command: SqlCommand.fromJson(commandJson),
-          requestIndex: i,
-          executionOrder: executionOrder,
-        ),
-      );
-    }
-
-    commandPlans.sort((left, right) {
-      final leftHasExplicitOrder = left.executionOrder != null;
-      final rightHasExplicitOrder = right.executionOrder != null;
-
-      if (leftHasExplicitOrder && rightHasExplicitOrder) {
-        final orderCompare = left.executionOrder!.compareTo(
-          right.executionOrder!,
-        );
-        if (orderCompare != 0) {
-          return orderCompare;
-        }
-        return left.requestIndex.compareTo(right.requestIndex);
-      }
-
-      if (leftHasExplicitOrder && !rightHasExplicitOrder) {
-        return -1;
-      }
-      if (!leftHasExplicitOrder && rightHasExplicitOrder) {
-        return 1;
-      }
-      return left.requestIndex.compareTo(right.requestIndex);
-    });
-
-    final commands = commandPlans.map((plan) => plan.command).toList(growable: false);
-
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
-      _logMissingClientTokenOnce(request);
-      _authMetrics?.recordDenied(
-        requestId: request.id?.toString(),
-        method: request.method,
-        reason: RpcClientTokenConstants.missingClientTokenReason,
-      );
-      _recordAuthSqlDenied(
-        request,
-        sql: _sqlPreviewForBatch(commands),
-        explicitReason: RpcClientTokenConstants.missingClientTokenReason,
-      );
-      final rpcError = FailureToRpcErrorMapper.map(
-        _support.buildMissingClientTokenFailure(),
-        instance: request.id?.toString(),
-        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-      );
-      return RpcResponse.error(id: request.id, error: rpcError);
-    }
-
-    final database = params['database'] as String?;
-
-    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
-      final authorizedSqlFingerprints = <String>{};
-      for (final cmd in commands) {
-        final authFingerprint = _authorizationFingerprint(cmd.sql);
-        if (authorizedSqlFingerprints.contains(authFingerprint)) {
-          continue;
-        }
-
-        final authStopwatch = Stopwatch()..start();
-        final authResult = await _support.authorizeWithBudget(
-          token: clientToken,
-          sql: cmd.sql,
-          requestDatabase: database,
-          requestId: request.id?.toString(),
-          method: request.method,
-          deadline: deadline,
-        );
-        authStopwatch.stop();
-        if (authResult.isError()) {
-          final failure = authResult.exceptionOrNull()! as domain.Failure;
-          final ctx = failure.context;
-          _authMetrics?.recordDenied(
-            requestId: request.id?.toString(),
-            method: request.method,
-            latencyMs: authStopwatch.elapsedMilliseconds,
-            clientId: ctx['client_id'] as String?,
-            operation: ctx['operation'] as String?,
-            resource: ctx['resource'] as String?,
-            reason: ctx['reason'] as String?,
-          );
-          _recordAuthSqlDenied(
-            request,
-            sql: cmd.sql,
-            failure: failure,
-          );
-          final rpcError = FailureToRpcErrorMapper.map(
-            failure,
-            instance: request.id?.toString(),
-            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-          );
-          return RpcResponse.error(id: request.id, error: rpcError);
-        }
-        _authMetrics?.recordAuthorized(
-          requestId: request.id?.toString(),
-          method: request.method,
-          latencyMs: authStopwatch.elapsedMilliseconds,
-        );
-        authorizedSqlFingerprints.add(authFingerprint);
-      }
-    }
-
-    // Parse options
-    final optionsJson = params['options'] as Map<String, dynamic>?;
-    final options = optionsJson != null ? SqlExecutionOptions.fromJson(optionsJson) : const SqlExecutionOptions();
-    final effectiveOptions = SqlExecutionOptions(
-      timeoutMs: options.timeoutMs,
-      maxRows: options.maxRows < limits.maxRows ? options.maxRows : limits.maxRows,
-      transaction: options.transaction,
-      maxParallelReadOnlyBatchItems: options.maxParallelReadOnlyBatchItems,
-    );
-
-    // Execute batch
-    return _support.runIdempotentExecution(
-      request: request,
-      idempotencyKey: idempotencyKey,
-      idempotencyFingerprint: idempotencyFingerprint,
-      execute: () async {
-        final batchStartedAt = DateTime.now().toUtc();
-        final result = await _executeSqlBatchWithBudget(
-          agentId,
-          commands,
-          database: database,
-          options: effectiveOptions,
-          requestId: request.id?.toString(),
-          deadline: deadline,
-        );
-
-        if (result.isError()) {
-          final failure = result.exceptionOrNull()! as domain.Failure;
-          final rpcError = FailureToRpcErrorMapper.map(
-            failure,
-            instance: request.id?.toString(),
-            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-          );
-          return RpcResponse.error(id: request.id, error: rpcError);
-        }
-
-        final commandResults = result.getOrThrow();
-        final batchFinishedAt = DateTime.now().toUtc();
-        final items =
-            commandResults
-                .map((SqlCommandResult batchResult) {
-                  if (batchResult.index < 0 || batchResult.index >= commandPlans.length) {
-                    return batchResult;
-                  }
-                  final requestIndex = commandPlans[batchResult.index].requestIndex;
-                  return SqlCommandResult(
-                    index: requestIndex,
-                    ok: batchResult.ok,
-                    rows: batchResult.rows,
-                    rowCount: batchResult.rowCount,
-                    affectedRows: batchResult.affectedRows,
-                    error: batchResult.error,
-                    columnMetadata: batchResult.columnMetadata,
-                  );
-                })
-                .toList(growable: false)
-              ..sort((left, right) => left.index.compareTo(right.index));
-
-        final resultData = {
-          'execution_id': _uuid.v4(),
-          'started_at': _executionTimestampUtcIso(batchStartedAt),
-          'finished_at': _executionTimestampUtcIso(batchFinishedAt),
-          'items': items.map((r) => r.toJson()).toList(growable: false),
-          'total_commands': commands.length,
-          'successful_commands': items.where((r) => r.ok).length,
-          'failed_commands': items.where((r) => !r.ok).length,
-        };
-
-        return RpcResponse.success(
-          id: request.id,
-          result: resultData,
-        );
-      },
-    );
-  }
+  }) => _batchHandler.handleSqlExecuteBatch(
+    request,
+    agentId,
+    clientToken,
+    limits: limits,
+    negotiatedExtensions: negotiatedExtensions,
+  );
 
   Future<RpcResponse> handleSqlBulkInsert(
     RpcRequest request,
@@ -1532,69 +1310,6 @@ class SqlRpcMethodHandlerOperations {
     }
   }
 
-  Future<Result<List<SqlCommandResult>>> _executeSqlBatchWithBudget(
-    String agentId,
-    List<SqlCommand> commands, {
-    required String? database,
-    required SqlExecutionOptions options,
-    required String? requestId,
-    required DateTime? deadline,
-  }) async {
-    final stageTimeout = _support.effectiveStageTimeout(
-      deadline: deadline,
-      stageBudget: _batchExecutionStageBudgetDuration,
-    );
-    final timeout = mergeBatchOdbcTimeout(
-      stageTimeout: stageTimeout,
-      timeoutMs: options.timeoutMs,
-    );
-    if (timeout != null && timeout <= Duration.zero) {
-      final context = <String, dynamic>{
-        'timeout': true,
-        'timeout_stage': 'sql',
-        'stage': 'batch',
-        'reason': RpcSqlBudgetConstants.batchBudgetExhaustedReason,
-      };
-      if (requestId != null) {
-        context['request_id'] = requestId;
-      }
-      return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'Batch execution budget exhausted before database call',
-          context: context,
-        ),
-      );
-    }
-
-    try {
-      return await _executeSqlBatch(
-        agentId,
-        commands,
-        database: database,
-        options: options,
-        timeout: timeout,
-        sourceRpcRequestId: requestId,
-      );
-    } on TimeoutException catch (error) {
-      final context = <String, dynamic>{
-        'timeout': true,
-        'timeout_stage': 'sql',
-        'stage': 'batch',
-        'reason': RpcSqlBudgetConstants.queryTimeoutReason,
-      };
-      if (requestId != null) {
-        context['request_id'] = requestId;
-      }
-      return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'Batch SQL execution timeout',
-          cause: error,
-          context: context,
-        ),
-      );
-    }
-  }
-
   Future<Result<int>> _executeBulkInsertWithBudget(
     BulkInsertRequest request, {
     required String? database,
@@ -1740,14 +1455,6 @@ class SqlRpcMethodHandlerOperations {
         return RpcResponse.error(id: request.id, error: rpcError);
       },
     );
-  }
-
-  String _sqlPreviewForBatch(List<SqlCommand> commands) {
-    final joined = commands.map((SqlCommand c) => c.sql).join('\n---\n');
-    if (joined.length <= _sqlInvestigationBatchPreviewMaxChars) {
-      return joined;
-    }
-    return '${joined.substring(0, _sqlInvestigationBatchPreviewMaxChars)}\n... [truncated]';
   }
 
   String _authorizationFingerprint(String sql) {
@@ -2264,16 +1971,4 @@ class _ResolvedSqlHandlingMode {
   final String? errorMessage;
 
   bool get hasError => errorMessage != null;
-}
-
-class _BatchCommandExecutionPlan {
-  const _BatchCommandExecutionPlan({
-    required this.command,
-    required this.requestIndex,
-    required this.executionOrder,
-  });
-
-  final SqlCommand command;
-  final int requestIndex;
-  final int? executionOrder;
 }

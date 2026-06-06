@@ -7469,7 +7469,7 @@ abstract class AppLocalizations {
   /// No description provided for @odbcHintPoolSize.
   ///
   /// In en, this message translates to:
-  /// **'4'**
+  /// **'8'**
   String get odbcHintPoolSize;
 
   /// No description provided for @odbcBlockTimeouts.

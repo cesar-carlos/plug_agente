@@ -30,8 +30,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.configTabPreferences);
 
     await tester.enterText(
@@ -70,8 +69,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.configTabPreferences);
 
     expect(find.text(ptL10n.agentActionsRetentionUseEnvDefaults), findsOneWidget);
@@ -101,8 +99,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     await harness.provider.load();
     harness.provider.selectAction('action-1');
@@ -132,8 +129,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     await openTab(tester, ptL10n.configTabPreferences);
 
@@ -142,8 +138,8 @@ void main() {
     expect(find.text(ptL10n.agentActionsDangerousCommandWarnModeDisabled), findsOneWidget);
 
     await harness.featureFlags.setEnableAgentActionDangerousCommandWarnMode(true);
-    harness.provider.notifyListeners();
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester, size: const Size(1400, 900));
+    await openTab(tester, ptL10n.configTabPreferences);
 
     expect(find.text(ptL10n.agentActionsDangerousCommandWarnModeEnabled), findsOneWidget);
   });
@@ -169,8 +165,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.configTabPreferences);
 
     expect(find.text('Runtime Detection'), findsOneWidget);

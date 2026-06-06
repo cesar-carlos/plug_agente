@@ -23,6 +23,7 @@ import 'package:plug_agente/domain/repositories/i_direct_connection_limiter_diag
 import 'package:plug_agente/domain/repositories/i_global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 
@@ -37,6 +38,7 @@ class HealthService {
     IAgentConfigRepository? configRepository,
     IStreamingDatabaseGateway? streamingGateway,
     IDirectConnectionLimiterDiagnostics? directConnectionLimiter,
+    IPoolDiscardInflightDiagnostics? poolDiscardDiagnostics,
     FeatureFlags? featureFlags,
     OdbcRuntimeTuning? odbcRuntimeTuning,
     AgentRuntimeIdentity? agentRuntimeIdentity,
@@ -58,6 +60,7 @@ class HealthService {
        _configRepository = configRepository,
        _streamingGateway = streamingGateway,
        _directConnectionLimiter = directConnectionLimiter,
+       _poolDiscardDiagnostics = poolDiscardDiagnostics,
        _featureFlags = featureFlags,
        _odbcRuntimeTuning = odbcRuntimeTuning,
        _agentRuntimeIdentity = agentRuntimeIdentity,
@@ -80,6 +83,7 @@ class HealthService {
   final IAgentConfigRepository? _configRepository;
   final IStreamingDatabaseGateway? _streamingGateway;
   final IDirectConnectionLimiterDiagnostics? _directConnectionLimiter;
+  final IPoolDiscardInflightDiagnostics? _poolDiscardDiagnostics;
   final FeatureFlags? _featureFlags;
   final OdbcRuntimeTuning? _odbcRuntimeTuning;
   final AgentRuntimeIdentity? _agentRuntimeIdentity;
@@ -105,6 +109,7 @@ class HealthService {
 
   /// Gets current health status with async pool diagnostics when available.
   Future<Map<String, Object?>> getHealthStatusAsync() async {
+    await _poolDiscardDiagnostics?.reconcilePoolDiscardInflight();
     final pool = _connectionPool;
     final poolSnapshot = await _resolvePoolSnapshot(pool);
     final poolDiagnostics = poolSnapshot.diagnostics;
@@ -168,8 +173,7 @@ class HealthService {
 
   /// Derives an overall status string from the available pool/queue diagnostics.
   ///
-  /// - 'degraded': native circuit open, or SQL queue ≥90% saturated, or
-  ///   recent 90% saturation events detected.
+  /// - 'degraded': native circuit open, or SQL queue ≥90% saturated right now.
   /// - 'healthy': no degradation signals detected.
   ///
   /// Hub consumers should treat absence of 'healthy' as actionable.
@@ -186,9 +190,6 @@ class HealthService {
       final maxSize = queuedGateway.maxQueueSize;
       final currentSize = queuedGateway.queueSize;
       if (maxSize > 0 && currentSize / maxSize >= 0.9) {
-        return 'degraded';
-      }
-      if ((metrics['sql_queue_saturation_90_count'] as int? ?? 0) > 0) {
         return 'degraded';
       }
     }
@@ -249,6 +250,10 @@ class HealthService {
         'fallbacks_total': directFallbacks + nativeFallbacks,
         'direct_fallbacks_total': directFallbacks,
         'native_fallbacks_total': nativeFallbacks,
+        'lease_active_count': poolDiagnostics['lease_active_count'] ?? 0,
+        'native_active_count': poolDiagnostics['native_active_count'] ?? 0,
+        'pool_discard_inflight': metrics['pool_discard_inflight'] ?? 0,
+        'pool_discard_reconciliation_stale_total': metrics['pool_discard_reconciliation_stale'] ?? 0,
       },
       'streaming': _buildStreamingHealth(metrics),
       'direct_connections': _buildDirectConnectionHealth(metrics),
@@ -317,6 +322,7 @@ class HealthService {
         'transactional_native_pool_total': metrics['transactional_batch_native_pool_path'] ?? 0,
         'transactional_native_pool_fallback_total': metrics['transactional_batch_native_pool_fallback'] ?? 0,
         'bulk_insert_recommended_total': metrics['batch_bulk_insert_recommended'] ?? 0,
+        'bulk_insert_routed_total': metrics['batch_bulk_insert_routed'] ?? 0,
         'last_requested_parallelism': metrics['read_only_batch_parallel_last_requested'] ?? 0,
         'last_effective_parallelism': metrics['read_only_batch_parallel_last_effective'] ?? 0,
         'parallel_global_wait_avg_ms': metrics['read_only_batch_parallel_wait_avg_time_ms'] ?? 0.0,
@@ -621,6 +627,7 @@ class HealthService {
       'capacity_strategy': ConnectionConstants.directOdbcConnectionCapacityStrategy(),
       'pool_size_reference': poolSize,
       'is_saturated': limiter?.isSaturated ?? false,
+      'by_operation_class': limiter?.getOperationClassDiagnostics() ?? const <String, Object?>{},
       'opened_total': limiter?.openedTotal ?? metrics['direct_connection_opened'] ?? 0,
       'closed_total': limiter?.closedTotal ?? metrics['direct_connection_closed'] ?? 0,
       'acquire_timeouts_total': metrics['direct_connection_acquire_timeout'] ?? 0,

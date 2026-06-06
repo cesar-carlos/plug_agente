@@ -37,6 +37,7 @@ import 'package:plug_agente/domain/repositories/i_authorization_metrics_collecto
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
@@ -87,6 +88,7 @@ class DefaultRpcMethodHandlerOperations {
     Duration batchExecutionStageBudget = _defaultBatchExecutionStageBudget,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
     RpcIdempotencyCoordinator? idempotencyCoordinator,
+    IOdbcConnectionSettings? odbcConnectionSettings,
   }) : _authorizeSqlOperation = authorizeSqlOperation,
        _featureFlags = featureFlags,
        _idempotencyStore = idempotencyStore,
@@ -122,6 +124,7 @@ class DefaultRpcMethodHandlerOperations {
       queryStageBudget: queryStageBudget,
       batchExecutionStageBudget: batchExecutionStageBudget,
       sqlStreamingCoordinator: sqlStreamingCoordinator,
+      odbcConnectionSettings: odbcConnectionSettings,
     );
     _agentActionOperations = AgentActionRpcMethodHandlerOperations(
       uuid: uuid,

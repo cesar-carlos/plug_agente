@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
+
 import '../../tool/src/live_hub_agent_action_env_check.dart' as live_hub_env;
 
 /// Environment variables for E2E and live integration tests.
@@ -265,6 +267,13 @@ class E2EEnv {
   /// `sql_queue_burst_test` (queue/backpressure burst scenarios; opt-in).
   static bool get odbcRunBurstTests => _get('RUN_ODBC_BURST_TESTS') == 'true';
 
+  /// ODBC pool size for live E2E harnesses (`ODBC_POOL_SIZE`). Default matches
+  /// [ConnectionConstants.defaultPoolSize] (benchmark-tuned).
+  static int get odbcPoolSize {
+    final parsed = _parsePositiveInt('ODBC_POOL_SIZE');
+    return (parsed ?? ConnectionConstants.defaultPoolSize).clamp(1, 20);
+  }
+
   static int get odbcBurstQueueSize => (_parsePositiveInt('ODBC_BURST_QUEUE_SIZE') ?? 8).clamp(4, 100);
 
   static int get odbcBurstWorkers => (_parsePositiveInt('ODBC_BURST_WORKERS') ?? 4).clamp(1, 32);
@@ -356,11 +365,11 @@ class E2EEnv {
     return (parsed ?? 1).clamp(1, 50);
   }
 
-  /// Parallel workers for chunked DML (`ODBC_E2E_DML_STRESS_CONCURRENCY`). Default 4, clamped 1–32.
+  /// Parallel workers for chunked DML (`ODBC_E2E_DML_STRESS_CONCURRENCY`). Default 8, clamped 1–32.
   static int get odbcE2eDmlStressConcurrency {
     final raw = _get('ODBC_E2E_DML_STRESS_CONCURRENCY');
     final parsed = raw != null ? int.tryParse(raw.trim()) : null;
-    return (parsed ?? 4).clamp(1, 32);
+    return (parsed ?? 8).clamp(1, 32);
   }
 
   /// Commands per `sql.executeBatch` chunk (`ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE`). Default 1000, clamped 32–2000.
@@ -371,10 +380,15 @@ class E2EEnv {
   }
 
   static int get odbcE2eDmlStressQueueSize =>
-      (_parsePositiveInt('ODBC_E2E_DML_STRESS_QUEUE_SIZE') ?? 8).clamp(4, 100);
+      (_parsePositiveInt('ODBC_E2E_DML_STRESS_QUEUE_SIZE') ?? 16).clamp(4, 100);
 
   static int get odbcE2eDmlStressWorkers =>
-      (_parsePositiveInt('ODBC_E2E_DML_STRESS_WORKERS') ?? 4).clamp(1, 32);
+      (_parsePositiveInt('ODBC_E2E_DML_STRESS_WORKERS') ?? 8).clamp(1, 32);
+
+  /// Queue enqueue timeout for the queued-gateway stress scenario
+  /// (`ODBC_E2E_DML_STRESS_ENQUEUE_TIMEOUT_MS`). Default 30000ms.
+  static int get odbcE2eDmlStressEnqueueTimeoutMs =>
+      (_parsePositiveInt('ODBC_E2E_DML_STRESS_ENQUEUE_TIMEOUT_MS') ?? 30000).clamp(500, 300000);
 
   /// Optional ceiling (ms) per full iteration; null = do not assert on time.
   static int? get odbcE2eDmlStressMaxMsPerIteration =>

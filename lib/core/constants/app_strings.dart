@@ -309,7 +309,7 @@ class AppStrings {
       'Múltiplas conexões são reutilizadas automaticamente. Melhora '
       'performance em cenários de alta concorrência.';
   static const String odbcFieldPoolSize = 'Tamanho máximo do pool';
-  static const String odbcHintPoolSize = '4';
+  static const String odbcHintPoolSize = '8';
   static const String odbcBlockTimeouts = 'Timeouts';
   static const String odbcFieldLoginTimeout = 'Login timeout (segundos)';
   static const String odbcHintLoginTimeout = '30';

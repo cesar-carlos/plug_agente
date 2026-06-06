@@ -271,7 +271,7 @@ final class HubRecoveryOrchestrator {
     }
     final context = _deps.contextSource.resolveConnectionContext();
     if (context == null) {
-      AppLogger.warning(
+      AppLogger.debug(
         'resilience: ${prefix}persistent_retry event=context_missing '
         'reason=missing_server_url_or_agent_id',
       );
@@ -280,7 +280,7 @@ final class HubRecoveryOrchestrator {
       return;
     }
     bumpPersistentTick();
-    AppLogger.info(
+    AppLogger.debug(
       'resilience: ${prefix}hub_persistent_retry_tick tick=$persistentRetryTickCount '
       'agent_id=${context.agentId}',
     );
@@ -292,7 +292,7 @@ final class HubRecoveryOrchestrator {
       stage: 'persistent',
     );
     if (!hubReachable) {
-      AppLogger.info(
+      AppLogger.debug(
         'resilience: ${prefix}hub_unreachable_skip_connect tick=$persistentRetryTickCount agent_id=${context.agentId}',
       );
       _deps.uiSink.setHubRecoveryUiHint(HubRecoveryUiHint.awaitingHubReachability);
@@ -311,7 +311,7 @@ final class HubRecoveryOrchestrator {
     );
     if (ok || _deps.isDisconnectRequested()) {
       if (ok) {
-        AppLogger.info(
+        AppLogger.debug(
           'resilience: ${prefix}persistent_retry event=hub_reconnect_succeeded '
           'tick=$persistentRetryTickCount agent_id=${context.agentId}',
         );

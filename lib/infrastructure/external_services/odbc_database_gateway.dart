@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'dart:math' as math;
-
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:odbc_fast/odbc_fast.dart' as odbc show DatabaseType;
@@ -22,6 +20,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
@@ -32,6 +31,7 @@ import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
+import 'package:plug_agente/infrastructure/external_services/homogeneous_insert_batch_planner.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_batch_transaction_manager.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_bulk_insert_executor.dart';
@@ -41,10 +41,12 @@ import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_read_only_batch_parallel_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/query_execution_outcome.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/pool/adaptive_odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
@@ -88,7 +90,7 @@ class _BatchConnectionState {
 /// - Built-in error handling with Result types
 /// - Connection pooling for reduced overhead
 /// - Performance metrics collection
-class OdbcDatabaseGateway implements IDatabaseGateway {
+class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagnostics {
   OdbcDatabaseGateway(
     this._configSource,
     this._service,
@@ -139,8 +141,27 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       optionsResolver: _optionsResolver,
       service: _service,
       metrics: _metrics,
+      settings: _settings,
+      parallelPool: connectionPool is AdaptiveOdbcConnectionPool
+          ? connectionPool.nativeBulkInsertPool
+          : null,
+    );
+    _readOnlyBatchParallelExecutor = OdbcReadOnlyBatchParallelExecutor(
+      connectionManager: _connectionManager,
+      queryRunner: _queryRunner,
+      optionsResolver: _optionsResolver,
+      metrics: _metrics,
+      parallelSemaphore: _readOnlyBatchParallelSemaphore,
+      uuid: _uuid,
+      recordInfrastructureFailure: _recordSqlInvestigationBatchInfrastructureFailure,
     );
   }
+
+  @override
+  int get poolDiscardInflightCount => _connectionManager.poolDiscardInflightCount;
+
+  @override
+  Future<void> reconcilePoolDiscardInflight() => _connectionManager.reconcilePoolDiscardInflight();
   final OdbcService _service;
   final IQueryConfigSource _configSource;
   final IRetryManager _retryManager;
@@ -156,6 +177,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   late final OdbcStatementExecutor _statementExecutor;
   late final OdbcQueryRunner _queryRunner;
   late final OdbcBulkInsertExecutor _bulkInsertExecutor;
+  late final OdbcReadOnlyBatchParallelExecutor _readOnlyBatchParallelExecutor;
   final Uuid _uuid;
   final PoolSemaphore _readOnlyBatchParallelSemaphore;
   bool _initialized = false;
@@ -167,7 +189,6 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     ),
   );
   static const int _multiResultSqlLogPreviewChars = 120;
-  static const int _bulkInsertRecommendationCommandThreshold = 50;
   static final RegExp _previewSqlWhitespaceCollapse = RegExp(r'\s+');
 
   static String _previewSqlForLog(String sql) {
@@ -179,7 +200,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
   }
 
   static int _safeReadOnlyBatchParallelism(int poolSize) {
-    return math.max(1, poolSize ~/ 2);
+    return OdbcReadOnlyBatchParallelExecutor.safeParallelismForPoolSize(poolSize);
   }
 
   bool _looksLikeTimeoutError(Object error) => OdbcErrorInspector.isTimeout(error);
@@ -612,6 +633,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         preparedExecution: preparedExecution,
         acquireOptions: null,
         timeout: timeout,
+        defaultQueryTimeout: ConnectionConstants.defaultQueryTimeout,
+        connectionString: connectionString,
       ),
     );
   }
@@ -697,6 +720,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         timeout: _remainingTimeoutFromDeadline(effectiveDeadline) ?? timeout,
         executionMode: allowNativeCompatibleAcquire ? 'native_compatible' : 'pooled',
       );
+
+      if (outcome.isSuccess &&
+          allowNativeCompatibleAcquire &&
+          timeout != null &&
+          timeout > Duration.zero) {
+        _nativeCompatiblePolicy.rememberNativeCompatibleTimeout(
+          connectionString: connectionString,
+          timeout: timeout,
+        );
+      }
 
       if (!outcome.isSuccess) {
         final error = outcome.error!;
@@ -937,7 +970,21 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
         _timeoutFromSqlExecutionOptions(options) ??
         (options.transaction ? ConnectionConstants.defaultTransactionalBatchTimeout : null);
     final batchPreview = _previewBatchCommandsForInvestigation(commands);
-    _recordBulkInsertRecommendationIfUseful(commands);
+    final bulkInsertPlan = await _tryHomogeneousInsertBatchAutoRoutePlan(commands);
+    if (bulkInsertPlan != null) {
+      return _executeHomogeneousInsertBatchAsBulk(
+        commands: commands,
+        plan: bulkInsertPlan,
+        database: database,
+        options: options,
+        timeout: effectiveTimeout,
+        sourceRpcRequestId: sourceRpcRequestId,
+        batchSqlPreview: batchPreview,
+      );
+    }
+    if (HomogeneousInsertBatchPlanner.shouldRecommend(commands)) {
+      _recordBulkInsertRecommendation(commands);
+    }
     if (_shouldUseParallelReadOnlyBatch(commands, options)) {
       return _executeParallelReadOnlyBatch(
         agentId: agentId,
@@ -1051,18 +1098,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               deadline: context.deadline,
             );
             if (commitResult.isError()) {
-              final commitFailure = commitResult.exceptionOrNull()!;
-              if (_shouldFallbackTransactionalNativePoolToDirect(context, commitFailure, attempt)) {
-                _recordTransactionalNativePoolFallback(
-                  context: context,
-                  connectionId: connectionState.connectionId,
-                  error: commitFailure,
-                  stage: 'transaction_commit',
-                );
-                forceDirectTransactionalConnection = true;
-                recycleAfterRelease = true;
-                continue;
-              }
+              // Commit failure may leave an ambiguous engine state even after
+              // rollback; do not re-run the batch on another connection path.
               return Failure(commitResult.exceptionOrNull()!);
             }
           }
@@ -1164,23 +1201,27 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
     );
   }
 
-  void _recordBulkInsertRecommendationIfUseful(List<SqlCommand> commands) {
-    if (commands.length < _bulkInsertRecommendationCommandThreshold) {
-      return;
+  Future<HomogeneousInsertBatchPlan?> _tryHomogeneousInsertBatchAutoRoutePlan(
+    List<SqlCommand> commands,
+  ) async {
+    if (commands.length < ConnectionConstants.batchBulkInsertRouteThreshold) {
+      return null;
     }
 
-    String? tableName;
-    for (final command in commands) {
-      final currentTable = _insertTargetTable(command.sql);
-      if (currentTable == null) {
-        return;
-      }
-      tableName ??= currentTable;
-      if (tableName != currentTable) {
-        return;
-      }
+    final configResult = await _resolveActiveConfig();
+    if (configResult.isError()) {
+      return null;
     }
 
+    final databaseType = _buildDatabaseConfig(configResult.getOrThrow()).databaseType;
+    if (!HomogeneousInsertBatchPlanner.supportsAutoRoute(databaseType)) {
+      return null;
+    }
+
+    return HomogeneousInsertBatchPlanner.tryPlan(commands);
+  }
+
+  void _recordBulkInsertRecommendation(List<SqlCommand> commands) {
     _metrics.recordBatchBulkInsertRecommended();
     developer.log(
       'Large homogeneous INSERT batch detected; sql.bulkInsert is recommended for this workload',
@@ -1188,21 +1229,223 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       level: 800,
       error: {
         'command_count': commands.length,
-        'table': tableName,
-        'threshold': _bulkInsertRecommendationCommandThreshold,
+        'table': commands.isEmpty ? null : HomogeneousInsertBatchPlanner.tryPlan(commands)?.request.table,
+        'threshold': ConnectionConstants.batchBulkInsertRecommendationThreshold,
       },
     );
   }
 
-  String? _insertTargetTable(String sql) {
-    final normalized = SqlValidator.removeComments(
-      sql,
-    ).replaceAll(RegExp(r'\s+'), ' ').trim().replaceFirst(RegExp(r';+$'), '').toLowerCase();
-    if (normalized.contains(' returning ') || normalized.contains(' output ')) {
-      return null;
+  Future<Result<List<SqlCommandResult>>> _executeHomogeneousInsertBatchAsBulk({
+    required List<SqlCommand> commands,
+    required HomogeneousInsertBatchPlan plan,
+    required String? database,
+    required SqlExecutionOptions options,
+    required Duration? timeout,
+    required String batchSqlPreview,
+    String? sourceRpcRequestId,
+  }) async {
+    final validationFailure = OdbcBulkInsertExecutor.validate(plan.request);
+    if (validationFailure != null) {
+      return Failure(validationFailure);
     }
-    final match = RegExp(r'^insert\s+into\s+([^\s(]+)').firstMatch(normalized);
-    return match?.group(1);
+
+    _metrics.recordBatchBulkInsertRouted();
+    developer.log(
+      'Routing homogeneous INSERT batch to native bulk-insert path',
+      name: 'database_gateway',
+      level: 800,
+      error: {
+        'command_count': commands.length,
+        'table': plan.request.table,
+        'row_count': plan.request.rowCount,
+        'transaction': options.transaction,
+        'threshold': ConnectionConstants.batchBulkInsertRouteThreshold,
+      },
+    );
+
+    if (!options.transaction) {
+      final bulkResult = await executeBulkInsert(
+        plan.request,
+        timeout: timeout,
+        database: database,
+      );
+      return bulkResult.fold(
+        (_) => Success(_syntheticBulkInsertBatchResults(commands)),
+        Failure.new,
+      );
+    }
+
+    var forceDirectTransactionalConnection = false;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final contextResult = await _prepareBatchExecutionContext(
+        database: database,
+        timeout: timeout,
+        useOwnedConnection: forceDirectTransactionalConnection,
+        allowNativeCompatibleTransaction: !forceDirectTransactionalConnection,
+        commands: commands,
+        batchSqlPreview: batchSqlPreview,
+        sourceRpcRequestId: sourceRpcRequestId,
+      );
+      if (contextResult.isError()) {
+        return Failure(contextResult.exceptionOrNull()!);
+      }
+
+      final context = contextResult.getOrThrow();
+      final connectionState = _BatchConnectionState(context.connectionId);
+      var recycleAfterRelease = false;
+      BatchTransactionGuard? transaction;
+      try {
+        final beginResult = await _txManager.beginIfNeeded(
+          connectionId: connectionState.connectionId!,
+          transactionEnabled: true,
+          lockTimeout: _transactionLockTimeout(
+            options: options,
+            timeout: timeout,
+          ),
+          accessMode: TransactionAccessMode.readWrite,
+        );
+        if (beginResult.isError()) {
+          final beginFailure = beginResult.exceptionOrNull()! as domain.Failure;
+          if (_shouldFallbackTransactionalNativePoolToDirect(context, beginFailure, attempt)) {
+            _recordTransactionalNativePoolFallback(
+              context: context,
+              connectionId: connectionState.connectionId,
+              error: beginFailure,
+              stage: 'transaction_begin',
+            );
+            forceDirectTransactionalConnection = true;
+            recycleAfterRelease = true;
+          } else {
+            return Failure(beginFailure);
+          }
+        } else {
+          transaction = BatchTransactionGuard(beginResult.getOrNull()!.transactionId);
+          final bulkResult = await _bulkInsertExecutor.executeOnConnection(
+            connectionId: connectionState.connectionId!,
+            request: plan.request,
+            timeout: _remainingTimeout(context.deadline) ?? timeout,
+            deadline: context.deadline,
+          );
+          if (bulkResult.isError()) {
+            final bulkFailure = bulkResult.exceptionOrNull()!;
+            if (_shouldFallbackTransactionalNativePoolToDirect(context, bulkFailure, attempt)) {
+              _recordTransactionalNativePoolFallback(
+                context: context,
+                connectionId: connectionState.connectionId,
+                error: bulkFailure,
+                stage: 'transaction_execute',
+              );
+              forceDirectTransactionalConnection = true;
+              recycleAfterRelease = true;
+              continue;
+            }
+            return Failure(bulkFailure);
+          }
+
+          if (transaction.isActive) {
+            final commitResult = await _txManager.commit(
+              connectionId: connectionState.connectionId!,
+              guard: transaction,
+              deadline: context.deadline,
+            );
+            if (commitResult.isError()) {
+              return Failure(commitResult.exceptionOrNull()!);
+            }
+          }
+
+          return Success(_syntheticBulkInsertBatchResults(commands));
+        }
+      } on Object catch (error, stackTrace) {
+        final activeConnectionId = connectionState.connectionId;
+        final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
+        await transaction?.rollback(
+          (transactionId) async {
+            if (activeConnectionId == null) {
+              return;
+            }
+            await _txManager.rollbackIfNeeded(
+              activeConnectionId,
+              transactionId,
+              timeout: rollbackTimeout,
+            );
+          },
+        );
+        developer.log(
+          'Unexpected failure during bulk-insert batch execution',
+          name: 'database_gateway',
+          level: 1000,
+          error: error,
+          stackTrace: stackTrace,
+        );
+        if (_shouldFallbackTransactionalNativePoolToDirect(context, error, attempt)) {
+          _recordTransactionalNativePoolFallback(
+            context: context,
+            connectionId: activeConnectionId,
+            error: error,
+            stage: 'transaction_unexpected_error',
+          );
+          forceDirectTransactionalConnection = true;
+          recycleAfterRelease = true;
+          continue;
+        }
+        return Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'Bulk-insert batch execution failed unexpectedly',
+            cause: error,
+            context: {
+              'reason': OdbcContextConstants.transactionFailedReason,
+              'operation': 'bulk_insert_batch_unexpected_error',
+              'transaction': true,
+            },
+          ),
+        );
+      } finally {
+        final activeConnectionId = connectionState.connectionId;
+        if (activeConnectionId != null) {
+          await _releaseBatchConnection(
+            _BatchExecutionContext(
+              connectionId: activeConnectionId,
+              connectionString: context.connectionString,
+              deadline: context.deadline,
+              directLease: context.directLease,
+              ownedConnection: context.ownedConnection,
+              nativeCompatibleAcquire: context.nativeCompatibleAcquire,
+            ),
+          );
+        }
+      }
+
+      if (recycleAfterRelease) {
+        if (!context.ownedConnection) {
+          await _connectionManager.tryRecoverPoolAfterInvalidConnectionId(
+            context.connectionString,
+          );
+        }
+        continue;
+      }
+    }
+
+    return Failure(
+      domain.QueryExecutionFailure.withContext(
+        message: 'Bulk-insert batch transaction failed after retry',
+        context: {
+          'reason': OdbcContextConstants.transactionFailedReason,
+          'operation': 'bulk_insert_batch_transaction',
+        },
+      ),
+    );
+  }
+
+  List<SqlCommandResult> _syntheticBulkInsertBatchResults(List<SqlCommand> commands) {
+    return List<SqlCommandResult>.generate(
+      commands.length,
+      (index) => SqlCommandResult.success(
+        index: index,
+        rows: const [],
+        affectedRows: 1,
+      ),
+      growable: false,
+    );
   }
 
   Future<Result<List<SqlCommandResult>>> _executeParallelReadOnlyBatch({
@@ -1240,138 +1483,19 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
       localConfig,
       databaseOverride: database,
     );
-    final deadline = _deadlineFor(timeout);
     final safePoolParallelism = _safeReadOnlyBatchParallelism(_settings.poolSize);
     _readOnlyBatchParallelSemaphore.resize(safePoolParallelism);
-    final parallelism = options.maxParallelReadOnlyBatchItems.clamp(1, safePoolParallelism);
-    final results = List<SqlCommandResult?>.filled(commands.length, null);
-    var cursor = 0;
 
-    _metrics.recordReadOnlyBatchParallel(
-      requestedParallelism: options.maxParallelReadOnlyBatchItems,
-      effectiveParallelism: parallelism,
-    );
-    developer.log(
-      'Executing read-only batch with controlled parallelism',
-      name: 'database_gateway',
-      level: 800,
-      error: {
-        'commands': commands.length,
-        'parallelism': parallelism,
-      },
-    );
-
-    Future<void> worker() async {
-      while (true) {
-        final index = cursor++;
-        if (index >= commands.length) {
-          return;
-        }
-
-        final command = commands[index];
-        final commandRequest = QueryRequest(
-          id: _uuid.v4(),
-          agentId: agentId,
-          query: command.sql,
-          parameters: command.params,
-          timestamp: DateTime.now(),
-          sourceRpcRequestId: sourceRpcRequestId,
-        );
-        final remainingTimeout = _remainingTimeoutFromDeadline(deadline);
-        if (remainingTimeout != null && remainingTimeout <= Duration.zero) {
-          results[index] = SqlCommandResult.failure(
-            index: index,
-            error: 'Batch SQL execution timeout',
-          );
-          continue;
-        }
-
-        final waitStopwatch = Stopwatch()..start();
-        try {
-          await _readOnlyBatchParallelSemaphore.acquire(timeout: remainingTimeout ?? timeout);
-        } on TimeoutException {
-          waitStopwatch.stop();
-          _metrics.recordReadOnlyBatchParallelWaitTime(waitStopwatch.elapsed);
-          _metrics.recordDiagnosticReason(
-            category: 'batch',
-            reason: RpcSqlDiagnosticsConstants.readOnlyParallelGlobalWaitTimeoutReason,
-          );
-          results[index] = SqlCommandResult.failure(
-            index: index,
-            error: 'Batch SQL execution timeout while waiting for read-only parallel capacity',
-          );
-          continue;
-        }
-        waitStopwatch.stop();
-        _metrics.recordReadOnlyBatchParallelWaitTime(waitStopwatch.elapsed);
-
-        late Result<QueryResponse> queryResult;
-        try {
-          final executionTimeout = _remainingTimeoutFromDeadline(deadline);
-          if (executionTimeout != null && executionTimeout <= Duration.zero) {
-            results[index] = SqlCommandResult.failure(
-              index: index,
-              error: 'Batch SQL execution timeout before read-only item execution',
-            );
-            continue;
-          }
-          queryResult = await _executeQueryWithRetry(
-            commandRequest,
-            connectionString,
-            localConfig,
-            timeout: executionTimeout ?? timeout,
-            maxAttempts: 1,
-          );
-        } finally {
-          _readOnlyBatchParallelSemaphore.release();
-        }
-        results[index] = queryResult.fold(
-          (response) {
-            final limitedRows = truncateSqlResultRows(
-              response.data,
-              options.maxRows,
-            );
-            return SqlCommandResult.success(
-              index: index,
-              rows: limitedRows,
-              rowCount: limitedRows.length,
-              affectedRows: response.affectedRows,
-              columnMetadata: response.columnMetadata,
-            );
-          },
-          (error) {
-            final message = error is domain.Failure ? error.message : error.toString();
-            _recordSqlInvestigationBatchInfrastructureFailure(
-              originalSql: command.sql.isEmpty ? batchSqlPreview : command.sql,
-              errorMessage: message,
-              rpcRequestId: sourceRpcRequestId,
-            );
-            return SqlCommandResult.failure(
-              index: index,
-              error: message,
-            );
-          },
-        );
-      }
-    }
-
-    await Future.wait(
-      List.generate(parallelism, (_) => worker()),
-    );
-
-    return Success(
-      results
-          .asMap()
-          .entries
-          .map(
-            (entry) =>
-                entry.value ??
-                SqlCommandResult.failure(
-                  index: entry.key,
-                  error: 'Read-only batch item did not complete',
-                ),
-          )
-          .toList(),
+    return _readOnlyBatchParallelExecutor.execute(
+      agentId: agentId,
+      commands: commands,
+      connectionString: connectionString,
+      databaseConfig: localConfig,
+      options: options,
+      timeout: timeout,
+      batchSqlPreview: batchSqlPreview,
+      poolSize: _settings.poolSize,
+      sourceRpcRequestId: sourceRpcRequestId,
     );
   }
 
@@ -2014,6 +2138,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway {
               request,
               connectionString,
               timeout: timeout,
+              databaseType: localConfig.databaseType,
             );
           },
           (domainFailure) => Failure(

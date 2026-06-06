@@ -182,15 +182,17 @@ class AuthorizeSqlOperation {
                       'reason': AuthorizationContextConstants.unexpectedFailureTypeReason,
                     },
                   );
-            for (final i in missIndices) {
-              _cacheDecision(
-                key: decisionKeys[i],
-                allowed: false,
-                clientId: error.context['client_id'] as String?,
-                reason: error.context['reason'] as String?,
-                requestId: requestId,
-                method: method,
-              );
+            if (!_isTransientTokenResolverFailure(error)) {
+              for (final i in missIndices) {
+                _cacheDecision(
+                  key: decisionKeys[i],
+                  allowed: false,
+                  clientId: error.context['client_id'] as String?,
+                  reason: error.context['reason'] as String?,
+                  requestId: requestId,
+                  method: method,
+                );
+              }
             }
             return Failure(error);
           },
@@ -417,6 +419,16 @@ class AuthorizeSqlOperation {
             'Este token esta restrito ao database "$expectedDatabase". Database recebido: "$requestDatabase".',
       },
     );
+  }
+
+  bool _isTransientTokenResolverFailure(domain.Failure failure) {
+    if (failure is domain.NetworkFailure) {
+      return true;
+    }
+    if (failure.context['authorization'] == true) {
+      return false;
+    }
+    return failure.isTransient;
   }
 
   String? _normalizeDatabaseName(String? rawValue) {

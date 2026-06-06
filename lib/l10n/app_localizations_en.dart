@@ -3991,7 +3991,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get odbcFieldPoolSize => 'Maximum pool size';
 
   @override
-  String get odbcHintPoolSize => '4';
+  String get odbcHintPoolSize => '8';
 
   @override
   String get odbcBlockTimeouts => 'Timeouts';

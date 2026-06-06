@@ -114,7 +114,6 @@ Future<void> main(List<String> args) async {
           driverName: driver,
           connectionString: connectionString,
         ),
-        nativeWarmUpEnabled: true,
       ),
       metrics: adaptiveMetrics,
     ),

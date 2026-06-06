@@ -38,6 +38,7 @@ class MetricsCollector
   static const String _transactionalBatchNativePoolPathCounter = 'transactional_batch_native_pool_path';
   static const String _transactionalBatchNativePoolFallbackCounter = 'transactional_batch_native_pool_fallback';
   static const String _batchBulkInsertRecommendedCounter = 'batch_bulk_insert_recommended';
+  static const String _batchBulkInsertRoutedCounter = 'batch_bulk_insert_routed';
   static const String _directConnectionFallbackCounter = 'direct_connection_fallback';
   static const String _odbcNativePoolFallbackCounter = 'odbc_native_pool_fallback';
   static const String _odbcNativeFallbackTotalCounter = 'odbc_native_fallback_total';
@@ -51,6 +52,10 @@ class MetricsCollector
   static const String _readOnlyBatchParallelCappedCounter = 'read_only_batch_parallel_capped';
   static const String _directConnectionAcquireTimeoutCounter = 'direct_connection_acquire_timeout';
   static const String _poolReleaseFailureCounter = 'pool_release_failure';
+  static const String _poolDiscardInflightCounter = 'pool_discard_inflight';
+  static const String _poolDiscardReconciliationStaleCounter = 'pool_discard_reconciliation_stale';
+  static const String _bulkInsertChunkedCounter = 'bulk_insert_chunked_total';
+  static const String _bulkInsertParallelCounter = 'bulk_insert_parallel_total';
   static const String _poolRecycleCounter = 'pool_recycle';
   static const String _poolRecycleFailureCounter = 'pool_recycle_failure';
   static const String _odbcEventConnectionLostCounter = 'odbc_event_connection_lost';
@@ -216,6 +221,7 @@ class MetricsCollector
   final Map<String, int> _eventCounters = <String, int>{};
   int _activeDirectConnections = 0;
   int _maxActiveDirectConnections = 0;
+  int _poolDiscardInflight = 0;
   int _currentQueueSize = 0;
   int _maxQueueSize = 0;
   int _currentActiveWorkers = 0;
@@ -266,6 +272,7 @@ class MetricsCollector
   int get transactionalBatchNativePoolFallbackCount =>
       _eventCounters[_transactionalBatchNativePoolFallbackCounter] ?? 0;
   int get batchBulkInsertRecommendedCount => _eventCounters[_batchBulkInsertRecommendedCounter] ?? 0;
+  int get batchBulkInsertRoutedCount => _eventCounters[_batchBulkInsertRoutedCounter] ?? 0;
   int get directConnectionFallbackCount => _eventCounters[_directConnectionFallbackCounter] ?? 0;
   int get odbcNativePoolFallbackCount => _eventCounters[_odbcNativePoolFallbackCounter] ?? 0;
   int get odbcNativePoolOptionsSkipCount => _eventCounters[_odbcNativePoolOptionsSkipCounter] ?? 0;
@@ -277,6 +284,10 @@ class MetricsCollector
   int get activeDirectConnections => _activeDirectConnections;
   int get maxActiveDirectConnections => _maxActiveDirectConnections;
   int get poolReleaseFailureCount => _eventCounters[_poolReleaseFailureCounter] ?? 0;
+  int get poolDiscardInflightCount => _poolDiscardInflight;
+  int get bulkInsertChunkedCount => _eventCounters[_bulkInsertChunkedCounter] ?? 0;
+
+  int get bulkInsertParallelCount => _eventCounters[_bulkInsertParallelCounter] ?? 0;
   int get poolRecycleCount => _eventCounters[_poolRecycleCounter] ?? 0;
   int get poolRecycleFailureCount => _eventCounters[_poolRecycleFailureCounter] ?? 0;
   int get authDecisionCacheHitCount => _eventCounters[_authDecisionCacheHitCounter] ?? 0;
@@ -689,6 +700,14 @@ class MetricsCollector
     );
   }
 
+  void recordBatchBulkInsertRouted() {
+    _incrementEventCounter(_batchBulkInsertRoutedCounter);
+    recordDiagnosticReason(
+      category: 'batch',
+      reason: RpcSqlDiagnosticsConstants.batchBulkInsertRoutedReason,
+    );
+  }
+
   void recordDirectConnectionFallback() => _incrementEventCounter(_directConnectionFallbackCounter);
 
   void recordOdbcNativePoolFallback() => _incrementEventCounter(_odbcNativePoolFallbackCounter);
@@ -759,6 +778,24 @@ class MetricsCollector
   }
 
   void recordPoolReleaseFailure() => _incrementEventCounter(_poolReleaseFailureCounter);
+
+  void recordPoolDiscardInflightStarted() {
+    _poolDiscardInflight++;
+    _eventCounters[_poolDiscardInflightCounter] = _poolDiscardInflight;
+  }
+
+  void recordPoolDiscardInflightCompleted() {
+    if (_poolDiscardInflight > 0) {
+      _poolDiscardInflight--;
+    }
+    _eventCounters[_poolDiscardInflightCounter] = _poolDiscardInflight;
+  }
+
+  void recordPoolDiscardReconciliationStale() => _incrementEventCounter(_poolDiscardReconciliationStaleCounter);
+
+  void recordBulkInsertChunked() => _incrementEventCounter(_bulkInsertChunkedCounter);
+
+  void recordBulkInsertParallel() => _incrementEventCounter(_bulkInsertParallelCounter);
 
   void recordPoolRecycle() => _incrementEventCounter(_poolRecycleCounter);
 

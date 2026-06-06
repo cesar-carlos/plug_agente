@@ -119,20 +119,18 @@ class AppInitializer {
       if (bootstrapPhasesOverride case final BootstrapPhasesOverride override) {
         await override();
       } else {
-        await _runBootstrapPhases();
+        await _runCriticalBootstrapPhases();
       }
     } finally {
       _markAgentActionsSubsystemReady();
     }
     final initialRoute = resolveInitialRouteOverride?.call(args) ?? _resolveInitialRoute(args);
     await (initializeDesktopFeaturesOverride ?? _initializeDesktopFeatures)(capabilities);
-    if (bootstrapPhasesOverride == null) {
-      await _dispatchAppStartAgentActions();
-    }
 
     return AppBootstrapData(
       capabilities: capabilities,
       initialRoute: initialRoute,
+      runDeferredBootstrap: bootstrapPhasesOverride == null ? _runDeferredBootstrapPhases : null,
     );
   }
 
@@ -197,9 +195,12 @@ class AppInitializer {
     return capabilities;
   }
 
-  Future<void> _runBootstrapPhases() async {
+  Future<void> _runCriticalBootstrapPhases() async {
     _refreshElevatedActionRunnerReadiness();
     await _reconcileAgentActionExecutions();
+  }
+
+  Future<void> _runDeferredBootstrapPhases() async {
     await _purgeStaleElevatedBridgeArtifacts();
     await _clearOldAgentActionCapturedOutput();
     await _purgeOldAgentActionExecutions();
@@ -214,6 +215,7 @@ class AppInitializer {
     // Warm up ODBC connection pool if connection string is configured
     await _warmUpConnectionPool();
     await _startAgentActionScheduler();
+    await _dispatchAppStartAgentActions();
   }
 
   String? _resolveInitialRoute(List<String> args) {

@@ -6,6 +6,7 @@ import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
+import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
 import 'package:plug_agente/application/services/agent_action_execution_periodic_purge.dart';
@@ -315,6 +316,7 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
     await _resetLazySingletonIfRegistered<OdbcEventBridge>();
     await _resetLazySingletonIfRegistered<IStreamingDatabaseGateway>();
     await _resetLazySingletonIfRegistered<IDatabaseGateway>();
+    await _resetLazySingletonIfRegistered<SqlExecutionQueue>();
     await _resetLazySingletonIfRegistered<DirectOdbcConnectionLimiter>();
     await _resetLazySingletonIfRegistered<IConnectionPool>();
 

@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
 import '../helpers/e2e_env.dart';
+import '../helpers/odbc_dml_stress_id_ranges.dart';
 import '../helpers/odbc_e2e_coverage_sql.dart';
 import '../helpers/odbc_e2e_row_assertions.dart';
 import '../helpers/odbc_e2e_rpc_harness.dart';
@@ -19,6 +20,12 @@ import '../helpers/odbc_e2e_rpc_harness.dart';
 ///
 /// Rows for the queued-gateway scenario (batched via `executeBatch`, not per-row RPC).
 const int _queuedGatewayStressRowCap = 2000;
+
+void _stressLog(String message) {
+  developer.log(message, name: 'e2e.odbc_dml_stress');
+  // ignore: avoid_print
+  print('[odbc_dml_stress] $message');
+}
 
 void main() async {
   await E2EEnv.load();
@@ -71,11 +78,17 @@ void main() async {
       );
       expect(create.isSuccess(), isTrue, reason: 'create table: $create');
 
-      developer.log(
-        'DML stress: CREATE TABLE $tableName',
-        name: 'e2e.odbc_dml_stress',
-      );
+      _stressLog('DML stress: CREATE TABLE $tableName (dialect=${sql.dialect.name})');
       isReady = true;
+    });
+
+    setUp(() async {
+      if (!isReady) {
+        return;
+      }
+      final h = harness!;
+      final cleanup = await h.gateway.executeNonQuery(sql.deleteAllRows, null);
+      expect(cleanup.isSuccess(), isTrue, reason: 'pre-test cleanup: $cleanup');
     });
 
     tearDownAll(() async {
@@ -85,11 +98,7 @@ void main() async {
       }
       final drop = await h.gateway.executeNonQuery(sql.dropTableIfExists, null);
       if (drop.isError()) {
-        developer.log(
-          'DML stress: tearDown DROP failed: $drop',
-          name: 'e2e.odbc_dml_stress',
-          level: 900,
-        );
+        _stressLog('DML stress: tearDown DROP failed: $drop');
       }
       await h.shutdown();
     });
@@ -174,12 +183,13 @@ void main() async {
           final updateMs = swUpdate.elapsedMilliseconds;
           final deleteMs = swDelete.elapsedMilliseconds;
 
-          developer.log(
+          _stressLog(
             'DML stress iteration $iteration: '
             'insert=${insertMs}ms '
             'update=${updateMs}ms '
-            'delete=${deleteMs}ms',
-            name: 'e2e.odbc_dml_stress',
+            'delete=${deleteMs}ms '
+            'total=${swIteration.elapsedMilliseconds}ms '
+            '(rows=$rowCount concurrency=$concurrency)',
           );
 
           if (maxMsPerIteration != null) {
@@ -195,14 +205,13 @@ void main() async {
         expect(active.isSuccess(), isTrue, reason: '$active');
         expect(active.getOrThrow(), 0);
 
-        developer.log(
+        _stressLog(
           'E2E_DML_STRESS_ITERATION_TIMINGS '
           '${jsonEncode({
             'table': tableName,
             'dialect': sql.dialect.name,
             'iterations': iterationTimings,
           })}',
-          name: 'e2e.odbc_dml_stress',
         );
       },
       timeout: const Timeout(Duration(minutes: 45)),
@@ -231,23 +240,35 @@ void main() async {
             maxQueueSize: E2EEnv.odbcE2eDmlStressQueueSize,
             maxConcurrentWorkers: E2EEnv.odbcE2eDmlStressWorkers,
             metricsCollector: h.metrics,
+            defaultEnqueueTimeout: Duration(
+              milliseconds: E2EEnv.odbcE2eDmlStressEnqueueTimeoutMs,
+            ),
           ),
         );
 
         try {
           final sw = Stopwatch()..start();
-          final insertFutures = _buildIdRanges(rowCount, concurrency).map((range) async {
+          final batchTimeoutMs = odbcDmlStressBatchTimeoutMs(
+            rowCount: rowCount,
+            concurrency: concurrency,
+          );
+          final insertFutures = buildOdbcDmlStressIdRanges(rowCount, concurrency).map((range) async {
             final commands = <SqlCommand>[];
-            for (var id = range.start; id <= range.end; id++) {
+            for (var localId = range.start; localId <= range.end; localId++) {
+              final rowId = odbcDmlStressRowId(
+                iteration: 0,
+                rowCount: rowCount,
+                localId: localId,
+              );
               commands.add(
                 SqlCommand(
                   sql: sql.insertRow(
-                    id: id,
-                    code: 'q$id',
-                    amt: 1.0 + (id % 50) * 0.01,
-                    birthDate: '2024-02-${(id % 28) + 1}',
+                    id: rowId,
+                    code: 'q$rowId',
+                    amt: 1.0 + (rowId % 50) * 0.01,
+                    birthDate: '2024-02-${(rowId % 28) + 1}',
                     ts: '2024-06-01 12:00:00',
-                    isActive: id.isEven,
+                    isActive: rowId.isEven,
                   ),
                 ),
               );
@@ -261,6 +282,7 @@ void main() async {
                 chunk,
                 options: SqlExecutionOptions(
                   transaction: true,
+                  timeoutMs: batchTimeoutMs,
                   maxRows: chunk.length + 16,
                 ),
               );
@@ -272,9 +294,9 @@ void main() async {
 
           await Future.wait(insertFutures);
 
-          final updateFutures = _buildIdRanges(rowCount, concurrency).map((range) {
+          final updateFutures = buildOdbcDmlStressIdRanges(rowCount, concurrency).map((range) {
             return queuedGateway.executeNonQuery(
-              _updateByIdRangeSql(sql, range.start, range.end),
+              _updateByIdRangeSql(sql, range.start, range.end, iteration: 0, rowCount: rowCount),
               null,
             );
           }).toList();
@@ -283,9 +305,9 @@ void main() async {
             expect(result.isSuccess(), isTrue, reason: '$result');
           }
 
-          final deleteFutures = _buildIdRanges(rowCount, concurrency).map((range) {
+          final deleteFutures = buildOdbcDmlStressIdRanges(rowCount, concurrency).map((range) {
             return queuedGateway.executeNonQuery(
-              _deleteByIdRangeSql(sql, range.start, range.end),
+              _deleteByIdRangeSql(sql, range.start, range.end, iteration: 0, rowCount: rowCount),
               null,
             );
           }).toList();
@@ -299,7 +321,7 @@ void main() async {
           expect(active.isSuccess(), isTrue, reason: '$active');
           expect(active.getOrThrow(), 0);
 
-          developer.log(
+          _stressLog(
             'E2E_DML_STRESS_QUEUED_TIMING '
             '${jsonEncode({
               'table': tableName,
@@ -307,9 +329,9 @@ void main() async {
               'concurrency': concurrency,
               'queue_size': E2EEnv.odbcE2eDmlStressQueueSize,
               'workers': E2EEnv.odbcE2eDmlStressWorkers,
+              'enqueue_timeout_ms': E2EEnv.odbcE2eDmlStressEnqueueTimeoutMs,
               'elapsed_ms': sw.elapsedMilliseconds,
             })}',
-            name: 'e2e.odbc_dml_stress',
           );
         } finally {
           queuedGateway.dispose();
@@ -322,41 +344,52 @@ void main() async {
   });
 }
 
-class _IdRange {
-  const _IdRange(this.start, this.end);
-
-  final int start;
-  final int end;
-}
-
-List<_IdRange> _buildIdRanges(int rowCount, int concurrency) {
-  final workers = math.max(1, concurrency);
-  final ranges = <_IdRange>[];
-  var start = 1;
-  final baseSize = rowCount ~/ workers;
-  var remainder = rowCount % workers;
-
-  for (var worker = 0; worker < workers; worker++) {
-    final size = baseSize + (remainder > 0 ? 1 : 0);
-    if (remainder > 0) {
-      remainder--;
-    }
-    if (size <= 0) {
-      continue;
-    }
-    final end = start + size - 1;
-    ranges.add(_IdRange(start, end));
-    start = end + 1;
+String _stressRpcErrorReason(RpcResponse resp) {
+  final error = resp.error;
+  if (error == null) {
+    return 'unknown RPC error';
   }
-  return ranges;
+  return 'code=${error.code} message=${error.message} data=${error.data}';
 }
 
-String _updateByIdRangeSql(OdbcE2eCoverageSql sql, int startId, int endId) {
-  return 'UPDATE ${sql.tableName} SET amt = amt + 0.0001 WHERE id >= $startId AND id <= $endId';
+String _updateByIdRangeSql(
+  OdbcE2eCoverageSql sql,
+  int startId,
+  int endId, {
+  required int iteration,
+  required int rowCount,
+}) {
+  final startRowId = odbcDmlStressRowId(
+    iteration: iteration,
+    rowCount: rowCount,
+    localId: startId,
+  );
+  final endRowId = odbcDmlStressRowId(
+    iteration: iteration,
+    rowCount: rowCount,
+    localId: endId,
+  );
+  return 'UPDATE ${sql.tableName} SET amt = amt + 0.0001 WHERE id >= $startRowId AND id <= $endRowId';
 }
 
-String _deleteByIdRangeSql(OdbcE2eCoverageSql sql, int startId, int endId) {
-  return 'DELETE FROM ${sql.tableName} WHERE id >= $startId AND id <= $endId';
+String _deleteByIdRangeSql(
+  OdbcE2eCoverageSql sql,
+  int startId,
+  int endId, {
+  required int iteration,
+  required int rowCount,
+}) {
+  final startRowId = odbcDmlStressRowId(
+    iteration: iteration,
+    rowCount: rowCount,
+    localId: startId,
+  );
+  final endRowId = odbcDmlStressRowId(
+    iteration: iteration,
+    rowCount: rowCount,
+    localId: endId,
+  );
+  return 'DELETE FROM ${sql.tableName} WHERE id >= $startRowId AND id <= $endRowId';
 }
 
 Future<void> _parallelInsertBatch({
@@ -368,18 +401,27 @@ Future<void> _parallelInsertBatch({
   required TransportLimits transportLimits,
   required int iteration,
 }) async {
-  final ranges = _buildIdRanges(rowCount, concurrency);
+  final batchTimeoutMs = odbcDmlStressBatchTimeoutMs(
+    rowCount: rowCount,
+    concurrency: concurrency,
+  );
+  final ranges = buildOdbcDmlStressIdRanges(rowCount, concurrency);
   final futures = ranges.map((range) async {
     final commands = <Map<String, dynamic>>[];
-    for (var id = range.start; id <= range.end; id++) {
+    for (var localId = range.start; localId <= range.end; localId++) {
+      final rowId = odbcDmlStressRowId(
+        iteration: iteration,
+        rowCount: rowCount,
+        localId: localId,
+      );
       commands.add({
         'sql': sql.insertRow(
-          id: id,
-          code: 's$id',
-          amt: 1.0 + (id % 100) * 0.01,
-          birthDate: '2024-03-${(id % 28) + 1}',
+          id: rowId,
+          code: 's$rowId',
+          amt: 1.0 + (rowId % 100) * 0.01,
+          birthDate: '2024-03-${(rowId % 28) + 1}',
           ts: '2024-06-01 12:00:00',
-          isActive: id.isOdd,
+          isActive: rowId.isOdd,
         ),
       });
     }
@@ -395,6 +437,7 @@ Future<void> _parallelInsertBatch({
           'commands': chunk,
           'options': {
             'transaction': true,
+            'timeout_ms': batchTimeoutMs,
             'max_rows': chunk.length + 16,
           },
         },
@@ -404,7 +447,7 @@ Future<void> _parallelInsertBatch({
         'e2e-agent',
         limits: transportLimits,
       );
-      expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+      expect(resp.isSuccess, isTrue, reason: _stressRpcErrorReason(resp));
       final map = resp.result! as Map<String, dynamic>;
       expect(map['failed_commands'], 0);
       expect(map['successful_commands'], chunk.length);
@@ -422,14 +465,20 @@ Future<void> _parallelUpdateByRange({
   required TransportLimits transportLimits,
   required int iteration,
 }) async {
-  final ranges = _buildIdRanges(rowCount, concurrency);
+  final ranges = buildOdbcDmlStressIdRanges(rowCount, concurrency);
   final futures = ranges.map((range) async {
     final req = RpcRequest(
       jsonrpc: '2.0',
       method: 'sql.execute',
       id: 'e2e-dml-stress-upd-$iteration-${range.start}',
       params: <String, dynamic>{
-        'sql': _updateByIdRangeSql(sql, range.start, range.end),
+        'sql': _updateByIdRangeSql(
+          sql,
+          range.start,
+          range.end,
+          iteration: iteration,
+          rowCount: rowCount,
+        ),
       },
     );
     final resp = await harness.dispatcher.dispatch(
@@ -437,7 +486,7 @@ Future<void> _parallelUpdateByRange({
       'e2e-agent',
       limits: transportLimits,
     );
-    expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+    expect(resp.isSuccess, isTrue, reason: _stressRpcErrorReason(resp));
   });
 
   await Future.wait(futures);
@@ -451,14 +500,20 @@ Future<void> _parallelDeleteByRange({
   required TransportLimits transportLimits,
   required int iteration,
 }) async {
-  final ranges = _buildIdRanges(rowCount, concurrency);
+  final ranges = buildOdbcDmlStressIdRanges(rowCount, concurrency);
   final futures = ranges.map((range) async {
     final req = RpcRequest(
       jsonrpc: '2.0',
       method: 'sql.execute',
       id: 'e2e-dml-stress-del-$iteration-${range.start}',
       params: <String, dynamic>{
-        'sql': _deleteByIdRangeSql(sql, range.start, range.end),
+        'sql': _deleteByIdRangeSql(
+          sql,
+          range.start,
+          range.end,
+          iteration: iteration,
+          rowCount: rowCount,
+        ),
       },
     );
     final resp = await harness.dispatcher.dispatch(
@@ -466,7 +521,7 @@ Future<void> _parallelDeleteByRange({
       'e2e-agent',
       limits: transportLimits,
     );
-    expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+    expect(resp.isSuccess, isTrue, reason: _stressRpcErrorReason(resp));
   });
 
   await Future.wait(futures);
@@ -491,7 +546,7 @@ Future<int> _countRows(
     'e2e-agent',
     limits: transportLimits,
   );
-  expect(resp.isSuccess, isTrue, reason: '${resp.error}');
+  expect(resp.isSuccess, isTrue, reason: _stressRpcErrorReason(resp));
   final map = resp.result! as Map<String, dynamic>;
   final rows = map['rows'] as List<dynamic>?;
   expect(rows, isNotNull);

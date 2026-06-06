@@ -182,6 +182,11 @@ class ConfigurationFailure extends Failure {
 
   @override
   bool get isRecoverable => true;
+
+  /// Queue backpressure and similar overload signals set `retryable: true`.
+  /// Authorization and config errors omit the flag and stay non-transient.
+  @override
+  bool get isTransient => context['retryable'] as bool? ?? false;
 }
 
 class ConnectionFailure extends Failure {
@@ -220,6 +225,10 @@ class QueryExecutionFailure extends Failure {
 
   @override
   bool get isRecoverable => true;
+
+  /// ODBC mappers and the SQL queue set `retryable` for transient cases.
+  @override
+  bool get isTransient => context['retryable'] as bool? ?? false;
 }
 
 class CompressionFailure extends Failure {

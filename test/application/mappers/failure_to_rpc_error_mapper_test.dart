@@ -7,7 +7,9 @@ import 'package:plug_agente/core/constants/agent_action_queue_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
+import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/actions/action_failure.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 
 void main() {
@@ -348,6 +350,46 @@ void main() {
 
       expect(FailureToRpcErrorMapper.map(requiredFailure).code, RpcErrorCode.invalidParams);
       expect(FailureToRpcErrorMapper.map(expiredFailure).code, RpcErrorCode.invalidParams);
+    });
+
+    test('marks queue backpressure ConfigurationFailure as transient and retryable', () {
+      final failure = ConfigurationFailure.withContext(
+        message: 'SQL execution queue is full',
+        context: {
+          'rpc_error_code': RpcErrorCode.rateLimited,
+          'reason': SqlPipelineContextConstants.sqlQueueFullReason,
+          'retryable': true,
+        },
+      );
+
+      expect(failure.isTransient, isTrue);
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, RpcErrorCode.rateLimited);
+      expect(data['retryable'], isTrue);
+    });
+
+    test('marks queue wait QueryExecutionFailure as transient and retryable', () {
+      final failure = QueryExecutionFailure.withContext(
+        message: 'SQL request timed out waiting in queue',
+        context: {
+          'rpc_error_code': RpcErrorCode.rateLimited,
+          'reason': SqlPipelineContextConstants.queueWaitTimeoutReason,
+          'retryable': true,
+          'timeout': true,
+          'timeout_stage': 'queue',
+        },
+      );
+
+      expect(failure.isTransient, isTrue);
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, RpcErrorCode.rateLimited);
+      expect(data['retryable'], isTrue);
     });
 
     test('maps executionCancelled / executionKilled to executionCancelled RPC code', () {

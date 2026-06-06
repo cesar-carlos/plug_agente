@@ -26,6 +26,7 @@ import 'package:plug_agente/application/actions/elevated_action_status_file_sync
 import 'package:plug_agente/application/actions/elevated_agent_action_execution_service.dart';
 import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
+import 'package:plug_agente/application/gateway/queued_streaming_database_gateway.dart';
 import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
@@ -178,6 +179,7 @@ import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
+import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
@@ -663,6 +665,7 @@ void registerPlugDependencyGraph(
         activeConfigResolver: getIt<ActiveConfigResolver>(),
         streamingGateway: getIt<IStreamingDatabaseGateway>(),
         directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
+        poolDiscardDiagnostics: _resolvePoolDiscardInflightDiagnostics(getIt<IDatabaseGateway>()),
         featureFlags: getIt<FeatureFlags>(),
         odbcRuntimeTuning: getIt<OdbcRuntimeTuning>(),
         agentRuntimeIdentity: getIt<AgentRuntimeIdentity>(),
@@ -819,6 +822,7 @@ void registerPlugDependencyGraph(
         agentRuntimeIdentity: getIt<AgentRuntimeIdentity>(),
         agentActionRetentionSettings: getIt<AgentActionRetentionSettings>(),
         loadOpenRpcDocument: getIt<OpenRpcDocumentLoader>().getDocument,
+        odbcConnectionSettings: getIt<IOdbcConnectionSettings>(),
       ),
     )
     ..registerLazySingleton<IRpcRequestDispatcher>(
@@ -882,9 +886,52 @@ void registerPlugDependencyGraph(
         );
       },
     )
+    ..registerLazySingleton<SqlExecutionQueue>(
+      () {
+        final persistedPoolSize = getIt<IOdbcConnectionSettings>().poolSize;
+        final sqlQueueMaxWorkers = ConnectionConstants.sqlQueueMaxWorkersForPoolSize(
+          persistedPoolSize,
+        );
+        if (sqlQueueMaxWorkers == persistedPoolSize) {
+          getIt<MetricsCollector>().recordSqlQueueWorkersEqualPool(
+            workers: sqlQueueMaxWorkers,
+            poolSize: persistedPoolSize,
+          );
+        }
+        final sqlQueue = SqlExecutionQueue(
+          maxQueueSize: ConnectionConstants.sqlQueueMaxSize,
+          maxConcurrentWorkers: sqlQueueMaxWorkers,
+          maxConcurrentBatchWorkers: ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(
+            sqlQueueMaxWorkers,
+            persistedPoolSize: persistedPoolSize,
+          ),
+          maxConcurrentLongQueryWorkers: ConnectionConstants.sqlQueueMaxLongQueryWorkersForWorkers(
+            sqlQueueMaxWorkers,
+            persistedPoolSize: persistedPoolSize,
+          ),
+          maxConcurrentNonQueryWorkers: ConnectionConstants.sqlQueueMaxNonQueryWorkersForWorkers(
+            sqlQueueMaxWorkers,
+            persistedPoolSize: persistedPoolSize,
+          ),
+          metricsCollector: getIt<MetricsCollector>(),
+          defaultEnqueueTimeout: ConnectionConstants.sqlQueueEnqueueTimeout,
+        );
+
+        developer.log(
+          'SQL queue initialized: maxSize=${ConnectionConstants.sqlQueueMaxSize}, '
+          'maxWorkers=$sqlQueueMaxWorkers, '
+          'batchWorkers=${sqlQueue.maxConcurrentBatchWorkers}, '
+          'longQueryWorkers=${sqlQueue.maxConcurrentLongQueryWorkers}, '
+          'nonQueryWorkers=${sqlQueue.maxConcurrentNonQueryWorkers}',
+          name: 'plug_dependency_registrar',
+          level: 800,
+        );
+
+        return sqlQueue;
+      },
+    )
     ..registerLazySingleton<IDatabaseGateway>(
       () {
-        // Create base ODBC gateway
         final baseGateway = OdbcDatabaseGateway(
           getIt<ActiveConfigResolver>(),
           getIt<odbc.OdbcService>(),
@@ -897,44 +944,26 @@ void registerPlugDependencyGraph(
           sqlInvestigation: getIt<ISqlInvestigationCollector>(),
         );
 
-        // Wrap with SQL execution queue for backpressure control
-        final sqlQueueMaxWorkers = ConnectionConstants.sqlQueueMaxWorkersForPoolSize(
-          getIt<IOdbcConnectionSettings>().poolSize,
-        );
-        final persistedPoolSize = getIt<IOdbcConnectionSettings>().poolSize;
-        if (sqlQueueMaxWorkers == persistedPoolSize) {
-          getIt<MetricsCollector>().recordSqlQueueWorkersEqualPool(
-            workers: sqlQueueMaxWorkers,
-            poolSize: persistedPoolSize,
-          );
-        }
-        final sqlQueue = SqlExecutionQueue(
-          maxQueueSize: ConnectionConstants.sqlQueueMaxSize,
-          maxConcurrentWorkers: sqlQueueMaxWorkers,
-          metricsCollector: getIt<MetricsCollector>(),
-          defaultEnqueueTimeout: ConnectionConstants.sqlQueueEnqueueTimeout,
-        );
-
-        developer.log(
-          'SQL queue initialized: maxSize=${ConnectionConstants.sqlQueueMaxSize}, '
-          'maxWorkers=$sqlQueueMaxWorkers',
-          name: 'plug_dependency_registrar',
-          level: 800,
-        );
-
         return QueuedDatabaseGateway(
           delegate: baseGateway,
-          queue: sqlQueue,
+          queue: getIt<SqlExecutionQueue>(),
         );
       },
     )
     ..registerLazySingleton<IStreamingDatabaseGateway>(
-      () => OdbcStreamingGateway(
-        getIt<odbc.OdbcService>(),
-        getIt<IOdbcConnectionSettings>(),
-        directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
-        metricsCollector: getIt<MetricsCollector>(),
-      ),
+      () {
+        final baseStreamingGateway = OdbcStreamingGateway(
+          getIt<odbc.OdbcService>(),
+          getIt<IOdbcConnectionSettings>(),
+          directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
+          metricsCollector: getIt<MetricsCollector>(),
+        );
+
+        return QueuedStreamingDatabaseGateway(
+          delegate: baseStreamingGateway,
+          queue: getIt<SqlExecutionQueue>(),
+        );
+      },
     )
     ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new)
     ..registerLazySingleton<IAuthClient>(
@@ -1640,6 +1669,16 @@ Future<void> _emitPreCloseNotice({String? title, String? body}) async {
   // the app actually closes. Capped by `_maxPreCloseDelaySeconds` in the
   // config helper to bound this delay.
   await Future<void>.delayed(Duration(seconds: delaySeconds));
+}
+
+IPoolDiscardInflightDiagnostics? _resolvePoolDiscardInflightDiagnostics(
+  IDatabaseGateway gateway,
+) {
+  final inner = gateway is QueuedDatabaseGateway ? gateway.delegate : gateway;
+  if (inner is IPoolDiscardInflightDiagnostics) {
+    return inner as IPoolDiscardInflightDiagnostics;
+  }
+  return null;
 }
 
 const Duration _silentUpdateExitGraceWindow = Duration(seconds: 5);

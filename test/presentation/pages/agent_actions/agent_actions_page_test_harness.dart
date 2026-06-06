@@ -385,6 +385,21 @@ class AgentActionsPageHarness {
   final RuntimeDetectionDiagnostics? _runtimeDiagnostics;
   late final AgentActionsProvider provider;
 
+  Future<void> pumpPage(
+    WidgetTester tester, {
+    Size? size,
+  }) async {
+    if (size != null) {
+      await tester.binding.setSurfaceSize(size);
+    }
+    await tester.pumpWidget(buildWidget());
+    await tester.pump();
+    while (provider.isLoading) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pumpAndSettle();
+  }
+
   Widget buildWidget() {
     if (getIt.isRegistered<RuntimeCapabilities>()) {
       getIt.unregister<RuntimeCapabilities>();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -403,6 +404,8 @@ void main() {
       expect(pool['strategy'], 'lease');
       expect(pool['native_circuit_open'], isFalse);
       expect(pool['native_circuit_failures'], 0);
+      expect(pool['lease_active_count'], 0);
+      expect(pool['native_active_count'], 0);
       expect(pool['fallbacks_total'], 2);
       expect(sqlQueue['enabled'], isTrue);
       expect(sqlQueue['max_size'], 11);
@@ -437,6 +440,8 @@ void main() {
           'native_pool_exposed': true,
           'experimental_enabled': true,
           'native_eligible': true,
+          'lease_active_count': 1,
+          'native_active_count': 3,
         },
       );
       when(configRepository.getCurrentConfigMetadata).thenAnswer(
@@ -472,6 +477,8 @@ void main() {
       expect(poolHealth['driver_type'], 'sqlServer');
       expect(poolHealth['experimental_enabled'], isTrue);
       expect(poolHealth['native_eligible'], isTrue);
+      expect(poolHealth['lease_active_count'], 1);
+      expect(poolHealth['native_active_count'], 3);
       expect(second['pool'], equals(first['pool']));
       verify(pool.getActiveCount).called(1);
       verify(pool.getHealthDiagnostics).called(1);
@@ -562,6 +569,71 @@ void main() {
       expect(streaming['db_streaming_flag_enabled'], isTrue);
       expect(streaming['chunk_streaming_flag_enabled'], isFalse);
       expect(streaming['auto_db_streaming_policy_enabled'], isTrue);
+    });
+
+    test('should stay healthy when only historical sql queue saturation counters are elevated', () {
+      final metrics = MetricsCollector()
+        ..recordQueueSaturation(thresholdPercent: 90, currentSize: 15, maxSize: 16);
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 16,
+        maxConcurrentWorkers: 8,
+        metricsCollector: metrics,
+      );
+      final gateway = QueuedDatabaseGateway(
+        delegate: _MockDatabaseGateway(),
+        queue: queue,
+      );
+      final service = HealthService(
+        metricsCollector: metrics,
+        gateway: gateway,
+      );
+
+      final status = service.getHealthStatus();
+
+      expect(status['status'], 'healthy');
+      final sqlQueue = status['sql_queue']! as Map<String, Object?>;
+      expect(sqlQueue['saturation_90_total'], greaterThan(0));
+      expect(sqlQueue['current_size'], lessThan(15));
+    });
+
+    test('should report degraded when sql queue is currently at or above 90 percent saturation', () async {
+      final metrics = MetricsCollector();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 2,
+        metricsCollector: metrics,
+      );
+      final gateway = QueuedDatabaseGateway(
+        delegate: _MockDatabaseGateway(),
+        queue: queue,
+      );
+      final service = HealthService(
+        metricsCollector: metrics,
+        gateway: gateway,
+      );
+      final hold = Completer<void>();
+
+      for (var index = 0; index < 11; index++) {
+        unawaited(
+          queue.submit<String>(
+            () async {
+              await hold.future;
+              return Success('held-$index');
+            },
+          ),
+        );
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final status = service.getHealthStatus();
+
+      expect(queue.queueSize, greaterThanOrEqualTo(9));
+      expect(status['status'], 'degraded');
+      final sqlQueue = status['sql_queue']! as Map<String, Object?>;
+      expect(sqlQueue['current_size'], greaterThanOrEqualTo(9));
+
+      hold.complete();
     });
 
     test('should expose recent diagnostic reasons and prepared cache counters', () {

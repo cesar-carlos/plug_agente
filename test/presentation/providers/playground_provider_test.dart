@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/ports/i_playground_db_connection_gateway.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
@@ -18,11 +19,14 @@ class MockTestDbConnection extends Mock implements TestDbConnection {}
 
 class MockExecuteStreamingQuery extends Mock implements ExecuteStreamingQuery {}
 
+class MockPlaygroundDbConnectionGateway extends Mock implements IPlaygroundDbConnectionGateway {}
+
 void main() {
   group('PlaygroundProvider', () {
     late MockExecutePlaygroundQuery mockExecutePlaygroundQuery;
     late MockTestDbConnection mockTestDbConnection;
     late MockExecuteStreamingQuery mockExecuteStreamingQuery;
+    late MockPlaygroundDbConnectionGateway mockDbConnectionGateway;
     late PlaygroundProvider provider;
 
     setUpAll(() {
@@ -36,10 +40,14 @@ void main() {
       mockExecutePlaygroundQuery = MockExecutePlaygroundQuery();
       mockTestDbConnection = MockTestDbConnection();
       mockExecuteStreamingQuery = MockExecuteStreamingQuery();
+      mockDbConnectionGateway = MockPlaygroundDbConnectionGateway();
+      when(() => mockDbConnectionGateway.testConnection(any())).thenAnswer(
+        (invocation) => mockTestDbConnection(invocation.positionalArguments[0] as String),
+      );
       provider = PlaygroundProvider(
         mockExecutePlaygroundQuery,
-        (String cs) => mockTestDbConnection(cs),
         mockExecuteStreamingQuery,
+        dbConnectionGateway: mockDbConnectionGateway,
       );
     });
 
@@ -251,11 +259,17 @@ void main() {
 
     test('should notify sync callback when query succeeds', () async {
       final synced = <bool>[];
+      final gateway = MockPlaygroundDbConnectionGateway();
+      when(() => gateway.testConnection(any())).thenAnswer(
+        (invocation) => mockTestDbConnection(invocation.positionalArguments[0] as String),
+      );
+      when(() => gateway.syncConnectionIndicator(any())).thenAnswer((invocation) {
+        synced.add(invocation.positionalArguments[0] as bool);
+      });
       final p = PlaygroundProvider(
         mockExecutePlaygroundQuery,
-        (String cs) => mockTestDbConnection(cs),
         mockExecuteStreamingQuery,
-        syncDbConnectionIndicator: synced.add,
+        dbConnectionGateway: gateway,
       );
       p.setQuery('SELECT 1');
 
@@ -288,11 +302,17 @@ void main() {
       'should notify sync callback when query fails with connection failure',
       () async {
         final synced = <bool>[];
+        final gateway = MockPlaygroundDbConnectionGateway();
+        when(() => gateway.testConnection(any())).thenAnswer(
+          (invocation) => mockTestDbConnection(invocation.positionalArguments[0] as String),
+        );
+        when(() => gateway.syncConnectionIndicator(any())).thenAnswer((invocation) {
+          synced.add(invocation.positionalArguments[0] as bool);
+        });
         final p = PlaygroundProvider(
           mockExecutePlaygroundQuery,
-          (String cs) => mockTestDbConnection(cs),
           mockExecuteStreamingQuery,
-          syncDbConnectionIndicator: synced.add,
+          dbConnectionGateway: gateway,
         );
         p.setQuery('SELECT 1');
 

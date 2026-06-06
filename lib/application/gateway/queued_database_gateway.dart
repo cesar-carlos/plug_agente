@@ -20,6 +20,9 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
   final IDatabaseGateway _delegate;
   final SqlExecutionQueue _queue;
 
+  /// Inner gateway wrapped by the SQL execution queue.
+  IDatabaseGateway get delegate => _delegate;
+
   /// Queue size for monitoring.
   int get queueSize => _queue.queueSize;
 

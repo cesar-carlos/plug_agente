@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:plug_agente/application/ports/i_playground_db_connection_gateway.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/validation/query_validation_messages.dart';
@@ -16,20 +17,39 @@ import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+class _NoOpPlaygroundDbConnectionGateway implements IPlaygroundDbConnectionGateway {
+  @override
+  Future<rd.Result<bool>> testConnection(String connectionString) {
+    return Future<rd.Result<bool>>.value(
+      rd.Failure(
+        ConnectionFailure.withContext(
+          message: 'Database connection gateway is not bound yet',
+          context: const {'operation': 'playground_test_connection'},
+        ),
+      ),
+    );
+  }
+
+  @override
+  void syncConnectionIndicator(bool connected) {}
+}
+
 class PlaygroundProvider extends ChangeNotifier {
   PlaygroundProvider(
     this._executePlaygroundQuery,
-    this._runDbConnectionTest,
     this._executeStreamingQuery, {
-    void Function(bool connected)? syncDbConnectionIndicator,
+    IPlaygroundDbConnectionGateway? dbConnectionGateway,
     PlaygroundUiStrings? uiStrings,
-  }) : _syncDbConnectionIndicator = syncDbConnectionIndicator,
+  }) : _dbConnectionGateway = dbConnectionGateway ?? _NoOpPlaygroundDbConnectionGateway(),
        _ui = uiStrings ?? PlaygroundUiStrings.english;
   final ExecutePlaygroundQuery _executePlaygroundQuery;
-  final Future<rd.Result<bool>> Function(String connectionString) _runDbConnectionTest;
   final ExecuteStreamingQuery _executeStreamingQuery;
-  final void Function(bool connected)? _syncDbConnectionIndicator;
+  IPlaygroundDbConnectionGateway _dbConnectionGateway;
   PlaygroundUiStrings _ui;
+
+  void bindDbConnectionGateway(IPlaygroundDbConnectionGateway gateway) {
+    _dbConnectionGateway = gateway;
+  }
 
   void bindUiStrings(PlaygroundUiStrings strings) {
     _ui = strings;
@@ -49,7 +69,7 @@ class PlaygroundProvider extends ChangeNotifier {
   }
 
   void _notifyDbConnectionIndicator(bool connected) {
-    _syncDbConnectionIndicator?.call(connected);
+    _dbConnectionGateway.syncConnectionIndicator(connected);
   }
 
   static bool _failureIndicatesDbUnreachable(Object failure) {
@@ -339,7 +359,7 @@ class PlaygroundProvider extends ChangeNotifier {
     _isConnectionStatusSuccess = null;
     notifyListeners();
 
-    final result = await _runDbConnectionTest(config.connectionString);
+    final result = await _dbConnectionGateway.testConnection(config.connectionString);
 
     result.fold(
       (_) {

@@ -5,6 +5,7 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_dsn_native_compatible_timeout_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 
 /// Decides whether a query/batch can use the experimental native-compatible
@@ -19,13 +20,16 @@ final class NativeCompatibleAcquirePolicy {
     FeatureFlags? featureFlags,
     String allowlistEnvName = _defaultAllowlistEnvName,
     Duration allowlistCacheTtl = _defaultAllowlistCacheTtl,
+    OdbcDsnNativeCompatibleTimeoutCache? dsnTimeoutCache,
   }) : _featureFlags = featureFlags,
        _allowlistEnvName = allowlistEnvName,
-       _allowlistCacheTtl = allowlistCacheTtl;
+       _allowlistCacheTtl = allowlistCacheTtl,
+       _dsnTimeoutCache = dsnTimeoutCache ?? OdbcDsnNativeCompatibleTimeoutCache();
 
   final FeatureFlags? _featureFlags;
   final String _allowlistEnvName;
   final Duration _allowlistCacheTtl;
+  final OdbcDsnNativeCompatibleTimeoutCache _dsnTimeoutCache;
 
   static const String _defaultAllowlistEnvName = 'ODBC_NATIVE_COMPATIBLE_SQL_ALLOWLIST';
   static const Duration _defaultAllowlistCacheTtl = Duration(seconds: 10);
@@ -45,6 +49,12 @@ final class NativeCompatibleAcquirePolicy {
   static final RegExp _explicitRowLimit = RegExp(
     r'(?:\btop\s*\(?\s*(\d+)\s*\)?|\blimit\s+(\d+)\b|\bfetch\s+first\s+(\d+)\s+rows?\s+only\b)',
   );
+  static final RegExp _countAggregate = RegExp(
+    r'^select\s+count\s*\(\s*(?:distinct\s+)?(?:\*|\w+)\s*\)',
+  );
+  static final RegExp _existsPredicate = RegExp(
+    r'^select\s+exists\s*\(',
+  );
 
   bool get _adaptivePoolingEnabled => _featureFlags?.enableOdbcExperimentalDriverAdaptivePooling ?? false;
 
@@ -55,20 +65,29 @@ final class NativeCompatibleAcquirePolicy {
     required OdbcPreparedQueryExecution preparedExecution,
     required ConnectionAcquireOptions? acquireOptions,
     required Duration? timeout,
+    Duration? defaultQueryTimeout,
+    String? connectionString,
   }) {
     if (!_adaptivePoolingEnabled) {
       return false;
     }
-    if (timeout != null) {
+    if (acquireOptions != null || request.expectMultipleResults || _hasNamedParameters(preparedExecution)) {
       return false;
     }
-    if (acquireOptions != null || request.expectMultipleResults || _hasNamedParameters(preparedExecution)) {
+    if (timeout != null &&
+        !_isNativeCompatibleTimeout(
+          timeout: timeout,
+          defaultQueryTimeout: defaultQueryTimeout,
+          connectionString: connectionString,
+        )) {
       return false;
     }
     final isSafeResultShape =
         request.pagination != null ||
         isProbeQuery(preparedExecution.sql) ||
         isExplicitlyLimitedSelect(preparedExecution.sql) ||
+        isBoundedAggregateQuery(preparedExecution.sql) ||
+        isExistsQuery(preparedExecution.sql) ||
         _isAllowlistedSql(preparedExecution.sql);
     if (!isSafeResultShape) {
       return false;
@@ -118,6 +137,39 @@ final class NativeCompatibleAcquirePolicy {
 
   static bool isProbeQuery(String sql) {
     return _probeQuery.hasMatch(normalizeSql(sql));
+  }
+
+  void rememberNativeCompatibleTimeout({
+    required String connectionString,
+    required Duration timeout,
+  }) {
+    _dsnTimeoutCache.remember(
+      connectionString: connectionString,
+      timeout: timeout,
+    );
+  }
+
+  bool _isNativeCompatibleTimeout({
+    required Duration timeout,
+    required Duration? defaultQueryTimeout,
+    required String? connectionString,
+  }) {
+    if (defaultQueryTimeout == null && connectionString == null) {
+      return false;
+    }
+    return _dsnTimeoutCache.isCompatible(
+      connectionString: connectionString ?? '',
+      timeout: timeout,
+      defaultQueryTimeout: defaultQueryTimeout ?? timeout,
+    );
+  }
+
+  static bool isBoundedAggregateQuery(String sql) {
+    return _countAggregate.hasMatch(normalizeSql(sql));
+  }
+
+  static bool isExistsQuery(String sql) {
+    return _existsPredicate.hasMatch(normalizeSql(sql));
   }
 
   static bool isExplicitlyLimitedSelect(String sql) {

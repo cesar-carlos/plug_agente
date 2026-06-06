@@ -44,8 +44,7 @@ void main() {
     await harness.featureFlags.setEnableAgentActions(false);
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.text(ptL10n.agentActionsDisabledTitle), findsWidgets);
     expect(find.text(ptL10n.agentActionsFormSave), findsNothing);
@@ -56,8 +55,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.text(ptL10n.navAgentActions), findsWidgets);
     expect(find.text(ptL10n.agentActionsEmptyActions), findsOneWidget);
@@ -83,8 +81,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     expect(agentActionFormHelpButton(ptL10n.agentActionsFormType), findsOneWidget);
@@ -130,8 +127,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.text(ptL10n.agentActionsMaintenanceModeInfoTitle), findsNothing);
 
@@ -155,8 +151,7 @@ void main() {
     await harness.featureFlags.setEnableAgentActionsMaintenanceMode(true);
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     await tester.tap(find.widgetWithText(FilledButton, ptL10n.agentActionsFormNew).last);
     await tester.pumpAndSettle();
@@ -170,8 +165,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     final createButton = find.widgetWithText(FilledButton, ptL10n.agentActionsFormNew).first;
     await tester.tap(createButton);
@@ -193,8 +187,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openActionDetailsDialog(tester, 'action-1');
 
     final addTrigger = find.descendant(
@@ -221,8 +214,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(find.text(ptL10n.agentActionsFormRemoteAdHocFeatureDisabledTitle), findsOneWidget);
@@ -243,8 +235,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2400));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     await openSelectedActionDialog(tester);
 
@@ -256,8 +247,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(harness.provider.isMaintenanceStrictMode, isFalse);
 
@@ -285,8 +275,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     await tester.binding.setSurfaceSize(const Size(920, 900));
     await tester.pumpAndSettle();
@@ -315,8 +304,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1200, 680));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.text('Run command'), findsWidgets);
     expect(find.byKey(const ValueKey<String>('agent_actions_detail_scroll')), findsNothing);
@@ -327,8 +315,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(920, 680));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
@@ -340,8 +327,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     final dialog = find.byType(ContentDialog);
@@ -386,8 +372,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     await openActionDetailsDialog(tester, 'action-1');
     await harness.provider.refreshTriggersForSelection();
@@ -409,8 +394,7 @@ void main() {
     );
 
     await setResponsiveTestWindow(tester, const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openActionDetailsDialog(tester, 'action-1');
     await openCreateTriggerDialog(tester, ptL10n);
 
@@ -431,8 +415,7 @@ void main() {
     );
 
     await setResponsiveTestWindow(tester, const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openActionDetailsDialog(tester, 'action-1');
     await openCreateTriggerDialog(tester, ptL10n);
     drainPendingFlutterErrors(tester);
@@ -461,8 +444,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(920, 700));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await harness.provider.refreshTriggersForSelection();
     await tester.pumpAndSettle();
     await openActionDetailsDialog(tester, 'action-1');
@@ -487,8 +469,7 @@ void main() {
     );
 
     await setResponsiveTestWindow(tester, const Size(900, 560));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openActionDetailsDialog(tester, 'action-1');
     await openCreateTriggerDialog(tester, ptL10n);
     drainPendingFlutterErrors(tester);
@@ -544,8 +525,7 @@ void main() {
       );
 
       await setResponsiveTestWindow(tester, const Size(1400, 900));
-      await tester.pumpWidget(harness.buildWidget());
-      await tester.pumpAndSettle();
+      await harness.pumpPage(tester);
       await openActionDetailsDialog(tester, 'action-1');
       await openCreateTriggerDialog(tester, ptL10n);
       await selectTriggerType(tester, ptL10n, triggerTypeTestLabel(scenario.type, ptL10n));
@@ -566,8 +546,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2600));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     final nameField = agentActionFormTextBox(ptL10n.agentActionsFormName);
@@ -593,8 +572,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 1200));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     await tester.tap(agentActionFormComboBox(ptL10n.agentActionsFormType));
@@ -607,8 +585,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2600));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
 
@@ -640,8 +617,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2600));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
     await selectPowerShellExecutable(tester, ptL10n, ptL10n.agentActionsFormPowerShellExecutablePwsh);
@@ -674,8 +650,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2600));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
     await selectPowerShellMode(tester, ptL10n, ptL10n.agentActionsFormPowerShellModeScript);
@@ -704,8 +679,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2600));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
     await selectPowerShellMode(tester, ptL10n, ptL10n.agentActionsFormPowerShellModeScript);
@@ -740,8 +714,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 1800));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
@@ -761,8 +734,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 1800));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(
@@ -787,8 +759,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 1800));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
@@ -822,8 +793,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 1800));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
@@ -846,8 +816,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 1800));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(find.text(ptL10n.agentActionsFormEditPowerShellTitle), findsOneWidget);
@@ -859,8 +828,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 1200));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     tester.widget<FilledButton>(filledButtonWithText(ptL10n.agentActionsFormSave)).onPressed!.call();
@@ -908,8 +876,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(find.text(ptL10n.agentActionsFormEditDeveloperTitle), findsOneWidget);
@@ -957,8 +924,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     final configPathField = agentActionFormTextBox(ptL10n.agentActionsFormData7ConfigPath);
@@ -1001,8 +967,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(
@@ -1042,8 +1007,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(
@@ -1080,8 +1044,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(
@@ -1116,8 +1079,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     await tester.tap(find.text(ptL10n.agentActionsTestSelected));
     await tester.pumpAndSettle();
@@ -1164,8 +1126,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     await tester.enterText(
@@ -1200,8 +1161,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     expect(find.byKey(const ValueKey('agent_actions_developer_connection_changed_info_bar')), findsOneWidget);
@@ -1236,8 +1196,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     await tester.enterText(
@@ -1281,8 +1240,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
@@ -1341,8 +1299,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     expect(find.text('Run command'), findsWidgets);
@@ -1439,6 +1396,10 @@ void main() {
     );
 
     await tester.tap(find.byIcon(FluentIcons.cancel));
+    await tester.pump();
+    while (harness.provider.isLoading || harness.provider.hasCancellationInProgress('execution-1')) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
     await tester.pumpAndSettle();
 
     expect(
@@ -1478,8 +1439,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     expect(find.text('Chunked output'), findsWidgets);
@@ -1516,8 +1476,7 @@ void main() {
     final harness = AgentActionsPageHarness(runtimeStateGuard: guard);
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     final typeCombo = agentActionFormComboBox(ptL10n.agentActionsFormType);
@@ -1543,8 +1502,7 @@ void main() {
     final harness = AgentActionsPageHarness(runtimeStateGuard: guard);
 
     await tester.binding.setSurfaceSize(const Size(1600, 1600));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
 
@@ -1568,8 +1526,7 @@ void main() {
     final harness = AgentActionsPageHarness(runtimeStateGuard: guard);
 
     await tester.binding.setSurfaceSize(const Size(1600, 1600));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
 
@@ -1593,8 +1550,7 @@ void main() {
     final harness = AgentActionsPageHarness(runtimeStateGuard: guard);
 
     await tester.binding.setSurfaceSize(const Size(1600, 1600));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     await tester.tap(agentActionFormComboBox(ptL10n.agentActionsFormType));
@@ -1623,8 +1579,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openActionDetailsDialog(tester, 'action-1');
 
     expect(find.text(ptL10n.agentActionsRiskRunnerUnavailable), findsWidgets);
@@ -1655,8 +1610,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     harness.provider.selectAction('email');
     harness.provider.setDefinitionTypeFilter(AgentActionType.email);
@@ -1688,8 +1642,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     harness.provider.selectAction('email');
     harness.provider
@@ -1741,8 +1694,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.text(ptL10n.agentActionsHistoryFilterStatus), findsOneWidget);
     expect(harness.provider.definitionTypeFilter, AgentActionType.email);
@@ -1769,8 +1721,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     final row = find.byKey(const ValueKey<String>('agent_action_definition_row_action-1'));
     await tester.tap(find.descendant(of: row, matching: find.byIcon(FluentIcons.play)));
@@ -1797,8 +1748,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
@@ -1837,8 +1787,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     harness.provider.setHistorySearchQuery('trace-keep');
@@ -1876,8 +1825,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     harness.provider.setHistoryFailurePhaseFilter('process_exit');
@@ -1897,8 +1845,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openActionDetailsDialog(tester, 'action-1');
 
     expect(find.text(ptL10n.agentActionsSecretPlaceholdersTitle), findsOneWidget);
@@ -1916,8 +1863,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openActionDetailsDialog(tester, 'action-1');
 
     expect(find.text(ptL10n.agentActionsSecretsSectionTitle), findsOneWidget);
@@ -1936,8 +1882,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openActionDetailsDialog(tester, 'action-1');
 
     await tester.tap(
@@ -1997,8 +1942,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.byKey(const ValueKey<String>('agent_actions_com_object_handlers_missing')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsComObjectHandlersMissingMessage), findsOneWidget);
@@ -2013,8 +1957,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.byKey(const ValueKey<String>('agent_actions_com_object_handlers_missing')), findsNothing);
     await openTab(tester, ptL10n.configTabPreferences);
@@ -2028,8 +1971,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.byKey(const ValueKey<String>('agent_actions_com_object_handlers_missing')), findsNothing);
     await openTab(tester, ptL10n.configTabPreferences);
@@ -2062,8 +2004,7 @@ void main() {
     final harness = AgentActionsPageHarness(triggerScheduler: scheduler);
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.byKey(const ValueKey<String>('agent_actions_scheduler_operational_issue')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsSchedulerInstanceLockedMessage), findsOneWidget);
@@ -2096,8 +2037,7 @@ void main() {
     final harness = AgentActionsPageHarness(triggerScheduler: scheduler);
 
     await tester.binding.setSurfaceSize(const Size(1400, 900));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.byKey(const ValueKey<String>('agent_actions_scheduler_operational_issue')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsSchedulerStorageAccessDeniedMessage), findsOneWidget);
@@ -2138,8 +2078,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.agentActionsRemoteAuditTitle);
 
     final showInHistory = find.text(ptL10n.agentActionsRemoteAuditShowInHistory);
@@ -2177,8 +2116,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     expect(find.text(ptL10n.agentActionsRiskRemote), findsWidgets);
     expect(find.text(ptL10n.agentActionsRiskRemoteReapproval), findsWidgets);
@@ -2194,8 +2132,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormCaptureStdout));
@@ -2222,8 +2159,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormCaptureStdout));
@@ -2256,8 +2192,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2400));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormMaxConcurrent));
@@ -2284,8 +2219,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2400));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
 
     harness.provider.selectAction('action-1');
     await tester.pumpAndSettle();
@@ -2322,8 +2256,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2400));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormMaxConcurrent));
@@ -2339,8 +2272,7 @@ void main() {
     final harness = AgentActionsPageHarness();
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openCreateActionDialog(tester, ptL10n);
 
     final stdoutEncodingLabel = find.text(ptL10n.agentActionsFormStdoutEncoding);
@@ -2367,8 +2299,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
     await tester.ensureVisible(find.text(ptL10n.agentActionsFormStdoutEncoding));
@@ -2416,8 +2347,7 @@ void main() {
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
-    await tester.pumpWidget(harness.buildWidget());
-    await tester.pumpAndSettle();
+    await harness.pumpPage(tester);
     await openTab(tester, ptL10n.agentActionsHistoryTitle);
 
     const copySupport = ValueKey<String>('execution_support_copy_button_execution-1');

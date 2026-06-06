@@ -233,20 +233,30 @@ class OdbcConnectionPool
     );
 
     try {
-      for (var i = 0; i < count; i++) {
-        final result = await acquire(connectionString);
-        result.fold(
-          connectionIds.add,
-          (error) {
-            developer.log(
-              'Warm-up connection ${i + 1}/$count failed',
-              name: 'connection_pool',
-              level: 900,
-              error: error,
-            );
-            errors.add('warmup_acquire_${i + 1}: $error');
-          },
+      final handshakeBatchSize = _nativeHandshakeSemaphore.maxConcurrent;
+      for (var offset = 0; offset < count; offset += handshakeBatchSize) {
+        final batchEnd = offset + handshakeBatchSize < count ? offset + handshakeBatchSize : count;
+        final batchResults = await Future.wait(
+          List.generate(
+            batchEnd - offset,
+            (_) => acquire(connectionString),
+          ),
         );
+        for (var batchIndex = 0; batchIndex < batchResults.length; batchIndex++) {
+          final globalIndex = offset + batchIndex + 1;
+          batchResults[batchIndex].fold(
+            connectionIds.add,
+            (error) {
+              developer.log(
+                'Warm-up connection $globalIndex/$count failed',
+                name: 'connection_pool',
+                level: 900,
+                error: error,
+              );
+              errors.add('warmup_acquire_$globalIndex: $error');
+            },
+          );
+        }
       }
 
       developer.log(
@@ -471,9 +481,11 @@ class OdbcConnectionPool
 
   @override
   Map<String, Object?> getHealthDiagnostics() {
-    return const {
+    return {
       'strategy': 'lease',
       'native_pool_exposed': false,
+      'lease_active_count': _leasedIds.length,
+      'native_active_count': 0,
     };
   }
 }

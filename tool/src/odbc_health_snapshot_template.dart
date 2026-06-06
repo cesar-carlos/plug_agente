@@ -3,8 +3,8 @@ import 'dart:math' as math;
 
 import 'package:plug_agente/infrastructure/config/odbc_result_encoding_parser.dart';
 
-const int _defaultPoolSize = 4;
-const int _defaultSqlQueueMaxSize = 500;
+const int _defaultPoolSize = 8;
+const int _defaultSqlQueueMaxSize = 16;
 const int _defaultSqlQueueTimeoutSeconds = 5;
 const int _defaultPoolAcquireTimeoutSeconds = 30;
 const String _defaultAppVersion = '1.6.7';

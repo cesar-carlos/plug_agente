@@ -1,6 +1,7 @@
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
@@ -50,6 +51,7 @@ IConnectionPool createOdbcConnectionPool(
       metricsCollector: metricsCollector,
       activeConfigResolver: activeConfigResolver,
       configRepository: configRepository,
+      nativeWarmUpEnabled: ConnectionConstants.nativeWarmUpEnabled,
     );
   }
 

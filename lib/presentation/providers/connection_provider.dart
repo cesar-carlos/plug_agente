@@ -256,6 +256,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
   Timer? _hubPersistentRetryTimer;
   bool _persistentRetryInFlight = false;
   int _reconnectQuietFailureLogCount = 0;
+  int _persistentRetryFailureLogCount = 0;
   HubRecoveryUiHint _hubRecoveryUiHint = HubRecoveryUiHint.none;
   late final HubAccessTokenRefreshGate _hubAccessTokenRefreshGate;
   final HubAccessTokenRenewer? _hubAccessTokenRenewer;
@@ -928,13 +929,19 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
       return;
     }
     _hubRecoveryOrchestrator.bumpPersistentFailure();
-    AppLogger.info(
-      'resilience: ${_resilienceLogPrefix()}hub_persistent_retry_failure '
-      'count=${_hubRecoveryOrchestrator.persistentFailureCount} '
-      'max=$_effectiveHubPersistentRetryMaxFailedTicks '
-      'reason=$reason '
-      'agent_id=${context.agentId}',
-    );
+    _persistentRetryFailureLogCount++;
+    const stride = ConnectionConstants.hubReconnectFailureLogThrottleStride;
+    if (_persistentRetryFailureLogCount == 1 || _persistentRetryFailureLogCount % stride == 0) {
+      AppLogger.debug(
+        'resilience: ${_resilienceLogPrefix()}hub_persistent_retry_failure '
+        'count=${_hubRecoveryOrchestrator.persistentFailureCount} '
+        'logged_failures=$_persistentRetryFailureLogCount '
+        'stride=$stride '
+        'max=$_effectiveHubPersistentRetryMaxFailedTicks '
+        'reason=$reason '
+        'agent_id=${context.agentId}',
+      );
+    }
     if (_hubRecoveryOrchestrator.persistentFailureCount >= _effectiveHubPersistentRetryMaxFailedTicks) {
       _cancelPersistentRetryTimer();
       _status = ConnectionStatus.error;
@@ -1157,8 +1164,9 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
   void _startPersistentRetry() {
     _cancelPersistentRetryTimer();
     _hubRecoveryOrchestrator.resetPersistentRetryCounters();
+    _persistentRetryFailureLogCount = 0;
     final ctx = _contextSource.resolveConnectionContext();
-    AppLogger.warning(
+    AppLogger.debug(
       'resilience: ${_resilienceLogPrefix()}persistent_retry event=started '
       'interval_ms=${_effectiveHubPersistentRetryInterval.inMilliseconds} '
       'max_failed_ticks=$_effectiveHubPersistentRetryMaxFailedTicks '

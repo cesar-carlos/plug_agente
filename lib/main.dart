@@ -17,6 +17,7 @@ void main(List<String> args) async {
       AppRoot(
         initialRoute: bootstrapData.initialRoute,
         capabilities: bootstrapData.capabilities,
+        runDeferredBootstrap: bootstrapData.runDeferredBootstrap,
       ),
     );
   } on Object catch (error, stackTrace) {

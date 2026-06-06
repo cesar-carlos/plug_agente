@@ -1576,7 +1576,7 @@
   "odbcBlockPool": "Connection pool",
   "odbcBlockPoolDescription": "Multiple connections are reused automatically. Improves performance under high concurrency.",
   "odbcFieldPoolSize": "Maximum pool size",
-  "odbcHintPoolSize": "4",
+  "odbcHintPoolSize": "8",
   "odbcBlockTimeouts": "Timeouts",
   "odbcFieldLoginTimeout": "Login timeout (seconds)",
   "odbcHintLoginTimeout": "30",

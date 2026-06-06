@@ -75,7 +75,7 @@ PoolOptions get _poolOptions => const PoolOptions(
   outside.
 - **`connectionTimeout = 30 s`** — also used as `defaultPoolAcquireTimeout`.
 
-Pool size is `ConnectionConstants.poolSize` (default `4`, env
+Pool size is `ConnectionConstants.poolSize` (default `8`, env
 `ODBC_POOL_SIZE`). The number of pools created at once is capped at
 `ConnectionConstants.maxConnectionPools` to prevent runaway allocations
 when many connection strings rotate through the agent.
@@ -109,6 +109,10 @@ real bottleneck in production.
 - `IConnectionPoolWarmUp.warmUp(connectionString, warmUpCount)` is
   invoked from `AppInitializer._warmUpConnectionPool()` so the first
   Hub-driven query does not pay the full handshake cost.
+- When adaptive pooling is active, eligible drivers (SQL Server,
+  PostgreSQL) warm the native pool by default
+  (`ODBC_NATIVE_WARMUP_ENABLED=true`); SQL Anywhere and other
+  lease-only drivers still warm through the lease pool.
 
 ### Discard and release
 
@@ -336,17 +340,21 @@ used through the high-level service.
 
 ## Bulk insert
 
-`OdbcDatabaseGateway` uses sequential `_service.bulkInsert` from a
-direct (non-pooled) connection. Parallel bulk via
-`bulkInsertParallel(poolId, ...)` is **not** wired today; it would
-require exposing `poolId` on `IConnectionPool` and adding a threshold
-on row count. Without profiling indicating mega-bulks (10k+ rows) are a
-hot path, the simpler sequential form is the safer choice on a critical
-write path.
+`OdbcBulkInsertExecutor` routes small loads through sequential
+`_service.bulkInsert` on a dedicated direct connection. Large SQL Server
+loads (row count above `ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD`, default
+50k) may use `bulkInsertParallel` on the adaptive pool's native
+`poolId` when `ODBC_BULK_INSERT_PARALLEL_ENABLED=true` (default).
 
-`_bulkInsertRecommendationCommandThreshold = 50` already promotes the
+Homogeneous `INSERT` batches above
+`ODBC_BATCH_BULK_INSERT_ROUTE_THRESHOLD` (default 50) may auto-route to
+the native bulk path on SQL Server and PostgreSQL; SQL Anywhere stays on
+the sequential path.
+
+`_bulkInsertRecommendationCommandThreshold = 50` still promotes the
 `bulk_insert` shape over `INSERT` loops when the caller submits more
-than 50 homogeneous `INSERT` commands in a single batch.
+than 50 homogeneous `INSERT` commands in a single batch without
+auto-routing.
 
 ## Counters and metric keys
 
@@ -388,7 +396,9 @@ ODBC are:
 - **Defer `executeQueryColumnar` / `TypedColumnarResult` adoption.**
   Would require changing the JSON-RPC schema and the dashboard
   contract; no profiling pointing at boxed-row decoding as a hot path.
-- **Defer `bulkInsertParallel`.** Critical write path; refactor cost
-  exceeds expected gain without profiling on real workloads.
+- **Gate `bulkInsertParallel` on row threshold and SQL Server only.**
+  Parallel fan-out uses half the pool size; disable via
+  `ODBC_BULK_INSERT_PARALLEL_ENABLED=false` when profiling shows
+  regressions on a specific driver build.
 - **Defer cancellation tokens on batches.** No evidence that abandoned
   RPC clients are a frequent cause of stuck locks today.

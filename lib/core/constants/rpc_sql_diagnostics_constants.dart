@@ -8,6 +8,8 @@ abstract final class RpcSqlDiagnosticsConstants {
 
   static const String batchBulkInsertRecommendedReason = 'batch_bulk_insert_recommended';
 
+  static const String batchBulkInsertRoutedReason = 'batch_bulk_insert_routed';
+
   static const String autoDbStreamingReason = 'auto_db_streaming';
 
   static const String preferDbStreamingReason = 'prefer_db_streaming';

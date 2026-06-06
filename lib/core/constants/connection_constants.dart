@@ -3,9 +3,11 @@ import 'dart:io' as io;
 import 'dart:math' as math;
 
 import 'package:plug_agente/core/config/app_environment.dart';
+import 'package:plug_agente/core/constants/direct_odbc_operation_class.dart';
 import 'package:plug_agente/domain/domain.dart' show IIdempotencyStore;
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart' show IIdempotencyStore;
 import 'package:plug_agente/domain/repositories/repositories.dart' show IIdempotencyStore;
+import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart' show DirectOdbcConnectionLimiter;
 
 /// Constantes para configuração de conexões ODBC e Socket.IO.
 class ConnectionConstants {
@@ -52,7 +54,8 @@ class ConnectionConstants {
   /// Legacy name; same as [defaultHubRecoveryBurstMaxAttempts] (ODBC pool options).
   static const int defaultMaxReconnectAttempts = defaultHubRecoveryBurstMaxAttempts;
   static const Duration defaultReconnectBackoff = Duration(seconds: 1);
-  static const int defaultPoolSize = 4;
+  static const int defaultPoolSize = 8;
+  static const int defaultSqlQueueMaxSize = 16;
   static const Duration defaultPoolAcquireTimeout = Duration(seconds: 30);
   static const Duration defaultNativePoolIdleTimeout = Duration(minutes: 5);
   static const Duration defaultNativePoolMaxLifetime = Duration(hours: 1);
@@ -131,7 +134,13 @@ class ConnectionConstants {
   }
 
   /// SQL execution queue maximum size (configurable via SQL_QUEUE_MAX_SIZE env var).
-  static int get sqlQueueMaxSize => int.tryParse(_optionalEnv('SQL_QUEUE_MAX_SIZE') ?? '') ?? 500;
+  static int get sqlQueueMaxSize => _positiveIntEnv('SQL_QUEUE_MAX_SIZE') ?? defaultSqlQueueMaxSize;
+
+  /// Soft in-flight `sql.execute` RPC limit per client token (or agent) scope.
+  ///
+  /// Matches SQL queue backpressure capacity: concurrent dispatch slots plus
+  /// queue depth (`sqlQueueMaxWorkers + sqlQueueMaxSize`).
+  static int get rpcSqlExecuteConcurrencySoftLimit => sqlQueueMaxWorkers + sqlQueueMaxSize;
 
   /// SQL execution queue maximum concurrent workers.
   ///
@@ -141,6 +150,59 @@ class ConnectionConstants {
 
   static int sqlQueueMaxWorkersForPoolSize(int persistedPoolSize) {
     return _positiveIntEnv('SQL_QUEUE_MAX_WORKERS') ?? (persistedPoolSize > 0 ? persistedPoolSize : defaultPoolSize);
+  }
+
+  static int sqlQueueMaxBatchWorkersForWorkers(
+    int maxWorkers, {
+    int? persistedPoolSize,
+  }) {
+    return _positiveIntEnv('SQL_QUEUE_MAX_BATCH_WORKERS') ??
+        _sqlQueuePerKindWorkerCap(
+          maxWorkers: maxWorkers,
+          persistedPoolSize: persistedPoolSize,
+          operationClass: DirectOdbcOperationClass.batchTransaction,
+        );
+  }
+
+  static int sqlQueueMaxLongQueryWorkersForWorkers(
+    int maxWorkers, {
+    int? persistedPoolSize,
+  }) {
+    return _positiveIntEnv('SQL_QUEUE_MAX_LONG_QUERY_WORKERS') ??
+        _sqlQueuePerKindWorkerCap(
+          maxWorkers: maxWorkers,
+          persistedPoolSize: persistedPoolSize,
+          operationClass: DirectOdbcOperationClass.streaming,
+        );
+  }
+
+  static int sqlQueueMaxNonQueryWorkersForWorkers(
+    int maxWorkers, {
+    int? persistedPoolSize,
+  }) {
+    return _positiveIntEnv('SQL_QUEUE_MAX_NON_QUERY_WORKERS') ??
+        _sqlQueuePerKindWorkerCap(
+          maxWorkers: maxWorkers,
+          persistedPoolSize: persistedPoolSize,
+          operationClass: DirectOdbcOperationClass.general,
+        );
+  }
+
+  /// Per-kind SQL queue worker cap aligned with [DirectOdbcConnectionLimiter].
+  ///
+  /// Uses `min(maxWorkers ~/ 2, directOdbcOperationClassCap(...))` so queue
+  /// dispatch for batch/streaming workloads cannot exceed the direct ODBC budget.
+  static int _sqlQueuePerKindWorkerCap({
+    required int maxWorkers,
+    required DirectOdbcOperationClass operationClass,
+    int? persistedPoolSize,
+  }) {
+    final effectiveWorkers = maxWorkers > 0 ? maxWorkers : 1;
+    final halfWorkers = math.max(1, effectiveWorkers ~/ 2);
+    final poolSize = persistedPoolSize ?? effectiveWorkers;
+    final directGlobalBudget = directOdbcConnectionConcurrency(poolSize);
+    final directClassCap = directOdbcOperationClassCap(operationClass, directGlobalBudget);
+    return math.min(halfWorkers, directClassCap);
   }
 
   static int? get directOdbcConnectionMaxConcurrentOverride => _positiveIntEnv('ODBC_DIRECT_CONNECTION_MAX_CONCURRENT');
@@ -187,6 +249,92 @@ class ConnectionConstants {
     }
     return effectivePoolSize ~/ 2;
   }
+
+  /// Per-class ceiling for [DirectOdbcConnectionLimiter] within the global budget.
+  static int directOdbcOperationClassCap(
+    DirectOdbcOperationClass operationClass,
+    int globalMaxConcurrent,
+  ) {
+    final effectiveGlobal = globalMaxConcurrent < 1 ? 1 : globalMaxConcurrent;
+    return switch (operationClass) {
+      DirectOdbcOperationClass.streaming => math.max(1, (effectiveGlobal + 1) ~/ 2),
+      DirectOdbcOperationClass.bulk => math.max(1, effectiveGlobal ~/ 2),
+      DirectOdbcOperationClass.batchTransaction => math.max(1, effectiveGlobal ~/ 2),
+      DirectOdbcOperationClass.general => effectiveGlobal,
+    };
+  }
+
+  static const int defaultBulkInsertChunkRowCount = 10000;
+  static const int defaultBulkInsertParallelRowThreshold = 50000;
+  static const bool defaultBulkInsertParallelEnabled = true;
+  static const bool defaultNativeWarmUpEnabled = true;
+  static const int defaultBatchBulkInsertRecommendationThreshold = 50;
+  static const int defaultBatchBulkInsertRouteThreshold = 50;
+
+  /// Rows per native bulk-insert chunk when the request exceeds this size.
+  ///
+  /// Override with env `ODBC_BULK_INSERT_CHUNK_ROWS` (positive integer).
+  static int get bulkInsertChunkRowCount =>
+      _positiveIntEnv('ODBC_BULK_INSERT_CHUNK_ROWS') ?? defaultBulkInsertChunkRowCount;
+
+  /// When true, large SQL Server bulk inserts may use `bulkInsertParallel`.
+  ///
+  /// Override with env `ODBC_BULK_INSERT_PARALLEL_ENABLED` (`true`/`false`).
+  static bool get bulkInsertParallelEnabled {
+    final raw = _optionalEnv('ODBC_BULK_INSERT_PARALLEL_ENABLED');
+    if (raw == null || raw.isEmpty) {
+      return defaultBulkInsertParallelEnabled;
+    }
+    final normalized = raw.toLowerCase();
+    if (normalized == 'true' || normalized == '1') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0') {
+      return false;
+    }
+    return defaultBulkInsertParallelEnabled;
+  }
+
+  /// Row count above which direct bulk inserts may use `bulkInsertParallel`.
+  ///
+  /// Override with env `ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD` (positive integer).
+  static int get bulkInsertParallelRowThreshold =>
+      _positiveIntEnv('ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD') ?? defaultBulkInsertParallelRowThreshold;
+
+  /// Parallel fan-out for `bulkInsertParallel`, aligned with read-only batch policy.
+  static int bulkInsertParallelismForPoolSize(int poolSize) {
+    return readOnlyBatchParallelismForPoolSize(poolSize);
+  }
+
+  /// When true, adaptive pool warm-up pre-creates native pool slots for
+  /// eligible drivers (SQL Server, PostgreSQL).
+  ///
+  /// Override with env `ODBC_NATIVE_WARMUP_ENABLED` (`true`/`false`).
+  static bool get nativeWarmUpEnabled {
+    final raw = _optionalEnv('ODBC_NATIVE_WARMUP_ENABLED');
+    if (raw == null || raw.isEmpty) {
+      return defaultNativeWarmUpEnabled;
+    }
+    final normalized = raw.toLowerCase();
+    if (normalized == 'true' || normalized == '1') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0') {
+      return false;
+    }
+    return defaultNativeWarmUpEnabled;
+  }
+
+  /// Homogeneous `INSERT` command count above which `sql.executeBatch` records a
+  /// recommendation to migrate callers to `sql.bulkInsert`.
+  static int get batchBulkInsertRecommendationThreshold =>
+      _positiveIntEnv('ODBC_BATCH_BULK_INSERT_RECOMMEND_THRESHOLD') ??
+      defaultBatchBulkInsertRecommendationThreshold;
+
+  /// Homogeneous `INSERT` command count above which the gateway may auto-route
+  /// an `sql.executeBatch` workload to the native bulk-insert path.
+  static int get batchBulkInsertRouteThreshold =>
+      _positiveIntEnv('ODBC_BATCH_BULK_INSERT_ROUTE_THRESHOLD') ?? defaultBatchBulkInsertRouteThreshold;
 
   /// Safe parallel fan-out for homogeneous read-only ODBC / JSON-RPC batch work.
   ///

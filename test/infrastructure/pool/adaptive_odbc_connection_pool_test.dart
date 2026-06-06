@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -473,49 +474,7 @@ void main() {
       verify(() => configRepository.getCurrentConfigMetadata()).called(1);
     });
 
-    test('warms up eligible SQL Server driver through lease pool by default', () async {
-      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
-        (_) async => Success(_sqlServerConfig()),
-      );
-      when(
-        () => service.connect(
-          any(),
-          options: any(named: 'options'),
-        ),
-      ).thenAnswer(
-        (_) async => Success(
-          Connection(
-            id: 'lease-warm-1',
-            connectionString: 'DSN=Prod',
-            createdAt: DateTime.now(),
-            isActive: true,
-          ),
-        ),
-      );
-      when(() => service.disconnect(any())).thenAnswer(
-        (_) async => const Success(unit),
-      );
-
-      final pool = _buildPool(
-        service: service,
-        settings: settings,
-        flags: flags,
-        metrics: metrics,
-        configRepository: configRepository,
-      );
-
-      final result = await pool.warmUp('DSN=Prod', warmUpCount: 2);
-
-      expect(result.isSuccess(), isTrue);
-      final diagnostics = pool.getHealthDiagnostics();
-      expect(diagnostics['native_warmup_enabled'], isFalse);
-      expect(diagnostics['native_skip_reason'], 'native_warmup_disabled');
-      verifyNever(() => service.poolCreate(any(), any(), options: any(named: 'options')));
-      verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(2);
-      verify(() => service.disconnect(any())).called(2);
-    });
-
-    test('can opt into native warm-up for benchmarks and isolated pool validation', () async {
+    test('warms up eligible SQL Server driver through native pool by default', () async {
       when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
@@ -548,7 +507,96 @@ void main() {
         flags: flags,
         metrics: metrics,
         configRepository: configRepository,
-        nativeWarmUpEnabled: true,
+      );
+
+      final result = await pool.warmUp('DSN=Prod', warmUpCount: 2);
+
+      expect(result.isSuccess(), isTrue);
+      final diagnostics = pool.getHealthDiagnostics();
+      expect(diagnostics['native_warmup_enabled'], isTrue);
+      expect(diagnostics['native_circuit_open'], isFalse);
+      verify(() => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options'))).called(1);
+      verify(() => service.poolGetConnection(51)).called(2);
+      verify(() => service.poolReleaseConnection(any())).called(2);
+      verifyNever(() => service.connect(any(), options: any(named: 'options')));
+    });
+
+    test('falls back to lease warm-up when native warm-up is disabled', () async {
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
+        (_) async => Success(_sqlServerConfig()),
+      );
+      when(
+        () => service.connect(
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'lease-warm-1',
+            connectionString: 'DSN=Prod',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => service.disconnect(any())).thenAnswer(
+        (_) async => const Success(unit),
+      );
+
+      final pool = _buildPool(
+        service: service,
+        settings: settings,
+        flags: flags,
+        metrics: metrics,
+        configRepository: configRepository,
+        nativeWarmUpEnabled: false,
+      );
+
+      final result = await pool.warmUp('DSN=Prod', warmUpCount: 2);
+
+      expect(result.isSuccess(), isTrue);
+      final diagnostics = pool.getHealthDiagnostics();
+      expect(diagnostics['native_warmup_enabled'], isFalse);
+      expect(diagnostics['native_skip_reason'], 'native_warmup_disabled');
+      verifyNever(() => service.poolCreate(any(), any(), options: any(named: 'options')));
+      verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(2);
+      verify(() => service.disconnect(any())).called(2);
+    });
+
+    test('can opt into native warm-up explicitly for isolated pool validation', () async {
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
+        (_) async => Success(_sqlServerConfig()),
+      );
+      when(
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => const Success(51));
+      var nativeCounter = 0;
+      when(() => service.poolGetConnection(51)).thenAnswer((_) async {
+        nativeCounter++;
+        return Success(
+          Connection(
+            id: 'native-warm-$nativeCounter',
+            connectionString: 'DSN=Prod',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(() => service.poolReleaseConnection(any())).thenAnswer(
+        (_) async => const Success(unit),
+      );
+
+      final pool = _buildPool(
+        service: service,
+        settings: settings,
+        flags: flags,
+        metrics: metrics,
+        configRepository: configRepository,
       );
 
       final result = await pool.warmUp('DSN=Prod', warmUpCount: 2);
@@ -728,7 +776,7 @@ AdaptiveOdbcConnectionPool _buildPool({
   required IAgentConfigRepository configRepository,
   int nativeCircuitBreakThreshold = 3,
   Duration nativeCircuitBreakDuration = const Duration(minutes: 1),
-  bool nativeWarmUpEnabled = false,
+  bool nativeWarmUpEnabled = ConnectionConstants.defaultNativeWarmUpEnabled,
   Duration driverInfoCacheTtl = const Duration(seconds: 10),
 }) {
   return AdaptiveOdbcConnectionPool(

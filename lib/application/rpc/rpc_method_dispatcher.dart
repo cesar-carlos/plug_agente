@@ -29,6 +29,7 @@ import 'package:plug_agente/domain/repositories/i_authorization_metrics_collecto
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
@@ -89,6 +90,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     Future<Map<String, dynamic>> Function()? loadOpenRpcDocument,
     RpcMethodConcurrencyLimiter? methodConcurrencyLimiter,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
+    IOdbcConnectionSettings? odbcConnectionSettings,
   }) : _defaultLimits = defaultLimits,
        _dispatchMetrics = dispatchMetrics,
        _methodConcurrencyLimiter = methodConcurrencyLimiter ?? RpcMethodConcurrencyLimiter.fromEnvironment(),
@@ -138,6 +140,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
       queryStageBudget: queryStageBudget,
       batchExecutionStageBudget: batchExecutionStageBudget,
       sqlStreamingCoordinator: _sqlStreamingCoordinator,
+      odbcConnectionSettings: odbcConnectionSettings,
     );
     _handlersByMethod = _buildHandlerRegistry(
       handlers ??

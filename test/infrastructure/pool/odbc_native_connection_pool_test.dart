@@ -35,6 +35,21 @@ void main() {
       );
     });
 
+    test('ensurePoolId returns native pool id without acquiring a connection', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => const Success(88));
+
+      final result = await pool.ensurePoolId('DSN=Bulk');
+
+      expect(result.getOrNull(), 88);
+      verifyNever(() => mockService.poolGetConnection(any()));
+    });
+
     test(
       'should create native pool once under concurrent acquire calls',
       () async {

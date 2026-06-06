@@ -1,9 +1,8 @@
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
-import 'package:plug_agente/application/validation/sql_validator.dart';
-import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/application/use_cases/validate_sql_batch.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -14,11 +13,18 @@ import 'package:result_dart/result_dart.dart';
 class ExecuteSqlBatch {
   ExecuteSqlBatch(
     this._databaseGateway,
-    this._normalizerService,
-  );
+    this._normalizerService, {
+    ValidateSqlBatch? validateSqlBatch,
+    int Function()? poolSizeProvider,
+  }) : _validateSqlBatch = validateSqlBatch ?? const ValidateSqlBatch(),
+       _poolSizeProvider = poolSizeProvider ?? _defaultPoolSize;
+
+  static int _defaultPoolSize() => ConnectionConstants.poolSize;
 
   final IDatabaseGateway _databaseGateway;
   final QueryNormalizerService _normalizerService;
+  final ValidateSqlBatch _validateSqlBatch;
+  final int Function() _poolSizeProvider;
 
   Future<Result<List<SqlCommandResult>>> call(
     String agentId,
@@ -28,25 +34,14 @@ class ExecuteSqlBatch {
     Duration? timeout,
     String? sourceRpcRequestId,
   }) async {
-    final opts = options ?? const SqlExecutionOptions();
+    final validation = _validateSqlBatch(commands);
+    if (validation.isError()) {
+      return Failure(validation.exceptionOrNull()!);
+    }
+
+    final opts = _capReadOnlyBatchParallelism(options ?? const SqlExecutionOptions());
 
     if (opts.transaction) {
-      for (var i = 0; i < commands.length; i++) {
-        final validation = SqlValidator.validateSqlForExecution(commands[i].sql);
-        if (validation.isError()) {
-          final failure = validation.exceptionOrNull()! as domain.Failure;
-          return Failure(
-            domain.ValidationFailure.withContext(
-              message: 'Invalid SQL in transactional batch at index $i: ${failure.message}',
-              context: {
-                'operation': 'batch_validation',
-                'index': i,
-                'reason': failure.context['reason'] ?? SqlPipelineContextConstants.invalidSqlReason,
-              },
-            ),
-          );
-        }
-      }
       return _databaseGateway.executeBatch(
         agentId,
         commands,
@@ -70,6 +65,22 @@ class ExecuteSqlBatch {
         results.map((result) => _normalizeNonTransactionalResult(result, opts)).toList(growable: false),
       ),
       Failure.new,
+    );
+  }
+
+  SqlExecutionOptions _capReadOnlyBatchParallelism(SqlExecutionOptions options) {
+    if (options.transaction || options.maxParallelReadOnlyBatchItems <= 1) {
+      return options;
+    }
+    final cap = ConnectionConstants.readOnlyBatchParallelismForPoolSize(_poolSizeProvider());
+    if (options.maxParallelReadOnlyBatchItems <= cap) {
+      return options;
+    }
+    return SqlExecutionOptions(
+      timeoutMs: options.timeoutMs,
+      maxRows: options.maxRows,
+      transaction: options.transaction,
+      maxParallelReadOnlyBatchItems: cap,
     );
   }
 

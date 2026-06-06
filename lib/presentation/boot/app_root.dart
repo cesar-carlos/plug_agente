@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
@@ -67,6 +69,7 @@ import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dar
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/presentation/adapters/connection_provider_playground_db_gateway.dart';
 import 'package:plug_agente/presentation/adapters/hub_recovery_auth_bridge.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/boot/startup_auto_session_initializer.dart';
@@ -90,11 +93,13 @@ class AppRoot extends StatelessWidget {
   const AppRoot({
     required this.capabilities,
     this.initialRoute,
+    this.runDeferredBootstrap,
     super.key,
   });
 
   final RuntimeCapabilities capabilities;
   final String? initialRoute;
+  final Future<void> Function()? runDeferredBootstrap;
 
   @override
   Widget build(BuildContext context) {
@@ -182,20 +187,17 @@ class AppRoot extends StatelessWidget {
             getIt<CancelAllNotifications>(),
           ),
         ),
-        ChangeNotifierProvider(
+        ChangeNotifierProxyProvider<ConnectionProvider, PlaygroundProvider>(
           create: (context) => PlaygroundProvider(
             getIt<ExecutePlaygroundQuery>(),
-            (String cs) => context.read<ConnectionProvider>().testDbConnection(
-              cs,
-              recordGlobalError: false,
-            ),
             getIt<ExecuteStreamingQuery>(),
-            syncDbConnectionIndicator: (bool connected) {
-              context.read<ConnectionProvider>().setDbConnectionIndicator(
-                connected,
-              );
-            },
           ),
+          update: (context, connection, playground) {
+            playground!.bindDbConnectionGateway(
+              ConnectionProviderPlaygroundDbGateway(connection),
+            );
+            return playground;
+          },
         ),
         ChangeNotifierProvider(
           create: (context) => AgentActionsProvider(
@@ -268,6 +270,7 @@ class AppRoot extends StatelessWidget {
       child: _ProviderInitializer(
         initialRoute: initialRoute,
         capabilities: capabilities,
+        runDeferredBootstrap: runDeferredBootstrap,
       ),
     );
   }
@@ -277,16 +280,29 @@ class _ProviderInitializer extends StatefulWidget {
   const _ProviderInitializer({
     required this.capabilities,
     this.initialRoute,
+    this.runDeferredBootstrap,
   });
 
   final RuntimeCapabilities capabilities;
   final String? initialRoute;
+  final Future<void> Function()? runDeferredBootstrap;
 
   @override
   State<_ProviderInitializer> createState() => _ProviderInitializerState();
 }
 
 class _ProviderInitializerState extends State<_ProviderInitializer> {
+  @override
+  void initState() {
+    super.initState();
+    final runDeferredBootstrap = widget.runDeferredBootstrap;
+    if (runDeferredBootstrap != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(runDeferredBootstrap());
+      });
+    }
+  }
+
   @override
   void dispose() {
     if (getIt.isRegistered<AgentActionRuntimeStateGuard>()) {

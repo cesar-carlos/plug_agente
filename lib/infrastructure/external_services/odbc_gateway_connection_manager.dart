@@ -5,12 +5,13 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
+import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
 
-final class OdbcGatewayConnectionManager {
+final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnostics {
   OdbcGatewayConnectionManager({
     required OdbcService service,
     required IConnectionPool connectionPool,
@@ -23,6 +24,8 @@ final class OdbcGatewayConnectionManager {
        _metrics = metrics,
        _directConnectionMaxProvider = directConnectionMaxProvider;
 
+  static const Duration _inflightDiscardStaleThreshold = Duration(seconds: 30);
+
   final OdbcService _service;
   final IConnectionPool _connectionPool;
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
@@ -30,6 +33,38 @@ final class OdbcGatewayConnectionManager {
   final int Function()? _directConnectionMaxProvider;
   final Set<String> _connectionsToDiscard = <String>{};
   final Map<String, DateTime> _lastRecycleAttempt = <String, DateTime>{};
+  final Map<String, DateTime> _inflightDiscards = <String, DateTime>{};
+
+  @override
+  int get poolDiscardInflightCount => _inflightDiscards.length;
+
+  @override
+  Future<void> reconcilePoolDiscardInflight() async {
+    if (_inflightDiscards.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final staleIds = _inflightDiscards.entries
+        .where((entry) => now.difference(entry.value) >= _inflightDiscardStaleThreshold)
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    if (staleIds.isEmpty) {
+      return;
+    }
+
+    _metrics.recordPoolDiscardReconciliationStale();
+    developer.log(
+      'Stale in-flight pooled connection discards detected during health reconciliation',
+      name: 'database_gateway',
+      level: 900,
+      error: <String, Object?>{
+        'stale_count': staleIds.length,
+        'connection_ids': staleIds,
+        'threshold_seconds': _inflightDiscardStaleThreshold.inSeconds,
+      },
+    );
+  }
 
   Future<Result<String>> acquirePooledConnection(
     String connectionString, {
@@ -200,7 +235,14 @@ final class OdbcGatewayConnectionManager {
   Future<void> releaseConnectionSafely(String connectionId) async {
     final shouldDiscard = _connectionsToDiscard.remove(connectionId);
     if (shouldDiscard) {
-      unawaited(_discardConnectionSafely(connectionId));
+      _inflightDiscards[connectionId] = DateTime.now();
+      _metrics.recordPoolDiscardInflightStarted();
+      unawaited(
+        _discardConnectionSafely(connectionId).whenComplete(() {
+          _inflightDiscards.remove(connectionId);
+          _metrics.recordPoolDiscardInflightCompleted();
+        }),
+      );
       return;
     }
 

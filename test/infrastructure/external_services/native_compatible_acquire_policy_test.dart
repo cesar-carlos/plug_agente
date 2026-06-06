@@ -88,7 +88,7 @@ void main() {
       );
     });
 
-    test('returns false when a timeout is provided', () async {
+    test('returns false when a custom timeout is provided', () async {
       final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
       expect(
         policy.shouldUseAcquire(
@@ -97,8 +97,40 @@ void main() {
           preparedExecution: _prepared('SELECT 1'),
           acquireOptions: null,
           timeout: const Duration(seconds: 5),
+          defaultQueryTimeout: const Duration(seconds: 60),
+          connectionString: 'Driver={ODBC Driver};Server=localhost;',
         ),
         isFalse,
+      );
+    });
+
+    test('returns true when timeout matches configured default', () async {
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseAcquire(
+          databaseType: DatabaseType.sqlServer,
+          request: _request('SELECT 1'),
+          preparedExecution: _prepared('SELECT 1'),
+          acquireOptions: null,
+          timeout: const Duration(seconds: 60),
+          defaultQueryTimeout: const Duration(seconds: 60),
+          connectionString: 'Driver={ODBC Driver};Server=localhost;',
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns true for COUNT aggregate queries', () async {
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseAcquire(
+          databaseType: DatabaseType.postgresql,
+          request: _request('SELECT COUNT(*) FROM users'),
+          preparedExecution: _prepared('SELECT COUNT(*) FROM users'),
+          acquireOptions: null,
+          timeout: null,
+        ),
+        isTrue,
       );
     });
 

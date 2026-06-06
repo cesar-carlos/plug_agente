@@ -592,8 +592,23 @@ class _ConfigPageState extends State<ConfigPage> {
     final l10n = AppLocalizations.of(context)!;
     final capabilities = getIt<RuntimeCapabilities>();
     final supportsTray = capabilities.supportsTray;
-    final themeProvider = context.watch<ThemeProvider>();
-    final systemSettingsProvider = context.watch<SystemSettingsProvider>();
+    final isDarkThemeEnabled = context.select<ThemeProvider, bool>((provider) => provider.isDarkMode);
+    final themeError = context.select<ThemeProvider, SystemSettingsErrorState?>(
+      (provider) => provider.persistenceError,
+    );
+    final systemSettings = context.select<SystemSettingsProvider, _ConfigSystemSettingsViewState>(
+      (provider) => _ConfigSystemSettingsViewState(
+        startWithWindows: provider.startWithWindows,
+        startMinimized: provider.startMinimized,
+        minimizeToTray: provider.minimizeToTray,
+        closeToTray: provider.closeToTray,
+        startupError: provider.startupError,
+        preferenceError: provider.preferenceError,
+        startupNotice: provider.startupNotice,
+      ),
+    );
+    final themeProvider = context.read<ThemeProvider>();
+    final systemSettingsProvider = context.read<SystemSettingsProvider>();
     final startupSupported = getIt.isRegistered<IStartupService>();
     final orchestrator = getIt<IAutoUpdateOrchestrator>();
     final isAutoUpdateAvailable = orchestrator.isAvailable;
@@ -624,11 +639,11 @@ class _ConfigPageState extends State<ConfigPage> {
         child: AppLayout.centeredContent(
           child: _ConfigTabbedContent(
             appVersion: _appVersion,
-            isDarkThemeEnabled: themeProvider.isDarkMode,
-            startWithWindows: systemSettingsProvider.startWithWindows,
-            startMinimized: systemSettingsProvider.startMinimized,
-            minimizeToTray: supportsTray && systemSettingsProvider.minimizeToTray,
-            closeToTray: supportsTray && systemSettingsProvider.closeToTray,
+            isDarkThemeEnabled: isDarkThemeEnabled,
+            startWithWindows: systemSettings.startWithWindows,
+            startMinimized: systemSettings.startMinimized,
+            minimizeToTray: supportsTray && systemSettings.minimizeToTray,
+            closeToTray: supportsTray && systemSettings.closeToTray,
             lastUpdateCheck: lastUpdateLabel,
             lastBackgroundUpdateCheck: lastBackgroundUpdateLabel,
             lastAutomaticUpdateCheck: lastAutomaticUpdateLabel,
@@ -640,10 +655,10 @@ class _ConfigPageState extends State<ConfigPage> {
             startupSupported: startupSupported,
             startMinimizedSupported: supportsTray,
             trayBehaviorSupported: supportsTray,
-            startupError: systemSettingsProvider.startupError,
-            preferenceError: systemSettingsProvider.preferenceError,
-            themeError: themeProvider.persistenceError,
-            startupNotice: systemSettingsProvider.startupNotice,
+            startupError: systemSettings.startupError,
+            preferenceError: systemSettings.preferenceError,
+            themeError: themeError,
+            startupNotice: systemSettings.startupNotice,
             isAutoUpdateAvailable: isAutoUpdateAvailable,
             autoUpdateUnavailableMessage: autoUpdateUnavailableMessage,
             releaseNotes:
@@ -853,4 +868,49 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
       ],
     );
   }
+}
+
+@immutable
+class _ConfigSystemSettingsViewState {
+  const _ConfigSystemSettingsViewState({
+    required this.startWithWindows,
+    required this.startMinimized,
+    required this.minimizeToTray,
+    required this.closeToTray,
+    required this.startupError,
+    required this.preferenceError,
+    required this.startupNotice,
+  });
+
+  final bool startWithWindows;
+  final bool startMinimized;
+  final bool minimizeToTray;
+  final bool closeToTray;
+  final SystemSettingsErrorState? startupError;
+  final SystemSettingsErrorState? preferenceError;
+  final SystemSettingsNoticeState? startupNotice;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is _ConfigSystemSettingsViewState &&
+            startWithWindows == other.startWithWindows &&
+            startMinimized == other.startMinimized &&
+            minimizeToTray == other.minimizeToTray &&
+            closeToTray == other.closeToTray &&
+            startupError == other.startupError &&
+            preferenceError == other.preferenceError &&
+            startupNotice == other.startupNotice;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    startWithWindows,
+    startMinimized,
+    minimizeToTray,
+    closeToTray,
+    startupError,
+    preferenceError,
+    startupNotice,
+  );
 }

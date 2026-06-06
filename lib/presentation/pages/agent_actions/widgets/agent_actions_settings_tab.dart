@@ -27,6 +27,13 @@ class AgentActionsSettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: provider,
+      builder: (context, _) => _buildTabContent(),
+    );
+  }
+
+  Widget _buildTabContent() {
     return ListView(
       children: [
         AgentActionsSummaryCard(provider: provider, l10n: l10n),

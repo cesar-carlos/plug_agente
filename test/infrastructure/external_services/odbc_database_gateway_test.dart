@@ -2740,8 +2740,112 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
     );
 
     test(
-      'should recommend sql.bulkInsert for large homogeneous insert batches',
+      'should route large homogeneous insert batches to native bulk insert',
       () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const directConnectionId = 'bulk-route-direct-1';
+        final config = _buildConfig(connectionString);
+        final commands = List<SqlCommand>.generate(
+          50,
+          (index) => SqlCommand(sql: 'INSERT INTO customers (id) VALUES ($index)'),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockService.connect(any(), options: any(named: 'options'))).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: directConnectionId,
+              connectionString: connectionString,
+              createdAt: DateTime(2024, 2, 3),
+              isActive: true,
+            ),
+          ),
+        );
+        when(() => mockService.bulkInsert(any(), any(), any(), any(), any())).thenAnswer((_) async {
+          return const Success(50);
+        });
+        when(() => mockService.disconnect(directConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          commands,
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(result.getOrThrow(), hasLength(commands.length));
+        expect(result.getOrThrow().every((item) => item.ok), isTrue);
+        expect(metrics.batchBulkInsertRoutedCount, 1);
+        verify(() => mockService.bulkInsert(any(), any(), any(), any(), any())).called(1);
+        verifyNever(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options')));
+      },
+    );
+
+    test(
+      'should not auto-route large homogeneous insert batches on SQL Anywhere',
+      () async {
+        const connectionString = 'Driver={SQL Anywhere 17};Server=localhost;';
+        const pooledConnectionId = 'pool-batch-insert-sa-1';
+        final config = _buildConfig(
+          connectionString,
+          driverName: 'SQL Anywhere',
+          odbcDriverName: 'SQL Anywhere 17',
+        );
+        final commands = List<SqlCommand>.generate(
+          50,
+          (index) => SqlCommand(sql: 'INSERT INTO customers (id) VALUES ($index)'),
+        );
+
+        when(() => mockService.initialize()).thenAnswer((_) async {
+          return const Success(unit);
+        });
+        when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer((_) async {
+          return Success(config);
+        });
+        when(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) async {
+          return const Success(pooledConnectionId);
+        });
+        when(
+          () => mockService.executeQuery(
+            any(),
+            connectionId: pooledConnectionId,
+          ),
+        ).thenAnswer((_) async {
+          return const Success(
+            QueryResult(
+              columns: [],
+              rows: [],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await gateway.executeBatch(
+          config.agentId,
+          commands,
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(result.getOrThrow(), hasLength(commands.length));
+        expect(metrics.batchBulkInsertRoutedCount, 0);
+        verifyNever(() => mockService.bulkInsert(any(), any(), any(), any(), any()));
+        verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(1);
+      },
+    );
+
+    test(
+      'should recommend sql.bulkInsert when route threshold is above batch size',
+      () async {
+        dotenv.loadFromString(envString: 'ODBC_BATCH_BULK_INSERT_ROUTE_THRESHOLD=100');
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         const pooledConnectionId = 'pool-batch-insert-recommendation-1';
         final config = _buildConfig(connectionString);
@@ -2785,6 +2889,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         expect(result.isSuccess(), isTrue);
         expect(result.getOrThrow(), hasLength(commands.length));
         expect(metrics.batchBulkInsertRecommendedCount, 1);
+        expect(metrics.batchBulkInsertRoutedCount, 0);
         expect(
           metrics.getSnapshot()['recent_diagnostic_reasons'],
           contains('batch:batch_bulk_insert_recommended'),
@@ -2795,6 +2900,15 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
     test(
       'should execute read-only batch in parallel when opt-in parallelism is provided',
       () async {
+        mockSettings = MockOdbcConnectionSettings(poolSize: 4);
+        gateway = OdbcDatabaseGateway(
+          AgentConfigQueryConfigSource(mockConfigRepository),
+          mockService,
+          mockConnectionPool,
+          retryManager,
+          metrics,
+          mockSettings,
+        );
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         final config = _buildConfig(connectionString);
         var acquireCount = 0;
@@ -2857,14 +2971,23 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         expect(metrics.readOnlyBatchParallelCappedCount, 1);
         final items = result.getOrNull()!;
         expect(items.map((item) => item.rows?.single['sql']), ['SELECT 1', 'SELECT 2', 'SELECT 3']);
-        verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(3);
-        verify(() => mockConnectionPool.release(any())).called(3);
+        verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(2);
+        verify(() => mockConnectionPool.release(any())).called(2);
       },
     );
 
     test(
       'should cap read-only batch parallelism globally across concurrent batches',
       () async {
+        mockSettings = MockOdbcConnectionSettings(poolSize: 4);
+        gateway = OdbcDatabaseGateway(
+          AgentConfigQueryConfigSource(mockConfigRepository),
+          mockService,
+          mockConnectionPool,
+          retryManager,
+          metrics,
+          mockSettings,
+        );
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         final config = _buildConfig(connectionString);
         var acquireCount = 0;

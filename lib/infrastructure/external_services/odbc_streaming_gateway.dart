@@ -96,6 +96,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       'direct_limiter_active_count': _directConnectionLimiter.activeCount,
       'direct_limiter_max_concurrent': _directConnectionLimiter.maxConcurrent,
       'direct_limiter_saturated': _directConnectionLimiter.isSaturated,
+      'direct_limiter_by_operation_class': _directConnectionLimiter.getOperationClassDiagnostics(),
     };
   }
 

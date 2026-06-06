@@ -8,6 +8,7 @@ import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_native_bulk_insert_pool.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -17,7 +18,12 @@ import 'package:result_dart/result_dart.dart';
 /// `ConnectionOptions` no repositório e podem cair em buffer ~512 KiB no
 /// worker). Mantido para testes; o app usa lease em `odbc_connection_pool.dart`.
 class OdbcNativeConnectionPool
-    implements IConnectionPool, ITimedConnectionPoolAcquire, IConnectionPoolDiagnostics, IConnectionPoolWarmUp {
+    implements
+        IConnectionPool,
+        ITimedConnectionPoolAcquire,
+        IConnectionPoolDiagnostics,
+        IConnectionPoolWarmUp,
+        IOdbcNativeBulkInsertPool {
   OdbcNativeConnectionPool(
     this._service,
     this._settings, {
@@ -33,6 +39,7 @@ class OdbcNativeConnectionPool
 
   final Map<String, int> _pools = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
+  int _activeAcquireCount = 0;
 
   String _odbcErrorMessage(Object error) => OdbcErrorInspector.message(error);
 
@@ -53,6 +60,11 @@ class OdbcNativeConnectionPool
       maxLifetime: ConnectionConstants.defaultNativePoolMaxLifetime,
       connectionTimeout: ConnectionConstants.defaultNativePoolConnectionTimeout,
     );
+  }
+
+  @override
+  Future<Result<int>> ensurePoolId(String connectionString) {
+    return _getOrCreatePool(connectionString);
   }
 
   Future<Result<int>> _getOrCreatePool(String connectionString) async {
@@ -246,6 +258,7 @@ class OdbcNativeConnectionPool
 
         return connResult.fold(
           (connection) {
+            _activeAcquireCount++;
             return Success(connection.id);
           },
           (error) => Failure(
@@ -286,9 +299,17 @@ class OdbcNativeConnectionPool
     }
 
     return result.fold(
-      (_) => const Success(unit),
+      (_) {
+        if (_activeAcquireCount > 0) {
+          _activeAcquireCount--;
+        }
+        return const Success(unit);
+      },
       (error) {
         if (_messageIndicatesInvalidConnectionId(error)) {
+          if (_activeAcquireCount > 0) {
+            _activeAcquireCount--;
+          }
           return const Success(unit);
         }
         _metrics?.recordPoolReleaseFailure();
@@ -331,9 +352,17 @@ class OdbcNativeConnectionPool
     }
 
     return result.fold(
-      (_) => const Success(unit),
+      (_) {
+        if (_activeAcquireCount > 0) {
+          _activeAcquireCount--;
+        }
+        return const Success(unit);
+      },
       (error) {
         if (_messageIndicatesInvalidConnectionId(error)) {
+          if (_activeAcquireCount > 0) {
+            _activeAcquireCount--;
+          }
           return const Success(unit);
         }
         _metrics?.recordPoolReleaseFailure();
@@ -386,6 +415,7 @@ class OdbcNativeConnectionPool
 
     _pools.clear();
     _poolCreationFutures.clear();
+    _activeAcquireCount = 0;
 
     if (errors.isNotEmpty) {
       return Failure(
@@ -545,9 +575,11 @@ class OdbcNativeConnectionPool
 
   @override
   Map<String, Object?> getHealthDiagnostics() {
-    return const {
+    return {
       'strategy': 'native',
       'native_pool_exposed': true,
+      'lease_active_count': 0,
+      'native_active_count': _activeAcquireCount,
     };
   }
 }

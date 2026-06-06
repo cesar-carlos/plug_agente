@@ -31,6 +31,13 @@ class AgentActionsActionsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: provider,
+      builder: (context, _) => _buildTabContent(context),
+    );
+  }
+
+  Widget _buildTabContent(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

@@ -16,14 +16,14 @@ void main() {
       final timeouts = snapshot['timeouts']! as Map<String, Object?>;
       final batch = snapshot['batch']! as Map<String, Object?>;
 
-      expect(runtime['pool_size'], 4);
-      expect(runtime['async_worker_count'], 4);
-      expect(runtime['async_max_pending_requests'], 16);
+      expect(runtime['pool_size'], 8);
+      expect(runtime['async_worker_count'], 8);
+      expect(runtime['async_max_pending_requests'], 32);
       expect(runtime['result_encoding'], 'rowMajor');
-      expect(pool['size'], 4);
+      expect(pool['size'], 8);
       expect(sqlQueue['enabled'], isTrue);
-      expect(sqlQueue['max_size'], 500);
-      expect(sqlQueue['max_workers'], 4);
+      expect(sqlQueue['max_size'], 16);
+      expect(sqlQueue['max_workers'], 8);
       expect(sqlQueue['enqueue_timeout_seconds'], 5);
       expect(timeouts['pool_total'], 0);
       expect(batch['transactional_direct_total'], 0);

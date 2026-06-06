@@ -75,85 +75,111 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
           style: context.sectionTitle,
         ),
       ),
-      content: Consumer<AgentActionsProvider>(
-        builder: (context, provider, _) {
-          return widgets.CallbackShortcuts(
-            bindings: <widgets.ShortcutActivator, VoidCallback>{
-              const widgets.SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
-                _runActionsTabShortcut(() {
-                  if (provider.canSaveAction) {
-                    _scheduleActionEditorDialog(context, provider, l10n);
-                  }
-                });
-              },
-              const widgets.SingleActivator(LogicalKeyboardKey.enter): () {
-                _runActionsTabShortcut(() => _editSelectedAction(context, provider, l10n));
-              },
-              const widgets.SingleActivator(LogicalKeyboardKey.delete): () {
-                _runActionsTabShortcut(() => _deleteSelectedAction(context, provider, l10n));
-              },
-              const widgets.SingleActivator(LogicalKeyboardKey.f5): () {
-                // F5 reloads the entire provider state, so it applies to any tab.
-                _runPageShortcut(() => unawaited(provider.load()));
-              },
-              const widgets.SingleActivator(LogicalKeyboardKey.keyT, control: true): () {
-                _runActionsTabShortcut(() {
-                  if (provider.canTestSelected) {
-                    unawaited(provider.testSelectedAction());
-                  }
-                });
-              },
-              const widgets.SingleActivator(LogicalKeyboardKey.keyR, control: true): () {
-                _runActionsTabShortcut(() {
-                  if (provider.canRunSelected) {
-                    unawaited(
-                      runAgentActionWithDangerousCommandCheck(
-                        context,
-                        provider,
-                        l10n,
-                      ),
-                    );
-                  }
-                });
-              },
-            },
-            child: widgets.Focus(
-              autofocus: true,
-              child: Padding(
-                padding: AppLayout.pagePadding(context),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AgentActionsStatusStrip(
-                      provider: provider,
-                      l10n: l10n,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Expanded(
-                      child: provider.isFeatureEnabled
-                          ? _buildTabs(
-                              context: context,
-                              provider: provider,
-                              l10n: l10n,
-                              runtimeCapabilities: widget.runtimeCapabilities,
-                              runtimeDiagnostics: widget.runtimeDiagnostics,
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                              child: InfoBar(
-                                title: Text(l10n.agentActionsDisabledTitle),
-                                content: Text(l10n.agentActionsDisabledMessage),
-                                severity: InfoBarSeverity.warning,
-                                isLong: true,
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
+      content: widgets.CallbackShortcuts(
+        bindings: <widgets.ShortcutActivator, VoidCallback>{
+          const widgets.SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
+            _runActionsTabShortcut(() {
+              final provider = context.read<AgentActionsProvider>();
+              if (provider.canSaveAction) {
+                _scheduleActionEditorDialog(context, provider, l10n);
+              }
+            });
+          },
+          const widgets.SingleActivator(LogicalKeyboardKey.enter): () {
+            _runActionsTabShortcut(
+              () => _editSelectedAction(context, context.read<AgentActionsProvider>(), l10n),
+            );
+          },
+          const widgets.SingleActivator(LogicalKeyboardKey.delete): () {
+            _runActionsTabShortcut(
+              () => _deleteSelectedAction(context, context.read<AgentActionsProvider>(), l10n),
+            );
+          },
+          const widgets.SingleActivator(LogicalKeyboardKey.f5): () {
+            _runPageShortcut(() => unawaited(context.read<AgentActionsProvider>().load()));
+          },
+          const widgets.SingleActivator(LogicalKeyboardKey.keyT, control: true): () {
+            _runActionsTabShortcut(() {
+              final provider = context.read<AgentActionsProvider>();
+              if (provider.canTestSelected) {
+                unawaited(provider.testSelectedAction());
+              }
+            });
+          },
+          const widgets.SingleActivator(LogicalKeyboardKey.keyR, control: true): () {
+            _runActionsTabShortcut(() {
+              final provider = context.read<AgentActionsProvider>();
+              if (provider.canRunSelected) {
+                unawaited(
+                  runAgentActionWithDangerousCommandCheck(
+                    context,
+                    provider,
+                    l10n,
+                  ),
+                );
+              }
+            });
+          },
         },
+        child: widgets.Focus(
+          autofocus: true,
+          child: Padding(
+            padding: AppLayout.pagePadding(context),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Selector<AgentActionsProvider, int>(
+                  selector: (_, provider) => Object.hash(
+                    provider.isFeatureEnabled,
+                    provider.isLoading,
+                    provider.errorMessage,
+                    provider.runtimeSubsystemSnapshot,
+                    provider.shouldWarnComObjectHandlersMissing,
+                    provider.triggerErrorMessage,
+                  ),
+                  builder: (context, _, child) {
+                    return AgentActionsStatusStrip(
+                      provider: context.read<AgentActionsProvider>(),
+                      l10n: l10n,
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Expanded(
+                  child: Selector<AgentActionsProvider, bool>(
+                    selector: (_, provider) => provider.isFeatureEnabled,
+                    builder: (context, isFeatureEnabled, _) {
+                      if (!isFeatureEnabled) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                          child: InfoBar(
+                            title: Text(l10n.agentActionsDisabledTitle),
+                            content: Text(l10n.agentActionsDisabledMessage),
+                            severity: InfoBarSeverity.warning,
+                            isLong: true,
+                          ),
+                        );
+                      }
+
+                      return Selector<AgentActionsProvider, bool>(
+                        selector: (_, provider) => provider.isRemoteAuditSectionVisible,
+                        builder: (context, _, child) {
+                          return _buildTabs(
+                            context: context,
+                            provider: context.read<AgentActionsProvider>(),
+                            l10n: l10n,
+                            runtimeCapabilities: widget.runtimeCapabilities,
+                            runtimeDiagnostics: widget.runtimeDiagnostics,
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

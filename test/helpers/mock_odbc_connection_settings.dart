@@ -23,7 +23,7 @@ odbc.ServiceLocator createAsyncOdbcServiceLocatorForSettings(
 
 class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
   MockOdbcConnectionSettings({
-    this.poolSize = 4,
+    this.poolSize = ConnectionConstants.defaultPoolSize,
     this.loginTimeoutSeconds = 30,
     this.maxResultBufferMb = ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024),
     this.streamingChunkSizeKb = 1024,

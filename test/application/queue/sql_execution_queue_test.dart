@@ -304,6 +304,7 @@ void main() {
       expect(exc.context['reason'], equals('sql_queue_full'));
       expect(exc.context['rpc_error_code'], equals(RpcErrorCode.rateLimited));
       expect(exc.context['retryable'], isTrue);
+      expect(exc.isTransient, isTrue);
       expect((exc.context['user_message'] as String?)?.isNotEmpty, isTrue);
       expect(metrics.queueRejectionCount, equals(1));
     });
@@ -890,6 +891,40 @@ void main() {
         expect(failure.context['timeout'], isTrue);
         expect(failure.context['timeout_stage'], equals('shutdown'));
       });
+    });
+
+    test('should execute streaming tasks through the shared worker pool', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 4,
+        maxConcurrentWorkers: 1,
+      );
+      final blocker = Completer<void>();
+      var streamingStarted = false;
+
+      unawaited(
+        queue.submit<String>(
+          () async {
+            streamingStarted = true;
+            await blocker.future;
+            return const res.Success('stream-1');
+          },
+          kind: SqlExecutionKind.streaming,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(streamingStarted, isTrue);
+      expect(queue.activeWorkers, 1);
+
+      final queued = queue.submit<String>(
+        () async => const res.Success('stream-2'),
+        kind: SqlExecutionKind.streaming,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(queue.activeWorkers, 1);
+
+      blocker.complete();
+      await queued;
+      expect(queue.activeWorkers, 0);
     });
   });
 }

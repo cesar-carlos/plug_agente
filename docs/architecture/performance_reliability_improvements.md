@@ -41,7 +41,7 @@ Variaveis de ambiente:
 | `ODBC_ASYNC_WORKER_COUNT` | `min(poolSize, CPU cores)` | Deve ser positiva e e limitada ao mesmo teto. Valor invalido ou `0` e ignorado. |
 | `ODBC_ASYNC_MAX_PENDING_REQUESTS` | `poolSize * 4` | Deve ser positiva. Valor invalido ou `0` e ignorado. |
 | `ODBC_RESULT_ENCODING` | `rowMajor` | Aceita `rowMajor`, `columnar` e `columnarCompressed`; so afeta queries parametrizadas. |
-| `ODBC_POOL_SIZE` | `4` | Define o tamanho do pool lease-based quando nao ha valor persistido. |
+| `ODBC_POOL_SIZE` | `8` | Define o tamanho do pool lease-based quando nao ha valor persistido. |
 
 O `poolSize` persistido pelo usuario vence o default de `ConnectionConstants`.
 Isso evita configurar workers com base em um valor diferente daquele usado pelo

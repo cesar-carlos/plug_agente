@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
-import 'dart:math';
 
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -55,9 +55,12 @@ class SqlExecutionQueue {
        ),
        _maxQueueSize = maxQueueSize,
        _maxConcurrentWorkers = maxConcurrentWorkers,
-       _maxConcurrentBatchWorkers = maxConcurrentBatchWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
-       _maxConcurrentLongQueryWorkers = maxConcurrentLongQueryWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
-       _maxConcurrentNonQueryWorkers = maxConcurrentNonQueryWorkers ?? max(1, maxConcurrentWorkers ~/ 2),
+       _maxConcurrentBatchWorkers = maxConcurrentBatchWorkers ??
+           ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(maxConcurrentWorkers),
+       _maxConcurrentLongQueryWorkers = maxConcurrentLongQueryWorkers ??
+           ConnectionConstants.sqlQueueMaxLongQueryWorkersForWorkers(maxConcurrentWorkers),
+       _maxConcurrentNonQueryWorkers = maxConcurrentNonQueryWorkers ??
+           ConnectionConstants.sqlQueueMaxNonQueryWorkersForWorkers(maxConcurrentWorkers),
        _metricsCollector = metricsCollector,
        _defaultEnqueueTimeout = defaultEnqueueTimeout,
        _fullRejectionLogStride = fullRejectionLogStride;
@@ -143,13 +146,6 @@ class SqlExecutionQueue {
     String? requestId,
     SqlExecutionKind kind = SqlExecutionKind.query,
   }) async {
-    developer.log(
-      'SQL request submitted',
-      name: 'sql_execution_queue',
-      level: 500,
-      error: {'request_id': requestId, 'queue_size': _queuedCount, 'active_workers': _activeWorkers},
-    );
-
     if (_disposed) {
       developer.log(
         'SQL request REJECTED (queue disposed)',
@@ -219,17 +215,6 @@ class SqlExecutionQueue {
         request.enqueuedAt,
       );
       _metricsCollector?.recordQueueWaitTime(waitTime);
-
-      developer.log(
-        'SQL request completed',
-        name: 'sql_execution_queue',
-        level: 500,
-        error: {
-          'request_id': requestId,
-          'wait_time_ms': waitTime.inMilliseconds,
-          'result': result.isSuccess() ? 'success' : 'failure',
-        },
-      );
 
       return result;
     } on TimeoutException catch (error) {
@@ -382,7 +367,9 @@ class SqlExecutionQueue {
       SqlExecutionKind.batch => _activeBatchWorkers < _maxConcurrentBatchWorkers,
       SqlExecutionKind.longQuery => _activeLongQueryWorkers < _maxConcurrentLongQueryWorkers,
       SqlExecutionKind.nonQuery => _activeNonQueryWorkers < _maxConcurrentNonQueryWorkers,
-      SqlExecutionKind.shortQuery || SqlExecutionKind.query => true,
+      SqlExecutionKind.shortQuery ||
+      SqlExecutionKind.query ||
+      SqlExecutionKind.streaming => true,
     };
   }
 
@@ -593,6 +580,9 @@ enum SqlExecutionKind {
   longQuery,
   nonQuery,
   batch,
+
+  /// ODBC streaming execution — shares the global worker pool with SQL queue.
+  streaming,
 }
 
 /// Metrics collector interface for SQL execution queue.

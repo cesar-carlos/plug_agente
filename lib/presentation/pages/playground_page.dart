@@ -213,9 +213,9 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
 
   KeyEventResult _handleKeyEvent(
     KeyEvent event,
-    PlaygroundProvider playgroundProvider,
-    ConfigProvider configProvider,
   ) {
+    final playgroundProvider = context.read<PlaygroundProvider>();
+    final configProvider = context.read<ConfigProvider>();
     if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
@@ -259,89 +259,86 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
           style: context.sectionTitle,
         ),
       ),
-      content: Consumer2<PlaygroundProvider, ConfigProvider>(
-        builder: (context, playgroundProvider, configProvider, _) {
-          final config = configProvider.currentConfig;
-
-          return Focus(
-            focusNode: _focusNode,
-            onKeyEvent: (node, event) => _handleKeyEvent(
-              event,
-              playgroundProvider,
-              configProvider,
-            ),
-            child: Padding(
-              padding: AppLayout.pagePadding(context),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  AppCard(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.xs,
+      content: Focus(
+        focusNode: _focusNode,
+        onKeyEvent: (node, event) => _handleKeyEvent(event),
+        child: Padding(
+          padding: AppLayout.pagePadding(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.playgroundDescription,
+                      style: context.bodyMuted,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
                       children: [
-                        Text(
-                          l10n.playgroundDescription,
-                          style: context.bodyMuted,
+                        _PlaygroundShortcutChip(
+                          icon: FluentIcons.play,
+                          label: l10n.playgroundShortcutExecute,
                         ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.xs,
-                          children: [
-                            _PlaygroundShortcutChip(
-                              icon: FluentIcons.play,
-                              label: l10n.playgroundShortcutExecute,
-                            ),
-                            _PlaygroundShortcutChip(
-                              icon: FluentIcons.plug_connected,
-                              label: l10n.playgroundShortcutTestConnection,
-                            ),
-                            _PlaygroundShortcutChip(
-                              icon: FluentIcons.clear,
-                              label: l10n.playgroundShortcutClear,
-                            ),
-                          ],
+                        _PlaygroundShortcutChip(
+                          icon: FluentIcons.plug_connected,
+                          label: l10n.playgroundShortcutTestConnection,
                         ),
-                        const SizedBox(height: AppSpacing.sm),
-                        const ConnectionStatusWidget(compact: true),
+                        _PlaygroundShortcutChip(
+                          icon: FluentIcons.clear,
+                          label: l10n.playgroundShortcutClear,
+                        ),
                       ],
                     ),
+                    const SizedBox(height: AppSpacing.sm),
+                    const ConnectionStatusWidget(compact: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              SqlEditor(
+                controller: _queryController,
+                onChanged: context.read<PlaygroundProvider>().setQuery,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Selector2<ConfigProvider, PlaygroundProvider, (bool, _PlaygroundActionBarState)>(
+                selector: (_, configProvider, playgroundProvider) => (
+                  configProvider.currentConfig != null,
+                  _PlaygroundActionBarState(
+                    isLoading: playgroundProvider.isLoading,
+                    sqlHandlingMode: playgroundProvider.sqlHandlingMode,
+                    lastExecutionHint: playgroundProvider.lastExecutionHint,
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  SqlEditor(
-                    controller: _queryController,
-                    onChanged: (value) {
-                      playgroundProvider.setQuery(value);
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AppCard(
+                ),
+                builder: (context, selected, _) {
+                  final hasConfig = selected.$1 || widget.configId != null;
+                  final actionBarState = selected.$2;
+                  final playgroundProvider = context.read<PlaygroundProvider>();
+                  final configProvider = context.read<ConfigProvider>();
+                  final config = configProvider.currentConfig;
+
+                  return AppCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SqlActionBar(
-                          onExecute:
-                              _canExecutePlaygroundQuery(
-                                hasConfig: config != null || widget.configId != null,
-                              )
-                              ? () => _handleExecute(
-                                  playgroundProvider,
-                                  configProvider,
-                                )
+                          onExecute: _canExecutePlaygroundQuery(hasConfig: hasConfig)
+                              ? () => _handleExecute(playgroundProvider, configProvider)
                               : null,
                           onTestConnection: config != null
-                              ? () => _handleTestConnection(
-                                  configProvider,
-                                  playgroundProvider,
-                                )
+                              ? () => _handleTestConnection(configProvider, playgroundProvider)
                               : null,
                           onClear: () => _handleClear(playgroundProvider),
-                          onCancel: () => playgroundProvider.cancelQuery(),
-                          isExecuting: playgroundProvider.isLoading,
+                          onCancel: playgroundProvider.cancelQuery,
+                          isExecuting: actionBarState.isLoading,
                           streamingModeEnabled: _streamingModeEnabled,
                           onStreamingModeChanged: (value) {
                             setState(() => _streamingModeEnabled = value);
@@ -354,7 +351,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                               ),
                             );
                           },
-                          sqlHandlingModePreserve: playgroundProvider.sqlHandlingMode == SqlHandlingMode.preserve,
+                          sqlHandlingModePreserve: actionBarState.sqlHandlingMode == SqlHandlingMode.preserve,
                           onSqlHandlingModeChanged: (value) {
                             playgroundProvider.setSqlHandlingMode(
                               value ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
@@ -380,79 +377,208 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                             );
                           },
                           useStreamingMode:
-                              config != null && playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve,
+                              config != null && actionBarState.sqlHandlingMode != SqlHandlingMode.preserve,
                         ),
-                        if (playgroundProvider.lastExecutionHint != null) ...[
+                        if (actionBarState.lastExecutionHint != null) ...[
                           const SizedBox(height: AppSpacing.md),
                           Text(
-                            playgroundProvider.lastExecutionHint!,
+                            actionBarState.lastExecutionHint!,
                             style: context.bodyMuted,
                           ),
                         ],
                       ],
                     ),
+                  );
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: Selector<PlaygroundProvider, _PlaygroundResultsState>(
+                  selector: (_, provider) => _PlaygroundResultsState(
+                    results: provider.results,
+                    isLoading: provider.isLoading,
+                    isStreaming: provider.isStreaming,
+                    rowsProcessed: provider.rowsProcessed,
+                    progress: provider.progress,
+                    executionDuration: provider.executionDuration,
+                    affectedRows: provider.affectedRows,
+                    columnMetadata: provider.columnMetadata,
+                    error: provider.error,
+                    currentPage: provider.currentPage,
+                    pageSize: provider.pageSize,
+                    hasNextPage: provider.hasNextPage,
+                    hasPreviousPage: provider.hasPreviousPage,
+                    hasPagination: provider.hasPagination,
+                    sqlHandlingMode: provider.sqlHandlingMode,
+                    resultSetCount: provider.resultSets.length,
+                    selectedResultSetIndex: provider.selectedResultSetIndex,
+                    hasMultipleResultSets: provider.hasMultipleResultSets,
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  Expanded(
-                    child: QueryResultsSection(
-                      results: playgroundProvider.results,
-                      isLoading: playgroundProvider.isLoading,
-                      isStreaming: playgroundProvider.isStreaming,
-                      rowsProcessed: playgroundProvider.rowsProcessed,
-                      progress: playgroundProvider.progress,
-                      executionDuration: playgroundProvider.executionDuration,
-                      affectedRows: playgroundProvider.affectedRows,
-                      columnMetadata: playgroundProvider.columnMetadata,
-                      error: playgroundProvider.error,
-                      currentPage: playgroundProvider.currentPage,
-                      pageSize: playgroundProvider.pageSize,
-                      hasNextPage: playgroundProvider.hasNextPage,
-                      hasPreviousPage: playgroundProvider.hasPreviousPage,
-                      showPagination:
-                          playgroundProvider.hasPagination &&
-                          playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve,
-                      resultSetCount: playgroundProvider.resultSets.length,
-                      selectedResultSetIndex: playgroundProvider.selectedResultSetIndex,
-                      onPreviousPage:
-                          playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve &&
-                              playgroundProvider.hasPreviousPage
-                          ? () => playgroundProvider.goToPreviousPage()
+                  builder: (context, state, _) {
+                    final playgroundProvider = context.read<PlaygroundProvider>();
+                    return QueryResultsSection(
+                      results: state.results,
+                      isLoading: state.isLoading,
+                      isStreaming: state.isStreaming,
+                      rowsProcessed: state.rowsProcessed,
+                      progress: state.progress,
+                      executionDuration: state.executionDuration,
+                      affectedRows: state.affectedRows,
+                      columnMetadata: state.columnMetadata,
+                      error: state.error,
+                      currentPage: state.currentPage,
+                      pageSize: state.pageSize,
+                      hasNextPage: state.hasNextPage,
+                      hasPreviousPage: state.hasPreviousPage,
+                      showPagination: state.hasPagination && state.sqlHandlingMode != SqlHandlingMode.preserve,
+                      resultSetCount: state.resultSetCount,
+                      selectedResultSetIndex: state.selectedResultSetIndex,
+                      onPreviousPage: state.sqlHandlingMode != SqlHandlingMode.preserve && state.hasPreviousPage
+                          ? playgroundProvider.goToPreviousPage
                           : null,
-                      onNextPage:
-                          playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve &&
-                              playgroundProvider.hasNextPage
-                          ? () => playgroundProvider.goToNextPage()
+                      onNextPage: state.sqlHandlingMode != SqlHandlingMode.preserve && state.hasNextPage
+                          ? playgroundProvider.goToNextPage
                           : null,
-                      onResultSetChanged: playgroundProvider.hasMultipleResultSets
+                      onResultSetChanged: state.hasMultipleResultSets
                           ? playgroundProvider.setSelectedResultSetIndex
                           : null,
-                      onPageSizeChanged: playgroundProvider.sqlHandlingMode != SqlHandlingMode.preserve
+                      onPageSizeChanged: state.sqlHandlingMode != SqlHandlingMode.preserve
                           ? (value) {
                               unawaited(
-                                playgroundProvider
-                                    .setPageSize(value)
-                                    .catchError(
-                                      (Object e) => AppLogger.warning(
-                                        'Failed to set page size',
-                                        e,
-                                      ),
-                                    ),
+                                playgroundProvider.setPageSize(value).catchError(
+                                  (Object e) => AppLogger.warning(
+                                    'Failed to set page size',
+                                    e,
+                                  ),
+                                ),
                               );
                             }
                           : null,
-                      onShowErrorDetails: playgroundProvider.error != null
-                          ? () => _showErrorModal(playgroundProvider.error!)
-                          : null,
-                    ),
-                  ),
-                ],
+                      onShowErrorDetails: state.error != null ? () => _showErrorModal(state.error!) : null,
+                    );
+                  },
+                ),
               ),
-            ),
-          );
-        },
+            ],
+          ),
+        ),
       ),
     );
   }
+}
+
+@immutable
+class _PlaygroundActionBarState {
+  const _PlaygroundActionBarState({
+    required this.isLoading,
+    required this.sqlHandlingMode,
+    required this.lastExecutionHint,
+  });
+
+  final bool isLoading;
+  final SqlHandlingMode sqlHandlingMode;
+  final String? lastExecutionHint;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is _PlaygroundActionBarState &&
+            isLoading == other.isLoading &&
+            sqlHandlingMode == other.sqlHandlingMode &&
+            lastExecutionHint == other.lastExecutionHint;
+  }
+
+  @override
+  int get hashCode => Object.hash(isLoading, sqlHandlingMode, lastExecutionHint);
+}
+
+@immutable
+class _PlaygroundResultsState {
+  const _PlaygroundResultsState({
+    required this.results,
+    required this.isLoading,
+    required this.isStreaming,
+    required this.rowsProcessed,
+    required this.progress,
+    required this.executionDuration,
+    required this.affectedRows,
+    required this.columnMetadata,
+    required this.error,
+    required this.currentPage,
+    required this.pageSize,
+    required this.hasNextPage,
+    required this.hasPreviousPage,
+    required this.hasPagination,
+    required this.sqlHandlingMode,
+    required this.resultSetCount,
+    required this.selectedResultSetIndex,
+    required this.hasMultipleResultSets,
+  });
+
+  final List<Map<String, dynamic>> results;
+  final bool isLoading;
+  final bool isStreaming;
+  final int rowsProcessed;
+  final double progress;
+  final Duration? executionDuration;
+  final int? affectedRows;
+  final List<Map<String, dynamic>>? columnMetadata;
+  final String? error;
+  final int currentPage;
+  final int pageSize;
+  final bool hasNextPage;
+  final bool hasPreviousPage;
+  final bool hasPagination;
+  final SqlHandlingMode sqlHandlingMode;
+  final int resultSetCount;
+  final int selectedResultSetIndex;
+  final bool hasMultipleResultSets;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is _PlaygroundResultsState &&
+            isLoading == other.isLoading &&
+            isStreaming == other.isStreaming &&
+            rowsProcessed == other.rowsProcessed &&
+            progress == other.progress &&
+            executionDuration == other.executionDuration &&
+            affectedRows == other.affectedRows &&
+            error == other.error &&
+            currentPage == other.currentPage &&
+            pageSize == other.pageSize &&
+            hasNextPage == other.hasNextPage &&
+            hasPreviousPage == other.hasPreviousPage &&
+            hasPagination == other.hasPagination &&
+            sqlHandlingMode == other.sqlHandlingMode &&
+            resultSetCount == other.resultSetCount &&
+            selectedResultSetIndex == other.selectedResultSetIndex &&
+            hasMultipleResultSets == other.hasMultipleResultSets &&
+            identical(results, other.results) &&
+            identical(columnMetadata, other.columnMetadata);
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    results,
+    isLoading,
+    isStreaming,
+    rowsProcessed,
+    progress,
+    executionDuration,
+    affectedRows,
+    columnMetadata,
+    error,
+    currentPage,
+    pageSize,
+    hasNextPage,
+    hasPreviousPage,
+    hasPagination,
+    sqlHandlingMode,
+    resultSetCount,
+    selectedResultSetIndex,
+    hasMultipleResultSets,
+  ]);
 }
 
 class _PlaygroundShortcutChip extends StatelessWidget {

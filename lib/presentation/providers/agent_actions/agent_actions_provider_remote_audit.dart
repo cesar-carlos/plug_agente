@@ -60,14 +60,7 @@ Future<AgentActionRemoteAuditFocusResult> focusExecutionFromRemoteAuditFor(
     return AgentActionRemoteAuditFocusResult.missingActionId;
   }
 
-  provider._historyStatusFilter = null;
-  provider._historySourceFilter = null;
-  provider._historyPeriodFilter = AgentActionHistoryPeriod.all;
-  provider._historyFailurePhaseFilter = null;
-  // Clear the textual search too, otherwise a stale needle could hide the
-  // execution the user is focusing on and force the misleading
-  // `executionNotResolvable` branch below.
-  provider._historySearchQuery = '';
+  provider._historyController.prepareForRemoteAuditFocus();
 
   final executionId = record.executionId?.trim();
   final selectionChanged = provider._selectedActionId != actionId;

@@ -8,6 +8,7 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -16,12 +17,13 @@ import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
-import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_connection_pool_factory.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_query_config_source.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import 'e2e_env.dart';
 import 'mock_odbc_connection_settings.dart';
 import 'odbc_e2e_coverage_sql.dart';
 
@@ -78,7 +80,9 @@ class OdbcE2eRpcHarness {
     String dsn,
     OdbcE2eSqlDialect dialect,
   ) async {
-    final settings = MockOdbcConnectionSettings();
+      final settings = MockOdbcConnectionSettings(
+        poolSize: E2EEnv.odbcPoolSize,
+      );
     final locator = createAsyncOdbcServiceLocatorForSettings(settings);
     final service = locator.asyncService;
     final init = await service.initialize();
@@ -97,9 +101,15 @@ class OdbcE2eRpcHarness {
     when(() => configRepo.getById(any())).thenAnswer(configAnswer);
     when(() => configRepo.getByIdMetadata(any())).thenAnswer(configAnswer);
 
-    final pool = OdbcConnectionPool(service, settings);
     final retry = RetryManager();
     final metrics = MetricsCollector()..clear();
+    final pool = createOdbcConnectionPool(
+      service,
+      settings,
+      metrics,
+      FeatureFlags(InMemoryAppSettingsStore()),
+      configRepo,
+    );
     final gateway = OdbcDatabaseGateway(
       AgentConfigQueryConfigSource(configRepo),
       service,

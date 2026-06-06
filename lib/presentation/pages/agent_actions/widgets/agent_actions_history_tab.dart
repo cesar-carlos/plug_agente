@@ -24,6 +24,13 @@ class AgentActionsHistoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: provider,
+      builder: (context, _) => _buildTabContent(context),
+    );
+  }
+
+  Widget _buildTabContent(BuildContext context) {
     final selected = provider.selectedDefinition;
     if (selected == null) {
       return AgentActionsEmptySelectionPanel(

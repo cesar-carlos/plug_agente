@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 
 class RpcMethodConcurrencyLimiter {
   RpcMethodConcurrencyLimiter({
@@ -34,10 +35,10 @@ class RpcMethodConcurrencyLimiter {
     );
   }
 
-  static const Map<String, int> _defaultLimits = <String, int>{
+  static Map<String, int> get _defaultLimits => <String, int>{
     'sql.bulkInsert': 10,
     'sql.executeBatch': 20,
-    'sql.execute': 40,
+    'sql.execute': ConnectionConstants.rpcSqlExecuteConcurrencySoftLimit,
     AgentActionRpcConstants.agentActionRunRpcMethodName: 20,
     AgentActionRpcConstants.agentActionValidateRunRpcMethodName: 40,
     'sql.cancel': 80,

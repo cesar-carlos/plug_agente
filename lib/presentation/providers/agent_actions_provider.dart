@@ -49,19 +49,16 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_history_controller.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_filter_helpers.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+export 'agent_actions/agent_actions_history_controller.dart' show AgentActionHistoryPeriod;
+
 part 'agent_actions/agent_actions_provider_bundle_transfer.dart';
 part 'agent_actions/agent_actions_provider_definition_list.dart';
 part 'agent_actions/agent_actions_provider_remote_audit.dart';
-
-enum AgentActionHistoryPeriod {
-  all,
-  last24Hours,
-  last3Days,
-}
 
 class AgentActionsProvider extends ChangeNotifier {
   AgentActionsProvider(
@@ -101,6 +98,7 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionDefinitionSnapshotter? definitionSnapshotter,
     AgentActionPreflightSettings? preflightSettings,
     DateTime Function()? now,
+    AgentActionsHistoryController? historyController,
   }) : _runtimeStateGuard = runtimeStateGuard,
        _subsystemCoordinator = subsystemCoordinator,
        _executionQueue = executionQueue,
@@ -114,7 +112,8 @@ class AgentActionsProvider extends ChangeNotifier {
        _comObjectInvocationDiagnostics = comObjectInvocationDiagnostics,
        _definitionSnapshotter = definitionSnapshotter ?? const AgentActionDefinitionSnapshotter(),
        _preflightSettings = preflightSettings,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _historyController = historyController ?? AgentActionsHistoryController();
   static const AgentActionRemoteAuditSupportExport _remoteAuditExport = AgentActionRemoteAuditSupportExport();
 
   final ListAgentActionDefinitions _listDefinitions;
@@ -184,11 +183,7 @@ class AgentActionsProvider extends ChangeNotifier {
   String? _lastTestCommandPreview;
   String? _lastTestPreviewErrorMessage;
   Map<String, Object?> _lastTestDiagnostics = const <String, Object?>{};
-  AgentActionExecutionStatus? _historyStatusFilter;
-  AgentActionRequestSource? _historySourceFilter;
-  AgentActionHistoryPeriod _historyPeriodFilter = AgentActionHistoryPeriod.last3Days;
-  String? _historyFailurePhaseFilter;
-  String _historySearchQuery = '';
+  final AgentActionsHistoryController _historyController;
   AgentActionType? _definitionTypeFilter;
   AgentActionState? _definitionStateFilter;
   String _definitionSearchQuery = '';
@@ -254,11 +249,13 @@ class AgentActionsProvider extends ChangeNotifier {
   String? get lastTestCommandPreview => _lastTestCommandPreview;
   String? get lastTestPreviewErrorMessage => _lastTestPreviewErrorMessage;
   Map<String, Object?> get lastTestDiagnostics => Map.unmodifiable(_lastTestDiagnostics);
-  AgentActionExecutionStatus? get historyStatusFilter => _historyStatusFilter;
-  AgentActionRequestSource? get historySourceFilter => _historySourceFilter;
-  AgentActionHistoryPeriod get historyPeriodFilter => _historyPeriodFilter;
-  String? get historyFailurePhaseFilter => _historyFailurePhaseFilter;
-  String get historySearchQuery => _historySearchQuery;
+  AgentActionExecutionStatus? get historyStatusFilter => _historyController.statusFilter;
+  AgentActionRequestSource? get historySourceFilter => _historyController.sourceFilter;
+  AgentActionHistoryPeriod get historyPeriodFilter => _historyController.periodFilter;
+  String? get historyFailurePhaseFilter => _historyController.failurePhaseFilter;
+  String get historySearchQuery => _historyController.searchQuery;
+  @visibleForTesting
+  AgentActionsHistoryController get historyController => _historyController;
   AgentActionSecretAvailabilityReport? get selectedSecretReport => _selectedSecretReport;
   Set<String> get selectedSecretPlaceholderNames => _selectedSecretReport?.referencedSecretNames ?? const <String>{};
   Set<String> get selectedMissingSecretNames => _selectedSecretReport?.missingSecretNames ?? const <String>{};
@@ -514,28 +511,14 @@ class AgentActionsProvider extends ChangeNotifier {
       return const <AgentActionExecution>[];
     }
 
-    final periodStart = _historyPeriodStart();
     final filtered = _executions
-        .where((execution) {
-          final matchesAction = execution.actionId == selected.id;
-          final matchesStatus = _historyStatusFilter == null || execution.status == _historyStatusFilter;
-          final matchesSource = _historySourceFilter == null || execution.source == _historySourceFilter;
-          final matchesPeriod = periodStart == null || !execution.requestedAt.isBefore(periodStart);
-          final matchesFailurePhase = agentActionsMatchesHistoryFailurePhase(
+        .where(
+          (execution) => _historyController.matchesExecution(
             execution: execution,
-            failurePhaseFilter: _historyFailurePhaseFilter,
-          );
-          final matchesSearch = agentActionsMatchesHistorySearch(
-            execution: execution,
-            searchQuery: _historySearchQuery,
-          );
-          return matchesAction &&
-              matchesStatus &&
-              matchesSource &&
-              matchesPeriod &&
-              matchesFailurePhase &&
-              matchesSearch;
-        })
+            selectedActionId: selected.id,
+            now: _now,
+          ),
+        )
         .toList(growable: false);
 
     filtered.sort((left, right) => right.requestedAt.compareTo(left.requestedAt));
@@ -606,8 +589,8 @@ class AgentActionsProvider extends ChangeNotifier {
     }
 
     final executionsResult = await _listExecutions(
-      requestedAfter: _historyPeriodStart(),
-      limit: _historyPeriodFilter == AgentActionHistoryPeriod.all ? 200 : 100,
+      requestedAfter: _historyController.periodStart(_now),
+      limit: _historyController.executionFetchLimit(),
     );
     if (generation != _loadGeneration) return;
 
@@ -749,32 +732,34 @@ class AgentActionsProvider extends ChangeNotifier {
   }
 
   void setHistoryStatusFilter(AgentActionExecutionStatus? status) {
-    if (_historyStatusFilter == status) {
+    if (_historyController.statusFilter == status) {
       return;
     }
 
     _auditCorrelationExecutionId = null;
-    _historyStatusFilter = status;
+    _historyController.statusFilter = status;
+    _filteredSelectedExecutionsCache = null;
     notifyListeners();
   }
 
   void setHistorySourceFilter(AgentActionRequestSource? source) {
-    if (_historySourceFilter == source) {
+    if (_historyController.sourceFilter == source) {
       return;
     }
 
     _auditCorrelationExecutionId = null;
-    _historySourceFilter = source;
+    _historyController.sourceFilter = source;
+    _filteredSelectedExecutionsCache = null;
     notifyListeners();
   }
 
   void setHistoryPeriodFilter(AgentActionHistoryPeriod period) {
-    if (_historyPeriodFilter == period) {
+    if (_historyController.periodFilter == period) {
       return;
     }
 
     _auditCorrelationExecutionId = null;
-    _historyPeriodFilter = period;
+    _historyController.periodFilter = period;
     _filteredSelectedExecutionsCache = null;
     notifyListeners();
     unawaited(_reloadExecutionsForPeriod());
@@ -788,8 +773,8 @@ class AgentActionsProvider extends ChangeNotifier {
     // Guard against rapid period switches landing out-of-order.
     final generation = ++_periodReloadGeneration;
     final result = await _listExecutions(
-      requestedAfter: _historyPeriodStart(),
-      limit: _historyPeriodFilter == AgentActionHistoryPeriod.all ? 200 : 100,
+      requestedAfter: _historyController.periodStart(_now),
+      limit: _historyController.executionFetchLimit(),
     );
     // A newer reload (or a full load()) already raced past us; discard.
     if (generation != _periodReloadGeneration || _isLoading) {
@@ -809,34 +794,28 @@ class AgentActionsProvider extends ChangeNotifier {
     );
   }
 
-  DateTime? _historyPeriodStart() {
-    return switch (_historyPeriodFilter) {
-      AgentActionHistoryPeriod.all => null,
-      AgentActionHistoryPeriod.last24Hours => _now().subtract(const Duration(hours: 24)),
-      AgentActionHistoryPeriod.last3Days => _now().subtract(const Duration(days: 3)),
-    };
-  }
-
   void setHistoryFailurePhaseFilter(String? phase) {
     final normalized = phase?.trim();
     final resolved = normalized == null || normalized.isEmpty ? null : normalized;
-    if (_historyFailurePhaseFilter == resolved) {
+    if (_historyController.failurePhaseFilter == resolved) {
       return;
     }
 
     _auditCorrelationExecutionId = null;
-    _historyFailurePhaseFilter = resolved;
+    _historyController.failurePhaseFilter = resolved;
+    _filteredSelectedExecutionsCache = null;
     notifyListeners();
   }
 
   void setHistorySearchQuery(String query) {
     final normalized = query.trim();
-    if (_historySearchQuery == normalized) {
+    if (_historyController.searchQuery == normalized) {
       return;
     }
 
     _auditCorrelationExecutionId = null;
-    _historySearchQuery = normalized;
+    _historyController.searchQuery = normalized;
+    _filteredSelectedExecutionsCache = null;
     notifyListeners();
   }
 
@@ -865,36 +844,29 @@ class AgentActionsProvider extends ChangeNotifier {
     required String historySearch,
   }) {
     final normalizedDefinitionSearch = definitionSearch.trim();
-    final normalizedHistorySearch = historySearch.trim();
-    final normalizedFailurePhase = historyFailurePhase?.trim();
-    final resolvedFailurePhase = normalizedFailurePhase == null || normalizedFailurePhase.isEmpty
-        ? null
-        : normalizedFailurePhase;
+    final historyRestore = _historyController.applyRestored(
+      historyStatus: historyStatus,
+      historySource: historySource,
+      historyPeriod: historyPeriod,
+      historyFailurePhase: historyFailurePhase,
+      historySearch: historySearch,
+    );
 
     final didChange =
         _definitionTypeFilter != definitionType ||
         _definitionStateFilter != definitionState ||
         _definitionSearchQuery != normalizedDefinitionSearch ||
-        _historyStatusFilter != historyStatus ||
-        _historySourceFilter != historySource ||
-        _historyPeriodFilter != historyPeriod ||
-        _historyFailurePhaseFilter != resolvedFailurePhase ||
-        _historySearchQuery != normalizedHistorySearch;
+        historyRestore.didChange;
 
     if (!didChange) {
       return;
     }
 
-    final periodChanged = _historyPeriodFilter != historyPeriod;
+    final periodChanged = historyRestore.periodChanged;
 
     _definitionTypeFilter = definitionType;
     _definitionStateFilter = definitionState;
     _definitionSearchQuery = normalizedDefinitionSearch;
-    _historyStatusFilter = historyStatus;
-    _historySourceFilter = historySource;
-    _historyPeriodFilter = historyPeriod;
-    _historyFailurePhaseFilter = resolvedFailurePhase;
-    _historySearchQuery = normalizedHistorySearch;
     _auditCorrelationExecutionId = null;
     _filteredSelectedExecutionsCache = null;
 
@@ -919,20 +891,11 @@ class AgentActionsProvider extends ChangeNotifier {
   Set<String> secretPlaceholderNamesFor(AgentActionDefinition definition) =>
       AgentActionSecretPlaceholderScanner.collectFromDefinition(definition);
 
-  bool get hasHistoryFilters =>
-      _historyStatusFilter != null ||
-      _historySourceFilter != null ||
-      _historyPeriodFilter != AgentActionHistoryPeriod.last3Days ||
-      _historyFailurePhaseFilter != null ||
-      _historySearchQuery.isNotEmpty;
+  bool get hasHistoryFilters => _historyController.hasFilters;
 
   void clearHistoryFilters() {
     _auditCorrelationExecutionId = null;
-    _historyStatusFilter = null;
-    _historySourceFilter = null;
-    _historyPeriodFilter = AgentActionHistoryPeriod.last3Days;
-    _historyFailurePhaseFilter = null;
-    _historySearchQuery = '';
+    _historyController.clearFilters();
     _filteredSelectedExecutionsCache = null;
     notifyListeners();
   }

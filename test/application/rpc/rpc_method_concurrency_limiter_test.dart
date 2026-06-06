@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/rpc/rpc_method_concurrency_limiter.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 
 void main() {
   group('RpcMethodConcurrencyLimiter', () {
@@ -52,6 +53,15 @@ void main() {
       expect(second.acquired, isTrue);
       first.lease!.release();
       second.lease!.release();
+    });
+
+    test('defaults sql.execute limit to SQL queue capacity', () {
+      final limiter = RpcMethodConcurrencyLimiter.defaults();
+
+      expect(
+        limiter.limitFor('sql.execute'),
+        ConnectionConstants.rpcSqlExecuteConcurrencySoftLimit,
+      );
     });
 
     test('falls back to agent scope when token is absent', () {

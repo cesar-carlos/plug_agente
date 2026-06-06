@@ -31,19 +31,25 @@ class AgentOperationalReadinessProvider extends ChangeNotifier {
     required ConnectionProvider connectionProvider,
     required ClientTokenProvider clientTokenProvider,
   }) {
+    var bindingsChanged = false;
+
     if (!identical(_connectionProvider, connectionProvider)) {
       _connectionProvider?.removeListener(_refresh);
       _connectionProvider = connectionProvider;
       _connectionProvider?.addListener(_refresh);
+      bindingsChanged = true;
     }
 
     if (!identical(_clientTokenProvider, clientTokenProvider)) {
       _clientTokenProvider?.removeListener(_refresh);
       _clientTokenProvider = clientTokenProvider;
       _clientTokenProvider?.addListener(_refresh);
+      bindingsChanged = true;
     }
 
-    _refresh();
+    if (bindingsChanged) {
+      _refresh();
+    }
   }
 
   @override
@@ -60,12 +66,16 @@ class AgentOperationalReadinessProvider extends ChangeNotifier {
       return;
     }
 
-    _snapshot = _assembler.assemble(
+    final nextSnapshot = _assembler.assemble(
       hubPhase: _mapHubPhase(connection.status),
       hubConnected: connection.isConnected,
       clientTokens: clientTokens.tokens,
       schedulerIssueReason: _triggerScheduler?.lastStartIssueReason,
     );
+    if (nextSnapshot == _snapshot) {
+      return;
+    }
+    _snapshot = nextSnapshot;
     notifyListeners();
   }
 

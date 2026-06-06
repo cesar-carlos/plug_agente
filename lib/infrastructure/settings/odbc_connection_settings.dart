@@ -3,6 +3,7 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 
 const _keyPoolSize = 'odbc_pool_size';
+const _keyPoolSizeUserConfigured = 'odbc_pool_size_user_configured';
 const _keyLoginTimeoutSeconds = 'odbc_login_timeout_seconds';
 const _keyMaxResultBufferMb = 'odbc_max_result_buffer_mb';
 const _keyStreamingChunkSizeKb = 'odbc_streaming_chunk_size_kb';
@@ -13,6 +14,9 @@ const _keyNativePoolTestOnCheckout = 'odbc_native_pool_test_on_checkout';
 class OdbcConnectionSettings implements IOdbcConnectionSettings {
   OdbcConnectionSettings(this._prefs);
   final IAppSettingsStore _prefs;
+
+  /// Previous factory default before benchmark tuning raised [ConnectionConstants.defaultPoolSize].
+  static const int legacyFactoryDefaultPoolSize = 4;
 
   // Allowed ranges (mirror the UI constraints in odbc_connection_pool_section).
   static const int _minPoolSize = 1;
@@ -58,9 +62,7 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   Future<void> load() async {
     // Clamp values on load so manually edited settings.json or legacy imports
     // can never drive the pool semaphore or connection options out of range.
-    _poolSize = _clampPoolSize(
-      _prefs.getInt(_keyPoolSize) ?? ConnectionConstants.defaultPoolSize,
-    );
+    _poolSize = await _loadPoolSize();
     _loginTimeoutSeconds = _clampLoginTimeout(
       _prefs.getInt(_keyLoginTimeoutSeconds) ?? ConnectionConstants.defaultLoginTimeout.inSeconds,
     );
@@ -74,10 +76,31 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
     _nativePoolTestOnCheckout = _prefs.getBool(_keyNativePoolTestOnCheckout) ?? true;
   }
 
+  Future<int> _loadPoolSize() async {
+    final persisted = _prefs.getInt(_keyPoolSize);
+    if (persisted == null) {
+      return _clampPoolSize(ConnectionConstants.poolSize);
+    }
+
+    final clamped = _clampPoolSize(persisted);
+    final userConfigured = _prefs.getBool(_keyPoolSizeUserConfigured) ?? false;
+    if (clamped == legacyFactoryDefaultPoolSize &&
+        !userConfigured &&
+        ConnectionConstants.defaultPoolSize != legacyFactoryDefaultPoolSize) {
+      await _prefs.setInt(_keyPoolSize, ConnectionConstants.defaultPoolSize);
+      return ConnectionConstants.defaultPoolSize;
+    }
+
+    return clamped;
+  }
+
   @override
   Future<void> setPoolSize(int value) async {
     final clamped = _clampPoolSize(value);
-    await _prefs.setInt(_keyPoolSize, clamped);
+    await _prefs.setValues({
+      _keyPoolSize: clamped,
+      _keyPoolSizeUserConfigured: true,
+    });
     _poolSize = clamped;
   }
 

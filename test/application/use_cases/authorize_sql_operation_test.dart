@@ -7,7 +7,7 @@ import 'package:plug_agente/core/constants/authorization_context_constants.dart'
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
-import 'package:plug_agente/domain/errors/failures.dart' show ConfigurationFailure;
+import 'package:plug_agente/domain/errors/failures.dart' show ConfigurationFailure, NetworkFailure;
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
@@ -284,6 +284,28 @@ void main() {
           );
         },
       );
+    });
+
+    test('should not cache denial when token resolver returns NetworkFailure', () async {
+      when(() => resolver.resolvePolicy(any())).thenAnswer(
+        (_) async => Failure(NetworkFailure.withContext(message: 'Hub unreachable')),
+      );
+
+      final first = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+      );
+      final second = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM dbo.users',
+      );
+
+      expect(first.isError(), isTrue);
+      expect(second.isError(), isTrue);
+      verify(() => resolver.resolvePolicy(any())).called(2);
+
+      final tokenHash = hashClientCredentialToken('bearer-token');
+      expect(decisionCache.get('$tokenHash|read|dbo.users'), isNull);
     });
 
     test('should normalize request database before matching payload.database', () async {

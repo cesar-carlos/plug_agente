@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -40,7 +41,7 @@ final class AdaptiveOdbcConnectionPool
     Duration nativeCircuitBreakDuration = const Duration(minutes: 1),
     int nativeCircuitBreakThreshold = 3,
     int nativeWarmUpCount = 1,
-    bool nativeWarmUpEnabled = false,
+    bool nativeWarmUpEnabled = ConnectionConstants.defaultNativeWarmUpEnabled,
     Duration driverInfoCacheTtl = const Duration(seconds: 10),
   }) : _leasePool = leasePool,
        _nativePool = nativePool,
@@ -56,6 +57,9 @@ final class AdaptiveOdbcConnectionPool
 
   final OdbcConnectionPool _leasePool;
   final OdbcNativeConnectionPool _nativePool;
+
+  /// Native pool used for pool-scoped bulk insert operations.
+  OdbcNativeConnectionPool get nativeBulkInsertPool => _nativePool;
   final FeatureFlags _featureFlags;
   final MetricsCollector _metrics;
   final ActiveConfigResolver? _activeConfigResolver;
@@ -75,6 +79,8 @@ final class AdaptiveOdbcConnectionPool
   String? _lastNativeSkipReason;
   int _nativeOptionsSkipCount = 0;
   int _nativeExecutionFallbackCount = 0;
+  int _leaseActiveCount = 0;
+  int _nativeActiveCount = 0;
   final Duration _driverInfoCacheTtl;
 
   @override
@@ -143,6 +149,7 @@ final class AdaptiveOdbcConnectionPool
         final connectionId = nativeAcquire.getOrThrow();
         _connectionOwners[connectionId] = _AdaptivePoolOwner.native;
         _connectionCircuitKeys[connectionId] = circuitKey;
+        _nativeActiveCount++;
         _lastEffectiveStrategy = allowNativeWithoutOptions ? 'native_compatible' : 'native';
         _recordNativeSuccess(circuitKey);
         if (allowNativeWithoutOptions) {
@@ -173,6 +180,7 @@ final class AdaptiveOdbcConnectionPool
       final connectionId = leaseAcquire.getOrThrow();
       _connectionOwners[connectionId] = _AdaptivePoolOwner.lease;
       _connectionCircuitKeys.remove(connectionId);
+      _leaseActiveCount++;
       _lastEffectiveStrategy = 'lease';
       return Success(connectionId);
     }
@@ -252,6 +260,7 @@ final class AdaptiveOdbcConnectionPool
   Future<Result<void>> release(String connectionId) async {
     final owner = _connectionOwners.remove(connectionId);
     _connectionCircuitKeys.remove(connectionId);
+    _decrementOwnerActiveCount(owner);
     if (owner == null) {
       // Unknown owner: the ID may belong to the native pool if owner tracking
       // was lost (e.g. double-release). Routing blindly to the lease pool would
@@ -276,6 +285,7 @@ final class AdaptiveOdbcConnectionPool
   Future<Result<void>> discard(String connectionId) async {
     final owner = _connectionOwners.remove(connectionId);
     _connectionCircuitKeys.remove(connectionId);
+    _decrementOwnerActiveCount(owner);
     if (owner == null) {
       developer.log(
         'discard called for connection with no tracked owner: $connectionId',
@@ -305,11 +315,28 @@ final class AdaptiveOdbcConnectionPool
 
     _connectionOwners.clear();
     _connectionCircuitKeys.clear();
+    _leaseActiveCount = 0;
+    _nativeActiveCount = 0;
     if (errors.isNotEmpty) {
       return Failure(_aggregatePoolFailure(errors, operation: 'pool_close_all'));
     }
 
     return const Success(unit);
+  }
+
+  void _decrementOwnerActiveCount(_AdaptivePoolOwner? owner) {
+    switch (owner) {
+      case _AdaptivePoolOwner.lease:
+        if (_leaseActiveCount > 0) {
+          _leaseActiveCount--;
+        }
+      case _AdaptivePoolOwner.native:
+        if (_nativeActiveCount > 0) {
+          _nativeActiveCount--;
+        }
+      case null:
+        break;
+    }
   }
 
   @override
@@ -653,6 +680,8 @@ final class AdaptiveOdbcConnectionPool
       'native_skip_reason': _lastNativeSkipReason,
       'native_warmup_enabled': _nativeWarmUpEnabled,
       'driver_type': resolvedDriverInfo?.driverType,
+      'lease_active_count': _leaseActiveCount,
+      'native_active_count': _nativeActiveCount,
     };
   }
 }

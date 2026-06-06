@@ -413,6 +413,7 @@
         "transactional_native_pool_total": { "type": "integer", "minimum": 0 },
         "transactional_native_pool_fallback_total": { "type": "integer", "minimum": 0 },
         "bulk_insert_recommended_total": { "type": "integer", "minimum": 0 },
+        "bulk_insert_routed_total": { "type": "integer", "minimum": 0 },
         "last_requested_parallelism": { "type": "integer", "minimum": 0 },
         "last_effective_parallelism": { "type": "integer", "minimum": 0 },
         "parallel_global_wait_avg_ms": { "type": "number", "minimum": 0 },

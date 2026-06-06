@@ -56,6 +56,8 @@ jobs:
         working-directory: tool/plug_agente_elevated_runner
         run: dart analyze
 
+      # Live ODBC/Hub E2E tests use tags live|slow|perf and are local-only
+      # (see docs/testing/e2e_setup.md). CI must not run them on GitHub runners.
       - name: Test
         run: flutter test --exclude-tags "live || slow || perf"
 
@@ -208,51 +210,3 @@ jobs:
         with:
           name: transport-benchmark
           path: benchmark-artifacts/transport-benchmark.txt
-
-  live-hub-e2e:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Validate live Hub agent.action env
-        env:
-          RUN_LIVE_HUB_TESTS: true
-          RUN_LIVE_HUB_SIGNING_TESTS: true
-          RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS: true
-          E2E_HUB_URL: ${{ secrets.E2E_HUB_URL }}
-          E2E_HUB_TOKEN: ${{ secrets.E2E_HUB_TOKEN }}
-          PAYLOAD_SIGNING_KEY_ID: ${{ secrets.PAYLOAD_SIGNING_KEY_ID }}
-          PAYLOAD_SIGNING_KEY: ${{ secrets.PAYLOAD_SIGNING_KEY }}
-        run: dart run tool/validate_live_hub_agent_actions_env.dart
-
-      - name: Agent actions production preflight
-        run: dart run tool/preflight_agent_actions_production.dart
-
-      - name: Hub Socket.IO live E2E
-        env:
-          RUN_LIVE_HUB_TESTS: true
-          E2E_HUB_URL: ${{ secrets.E2E_HUB_URL }}
-          E2E_HUB_TOKEN: ${{ secrets.E2E_HUB_TOKEN }}
-        run: flutter test test/integration/hub_socket_live_e2e_test.dart
-
-      - name: Hub agent.action live E2E
-        env:
-          RUN_LIVE_HUB_TESTS: true
-          RUN_LIVE_HUB_SIGNING_TESTS: true
-          RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS: true
-          E2E_HUB_URL: ${{ secrets.E2E_HUB_URL }}
-          E2E_HUB_TOKEN: ${{ secrets.E2E_HUB_TOKEN }}
-          PAYLOAD_SIGNING_KEY_ID: ${{ secrets.PAYLOAD_SIGNING_KEY_ID }}
-          PAYLOAD_SIGNING_KEY: ${{ secrets.PAYLOAD_SIGNING_KEY }}
-        run: flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags live

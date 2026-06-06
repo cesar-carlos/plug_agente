@@ -256,7 +256,7 @@ class FailureToRpcErrorMapper {
       technicalMessage: clientDetail,
       correlationId: correlationId,
       timestamp: failure.timestamp,
-      retryable: RpcErrorCode.isTransient(code),
+      retryable: failure.isTransient || RpcErrorCode.isTransient(code),
       category: _categoryForFailure(failure),
       extra: extra,
     );

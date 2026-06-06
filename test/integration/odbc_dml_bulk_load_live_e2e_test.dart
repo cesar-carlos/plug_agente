@@ -129,9 +129,13 @@ void main() async {
         expect(insertMap['inserted_rows'], totalRows);
         swInsert.stop();
         phaseTimings['insert_ms'] = swInsert.elapsedMilliseconds;
+        phaseTimings['bulk_insert_parallel_total'] = h.metrics.bulkInsertParallelCount;
+        phaseTimings['bulk_insert_chunked_total'] = h.metrics.bulkInsertChunkedCount;
         developer.log(
           'DML bulk: native bulk INSERT total $totalRows rows in '
-          '${swInsert.elapsedMilliseconds} ms',
+          '${swInsert.elapsedMilliseconds} ms '
+          '(bulk_insert_parallel_total=${h.metrics.bulkInsertParallelCount}, '
+          'bulk_insert_chunked_total=${h.metrics.bulkInsertChunkedCount})',
           name: 'e2e.odbc_dml_bulk',
         );
         final maxIns = E2EEnv.odbcE2eDmlBulkMaxMsInsertOrDefault;
@@ -234,15 +238,17 @@ void main() async {
         swUserDrop.stop();
         phaseTimings['drop_ms'] = swUserDrop.elapsedMilliseconds;
         expect(userDrop.isSuccess(), isTrue, reason: 'user drop: $userDrop');
+        final phaseTimingsJson = jsonEncode({
+          'rows': totalRows,
+          'method': 'odbc_fast.bulkInsert',
+          ...phaseTimings,
+        });
         developer.log(
-          'E2E_DML_BULK_PHASE_TIMINGS '
-          '${jsonEncode({
-            'rows': totalRows,
-            'method': 'odbc_fast.bulkInsert',
-            ...phaseTimings,
-          })}',
+          'E2E_DML_BULK_PHASE_TIMINGS $phaseTimingsJson',
           name: 'e2e.odbc_dml_bulk',
         );
+        // ignore: avoid_print
+        print('E2E_DML_BULK_PHASE_TIMINGS $phaseTimingsJson');
         developer.log(
           'DML bulk: DROP TABLE (end of test) ${swUserDrop.elapsedMilliseconds} ms',
           name: 'e2e.odbc_dml_bulk',
