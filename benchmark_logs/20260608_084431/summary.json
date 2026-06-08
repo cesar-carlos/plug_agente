@@ -1,0 +1,144 @@
+{
+  "run_timestamp": "20260608_084431",
+  "scope": "opt_in_e2e_excluding_live_hub",
+  "excluded": [
+    "test/integration/hub_*.dart",
+    "test/live/*",
+    "hub Socket.IO / agent.action / auto_update diagnostics push"
+  ],
+  "config": {
+    "RUN_LIVE_API_TESTS": true,
+    "ODBC_E2E_DML_STRESS_TESTS": true,
+    "ODBC_E2E_CODCLIENTE_TESTS": true,
+    "ODBC_E2E_TRANSACTIONAL_BATCH": true,
+    "ODBC_E2E_DML_STRESS_CONCURRENCY": 8,
+    "ODBC_E2E_DML_STRESS_WORKERS": 8,
+    "ODBC_E2E_DML_STRESS_QUEUE_SIZE": 16,
+    "ODBC_E2E_DML_STRESS_ROW_COUNT": 100,
+    "ODBC_E2E_DML_STRESS_ITERATIONS": 1,
+    "API_TEST_BASE_URL": "http://31.97.29.223:3000/ (default)",
+    "sqlServer_override": "ODBC_E2E_RPC_DSN set from ODBC_TEST_DSN_SQL_SERVER at runtime"
+  },
+  "suite_results": {
+    "sqlAnywhere_odbc_optin": {
+      "status": "pass",
+      "passed": 7,
+      "skipped": 0,
+      "failed": 0,
+      "wall_ms": 9378,
+      "log": "sqlAnywhere_odbc_optin.log"
+    },
+    "sqlServer_odbc_optin": {
+      "status": "pass",
+      "passed": 7,
+      "skipped": 0,
+      "failed": 0,
+      "wall_ms": 9203,
+      "log": "sqlServer_odbc_optin.log"
+    },
+    "api_http": {
+      "status": "partial_fail",
+      "passed": 2,
+      "skipped": 0,
+      "failed": 2,
+      "wall_ms": 62095,
+      "log": "api_test.log",
+      "failures": [
+        "should successfully connect to production server",
+        "should handle different endpoints correctly"
+      ]
+    },
+    "totals": {
+      "passed": 16,
+      "skipped": 0,
+      "failed": 2
+    }
+  },
+  "results": [
+    {
+      "test": "odbc_dml_stress_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "cases": 2,
+      "insert_ms": 1323,
+      "update_ms": 87,
+      "delete_ms": 90,
+      "total_ms": 1584,
+      "queued_elapsed_ms": 1374,
+      "rows": 100,
+      "concurrency": 8
+    },
+    {
+      "test": "odbc_dml_stress_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "cases": 2,
+      "insert_ms": 1257,
+      "update_ms": 56,
+      "delete_ms": 55,
+      "total_ms": 1449,
+      "queued_elapsed_ms": 1235,
+      "rows": 100,
+      "concurrency": 8
+    },
+    {
+      "test": "odbc_sql_execute_codcliente_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "cases": 1
+    },
+    {
+      "test": "odbc_sql_execute_codcliente_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "cases": 1
+    },
+    {
+      "test": "odbc_rpc_execute_coverage_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "cases": 4,
+      "note": "transactional batch enabled (ODBC_E2E_TRANSACTIONAL_BATCH=true)"
+    },
+    {
+      "test": "odbc_rpc_execute_coverage_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "cases": 4,
+      "note": "transactional batch enabled"
+    },
+    {
+      "test": "api_test",
+      "driver": "n/a",
+      "status": "partial_fail",
+      "passed": 2,
+      "failed": 2,
+      "cases": {
+        "should successfully connect to production server": "fail",
+        "should handle connection timeout gracefully": "pass",
+        "should include proper headers in request": "pass",
+        "should handle different endpoints correctly": "fail"
+      }
+    }
+  ],
+  "failure_analysis": [
+    {
+      "test": "api_test / should successfully connect to production server",
+      "verdict": "env_infra",
+      "root_cause": "TCP connection to API_TEST_BASE_URL (31.97.29.223:3000) timed out (Windows errno 121 semaphore timeout). Server unreachable from this machine; not a plug_agente application bug.",
+      "recommended_fix": "Ensure the hub/API host is running and reachable (firewall, VPN, correct URL). Set API_TEST_BASE_URL in .env to a reachable endpoint before re-running."
+    },
+    {
+      "test": "api_test / should handle different endpoints correctly",
+      "verdict": "env_infra_with_test_hardening",
+      "root_cause": "Same unreachable host; Dio has no connectTimeout so the hung TCP attempt exceeded the 15s Flutter test timeout. The test catches Exception but never receives one before timeout.",
+      "recommended_fix": "Fix API reachability first. Optionally harden the test: add connectTimeout on Dio aligned with test timeout, or skip/assert when base URL is unreachable."
+    }
+  ],
+  "bug_findings": {
+    "application_bugs": 0,
+    "env_config_issues": 2,
+    "flaky_tests": 0,
+    "odbc_opt_in_all_pass": true
+  }
+}

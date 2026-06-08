@@ -1,0 +1,55 @@
+{
+  "run_timestamp": "20260606_122558",
+  "config": {
+    "ODBC_E2E_DML_BULK_TESTS": true,
+    "ODBC_E2E_DML_BULK_ROW_COUNT": 50000,
+    "ODBC_E2E_DML_BULK_CHUNK_SIZE": 1000,
+    "ODBC_POOL_SIZE": 8,
+    "method": "odbc_fast.bulkInsert"
+  },
+  "results": [
+    {
+      "test": "odbc_dml_bulk_load_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "rows": 50000,
+      "row_count_verified": true,
+      "create_ms": 35,
+      "insert_ms": 878,
+      "bulk_insert_parallel_total": 0,
+      "bulk_insert_chunked_total": 1,
+      "update_ms": 74,
+      "delete_ms": 1758,
+      "drop_ms": 63,
+      "insert_rows_per_sec": 56947.61,
+      "update_rows_per_sec": 675675.68,
+      "delete_rows_per_sec": 28441.41,
+      "wall_ms": 7239,
+      "log": "sqlAnywhere_bulk.log"
+    },
+    {
+      "test": "odbc_dml_bulk_load_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "rows": 50000,
+      "row_count_verified": true,
+      "create_ms": 15,
+      "insert_ms": 1890,
+      "bulk_insert_parallel_total": 1,
+      "bulk_insert_chunked_total": 1,
+      "update_ms": 33,
+      "delete_ms": 50,
+      "drop_ms": 10,
+      "insert_rows_per_sec": 26455.03,
+      "update_rows_per_sec": 1515151.52,
+      "delete_rows_per_sec": 1000000.0,
+      "wall_ms": 6287,
+      "log": "sqlServer_bulk.log"
+    }
+  ],
+  "comparison_notes": {
+    "insert": "SQL Anywhere ~2.2x faster insert (57k vs 26k rows/sec); SA used chunked-only (parallel=0), SQL Server used parallel+chunked (1/1).",
+    "delete": "SQL Server ~35x faster delete (1M vs 28k rows/sec); SA delete remains the bottleneck at 1758ms vs 50ms.",
+    "update": "Both fast; SQL Server slightly faster on this run."
+  }
+}

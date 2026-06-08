@@ -1,0 +1,44 @@
+{
+  "run_timestamp": "20260606_122349",
+  "config": {
+    "ODBC_E2E_DML_STRESS_TESTS": true,
+    "ODBC_POOL_SIZE": 8,
+    "ODBC_E2E_DML_STRESS_CONCURRENCY": 8,
+    "ODBC_E2E_DML_STRESS_WORKERS": 8,
+    "ODBC_E2E_DML_STRESS_QUEUE_SIZE": 16,
+    "ODBC_E2E_DML_STRESS_ROW_COUNT": 100,
+    "ODBC_E2E_DML_STRESS_ITERATIONS": 1
+  },
+  "results": [
+    {
+      "test": "odbc_dml_stress_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "insert_ms": 1335,
+      "update_ms": 74,
+      "delete_ms": 73,
+      "total_ms": 1564,
+      "queued_elapsed_ms": 1355,
+      "rows": 100,
+      "concurrency": 8,
+      "insert_rows_per_sec": 74.91,
+      "update_rows_per_sec": 1351.35,
+      "delete_rows_per_sec": 1369.86
+    },
+    {
+      "test": "odbc_dml_stress_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "insert_ms": 1174,
+      "update_ms": 55,
+      "delete_ms": 75,
+      "total_ms": 1385,
+      "queued_elapsed_ms": 1248,
+      "rows": 100,
+      "concurrency": 8,
+      "insert_rows_per_sec": 85.18,
+      "update_rows_per_sec": 1818.18,
+      "delete_rows_per_sec": 1333.33
+    }
+  ]
+}

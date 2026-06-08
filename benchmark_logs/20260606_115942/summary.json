@@ -1,0 +1,160 @@
+{
+  "run_timestamp": "20260606_115942",
+  "config": {
+    "ODBC_POOL_SIZE": 8,
+    "ODBC_E2E_DML_STRESS_CONCURRENCY": 8,
+    "ODBC_E2E_DML_STRESS_WORKERS": 8,
+    "ODBC_E2E_DML_STRESS_QUEUE_SIZE": 16,
+    "ODBC_E2E_DML_PERF_ROW_COUNT": 100,
+    "ODBC_E2E_DML_BULK_ROW_COUNT": 50000,
+    "ODBC_E2E_DML_STRESS_ROW_COUNT": 100,
+    "ODBC_E2E_DML_STRESS_ITERATIONS": 1
+  },
+  "results": [
+    {
+      "test": "odbc_dml_perf_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "wall_s": 2,
+      "note": "timings via developer.log only; stress proxy insert~1301ms update~61ms delete~58ms"
+    },
+    {
+      "test": "odbc_dml_perf_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "wall_s": 2,
+      "note": "stress proxy insert~1269ms update~63ms delete~58ms"
+    },
+    {
+      "test": "odbc_dml_stress_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "insert_ms": 1301,
+      "update_ms": 61,
+      "delete_ms": 58,
+      "total_ms": 1494,
+      "queued_elapsed_ms": 1282,
+      "rows": 100,
+      "concurrency": 8
+    },
+    {
+      "test": "odbc_dml_stress_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "insert_ms": 1269,
+      "update_ms": 63,
+      "delete_ms": 58,
+      "total_ms": 1472,
+      "queued_elapsed_ms": 1309,
+      "rows": 100,
+      "concurrency": 8
+    },
+    {
+      "test": "odbc_dml_bulk_load_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "create_ms": 23,
+      "insert_ms": 796,
+      "bulk_insert_parallel_total": 0,
+      "bulk_insert_chunked_total": 1,
+      "update_ms": 52,
+      "delete_ms": 1461,
+      "drop_ms": 52,
+      "rows": 50000
+    },
+    {
+      "test": "odbc_dml_bulk_load_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "create_ms": 15,
+      "insert_ms": 2296,
+      "bulk_insert_parallel_total": 1,
+      "bulk_insert_chunked_total": 1,
+      "update_ms": 50,
+      "delete_ms": 51,
+      "drop_ms": 11,
+      "rows": 50000
+    },
+    {
+      "test": "odbc_rpc_execute_coverage_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "skipped": 1,
+      "note": "transactional batch skipped"
+    },
+    {
+      "test": "odbc_rpc_execute_coverage_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "skipped": 1
+    },
+    {
+      "test": "odbc_streaming_live_integration",
+      "driver": "sqlAnywhere",
+      "status": "pass"
+    },
+    {
+      "test": "odbc_streaming_live_integration",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "note": "sqlserver_streaming log also used ODBC_TEST_DSN (Anywhere priority)"
+    },
+    {
+      "test": "odbc_queued_gateway_smoke_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "note": "failed once (30s init timeout), passed on retry"
+    },
+    {
+      "test": "odbc_queued_gateway_smoke_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass"
+    },
+    {
+      "test": "odbc_lock_contention_live_integration",
+      "driver": "sqlAnywhere",
+      "status": "pass"
+    },
+    {
+      "test": "odbc_lock_contention_live_integration",
+      "driver": "sqlServer",
+      "status": "pass"
+    },
+    {
+      "test": "sql_queue_burst_test",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "wall_s": 20
+    },
+    {
+      "test": "sql_queue_burst_test",
+      "driver": "sqlServer",
+      "status": "pass",
+      "wall_s": 6
+    },
+    {
+      "test": "odbc_sql_anywhere_top_start_at_live",
+      "driver": "sqlAnywhere",
+      "status": "pass"
+    },
+    {
+      "test": "hub_socket_live_e2e",
+      "driver": "hub",
+      "status": "skipped",
+      "reason": "E2E_HUB_TOKEN JWT expired"
+    },
+    {
+      "test": "hub_agent_action_rpc_live_e2e",
+      "driver": "hub",
+      "status": "skipped",
+      "reason": "E2E_HUB_TOKEN JWT expired"
+    }
+  ],
+  "skipped_not_run": [
+    "odbc_sql_execute_codcliente_live_e2e (ODBC_E2E_CODCLIENTE_TESTS not set)",
+    "test/live/auto_update_diagnostics_push_e2e (hub JWT expired)",
+    "api_test (RUN_LIVE_API_TESTS=false)",
+    "odbc_rpc transactional batch (ODBC_E2E_TRANSACTIONAL_BATCH not set)",
+    "benchmark tests (ODBC_E2E_BENCHMARK file missing in test/live)"
+  ]
+}

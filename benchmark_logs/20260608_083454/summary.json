@@ -1,0 +1,132 @@
+{
+  "run_timestamp": "20260608_083454",
+  "config": {
+    "ODBC_E2E_DML_PERF_ROW_COUNT": 100,
+    "ODBC_E2E_DML_BULK_ROW_COUNT": 50000,
+    "ODBC_E2E_DML_BULK_CHUNK_SIZE": 1000,
+    "ODBC_POOL_SIZE": 8,
+    "method": "odbc_fast.bulkInsert"
+  },
+  "suite_results": {
+    "sqlAnywhere": {
+      "status": "pass",
+      "passed": 32,
+      "skipped": 10,
+      "failed": 0,
+      "wall_ms": 30075
+    },
+    "sqlServer": {
+      "status": "partial_fail",
+      "passed": 32,
+      "skipped": 9,
+      "failed": 1,
+      "wall_ms": 15914,
+      "failures": [
+        "test/live/auto_update_diagnostics_push_e2e_test.dart (hub throttle: expected 1 push, got 2)"
+      ]
+    }
+  },
+  "results": [
+    {
+      "test": "odbc_dml_perf_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "rows": 100,
+      "wall_ms": 2448,
+      "note": "isolated run; parallel full suite did not complete this test"
+    },
+    {
+      "test": "odbc_dml_perf_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "rows": 100,
+      "wall_ms": 2502,
+      "note": "isolated run"
+    },
+    {
+      "test": "odbc_dml_bulk_load_live_e2e",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "rows": 50000,
+      "create_ms": 34,
+      "insert_ms": 1160,
+      "bulk_insert_parallel_total": 0,
+      "bulk_insert_chunked_total": 1,
+      "update_ms": 77,
+      "delete_ms": 1654,
+      "drop_ms": 60,
+      "insert_rows_per_sec": 43103.45,
+      "update_rows_per_sec": 649350.65,
+      "delete_rows_per_sec": 30229.75,
+      "wall_ms": 2985
+    },
+    {
+      "test": "odbc_dml_bulk_load_live_e2e",
+      "driver": "sqlServer",
+      "status": "pass",
+      "rows": 50000,
+      "create_ms": 21,
+      "insert_ms": 2684,
+      "bulk_insert_parallel_total": 1,
+      "bulk_insert_chunked_total": 1,
+      "update_ms": 66,
+      "delete_ms": 78,
+      "drop_ms": 29,
+      "insert_rows_per_sec": 18628.91,
+      "update_rows_per_sec": 757575.76,
+      "delete_rows_per_sec": 641025.64,
+      "wall_ms": 2878
+    },
+    {
+      "test": "sql_queue_burst_test",
+      "driver": "sqlAnywhere",
+      "status": "pass",
+      "wall_s": 15,
+      "note": "overflow recovery test ~00:05 to 00:20"
+    },
+    {
+      "test": "sql_queue_burst_test",
+      "driver": "sqlServer",
+      "status": "pass",
+      "wall_s": 5,
+      "note": "overflow recovery test ~00:06 to 00:11"
+    },
+    {
+      "test": "hub_socket_live_e2e",
+      "driver": "hub",
+      "status": "skipped",
+      "reason": "E2E_HUB_TOKEN JWT expired"
+    },
+    {
+      "test": "hub_agent_action_rpc_live_e2e",
+      "driver": "hub",
+      "status": "skipped",
+      "reason": "E2E_HUB_TOKEN JWT expired"
+    },
+    {
+      "test": "auto_update_diagnostics_push_e2e",
+      "driver": "hub",
+      "status": "fail_on_sql_server_run",
+      "reason": "throttle window: second push was not suppressed"
+    }
+  ],
+  "skipped_not_run": [
+    "odbc_dml_stress_live_e2e (ODBC_E2E_DML_STRESS_TESTS not set)",
+    "odbc_sql_execute_codcliente_live_e2e (ODBC_E2E_CODCLIENTE_TESTS not set)",
+    "odbc_rpc transactional batch (ODBC_E2E_TRANSACTIONAL_BATCH not set)",
+    "api_test (RUN_LIVE_API_TESTS=false)"
+  ],
+  "comparison_vs_20260606_122558": {
+    "bulk_insert_sa": "1160ms vs 878ms baseline (+32% slower today)",
+    "bulk_delete_sa": "1654ms vs 1758ms baseline (similar; still bottleneck)",
+    "bulk_insert_ss": "2684ms vs 1890ms baseline (+42% slower today)",
+    "bulk_delete_ss": "78ms vs 50ms baseline (still fast)"
+  },
+  "comparison_notes": {
+    "insert": "SQL Anywhere ~2.3x faster bulk insert (43k vs 19k rows/sec); SA chunked-only, SS parallel+chunked.",
+    "delete": "SQL Server ~21x faster delete (641k vs 30k rows/sec); SA delete dominates bulk wall time (55% of DML phases).",
+    "update": "Both sub-80ms for 50k rows; negligible vs insert/delete.",
+    "burst": "SQL Server queue recovery ~3x faster than SQL Anywhere under long-query saturation.",
+    "parallel_suite": "flutter test runs integration files concurrently; odbc_dml_perf may not finish when bulk/lock tests share ODBC — use --concurrency=1 for reliable perf numbers."
+  }
+}
