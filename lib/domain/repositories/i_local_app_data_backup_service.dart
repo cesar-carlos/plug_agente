@@ -5,7 +5,10 @@ abstract class ILocalAppDataBackupService {
   /// Drift / `PRAGMA user_version` of the live `agent_config` database.
   int get liveAgentConfigSchemaVersion;
 
-  Future<Result<void>> exportBackupZip(String destinationZipPath);
+  Future<Result<void>> exportBackupZip(
+    String destinationZipPath, {
+    bool includeSecureStorageSecrets = false,
+  });
 
   Future<Result<RestoreStagingSnapshot>> stageRestoreFromZip(String zipPath);
 

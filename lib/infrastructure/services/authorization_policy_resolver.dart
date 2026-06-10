@@ -1,18 +1,18 @@
-import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
+import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
+import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
-import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -20,13 +20,13 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   AuthorizationPolicyResolver(
     this._featureFlags, {
     JwtJwksVerifier? jwksVerifier,
-    ClientTokenLocalDataSource? localDataSource,
+    IClientTokenRepository? clientTokenRepository,
     IRevokedTokenStore? revokedTokenStore,
     ITokenAuditStore? tokenAuditStore,
     IClientTokenPolicyCache? policyCache,
     IAuthorizationCacheMetrics? cacheMetrics,
   }) : _jwksVerifier = jwksVerifier,
-       _localDataSource = localDataSource,
+       _clientTokenRepository = clientTokenRepository,
        _revokedTokenStore = revokedTokenStore,
        _tokenAuditStore = tokenAuditStore,
        _policyCache = policyCache,
@@ -34,7 +34,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
 
   final FeatureFlags _featureFlags;
   final JwtJwksVerifier? _jwksVerifier;
-  final ClientTokenLocalDataSource? _localDataSource;
+  final IClientTokenRepository? _clientTokenRepository;
   final IRevokedTokenStore? _revokedTokenStore;
   final ITokenAuditStore? _tokenAuditStore;
   final IClientTokenPolicyCache? _policyCache;
@@ -77,8 +77,12 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       _cacheMetrics?.recordPolicyCacheLookup(hit: false);
     }
 
-    if (_localDataSource != null) {
-      final localResult = await _resolvePolicyFromLocalStore(rawToken);
+    final clientTokenRepository = _clientTokenRepository;
+    if (clientTokenRepository != null) {
+      final localResult = await _resolvePolicyFromLocalStore(
+        clientTokenRepository,
+        rawToken,
+      );
       if (localResult.isSuccess()) {
         final policy = localResult.getOrNull();
         if (policy != null) {
@@ -122,39 +126,42 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       return jwksResolved;
     }
 
-    final decodeResult = await _resolvePolicyDecodeOnly(token);
-    if (decodeResult.isError()) {
-      final failure = decodeResult.exceptionOrNull();
-      if (failure is domain.Failure) {
-        _addToRevokedStoreIfNeeded(rawToken, failure);
-        await _recordAuthorizationDeniedAudit(failure);
-      }
-    } else {
-      final policy = decodeResult.getOrNull();
-      if (policy != null) {
-        policyCache?.put(credentialHash, policy);
-      }
-    }
-    return decodeResult;
+    final failure = _unsignedTokenAuthenticationFailure();
+    _addToRevokedStoreIfNeeded(rawToken, failure);
+    await _recordAuthorizationDeniedAudit(failure);
+    return Failure(failure);
   }
 
   Future<Result<ClientTokenPolicy>> _resolvePolicyFromLocalStore(
+    IClientTokenRepository repository,
     String rawToken,
   ) async {
-    final tokenHash = _localDataSource!.hashTokenForLookup(rawToken);
-    final summary = await _localDataSource.getTokenByHash(tokenHash);
-    if (summary == null) {
+    final tokenHash = hashClientCredentialToken(rawToken);
+    final summaryResult = await repository.getTokenByHash(tokenHash);
+    if (summaryResult.isError()) {
+      final error = summaryResult.exceptionOrNull();
+      if (error is domain.Failure) {
+        return _mapLocalStoreFailure(error);
+      }
       return Failure(
         domain.ConfigurationFailure.withContext(
-          message: 'Token not found in local store',
+          message: 'Failed to resolve token policy from local store',
+          cause: error,
           context: {
-            'authorization': true,
-            'reason': AuthorizationContextConstants.tokenNotFoundReason,
+            'authentication': true,
+            'reason': AuthorizationContextConstants.unauthorizedReason,
           },
         ),
       );
     }
 
+    return _policyFromSummary(summaryResult.getOrThrow(), rawToken);
+  }
+
+  Result<ClientTokenPolicy> _policyFromSummary(
+    ClientTokenSummary summary,
+    String rawToken,
+  ) {
     if (summary.isRevoked) {
       final failure = domain.ConfigurationFailure.withContext(
         message: 'Token revoked',
@@ -186,61 +193,44 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     );
   }
 
-  Future<Result<ClientTokenPolicy>> _resolvePolicyDecodeOnly(
-    String token,
-  ) async {
-    final rawToken = normalizeClientCredentialToken(token);
-    if (rawToken.isEmpty) {
+  Result<ClientTokenPolicy> _mapLocalStoreFailure(domain.Failure failure) {
+    if (failure is domain.NotFoundFailure) {
       return Failure(
         domain.ConfigurationFailure.withContext(
-          message: 'Missing client token',
-          context: {'authentication': true},
-        ),
-      );
-    }
-
-    final segments = rawToken.split('.');
-    if (segments.length < 2) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Invalid token format',
+          message: 'Token not found in local store',
           context: {
-            'authentication': true,
-            'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
+            'authorization': true,
+            'reason': AuthorizationContextConstants.tokenNotFoundReason,
           },
         ),
       );
     }
 
-    try {
-      final payloadSegment = segments[1];
-      final normalized = base64Url.normalize(payloadSegment);
-      final decoded = utf8.decode(base64Url.decode(normalized));
-      final payload = jsonDecode(decoded) as Map<String, dynamic>;
-      return _extractPolicyFromPayload(payload);
-    } on FormatException catch (error) {
+    if (failure is domain.ServerFailure) {
       return Failure(
         domain.ConfigurationFailure.withContext(
-          message: 'Invalid token payload encoding',
-          cause: error,
+          message: 'Failed to resolve token policy from local store',
+          cause: failure.cause,
           context: {
             'authentication': true,
-            'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
-          },
-        ),
-      );
-    } on Exception catch (error) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Failed to parse token policy',
-          cause: error,
-          context: {
-            'authentication': true,
-            'reason': AuthorizationContextConstants.invalidPolicyReason,
+            'reason': AuthorizationContextConstants.unauthorizedReason,
+            'operation': failure.context['operation'],
           },
         ),
       );
     }
+
+    return Failure(failure);
+  }
+
+  domain.ConfigurationFailure _unsignedTokenAuthenticationFailure() {
+    return domain.ConfigurationFailure.withContext(
+      message: 'Token signature verification is required',
+      context: {
+        'authentication': true,
+        'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
+      },
+    );
   }
 
   Result<ClientTokenPolicy> _extractPolicyFromPayload(
@@ -307,7 +297,9 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     }
     final reason = failure.context['reason'] as String?;
     if (reason == AuthorizationContextConstants.tokenRevokedReason) {
-      _revokedTokenStore.add(token);
+      if (token.isNotEmpty) {
+        _revokedTokenStore.add(token);
+      }
       final clientId = failure.context['client_id'] as String?;
       _tokenAuditStore?.record(
         TokenAuditEvent(

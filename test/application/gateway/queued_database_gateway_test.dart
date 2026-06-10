@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
@@ -23,6 +24,7 @@ void main() {
     registerFallbackValue(_FakeQueryRequest());
     registerFallbackValue(_FakeSqlCommand());
     registerFallbackValue(const SqlExecutionOptions());
+    registerFallbackValue(CancellationToken());
   });
 
   group('QueuedDatabaseGateway', () {
@@ -58,6 +60,7 @@ void main() {
           any(),
           timeout: any(named: 'timeout'),
           database: any(named: 'database'),
+          cancellationToken: any(named: 'cancellationToken'),
         ),
       ).thenAnswer((_) async => res.Success(mockResponse));
 
@@ -65,7 +68,12 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
       expect(result.getOrNull(), equals(mockResponse));
-      verify(() => delegate.executeQuery(request)).called(1);
+      verify(
+        () => delegate.executeQuery(
+          request,
+          cancellationToken: any(named: 'cancellationToken'),
+        ),
+      ).called(1);
     });
 
     test('should route executeBatch through queue', () async {
@@ -163,6 +171,7 @@ void main() {
           any(),
           timeout: any(named: 'timeout'),
           database: any(named: 'database'),
+          cancellationToken: any(named: 'cancellationToken'),
         ),
       ).thenAnswer((_) async {
         await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -326,5 +335,94 @@ void main() {
       }
       expect(error.context['reason'], equals(SqlPipelineContextConstants.queueDisposedReason));
     });
+
+    test(
+      'should signal cooperative cancel when materialized enqueue times out',
+      () async {
+        final delegate = _MockDatabaseGateway();
+        final queue = SqlExecutionQueue(
+          maxQueueSize: 4,
+          maxConcurrentWorkers: 1,
+          defaultEnqueueTimeout: const Duration(milliseconds: 30),
+        );
+        final gateway = QueuedDatabaseGateway(
+          delegate: delegate,
+          queue: queue,
+        );
+        final firstBlocker = Completer<void>();
+        final cooperativeToken = CancellationToken();
+
+        var queryInvocation = 0;
+        when(
+          () => delegate.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+            cancellationToken: any(named: 'cancellationToken'),
+          ),
+        ).thenAnswer((invocation) async {
+          queryInvocation++;
+          final token = invocation.namedArguments[#cancellationToken] as CancellationToken?;
+          if (queryInvocation == 1) {
+            await firstBlocker.future;
+            return res.Success(
+              QueryResponse(
+                id: 'response-1',
+                requestId: 'blocker',
+                agentId: 'agent-1',
+                data: [],
+                timestamp: DateTime.now(),
+              ),
+            );
+          }
+          await Future<void>.delayed(const Duration(seconds: 1));
+          if (token?.isCancelled ?? false) {
+            return res.Failure(
+              QueryExecutionFailure.withContext(
+                message: 'SQL execution cancelled',
+                context: const {'cooperative_cancel': true},
+              ),
+            );
+          }
+          return res.Success(
+            QueryResponse(
+              id: 'response-2',
+              requestId: 'timeout',
+              agentId: 'agent-1',
+              data: [],
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+
+        unawaited(
+          gateway.executeQuery(
+            QueryRequest(
+              id: 'blocker',
+              agentId: 'agent-1',
+              query: 'SELECT 1',
+              timestamp: DateTime.now(),
+            ),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final result = await gateway.executeQuery(
+          QueryRequest(
+            id: 'timeout',
+            agentId: 'agent-1',
+            query: 'SELECT 2',
+            timestamp: DateTime.now(),
+          ),
+          cancellationToken: cooperativeToken,
+        );
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<QueryExecutionFailure>());
+        expect(cooperativeToken.isCancelled, isTrue);
+
+        firstBlocker.complete();
+      },
+    );
   });
 }

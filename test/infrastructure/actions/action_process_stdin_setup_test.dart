@@ -5,12 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
-import 'package:plug_agente/infrastructure/actions/action_process_stdin_setup.dart';
+import 'agent_action_process_runner_test_support.dart';
 
 void main() {
   group('ActionProcessStdinSetup', () {
     test('should close stdin when injection mode is not stdin', () async {
-      const setup = ActionProcessStdinSetup();
+      const setup = kTestActionProcessStdinSetup;
       final process = await Process.start(
         Platform.isWindows ? 'cmd.exe' : 'cat',
         Platform.isWindows ? ['/C', 'exit 0'] : [],
@@ -43,7 +43,7 @@ void main() {
       if (!Platform.isWindows) {
         return;
       }
-      const setup = ActionProcessStdinSetup();
+      const setup = kTestActionProcessStdinSetup;
       final process = await Process.start(
         'powershell.exe',
         ['-NoProfile', '-Command', r'$input | Out-String'],
@@ -92,7 +92,7 @@ void main() {
         return;
       }
 
-      const setup = ActionProcessStdinSetup();
+      const setup = kTestActionProcessStdinSetup;
       final process = await Process.start(
         'cmd.exe',
         ['/C', 'exit 0'],

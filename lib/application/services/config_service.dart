@@ -1,6 +1,7 @@
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/constants/odbc_drivers.dart';
 import 'package:plug_agente/core/constants/sql_anywhere_connection_string.dart';
+import 'package:plug_agente/core/utils/odbc_connection_string_secrets.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:result_dart/result_dart.dart';
@@ -9,10 +10,14 @@ class ConfigService {
   ConfigService(this._validator);
   final ConfigValidator _validator;
 
-  Future<Result<bool>> validateConfig(Config config) async {
-    return _validator.validate(config);
+  Future<Result<void>> validateConfig(
+    Config config, {
+    bool forPersistence = false,
+  }) async {
+    return _validator.validate(config, forPersistence: forPersistence);
   }
 
+  /// Builds a runtime ODBC connection string, including [Config.password] when set.
   String generateConnectionString(Config config) {
     final driver = DatabaseDriver.fromString(config.driverName);
 
@@ -22,6 +27,13 @@ class ConfigService {
       DatabaseDriver.sqlAnywhere => _buildSqlAnywhereConnectionString(config),
       DatabaseDriver.unknown => '',
     };
+  }
+
+  /// Builds the connection string persisted in Drift (never embeds `PWD`).
+  String generateConnectionStringForPersistence(Config config) {
+    return OdbcConnectionStringSecrets.stripPasswordFromConnectionString(
+      generateConnectionString(config),
+    );
   }
 
   String _buildSqlServerConnectionString(Config config) {

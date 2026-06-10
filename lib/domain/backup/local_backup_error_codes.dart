@@ -16,4 +16,8 @@ abstract final class LocalBackupErrorCodes {
   static const String stageGeneric = 'stage_generic';
   static const String applyMissingDb = 'apply_missing_db';
   static const String applyWrite = 'apply_write';
+  static const String exportSecretsUnavailable = 'export_secrets_unavailable';
+  static const String exportSecretsEncrypt = 'export_secrets_encrypt';
+  static const String restoreSecretsDecrypt = 'restore_secrets_decrypt';
+  static const String restoreSecretsApply = 'restore_secrets_apply';
 }

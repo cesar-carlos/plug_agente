@@ -13,17 +13,19 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
-import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/metrics/authorization_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
@@ -39,7 +41,7 @@ HealthService _healthServiceForIntegration(IDatabaseGateway gateway) => HealthSe
 
 class MockAuthorizationPolicyResolver extends Mock implements IAuthorizationPolicyResolver {}
 
-class MockClientTokenLocalDataSource extends Mock implements ClientTokenLocalDataSource {}
+class MockClientTokenRepository extends Mock implements IClientTokenRepository {}
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
@@ -74,7 +76,7 @@ void main() {
   late MockDatabaseGateway mockGateway;
   late MockAuthorizationPolicyResolver mockResolver;
   late MockFeatureFlags mockFeatureFlags;
-  late MockClientTokenLocalDataSource mockLocalDataSource;
+  late MockClientTokenRepository mockClientTokenRepository;
   late MockQueryNormalizerService mockNormalizer;
   late AuthorizationMetricsCollector authMetrics;
 
@@ -128,7 +130,7 @@ void main() {
     mockGateway = MockDatabaseGateway();
     mockResolver = MockAuthorizationPolicyResolver();
     mockFeatureFlags = MockFeatureFlags();
-    mockLocalDataSource = MockClientTokenLocalDataSource();
+    mockClientTokenRepository = MockClientTokenRepository();
     mockNormalizer = MockQueryNormalizerService();
     authMetrics = AuthorizationMetricsCollector();
 
@@ -358,17 +360,29 @@ void main() {
       'should deny rpc request when token jti is not found in local store',
       () async {
         const tokenId = 'missing-local-token';
-        const tokenHash = 'hash-missing-local-token';
-        when(
-          () => mockLocalDataSource.hashTokenForLookup(any()),
-        ).thenReturn(tokenHash);
-        when(
-          () => mockLocalDataSource.getTokenByHash(tokenHash),
-        ).thenAnswer((_) async => null);
+        final clientToken = _buildTokenWithJti(
+          tokenId: tokenId,
+          payloadPolicy: const {
+            'client_id': 'payload-client',
+            'all_tables': true,
+            'all_views': true,
+            'all_permissions': true,
+            'rules': <Map<String, dynamic>>[],
+          },
+        );
+        final tokenHash = hashClientCredentialToken(clientToken);
+        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+          (_) async => Failure(
+            domain.NotFoundFailure.withContext(
+              message: 'Client token not found',
+              context: const {'operation': 'get_local_client_token_by_hash'},
+            ),
+          ),
+        );
 
         final resolver = AuthorizationPolicyResolver(
           mockFeatureFlags,
-          localDataSource: mockLocalDataSource,
+          clientTokenRepository: mockClientTokenRepository,
         );
         final authorizeSqlOperation = AuthorizeSqlOperation(
           SqlOperationClassifier(),
@@ -397,16 +411,7 @@ void main() {
         final response = await dispatcherWithLocalResolver.dispatch(
           request,
           'agent-1',
-          clientToken: _buildTokenWithJti(
-            tokenId: tokenId,
-            payloadPolicy: const {
-              'client_id': 'payload-client',
-              'all_tables': true,
-              'all_views': true,
-              'all_permissions': true,
-              'rules': <Map<String, dynamic>>[],
-            },
-          ),
+          clientToken: clientToken,
         );
 
         check(response.isError).isTrue();
@@ -414,8 +419,7 @@ void main() {
         final data = response.error!.data as Map<String, dynamic>;
         check(data['reason']).equals(AuthorizationContextConstants.unauthorizedReason);
         check(data['odbc_reason']).equals('token_not_found');
-        verify(() => mockLocalDataSource.hashTokenForLookup(any())).called(1);
-        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
       },
     );
@@ -424,7 +428,6 @@ void main() {
       'should authorize rpc request using local policy over token payload',
       () async {
         const tokenId = 'local-token-allow';
-        const tokenHash = 'hash-local-token-allow';
         final localSummary = ClientTokenSummary(
           id: tokenId,
           clientId: 'local-client',
@@ -448,16 +451,24 @@ void main() {
             ),
           ],
         );
-        when(
-          () => mockLocalDataSource.hashTokenForLookup(any()),
-        ).thenReturn(tokenHash);
-        when(
-          () => mockLocalDataSource.getTokenByHash(tokenHash),
-        ).thenAnswer((_) async => localSummary);
+        final clientToken = _buildTokenWithJti(
+          tokenId: tokenId,
+          payloadPolicy: const {
+            'client_id': 'payload-client',
+            'all_tables': false,
+            'all_views': false,
+            'all_permissions': false,
+            'rules': <Map<String, dynamic>>[],
+          },
+        );
+        final tokenHash = hashClientCredentialToken(clientToken);
+        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+          (_) async => Success(localSummary),
+        );
 
         final resolver = AuthorizationPolicyResolver(
           mockFeatureFlags,
-          localDataSource: mockLocalDataSource,
+          clientTokenRepository: mockClientTokenRepository,
         );
         final authorizeSqlOperation = AuthorizeSqlOperation(
           SqlOperationClassifier(),
@@ -502,21 +513,11 @@ void main() {
             params: {'sql': 'SELECT * FROM dbo.users'},
           ),
           'agent-1',
-          clientToken: _buildTokenWithJti(
-            tokenId: tokenId,
-            payloadPolicy: const {
-              'client_id': 'payload-client',
-              'all_tables': false,
-              'all_views': false,
-              'all_permissions': false,
-              'rules': <Map<String, dynamic>>[],
-            },
-          ),
+          clientToken: clientToken,
         );
 
         check(response.isError).isFalse();
-        verify(() => mockLocalDataSource.hashTokenForLookup(any())).called(1);
-        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
         verify(
           () => mockGateway.executeQuery(
             any(),
@@ -531,7 +532,6 @@ void main() {
       'should return token_id and issued_at on client_token.getPolicy via local resolver',
       () async {
         const tokenId = 'policy-introspect-1';
-        const tokenHash = 'hash-policy-introspect-1';
         final localSummary = ClientTokenSummary(
           id: tokenId,
           clientId: 'local-client',
@@ -542,16 +542,15 @@ void main() {
           allPermissions: false,
           rules: const [],
         );
-        when(
-          () => mockLocalDataSource.hashTokenForLookup(any()),
-        ).thenReturn(tokenHash);
-        when(
-          () => mockLocalDataSource.getTokenByHash(tokenHash),
-        ).thenAnswer((_) async => localSummary);
+        const clientToken = 'opaque';
+        final tokenHash = hashClientCredentialToken(clientToken);
+        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+          (_) async => Success(localSummary),
+        );
 
         final resolver = AuthorizationPolicyResolver(
           mockFeatureFlags,
-          localDataSource: mockLocalDataSource,
+          clientTokenRepository: mockClientTokenRepository,
         );
         final authorizeSqlOperation = AuthorizeSqlOperation(
           SqlOperationClassifier(),
@@ -575,10 +574,10 @@ void main() {
             jsonrpc: '2.0',
             method: 'client_token.getPolicy',
             id: 'req-get-policy',
-            params: {'client_token': 'opaque'},
+            params: {'client_token': clientToken},
           ),
           'agent-1',
-          clientToken: 'opaque',
+          clientToken: clientToken,
         );
 
         check(response.isError).isFalse();

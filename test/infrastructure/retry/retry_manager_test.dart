@@ -73,6 +73,16 @@ void main() {
         expect(attempts, 1); // Should not retry
       });
 
+      test('should normalize raw Exception failures to ServerFailure', () async {
+        final result = await retryManager.execute<String>(
+          () async => Failure(Exception('pool acquire failed')),
+          maxAttempts: 1,
+        );
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<domain.ServerFailure>());
+      });
+
       test('should fail after max attempts', () async {
         // Arrange
         var attempts = 0;

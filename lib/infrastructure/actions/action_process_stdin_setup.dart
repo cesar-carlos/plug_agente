@@ -1,20 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
 import 'package:plug_agente/core/constants/agent_action_path_context_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/i_agent_action_secret_placeholder_resolver.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Configures child-process stdin: closed by default, or payload when injection mode is stdin.
 class ActionProcessStdinSetup {
   const ActionProcessStdinSetup({
-    AgentActionSecretPlaceholderResolver? secretPlaceholderResolver,
-  }) : _secretPlaceholderResolver = secretPlaceholderResolver ?? const AgentActionSecretPlaceholderResolver();
+    required IAgentActionSecretPlaceholderResolver secretPlaceholderResolver,
+  }) : _secretPlaceholderResolver = secretPlaceholderResolver;
 
-  final AgentActionSecretPlaceholderResolver _secretPlaceholderResolver;
+  final IAgentActionSecretPlaceholderResolver _secretPlaceholderResolver;
 
   Future<Result<void>> configure({
     required Process process,

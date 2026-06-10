@@ -42,7 +42,7 @@ contendo:
 | Arquivo | Conteudo |
 | --- | --- |
 | `odbc_operational_validation_report.md` | Worksheet em Markdown com ambiente, tuning efetivo e placeholders para preenchimento |
-| `health_snapshot_template.json` | Baseline do shape atual de `agent.getHealth` |
+| `health_snapshot_template.json` | Baseline do shape atual de `agent.getHealth` (gerado por `dart run tool/export_odbc_health_snapshot_template.dart`, alinhado a `HealthService` e `rpc.result.agent-get-health.schema.json`) |
 | `odbc_runtime.log` | Smoke do runtime `odbc_fast` (sem DSN) |
 | `preflight.log` | Resultado de `tool/check_e2e_env.dart` |
 | `smoke.log` | Smoke ODBC (`odbc_queued_gateway_smoke_live_e2e_test.dart`) |
@@ -104,24 +104,36 @@ etapas rodar.
 
 ## Como ler o snapshot de health
 
-Campos mais relevantes:
+Campos mais relevantes (nomes atuais do contrato `agent.getHealth`):
 
-- `odbc_runtime_tuning.async_worker_count`
-- `odbc_runtime_tuning.async_max_pending_requests`
-- `odbc_runtime_tuning.result_encoding`
+- `secure_storage.odbc_available`, `hub_auth_available`,
+  `client_tokens_available`, `degraded` — disponibilidade de
+  `flutter_secure_storage` por dominio (ODBC, hub auth, client tokens).
+- `odbc_runtime_tuning.async_worker_count`,
+  `odbc_runtime_tuning.async_max_pending_requests`,
+  `odbc_runtime_tuning.result_encoding`
 - `pool.effective_strategy`, `pool.native_eligible`, `pool.active_count`,
-  `pool.fallbacks_total`
+  `pool.lease_active_count`, `pool.native_active_count`, `pool.fallbacks_total`
 - `pool.native_compatible_acquire_success_total`
+- `streaming.from_db_responses_total`, `streaming.cancel_requests_total`,
+  `streaming.backpressure_cancels_total`, `streaming.active_streams`
+- `prepared.cache_hit_total`, `prepared.cache_miss_total`, `prepared.prepare_p95_ms`
 - `batch.transactional_native_pool_total`,
-  `batch.transactional_native_pool_fallback_total`
-- `batch.bulk_insert_recommended_total`
+  `batch.transactional_native_pool_fallback_total`,
+  `batch.bulk_insert_recommended_total`, `batch.bulk_insert_routed_total`
 - `sql_queue.current_size`, `sql_queue.rejections_total`,
-  `sql_queue.timeouts_total`, `sql_queue.p95_wait_time_ms`
+  `sql_queue.timeouts_total`, `sql_queue.timeouts_after_worker_started_total`,
+  `sql_queue.p95_wait_time_ms`
+- Worker-kind slots: `sql_queue.active_streaming_workers` /
+  `max_streaming_workers`, `active_batch_workers`, `active_long_query_workers`,
+  `active_non_query_workers` (e respectivos `max_*`)
 - `queries.p95_latency_ms`, `queries.p99_latency_ms`
-- `timeouts.pool_total`
+- `timeouts.pool_total`, `timeouts.cancel_success_total`
 
-`async_worker_pool.near_pending_limit=true` indica que o worker pool interno
-esta proximo do teto configurado.
+`async_worker_pool.near_pending_limit=true` (quando presente no payload ODBC
+nativo) indica que o worker pool interno do `odbc_fast` esta proximo do teto
+configurado. `timeouts_after_worker_started_total` > 0 sinaliza risco de
+**ghost query** — ver `docs/testing/sql_queue_concurrency_tests.md`.
 
 ## Decisao de tuning
 

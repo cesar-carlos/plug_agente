@@ -4,6 +4,21 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('layer boundaries', () {
+    test('infrastructure does not import application', () {
+      final offenders = <String>[];
+      for (final entity in Directory('lib/infrastructure').listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) {
+          continue;
+        }
+        final content = entity.readAsStringSync();
+        if (content.contains('package:plug_agente/application/')) {
+          offenders.add(entity.path);
+        }
+      }
+
+      expect(offenders, isEmpty);
+    });
+
     test('application and domain do not import forbidden outer dependencies', () {
       final offenders = <String>[];
       for (final root in const <String>['lib/application', 'lib/domain']) {

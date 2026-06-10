@@ -9,7 +9,9 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/config/database_config.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
@@ -63,6 +65,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
     required Duration? timeout,
     required String batchSqlPreview,
     required int poolSize,
+    bool allowNativeCompatibleAcquire = false,
     String? sourceRpcRequestId,
   }) async {
     final deadline = timeout == null ? null : DateTime.now().add(timeout);
@@ -70,7 +73,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
     _parallelSemaphore.resize(safePoolParallelism);
     final parallelism = options.maxParallelReadOnlyBatchItems.clamp(1, safePoolParallelism);
     final acquireOptions = _optionsResolver.forTimeout(
-      _remainingTimeoutFromDeadline(deadline) ?? timeout,
+      OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
     );
 
     _metrics.recordReadOnlyBatchParallel(
@@ -89,7 +92,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
 
     final workerConnections = <String>[];
     for (var workerIndex = 0; workerIndex < parallelism; workerIndex++) {
-      final remainingTimeout = _remainingTimeoutFromDeadline(deadline);
+      final remainingTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
       if (remainingTimeout != null && remainingTimeout <= Duration.zero) {
         await _releaseWorkerConnections(workerConnections);
         return Failure(
@@ -105,15 +108,25 @@ final class OdbcReadOnlyBatchParallelExecutor {
         );
       }
 
-      final poolResult = await _connectionManager.acquirePooledConnection(
-        connectionString,
-        options: acquireOptions,
-        deadline: deadline,
-        context: {
-          'operation': 'read_only_batch_parallel_worker',
-          'worker_index': workerIndex,
-        },
-      );
+      final poolResult = allowNativeCompatibleAcquire
+          ? await _connectionManager.acquireNativeCompatiblePooledConnection(
+              connectionString,
+              leaseFallbackOptions: acquireOptions,
+              deadline: deadline,
+              context: {
+                'operation': 'read_only_batch_parallel_worker',
+                'worker_index': workerIndex,
+              },
+            )
+          : await _connectionManager.acquirePooledConnection(
+              connectionString,
+              options: acquireOptions,
+              deadline: deadline,
+              context: {
+                'operation': 'read_only_batch_parallel_worker',
+                'worker_index': workerIndex,
+              },
+            );
       if (poolResult.isError()) {
         await _releaseWorkerConnections(workerConnections);
         final error = poolResult.exceptionOrNull()!;
@@ -144,7 +157,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
           }
 
           final command = commands[index];
-          final remainingTimeout = _remainingTimeoutFromDeadline(deadline);
+          final remainingTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
           if (remainingTimeout != null && remainingTimeout <= Duration.zero) {
             results[index] = SqlCommandResult.failure(
               index: index,
@@ -173,7 +186,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
           _metrics.recordReadOnlyBatchParallelWaitTime(waitStopwatch.elapsed);
 
           try {
-            final executionTimeout = _remainingTimeoutFromDeadline(deadline);
+            final executionTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
             if (executionTimeout != null && executionTimeout <= Duration.zero) {
               results[index] = SqlCommandResult.failure(
                 index: index,
@@ -200,11 +213,22 @@ final class OdbcReadOnlyBatchParallelExecutor {
               preparedExecution: preparedExecution,
               connectionString: connectionString,
               timeout: executionTimeout ?? timeout,
-              executionMode: 'read_only_batch_parallel',
+              executionMode: allowNativeCompatibleAcquire
+                  ? 'read_only_batch_parallel_native'
+                  : 'read_only_batch_parallel',
             );
 
             if (!outcome.isSuccess) {
               final error = outcome.error!;
+              if (allowNativeCompatibleAcquire && _isInvalidConnectionIdError(error)) {
+                _connectionManager.recordPooledExecutionFailure(
+                  connectionString: connectionString,
+                  connectionId: connectionId,
+                  error: error,
+                  stage: 'read_only_batch_parallel',
+                );
+                _connectionManager.markConnectionForDiscard(connectionId);
+              }
               final message = error is domain.Failure ? error.message : error.toString();
               _recordInfrastructureFailure(
                 originalSql: command.sql.isEmpty ? batchSqlPreview : command.sql,
@@ -223,6 +247,11 @@ final class OdbcReadOnlyBatchParallelExecutor {
               rowCount: limitedRows.length,
               affectedRows: response.affectedRows,
               columnMetadata: response.columnMetadata,
+            );
+          } on TimeoutException {
+            results[index] = SqlCommandResult.failure(
+              index: index,
+              error: 'Batch SQL execution timeout',
             );
           } finally {
             _parallelSemaphore.release();
@@ -257,11 +286,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
     }
   }
 
-  Duration? _remainingTimeoutFromDeadline(DateTime? deadline) {
-    if (deadline == null) {
-      return null;
-    }
-    final remaining = deadline.difference(DateTime.now());
-    return remaining <= Duration.zero ? Duration.zero : remaining;
+  bool _isInvalidConnectionIdError(Object error) {
+    return OdbcErrorInspector.isInvalidConnectionId(error);
   }
 }

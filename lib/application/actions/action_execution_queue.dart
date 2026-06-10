@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:plug_agente/core/constants/agent_action_queue_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/repositories/action_execution_queue_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 typedef AgentActionQueuedTask<T extends Object> = Future<Result<T>> Function();
@@ -342,27 +343,6 @@ class ActionExecutionQueue {
 
     return '$actionId:$trimmed';
   }
-}
-
-/// Metrics for [ActionExecutionQueue]; stable counter keys for snapshots/OTel.
-abstract class ActionExecutionQueueMetricsCollector {
-  void recordConcurrencyReject();
-
-  void recordConcurrencyIgnore();
-
-  void recordQueueDepthFull();
-
-  void recordPendingEnqueued();
-
-  void recordIdempotentReplay();
-
-  void recordRunStarted();
-
-  void recordPendingWaitTimeout();
-
-  void recordPendingCancelled();
-
-  void recordPendingDequeueWaitTime(Duration wait);
 }
 
 class _PendingActionTask<T extends Object> {

@@ -2,6 +2,7 @@
 // Reason: Config uses ID-based equality for collections and state comparison.
 
 import 'package:plug_agente/core/constants/sql_anywhere_connection_string.dart';
+import 'package:plug_agente/core/utils/odbc_connection_string_secrets.dart';
 
 class Config {
   const Config({
@@ -161,6 +162,18 @@ class Config {
   String resolveConnectionString() {
     final persisted = connectionString.trim();
     if (persisted.isNotEmpty) {
+      final embeddedPassword = OdbcConnectionStringSecrets.extractPasswordFromConnectionString(
+        persisted,
+      );
+      if (embeddedPassword == null) {
+        final storedPassword = password?.trim();
+        if (storedPassword != null && storedPassword.isNotEmpty) {
+          return OdbcConnectionStringSecrets.injectPasswordIntoConnectionString(
+            persisted,
+            storedPassword,
+          );
+        }
+      }
       return persisted;
     }
 

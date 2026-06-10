@@ -19,7 +19,7 @@ sincronizado a partir deste arquivo.
 
 ## Status oficial
 
-**2026-05-26**: Execucao em andamento. Itens marcados como `[x]` foram
+**2026-06-10**: Execucao em andamento. Itens marcados como `[x]` foram
 mergeados; `[~]` indica em PR aberto; `[ ]` permanece pendente.
 
 ## Backlog (atalho)
@@ -85,38 +85,38 @@ incidentes.
 
 #### 1A. CI executa `tool/test_appcast_signing` sem skip
 
-- [ ] Adicionar `pip install cryptography>=42.0.0` aos workflows
+- [x] Adicionar `pip install cryptography>=42.0.0` aos workflows
   `.github/workflows/release.yml`, `.github/workflows/update-appcast.yml`,
   `.github/workflows/release-preflight.yml`.
-- [ ] Step novo: `python -m unittest tool.test_appcast_signing -v` (falha
-  o workflow se algum skip).
-- [ ] Documentar requisito de Python 3.10+ nos workflows.
+- [x] Step novo: `python -m unittest tool.test_appcast_signing -v` (falha
+  o workflow se algum skip) em `update-appcast.yml` e `validate-appcast.yml`.
+- [x] Documentar requisito de Python 3.10+ nos workflows (`python-version: "3.11"`).
 
 #### 1B. Multi-key support (rotacao segura)
 
-- [ ] `AUTO_UPDATE_FEED_PUBLIC_KEY` aceita CSV de chaves base64 em
+- [x] `AUTO_UPDATE_FEED_PUBLIC_KEY` aceita CSV de chaves base64 em
   `lib/core/config/auto_update_feed_config.dart`.
-- [ ] `Ed25519AppcastSignatureVerifier.verifyEnclosure` em
+- [x] `Ed25519AppcastSignatureVerifier.verifyEnclosure` em
   `lib/core/security/appcast_signature_verifier.dart` itera as chaves e
   retorna `valid` se qualquer uma aceita.
-- [ ] Tests no `test/core/security/appcast_signature_verifier_test.dart`
+- [x] Tests no `test/core/security/appcast_signature_verifier_test.dart`
   cobrindo: 1 chave (compat), 2 chaves uma valida, 2 chaves nenhuma
   valida, CSV malformado.
-- [ ] `tool/appcast_signing.py` ganha `verify_with_any_key`.
+- [x] `tool/appcast_signing.py` ganha `verify_with_any_key`.
 
 #### 1C. Authenticode gate no CI
 
-- [ ] Step em `.github/workflows/release.yml` rodando
+- [x] Step em `.github/workflows/release.yml` rodando
   `signtool verify /pa /v` no installer e no helper.
-- [ ] Falha o workflow se nao for `Verified successfully`.
+- [x] Falha o workflow se nao for `Verified successfully`.
 - [ ] Flag de override (`SKIP_AUTHENTICODE_CHECK=1`) para builds manuais.
 
 #### 1D. Preflight valida pubkey embutida
 
-- [ ] Estender `tool/release_preflight.py`: checar string base64 da pubkey
+- [x] Estender `tool/release_preflight.py`: checar string base64 da pubkey
   configurada presente no binario.
-- [ ] Falha o preflight se ausente.
-- [ ] Documentar como rodar localmente.
+- [x] Falha o preflight se ausente.
+- [x] Documentar como rodar localmente.
 
 #### 1E. Faseamento de producao
 
@@ -165,7 +165,7 @@ no build via `--dart-define`.
 
 #### Criterio de aceite da Fase 1
 
-- [ ] `python -m unittest tool.test_appcast_signing` sem skip no CI.
+- [x] `python -m unittest tool.test_appcast_signing` sem skip no CI.
 - [ ] Release publica com `plug:edSignature` valido.
 - [ ] Cliente em campo reporta `feedSignatureStatus: valid`.
 - [ ] Rotacao testada via builds que aceitam 2 chaves.
@@ -176,25 +176,25 @@ Goal: cadeia de confianca nao depende mais so de filesystem ACL.
 
 #### 2A. Helper Authenticode antes de spawnar
 
-- [ ] Nova interface `IHelperSignatureProbe` em `lib/core/security/`.
-- [ ] Default impl roda `Process.run('powershell', ['-NoProfile',
+- [x] Nova interface `IHelperSignatureProbe` em `lib/core/security/`.
+- [x] Default impl roda `Process.run('powershell', ['-NoProfile',
   '-Command', "(Get-AuthenticodeSignature '<path>').Status"])` com
   timeout 5s.
-- [ ] Cache do resultado por sessao.
-- [ ] `HttpSilentUpdateInstaller` recusa launch se
+- [x] Cache do resultado por sessao.
+- [x] `HttpSilentUpdateInstaller` recusa launch se
   `requireValidSignature=true` e status != `Valid`.
-- [ ] Tests cobrem 3 status (Valid -> ok, Invalid + REQUIRE=true ->
+- [x] Tests cobrem 3 status (Valid -> ok, Invalid + REQUIRE=true ->
   ValidationFailure, timeout -> best-effort).
 
 #### 2B. Threat model documentado
 
-- [ ] Novo doc `docs/security/auto_update_threat_model.md`.
-- [ ] Estrutura: atores, defesas em camadas, matriz what-if.
+- [x] Novo doc `docs/security/auto_update_threat_model.md`.
+- [x] Estrutura: atores, defesas em camadas, matriz what-if.
 - [ ] Review por alguem de seguranca antes de publicar.
 
 #### Criterio de aceite da Fase 2
 
-- [ ] Tests de helper signature passam.
+- [x] Tests de helper signature passam.
 - [ ] Doc reviewada.
 
 ### Fase 3 - Resiliencia do download
@@ -203,25 +203,25 @@ Goal: download silent completa em redes ruins.
 
 #### 3A. Pre-flight de disco
 
-- [ ] FFI para `GetDiskFreeSpaceExW` via `package:win32` ja em deps
+- [x] FFI para `GetDiskFreeSpaceExW` via `package:win32` ja em deps
   transitivas.
-- [ ] Falha curta com `ValidationFailure(code: 'insufficient_disk_space')`
+- [x] Falha curta com `ValidationFailure(code: 'insufficient_disk_space')`
   quando livre < `assetSize * 2`.
-- [ ] Test cobre disco cheio.
+- [x] Test cobre disco cheio.
 
 #### 3B. Download resumivel (HTTP Range)
 
-- [ ] `_download` aceita `.part` parcial: envia `Range: bytes=<offset>-`,
+- [x] `_download` aceita `.part` parcial: envia `Range: bytes=<offset>-`,
   valida `Content-Range` e `206 Partial Content`.
-- [ ] Fallback para baixar do zero quando server retorna `200`.
-- [ ] Flag `AUTO_UPDATE_DOWNLOAD_RESUME=true|false` (default `true`).
-- [ ] Tests: resume com `.part` parcial de 2 bytes / 5; server sem Range;
+- [x] Fallback para baixar do zero quando server retorna `200`.
+- [x] Flag `AUTO_UPDATE_DOWNLOAD_RESUME=true|false` (default `true`).
+- [x] Tests: resume com `.part` parcial de 2 bytes / 5; server sem Range;
   disco cheio durante resume.
 
 #### Criterio de aceite da Fase 3
 
-- [ ] Tests dos cenarios acima verdes.
-- [ ] Doc explica o opt-out.
+- [x] Tests dos cenarios acima verdes.
+- [x] Doc explica o opt-out.
 
 ### Fase 4 - Observabilidade local
 
@@ -229,23 +229,23 @@ Goal: cada check correlacionavel e mensuravel.
 
 #### 4A. Correlation ID
 
-- [ ] `UpdateCheckDiagnostics.checkId` (UUIDv7 time-ordered).
-- [ ] Coordinator e orchestrator geram no inicio de cada ciclo.
-- [ ] Logs estruturados incluem o ID.
-- [ ] Ring buffer das ultimas 20 IDs em settings para correlacao offline.
+- [x] `UpdateCheckDiagnostics.checkId` (UUIDv7 time-ordered).
+- [x] Coordinator e orchestrator geram no inicio de cada ciclo.
+- [x] Logs estruturados incluem o ID.
+- [x] Ring buffer das ultimas 20 IDs em settings para correlacao offline.
 
 #### 4B. Histograma de duracoes
 
-- [ ] `MetricsCollector._autoUpdateProbeTimes` e `_autoUpdateDownloadTimes`
+- [x] `MetricsCollector._autoUpdateProbeTimes` e `_autoUpdateDownloadTimes`
   (`ListQueue<Duration>` capped a 1000).
-- [ ] Reusar `_durationStatsSnapshot('auto_update_probe', ...)`.
-- [ ] `getSnapshot()` expoe novas chaves p95, max recente.
+- [x] Reusar `_durationStatsSnapshot('auto_update_probe', ...)`.
+- [x] `getSnapshot()` expoe novas chaves p95, max recente.
 - [ ] Tests em `metrics_collector_test.dart`.
 
 #### Criterio de aceite da Fase 4
 
-- [ ] Diagnostics copiavel mostra `Check ID: 01923abc-...`.
-- [ ] Snapshot retorna chaves novas.
+- [x] Diagnostics copiavel mostra `Check ID: 01923abc-...`.
+- [x] Snapshot retorna chaves novas.
 
 ### Fase 5 - UX visivel ao usuario
 
@@ -253,34 +253,34 @@ Goal: usuario nao e surpreendido pelo fechamento do app.
 
 #### 5A. Notificacao pre-close
 
-- [ ] `_closeApplicationForSilentUpdate` aguarda
+- [x] `_closeApplicationForSilentUpdate` aguarda
   `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` (default 30).
-- [ ] Emite toast Fluent ou notificacao quando
+- [x] Emite toast Fluent ou notificacao quando
   `INotificationService.isSupported`.
-- [ ] Server (notif desligada): pular aviso.
-- [ ] Min 0, max 120 via env.
+- [x] Server (notif desligada): pular aviso.
+- [x] Min 0, max 120 via env.
 
 #### 5B. Release notes na UI
 
-- [ ] `AppcastProbeResult.releaseNotes` extraido de `<description>` ou
+- [x] `AppcastProbeResult.releaseNotes` extraido de `<description>` ou
   `<sparkle:releaseNotesLink>`.
-- [ ] UI mostra em expander.
-- [ ] Sanitizacao markdown basica (so links + paragrafos).
-- [ ] Widget test cobre o expander.
+- [x] UI mostra em expander.
+- [x] Sanitizacao markdown basica (so links + paragrafos).
+- [x] Widget test cobre o expander.
 
 #### 5C. Quiet hours
 
-- [ ] Novo `SilentUpdateOutcome.skippedByQuietHours`.
-- [ ] Env `AUTO_UPDATE_QUIET_HOURS_START=22:00` e `_END=06:00`.
-- [ ] Settings UI editavel.
-- [ ] Coordinator pula `checkSilently()` durante janela, mantem pending.
-- [ ] Sem incremento de cooldown.
-- [ ] Tests cobrem dentro/fora da janela.
+- [x] Novo `SilentUpdateOutcome.skippedByQuietHours`.
+- [x] Env `AUTO_UPDATE_QUIET_HOURS_START=22:00` e `_END=06:00`.
+- [x] Settings UI editavel.
+- [x] Coordinator pula `checkSilently()` durante janela, mantem pending.
+- [x] Sem incremento de cooldown.
+- [x] Tests cobrem dentro/fora da janela.
 
 #### Criterio de aceite da Fase 5
 
-- [ ] Widget test cobre release notes.
-- [ ] Coordinator test cobre `skippedByQuietHours`.
+- [x] Widget test cobre release notes.
+- [x] Coordinator test cobre `skippedByQuietHours`.
 - [ ] Doc explica interacao quiet hours x pending update.
 
 ### Fase 6 - Refactor de API
@@ -289,20 +289,20 @@ Goal: contratos tipados em todas as fronteiras.
 
 #### 6A. `Result<ManualCheckOutcome>` para `checkManual`
 
-- [ ] Enum `ManualCheckOutcome` em
+- [x] Enum `ManualCheckOutcome` em
   `lib/application/services/manual_check_outcome.dart`.
-- [ ] `IAutoUpdateOrchestrator.checkManual()` retorna
+- [x] `IAutoUpdateOrchestrator.checkManual()` retorna
   `Future<Result<ManualCheckOutcome>>`.
-- [ ] Atualizar ~30 assertions de teste.
-- [ ] UI mantem leitura por `completionSource`.
+- [x] Atualizar ~30 assertions de teste.
+- [x] UI mantem leitura por `completionSource`.
 
 #### 6B. Schema do launcher status
 
 - [ ] `lib/application/services/silent_update_launcher_status.dart` gerado
   por `json_serializable`.
-- [ ] Schema em
+- [x] Schema em
   `docs/communication/schemas/silent_update_launcher_status.schema.json`.
-- [ ] CI valida outputs do helper smoke test contra o schema.
+- [x] CI valida outputs do helper smoke test contra o schema.
 
 #### 6C. Separar manual e silent em orchestrators
 
@@ -333,20 +333,20 @@ Goal: operador ve estado da frota inteira. Bloqueado por decisao 3.
 
 #### 7A. Novo metodo RPC
 
-- [ ] Spec em `docs/communication/socket_communication_standard.md`.
-- [ ] Schema em
+- [x] Spec em `docs/communication/socket_communication_standard.md`.
+- [x] Schema em
   `docs/communication/schemas/auto_update_diagnostics.schema.json`.
-- [ ] Atualizar `docs/communication/openrpc.json`.
+- [x] Atualizar `docs/communication/openrpc.json`.
 
 #### 7B. Cliente envia apos cada check
 
-- [ ] Novo gateway que envia subset nao-sensivel.
-- [ ] Throttle 1 push/minuto por cliente.
-- [ ] Coordinator e orchestrator chamam apos terminal.
+- [x] Novo gateway que envia subset nao-sensivel.
+- [x] Throttle 1 push/minuto por cliente.
+- [x] Coordinator e orchestrator chamam apos terminal.
 
 #### 7C. E2E test
 
-- [ ] Novo test em `test/live/` gated por `RUN_LIVE_HUB_TESTS=true`.
+- [x] Novo test em `test/live/` gated por `RUN_LIVE_HUB_TESTS=true`.
 - [ ] Hub-side: assume implementacao separada no `plug_server`.
 
 #### Criterio de aceite da Fase 7
@@ -409,7 +409,7 @@ Plano de execucao quando retomar:
 
 #### 9A. FakeAsync para timers
 
-- [ ] Migrar tests de jitter em
+- [x] Migrar tests de jitter em
   `test/application/services/silent_update_coordinator_test.dart` para
   `package:fake_async`.
 
@@ -420,8 +420,8 @@ Plano de execucao quando retomar:
 
 #### 9C. Smoke contra appcast real
 
-- [ ] Workflow agendado `.github/workflows/feed-smoke.yml` (cron diario).
-- [ ] Probe contra
+- [x] Workflow agendado `.github/workflows/feed-smoke.yml` (cron diario).
+- [x] Probe contra
   `https://cesar-carlos.github.io/plug_agente/appcast.xml`, valida shape +
   assinatura.
 

@@ -5,7 +5,10 @@ import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Wraps a streaming gateway with the shared [SqlExecutionQueue] so ODBC
-/// streaming cannot bypass SQL queue backpressure limits.
+/// streaming connect/setup is bounded by SQL queue backpressure limits.
+///
+/// The queue worker is released after connect and stream registration; the
+/// stream body continues under the direct ODBC connection limiter only.
 class QueuedStreamingDatabaseGateway implements IStreamingDatabaseGateway, IStreamingGatewayDiagnostics {
   QueuedStreamingDatabaseGateway({
     required IStreamingDatabaseGateway delegate,
@@ -30,9 +33,11 @@ class QueuedStreamingDatabaseGateway implements IStreamingDatabaseGateway, IStre
     Duration? queryTimeout,
     CancellationToken? cancellationToken,
     StreamingCancelReason? Function()? cancellationReasonProvider,
+    void Function()? onSetupComplete,
   }) async {
-    final queued = await _queue.submit<bool>(
-      () async {
+    final lifecycleToken = cancellationToken ?? CancellationToken();
+    final queued = await _queue.submitWithReleasableWorker<bool>(
+      (releaseWorker) async {
         final streamResult = await _delegate.executeQueryStream(
           query,
           connectionString,
@@ -41,8 +46,12 @@ class QueuedStreamingDatabaseGateway implements IStreamingDatabaseGateway, IStre
           chunkSizeBytes: chunkSizeBytes,
           executionId: executionId,
           queryTimeout: queryTimeout,
-          cancellationToken: cancellationToken,
+          cancellationToken: lifecycleToken,
           cancellationReasonProvider: cancellationReasonProvider,
+          onSetupComplete: () {
+            releaseWorker();
+            onSetupComplete?.call();
+          },
         );
         return streamResult.fold(
           (_) => const Success(true),
@@ -51,6 +60,7 @@ class QueuedStreamingDatabaseGateway implements IStreamingDatabaseGateway, IStre
       },
       requestId: executionId,
       kind: SqlExecutionKind.streaming,
+      cooperativeCancellationToken: lifecycleToken,
     );
     return queued.fold(
       (_) => const Success(unit),

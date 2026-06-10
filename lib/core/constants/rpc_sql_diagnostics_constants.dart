@@ -6,6 +6,8 @@ abstract final class RpcSqlDiagnosticsConstants {
 
   static const String transactionalNativePoolFallbackReason = 'transactional_native_pool_fallback';
 
+  static const String readOnlyBatchNativePoolFallbackReason = 'read_only_batch_native_pool_fallback';
+
   static const String batchBulkInsertRecommendedReason = 'batch_bulk_insert_recommended';
 
   static const String batchBulkInsertRoutedReason = 'batch_bulk_insert_routed';

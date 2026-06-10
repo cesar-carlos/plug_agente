@@ -9,15 +9,19 @@ import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/domain/backup/backup_secure_storage_secrets_constants.dart';
 import 'package:plug_agente/domain/backup/local_backup_error_codes.dart';
 import 'package:plug_agente/domain/backup/local_data_backup.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_auth_client.dart';
+import 'package:plug_agente/domain/repositories/i_backup_secure_storage_secrets_port.dart';
 import 'package:plug_agente/domain/repositories/i_connected_agents_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.dart';
+import 'package:plug_agente/infrastructure/backup/backup_secure_storage_secrets_cipher.dart';
 import 'package:plug_agente/infrastructure/backup/backup_sqlite_reader.dart';
 import 'package:plug_agente/infrastructure/backup/backup_zip_encoder.dart';
 import 'package:plug_agente/infrastructure/backup/connected_agents_response_parser.dart';
+import 'package:plug_agente/infrastructure/backup/flutter_secure_storage_backup_secrets_port.dart';
 import 'package:plug_agente/infrastructure/backup/restore_failure_diagnostics.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:result_dart/result_dart.dart';
@@ -35,11 +39,13 @@ const int _backupManifestFormatVersion = 1;
 const String _manifestFileName = 'manifest.json';
 const String _dbFileName = 'agent_config.db';
 const String _settingsFileName = 'settings.json';
+const String _secureStorageSecretsFileName = BackupSecureStorageSecretsConstants.zipEntryFileName;
 
 const Set<String> _allowedZipBasenames = {
   _manifestFileName,
   _dbFileName,
   _settingsFileName,
+  _secureStorageSecretsFileName,
 };
 
 Map<String, dynamic> _backupErr(String code) => <String, dynamic>{
@@ -54,37 +60,109 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
     required IAppSettingsStore settingsStore,
     required IAuthClient authClient,
     required IConnectedAgentsGateway connectedAgentsGateway,
+    IBackupSecureStorageSecretsPort? secureStorageSecretsPort,
   }) : _database = database,
        _storageContext = storageContext,
        _settingsStore = settingsStore,
        _authClient = authClient,
-       _connectedAgentsGateway = connectedAgentsGateway;
+       _connectedAgentsGateway = connectedAgentsGateway,
+       _secureStorageSecretsPort =
+           secureStorageSecretsPort ?? FlutterSecureStorageBackupSecretsPort();
 
   final AppDatabase _database;
   final GlobalStorageContext _storageContext;
   final IAppSettingsStore _settingsStore;
   final IAuthClient _authClient;
   final IConnectedAgentsGateway _connectedAgentsGateway;
+  final IBackupSecureStorageSecretsPort _secureStorageSecretsPort;
 
   @override
   int get liveAgentConfigSchemaVersion => _database.schemaVersion;
 
   @override
-  Future<Result<void>> exportBackupZip(String destinationZipPath) async {
+  Future<Result<void>> exportBackupZip(
+    String destinationZipPath, {
+    bool includeSecureStorageSecrets = false,
+  }) async {
     final out = File(destinationZipPath);
     try {
       developer.log(
-        'operation=exportBackupZip phase=start',
+        'operation=exportBackupZip phase=start includeSecureStorageSecrets=$includeSecureStorageSecrets',
         name: 'local_app_data_backup',
       );
 
       final installationId = await _ensureInstallationId();
+      var secretsIncluded = false;
+      var secretsEntryCount = 0;
+      Uint8List? secureStorageSecretsBytes;
+
+      if (includeSecureStorageSecrets) {
+        if (!_secureStorageSecretsPort.isAvailable) {
+          return Failure(
+            domain.ConfigurationFailure.withContext(
+              message: 'Secure storage is not available for backup export',
+              context: {
+                'operation': 'exportBackupZip',
+                ..._backupErr(LocalBackupErrorCodes.exportSecretsUnavailable),
+              },
+            ),
+          );
+        }
+
+        final entriesResult = await _secureStorageSecretsPort.readBackupEligibleEntries();
+        if (entriesResult.isError()) {
+          final failure = entriesResult.exceptionOrNull()!;
+          return Failure(
+            domain.ConfigurationFailure.withContext(
+              message: 'Could not read secure storage secrets for backup export',
+              cause: failure is domain.Failure ? failure.cause : failure,
+              context: {
+                'operation': 'exportBackupZip',
+                ..._backupErr(LocalBackupErrorCodes.exportSecretsUnavailable),
+              },
+            ),
+          );
+        }
+
+        final entries = entriesResult.getOrThrow();
+        if (entries.isNotEmpty) {
+          try {
+            secureStorageSecretsBytes = await BackupSecureStorageSecretsCipher.encryptEntries(entries);
+            secretsIncluded = true;
+            secretsEntryCount = entries.length;
+          } on Object catch (error, stackTrace) {
+            developer.log(
+              'operation=exportBackupZip outcome=failure backupError=${LocalBackupErrorCodes.exportSecretsEncrypt}',
+              name: 'local_app_data_backup',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            return Failure(
+              domain.ConfigurationFailure.withContext(
+                message: 'Failed to encrypt secure storage secrets for backup export',
+                cause: error,
+                context: {
+                  'operation': 'exportBackupZip',
+                  ..._backupErr(LocalBackupErrorCodes.exportSecretsEncrypt),
+                },
+              ),
+            );
+          }
+        }
+      }
+
       final manifest = <String, dynamic>{
         'formatVersion': _backupManifestFormatVersion,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
         'appVersion': AppConstants.appVersion,
         'platform': Platform.operatingSystem,
         'installationId': installationId,
+        'odbcSecretsIncluded': secretsIncluded,
+        'secureStorageSecretsIncluded': secretsIncluded,
+        if (secretsIncluded) ...<String, dynamic>{
+          'secureStorageSecretsBlobVersion': BackupSecureStorageSecretsConstants.blobFormatVersion,
+          'secureStorageSecretsEntryCount': secretsEntryCount,
+        },
       };
 
       final dbFile = File(_storageContext.databaseFilePath);
@@ -114,11 +192,16 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       }
 
       final manifestBytes = Uint8List.fromList(utf8.encode(jsonEncode(manifest)));
-      final payloadBytes = manifestBytes.length + dbBytes.length + (settingsBytes?.length ?? 0);
+      final payloadBytes =
+          manifestBytes.length +
+          dbBytes.length +
+          (settingsBytes?.length ?? 0) +
+          (secureStorageSecretsBytes?.length ?? 0);
       final zipBytes = await _encodeZipPayload(
         manifestBytes: manifestBytes,
         dbBytes: dbBytes,
         settingsBytes: settingsBytes,
+        secureStorageSecretsBytes: secureStorageSecretsBytes,
         payloadBytes: payloadBytes,
       );
       if (zipBytes == null) {
@@ -150,7 +233,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       }
       await tmp.rename(out.path);
       developer.log(
-        'operation=exportBackupZip outcome=success bytes=$payloadBytes zipBytes=${zipBytes.length}',
+        'operation=exportBackupZip outcome=success bytes=$payloadBytes zipBytes=${zipBytes.length} secretsIncluded=$secretsIncluded',
         name: 'local_app_data_backup',
       );
       return const Success(unit);
@@ -328,6 +411,24 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       final stagedSettingsPath = File(p.join(root, _settingsFileName)).existsSync()
           ? p.join(root, _settingsFileName)
           : null;
+      final stagedSecretsPath = File(p.join(root, _secureStorageSecretsFileName)).existsSync()
+          ? p.join(root, _secureStorageSecretsFileName)
+          : null;
+
+      final manifestSecureStorageSecretsIncluded = _manifestSecureStorageSecretsIncluded(manifest);
+      final manifestSecureStorageSecretsEntryCount = manifest['secureStorageSecretsEntryCount'] is int
+          ? manifest['secureStorageSecretsEntryCount'] as int
+          : null;
+
+      if (manifestSecureStorageSecretsIncluded && stagedSecretsPath == null) {
+        _deleteDirIfExists(root);
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Backup manifest declares secure storage secrets but the archive is missing the encrypted blob',
+            context: _backupErr(LocalBackupErrorCodes.invalidManifest),
+          ),
+        );
+      }
 
       final hubRow = BackupSqliteReader.readHubRow(dbStaged.path);
       final duplicateRisk = await _resolveDuplicateRisk(hubRow);
@@ -339,10 +440,13 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
         tempDirectoryPath: root,
         stagedDatabasePath: dbStaged.path,
         stagedSettingsPath: stagedSettingsPath,
+        stagedSecureStorageSecretsPath: stagedSecretsPath,
         backupUserVersion: backupUserVersion,
         duplicateRisk: duplicateRisk,
         manifestInstallationId: manifestInstallationId,
         currentInstallationId: currentInstallationId,
+        manifestSecureStorageSecretsIncluded: manifestSecureStorageSecretsIncluded,
+        manifestSecureStorageSecretsEntryCount: manifestSecureStorageSecretsEntryCount,
       );
 
       developer.log(
@@ -466,8 +570,17 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
         }
       }
 
+      if (staging.stagedSecureStorageSecretsPath != null) {
+        final restoreSecretsResult = await _restoreSecureStorageSecretsFromStagedFile(
+          File(staging.stagedSecureStorageSecretsPath!),
+        );
+        if (restoreSecretsResult.isError()) {
+          return restoreSecretsResult;
+        }
+      }
+
       developer.log(
-        'operation=applyRestore outcome=success',
+        'operation=applyRestore outcome=success secureStorageSecretsRestored=${staging.stagedSecureStorageSecretsPath != null}',
         name: 'local_app_data_backup',
       );
       return const Success(unit);
@@ -583,16 +696,97 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
     return "'${normalized.replaceAll("'", "''")}'";
   }
 
+  Future<Result<void>> _restoreSecureStorageSecretsFromStagedFile(File stagedSecretsFile) async {
+    if (!_secureStorageSecretsPort.isAvailable) {
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Secure storage is not available to restore backup secrets',
+          context: {
+            'operation': 'applyRestore',
+            ..._backupErr(LocalBackupErrorCodes.restoreSecretsApply),
+          },
+        ),
+      );
+    }
+
+    try {
+      final envelopeBytes = await stagedSecretsFile.readAsBytes();
+      final entries = await BackupSecureStorageSecretsCipher.decryptEntries(envelopeBytes);
+      final restoreResult = await _secureStorageSecretsPort.restoreBackupEligibleEntries(entries);
+      if (restoreResult.isError()) {
+        final failure = restoreResult.exceptionOrNull()!;
+        return Failure(
+          domain.ConfigurationFailure.withContext(
+            message: 'Could not apply secure storage secrets from backup',
+            cause: failure is domain.Failure ? failure.cause : failure,
+            context: {
+              'operation': 'applyRestore',
+              ..._backupErr(LocalBackupErrorCodes.restoreSecretsApply),
+            },
+          ),
+        );
+      }
+      return const Success(unit);
+    } on FormatException catch (error, stackTrace) {
+      developer.log(
+        'operation=applyRestore outcome=failure backupError=${LocalBackupErrorCodes.restoreSecretsDecrypt}',
+        name: 'local_app_data_backup',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'Could not decrypt secure storage secrets from backup',
+          cause: error,
+          context: {
+            'operation': 'applyRestore',
+            ..._backupErr(LocalBackupErrorCodes.restoreSecretsDecrypt),
+          },
+        ),
+      );
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'operation=applyRestore outcome=failure backupError=${LocalBackupErrorCodes.restoreSecretsDecrypt}',
+        name: 'local_app_data_backup',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Failed to restore secure storage secrets from backup',
+          cause: error,
+          context: {
+            'operation': 'applyRestore',
+            ..._backupErr(LocalBackupErrorCodes.restoreSecretsDecrypt),
+          },
+        ),
+      );
+    }
+  }
+
+  bool _manifestSecureStorageSecretsIncluded(Map<String, dynamic> manifest) {
+    final secureStorageFlag = manifest['secureStorageSecretsIncluded'];
+    if (secureStorageFlag is bool) {
+      return secureStorageFlag;
+    }
+    final legacyFlag = manifest['odbcSecretsIncluded'];
+    return legacyFlag is bool && legacyFlag;
+  }
+
   Future<Uint8List?> _encodeZipPayload({
     required Uint8List manifestBytes,
     required Uint8List dbBytes,
     required Uint8List? settingsBytes,
+    required Uint8List? secureStorageSecretsBytes,
     required int payloadBytes,
   }) async {
     final parts = BackupZipEncodeParts(
       manifestBytes: manifestBytes,
       dbBytes: dbBytes,
       settingsBytes: settingsBytes,
+      secureStorageSecretsBytes: secureStorageSecretsBytes,
+      secureStorageSecretsFileName:
+          secureStorageSecretsBytes == null ? null : _secureStorageSecretsFileName,
     );
     if (payloadBytes >= _backupExportIsolateMinBytes) {
       developer.log(

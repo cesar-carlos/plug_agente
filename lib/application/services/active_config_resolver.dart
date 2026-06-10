@@ -19,14 +19,18 @@ class ActiveConfigResolver implements IQueryConfigSource {
   Future<Result<Config>> resolveConfigForQuery(String? configId) {
     final normalized = _normalizeConfigId(configId);
     if (normalized != null) {
-      return resolveExplicit(normalized, metadataOnly: true);
+      return resolveExplicit(normalized);
     }
-    return resolveActiveConfig();
+    return resolveActiveForDatabaseAccess();
   }
 
   @override
   Future<Result<Config>> resolveActiveConfig() {
-    return resolveActiveOrFallback(metadataOnly: true);
+    return resolveActiveForDatabaseAccess();
+  }
+
+  Future<Result<Config>> resolveActiveForDatabaseAccess() {
+    return resolveActiveOrFallback();
   }
 
   String? getActiveConfigId() => _normalizeConfigId(

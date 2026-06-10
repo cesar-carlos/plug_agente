@@ -335,6 +335,79 @@ void main() {
         expect(synced, [false]);
       },
     );
+
+    test('should expose canRetry true for transient execute failures', () async {
+      provider.setQuery('SELECT 1');
+
+      when(
+        () => mockExecutePlaygroundQuery(
+          any(),
+          pagination: any(named: 'pagination'),
+        ),
+      ).thenAnswer(
+        (_) async => rd.Failure(
+          ConnectionFailure.withContext(
+            message: 'Database unreachable',
+            context: const {'connectionFailed': true},
+          ),
+        ),
+      );
+
+      await provider.executeQuery(resetPagination: true);
+
+      expect(provider.error, isNotNull);
+      expect(provider.canRetry, isTrue);
+    });
+
+    test('should expose canRetry false for validation failures', () async {
+      provider.setQuery('SELECT 1');
+
+      when(
+        () => mockExecutePlaygroundQuery(
+          any(),
+          pagination: any(named: 'pagination'),
+        ),
+      ).thenAnswer(
+        (_) async => rd.Failure(
+          ValidationFailure('Syntax error near FROM'),
+        ),
+      );
+
+      await provider.executeQuery(resetPagination: true);
+
+      expect(provider.error, isNotNull);
+      expect(provider.canRetry, isFalse);
+    });
+
+    test(
+      'should expose canRetry from QueryResponse.error connection messages',
+      () async {
+        provider.setQuery('SELECT 1');
+
+        when(
+          () => mockExecutePlaygroundQuery(
+            any(),
+            pagination: any(named: 'pagination'),
+          ),
+        ).thenAnswer(
+          (_) async => rd.Success(
+            QueryResponse(
+              id: 'resp-err',
+              requestId: 'req-err',
+              agentId: 'agent-1',
+              data: const [],
+              timestamp: DateTime.now(),
+              error: 'Connection timeout while executing query',
+            ),
+          ),
+        );
+
+        await provider.executeQuery(resetPagination: true);
+
+        expect(provider.error, contains('Connection timeout'));
+        expect(provider.canRetry, isTrue);
+      },
+    );
   });
 }
 

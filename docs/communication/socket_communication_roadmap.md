@@ -15,6 +15,7 @@ itens.
 
 | Item                                                              | Concluido em |
 | ----------------------------------------------------------------- | ------------ |
+| Extensoes de `agent.getHealth` (secure_storage, global_storage, streaming path/worker_hold, sql_queue por tipo de worker e timeouts_after_worker_started, direct_connections.by_operation_class, prepared/timeouts/diagnostics, sql_execution_by_mode); `sql.cancel` com client_token e ownership; schemas alinhados | pos-v2.11.2 |
 | Plug JSON-RPC `agent.action.*` remoto (incl. `validateRun` + `skipped`), OpenRPC `2.11.2`, fixtures `test/fixtures/rpc/` | v2.11.2 |
 | `api_version` + `meta` obrigatorios por contrato                  | v2.1         |
 | Semantica formal de notification JSON-RPC                         | v2.1         |
@@ -34,6 +35,7 @@ itens.
 | `trace_id` em `agent:heartbeat` para correlacao de rastreamento distribuido | pos-v2.11 |
 | `rpc:stream.pull` registrado para qualquer flag de streaming ativa (nao so backpressure) | pos-v2.11 |
 | Codigos terminais vs recuperaveis de `agent:register_error` documentados e implementados | pos-v2.11 |
+| Health: `secure_storage`, streaming diagnostics (`batched_path_total`, `native_path_inference`, `worker_hold_*`), sql_queue worker kinds + `timeouts_after_worker_started_total`, cooperative cancel observability | pos-v2.11.2 |
 
 ## Criterio de rollout
 

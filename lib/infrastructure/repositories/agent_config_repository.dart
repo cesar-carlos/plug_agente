@@ -1,10 +1,17 @@
 import 'package:drift/drift.dart';
+import 'package:plug_agente/core/utils/odbc_connection_string_secrets.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_hub_session_store.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_credential_store.dart';
+import 'package:plug_agente/domain/value_objects/config_row_legacy_secrets.dart';
 import 'package:plug_agente/domain/value_objects/hub_auth_secrets.dart';
+import 'package:plug_agente/domain/value_objects/hub_stored_credentials_state.dart';
+import 'package:plug_agente/domain/value_objects/hub_stored_session.dart';
+import 'package:plug_agente/domain/value_objects/odbc_credential_secrets.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -13,12 +20,18 @@ class AgentConfigRepository implements IAgentConfigRepository {
     this._database, {
     required IHubAuthSecretStore authSecretStore,
     required IHubSessionStore hubSessionStore,
+    required IOdbcCredentialSecretStore odbcCredentialSecretStore,
+    required IOdbcCredentialStore odbcCredentialStore,
   }) : _authSecretStore = authSecretStore,
-       _hubSessionStore = hubSessionStore;
+       _hubSessionStore = hubSessionStore,
+       _odbcCredentialSecretStore = odbcCredentialSecretStore,
+       _odbcCredentialStore = odbcCredentialStore;
 
   final AppDatabase _database;
   final IHubAuthSecretStore _authSecretStore;
   final IHubSessionStore _hubSessionStore;
+  final IOdbcCredentialSecretStore _odbcCredentialSecretStore;
+  final IOdbcCredentialStore _odbcCredentialStore;
 
   domain.DatabaseFailure _buildDatabaseFailure(
     String message, {
@@ -91,10 +104,11 @@ class AgentConfigRepository implements IAgentConfigRepository {
   Future<Result<List<Config>>> getAll() async {
     try {
       final configsData = await _database.select(_database.configTable).get();
+      if (configsData.isEmpty) {
+        return const Success(<Config>[]);
+      }
 
-      final configs = await Future.wait(
-        configsData.map(_mapDataToEntity),
-      );
+      final configs = await _mapDataListToEntities(configsData);
       return Success(configs);
     } on domain.Failure catch (failure) {
       return Failure(failure);
@@ -152,9 +166,14 @@ class AgentConfigRepository implements IAgentConfigRepository {
   @override
   Future<Result<void>> delete(String id) async {
     try {
-      final clearSecretsResult = await _hubSessionStore.deleteAllSecrets(id);
-      if (clearSecretsResult.isError()) {
-        return Failure(clearSecretsResult.exceptionOrNull()!);
+      final clearHubSecretsResult = await _hubSessionStore.deleteAllSecrets(id);
+      if (clearHubSecretsResult.isError()) {
+        return Failure(clearHubSecretsResult.exceptionOrNull()!);
+      }
+
+      final clearOdbcSecretsResult = await _odbcCredentialStore.deleteAllSecrets(id);
+      if (clearOdbcSecretsResult.isError()) {
+        return Failure(clearOdbcSecretsResult.exceptionOrNull()!);
       }
 
       await (_database.delete(
@@ -238,6 +257,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
       config.id,
       secrets,
     );
+    final persistedOdbcSecrets = await _persistOdbcSecretsForSave(config);
     return ConfigData(
       id: config.id,
       serverUrl: config.serverUrl,
@@ -248,9 +268,8 @@ class AgentConfigRepository implements IAgentConfigRepository {
       authPassword: persistedSecrets.authPassword,
       driverName: config.driverName,
       odbcDriverName: config.odbcDriverName,
-      connectionString: config.connectionString,
+      connectionString: persistedOdbcSecrets.connectionString,
       username: config.username,
-      password: config.password,
       databaseName: config.databaseName,
       host: config.host,
       port: config.port,
@@ -275,21 +294,55 @@ class AgentConfigRepository implements IAgentConfigRepository {
   }
 
   Future<Config> _mapDataToEntity(ConfigData data) async {
-    final metadataConfig = _mapDataToEntityMetadata(data);
-    final sessionResult = await _hubSessionStore.readSession(data.id);
-    if (sessionResult.isError()) {
-      throw sessionResult.exceptionOrNull()!;
+    final configs = await _mapDataListToEntities([data]);
+    return configs.single;
+  }
+
+  Future<List<Config>> _mapDataListToEntities(List<ConfigData> configsData) async {
+    final legacyRows = configsData
+        .map(_legacySecretsFromConfigData)
+        .toList(growable: false);
+
+    final hubBundleResult = await _hubSessionStore.readLegacyRowBundle(legacyRows);
+    if (hubBundleResult.isError()) {
+      throw hubBundleResult.exceptionOrNull()!;
     }
-    final credentialsResult = await _hubSessionStore.readStoredCredentials(data.id);
-    if (credentialsResult.isError()) {
-      throw credentialsResult.exceptionOrNull()!;
+    final hubBundle = hubBundleResult.getOrThrow();
+
+    final odbcCredentialsResult = await _odbcCredentialStore.readCredentialsForLegacyRows(
+      legacyRows,
+    );
+    if (odbcCredentialsResult.isError()) {
+      throw odbcCredentialsResult.exceptionOrNull()!;
     }
-    final session = sessionResult.getOrThrow();
-    final credentials = credentialsResult.getOrThrow();
-    return metadataConfig.copyWith(
-      authToken: session.token?.token,
-      refreshToken: session.token?.refreshToken,
-      authPassword: credentials.credentials?.password,
+    final odbcCredentialsById = odbcCredentialsResult.getOrThrow();
+
+    return configsData
+        .map((data) {
+          final metadataConfig = _mapDataToEntityMetadata(data);
+          final session = hubBundle.sessions[data.id] ?? const HubStoredSession();
+          final credentials =
+              hubBundle.credentials[data.id] ?? const HubStoredCredentialsState();
+          final odbcCredentials =
+              odbcCredentialsById[data.id] ?? const OdbcCredentialSecrets();
+          return metadataConfig.copyWith(
+            authToken: session.token?.token,
+            refreshToken: session.token?.refreshToken,
+            authPassword: credentials.credentials?.password,
+            password: odbcCredentials.password,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  ConfigRowLegacySecrets _legacySecretsFromConfigData(ConfigData data) {
+    return ConfigRowLegacySecrets(
+      configId: data.id,
+      authToken: data.authToken,
+      refreshToken: data.refreshToken,
+      authPassword: data.authPassword,
+      authUsername: data.authUsername,
+      connectionString: data.connectionString,
     );
   }
 
@@ -308,9 +361,10 @@ class AgentConfigRepository implements IAgentConfigRepository {
       authUsername: data.authUsername,
       driverName: data.driverName,
       odbcDriverName: data.odbcDriverName,
-      connectionString: data.connectionString,
+      connectionString: OdbcConnectionStringSecrets.stripPasswordFromConnectionString(
+        data.connectionString,
+      ),
       username: data.username,
-      password: data.password,
       databaseName: data.databaseName,
       host: data.host,
       port: data.port,
@@ -332,6 +386,51 @@ class AgentConfigRepository implements IAgentConfigRepository {
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     );
+  }
+
+  Future<({String connectionString})> _persistOdbcSecretsForSave(
+    Config config,
+  ) async {
+    if (!_odbcCredentialSecretStore.isAvailable) {
+      return (
+        connectionString: OdbcConnectionStringSecrets.injectPasswordIntoConnectionString(
+          config.connectionString,
+          config.password ?? '',
+        ),
+      );
+    }
+
+    try {
+      final incomingPassword =
+          _normalize(config.password) ??
+          OdbcConnectionStringSecrets.extractPasswordFromConnectionString(
+            config.connectionString,
+          );
+      final currentSecrets = await _odbcCredentialSecretStore.readSecrets(config.id);
+      final passwordToPersist = incomingPassword ?? _normalize(currentSecrets.password);
+      final secretsToPersist = OdbcCredentialSecrets(password: passwordToPersist);
+
+      if (secretsToPersist.hasAny) {
+        await _odbcCredentialSecretStore.saveSecrets(config.id, secretsToPersist);
+      } else {
+        await _odbcCredentialSecretStore.deleteSecrets(config.id);
+      }
+
+      return (
+        connectionString: OdbcConnectionStringSecrets.stripPasswordFromConnectionString(
+          config.connectionString,
+        ),
+      );
+    } on Exception catch (error) {
+      throw domain.DatabaseFailure.withContext(
+        message: 'Failed to persist ODBC credentials securely',
+        cause: error,
+        context: {
+          'operation': 'persistOdbcCredentials',
+          'configId': config.id,
+        },
+      );
+    }
   }
 
   Future<HubAuthSecrets> _persistSecretsForSave(

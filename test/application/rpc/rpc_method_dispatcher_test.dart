@@ -10,7 +10,6 @@ import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
-import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
@@ -28,6 +27,7 @@ import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
@@ -3772,6 +3772,134 @@ void main() {
     );
 
     test(
+      'should cache successful DB streaming sql.execute responses for idempotency key',
+      () async {
+        final mockStore = MockIdempotencyStore();
+        final mockConfigRepo = MockAgentConfigRepository();
+        when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
+        when(() => mockFeatureFlags.enableSocketStreamingFromDb).thenReturn(true);
+        when(() => mockFeatureFlags.enableSocketStreamingChunks).thenReturn(false);
+
+        final config = Config(
+          id: 'cfg-stream-idem',
+          driverName: 'SQL Server',
+          odbcDriverName: 'ODBC Driver 17',
+          connectionString: 'DSN=Test',
+          username: 'u',
+          databaseName: 'db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
+        when(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+          ),
+        ).thenAnswer((invocation) async {
+          final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
+          await onChunk([
+            {'id': 1},
+          ]);
+          return const Success(unit);
+        });
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          idempotencyStore: mockStore,
+          configRepository: mockConfigRepo,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-stream-idem-1',
+          params: <String, dynamic>{
+            'sql': 'SELECT * FROM users',
+            'idempotency_key': 'stream-key-abc',
+            'options': {'prefer_db_streaming': true},
+          },
+        );
+
+        when(() => mockStore.getRecord(any())).thenAnswer((_) async => null);
+        when(
+          () => mockStore.set(
+            any(),
+            any(),
+            any(),
+            requestFingerprint: any(named: 'requestFingerprint'),
+          ),
+        ).thenAnswer((_) async {});
+
+        final first = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': true},
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+
+        expect(first.isSuccess, isTrue);
+        verify(
+          () => mockStore.set(
+            'sql.execute:stream-key-abc',
+            any(),
+            any(),
+            requestFingerprint: any(named: 'requestFingerprint'),
+          ),
+        ).called(1);
+
+        when(
+          () => mockStore.getRecord(any()),
+        ).thenAnswer(
+          (_) async => IdempotencyRecord(
+            response: first,
+            requestFingerprint: null,
+          ),
+        );
+
+        final second = await dispatcher.dispatch(
+          request,
+          'agent-1',
+          negotiatedExtensions: const {'streamingResults': true},
+          streamEmitter: _stubRpcStreamEmitter(),
+        );
+
+        expect(second.isSuccess, isTrue);
+        expect(second.result, equals(first.result));
+        verify(
+          () => mockStreamingGateway.executeQueryStream(
+            any(),
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSizeBytes: any(named: 'chunkSizeBytes'),
+            executionId: any(named: 'executionId'),
+            queryTimeout: any(named: 'queryTimeout'),
+            cancellationToken: any(named: 'cancellationToken'),
+            cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
       'should reject idempotency key reuse with different payload fingerprint',
       () async {
         final mockStore = MockIdempotencyStore();
@@ -3824,6 +3952,294 @@ void main() {
             any(),
             timeout: any(named: 'timeout'),
             database: any(named: 'database'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'should return cached response when sql.executeBatch idempotency key repeats',
+      () async {
+        final mockStore = MockIdempotencyStore();
+        when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          idempotencyStore: mockStore,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.executeBatch',
+          id: 'req-batch-idem-1',
+          params: <String, dynamic>{
+            'commands': [
+              {'sql': 'SELECT 1'},
+              {'sql': 'SELECT 2'},
+            ],
+            'idempotency_key': 'batch-key-abc',
+          },
+        );
+
+        when(() => mockStore.getRecord(any())).thenAnswer((_) async => null);
+        when(
+          () => mockStore.set(
+            any(),
+            any(),
+            any(),
+            requestFingerprint: any(named: 'requestFingerprint'),
+          ),
+        ).thenAnswer((_) async {});
+
+        final first = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(first.isSuccess, isTrue);
+        verify(
+          () => mockStore.set(
+            'sql.executeBatch:batch-key-abc',
+            any(),
+            any(),
+            requestFingerprint: any(named: 'requestFingerprint'),
+          ),
+        ).called(1);
+
+        when(
+          () => mockStore.getRecord(any()),
+        ).thenAnswer(
+          (_) async => IdempotencyRecord(
+            response: first,
+            requestFingerprint: null,
+          ),
+        );
+
+        final second = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(second.isSuccess, isTrue);
+        expect(second.result, equals(first.result));
+        verify(
+          () => mockGateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+            sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'should reject sql.executeBatch idempotency key reuse with different payload fingerprint',
+      () async {
+        final mockStore = MockIdempotencyStore();
+        var mismatchCount = 0;
+        when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          idempotencyStore: mockStore,
+          onIdempotencyFingerprintMismatch: () => mismatchCount++,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.executeBatch',
+          id: 'req-batch-idem-2',
+          params: <String, dynamic>{
+            'commands': [
+              {'sql': 'SELECT 99'},
+            ],
+            'idempotency_key': 'batch-key-abc',
+          },
+        );
+
+        when(
+          () => mockStore.getRecord(any()),
+        ).thenAnswer(
+          (_) async => IdempotencyRecord(
+            response: RpcResponse.success(
+              id: 'req-batch-idem-2',
+              result: const <String, dynamic>{'total_commands': 1},
+            ),
+            requestFingerprint: 'different-fingerprint',
+          ),
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        check(response.isError).isTrue();
+        check(response.error!.code).equals(RpcErrorCode.invalidParams);
+        check(mismatchCount).equals(1);
+        verifyNever(
+          () => mockGateway.executeBatch(
+            any(),
+            any(),
+            database: any(named: 'database'),
+            options: any(named: 'options'),
+            timeout: any(named: 'timeout'),
+            sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'should return cached response when sql.bulkInsert idempotency key repeats',
+      () async {
+        final mockStore = MockIdempotencyStore();
+        when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          idempotencyStore: mockStore,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.bulkInsert',
+          id: 'bulk-idem-1',
+          params: <String, dynamic>{
+            'table': 'users',
+            'columns': [
+              {'name': 'id', 'type': 'i32'},
+            ],
+            'rows': [
+              [1],
+              [2],
+            ],
+            'idempotency_key': 'bulk-key-abc',
+          },
+        );
+
+        when(() => mockStore.getRecord(any())).thenAnswer((_) async => null);
+        when(
+          () => mockStore.set(
+            any(),
+            any(),
+            any(),
+            requestFingerprint: any(named: 'requestFingerprint'),
+          ),
+        ).thenAnswer((_) async {});
+
+        final first = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(first.isSuccess, isTrue);
+        verify(
+          () => mockStore.set(
+            'sql.bulkInsert:bulk-key-abc',
+            any(),
+            any(),
+            requestFingerprint: any(named: 'requestFingerprint'),
+          ),
+        ).called(1);
+
+        when(
+          () => mockStore.getRecord(any()),
+        ).thenAnswer(
+          (_) async => IdempotencyRecord(
+            response: first,
+            requestFingerprint: null,
+          ),
+        );
+
+        final second = await dispatcher.dispatch(request, 'agent-1');
+
+        expect(second.isSuccess, isTrue);
+        expect(second.result, equals(first.result));
+        verify(
+          () => mockGateway.executeBulkInsert(
+            any(),
+            database: any(named: 'database'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'should reject sql.bulkInsert idempotency key reuse with different payload fingerprint',
+      () async {
+        final mockStore = MockIdempotencyStore();
+        var mismatchCount = 0;
+        when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
+
+        dispatcher = RpcMethodDispatcher(
+          databaseGateway: mockGateway,
+          healthService: _testHealthService(mockGateway),
+          normalizerService: mockNormalizer,
+          uuid: const Uuid(),
+          authorizeSqlOperation: mockAuthorize,
+          getClientTokenPolicy: mockGetClientTokenPolicy,
+          getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+          featureFlags: mockFeatureFlags,
+          idempotencyStore: mockStore,
+          onIdempotencyFingerprintMismatch: () => mismatchCount++,
+          streamingGateway: mockStreamingGateway,
+        );
+
+        const request = RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.bulkInsert',
+          id: 'bulk-idem-2',
+          params: <String, dynamic>{
+            'table': 'users',
+            'columns': [
+              {'name': 'id', 'type': 'i32'},
+            ],
+            'rows': [
+              [99],
+            ],
+            'idempotency_key': 'bulk-key-abc',
+          },
+        );
+
+        when(
+          () => mockStore.getRecord(any()),
+        ).thenAnswer(
+          (_) async => IdempotencyRecord(
+            response: RpcResponse.success(
+              id: 'bulk-idem-2',
+              result: const <String, dynamic>{'inserted_rows': 1},
+            ),
+            requestFingerprint: 'different-fingerprint',
+          ),
+        );
+
+        final response = await dispatcher.dispatch(request, 'agent-1');
+
+        check(response.isError).isTrue();
+        check(response.error!.code).equals(RpcErrorCode.invalidParams);
+        check(mismatchCount).equals(1);
+        verifyNever(
+          () => mockGateway.executeBulkInsert(
+            any(),
+            database: any(named: 'database'),
+            timeout: any(named: 'timeout'),
           ),
         );
       },
@@ -4183,6 +4599,120 @@ void main() {
           expect(
             cancelResponse.error!.code,
             equals(RpcErrorCode.executionNotFound),
+          );
+          verifyNever(() => mockStreamingGateway.cancelActiveStream());
+
+          completer.complete(const Success(unit));
+          await dispatchFuture;
+        },
+      );
+
+      test(
+        'should return invalidParams when cancel clientToken does not match stream owner',
+        () async {
+          when(
+            () => mockFeatureFlags.enableClientTokenAuthorization,
+          ).thenReturn(true);
+          when(
+            () => mockFeatureFlags.enableSocketStreamingChunks,
+          ).thenReturn(true);
+          when(
+            () => mockFeatureFlags.enableSocketStreamingFromDb,
+          ).thenReturn(true);
+          when(
+            () => mockFeatureFlags.enableSocketCancelMethod,
+          ).thenReturn(true);
+          when(() => mockStreamingGateway.hasActiveStream).thenReturn(true);
+          when(
+            () => mockAuthorize(
+              token: any(named: 'token'),
+              sql: any(named: 'sql'),
+              requestDatabase: any(named: 'requestDatabase'),
+              requestId: any(named: 'requestId'),
+              method: any(named: 'method'),
+            ),
+          ).thenAnswer((_) async => const Success(unit));
+
+          final mockConfigRepo = MockAgentConfigRepository();
+          final config = Config(
+            id: 'cfg-1',
+            driverName: 'SQL Server',
+            odbcDriverName: 'ODBC Driver 17',
+            connectionString: 'DSN=Test',
+            username: 'u',
+            databaseName: 'db',
+            host: 'localhost',
+            port: 1433,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+          when(
+            mockConfigRepo.getCurrentConfigMetadata,
+          ).thenAnswer((_) async => Success(config));
+
+          final completer = Completer<Result<void>>();
+          when(
+            () => mockStreamingGateway.executeQueryStream(
+              any(),
+              any(),
+              any(),
+              fetchSize: any(named: 'fetchSize'),
+              chunkSizeBytes: any(named: 'chunkSizeBytes'),
+              executionId: any(named: 'executionId'),
+              queryTimeout: any(named: 'queryTimeout'),
+              cancellationToken: any(named: 'cancellationToken'),
+              cancellationReasonProvider: any(named: 'cancellationReasonProvider'),
+            ),
+          ).thenAnswer((_) => completer.future);
+
+          dispatcher = RpcMethodDispatcher(
+            databaseGateway: mockGateway,
+            healthService: _testHealthService(mockGateway),
+            normalizerService: mockNormalizer,
+            uuid: const Uuid(),
+            authorizeSqlOperation: mockAuthorize,
+            getClientTokenPolicy: mockGetClientTokenPolicy,
+            getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+            featureFlags: mockFeatureFlags,
+            configRepository: mockConfigRepo,
+            streamingGateway: mockStreamingGateway,
+          );
+
+          final dispatchFuture = dispatcher.dispatch(
+            const RpcRequest(
+              jsonrpc: '2.0',
+              method: 'sql.execute',
+              id: 'req-owned-stream',
+              params: {'sql': 'SELECT * FROM users'},
+            ),
+            'agent-1',
+            clientToken: 'owner-token',
+            streamEmitter: _stubRpcStreamEmitter(),
+          );
+
+          await Future<void>.delayed(Duration.zero);
+
+          final cancelResponse = await dispatcher.dispatch(
+            const RpcRequest(
+              jsonrpc: '2.0',
+              method: 'sql.cancel',
+              id: 'req-cancel-mismatch',
+              params: {
+                'request_id': 'req-owned-stream',
+                'client_token': 'other-token',
+              },
+            ),
+            'agent-1',
+            clientToken: 'other-token',
+          );
+
+          expect(cancelResponse.isError, isTrue);
+          expect(cancelResponse.error!.code, equals(RpcErrorCode.invalidParams));
+          final data = cancelResponse.error!.data as Map<String, dynamic>;
+          expect(data['reason'], equals('invalid_params'));
+          expect(
+            data['detail'] as String,
+            contains('clientToken does not match'),
           );
           verifyNever(() => mockStreamingGateway.cancelActiveStream());
 

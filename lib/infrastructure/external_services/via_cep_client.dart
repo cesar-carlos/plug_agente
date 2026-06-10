@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
-import 'package:plug_agente/application/services/agent_profile_lookup_gateways.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/agent_profile_lookup_gateways.dart';
 import 'package:result_dart/result_dart.dart';
 
 class ViaCepClient implements IViaCepLookup {

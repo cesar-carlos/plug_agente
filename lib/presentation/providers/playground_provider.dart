@@ -112,8 +112,35 @@ class PlaygroundProvider extends ChangeNotifier {
     );
   }
 
+  Failure _failureFromQueryResponseError(String errorMessage) {
+    final normalized = errorMessage.toLowerCase();
+    if (normalized.contains('connection') ||
+        normalized.contains('timeout') ||
+        normalized.contains('network') ||
+        normalized.contains('communication link')) {
+      return ConnectionFailure.withContext(
+        message: errorMessage,
+        context: const {'connectionFailed': true},
+      );
+    }
+    return QueryExecutionFailure.withContext(
+      message: errorMessage,
+      context: const {'operation': 'executeQuery'},
+    );
+  }
+
+  void _setExecuteFailure(Object failure) {
+    _error = _displayExecuteFailure(failure);
+    _canRetry = failure is Failure && failure.isTransient;
+    _logExecuteQueryFailure(failure);
+    if (_failureIndicatesDbUnreachable(failure)) {
+      _notifyDbConnectionIndicator(false);
+    }
+  }
+
   void _rejectEmptyQuery() {
     _error = _ui.queryValidationEmpty;
+    _canRetry = false;
     _isLoading = false;
     _hasExecutedQuery = true;
     _paginationAvailable = false;
@@ -131,6 +158,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void _rejectStreamingValidation(String message) {
     _error = message;
+    _canRetry = false;
     _isLoading = false;
     _isStreaming = false;
     _streamingStoppedByCap = false;
@@ -159,6 +187,7 @@ class PlaygroundProvider extends ChangeNotifier {
   List<QueryResultSet> _resultSets = [];
   bool _isLoading = false;
   String? _error;
+  bool _canRetry = false;
   String? _connectionStatus;
   bool? _isConnectionStatusSuccess;
   Duration? _executionDuration;
@@ -192,6 +221,7 @@ class PlaygroundProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get results => selectedResultSet?.rows ?? _results;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get canRetry => _canRetry;
   String? get connectionStatus => _connectionStatus;
   bool? get isConnectionStatusSuccess => _isConnectionStatusSuccess;
   Duration? get executionDuration => _executionDuration;
@@ -296,7 +326,8 @@ class PlaygroundProvider extends ChangeNotifier {
       result.fold(
         (response) {
           if (response.error != null) {
-            _error = response.error;
+            final failure = _failureFromQueryResponseError(response.error!);
+            _setExecuteFailure(failure);
             _results = [];
             _resultSets = [];
             _columnMetadata = null;
@@ -304,6 +335,7 @@ class PlaygroundProvider extends ChangeNotifier {
             _paginationAvailable = false;
             _lastExecutionHint = null;
           } else {
+            _canRetry = false;
             _resultSets = response.resultSets;
             _selectedResultSetIndex = 0;
             _results = response.data;
@@ -316,11 +348,7 @@ class PlaygroundProvider extends ChangeNotifier {
           _executionDuration = stopwatch.elapsed;
         },
         (failure) {
-          _error = _displayExecuteFailure(failure);
-          _logExecuteQueryFailure(failure);
-          if (_failureIndicatesDbUnreachable(failure)) {
-            _notifyDbConnectionIndicator(false);
-          }
+          _setExecuteFailure(failure);
           _columnMetadata = null;
           _resultSets = [];
           _executionDuration = stopwatch.elapsed;
@@ -337,6 +365,7 @@ class PlaygroundProvider extends ChangeNotifier {
         context: {'operation': 'executeQuery'},
       );
       _error = failure.toDisplayMessage();
+      _canRetry = failure.isTransient;
       _columnMetadata = null;
       _resultSets = [];
       _executionDuration = stopwatch.elapsed;
@@ -458,6 +487,7 @@ class PlaygroundProvider extends ChangeNotifier {
         (_) {
           _isStreaming = false;
           _progress = 1.0;
+          _canRetry = false;
           if (!_streamingStoppedByCap) {
             _lastExecutionHint = _buildStreamingExecutionHint();
           }
@@ -465,6 +495,7 @@ class PlaygroundProvider extends ChangeNotifier {
         },
         (failure) {
           _error = _displayExecuteFailure(failure);
+          _canRetry = failure is Failure && failure.isTransient;
           _isStreaming = false;
           if (!_streamingStoppedByCap) {
             _lastExecutionHint = null;
@@ -483,6 +514,7 @@ class PlaygroundProvider extends ChangeNotifier {
         context: {'operation': 'executeQueryWithStreaming'},
       );
       _error = failure.toDisplayMessage();
+      _canRetry = failure.isTransient;
       AppLogger.error(
         'Streaming exception: ${failure.toDisplayMessage()}',
         error,
@@ -500,6 +532,7 @@ class PlaygroundProvider extends ChangeNotifier {
     _query = '';
     _results = [];
     _error = null;
+    _canRetry = false;
     _executionDuration = null;
     _affectedRows = null;
     _connectionStatus = null;
@@ -555,6 +588,7 @@ class PlaygroundProvider extends ChangeNotifier {
       _isLoading = false;
       _isStreaming = false;
       _error = _ui.queryCancelledByUser;
+      _canRetry = false;
       notifyListeners();
     }
   }
@@ -572,6 +606,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void _clearError() {
     _error = null;
+    _canRetry = false;
   }
 
   Future<void> goToNextPage() async {

@@ -2,16 +2,31 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
 
+import 'package:meta/meta.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
+import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Bounded FIFO queue for SQL execution requests to prevent pool overload.
 ///
 /// Enforces backpressure by rejecting requests when the queue is full,
 /// returning a clear failure instead of cascading timeouts.
+///
+/// `enqueueTimeout` / `defaultEnqueueTimeout` only bounds **queue-wait** time
+/// (until a worker slot is acquired). Once the worker-start signal completes, the
+/// caller waits for task completion without a queue-level deadline.
+///
+/// When a queue-wait timeout races with worker start, the caller receives a
+/// queue-timeout failure but ODBC work may already be running ("ghost query").
+/// The queue cannot safely abort arbitrary ODBC tasks from here:
+/// cancellation requires cooperative cancellation-token wiring in the task
+/// (materialized sql.execute and streaming) or ODBC-layer execution timeouts
+/// when no token is observed cooperatively.
+/// See ConnectionConstants.sqlQueueEnqueueTimeout for the timeout policy.
 ///
 /// Usage:
 /// ```dart
@@ -31,6 +46,7 @@ class SqlExecutionQueue {
     required int maxConcurrentWorkers,
     int? maxConcurrentBatchWorkers,
     int? maxConcurrentLongQueryWorkers,
+    int? maxConcurrentStreamingWorkers,
     int? maxConcurrentNonQueryWorkers,
     SqlExecutionQueueMetricsCollector? metricsCollector,
     Duration defaultEnqueueTimeout = const Duration(seconds: 5),
@@ -46,6 +62,10 @@ class SqlExecutionQueue {
          'maxConcurrentLongQueryWorkers must be null or > 0',
        ),
        assert(
+         maxConcurrentStreamingWorkers == null || maxConcurrentStreamingWorkers > 0,
+         'maxConcurrentStreamingWorkers must be null or > 0',
+       ),
+       assert(
          maxConcurrentNonQueryWorkers == null || maxConcurrentNonQueryWorkers > 0,
          'maxConcurrentNonQueryWorkers must be null or > 0',
        ),
@@ -59,6 +79,8 @@ class SqlExecutionQueue {
            ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(maxConcurrentWorkers),
        _maxConcurrentLongQueryWorkers = maxConcurrentLongQueryWorkers ??
            ConnectionConstants.sqlQueueMaxLongQueryWorkersForWorkers(maxConcurrentWorkers),
+       _maxConcurrentStreamingWorkers = maxConcurrentStreamingWorkers ??
+           ConnectionConstants.sqlQueueMaxStreamingWorkersForWorkers(maxConcurrentWorkers),
        _maxConcurrentNonQueryWorkers = maxConcurrentNonQueryWorkers ??
            ConnectionConstants.sqlQueueMaxNonQueryWorkersForWorkers(maxConcurrentWorkers),
        _metricsCollector = metricsCollector,
@@ -76,6 +98,7 @@ class SqlExecutionQueue {
   final int _maxConcurrentWorkers;
   final int _maxConcurrentBatchWorkers;
   final int _maxConcurrentLongQueryWorkers;
+  final int _maxConcurrentStreamingWorkers;
   final int _maxConcurrentNonQueryWorkers;
   final SqlExecutionQueueMetricsCollector? _metricsCollector;
   final Duration _defaultEnqueueTimeout;
@@ -89,6 +112,7 @@ class SqlExecutionQueue {
   int _activeWorkers = 0;
   int _activeBatchWorkers = 0;
   int _activeLongQueryWorkers = 0;
+  int _activeStreamingWorkers = 0;
   int _activeNonQueryWorkers = 0;
   bool _disposed = false;
   bool _reportedSaturation70 = false;
@@ -116,6 +140,10 @@ class SqlExecutionQueue {
   int get activeLongQueryWorkers => _activeLongQueryWorkers;
 
   int get maxConcurrentLongQueryWorkers => _maxConcurrentLongQueryWorkers;
+
+  int get activeStreamingWorkers => _activeStreamingWorkers;
+
+  int get maxConcurrentStreamingWorkers => _maxConcurrentStreamingWorkers;
 
   int get activeNonQueryWorkers => _activeNonQueryWorkers;
 
@@ -145,6 +173,7 @@ class SqlExecutionQueue {
     Duration? enqueueTimeout,
     String? requestId,
     SqlExecutionKind kind = SqlExecutionKind.query,
+    CancellationToken? cooperativeCancellationToken,
   }) async {
     if (_disposed) {
       developer.log(
@@ -198,6 +227,7 @@ class SqlExecutionQueue {
       requestId: requestId,
       kind: kind,
       sequence: _nextSequence++,
+      cooperativeCancellationToken: cooperativeCancellationToken,
     );
 
     _enqueue(request);
@@ -218,38 +248,109 @@ class SqlExecutionQueue {
 
       return result;
     } on TimeoutException catch (error) {
-      request.isCancelled = true;
-      if (!request.hasStarted) {
-        _removeQueuedRequest(request);
-        _metricsCollector?.recordQueueSizeChanged(_queuedCount);
-        _recordQueueSaturationIfNeeded();
-      }
-      _metricsCollector?.recordQueueTimeout();
+      return Failure(
+        _completeQueueWaitTimeout(
+          request: request,
+          timeout: timeout,
+          error: error,
+          requestId: requestId,
+        ),
+      );
+    }
+  }
+
+  /// Submits a task that can release its queue worker slot before finishing.
+  ///
+  /// The task receives a release-worker callback; invoking it frees the worker for other
+  /// queued requests while the task continues running. Used by streaming so
+  /// ODBC connect/setup is bounded by the queue but the stream body runs under
+  /// the direct ODBC connection limiter only.
+  Future<Result<T>> submitWithReleasableWorker<T extends Object>(
+    Future<Result<T>> Function(void Function() releaseWorker) task, {
+    Duration? enqueueTimeout,
+    String? requestId,
+    SqlExecutionKind kind = SqlExecutionKind.query,
+    CancellationToken? cooperativeCancellationToken,
+  }) async {
+    if (_disposed) {
       developer.log(
-        'SQL request TIMEOUT in queue',
+        'SQL request REJECTED (queue disposed)',
         name: 'sql_execution_queue',
         level: 900,
-        error: {
-          'request_id': requestId,
-          'timeout_seconds': timeout.inSeconds,
-          'queue_size': _queuedCount,
-          'active_workers': _activeWorkers,
-          'error': error,
-        },
+        error: {'request_id': requestId},
       );
       return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'SQL request timed out waiting in queue',
-          cause: error,
-          context: {
-            ..._queueBackpressureContext(
-              reason: SqlPipelineContextConstants.queueWaitTimeoutReason,
-              requestId: requestId,
-            ),
-            'timeout': true,
-            'timeout_stage': 'queue',
-            'timeout_seconds': timeout.inSeconds,
+        _queueDisposedFailure(
+          message: 'SQL execution queue is disposed',
+          requestId: requestId,
+        ),
+      );
+    }
+
+    if (isFull) {
+      _consecutiveFullRejections++;
+      _metricsCollector?.recordQueueRejection();
+      if (_shouldLogFullRejection(_consecutiveFullRejections)) {
+        developer.log(
+          'SQL request REJECTED (queue full)',
+          name: 'sql_execution_queue',
+          level: 900,
+          error: {
+            'request_id': requestId,
+            'queue_size': _queuedCount,
+            'max_queue_size': _maxQueueSize,
+            'active_workers': _activeWorkers,
+            'consecutive_full_rejections': _consecutiveFullRejections,
+            'log_stride': _fullRejectionLogStride,
           },
+        );
+      }
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'SQL execution queue is full; system is under heavy load',
+          context: _queueBackpressureContext(
+            reason: SqlPipelineContextConstants.sqlQueueFullReason,
+            requestId: requestId,
+          ),
+        ),
+      );
+    }
+
+    _consecutiveFullRejections = 0;
+
+    final request = _QueuedRequest<T>.releasable(
+      task: task,
+      enqueuedAt: DateTime.now(),
+      requestId: requestId,
+      kind: kind,
+      sequence: _nextSequence++,
+      cooperativeCancellationToken: cooperativeCancellationToken,
+    );
+
+    _enqueue(request);
+    _metricsCollector?.recordQueueAdded(_queuedCount);
+    _recordQueueSaturationIfNeeded();
+
+    unawaited(_processQueue());
+
+    final timeout = enqueueTimeout ?? _defaultEnqueueTimeout;
+    try {
+      await request.startedCompleter.future.timeout(timeout);
+
+      final result = await request.completer.future;
+      final waitTime = (request.startedAt ?? DateTime.now()).difference(
+        request.enqueuedAt,
+      );
+      _metricsCollector?.recordQueueWaitTime(waitTime);
+
+      return result;
+    } on TimeoutException catch (error) {
+      return Failure(
+        _completeQueueWaitTimeout(
+          request: request,
+          timeout: timeout,
+          error: error,
+          requestId: requestId,
         ),
       );
     }
@@ -278,6 +379,9 @@ class SqlExecutionQueue {
       if (request.kind == SqlExecutionKind.longQuery) {
         _activeLongQueryWorkers++;
       }
+      if (request.kind == SqlExecutionKind.streaming) {
+        _activeStreamingWorkers++;
+      }
       if (request.kind == SqlExecutionKind.nonQuery) {
         _activeNonQueryWorkers++;
       }
@@ -288,9 +392,21 @@ class SqlExecutionQueue {
   }
 
   Future<void> _executeTask<T extends Object>(_QueuedRequest<T> request) async {
+    if (request.isCancelled) {
+      return;
+    }
+
     try {
-      final result = await request.task();
-      if (!request.completer.isCompleted) {
+      final Future<Result<T>> resultFuture;
+      if (request.releasableTask != null) {
+        resultFuture = request.releasableTask!(
+          () => _releaseWorkerSlot(request),
+        );
+      } else {
+        resultFuture = request.task!();
+      }
+      final result = await resultFuture;
+      if (!request.completer.isCompleted && !request.isCancelled) {
         request.completer.complete(result);
       }
     } on Object catch (error, stackTrace) {
@@ -313,20 +429,40 @@ class SqlExecutionQueue {
         request.completeFailure(failure);
       }
     } finally {
-      _activeWorkers--;
-      if (request.kind == SqlExecutionKind.batch && _activeBatchWorkers > 0) {
-        _activeBatchWorkers--;
-      }
-      if (request.kind == SqlExecutionKind.longQuery && _activeLongQueryWorkers > 0) {
-        _activeLongQueryWorkers--;
-      }
-      if (request.kind == SqlExecutionKind.nonQuery && _activeNonQueryWorkers > 0) {
-        _activeNonQueryWorkers--;
-      }
-      _metricsCollector?.recordWorkerCompleted(_activeWorkers);
-      _completeDrainedIfIdle();
-      unawaited(_processQueue());
+      _releaseWorkerSlot(request);
     }
+  }
+
+  void _releaseWorkerSlot(_QueuedRequest<dynamic> request) {
+    if (request.workerSlotReleased) {
+      return;
+    }
+    request.workerSlotReleased = true;
+
+    if (request.kind == SqlExecutionKind.streaming) {
+      final startedAt = request.startedAt;
+      if (startedAt != null) {
+        _metricsCollector?.recordStreamingWorkerHoldTime(
+          DateTime.now().difference(startedAt),
+        );
+      }
+    }
+    _activeWorkers--;
+    if (request.kind == SqlExecutionKind.batch && _activeBatchWorkers > 0) {
+      _activeBatchWorkers--;
+    }
+    if (request.kind == SqlExecutionKind.longQuery && _activeLongQueryWorkers > 0) {
+      _activeLongQueryWorkers--;
+    }
+    if (request.kind == SqlExecutionKind.streaming && _activeStreamingWorkers > 0) {
+      _activeStreamingWorkers--;
+    }
+    if (request.kind == SqlExecutionKind.nonQuery && _activeNonQueryWorkers > 0) {
+      _activeNonQueryWorkers--;
+    }
+    _metricsCollector?.recordWorkerCompleted(_activeWorkers);
+    _completeDrainedIfIdle();
+    unawaited(_processQueue());
   }
 
   void _completeDrainedIfIdle() {
@@ -366,10 +502,9 @@ class SqlExecutionQueue {
     return switch (request.kind) {
       SqlExecutionKind.batch => _activeBatchWorkers < _maxConcurrentBatchWorkers,
       SqlExecutionKind.longQuery => _activeLongQueryWorkers < _maxConcurrentLongQueryWorkers,
+      SqlExecutionKind.streaming => _activeStreamingWorkers < _maxConcurrentStreamingWorkers,
       SqlExecutionKind.nonQuery => _activeNonQueryWorkers < _maxConcurrentNonQueryWorkers,
-      SqlExecutionKind.shortQuery ||
-      SqlExecutionKind.query ||
-      SqlExecutionKind.streaming => true,
+      SqlExecutionKind.shortQuery || SqlExecutionKind.query => true,
     };
   }
 
@@ -529,6 +664,93 @@ class SqlExecutionQueue {
     return selected.value.removeFirst();
   }
 
+  domain.QueryExecutionFailure _completeQueueWaitTimeout<T extends Object>({
+    required _QueuedRequest<T> request,
+    required Duration timeout,
+    required TimeoutException error,
+    required String? requestId,
+  }) {
+    request.isCancelled = true;
+    request.cooperativeCancellationToken?.cancel();
+
+    if (!request.hasStarted) {
+      _removeQueuedRequest(request);
+      _metricsCollector?.recordQueueSizeChanged(_queuedCount);
+      _recordQueueSaturationIfNeeded();
+    } else {
+      _metricsCollector?.recordQueueTimeoutAfterWorkerStarted();
+      developer.log(
+        'SQL request queue wait timed out after worker started; in-flight ODBC may continue until task completion or cooperative cancellation',
+        name: 'sql_execution_queue',
+        level: 900,
+        error: {
+          'request_id': requestId,
+          'timeout_seconds': timeout.inSeconds,
+          'queue_size': _queuedCount,
+          'active_workers': _activeWorkers,
+          'ghost_query_risk': true,
+          'cooperative_cancel_signalled':
+              request.cooperativeCancellationToken?.isCancelled ?? false,
+        },
+      );
+    }
+
+    _metricsCollector?.recordQueueTimeout();
+    developer.log(
+      'SQL request TIMEOUT in queue',
+      name: 'sql_execution_queue',
+      level: 900,
+      error: {
+        'request_id': requestId,
+        'timeout_seconds': timeout.inSeconds,
+        'queue_size': _queuedCount,
+        'active_workers': _activeWorkers,
+        'worker_started': request.hasStarted,
+        'error': error,
+      },
+    );
+
+    return domain.QueryExecutionFailure.withContext(
+      message: 'SQL request timed out waiting in queue',
+      cause: error,
+      context: {
+        ..._queueBackpressureContext(
+          reason: SqlPipelineContextConstants.queueWaitTimeoutReason,
+          requestId: requestId,
+        ),
+        'timeout': true,
+        'timeout_stage': 'queue',
+        'timeout_seconds': timeout.inSeconds,
+        'worker_started': request.hasStarted,
+        if (request.hasStarted) 'ghost_query_risk': true,
+      },
+    );
+  }
+
+  /// Test hook for queue-wait timeout after worker start (ghost-query path).
+  @visibleForTesting
+  domain.QueryExecutionFailure recordQueueWaitTimeoutForTesting({
+    required bool workerStarted,
+    CancellationToken? cooperativeCancellationToken,
+    String? requestId,
+  }) {
+    final request = _QueuedRequest<int>(
+      task: () async => const Success(0),
+      enqueuedAt: DateTime.now(),
+      requestId: requestId,
+      kind: SqlExecutionKind.query,
+      sequence: -1,
+      cooperativeCancellationToken: cooperativeCancellationToken,
+    )..hasStarted = workerStarted;
+
+    return _completeQueueWaitTimeout(
+      request: request,
+      timeout: const Duration(milliseconds: 1),
+      error: TimeoutException('queue wait timeout (test)'),
+      requestId: requestId,
+    );
+  }
+
   domain.ConfigurationFailure _queueDisposedFailure({
     required String message,
     required String? requestId,
@@ -551,15 +773,29 @@ class _QueuedRequest<T extends Object> {
     required this.kind,
     required this.sequence,
     this.requestId,
-  });
+    this.cooperativeCancellationToken,
+  }) : releasableTask = null;
 
-  final Future<Result<T>> Function() task;
+  _QueuedRequest.releasable({
+    required Future<Result<T>> Function(void Function() releaseWorker) task,
+    required this.enqueuedAt,
+    required this.kind,
+    required this.sequence,
+    this.requestId,
+    this.cooperativeCancellationToken,
+  }) : task = null,
+       releasableTask = task;
+
+  final Future<Result<T>> Function()? task;
+  final Future<Result<T>> Function(void Function() releaseWorker)? releasableTask;
+  final CancellationToken? cooperativeCancellationToken;
   final DateTime enqueuedAt;
   final SqlExecutionKind kind;
   final int sequence;
   final String? requestId;
   bool hasStarted = false;
   bool isCancelled = false;
+  bool workerSlotReleased = false;
   DateTime? startedAt;
   final Completer<void> startedCompleter = Completer<void>();
   final Completer<Result<T>> completer = Completer<Result<T>>();
@@ -583,20 +819,4 @@ enum SqlExecutionKind {
 
   /// ODBC streaming execution — shares the global worker pool with SQL queue.
   streaming,
-}
-
-/// Metrics collector interface for SQL execution queue.
-abstract class SqlExecutionQueueMetricsCollector {
-  void recordQueueAdded(int currentSize);
-  void recordQueueSizeChanged(int currentSize);
-  void recordQueueRejection();
-  void recordQueueTimeout();
-  void recordQueueSaturation({
-    required int thresholdPercent,
-    required int currentSize,
-    required int maxSize,
-  });
-  void recordQueueWaitTime(Duration waitTime);
-  void recordWorkerStarted(int activeCount);
-  void recordWorkerCompleted(int activeCount);
 }

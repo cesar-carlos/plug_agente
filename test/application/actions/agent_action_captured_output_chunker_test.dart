@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/application/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
+import 'package:plug_agente/domain/actions/agent_action_captured_output_chunker.dart';
 
 void main() {
   group('AgentActionCapturedOutputChunker', () {

@@ -3007,6 +3007,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configBackupErrApplyWrite => 'Could not apply backup files.';
 
   @override
+  String get configBackupErrExportSecretsUnavailable =>
+      'Secure storage is not available, so secrets could not be exported.';
+
+  @override
+  String get configBackupErrExportSecretsEncrypt => 'Failed to encrypt secure-storage secrets for export.';
+
+  @override
+  String get configBackupErrRestoreSecretsDecrypt => 'Could not decrypt secure-storage secrets from the backup.';
+
+  @override
+  String get configBackupErrRestoreSecretsApply => 'Could not restore secure-storage secrets from the backup.';
+
+  @override
   String get configBackupRestoreFailedTitle => 'Restore failed';
 
   @override
@@ -3018,6 +3031,34 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get configBackupRestoreOlderSchemaNote =>
       'This backup uses an older database schema. The app will migrate it on the next start.';
+
+  @override
+  String get configBackupSecureStorageSecretsNote =>
+      'ODBC passwords, hub secrets, and client token secrets stored in Windows secure storage are not included in the backup ZIP by default. They remain on this machine only unless you opt in below.';
+
+  @override
+  String get configBackupIncludeSecureStorageSecretsLabel =>
+      'Include encrypted secure-storage secrets in the backup ZIP';
+
+  @override
+  String get configBackupIncludeSecureStorageSecretsWarning =>
+      'The backup will contain an encrypted blob with ODBC passwords, hub tokens, and client token secrets. Anyone with this ZIP and the Plug Agente app can decrypt it. Store the file only in a trusted location.';
+
+  @override
+  String get configBackupExportSecretsNotIncludedNote =>
+      'Secure-storage secrets were not copied—the ZIP does not include ODBC, hub, or client token secrets.';
+
+  @override
+  String get configBackupExportSecretsIncludedNote =>
+      'An encrypted secure-storage secrets blob was included in the backup ZIP.';
+
+  @override
+  String get configBackupRestoreOdbcSecretsWarning =>
+      'This backup does not include secure-storage secrets. On a new machine or after restore, re-enter ODBC credentials in connection settings and sign in to the hub again.';
+
+  @override
+  String get configBackupRestoreSecretsIncludedNote =>
+      'This backup includes an encrypted secure-storage secrets blob. ODBC passwords, hub tokens, and client token secrets will be restored when you confirm.';
 
   @override
   String get configLastUpdateNever => 'Never checked';

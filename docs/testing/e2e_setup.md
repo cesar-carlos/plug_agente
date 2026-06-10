@@ -53,6 +53,23 @@ operacional:
 Para preflight especifico do Hub `agent.action.*` live, ver
 [e2e_hub.md](e2e_hub.md).
 
+### Agent-actions operational gate (local / CI)
+
+Acoes agendadas (`agent.action.*`) tem gate dedicado sem Hub real. No Windows,
+use o atalho `tool/run_agent_actions_operational_gate.ps1` ou os wrappers
+equivalentes:
+
+- `tool/preflight_agent_actions_production.ps1 -RunContractTests` — preflight
+  estatico + testes de contrato listados em `tool/agent_actions_*_test_paths.txt`
+- `tool/homologate_hub_agent_actions.ps1 -RunContractTests` — homologacao
+  consolidada (contrato local)
+
+Homologacao live contra Hub real e opt-in (`RUN_LIVE_HUB_*`, `E2E_HUB_URL`,
+`E2E_HUB_TOKEN`, assinatura `PAYLOAD_SIGNING_*`); preflight:
+`dart run tool/validate_live_hub_agent_actions_env.dart` com
+`homologate_hub_agent_actions.ps1 -ValidateLiveEnv -RunLiveTests`. Detalhes em
+`.cursor/rules/project_specifics.mdc` e `docs/implemente/plano_acoes_agendadas_execucoes.md`.
+
 ## Executar
 
 ```bash

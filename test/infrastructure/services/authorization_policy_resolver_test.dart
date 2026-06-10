@@ -4,14 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
-import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/stores/in_memory_revoked_token_store.dart';
@@ -19,7 +20,7 @@ import 'package:result_dart/result_dart.dart';
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
-class MockClientTokenLocalDataSource extends Mock implements ClientTokenLocalDataSource {}
+class MockClientTokenRepository extends Mock implements IClientTokenRepository {}
 
 class MockJwtJwksVerifier extends Mock implements JwtJwksVerifier {}
 
@@ -38,13 +39,13 @@ void main() {
   group('AuthorizationPolicyResolver', () {
     late AuthorizationPolicyResolver resolver;
     late MockFeatureFlags mockFeatureFlags;
-    late MockClientTokenLocalDataSource mockLocalDataSource;
+    late MockClientTokenRepository mockClientTokenRepository;
     late MockJwtJwksVerifier mockJwksVerifier;
     late MockTokenAuditStore mockTokenAuditStore;
 
     setUp(() async {
       mockFeatureFlags = MockFeatureFlags();
-      mockLocalDataSource = MockClientTokenLocalDataSource();
+      mockClientTokenRepository = MockClientTokenRepository();
       mockJwksVerifier = MockJwtJwksVerifier();
       mockTokenAuditStore = MockTokenAuditStore();
       when(() => mockFeatureFlags.enableSocketJwksValidation).thenReturn(false);
@@ -57,33 +58,53 @@ void main() {
       resolver = AuthorizationPolicyResolver(mockFeatureFlags);
     });
 
-    test('should resolve policy from JWT payload', () async {
-      final token = _buildToken(<String, dynamic>{
-        'policy': <String, dynamic>{
-          'client_id': 'client-acme',
-          'all_tables': true,
-          'all_views': false,
-          'all_permissions': true,
-          'rules': const <Map<String, dynamic>>[],
-        },
-      });
+    test(
+      'should reject unsigned JWT decode when JWKS disabled and token not in local store',
+      () async {
+        final token = _buildToken(<String, dynamic>{
+          'policy': <String, dynamic>{
+            'client_id': 'client-acme',
+            'all_tables': true,
+            'all_views': false,
+            'all_permissions': true,
+            'rules': const <Map<String, dynamic>>[],
+          },
+        });
 
-      final result = await resolver.resolvePolicy(token);
+        final result = await resolver.resolvePolicy(token);
 
-      expect(result.isSuccess(), isTrue);
-      result.fold((policy) {
-        expect(policy.clientId, equals('client-acme'));
-        expect(policy.allPermissions, isTrue);
-      }, (_) => fail('Expected success'));
-    });
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final authFailure = failure as domain.Failure;
+            expect(
+              authFailure.context['reason'],
+              equals(AuthorizationContextConstants.invalidTokenSignatureReason),
+            );
+          },
+        );
+      },
+    );
 
     test('should return failure for malformed token', () async {
       final result = await resolver.resolvePolicy('invalid-token');
 
       expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) {
+          final authFailure = failure as domain.Failure;
+          expect(
+            authFailure.context['reason'],
+            equals(AuthorizationContextConstants.invalidTokenSignatureReason),
+          );
+        },
+      );
     });
 
-    test('should return failure for revoked token', () async {
+    test('should return failure for revoked token via JWKS payload', () async {
+      when(() => mockFeatureFlags.enableSocketJwksValidation).thenReturn(true);
       final token = _buildToken(<String, dynamic>{
         'policy': <String, dynamic>{
           'client_id': 'client-acme',
@@ -94,6 +115,22 @@ void main() {
         },
         'revoked': true,
       });
+      when(() => mockJwksVerifier.verify(token)).thenAnswer(
+        (_) async => const Success(<String, dynamic>{
+          'policy': <String, dynamic>{
+            'client_id': 'client-acme',
+            'all_tables': false,
+            'all_views': false,
+            'all_permissions': false,
+            'rules': <Map<String, dynamic>>[],
+          },
+          'revoked': true,
+        }),
+      );
+      resolver = AuthorizationPolicyResolver(
+        mockFeatureFlags,
+        jwksVerifier: mockJwksVerifier,
+      );
 
       final result = await resolver.resolvePolicy(token);
 
@@ -129,11 +166,8 @@ void main() {
         when(
           () => mockFeatureFlags.enableSocketRevokedTokenInSession,
         ).thenReturn(true);
+        when(() => mockFeatureFlags.enableSocketJwksValidation).thenReturn(true);
         final store = InMemoryRevokedTokenStore();
-        resolver = AuthorizationPolicyResolver(
-          mockFeatureFlags,
-          revokedTokenStore: store,
-        );
         final token = _buildToken(<String, dynamic>{
           'policy': <String, dynamic>{
             'client_id': 'client-acme',
@@ -144,6 +178,23 @@ void main() {
           },
           'revoked': true,
         });
+        when(() => mockJwksVerifier.verify(token)).thenAnswer(
+          (_) async => const Success(<String, dynamic>{
+            'policy': <String, dynamic>{
+              'client_id': 'client-acme',
+              'all_tables': false,
+              'all_views': false,
+              'all_permissions': false,
+              'rules': <Map<String, dynamic>>[],
+            },
+            'revoked': true,
+          }),
+        );
+        resolver = AuthorizationPolicyResolver(
+          mockFeatureFlags,
+          jwksVerifier: mockJwksVerifier,
+          revokedTokenStore: store,
+        );
 
         final firstResult = await resolver.resolvePolicy(token);
         expect(firstResult.isError(), isTrue);
@@ -155,11 +206,11 @@ void main() {
     );
 
     test(
-      'should resolve policy from local database when datasource provided',
+      'should resolve policy from local repository when configured',
       () async {
         const tokenId = 'token-123';
         const opaqueToken = 'abc123def456';
-        const tokenHash = 'hash-of-abc123def456';
+        final tokenHash = hashClientCredentialToken(opaqueToken);
 
         final summary = ClientTokenSummary(
           id: tokenId,
@@ -186,15 +237,12 @@ void main() {
         );
 
         when(
-          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
-        ).thenReturn(tokenHash);
-        when(
-          () => mockLocalDataSource.getTokenByHash(tokenHash),
-        ).thenAnswer((_) async => summary);
+          () => mockClientTokenRepository.getTokenByHash(tokenHash),
+        ).thenAnswer((_) async => Success(summary));
 
         resolver = AuthorizationPolicyResolver(
           mockFeatureFlags,
-          localDataSource: mockLocalDataSource,
+          clientTokenRepository: mockClientTokenRepository,
         );
 
         final result = await resolver.resolvePolicy(opaqueToken);
@@ -204,29 +252,28 @@ void main() {
           expect(policy.clientId, equals('local-client'));
           expect(policy.allPermissions, isTrue);
         }, (_) => fail('Expected success'));
-        verify(
-          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
-        ).called(1);
-        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
       },
     );
 
     test(
-      'should return token_not_found when token is absent in local database',
+      'should return token_not_found when token is absent in local repository',
       () async {
         const opaqueToken = 'missing-token-xyz';
-        const tokenHash = 'hash-of-missing-token';
+        final tokenHash = hashClientCredentialToken(opaqueToken);
 
-        when(
-          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
-        ).thenReturn(tokenHash);
-        when(
-          () => mockLocalDataSource.getTokenByHash(tokenHash),
-        ).thenAnswer((_) async => null);
+        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+          (_) async => Failure(
+            domain.NotFoundFailure.withContext(
+              message: 'Client token not found',
+              context: const {'operation': 'get_local_client_token_by_hash'},
+            ),
+          ),
+        );
 
         resolver = AuthorizationPolicyResolver(
           mockFeatureFlags,
-          localDataSource: mockLocalDataSource,
+          clientTokenRepository: mockClientTokenRepository,
         );
 
         final result = await resolver.resolvePolicy(opaqueToken);
@@ -239,10 +286,44 @@ void main() {
             expect(authFailure.context['reason'], equals('token_not_found'));
           },
         );
-        verify(
-          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
-        ).called(1);
-        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
+      },
+    );
+
+    test(
+      'should map repository DB errors to authentication failure without decode fallback',
+      () async {
+        const opaqueToken = 'db-error-token';
+        final tokenHash = hashClientCredentialToken(opaqueToken);
+
+        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+          (_) async => Failure(
+            domain.ServerFailure.withContext(
+              message: 'Failed to load local client token',
+              context: const {'operation': 'get_local_client_token_by_hash'},
+            ),
+          ),
+        );
+
+        resolver = AuthorizationPolicyResolver(
+          mockFeatureFlags,
+          clientTokenRepository: mockClientTokenRepository,
+        );
+
+        final result = await resolver.resolvePolicy(opaqueToken);
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final authFailure = failure as domain.Failure;
+            expect(
+              authFailure.context['reason'],
+              equals(AuthorizationContextConstants.unauthorizedReason),
+            );
+            expect(authFailure.context['authentication'], isTrue);
+          },
+        );
       },
     );
 
@@ -250,16 +331,18 @@ void main() {
       'should fallback to JWKS when local token is not found and JWKS is enabled',
       () async {
         const opaqueToken = 'missing-local-token-fallback';
-        const tokenHash = 'hash-of-missing-token-fallback';
+        final tokenHash = hashClientCredentialToken(opaqueToken);
         when(
           () => mockFeatureFlags.enableSocketJwksValidation,
         ).thenReturn(true);
-        when(
-          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
-        ).thenReturn(tokenHash);
-        when(
-          () => mockLocalDataSource.getTokenByHash(tokenHash),
-        ).thenAnswer((_) async => null);
+        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+          (_) async => Failure(
+            domain.NotFoundFailure.withContext(
+              message: 'Client token not found',
+              context: const {'operation': 'get_local_client_token_by_hash'},
+            ),
+          ),
+        );
         when(
           () => mockJwksVerifier.verify(opaqueToken),
         ).thenAnswer(
@@ -276,7 +359,7 @@ void main() {
 
         resolver = AuthorizationPolicyResolver(
           mockFeatureFlags,
-          localDataSource: mockLocalDataSource,
+          clientTokenRepository: mockClientTokenRepository,
           jwksVerifier: mockJwksVerifier,
         );
 
@@ -295,17 +378,19 @@ void main() {
       'should record authorization denied audit event on token_not_found',
       () async {
         const opaqueToken = 'missing-audit-token';
-        const tokenHash = 'hash-of-missing-audit-token';
-        when(
-          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
-        ).thenReturn(tokenHash);
-        when(
-          () => mockLocalDataSource.getTokenByHash(tokenHash),
-        ).thenAnswer((_) async => null);
+        final tokenHash = hashClientCredentialToken(opaqueToken);
+        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+          (_) async => Failure(
+            domain.NotFoundFailure.withContext(
+              message: 'Client token not found',
+              context: const {'operation': 'get_local_client_token_by_hash'},
+            ),
+          ),
+        );
 
         resolver = AuthorizationPolicyResolver(
           mockFeatureFlags,
-          localDataSource: mockLocalDataSource,
+          clientTokenRepository: mockClientTokenRepository,
           tokenAuditStore: mockTokenAuditStore,
         );
 
@@ -325,11 +410,11 @@ void main() {
     );
 
     test(
-      'should return token_revoked when token is revoked in local database',
+      'should return token_revoked when token is revoked in local repository',
       () async {
         const tokenId = 'revoked-token';
         const opaqueToken = 'revoked-abc123';
-        const tokenHash = 'hash-of-revoked-abc123';
+        final tokenHash = hashClientCredentialToken(opaqueToken);
 
         final summary = ClientTokenSummary(
           id: tokenId,
@@ -343,15 +428,12 @@ void main() {
         );
 
         when(
-          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
-        ).thenReturn(tokenHash);
-        when(
-          () => mockLocalDataSource.getTokenByHash(tokenHash),
-        ).thenAnswer((_) async => summary);
+          () => mockClientTokenRepository.getTokenByHash(tokenHash),
+        ).thenAnswer((_) async => Success(summary));
 
         resolver = AuthorizationPolicyResolver(
           mockFeatureFlags,
-          localDataSource: mockLocalDataSource,
+          clientTokenRepository: mockClientTokenRepository,
         );
 
         final result = await resolver.resolvePolicy(opaqueToken);
@@ -364,10 +446,7 @@ void main() {
             expect(authFailure.context['reason'], equals(AuthorizationContextConstants.tokenRevokedReason));
           },
         );
-        verify(
-          () => mockLocalDataSource.hashTokenForLookup(opaqueToken),
-        ).called(1);
-        verify(() => mockLocalDataSource.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
       },
     );
   });

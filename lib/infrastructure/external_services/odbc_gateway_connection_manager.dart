@@ -7,6 +7,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
@@ -18,19 +19,20 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     required DirectOdbcConnectionLimiter directConnectionLimiter,
     required MetricsCollector metrics,
     int Function()? directConnectionMaxProvider,
+    Duration inflightDiscardStaleThreshold = const Duration(seconds: 30),
   }) : _service = service,
        _connectionPool = connectionPool,
        _directConnectionLimiter = directConnectionLimiter,
        _metrics = metrics,
-       _directConnectionMaxProvider = directConnectionMaxProvider;
-
-  static const Duration _inflightDiscardStaleThreshold = Duration(seconds: 30);
+       _directConnectionMaxProvider = directConnectionMaxProvider,
+       _inflightDiscardStaleThreshold = inflightDiscardStaleThreshold;
 
   final OdbcService _service;
   final IConnectionPool _connectionPool;
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
   final MetricsCollector _metrics;
   final int Function()? _directConnectionMaxProvider;
+  final Duration _inflightDiscardStaleThreshold;
   final Set<String> _connectionsToDiscard = <String>{};
   final Map<String, DateTime> _lastRecycleAttempt = <String, DateTime>{};
   final Map<String, DateTime> _inflightDiscards = <String, DateTime>{};
@@ -64,6 +66,10 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
         'threshold_seconds': _inflightDiscardStaleThreshold.inSeconds,
       },
     );
+
+    for (final connectionId in staleIds) {
+      await _remediateStaleInflightDiscard(connectionId);
+    }
   }
 
   Future<Result<String>> acquirePooledConnection(
@@ -72,7 +78,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     DateTime? deadline,
     Map<String, dynamic> context = const {},
   }) async {
-    final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
+    final acquireTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
     if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
       _metrics.recordPoolAcquireTimeout();
       _metrics.recordDiagnosticReason(
@@ -111,7 +117,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     DateTime? deadline,
     Map<String, dynamic> context = const {},
   }) async {
-    final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
+    final acquireTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
     if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
       _metrics.recordPoolAcquireTimeout();
       _metrics.recordDiagnosticReason(
@@ -163,7 +169,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     if (maxConcurrent != null) {
       _directConnectionLimiter.reconfigureMaxConcurrent(maxConcurrent);
     }
-    final acquireTimeout = _remainingTimeoutFromDeadline(deadline);
+    final acquireTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
     if (acquireTimeout != null && acquireTimeout <= Duration.zero) {
       _metrics.recordDirectConnectionAcquireTimeout();
       _metrics.recordDiagnosticReason(
@@ -291,7 +297,10 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       return await _service.connect(connectionString, options: options);
     } on Object catch (error) {
       return Failure(
-        error is Exception ? error : Exception(error.toString()),
+        OdbcFailureMapper.mapConnectionError(
+          error,
+          operation: 'connect',
+        ),
       );
     } finally {
       stopwatch.stop();
@@ -357,6 +366,37 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     );
   }
 
+  Future<void> _remediateStaleInflightDiscard(String connectionId) async {
+    final discardResult = await _connectionPool.discard(connectionId);
+    if (discardResult.isSuccess()) {
+      _clearInflightDiscard(connectionId);
+      _metrics.recordPoolDiscardReconciliationRemediated();
+      return;
+    }
+
+    final discardError = discardResult.exceptionOrNull()!;
+    _metrics.recordPoolReleaseFailure();
+    developer.log(
+      'Re-discard failed during stale in-flight reconciliation; forcing disconnect',
+      name: 'database_gateway',
+      level: 900,
+      error: discardError,
+    );
+
+    await disconnectOwnedConnectionSafely(
+      connectionId,
+      operation: 'pool_discard_reconciliation_force_release',
+    );
+    _clearInflightDiscard(connectionId);
+    _metrics.recordPoolDiscardReconciliationForceRelease();
+  }
+
+  void _clearInflightDiscard(String connectionId) {
+    if (_inflightDiscards.remove(connectionId) != null) {
+      _metrics.recordPoolDiscardInflightCompleted();
+    }
+  }
+
   Future<void> _discardConnectionSafely(String connectionId) async {
     final discardResult = await _connectionPool.discard(connectionId);
     if (discardResult.isSuccess()) {
@@ -371,14 +411,6 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       level: 900,
       error: discardError,
     );
-  }
-
-  Duration? _remainingTimeoutFromDeadline(DateTime? deadline) {
-    if (deadline == null) {
-      return null;
-    }
-    final remaining = deadline.difference(DateTime.now());
-    return remaining <= Duration.zero ? Duration.zero : remaining;
   }
 
   domain.Failure _poolBudgetExhaustedFailure({

@@ -1,7 +1,7 @@
-import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Validates every SQL command in a batch before execution.

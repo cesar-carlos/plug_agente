@@ -1,10 +1,10 @@
 import 'package:odbc_fast/odbc_fast.dart';
-import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/adaptive_odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
@@ -33,7 +33,7 @@ IConnectionPool createOdbcConnectionPool(
   FeatureFlags featureFlags,
   Object? configContext,
 ) {
-  final activeConfigResolver = configContext is ActiveConfigResolver ? configContext : null;
+  final queryConfigSource = configContext is IQueryConfigSource ? configContext : null;
   final configRepository = configContext is IAgentConfigRepository ? configContext : null;
   if (featureFlags.enableOdbcExperimentalDriverAdaptivePooling) {
     return AdaptiveOdbcConnectionPool(
@@ -49,7 +49,7 @@ IConnectionPool createOdbcConnectionPool(
       ),
       featureFlags: featureFlags,
       metricsCollector: metricsCollector,
-      activeConfigResolver: activeConfigResolver,
+      queryConfigSource: queryConfigSource,
       configRepository: configRepository,
       nativeWarmUpEnabled: ConnectionConstants.nativeWarmUpEnabled,
     );

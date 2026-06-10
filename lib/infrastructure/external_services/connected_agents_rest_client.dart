@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
-import 'package:plug_agente/application/ports/i_hub_access_token_renewer.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connected_agents_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_hub_access_token_renewer.dart';
 import 'package:plug_agente/infrastructure/external_services/hub_http_auth_retry.dart';
 import 'package:result_dart/result_dart.dart';
 

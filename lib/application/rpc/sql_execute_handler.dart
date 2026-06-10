@@ -1,0 +1,288 @@
+import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
+import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
+import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
+import 'package:plug_agente/application/rpc/sql_execute_result_mapper.dart';
+import 'package:plug_agente/application/rpc/sql_options_resolver.dart';
+import 'package:plug_agente/application/rpc/sql_pagination_resolver.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_db_streaming_executor.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_materialized_streaming_executor.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_odbc_budget_runner.dart';
+import 'package:plug_agente/application/services/query_normalizer_service.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
+import 'package:plug_agente/core/utils/sql_row_truncation.dart';
+import 'package:plug_agente/domain/entities/query_request.dart';
+import 'package:plug_agente/domain/entities/query_response.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/domain/validation/sql_validator.dart';
+import 'package:uuid/uuid.dart';
+
+/// Handles `sql.execute` RPC requests.
+class SqlExecuteHandler {
+  SqlExecuteHandler({
+    required QueryNormalizerService normalizerService,
+    required Uuid uuid,
+    required FeatureFlags featureFlags,
+    required SqlRpcMethodHandlerSupport support,
+    required SqlRpcClientTokenGate clientTokenGate,
+    required SqlRpcOdbcBudgetRunner odbcBudgetRunner,
+    required SqlRpcDbStreamingExecutor dbStreamingExecutor,
+    required SqlRpcMaterializedStreamingExecutor materializedStreamingExecutor,
+    required Duration sqlExecuteTotalBudget,
+    IDeprecationMetricsCollector? deprecationMetrics,
+    IRpcDispatchMetricsCollector? dispatchMetrics,
+  }) : _normalizerService = normalizerService,
+       _uuid = uuid,
+       _featureFlags = featureFlags,
+       _support = support,
+       _clientTokenGate = clientTokenGate,
+       _odbcBudgetRunner = odbcBudgetRunner,
+       _dbStreamingExecutor = dbStreamingExecutor,
+       _materializedStreamingExecutor = materializedStreamingExecutor,
+       _sqlExecuteTotalBudgetDuration = sqlExecuteTotalBudget,
+       _deprecationMetrics = deprecationMetrics,
+       _dispatchMetrics = dispatchMetrics;
+
+  final QueryNormalizerService _normalizerService;
+  final Uuid _uuid;
+  final FeatureFlags _featureFlags;
+  final SqlRpcMethodHandlerSupport _support;
+  final SqlRpcClientTokenGate _clientTokenGate;
+  final SqlRpcOdbcBudgetRunner _odbcBudgetRunner;
+  final SqlRpcDbStreamingExecutor _dbStreamingExecutor;
+  final SqlRpcMaterializedStreamingExecutor _materializedStreamingExecutor;
+  final Duration _sqlExecuteTotalBudgetDuration;
+  final IDeprecationMetricsCollector? _deprecationMetrics;
+  final IRpcDispatchMetricsCollector? _dispatchMetrics;
+  final SqlExecuteResultMapper _resultMapper = const SqlExecuteResultMapper();
+
+  Future<RpcResponse> handleSqlExecute(
+    RpcRequest request,
+    String agentId,
+    String? clientToken, {
+    required TransportLimits limits,
+    required Map<String, dynamic> negotiatedExtensions,
+    IRpcStreamEmitter? streamEmitter,
+  }) async {
+    if (request.params is! Map<String, dynamic>) {
+      return _support.invalidParams(request, 'params must be an object');
+    }
+
+    final params = request.params as Map<String, dynamic>;
+    final paramReader = SqlExecuteParamsReader(params);
+    final sql = paramReader.sql;
+    final maxRows = resolveMaxRows(params, limits.maxRows);
+    // Always bound hub-originated sql.execute so a slow ODBC call cannot hold the
+    // UI isolate and RPC slots indefinitely when the stage-timeout flag is off.
+    final deadline = DateTime.now().add(_sqlExecuteTotalBudgetDuration);
+
+    if (sql == null || sql.isEmpty) {
+      return _support.invalidParams(request, 'sql is required');
+    }
+    final options = paramReader.options;
+    if (options?['preserve_sql'] == true) {
+      _deprecationMetrics?.recordPreserveSqlUsage(
+        requestId: request.id?.toString(),
+        method: request.method,
+      );
+    }
+    final sqlHandlingModeResolution = resolveSqlHandlingMode(params);
+    if (sqlHandlingModeResolution.hasError) {
+      return _support.invalidParams(
+        request,
+        sqlHandlingModeResolution.errorMessage!,
+      );
+    }
+    final sqlHandlingMode = sqlHandlingModeResolution.sqlHandlingMode!;
+    final paginationResolution = sqlHandlingMode == SqlHandlingMode.preserve
+        ? const ResolvedPagination()
+        : resolvePagination(
+            params,
+            sql,
+            maxRows,
+            negotiatedExtensions,
+          );
+    if (paginationResolution.hasError) {
+      return _support.invalidParams(request, paginationResolution.errorMessage!);
+    }
+    final pagination = paginationResolution.pagination;
+    final multiResultRequested = resolveMultiResult(params);
+    final requestParameters = paramReader.boundParams;
+    final database = paramReader.database;
+    final requestedTimeoutMs = resolveRequestedTimeoutMs(params);
+
+    if (multiResultRequested && requestParameters != null && requestParameters.isNotEmpty) {
+      return _support.invalidParams(
+        request,
+        'multi_result is not supported with named parameters',
+      );
+    }
+    if (multiResultRequested && pagination != null) {
+      return _support.invalidParams(
+        request,
+        'multi_result cannot be combined with pagination',
+      );
+    }
+
+    final idempotencyKey = paramReader.idempotencyKey;
+    final idempotencyFingerprint = await resolveIdempotencyFingerprint(
+      request.method,
+      params,
+    );
+    final idempotentEarly = await _support.consumeIdempotentCacheIfAny(
+      request,
+      idempotencyKey,
+      idempotencyFingerprint,
+    );
+    if (idempotentEarly != null) {
+      return idempotentEarly;
+    }
+
+    final authDenied = await _clientTokenGate.enforce(
+      request: request,
+      clientToken: clientToken,
+      sqlStatements: multiResultRequested ? sqlStatementsForClientTokenAuthorization(sql) : [sql],
+      investigationSqlOnDeny: sql,
+      requestDatabase: database,
+      deadline: deadline,
+      deduplicateEquivalentSql: multiResultRequested,
+      skipEmptyAfterTrim: multiResultRequested,
+    );
+    if (authDenied != null) {
+      return authDenied;
+    }
+
+    final validation = SqlValidator.validateSqlForExecution(
+      sql,
+      allowMultipleStatements: multiResultRequested,
+    );
+    if (validation.isError()) {
+      final failure = validation.exceptionOrNull()! as domain.Failure;
+      final rpcError = FailureToRpcErrorMapper.map(
+        failure,
+        instance: request.id?.toString(),
+        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+      );
+      return RpcResponse.error(id: request.id, error: rpcError);
+    }
+
+    final queryRequest = QueryRequest(
+      id: _uuid.v4(),
+      agentId: agentId,
+      query: sql,
+      parameters: requestParameters,
+      timestamp: DateTime.now(),
+      pagination: pagination,
+      expectMultipleResults: multiResultRequested,
+      sqlHandlingMode: sqlHandlingMode,
+      sourceRpcRequestId: request.id?.toString(),
+    );
+
+    return _support.runIdempotentExecution(
+      request: request,
+      idempotencyKey: idempotencyKey,
+      idempotencyFingerprint: idempotencyFingerprint,
+      execute: () async {
+        final streamingFromDbResponse = await _dbStreamingExecutor.tryStreamingFromDb(
+          request,
+          queryRequest,
+          sql,
+          request.isNotification ? null : streamEmitter,
+          limits: limits,
+          deadline: deadline,
+          timeoutMs: requestedTimeoutMs,
+          negotiatedExtensions: negotiatedExtensions,
+          preferDbStreaming: options?['prefer_db_streaming'] == true,
+          effectiveMaxRows: maxRows,
+          clientToken: clientToken,
+        );
+        if (streamingFromDbResponse != null) {
+          return streamingFromDbResponse;
+        }
+
+        final result = await _odbcBudgetRunner.executeQuery(
+          queryRequest,
+          database: database,
+          requestId: request.id?.toString(),
+          deadline: deadline,
+          timeoutMs: requestedTimeoutMs,
+        );
+
+        return result.fold<Future<RpcResponse>>(
+          (QueryResponse queryResponse) async {
+            var normalized = await _normalizerService.normalizeAsync(queryResponse);
+
+            var multiResultSetsTruncated = false;
+            if (normalized.resultSets.isNotEmpty) {
+              final beforeMulti = normalized;
+              normalized = _resultMapper.applyMaxRowsToMultiResultSets(normalized, maxRows);
+              multiResultSetsTruncated = _resultMapper.multiResultSetsWereTruncated(
+                beforeMulti,
+                normalized,
+              );
+            }
+
+            final limitedRows = normalized.resultSets.isNotEmpty
+                ? normalized.data
+                : truncateSqlResultRows(normalized.data, maxRows);
+            final wasTruncated =
+                multiResultSetsTruncated ||
+                (!normalized.resultSets.isNotEmpty && limitedRows.length != normalized.data.length);
+            final useStreaming =
+                _featureFlags.enableSocketStreamingChunks &&
+                streamEmitter != null &&
+                !request.isNotification &&
+                pagination == null &&
+                !normalized.hasMultiResult &&
+                limitedRows.length > limits.streamingRowThreshold;
+
+            if (useStreaming) {
+              return _materializedStreamingExecutor.streamMaterializedResult(
+                request: request,
+                queryRequest: queryRequest,
+                normalized: normalized,
+                limitedRows: limitedRows,
+                effectiveMaxRows: maxRows,
+                wasTruncated: wasTruncated,
+                limits: limits,
+                streamEmitter: streamEmitter,
+              );
+            }
+
+            final resultData = _resultMapper.buildExecuteResultData(
+              normalized,
+              startedAt: queryRequest.timestamp,
+              finishedAt: normalized.timestamp,
+              limitedRows: limitedRows,
+              wasTruncated: wasTruncated,
+              sqlHandlingMode: queryRequest.sqlHandlingMode,
+              effectiveMaxRows: maxRows,
+              forceMultiResultEnvelope: multiResultRequested,
+            );
+
+            final rpcResponse = RpcResponse.success(
+              id: request.id,
+              result: resultData,
+            );
+            _dispatchMetrics?.recordSqlExecuteMaterializedResponse();
+            return rpcResponse;
+          },
+          (Exception failure) async {
+            final rpcError = FailureToRpcErrorMapper.map(
+              failure as domain.Failure,
+              instance: request.id?.toString(),
+              useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+            );
+            return RpcResponse.error(id: request.id, error: rpcError);
+          },
+        );
+      },
+    );
+  }
+}

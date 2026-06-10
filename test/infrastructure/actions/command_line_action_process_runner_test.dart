@@ -11,6 +11,8 @@ import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.dart';
 import 'package:plug_agente/infrastructure/actions/command_line_action_process_runner.dart';
 
+import 'agent_action_process_runner_test_support.dart';
+
 void main() {
   group('CommandLineActionProcessRunner', () {
     test('should run command through cmd.exe and redact captured output', () async {
@@ -23,6 +25,9 @@ void main() {
         stdoutText: r'ok ${secret:token} password=123',
       );
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter:
             (
@@ -78,6 +83,9 @@ void main() {
 
     test('should mark failed when exit code is not accepted', () async {
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(
           _FakeProcess(
@@ -109,6 +117,9 @@ void main() {
 
     test('should return context hash when request has context file', () async {
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
       );
@@ -135,6 +146,9 @@ void main() {
     test('should kill only main process when command times out', () async {
       final process = _FakeProcess.pendingExit(pid: 4321);
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(process),
       );
@@ -167,6 +181,9 @@ void main() {
 
     test('should not capture output when capture policy disables it', () async {
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(
           _FakeProcess(
@@ -208,6 +225,9 @@ void main() {
 
     test('should map process start errors to runtime failure', () async {
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter:
             (
@@ -252,6 +272,9 @@ void main() {
 
     test('should reject execution preflight when working directory drift is detected', () async {
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: ActionPathValidator(
           fileExists: (_) async => true,
           directoryExists: (_) async => true,
@@ -292,6 +315,9 @@ void main() {
 
     test('should map stdin close errors to runtime failure', () async {
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(
           _FakeProcess(
@@ -332,6 +358,9 @@ void main() {
     test('should cancel active process by execution id', () async {
       final process = _FakeProcess.pendingExit(pid: 4321);
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(process),
       );
@@ -365,6 +394,9 @@ void main() {
     test('should reject cancellation when expected pid does not match active process', () async {
       final process = _FakeProcess.pendingExit(pid: 4321);
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(process),
       );
@@ -411,6 +443,9 @@ void main() {
 
     test('should return not active failure when canceling unknown execution', () async {
       final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
       );
@@ -428,8 +463,10 @@ void main() {
     test('should disable parent environment inheritance in prod operational profile by default', () async {
       late bool capturedIncludeParentEnvironment;
       final runner = CommandLineActionProcessRunner(
-        pathValidator: _acceptingPathValidator(),
+        environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: const _FixedProfileResolver('prod'),
+        stdinSetup: kTestActionProcessStdinSetup,
+        pathValidator: _acceptingPathValidator(),
         processStarter:
             (
               String executable,

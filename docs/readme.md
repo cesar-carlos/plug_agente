@@ -34,6 +34,11 @@ docs/
 |  |- plano_acoes_agendadas_execucoes.md
 |  |- plano_auto_update_evolution.md
 |  \- acoes/
+|     |- contrato_remoto.md
+|     |- ui_acoes.md
+|     \- seguranca_acoes.md
+|- runtime/
+|  \- odbc_pool_and_transactions.md
 |- install/
 |  |- readme.md
 |  |- installation_guide.md
@@ -42,6 +47,7 @@ docs/
 |  \- auto_update_setup.md
 |- security/
 |  \- auto_update_threat_model.md
+|  \- (threat models e notas de hardening por superficie)
 \- testing/
    |- readme.md
    |- e2e_setup.md
@@ -60,6 +66,11 @@ docs/
 - [Guia de cliente Socket com transporte binario](communication/socketio_client_binary_transport.md)
 - [OpenRPC do agente](communication/openrpc.json)
 - [Quick start de performance/confiabilidade](architecture/QUICKSTART.md)
+- [Pool ODBC e transacoes (runtime)](runtime/odbc_pool_and_transactions.md)
 - [Configuracao de testes E2E](testing/e2e_setup.md)
 - [Connection strings ODBC por driver](database/readme.md)
+- [Plano de acoes agendadas](implemente/plano_acoes_agendadas_execucoes.md)
+- [Contrato remoto de acoes](implemente/acoes/contrato_remoto.md)
+- [Seguranca de acoes agendadas](implemente/acoes/seguranca_acoes.md)
+- [Threat model do auto-update](security/auto_update_threat_model.md)
 - [Guia de instalacao](install/readme.md)

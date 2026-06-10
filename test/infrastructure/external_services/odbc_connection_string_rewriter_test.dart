@@ -79,6 +79,18 @@ void main() {
       expect(result, 'Driver={ODBC};Server=localhost;Database=base');
     });
 
+    test('injects secure password into redacted persisted connection string', () {
+      final config = _config(
+        connectionString: 'Driver={ODBC};Server=localhost;Database=base;UID=app',
+      ).copyWith(password: 'secure-secret');
+      final result = OdbcConnectionStringRewriter.resolve(
+        config,
+        _databaseConfig(),
+      );
+      expect(result, contains('PWD=secure-secret'));
+      expect(result, contains('Database=base'));
+    });
+
     test('falls back to field-built connection string when persisted string is blank', () {
       // A real Config with a blank persisted string still derives a connection
       // string from its fields, so the resolved value reflects the config's

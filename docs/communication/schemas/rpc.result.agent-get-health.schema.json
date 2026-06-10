@@ -31,6 +31,32 @@
         "acl_last_outcome": { "type": "string" }
       }
     },
+    "secure_storage": {
+      "type": "object",
+      "description": "Flutter secure storage availability for ODBC credentials, hub auth secrets, and client tokens.",
+      "additionalProperties": false,
+      "required": [
+        "odbc_available",
+        "hub_auth_available",
+        "client_tokens_available",
+        "degraded"
+      ],
+      "properties": {
+        "odbc_available": { "type": "boolean" },
+        "hub_auth_available": { "type": "boolean" },
+        "client_tokens_available": { "type": "boolean" },
+        "degraded": { "type": "boolean" },
+        "unavailable": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["odbc", "hub_auth", "client_tokens"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
     "agent_runtime": {
       "type": "object",
       "description": "Stable runtime identity for correlating executions and remote audit (when injected).",
@@ -81,7 +107,7 @@
               "description": "SQL execution queue is not active for this gateway"
             }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         },
         {
           "type": "object",
@@ -91,9 +117,33 @@
             "max_size",
             "active_workers",
             "max_workers",
+            "active_batch_workers",
+            "max_batch_workers",
+            "active_long_query_workers",
+            "max_long_query_workers",
+            "active_streaming_workers",
+            "max_streaming_workers",
+            "active_non_query_workers",
+            "max_non_query_workers",
+            "enqueue_timeout_seconds",
             "rejections_total",
             "timeouts_total",
-            "avg_wait_time_ms"
+            "timeouts_after_worker_started_total",
+            "avg_wait_time_ms",
+            "p95_wait_time_ms",
+            "max_recent_wait_time_ms",
+            "pool_wait_avg_time_ms",
+            "pool_wait_p95_time_ms",
+            "connect_avg_time_ms",
+            "sql_execution_avg_time_ms",
+            "saturation_70_total",
+            "saturation_90_total",
+            "workers_equal_pool_total",
+            "pool_wait_timeouts_total",
+            "streaming_worker_hold_avg_ms",
+            "streaming_worker_hold_p95_ms",
+            "streaming_worker_hold_max_recent_ms",
+            "streaming_worker_hold_sample_count"
           ],
           "properties": {
             "enabled": { "const": true },
@@ -103,15 +153,68 @@
             "max_workers": { "type": "integer", "minimum": 0 },
             "rejections_total": { "type": "integer", "minimum": 0 },
             "timeouts_total": { "type": "integer", "minimum": 0 },
-            "avg_wait_time_ms": { "type": "integer", "minimum": 0 }
+            "timeouts_after_worker_started_total": { "type": "integer", "minimum": 0 },
+            "avg_wait_time_ms": { "type": "integer", "minimum": 0 },
+            "p95_wait_time_ms": { "type": "integer", "minimum": 0 },
+            "max_recent_wait_time_ms": { "type": "integer", "minimum": 0 },
+            "active_batch_workers": { "type": "integer", "minimum": 0 },
+            "max_batch_workers": { "type": "integer", "minimum": 0 },
+            "active_long_query_workers": { "type": "integer", "minimum": 0 },
+            "max_long_query_workers": { "type": "integer", "minimum": 0 },
+            "active_streaming_workers": { "type": "integer", "minimum": 0 },
+            "max_streaming_workers": { "type": "integer", "minimum": 0 },
+            "active_non_query_workers": { "type": "integer", "minimum": 0 },
+            "max_non_query_workers": { "type": "integer", "minimum": 0 },
+            "enqueue_timeout_seconds": { "type": "integer", "minimum": 0 },
+            "pool_wait_avg_time_ms": { "type": "integer", "minimum": 0 },
+            "pool_wait_p95_time_ms": { "type": "integer", "minimum": 0 },
+            "connect_avg_time_ms": { "type": "integer", "minimum": 0 },
+            "sql_execution_avg_time_ms": { "type": "integer", "minimum": 0 },
+            "saturation_70_total": { "type": "integer", "minimum": 0 },
+            "saturation_90_total": { "type": "integer", "minimum": 0 },
+            "workers_equal_pool_total": { "type": "integer", "minimum": 0 },
+            "pool_wait_timeouts_total": { "type": "integer", "minimum": 0 },
+            "streaming_worker_hold_avg_ms": { "type": "integer", "minimum": 0 },
+            "streaming_worker_hold_p95_ms": { "type": "integer", "minimum": 0 },
+            "streaming_worker_hold_max_recent_ms": { "type": "integer", "minimum": 0 },
+            "streaming_worker_hold_sample_count": { "type": "integer", "minimum": 0 }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         }
       ]
     },
     "streaming": {
       "type": "object",
       "description": "Socket/DB streaming diagnostics.",
+      "required": [
+        "enabled",
+        "gateway_available",
+        "db_streaming_flag_enabled",
+        "chunk_streaming_flag_enabled",
+        "auto_db_streaming_policy_enabled",
+        "active_streams",
+        "direct_limiter_active_count",
+        "direct_limiter_max_concurrent",
+        "direct_limiter_saturated",
+        "from_db_responses_total",
+        "auto_from_db_responses_total",
+        "prefer_from_db_responses_total",
+        "allowlist_from_db_responses_total",
+        "from_db_skip_total",
+        "from_db_skip_reasons",
+        "chunked_materialized_responses_total",
+        "materialized_responses_total",
+        "cancel_requests_total",
+        "backpressure_cancels_total",
+        "batched_path_total",
+        "single_chunk_path_total",
+        "native_batched_path_observable",
+        "native_path_inference",
+        "worker_hold_avg_ms",
+        "worker_hold_p95_ms",
+        "worker_hold_max_recent_ms",
+        "worker_hold_sample_count"
+      ],
       "properties": {
         "enabled": { "type": "boolean" },
         "gateway_available": { "type": "boolean" },
@@ -134,9 +237,17 @@
         "chunked_materialized_responses_total": { "type": "integer", "minimum": 0 },
         "materialized_responses_total": { "type": "integer", "minimum": 0 },
         "cancel_requests_total": { "type": "integer", "minimum": 0 },
-        "backpressure_cancels_total": { "type": "integer", "minimum": 0 }
+        "backpressure_cancels_total": { "type": "integer", "minimum": 0 },
+        "batched_path_total": { "type": "integer", "minimum": 0 },
+        "single_chunk_path_total": { "type": "integer", "minimum": 0 },
+        "native_batched_path_observable": { "type": "boolean" },
+        "native_path_inference": { "type": ["string", "null"] },
+        "worker_hold_avg_ms": { "type": "integer", "minimum": 0 },
+        "worker_hold_p95_ms": { "type": "integer", "minimum": 0 },
+        "worker_hold_max_recent_ms": { "type": "integer", "minimum": 0 },
+        "worker_hold_sample_count": { "type": "integer", "minimum": 0 }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "agent_actions": {
       "type": "object",
@@ -353,20 +464,48 @@
         "wait_avg_ms": { "type": "number", "minimum": 0 },
         "wait_p95_ms": { "type": "integer", "minimum": 0 },
         "wait_p99_ms": { "type": "integer", "minimum": 0 },
-        "wait_sample_count": { "type": "integer", "minimum": 0 }
+        "wait_sample_count": { "type": "integer", "minimum": 0 },
+        "by_operation_class": {
+          "type": "object",
+          "description": "Per-operation-class direct limiter occupancy (keys are operation class names).",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
       },
       "additionalProperties": true
     },
     "prepared": {
       "type": "object",
+      "properties": {
+        "reuse_total": { "type": "integer", "minimum": 0 },
+        "cache_hit_total": { "type": "integer", "minimum": 0 },
+        "cache_miss_total": { "type": "integer", "minimum": 0 },
+        "prepare_avg_ms": { "type": "number", "minimum": 0 },
+        "prepare_p95_ms": { "type": "integer", "minimum": 0 }
+      },
       "additionalProperties": true
     },
     "timeouts": {
       "type": "object",
+      "properties": {
+        "sql_total": { "type": "integer", "minimum": 0 },
+        "pool_total": { "type": "integer", "minimum": 0 },
+        "cancel_success_total": { "type": "integer", "minimum": 0 },
+        "cancel_failure_total": { "type": "integer", "minimum": 0 }
+      },
       "additionalProperties": true
     },
     "diagnostics": {
       "type": "object",
+      "properties": {
+        "top_recent_reasons": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "recent_reasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
       "additionalProperties": true
     },
     "queries": {
@@ -409,6 +548,8 @@
       "properties": {
         "read_only_parallel_total": { "type": "integer", "minimum": 0 },
         "read_only_parallel_capped_total": { "type": "integer", "minimum": 0 },
+        "read_only_native_pool_total": { "type": "integer", "minimum": 0 },
+        "read_only_native_pool_fallback_total": { "type": "integer", "minimum": 0 },
         "transactional_direct_total": { "type": "integer", "minimum": 0 },
         "transactional_native_pool_total": { "type": "integer", "minimum": 0 },
         "transactional_native_pool_fallback_total": { "type": "integer", "minimum": 0 },

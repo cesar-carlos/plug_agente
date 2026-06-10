@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:plug_agente/application/actions/action_environment_resolver.dart';
-import 'package:plug_agente/application/actions/agent_operational_profile_resolver.dart';
 import 'package:plug_agente/core/constants/agent_action_executable_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/i_action_environment_resolver.dart';
+import 'package:plug_agente/domain/actions/i_agent_operational_profile_resolver.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
 import 'package:plug_agente/infrastructure/actions/action_process_output_capture.dart';
@@ -21,26 +21,23 @@ import 'package:result_dart/result_dart.dart';
 
 class ExecutableActionProcessRunner implements AgentActionLocalRunner {
   ExecutableActionProcessRunner({
-    AgentActionProcessStarter? processStarter,
+    required IActionEnvironmentResolver environmentResolver, required IAgentOperationalProfileResolver operationalProfileResolver, required ActionProcessStdinSetup stdinSetup, AgentActionProcessStarter? processStarter,
     ActionCommandNormalizer? commandNormalizer,
     ActionPathValidator? pathValidator,
-    ActionEnvironmentResolver? environmentResolver,
-    AgentOperationalProfileResolver? operationalProfileResolver,
-    ActionProcessStdinSetup? stdinSetup,
     AgentActionRedactor redactor = const AgentActionRedactor(),
   }) : _processStarter = processStarter ?? Process.start,
        _commandNormalizer = commandNormalizer ?? const ActionCommandNormalizer(),
        _pathValidator = pathValidator ?? ActionPathValidator(),
-       _environmentResolver = environmentResolver ?? const ActionEnvironmentResolver(),
-       _operationalProfileResolver = operationalProfileResolver ?? const AgentOperationalProfileResolver(),
-       _stdinSetup = stdinSetup ?? const ActionProcessStdinSetup(),
+       _environmentResolver = environmentResolver,
+       _operationalProfileResolver = operationalProfileResolver,
+       _stdinSetup = stdinSetup,
        _redactor = redactor;
 
   final AgentActionProcessStarter _processStarter;
   final ActionCommandNormalizer _commandNormalizer;
   final ActionPathValidator _pathValidator;
-  final ActionEnvironmentResolver _environmentResolver;
-  final AgentOperationalProfileResolver _operationalProfileResolver;
+  final IActionEnvironmentResolver _environmentResolver;
+  final IAgentOperationalProfileResolver _operationalProfileResolver;
   final ActionProcessStdinSetup _stdinSetup;
   final AgentActionRedactor _redactor;
   final Map<String, Process> _activeProcessesByExecutionId = <String, Process>{};

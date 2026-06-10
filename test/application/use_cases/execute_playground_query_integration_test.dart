@@ -8,15 +8,15 @@ import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
-import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 // Mocks
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
-class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
+class MockQueryConfigSource extends Mock implements IQueryConfigSource {}
 
 class MockUuid extends Mock implements Uuid {}
 
@@ -36,17 +36,17 @@ void main() {
   group('ExecutePlaygroundQuery Integration Tests', () {
     late ExecutePlaygroundQuery useCase;
     late MockDatabaseGateway mockDatabaseGateway;
-    late MockAgentConfigRepository mockConfigRepository;
+    late MockQueryConfigSource mockQueryConfigSource;
     late MockUuid mockUuid;
 
     setUp(() {
       mockDatabaseGateway = MockDatabaseGateway();
-      mockConfigRepository = MockAgentConfigRepository();
+      mockQueryConfigSource = MockQueryConfigSource();
       mockUuid = MockUuid();
 
       useCase = ExecutePlaygroundQuery(
         mockDatabaseGateway,
-        mockConfigRepository,
+        mockQueryConfigSource,
         mockUuid,
       );
 
@@ -87,10 +87,55 @@ void main() {
       );
     });
 
+    test('should resolve explicit config id via query config source', () async {
+      const validQuery = 'SELECT * FROM users';
+      const explicitConfigId = 'config-explicit';
+      final config = Config(
+        id: explicitConfigId,
+        agentId: 'agent-123',
+        driverName: 'MySQL',
+        odbcDriverName: 'ODBC Driver for MySQL',
+        connectionString: 'DSN=Test',
+        username: 'root',
+        databaseName: 'testdb',
+        host: 'localhost',
+        port: 3306,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      when(
+        () => mockQueryConfigSource.resolveConfigForQuery(explicitConfigId),
+      ).thenAnswer((_) async => Success(config));
+      when(
+        () => mockDatabaseGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          QueryResponse(
+            id: 'response-1',
+            requestId: 'test-uuid-123',
+            agentId: 'agent-123',
+            data: const [],
+            timestamp: DateTime.now(),
+          ),
+        ),
+      );
+
+      final result = await useCase.call(validQuery, configId: explicitConfigId);
+
+      expect(result.isSuccess(), isTrue);
+      verify(
+        () => mockQueryConfigSource.resolveConfigForQuery(explicitConfigId),
+      ).called(1);
+    });
+
     test('should fail when config is not found', () async {
       // Arrange
       const validQuery = 'SELECT * FROM users';
-      when(() => mockConfigRepository.getCurrentConfigMetadata()).thenAnswer(
+      when(() => mockQueryConfigSource.resolveConfigForQuery(any())).thenAnswer(
         (_) async => Failure(domain.NotFoundFailure('Config not found')),
       );
 
@@ -136,7 +181,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfigMetadata(),
+        () => mockQueryConfigSource.resolveConfigForQuery(any()),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(
@@ -180,7 +225,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfigMetadata(),
+        () => mockQueryConfigSource.resolveConfigForQuery(any()),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(
@@ -229,7 +274,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfigMetadata(),
+        () => mockQueryConfigSource.resolveConfigForQuery(any()),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(
@@ -290,7 +335,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfigMetadata(),
+        () => mockQueryConfigSource.resolveConfigForQuery(any()),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(
@@ -342,7 +387,7 @@ void main() {
       );
 
       when(
-        () => mockConfigRepository.getCurrentConfigMetadata(),
+        () => mockQueryConfigSource.resolveConfigForQuery(any()),
       ).thenAnswer((_) async => Success(config));
       when(
         () => mockDatabaseGateway.executeQuery(
@@ -385,7 +430,7 @@ void main() {
         );
 
         when(
-          () => mockConfigRepository.getCurrentConfigMetadata(),
+          () => mockQueryConfigSource.resolveConfigForQuery(any()),
         ).thenAnswer((_) async => Success(config));
         when(
           () => mockDatabaseGateway.executeQuery(
@@ -442,7 +487,7 @@ void main() {
         );
 
         when(
-          () => mockConfigRepository.getCurrentConfigMetadata(),
+          () => mockQueryConfigSource.resolveConfigForQuery(any()),
         ).thenAnswer((_) async => Success(config));
         when(
           () => mockDatabaseGateway.executeQuery(
@@ -496,7 +541,7 @@ void main() {
         );
 
         when(
-          () => mockConfigRepository.getCurrentConfigMetadata(),
+          () => mockQueryConfigSource.resolveConfigForQuery(any()),
         ).thenAnswer((_) async => Success(config));
         when(
           () => mockDatabaseGateway.executeQuery(

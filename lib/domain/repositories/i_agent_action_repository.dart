@@ -43,6 +43,10 @@ abstract class IAgentActionRepository {
     required int maxBytes,
   });
 
+  /// Lists executions ordered by `requestedAt` descending.
+  ///
+  /// When [limit] is omitted, a conservative default cap applies. Pass `limit <= 0`
+  /// to request no cap.
   Future<Result<List<AgentActionExecution>>> listExecutions({
     String? actionId,
     String? idempotencyKey,

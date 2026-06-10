@@ -17,21 +17,76 @@ class ClientTokenRepository implements IClientTokenRepository {
   final ClientTokenLocalDataSource _localDataSource;
 
   @override
-  Future<ClientTokenSummary?> getTokenById(String tokenId) async {
+  Future<Result<ClientTokenSummary>> getTokenById(String tokenId) async {
     try {
-      return await _localDataSource.getTokenById(tokenId);
+      final summary = await _localDataSource.getTokenById(tokenId);
+      if (summary == null) {
+        return Failure(
+          domain.NotFoundFailure.withContext(
+            message: 'Client token not found',
+            context: {
+              'operation': 'get_local_client_token_by_id',
+              'token_id': tokenId,
+            },
+          ),
+        );
+      }
+      return Success(summary);
     } on Exception catch (error, stackTrace) {
-      // Log at error level so DB failures are distinguishable from "not found"
-      // (null return). Callers that need to distinguish should use listTokens
-      // or a Result-returning overload when the distinction matters.
       developer.log(
-        'DB error loading client token by id — returning null',
+        'Failed to load client token by id',
         name: 'client_token_repository',
         error: error,
         stackTrace: stackTrace,
         level: 1000,
       );
-      return null;
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to load local client token',
+          cause: error,
+          context: {
+            'operation': 'get_local_client_token_by_id',
+            'token_id': tokenId,
+          },
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<Result<ClientTokenSummary>> getTokenByHash(String tokenHash) async {
+    try {
+      final summary = await _localDataSource.getTokenByHash(tokenHash);
+      if (summary == null) {
+        return Failure(
+          domain.NotFoundFailure.withContext(
+            message: 'Client token not found',
+            context: {
+              'operation': 'get_local_client_token_by_hash',
+              'token_hash': tokenHash,
+            },
+          ),
+        );
+      }
+      return Success(summary);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to load client token by hash',
+        name: 'client_token_repository',
+        error: error,
+        stackTrace: stackTrace,
+        level: 1000,
+      );
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to load local client token',
+          cause: error,
+          context: {
+            'operation': 'get_local_client_token_by_hash',
+            'token_hash': tokenHash,
+          },
+        ),
+      );
     }
   }
 

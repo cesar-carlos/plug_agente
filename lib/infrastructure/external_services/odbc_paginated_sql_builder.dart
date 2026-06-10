@@ -1,7 +1,7 @@
 import 'dart:developer' as developer;
 
-import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 
 /// Builds dialect-specific SQL for managed pagination (offset and cursor).

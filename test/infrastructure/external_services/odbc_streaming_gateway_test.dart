@@ -6,7 +6,9 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/infrastructure/external_services/i_odbc_batched_streaming_query_source.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_native_options.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
@@ -15,7 +17,19 @@ import '../../helpers/mock_odbc_connection_settings.dart';
 
 class MockOdbcService extends Mock implements OdbcService {}
 
+class MockBatchedStreamingQuerySource extends Mock implements IOdbcBatchedStreamingQuerySource {}
+
 void main() {
+  setUpAll(() {
+    registerFallbackValue(
+      OdbcStreamingNativeOptions.resolve(
+        fetchSize: 1000,
+        chunkSizeBytes: 1024 * 1024,
+        settingsMaxResultBufferMb: 16,
+      ),
+    );
+  });
+
   group('OdbcStreamingGateway', () {
     late MockOdbcService mockService;
     late MockOdbcConnectionSettings mockSettings;
@@ -88,6 +102,65 @@ void main() {
       expect(receivedChunks.length, 2);
       expect(receivedChunks[0].length, 2);
       expect(receivedChunks[1].length, 1);
+    });
+
+    test('should invoke onSetupComplete after connect before consuming chunks', () async {
+      final controller = StreamController<Result<QueryResult>>();
+      var setupCompleteCalled = false;
+      var chunkReceived = false;
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-setup',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQuery('conn-setup', any()),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect('conn-setup'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final execution = gateway.executeQueryStream(
+        'SELECT * FROM users',
+        'DSN=Test',
+        (_) async {
+          chunkReceived = true;
+        },
+        onSetupComplete: () {
+          setupCompleteCalled = true;
+        },
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      expect(setupCompleteCalled, isTrue);
+      expect(chunkReceived, isFalse);
+
+      controller.add(
+        const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        ),
+      );
+      await controller.close();
+
+      final result = await execution;
+      expect(result.isSuccess(), isTrue);
     });
 
     test('should cancel active streaming and stop with failure', () async {
@@ -653,6 +726,178 @@ void main() {
 
       await controller.close();
       await firstExecution;
+    });
+
+    test('should record single-chunk native path metric for one ODBC chunk', () async {
+      final controller = StreamController<Result<QueryResult>>();
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-single',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQuery('conn-single', any()),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect('conn-single'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final execution = gateway.executeQueryStream(
+        'SELECT 1',
+        'DSN=Test',
+        (_) async {},
+      );
+
+      controller.add(
+        const Success(
+          QueryResult(columns: ['id'], rows: [
+            [1],
+          ], rowCount: 1),
+        ),
+      );
+      await controller.close();
+
+      await execution;
+
+      expect(metrics.streamingSingleChunkPathCount, 1);
+      expect(metrics.streamingBatchedPathCount, 0);
+    });
+
+    test('should propagate fetch and chunk options to batched query source', () async {
+      final batchedSource = MockBatchedStreamingQuerySource();
+      gateway = OdbcStreamingGateway(
+        mockService,
+        mockSettings,
+        batchedQuerySource: batchedSource,
+        metricsCollector: metrics,
+        cancelDisconnectTimeout: const Duration(milliseconds: 20),
+      );
+
+      final controller = StreamController<Result<QueryResult>>();
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: '42',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => batchedSource.streamQuery(
+          42,
+          any(),
+          any(),
+        ),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect('42'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final execution = gateway.executeQueryStream(
+        'SELECT * FROM users',
+        'DSN=Test',
+        (_) async {},
+        fetchSize: 250,
+        chunkSizeBytes: 256 * 1024,
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      final captured = verify(
+        () => batchedSource.streamQuery(
+          42,
+          captureAny(),
+          captureAny(),
+        ),
+      ).captured;
+      final nativeOptions = captured.last as OdbcStreamingNativeOptions;
+      expect(nativeOptions.fetchSize, 250);
+      expect(nativeOptions.nativeChunkSizeBytes, 256 * 1024);
+
+      controller.add(
+        const Success(
+          QueryResult(columns: ['id'], rows: [
+            [1],
+          ], rowCount: 1),
+        ),
+      );
+      await controller.close();
+      await execution;
+
+      verifyNever(() => mockService.streamQuery(any(), any()));
+    });
+
+    test('should record batched native path metric for multiple ODBC chunks', () async {
+      final controller = StreamController<Result<QueryResult>>();
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-multi',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQuery('conn-multi', any()),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect('conn-multi'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final execution = gateway.executeQueryStream(
+        'SELECT * FROM large',
+        'DSN=Test',
+        (_) async {},
+      );
+
+      controller.add(
+        const Success(
+          QueryResult(columns: ['id'], rows: [
+            [1],
+            [2],
+          ], rowCount: 2),
+        ),
+      );
+      controller.add(
+        const Success(
+          QueryResult(columns: ['id'], rows: [
+            [3],
+          ], rowCount: 1),
+        ),
+      );
+      await controller.close();
+
+      await execution;
+
+      expect(metrics.streamingBatchedPathCount, 1);
+      expect(metrics.streamingSingleChunkPathCount, 0);
     });
   });
 }

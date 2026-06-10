@@ -10,6 +10,9 @@ class FlutterSecureTokenSecretStore implements ITokenSecretStore {
   final FlutterSecureStorage _secureStorage;
   final String keyPrefix;
 
+  @override
+  bool get isAvailable => true;
+
   String _keyFor(String secretKey) => '$keyPrefix$secretKey';
 
   @override

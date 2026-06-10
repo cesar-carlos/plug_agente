@@ -85,15 +85,49 @@ lib/
 ```
 
 Direcao de dependencias: `presentation -> application -> domain`,
-`infrastructure` implementa contratos do `domain`. Detalhes em
-`.cursor/rules/clean_architecture.mdc`.
+`infrastructure` implementa contratos do `domain`. Ports (interfaces) vivem em
+`lib/domain/repositories/`; `infrastructure` implementa esses contratos.
+Enforcement automatizado: `test/architecture/layer_boundaries_test.dart`.
+Detalhes em `.cursor/rules/clean_architecture.mdc`.
+
+### Sql RPC (mapa para maintainers)
+
+Handlers SQL foram modularizados em `lib/application/rpc/`:
+
+| Modulo | Responsabilidade |
+| --- | --- |
+| `sql_rpc_method_handler_operations.dart` | Facade que compoe os handlers abaixo |
+| `sql_execute_handler.dart` | `sql.execute` (materializado e streaming) |
+| `sql_batch_handler.dart` | `sql.executeBatch` |
+| `sql_bulk_insert_handler.dart` | `sql.bulkInsert` |
+| `sql_cancel_handler.dart` | `sql.cancel` |
+| `sql_rpc_db_streaming_executor.dart` / `sql_rpc_materialized_streaming_executor.dart` | Caminhos de streaming DB vs materializado |
+| `sql_streaming_coordinator.dart` | Orquestracao de stream terminal/chunks |
+| `sql_rpc_client_token_gate.dart` / `sql_authorization_fingerprint.dart` | Autorizacao e fingerprint de policy |
+| `sql_rpc_handler_support.dart` | Helpers compartilhados entre handlers |
 
 ## Persistencia e estado
 
-- `drift` para historico de execucoes, auditoria de RPC, idempotencia, cache
-  de tokens, `agent_action_remote_audit`.
-- `flutter_secure_storage` para tokens, segredos e chaves HMAC.
+- `drift` (schema **v30**) para historico de execucoes, auditoria de RPC,
+  idempotencia, cache de tokens, `agent_action_remote_audit`.
+- **Drift v29–v30 — ODBC credential externalization:** senhas ODBC saem de
+  `config_table` para `flutter_secure_storage` via `OdbcCredentialStore`
+  (`IOdbcCredentialStore` / `IOdbcCredentialSecretStore`). v29 introduziu o
+  fluxo de lazy migration on read; **v30 remove a coluna plaintext `password`**
+  apos copiar stragglers remanescentes para o secure store na migration.
+- `flutter_secure_storage` particionado por dominio:
+  - **ODBC** — credenciais de conexao (`FlutterSecureOdbcCredentialSecretStore`)
+  - **Hub auth** — tokens/sessao do hub (`FlutterSecureHubAuthSecretStore`)
+  - **Client tokens** — politicas de autorizacao local
+    (`FlutterSecureTokenSecretStore`)
+  - Payload signing keys e segredos de acoes agendadas usam stores dedicados no
+    mesmo mecanismo.
 - `shared_preferences` para flags leves.
+- **Backup local:** por padrao o export omite segredos (`includeSecureStorageSecrets:
+  false` na UI e no servico); o manifest ZIP declara `odbcSecretsIncluded` conforme
+  a escolha do operador. Opt-in explicito inclui entradas elegiveis de
+  `flutter_secure_storage` — ver `LocalAppDataBackupService` e
+  `BackupConfigSection`.
 
 ## Seguranca
 

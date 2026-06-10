@@ -132,6 +132,7 @@ void main() {
     test('should align SQL queue per-kind worker caps with direct ODBC class budgets', () {
       expect(ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(8), 2);
       expect(ConnectionConstants.sqlQueueMaxLongQueryWorkersForWorkers(8), 2);
+      expect(ConnectionConstants.sqlQueueMaxStreamingWorkersForWorkers(8), 2);
       expect(ConnectionConstants.sqlQueueMaxNonQueryWorkersForWorkers(8), 4);
       expect(ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(1), 1);
     });

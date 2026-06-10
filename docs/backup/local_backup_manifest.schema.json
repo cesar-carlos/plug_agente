@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plug.database/schemas/local-backup-manifest.schema.json",
+  "title": "Plug Agente local backup manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatVersion",
+    "createdAt",
+    "appVersion",
+    "platform",
+    "installationId",
+    "odbcSecretsIncluded",
+    "secureStorageSecretsIncluded"
+  ],
+  "properties": {
+    "formatVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "appVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "platform": {
+      "type": "string",
+      "minLength": 1
+    },
+    "installationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "odbcSecretsIncluded": {
+      "type": "boolean",
+      "description": "Legacy flag; true when an encrypted secure-storage secrets blob is present."
+    },
+    "secureStorageSecretsIncluded": {
+      "type": "boolean",
+      "description": "Whether secure_storage_secrets.enc is included in the ZIP."
+    },
+    "secureStorageSecretsBlobVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "secureStorageSecretsEntryCount": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "secureStorageSecretsIncluded": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "secureStorageSecretsBlobVersion",
+          "secureStorageSecretsEntryCount"
+        ],
+        "properties": {
+          "odbcSecretsIncluded": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "secureStorageSecretsIncluded": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": ["secureStorageSecretsBlobVersion"]
+        }
+      }
+    }
+  ]
+}

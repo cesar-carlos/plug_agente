@@ -2,17 +2,17 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
 
-import 'package:plug_agente/application/actions/action_execution_queue.dart';
-import 'package:plug_agente/application/actions/agent_action_execution_metrics_collector.dart';
-import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
-import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_diagnostics_constants.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/domain/repositories/action_execution_queue_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/agent_action_execution_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_schema_validation_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 
 /// Servico para coletar e gerenciar metricas de performance.
 ///
@@ -50,10 +50,14 @@ class MetricsCollector
   static const String _odbcNativeCompatibleAcquireSuccessCounter = 'odbc_native_compatible_acquire_success';
   static const String _readOnlyBatchParallelCounter = 'read_only_batch_parallel';
   static const String _readOnlyBatchParallelCappedCounter = 'read_only_batch_parallel_capped';
+  static const String _readOnlyBatchNativePoolPathCounter = 'read_only_batch_native_pool_path';
+  static const String _readOnlyBatchNativePoolFallbackCounter = 'read_only_batch_native_pool_fallback';
   static const String _directConnectionAcquireTimeoutCounter = 'direct_connection_acquire_timeout';
   static const String _poolReleaseFailureCounter = 'pool_release_failure';
   static const String _poolDiscardInflightCounter = 'pool_discard_inflight';
   static const String _poolDiscardReconciliationStaleCounter = 'pool_discard_reconciliation_stale';
+  static const String _poolDiscardReconciliationRemediatedCounter = 'pool_discard_reconciliation_remediated';
+  static const String _poolDiscardReconciliationForceReleaseCounter = 'pool_discard_reconciliation_force_release';
   static const String _bulkInsertChunkedCounter = 'bulk_insert_chunked_total';
   static const String _bulkInsertParallelCounter = 'bulk_insert_parallel_total';
   static const String _poolRecycleCounter = 'pool_recycle';
@@ -182,9 +186,13 @@ class MetricsCollector
   static const String _streamCancelDisconnectTimeoutCounter = 'stream_cancel_disconnect_timeout';
   static const String _sqlQueueRejectionCounter = 'sql_queue_rejection';
   static const String _sqlQueueTimeoutCounter = 'sql_queue_timeout';
+  static const String _sqlQueueTimeoutAfterWorkerStartedCounter =
+      'sql_queue_timeout_after_worker_started';
   static const String _sqlQueueSaturation70Counter = 'sql_queue_saturation_70';
   static const String _sqlQueueSaturation90Counter = 'sql_queue_saturation_90';
   static const String _sqlQueueWorkersEqualPoolCounter = 'sql_queue_workers_equal_pool';
+  static const String _streamingBatchedPathCounter = 'streaming_batched_path';
+  static const String _streamingSingleChunkPathCounter = 'streaming_single_chunk_path';
   static const String _autoUpdateManualCheckStartedCounter = 'auto_update_manual_check_started';
   static const String _autoUpdateManualCheckSuccessAvailableCounter = 'auto_update_manual_check_success_available';
   static const String _autoUpdateManualCheckSuccessNotAvailableCounter =
@@ -234,6 +242,7 @@ class MetricsCollector
   final ListQueue<Duration> _poolWaitTimes = ListQueue<Duration>();
   final ListQueue<Duration> _directConnectionWaitTimes = ListQueue<Duration>();
   final ListQueue<Duration> _readOnlyBatchParallelWaitTimes = ListQueue<Duration>();
+  final ListQueue<Duration> _streamingWorkerHoldTimes = ListQueue<Duration>();
   final ListQueue<Duration> _connectTimes = ListQueue<Duration>();
   final ListQueue<Duration> _sqlExecutionTimes = ListQueue<Duration>();
   final Map<String, ListQueue<Duration>> _sqlExecutionTimesByMode = <String, ListQueue<Duration>>{};
@@ -280,6 +289,8 @@ class MetricsCollector
   int get odbcNativeCompatibleAcquireSuccessCount => _eventCounters[_odbcNativeCompatibleAcquireSuccessCounter] ?? 0;
   int get readOnlyBatchParallelCount => _eventCounters[_readOnlyBatchParallelCounter] ?? 0;
   int get readOnlyBatchParallelCappedCount => _eventCounters[_readOnlyBatchParallelCappedCounter] ?? 0;
+  int get readOnlyBatchNativePoolPathCount => _eventCounters[_readOnlyBatchNativePoolPathCounter] ?? 0;
+  int get readOnlyBatchNativePoolFallbackCount => _eventCounters[_readOnlyBatchNativePoolFallbackCounter] ?? 0;
   int get directConnectionAcquireTimeoutCount => _eventCounters[_directConnectionAcquireTimeoutCounter] ?? 0;
   int get activeDirectConnections => _activeDirectConnections;
   int get maxActiveDirectConnections => _maxActiveDirectConnections;
@@ -328,9 +339,13 @@ class MetricsCollector
   int get streamCancelDisconnectTimeoutCount => _eventCounters[_streamCancelDisconnectTimeoutCounter] ?? 0;
   int get sqlQueueRejectionCount => _eventCounters[_sqlQueueRejectionCounter] ?? 0;
   int get sqlQueueTimeoutCount => _eventCounters[_sqlQueueTimeoutCounter] ?? 0;
+  int get sqlQueueTimeoutAfterWorkerStartedCount =>
+      _eventCounters[_sqlQueueTimeoutAfterWorkerStartedCounter] ?? 0;
   int get sqlQueueSaturation70Count => _eventCounters[_sqlQueueSaturation70Counter] ?? 0;
   int get sqlQueueSaturation90Count => _eventCounters[_sqlQueueSaturation90Counter] ?? 0;
   int get sqlQueueWorkersEqualPoolCount => _eventCounters[_sqlQueueWorkersEqualPoolCounter] ?? 0;
+  int get streamingBatchedPathCount => _eventCounters[_streamingBatchedPathCounter] ?? 0;
+  int get streamingSingleChunkPathCount => _eventCounters[_streamingSingleChunkPathCounter] ?? 0;
   int get autoUpdateManualCheckStartedCount => _eventCounters[_autoUpdateManualCheckStartedCounter] ?? 0;
   int get autoUpdateManualCheckSuccessAvailableCount =>
       _eventCounters[_autoUpdateManualCheckSuccessAvailableCounter] ?? 0;
@@ -395,6 +410,7 @@ class MetricsCollector
     _poolWaitTimes.clear();
     _directConnectionWaitTimes.clear();
     _readOnlyBatchParallelWaitTimes.clear();
+    _streamingWorkerHoldTimes.clear();
     _connectTimes.clear();
     _sqlExecutionTimes.clear();
     _sqlExecutionTimesByMode.clear();
@@ -435,6 +451,11 @@ class MetricsCollector
   @override
   void recordQueueTimeout() {
     _incrementEventCounter(_sqlQueueTimeoutCounter);
+  }
+
+  @override
+  void recordQueueTimeoutAfterWorkerStarted() {
+    _incrementEventCounter(_sqlQueueTimeoutAfterWorkerStartedCounter);
   }
 
   @override
@@ -671,6 +692,24 @@ class MetricsCollector
     _currentActiveWorkers = activeCount;
   }
 
+  @override
+  void recordStreamingWorkerHoldTime(Duration holdTime) {
+    if (holdTime.isNegative) {
+      return;
+    }
+    _recordDurationSample(_streamingWorkerHoldTimes, holdTime);
+  }
+
+  /// Records ODBC streams that delivered multiple native chunks (batched-first
+  /// path in odbc_fast). Legacy fallback cannot be distinguished from a small
+  /// single-batch result without package-level diagnostics.
+  void recordStreamingBatchedPath() => _incrementEventCounter(_streamingBatchedPathCounter);
+
+  /// Records ODBC streams that completed with exactly one native chunk. This
+  /// may be a small batched result or a legacy fallback after batched start
+  /// failed before the first emit.
+  void recordStreamingSingleChunkPath() => _incrementEventCounter(_streamingSingleChunkPathCounter);
+
   void recordTimeoutCancelSuccess() => _incrementEventCounter(_timeoutCancelSuccessCounter);
 
   void recordTimeoutCancelFailure() => _incrementEventCounter(_timeoutCancelFailureCounter);
@@ -740,6 +779,10 @@ class MetricsCollector
 
   void recordOdbcNativeCompatibleAcquireSuccess() => _incrementEventCounter(_odbcNativeCompatibleAcquireSuccessCounter);
 
+  void recordReadOnlyBatchNativePoolPath() => _incrementEventCounter(_readOnlyBatchNativePoolPathCounter);
+
+  void recordReadOnlyBatchNativePoolFallback() => _incrementEventCounter(_readOnlyBatchNativePoolFallbackCounter);
+
   void recordReadOnlyBatchParallel({
     int? requestedParallelism,
     int? effectiveParallelism,
@@ -792,6 +835,12 @@ class MetricsCollector
   }
 
   void recordPoolDiscardReconciliationStale() => _incrementEventCounter(_poolDiscardReconciliationStaleCounter);
+
+  void recordPoolDiscardReconciliationRemediated() =>
+      _incrementEventCounter(_poolDiscardReconciliationRemediatedCounter);
+
+  void recordPoolDiscardReconciliationForceRelease() =>
+      _incrementEventCounter(_poolDiscardReconciliationForceReleaseCounter);
 
   void recordBulkInsertChunked() => _incrementEventCounter(_bulkInsertChunkedCounter);
 
@@ -1285,6 +1334,7 @@ class MetricsCollector
       'query_p99_latency_ms': p99Latency,
       'sql_queue_rejection_count': sqlQueueRejectionCount,
       'sql_queue_timeout_count': sqlQueueTimeoutCount,
+      'sql_queue_timeout_after_worker_started_count': sqlQueueTimeoutAfterWorkerStartedCount,
       'sql_queue_saturation_70_count': sqlQueueSaturation70Count,
       'sql_queue_saturation_90_count': sqlQueueSaturation90Count,
       'sql_queue_workers_equal_pool_count': sqlQueueWorkersEqualPoolCount,
@@ -1307,6 +1357,7 @@ class MetricsCollector
       ..._durationStatsSnapshot('pool_wait', _poolWaitTimes),
       ..._durationStatsSnapshot('direct_connection_wait', _directConnectionWaitTimes),
       ..._durationStatsSnapshot('read_only_batch_parallel_wait', _readOnlyBatchParallelWaitTimes),
+      ..._durationStatsSnapshot('streaming_worker_hold', _streamingWorkerHoldTimes),
       ..._durationStatsSnapshot('connect', _connectTimes),
       ..._durationStatsSnapshot('sql_execution', _sqlExecutionTimes),
       ..._durationStatsSnapshot('auto_update_probe', _autoUpdateProbeTimes),

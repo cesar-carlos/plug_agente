@@ -27,6 +27,33 @@ Location: `test/application/queue/sql_execution_queue_test.dart`
 5. **Exceptions**: Tests that thrown exceptions are caught and reported
 6. **Metrics**: Verifies all queue metrics are recorded correctly
 
+### Cooperative cancellation and ghost-query semantics
+
+`SqlExecutionQueue` (`lib/application/queue/sql_execution_queue.dart`) bounds
+**queue-wait** time via `enqueueTimeout`. After a worker slot is acquired, the
+caller waits for task completion without a queue-level deadline.
+
+When a queue-wait timeout races with worker start, the caller receives a
+queue-timeout failure but ODBC work may already be running — a **ghost query**.
+The queue cannot abort arbitrary ODBC tasks from the timeout path alone:
+
+- **Streaming** paths may pass an optional `CancellationToken`
+  (`cooperativeCancellationToken`). On queue-wait timeout after worker start,
+  the queue signals `cooperativeCancellationToken.cancel()` so the task can
+  cooperatively stop.
+- **Materialized** `sql.execute` routes through `QueuedDatabaseGateway`, which
+  passes the same optional `CancellationToken` as cooperative
+  `cooperativeCancellationToken` on queue submit. On queue-wait timeout after
+  worker start, the token is signalled so ODBC execution can stop
+  cooperatively; ODBC execution timeouts remain the fallback when cancel does
+  not propagate in time.
+
+Health exposes `sql_queue.timeouts_after_worker_started_total` (metric
+`sql_queue_timeout_after_worker_started_count`) when this race occurs. Failure
+context may include `ghost_query_risk: true` and
+`cooperative_cancel_signalled`. Operational triage: investigate rising
+`timeouts_after_worker_started_total` before increasing pool/workers.
+
 ### QueuedDatabaseGateway Tests
 
 Location: `test/application/gateway/queued_database_gateway_test.dart`

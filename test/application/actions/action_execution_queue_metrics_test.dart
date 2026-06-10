@@ -4,6 +4,7 @@ import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/repositories/action_execution_queue_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 

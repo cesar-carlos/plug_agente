@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_agent_actions_bundle_file_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
 class AgentActionsBundleFileGateway implements IAgentActionsBundleFileGateway {

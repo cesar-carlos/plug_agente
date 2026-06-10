@@ -386,6 +386,23 @@ void main() {
         expect(collector.rpcSqlExecuteMaterializedResponseCount, 2);
       });
 
+      test('should expose streaming path and worker hold metrics in snapshot', () {
+        collector.recordStreamingBatchedPath();
+        collector.recordStreamingSingleChunkPath();
+        collector.recordStreamingWorkerHoldTime(const Duration(milliseconds: 120));
+        collector.recordStreamingWorkerHoldTime(const Duration(milliseconds: 200));
+
+        final snapshot = collector.getSnapshot();
+
+        expect(collector.streamingBatchedPathCount, 1);
+        expect(collector.streamingSingleChunkPathCount, 1);
+        expect(snapshot['streaming_batched_path'], 1);
+        expect(snapshot['streaming_single_chunk_path'], 1);
+        expect(snapshot['streaming_worker_hold_avg_time_ms'], 160.0);
+        expect(snapshot['streaming_worker_hold_p95_time_ms'], 200);
+        expect(snapshot['streaming_worker_hold_sample_count'], 2);
+      });
+
       test('should expose numeric SQL queue counters and wait times in snapshot', () {
         collector.recordQueueRejection();
         collector.recordQueueRejection();

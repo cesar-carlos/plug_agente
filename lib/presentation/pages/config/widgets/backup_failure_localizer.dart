@@ -19,6 +19,10 @@ String localizedBackupFailureMessage(Failure failure, AppLocalizations l10n) {
     LocalBackupErrorCodes.stageGeneric => l10n.configBackupErrStageGeneric,
     LocalBackupErrorCodes.applyMissingDb => l10n.configBackupErrApplyMissingDb,
     LocalBackupErrorCodes.applyWrite => l10n.configBackupErrApplyWrite,
+    LocalBackupErrorCodes.exportSecretsUnavailable => l10n.configBackupErrExportSecretsUnavailable,
+    LocalBackupErrorCodes.exportSecretsEncrypt => l10n.configBackupErrExportSecretsEncrypt,
+    LocalBackupErrorCodes.restoreSecretsDecrypt => l10n.configBackupErrRestoreSecretsDecrypt,
+    LocalBackupErrorCodes.restoreSecretsApply => l10n.configBackupErrRestoreSecretsApply,
     _ => failure.message,
   };
 }

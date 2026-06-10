@@ -3,8 +3,10 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_response_factory.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
@@ -76,7 +78,14 @@ final class OdbcQueryRunner {
     Duration? timeout,
     bool preferPreparedTimeout = true,
     String executionMode = 'pooled',
+    CancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return const QueryExecutionOutcome.failure(
+        CancellationException('Operation was cancelled'),
+      );
+    }
+
     final stopwatch = Stopwatch()..start();
     final usesMultiResultExecution = OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
       request,
@@ -88,44 +97,53 @@ final class OdbcQueryRunner {
       preferPreparedTimeout: preferPreparedTimeout,
       usesMultiResultExecution: usesMultiResultExecution,
     );
+    var timeoutCleanupAlreadyHandled = false;
     try {
       if (usesPreparedTimeout) {
-        return await runPrepared(
-          connectionId: connId,
-          request: request,
-          preparedExecution: preparedExecution,
+        return await _guardWithCooperativeCancellation(
+          () => runPrepared(
+            connectionId: connId,
+            request: request,
+            preparedExecution: preparedExecution,
+            timeout: timeout,
+          ),
+          cancellationToken: cancellationToken,
           timeout: timeout,
         );
       }
 
       if (timeout != null && !usesMultiResultExecution && !_hasNamedParameters(preparedExecution)) {
         final startedAt = DateTime.now();
-        final asyncResult = await _statementExecutor.runNativeAsyncQueryWithTimeout(
-          connectionId: connId,
-          query: preparedExecution.sql,
-          timeout: timeout,
-        );
-        if (asyncResult.isSuccess()) {
-          return QueryExecutionOutcome.success(
-            OdbcQueryResponseFactory.fromSingleResult(request, asyncResult.getOrThrow(), startedAt: startedAt),
+        try {
+          final asyncResult = await _guardWithCooperativeCancellation(
+            () => _statementExecutor.runNativeAsyncQueryWithTimeout(
+              connectionId: connId,
+              query: preparedExecution.sql,
+              timeout: timeout,
+            ),
+            cancellationToken: cancellationToken,
           );
-        }
+          if (asyncResult.isSuccess()) {
+            return QueryExecutionOutcome.success(
+              OdbcQueryResponseFactory.fromSingleResult(request, asyncResult.getOrThrow(), startedAt: startedAt),
+            );
+          }
 
-        final asyncError = asyncResult.exceptionOrNull();
-        if (asyncError is! UnsupportedFeatureError) {
-          return QueryExecutionOutcome.failure(asyncError);
+          final asyncError = asyncResult.exceptionOrNull();
+          if (asyncError is! UnsupportedFeatureError) {
+            return QueryExecutionOutcome.failure(asyncError);
+          }
+        } on TimeoutException {
+          timeoutCleanupAlreadyHandled = true;
+          rethrow;
         }
       }
 
-      if (timeout == null) {
-        return await _run(connId, request, preparedExecution);
-      }
-
-      return await _run(
-        connId,
-        request,
-        preparedExecution,
-      ).timeout(timeout);
+      return await _guardWithCooperativeCancellation(
+        () => _run(connId, request, preparedExecution),
+        cancellationToken: cancellationToken,
+        timeout: timeout,
+      );
     } on TimeoutException catch (error) {
       _metrics.recordQueryTimeout();
       _metrics.recordOdbcQueryTimeoutByStage('query');
@@ -133,7 +151,7 @@ final class OdbcQueryRunner {
         category: 'timeout',
         reason: RpcSqlBudgetConstants.queryTimeoutReason,
       );
-      if (!usesPreparedTimeout) {
+      if (!usesPreparedTimeout && !timeoutCleanupAlreadyHandled) {
         await _cancelConnectionForTimeout(connId);
       }
       developer.log(
@@ -143,6 +161,17 @@ final class OdbcQueryRunner {
         error: error,
       );
       rethrow;
+    } on CancellationException catch (error) {
+      if (!usesPreparedTimeout) {
+        await _cancelConnectionForTimeout(connId);
+      }
+      developer.log(
+        'SQL query cancelled cooperatively before completion',
+        name: 'database_gateway',
+        level: 900,
+        error: error,
+      );
+      return QueryExecutionOutcome.failure(error);
     } finally {
       stopwatch.stop();
       _metrics.recordSqlExecutionTime(
@@ -162,13 +191,13 @@ final class OdbcQueryRunner {
     required String statementKey,
     Duration? timeout,
   }) async {
-    final deadline = _deadlineFor(timeout);
+    final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final stmtId = await _statementExecutor.getOrPrepareStatement(
       connectionId: connectionId,
       preparedExecution: preparedExecution,
       preparedStatements: preparedStatements,
       statementKey: statementKey,
-      timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
+      timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
     );
     if (stmtId.isError()) {
       return QueryExecutionOutcome.failure(
@@ -182,7 +211,7 @@ final class OdbcQueryRunner {
       connectionId: connectionId,
       preparedExecution: preparedExecution,
       statementId: preparedStatementId,
-      timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
+      timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
     );
     return result.fold(
       (queryResult) => QueryExecutionOutcome.success(
@@ -200,7 +229,7 @@ final class OdbcQueryRunner {
     required OdbcPreparedQueryExecution preparedExecution,
     Duration? timeout,
   }) async {
-    final deadline = _deadlineFor(timeout);
+    final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final preparedStatements = <String, int>{};
     final statementKey = preparedStatementKeyFor(preparedExecution);
     try {
@@ -209,7 +238,7 @@ final class OdbcQueryRunner {
         preparedExecution: preparedExecution,
         preparedStatements: preparedStatements,
         statementKey: statementKey,
-        timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
+        timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
       );
       if (stmtId.isError()) {
         return QueryExecutionOutcome.failure(
@@ -222,7 +251,7 @@ final class OdbcQueryRunner {
         connectionId: connectionId,
         preparedExecution: preparedExecution,
         statementId: stmtId.getOrThrow(),
-        timeout: _remainingTimeoutFromDeadline(deadline) ?? timeout,
+        timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
       );
       return result.fold(
         (queryResult) => QueryExecutionOutcome.success(
@@ -300,15 +329,35 @@ final class OdbcQueryRunner {
     );
   }
 
-  DateTime? _deadlineFor(Duration? timeout) {
-    return timeout == null ? null : DateTime.now().add(timeout);
+  Future<T> _guardWithCooperativeCancellation<T>(
+    Future<T> Function() operation, {
+    CancellationToken? cancellationToken,
+    Duration? timeout,
+  }) async {
+    if (cancellationToken == null) {
+      final work = operation();
+      return timeout == null ? work : work.timeout(timeout);
+    }
+
+    if (cancellationToken.isCancelled) {
+      throw const CancellationException('Operation was cancelled');
+    }
+
+    var work = operation();
+    if (timeout != null) {
+      work = work.timeout(timeout);
+    }
+
+    return Future.any(<Future<T>>[
+      work,
+      _waitForCooperativeCancellation(cancellationToken),
+    ]);
   }
 
-  Duration? _remainingTimeoutFromDeadline(DateTime? deadline) {
-    if (deadline == null) {
-      return null;
+  Future<T> _waitForCooperativeCancellation<T>(CancellationToken cancellationToken) async {
+    while (!cancellationToken.isCancelled) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
     }
-    final remaining = deadline.difference(DateTime.now());
-    return remaining <= Duration.zero ? Duration.zero : remaining;
+    throw const CancellationException('Operation was cancelled');
   }
 }

@@ -1,7 +1,7 @@
-import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
+import 'package:plug_agente/domain/validation/agent_profile_schema.dart';
 import 'package:plug_agente/infrastructure/validation/trace_context_validator.dart';
 import 'package:result_dart/result_dart.dart';
 

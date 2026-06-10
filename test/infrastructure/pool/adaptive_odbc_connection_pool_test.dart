@@ -726,6 +726,47 @@ void main() {
       verify(() => service.connect('DSN=SQLAnywhere', options: any(named: 'options'))).called(1);
     });
 
+    test('healthCheckAll preserves typed child failure instead of a raw Exception', () async {
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
+        (_) async => Success(_sqlServerConfig()),
+      );
+      when(
+        () => service.poolCreate(any(), any(), options: any(named: 'options')),
+      ).thenAnswer((_) async => const Success(41));
+      when(() => service.poolGetConnection(41)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'native-health',
+            connectionString: 'DSN=Prod',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => service.poolReleaseConnection('native-health')).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(() => service.poolHealthCheck(41)).thenAnswer(
+        (_) async => const Failure(
+          ConnectionError(message: 'native health failed'),
+        ),
+      );
+
+      final pool = _buildPool(
+        service: service,
+        settings: settings,
+        flags: flags,
+        metrics: metrics,
+        configRepository: configRepository,
+      );
+
+      await pool.acquire('DSN=Prod');
+      final health = await pool.healthCheckAll();
+
+      expect(health.isError(), isTrue);
+      expect(health.exceptionOrNull(), isA<domain.Failure>());
+    });
+
     test('closeAll preserves typed child failure instead of a raw Exception', () async {
       when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),

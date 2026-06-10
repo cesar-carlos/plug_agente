@@ -7,12 +7,12 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
-import 'package:plug_agente/application/services/silent_update_failure.dart';
-import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/security/helper_signature_probe.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/errors/silent_install_failure.dart';
+import 'package:plug_agente/domain/services/silent_update_installer.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:win32/win32.dart' as win32;
 

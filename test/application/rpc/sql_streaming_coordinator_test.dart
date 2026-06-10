@@ -37,6 +37,7 @@ class _FakeStreamingGateway implements IStreamingDatabaseGateway {
     Duration? queryTimeout,
     CancellationToken? cancellationToken,
     StreamingCancelReason? Function()? cancellationReasonProvider,
+    void Function()? onSetupComplete,
   }) {
     throw UnimplementedError();
   }

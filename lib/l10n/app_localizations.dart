@@ -5594,6 +5594,30 @@ abstract class AppLocalizations {
   /// **'Could not apply backup files.'**
   String get configBackupErrApplyWrite;
 
+  /// No description provided for @configBackupErrExportSecretsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Secure storage is not available, so secrets could not be exported.'**
+  String get configBackupErrExportSecretsUnavailable;
+
+  /// No description provided for @configBackupErrExportSecretsEncrypt.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to encrypt secure-storage secrets for export.'**
+  String get configBackupErrExportSecretsEncrypt;
+
+  /// No description provided for @configBackupErrRestoreSecretsDecrypt.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not decrypt secure-storage secrets from the backup.'**
+  String get configBackupErrRestoreSecretsDecrypt;
+
+  /// No description provided for @configBackupErrRestoreSecretsApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not restore secure-storage secrets from the backup.'**
+  String get configBackupErrRestoreSecretsApply;
+
   /// Error dialog title for restore failures before exit.
   ///
   /// In en, this message translates to:
@@ -5617,6 +5641,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This backup uses an older database schema. The app will migrate it on the next start.'**
   String get configBackupRestoreOlderSchemaNote;
+
+  /// Info on backup tab: secure-storage secrets are omitted by default.
+  ///
+  /// In en, this message translates to:
+  /// **'ODBC passwords, hub secrets, and client token secrets stored in Windows secure storage are not included in the backup ZIP by default. They remain on this machine only unless you opt in below.'**
+  String get configBackupSecureStorageSecretsNote;
+
+  /// Checkbox label to opt in to encrypted secure-storage export.
+  ///
+  /// In en, this message translates to:
+  /// **'Include encrypted secure-storage secrets in the backup ZIP'**
+  String get configBackupIncludeSecureStorageSecretsLabel;
+
+  /// Warning shown when the user opts in to exporting encrypted secrets.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup will contain an encrypted blob with ODBC passwords, hub tokens, and client token secrets. Anyone with this ZIP and the Plug Agente app can decrypt it. Store the file only in a trusted location.'**
+  String get configBackupIncludeSecureStorageSecretsWarning;
+
+  /// Reminder in export success dialog that secure-storage secrets were omitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Secure-storage secrets were not copied—the ZIP does not include ODBC, hub, or client token secrets.'**
+  String get configBackupExportSecretsNotIncludedNote;
+
+  /// Reminder in export success dialog that encrypted secure-storage secrets were included.
+  ///
+  /// In en, this message translates to:
+  /// **'An encrypted secure-storage secrets blob was included in the backup ZIP.'**
+  String get configBackupExportSecretsIncludedNote;
+
+  /// Warning in restore confirm dialog when backup has no secure-storage secrets.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup does not include secure-storage secrets. On a new machine or after restore, re-enter ODBC credentials in connection settings and sign in to the hub again.'**
+  String get configBackupRestoreOdbcSecretsWarning;
+
+  /// Info in restore confirm dialog when backup includes encrypted secure-storage secrets.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup includes an encrypted secure-storage secrets blob. ODBC passwords, hub tokens, and client token secrets will be restored when you confirm.'**
+  String get configBackupRestoreSecretsIncludedNote;
 
   /// No description provided for @configLastUpdateNever.
   ///

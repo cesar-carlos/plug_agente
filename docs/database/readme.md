@@ -24,7 +24,8 @@ Detalhes E2E e prioridade entre DSNs: `docs/testing/e2e_setup.md`.
 
 ## Tuning compartilhado
 
-- `ODBC_POOL_SIZE` — tamanho do pool lease-based (default 4).
+- `ODBC_POOL_SIZE` — tamanho do pool lease-based (default **8**,
+  `ConnectionConstants.defaultPoolSize`).
 - `ODBC_ASYNC_WORKER_COUNT` — workers do worker pool interno do `odbc_fast`
   (default `min(ODBC_POOL_SIZE, CPU cores)`).
 - `ODBC_ASYNC_MAX_PENDING_REQUESTS` — fila do worker pool (default

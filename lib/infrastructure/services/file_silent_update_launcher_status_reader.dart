@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
-import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
-import 'package:plug_agente/application/services/pending_silent_update.dart';
+import 'package:plug_agente/domain/entities/pending_silent_update.dart';
+import 'package:plug_agente/domain/repositories/i_pending_silent_update_store.dart';
 
 /// Reads the helper status JSON file from disk. Lives in the
 /// infrastructure layer so `dart:io` does not leak into the coordinator.

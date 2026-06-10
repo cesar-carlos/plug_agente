@@ -7,5 +7,9 @@ abstract interface class IHubAuthSecretStore {
 
   Future<HubAuthSecrets> readSecrets(String configId);
 
+  Future<Map<String, HubAuthSecrets>> readSecretsForConfigIds(
+    Iterable<String> configIds,
+  );
+
   Future<void> deleteSecrets(String configId);
 }

@@ -2766,6 +2766,14 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   identidade auxiliar segura da execucao (`processExecutable`,
   `processArgumentCount`, `processCommandPreview`) e possui teste abrindo banco
   legado v16 sem essas colunas.
+
+  **Schema evolution (2026):** o banco local evoluiu desde v17; a versao atual
+  e **Drift v30** (`agent_config_drift_database.dart`). Destaques pos-v17:
+  auditoria remota, chunks de saida capturada, externalizacao de credenciais
+  ODBC para `flutter_secure_storage` via `OdbcCredentialStore` (v29 lazy
+  migration on read; **v30** remove a coluna plaintext `password` de
+  `config_table` apos migrar stragglers). Ao citar migrations neste plano,
+  trate v17 como marco historico, nao como versao vigente.
 - [x] TODO: Criar tabelas Drift para gatilhos, auditoria redigida, cache de
   idempotencia e saidas capturadas quando necessario. Parcial: tabela de
   gatilhos, `agent_action_remote_audit` (auditoria remota append-only),

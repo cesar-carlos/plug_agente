@@ -26,6 +26,11 @@ abstract class IStreamingDatabaseGateway {
     Duration? queryTimeout,
     CancellationToken? cancellationToken,
     StreamingCancelReason? Function()? cancellationReasonProvider,
+
+    /// Invoked after ODBC connect and stream registration succeed, before the
+    /// first result chunk is consumed. Used by the queued streaming gateway
+    /// to release the SQL queue worker while the stream body continues.
+    void Function()? onSetupComplete,
   });
 
   /// Cancela o streaming ativo no runtime ODBC.

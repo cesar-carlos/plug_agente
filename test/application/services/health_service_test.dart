@@ -24,12 +24,18 @@ import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/infrastructure/health/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_marker_store.dart';
+import 'package:plug_agente/infrastructure/stores/noop_hub_auth_secret_store.dart';
+import 'package:plug_agente/infrastructure/stores/noop_odbc_credential_secret_store.dart';
+import 'package:plug_agente/infrastructure/stores/noop_token_secret_store.dart';
 import 'package:result_dart/result_dart.dart';
 
 import '../../helpers/mock_odbc_connection_settings.dart';
@@ -49,6 +55,12 @@ class _MockAgentActionTriggerScheduler extends Mock implements AgentActionTrigge
 class _MockAgentActionSchedulerInstanceLock extends Mock implements IAgentActionSchedulerInstanceLock {}
 
 class _MockComObjectInvocationDiagnostics extends Mock implements IComObjectInvocationDiagnostics {}
+
+class _MockOdbcCredentialSecretStore extends Mock implements IOdbcCredentialSecretStore {}
+
+class _MockHubAuthSecretStore extends Mock implements IHubAuthSecretStore {}
+
+class _MockTokenSecretStore extends Mock implements ITokenSecretStore {}
 
 void main() {
   group('HealthService', () {
@@ -634,6 +646,88 @@ void main() {
       expect(sqlQueue['current_size'], greaterThanOrEqualTo(9));
 
       hold.complete();
+    });
+
+    test('should omit secure_storage when secret stores are not wired', () {
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+      );
+
+      final status = service.getHealthStatus();
+
+      expect(status.containsKey('secure_storage'), isFalse);
+    });
+
+    test('should expose secure_storage availability when secret stores are wired', () {
+      final odbcStore = _MockOdbcCredentialSecretStore();
+      final hubAuthStore = _MockHubAuthSecretStore();
+      final tokenStore = _MockTokenSecretStore();
+      when(() => odbcStore.isAvailable).thenReturn(true);
+      when(() => hubAuthStore.isAvailable).thenReturn(true);
+      when(() => tokenStore.isAvailable).thenReturn(true);
+
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        odbcCredentialSecretStore: odbcStore,
+        hubAuthSecretStore: hubAuthStore,
+        tokenSecretStore: tokenStore,
+      );
+
+      final secureStorage = service.getHealthStatus()['secure_storage']! as Map<String, Object?>;
+      expect(secureStorage['odbc_available'], isTrue);
+      expect(secureStorage['hub_auth_available'], isTrue);
+      expect(secureStorage['client_tokens_available'], isTrue);
+      expect(secureStorage['degraded'], isFalse);
+      expect(secureStorage.containsKey('unavailable'), isFalse);
+      expect(service.getHealthStatus()['status'], 'healthy');
+    });
+
+    test('should expose secure_storage degradation when noop secret stores are wired', () {
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        odbcCredentialSecretStore: NoopOdbcCredentialSecretStore(),
+        hubAuthSecretStore: NoopHubAuthSecretStore(),
+        tokenSecretStore: NoopTokenSecretStore(),
+      );
+
+      final status = service.getHealthStatus();
+      final secureStorage = status['secure_storage']! as Map<String, Object?>;
+      expect(secureStorage['odbc_available'], isFalse);
+      expect(secureStorage['hub_auth_available'], isFalse);
+      expect(secureStorage['client_tokens_available'], isFalse);
+      expect(secureStorage['degraded'], isTrue);
+      expect(
+        secureStorage['unavailable'],
+        containsAll(<String>['odbc', 'hub_auth', 'client_tokens']),
+      );
+      expect(status['status'], 'degraded');
+    });
+
+    test('should expose partial secure_storage degradation with unavailable reasons', () {
+      final odbcStore = _MockOdbcCredentialSecretStore();
+      final hubAuthStore = _MockHubAuthSecretStore();
+      final tokenStore = _MockTokenSecretStore();
+      when(() => odbcStore.isAvailable).thenReturn(true);
+      when(() => hubAuthStore.isAvailable).thenReturn(false);
+      when(() => tokenStore.isAvailable).thenReturn(false);
+
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+        odbcCredentialSecretStore: odbcStore,
+        hubAuthSecretStore: hubAuthStore,
+        tokenSecretStore: tokenStore,
+      );
+
+      final secureStorage = service.getHealthStatus()['secure_storage']! as Map<String, Object?>;
+      expect(secureStorage['odbc_available'], isTrue);
+      expect(secureStorage['hub_auth_available'], isFalse);
+      expect(secureStorage['client_tokens_available'], isFalse);
+      expect(secureStorage['degraded'], isTrue);
+      expect(secureStorage['unavailable'], ['hub_auth', 'client_tokens']);
     });
 
     test('should expose recent diagnostic reasons and prepared cache counters', () {

@@ -1,9 +1,10 @@
-import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_dsn_native_compatible_timeout_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
@@ -93,6 +94,39 @@ final class NativeCompatibleAcquirePolicy {
       return false;
     }
     return _isNativeEligibleDialect(databaseType);
+  }
+
+  /// Whether a homogeneous read-only parallel batch may use native-compatible
+  /// worker pool acquire instead of the default lease-pooled path.
+  bool shouldUseReadOnlyBatchParallel({
+    required DatabaseType databaseType,
+    required List<SqlCommand> commands,
+    required Duration? timeout,
+    String? connectionString,
+  }) {
+    if (!ConnectionConstants.readOnlyBatchNativePoolEnabled) {
+      return false;
+    }
+    if (!_adaptivePoolingEnabled || commands.isEmpty) {
+      return false;
+    }
+    if (!_isNativeEligibleDialect(databaseType)) {
+      return false;
+    }
+    for (final command in commands) {
+      if (command.params != null && command.params!.isNotEmpty) {
+        return false;
+      }
+    }
+    if (timeout != null &&
+        !_isNativeCompatibleTimeout(
+          timeout: timeout,
+          defaultQueryTimeout: ConnectionConstants.defaultQueryTimeout,
+          connectionString: connectionString,
+        )) {
+      return false;
+    }
+    return true;
   }
 
   /// Whether a transactional batch may use the native-compatible pool path.

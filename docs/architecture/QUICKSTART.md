@@ -72,22 +72,45 @@ final status = await healthService.getHealthStatusAsync();
 print(status);
 ```
 
-Output esperado:
+Output esperado (shape resumido; contrato completo em
+`docs/communication/schemas/rpc.result.agent-get-health.schema.json`):
 ```json
 {
   "status": "healthy",
   "timestamp": "2026-04-28T19:45:00.000Z",
+  "version": "1.6.7",
+  "secure_storage": {
+    "odbc_available": true,
+    "hub_auth_available": true,
+    "client_tokens_available": true,
+    "degraded": false
+  },
   "odbc_runtime_tuning": {
     "pool_size": 8,
+    "processor_count": 8,
     "async_worker_count": 8,
-    "async_max_pending_requests": 32
+    "async_max_pending_requests": 32,
+    "async_backpressure_mode": "failFast",
+    "result_encoding": "rowMajor"
   },
   "pool": {
     "size": 8,
     "active_count": 2,
     "strategy": "lease",
+    "effective_strategy": "lease",
     "acquire_timeout_seconds": 30,
-    "fallbacks_total": 0
+    "fallbacks_total": 0,
+    "lease_active_count": 2,
+    "native_active_count": 0
+  },
+  "streaming": {
+    "enabled": true,
+    "gateway_available": true,
+    "active_streams": 0,
+    "from_db_responses_total": 120,
+    "cancel_requests_total": 2,
+    "backpressure_cancels_total": 0,
+    "materialized_responses_total": 45
   },
   "sql_queue": {
     "enabled": true,
@@ -97,12 +120,26 @@ Output esperado:
     "max_workers": 8,
     "active_batch_workers": 0,
     "max_batch_workers": 4,
+    "active_long_query_workers": 0,
+    "max_long_query_workers": 4,
+    "active_streaming_workers": 1,
+    "max_streaming_workers": 4,
+    "active_non_query_workers": 0,
+    "max_non_query_workers": 4,
     "enqueue_timeout_seconds": 5,
     "rejections_total": 0,
     "timeouts_total": 0,
+    "timeouts_after_worker_started_total": 0,
     "avg_wait_time_ms": 45,
     "p95_wait_time_ms": 80,
     "pool_wait_timeouts_total": 0
+  },
+  "prepared": {
+    "reuse_total": 890,
+    "cache_hit_total": 420,
+    "cache_miss_total": 38,
+    "prepare_avg_ms": 1.2,
+    "prepare_p95_ms": 4
   },
   "queries": {
     "total": 1523,
@@ -114,10 +151,17 @@ Output esperado:
   },
   "timeouts": {
     "sql_total": 0,
-    "pool_total": 0
-  }
+    "pool_total": 0,
+    "cancel_success_total": 0,
+    "cancel_failure_total": 0
+  },
+  "uptime_seconds": 3600
 }
 ```
+
+`secure_storage` is omitted when secret stores are not wired in DI. Overall
+`status` becomes `degraded` when `secure_storage.degraded` is true or the SQL
+queue is near saturation.
 
 ## Sinais de alerta
 

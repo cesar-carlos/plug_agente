@@ -14,6 +14,13 @@ agente. Foco no eixo ODBC + fila SQL + circuit breaker + observabilidade.
 
 - Testes E2E e DSN: `docs/testing/e2e_setup.md` (e familias relacionadas).
 - Concorrencia da fila SQL: `docs/testing/sql_queue_concurrency_tests.md`.
+- Layer boundaries (CI): `test/architecture/layer_boundaries_test.dart` — garante
+  que `domain`/`application` nao importam `infrastructure` e que o dispatcher RPC
+  permanece facade fina.
+- Sql RPC modularization (maintainers): handlers em `lib/application/rpc/`
+  (`sql_execute_handler.dart`, `sql_batch_handler.dart`, etc.); ponto de entrada
+  `sql_rpc_method_handler_operations.dart`. Mapa resumido em
+  `docs/project_overview.md` (secao Sql RPC).
 - Wrappers operacionais Windows: `tool/run_odbc_operational_validation.ps1`,
   `tool/odbc_async_benchmark.ps1`, `tool/odbc_streaming_benchmark.ps1`,
   `tool/odbc_driver_matrix_benchmark.ps1`.

@@ -1,6 +1,24 @@
+import 'package:plug_agente/domain/domain.dart' show IAgentActionRepository;
+import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart' show IAgentActionRepository;
+import 'package:plug_agente/domain/repositories/repositories.dart' show IAgentActionRepository;
+
 /// Stable diagnostic `reason` strings for agent action runtime lifecycle transitions
 /// and subsystem readiness surfaced on authorization failures.
 abstract final class AgentActionRuntimeStateConstants {
+  /// Default cap when [IAgentActionRepository.listExecutions] is called without
+  /// an explicit `limit`. Pass `limit <= 0` to request no cap.
+  static const int listExecutionsDefaultLimit = 500;
+
+  static int? resolveListExecutionsLimit(int? limit) {
+    if (limit == null) {
+      return listExecutionsDefaultLimit;
+    }
+    if (limit <= 0) {
+      return null;
+    }
+    return limit;
+  }
+
   static const String shutdownReason = 'shutdown';
 
   static const String bootstrapReason = 'bootstrap';

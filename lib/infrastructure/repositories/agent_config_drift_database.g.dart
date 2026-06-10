@@ -131,17 +131,6 @@ class $ConfigTableTable extends ConfigTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _passwordMeta = const VerificationMeta(
-    'password',
-  );
-  @override
-  late final GeneratedColumn<String> password = GeneratedColumn<String>(
-    'password',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
   static const VerificationMeta _databaseNameMeta = const VerificationMeta(
     'databaseName',
   );
@@ -376,7 +365,6 @@ class $ConfigTableTable extends ConfigTable
     odbcDriverName,
     connectionString,
     username,
-    password,
     databaseName,
     host,
     port,
@@ -495,12 +483,6 @@ class $ConfigTableTable extends ConfigTable
       );
     } else if (isInserting) {
       context.missing(_usernameMeta);
-    }
-    if (data.containsKey('password')) {
-      context.handle(
-        _passwordMeta,
-        password.isAcceptableOrUnknown(data['password']!, _passwordMeta),
-      );
     }
     if (data.containsKey('database_name')) {
       context.handle(
@@ -709,10 +691,6 @@ class $ConfigTableTable extends ConfigTable
         DriftSqlType.string,
         data['${effectivePrefix}username'],
       )!,
-      password: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}password'],
-      ),
       databaseName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}database_name'],
@@ -814,7 +792,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
   final String odbcDriverName;
   final String connectionString;
   final String username;
-  final String? password;
   final String databaseName;
   final String host;
   final int port;
@@ -847,7 +824,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     required this.odbcDriverName,
     required this.connectionString,
     required this.username,
-    this.password,
     required this.databaseName,
     required this.host,
     required this.port,
@@ -891,9 +867,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     map['odbc_driver_name'] = Variable<String>(odbcDriverName);
     map['connection_string'] = Variable<String>(connectionString);
     map['username'] = Variable<String>(username);
-    if (!nullToAbsent || password != null) {
-      map['password'] = Variable<String>(password);
-    }
     map['database_name'] = Variable<String>(databaseName);
     map['host'] = Variable<String>(host);
     map['port'] = Variable<int>(port);
@@ -942,9 +915,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       odbcDriverName: Value(odbcDriverName),
       connectionString: Value(connectionString),
       username: Value(username),
-      password: password == null && nullToAbsent
-          ? const Value.absent()
-          : Value(password),
       databaseName: Value(databaseName),
       host: Value(host),
       port: Value(port),
@@ -989,7 +959,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       odbcDriverName: serializer.fromJson<String>(json['odbcDriverName']),
       connectionString: serializer.fromJson<String>(json['connectionString']),
       username: serializer.fromJson<String>(json['username']),
-      password: serializer.fromJson<String?>(json['password']),
       databaseName: serializer.fromJson<String>(json['databaseName']),
       host: serializer.fromJson<String>(json['host']),
       port: serializer.fromJson<int>(json['port']),
@@ -1029,7 +998,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
       'odbcDriverName': serializer.toJson<String>(odbcDriverName),
       'connectionString': serializer.toJson<String>(connectionString),
       'username': serializer.toJson<String>(username),
-      'password': serializer.toJson<String?>(password),
       'databaseName': serializer.toJson<String>(databaseName),
       'host': serializer.toJson<String>(host),
       'port': serializer.toJson<int>(port),
@@ -1065,7 +1033,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     String? odbcDriverName,
     String? connectionString,
     String? username,
-    Value<String?> password = const Value.absent(),
     String? databaseName,
     String? host,
     int? port,
@@ -1098,7 +1065,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     odbcDriverName: odbcDriverName ?? this.odbcDriverName,
     connectionString: connectionString ?? this.connectionString,
     username: username ?? this.username,
-    password: password.present ? password.value : this.password,
     databaseName: databaseName ?? this.databaseName,
     host: host ?? this.host,
     port: port ?? this.port,
@@ -1149,7 +1115,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           ? data.connectionString.value
           : this.connectionString,
       username: data.username.present ? data.username.value : this.username,
-      password: data.password.present ? data.password.value : this.password,
       databaseName: data.databaseName.present
           ? data.databaseName.value
           : this.databaseName,
@@ -1205,7 +1170,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           ..write('odbcDriverName: $odbcDriverName, ')
           ..write('connectionString: $connectionString, ')
           ..write('username: $username, ')
-          ..write('password: $password, ')
           ..write('databaseName: $databaseName, ')
           ..write('host: $host, ')
           ..write('port: $port, ')
@@ -1243,7 +1207,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
     odbcDriverName,
     connectionString,
     username,
-    password,
     databaseName,
     host,
     port,
@@ -1280,7 +1243,6 @@ class ConfigData extends DataClass implements Insertable<ConfigData> {
           other.odbcDriverName == this.odbcDriverName &&
           other.connectionString == this.connectionString &&
           other.username == this.username &&
-          other.password == this.password &&
           other.databaseName == this.databaseName &&
           other.host == this.host &&
           other.port == this.port &&
@@ -1315,7 +1277,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
   final Value<String> odbcDriverName;
   final Value<String> connectionString;
   final Value<String> username;
-  final Value<String?> password;
   final Value<String> databaseName;
   final Value<String> host;
   final Value<int> port;
@@ -1349,7 +1310,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.odbcDriverName = const Value.absent(),
     this.connectionString = const Value.absent(),
     this.username = const Value.absent(),
-    this.password = const Value.absent(),
     this.databaseName = const Value.absent(),
     this.host = const Value.absent(),
     this.port = const Value.absent(),
@@ -1384,7 +1344,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     this.odbcDriverName = const Value.absent(),
     required String connectionString,
     required String username,
-    this.password = const Value.absent(),
     required String databaseName,
     required String host,
     required int port,
@@ -1427,7 +1386,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     Expression<String>? odbcDriverName,
     Expression<String>? connectionString,
     Expression<String>? username,
-    Expression<String>? password,
     Expression<String>? databaseName,
     Expression<String>? host,
     Expression<int>? port,
@@ -1462,7 +1420,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       if (odbcDriverName != null) 'odbc_driver_name': odbcDriverName,
       if (connectionString != null) 'connection_string': connectionString,
       if (username != null) 'username': username,
-      if (password != null) 'password': password,
       if (databaseName != null) 'database_name': databaseName,
       if (host != null) 'host': host,
       if (port != null) 'port': port,
@@ -1500,7 +1457,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     Value<String>? odbcDriverName,
     Value<String>? connectionString,
     Value<String>? username,
-    Value<String?>? password,
     Value<String>? databaseName,
     Value<String>? host,
     Value<int>? port,
@@ -1535,7 +1491,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
       odbcDriverName: odbcDriverName ?? this.odbcDriverName,
       connectionString: connectionString ?? this.connectionString,
       username: username ?? this.username,
-      password: password ?? this.password,
       databaseName: databaseName ?? this.databaseName,
       host: host ?? this.host,
       port: port ?? this.port,
@@ -1595,9 +1550,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
     }
     if (username.present) {
       map['username'] = Variable<String>(username.value);
-    }
-    if (password.present) {
-      map['password'] = Variable<String>(password.value);
     }
     if (databaseName.present) {
       map['database_name'] = Variable<String>(databaseName.value);
@@ -1681,7 +1633,6 @@ class ConfigTableCompanion extends UpdateCompanion<ConfigData> {
           ..write('odbcDriverName: $odbcDriverName, ')
           ..write('connectionString: $connectionString, ')
           ..write('username: $username, ')
-          ..write('password: $password, ')
           ..write('databaseName: $databaseName, ')
           ..write('host: $host, ')
           ..write('port: $port, ')
@@ -8069,7 +8020,6 @@ typedef $$ConfigTableTableCreateCompanionBuilder =
       Value<String> odbcDriverName,
       required String connectionString,
       required String username,
-      Value<String?> password,
       required String databaseName,
       required String host,
       required int port,
@@ -8105,7 +8055,6 @@ typedef $$ConfigTableTableUpdateCompanionBuilder =
       Value<String> odbcDriverName,
       Value<String> connectionString,
       Value<String> username,
-      Value<String?> password,
       Value<String> databaseName,
       Value<String> host,
       Value<int> port,
@@ -8190,11 +8139,6 @@ class $$ConfigTableTableFilterComposer
 
   ColumnFilters<String> get username => $composableBuilder(
     column: $table.username,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get password => $composableBuilder(
-    column: $table.password,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8363,11 +8307,6 @@ class $$ConfigTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get password => $composableBuilder(
-    column: $table.password,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get databaseName => $composableBuilder(
     column: $table.databaseName,
     builder: (column) => ColumnOrderings(column),
@@ -8523,9 +8462,6 @@ class $$ConfigTableTableAnnotationComposer
   GeneratedColumn<String> get username =>
       $composableBuilder(column: $table.username, builder: (column) => column);
 
-  GeneratedColumn<String> get password =>
-      $composableBuilder(column: $table.password, builder: (column) => column);
-
   GeneratedColumn<String> get databaseName => $composableBuilder(
     column: $table.databaseName,
     builder: (column) => column,
@@ -8647,7 +8583,6 @@ class $$ConfigTableTableTableManager
                 Value<String> odbcDriverName = const Value.absent(),
                 Value<String> connectionString = const Value.absent(),
                 Value<String> username = const Value.absent(),
-                Value<String?> password = const Value.absent(),
                 Value<String> databaseName = const Value.absent(),
                 Value<String> host = const Value.absent(),
                 Value<int> port = const Value.absent(),
@@ -8681,7 +8616,6 @@ class $$ConfigTableTableTableManager
                 odbcDriverName: odbcDriverName,
                 connectionString: connectionString,
                 username: username,
-                password: password,
                 databaseName: databaseName,
                 host: host,
                 port: port,
@@ -8717,7 +8651,6 @@ class $$ConfigTableTableTableManager
                 Value<String> odbcDriverName = const Value.absent(),
                 required String connectionString,
                 required String username,
-                Value<String?> password = const Value.absent(),
                 required String databaseName,
                 required String host,
                 required int port,
@@ -8751,7 +8684,6 @@ class $$ConfigTableTableTableManager
                 odbcDriverName: odbcDriverName,
                 connectionString: connectionString,
                 username: username,
-                password: password,
                 databaseName: databaseName,
                 host: host,
                 port: port,

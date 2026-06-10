@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
-import 'package:plug_agente/application/ports/i_hub_access_token_renewer.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/domain/entities/agent_hub_profile_catalog_snapshot.dart';
 import 'package:plug_agente/domain/entities/agent_hub_profile_push_result.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_hub_profile_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_hub_access_token_renewer.dart';
 import 'package:plug_agente/infrastructure/external_services/agent_hub_profile_http_support.dart';
 import 'package:plug_agente/infrastructure/external_services/hub_http_auth_retry.dart';
 import 'package:result_dart/result_dart.dart';

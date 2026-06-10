@@ -3,6 +3,8 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
+import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
+import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
@@ -186,6 +188,53 @@ void main() {
         );
       },
     );
+
+    test('should validate HealthService snapshot with enabled sql_queue and streaming blocks', () {
+      if (!validator.isLoaded(TransportSchemaIds.resultAgentGetHealth)) {
+        return;
+      }
+
+      final metrics = MetricsCollector()
+        ..recordQueueSaturation(thresholdPercent: 70, currentSize: 6, maxSize: 8)
+        ..recordQueueSaturation(thresholdPercent: 90, currentSize: 7, maxSize: 8)
+        ..recordSqlQueueWorkersEqualPool(workers: 4, poolSize: 4)
+        ..recordPoolAcquireTimeout()
+        ..recordStreamingWorkerHoldTime(const Duration(milliseconds: 40));
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 8,
+        maxConcurrentWorkers: 4,
+        metricsCollector: metrics,
+        defaultEnqueueTimeout: const Duration(seconds: 3),
+      );
+      final gateway = QueuedDatabaseGateway(
+        delegate: _MockDatabaseGateway(),
+        queue: queue,
+      );
+      final service = HealthService(
+        metricsCollector: metrics,
+        gateway: gateway,
+      );
+
+      final snapshot = service.getHealthStatus();
+      final sqlQueue = snapshot['sql_queue'] as Map<String, Object?>?;
+      final streaming = snapshot['streaming'] as Map<String, Object?>?;
+      expect(sqlQueue?['enabled'], isTrue);
+      expect(sqlQueue?['max_size'], 8);
+      expect(sqlQueue?['enqueue_timeout_seconds'], 3);
+      expect(streaming, isA<Map<String, Object?>>());
+      expect(streaming?['from_db_skip_reasons'], isA<Map<String, Object?>>());
+
+      final validation = validator.validate(
+        schemaId: TransportSchemaIds.resultAgentGetHealth,
+        payload: snapshot,
+      );
+
+      expect(
+        validation.isSuccess(),
+        isTrue,
+        reason: validation.exceptionOrNull()?.toString() ?? 'schema validation failed',
+      );
+    });
 
     test('should validate typical HealthService snapshot against published schema', () {
       if (!validator.isLoaded(TransportSchemaIds.resultAgentGetHealth)) {

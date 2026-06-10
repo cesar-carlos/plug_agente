@@ -8,17 +8,23 @@ class RestoreStagingSnapshot {
     required this.backupUserVersion,
     required this.duplicateRisk,
     this.stagedSettingsPath,
+    this.stagedSecureStorageSecretsPath,
     this.manifestInstallationId,
     this.currentInstallationId,
+    this.manifestSecureStorageSecretsIncluded = false,
+    this.manifestSecureStorageSecretsEntryCount,
   });
 
   final String tempDirectoryPath;
   final String stagedDatabasePath;
   final String? stagedSettingsPath;
+  final String? stagedSecureStorageSecretsPath;
   final int backupUserVersion;
   final DuplicateRiskLevel duplicateRisk;
   final String? manifestInstallationId;
   final String? currentInstallationId;
+  final bool manifestSecureStorageSecretsIncluded;
+  final int? manifestSecureStorageSecretsEntryCount;
 }
 
 enum DuplicateRiskLevel {

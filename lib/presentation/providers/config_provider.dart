@@ -168,8 +168,7 @@ class ConfigProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
 
-    // Generate connection string
-    final connectionString = _configService.generateConnectionString(
+    final connectionString = _configService.generateConnectionStringForPersistence(
       _currentConfig!,
     );
     final configWithConnectionString = _currentConfig!.copyWith(

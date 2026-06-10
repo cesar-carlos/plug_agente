@@ -14,6 +14,7 @@ import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:plug_agente/infrastructure/stores/noop_token_secret_store.dart';
 
 void main() {
   group('ClientTokenLocalDataSource', () {
@@ -163,16 +164,18 @@ void main() {
       expect(page1.single.id, isNot(equals(page2.single.id)));
     });
 
-    test('replaceTokens clears and repopulates cache', () async {
+    test('replaceTokens upserts synced tokens without clearing unrelated cache rows', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);
       final ds = ClientTokenLocalDataSource(db);
 
       await ds.createToken(baseRequest());
+      final localId = (await ds.listTokens()).single.id;
       expect((await ds.listTokens()).length, 1);
 
       await ds.replaceTokens(const <ClientTokenSummary>[]);
-      expect(await ds.listTokens(), isEmpty);
+      expect((await ds.listTokens()).length, 1);
+      expect(await ds.getTokenById(localId), isNotNull);
 
       final now = DateTime.utc(2024, 3);
       await ds.replaceTokens([
@@ -192,10 +195,66 @@ void main() {
       ]);
 
       final listed = await ds.listTokens();
-      expect(listed.length, 1);
-      expect(listed.single.clientId, 'remote');
-      expect(listed.single.tokenValue, isNull);
+      expect(listed.length, 2);
+      expect(listed.map((token) => token.id), containsAll([localId, 'imported-1']));
+
+      final imported = listed.singleWhere((token) => token.id == 'imported-1');
+      expect(imported.clientId, 'remote');
+      expect(imported.tokenValue, isNull);
       expect(await ds.getTokenSecret('imported-1'), equals('deadbeef'));
+    });
+
+    test('replaceTokens updates an existing token in place', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final ds = ClientTokenLocalDataSource(db);
+
+      final now = DateTime.utc(2024, 3);
+      await ds.replaceTokens([
+        ClientTokenSummary(
+          id: 'imported-1',
+          clientId: 'remote',
+          createdAt: now,
+          isRevoked: false,
+          allTables: false,
+          allViews: true,
+          allPermissions: false,
+          rules: const [],
+          tokenValue: 'deadbeef',
+        ),
+      ]);
+
+      final updatedAt = now.add(const Duration(hours: 1));
+      await ds.replaceTokens([
+        ClientTokenSummary(
+          id: 'imported-1',
+          clientId: 'remote-renamed',
+          createdAt: now,
+          isRevoked: true,
+          allTables: true,
+          allViews: false,
+          allPermissions: false,
+          rules: const [],
+          version: 3,
+          updatedAt: updatedAt,
+          tokenValue: 'cafebabe',
+        ),
+      ]);
+
+      final listed = await ds.listTokens();
+      expect(listed, hasLength(1));
+      expect(listed.single.clientId, 'remote-renamed');
+      expect(listed.single.isRevoked, isTrue);
+      expect(listed.single.version, 3);
+      expect(await ds.getTokenSecret('imported-1'), equals('cafebabe'));
+      expect(
+        await ds.getTokenByHash(ds.hashTokenForLookup('deadbeef')),
+        isNull,
+      );
+      expect(
+        await ds.getTokenByHash(ds.hashTokenForLookup('cafebabe')),
+        isNotNull,
+      );
     });
 
     test('replaceTokens supports multiple imported tokens with unique lookup hashes', () async {
@@ -325,6 +384,71 @@ void main() {
       expect(await ds.getTokenSecret(tokenId), equals(tokenValue));
       expect(secretStore.readSecretSync(tokenId), isNull);
       expect(secretStore.readSecretSync(tokenHash), equals(tokenValue));
+    });
+
+    test('createToken with unavailable secret store persists plaintext token value', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final ds = ClientTokenLocalDataSource(db, secretStore: NoopTokenSecretStore());
+
+      final opaque = await ds.createToken(baseRequest());
+      final row = await db
+          .select(db.clientTokenCacheTable)
+          .getSingle();
+
+      expect(row.tokenValue, opaque);
+      expect(row.tokenValue, isNot('__secure_storage__'));
+      expect(await ds.getTokenSecret((await ds.listTokens()).single.id), equals(opaque));
+    });
+
+    test('replaceTokens does not update secrets when database transaction fails', () async {
+      final db = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(db.close);
+      final secretStore = _FakeTokenSecretStore();
+      final ds = ClientTokenLocalDataSource(db, secretStore: secretStore);
+
+      final now = DateTime.utc(2024, 3);
+      await ds.replaceTokens([
+        ClientTokenSummary(
+          id: 'existing-1',
+          clientId: 'remote',
+          createdAt: now,
+          isRevoked: false,
+          allTables: false,
+          allViews: true,
+          allPermissions: false,
+          rules: const [],
+          tokenValue: 'existing-secret',
+        ),
+      ]);
+      secretStore.resetCounters();
+
+      await db.customStatement('DROP TABLE client_token_cache_table');
+
+      await expectLater(
+        ds.replaceTokens([
+          ClientTokenSummary(
+            id: 'replacement-1',
+            clientId: 'remote',
+            createdAt: now,
+            isRevoked: false,
+            allTables: false,
+            allViews: true,
+            allPermissions: false,
+            rules: const [],
+            tokenValue: 'replacement-secret',
+          ),
+        ]),
+        throwsA(isA<Exception>()),
+      );
+      expect(
+        secretStore.readSecretSync(ds.hashTokenForLookup('existing-secret')),
+        equals('existing-secret'),
+      );
+      expect(
+        secretStore.readSecretSync(ds.hashTokenForLookup('replacement-secret')),
+        isNull,
+      );
     });
 
     test('createToken cleans up secret when database persistence fails', () async {
@@ -663,6 +787,9 @@ class _FakeTokenSecretStore implements ITokenSecretStore {
   final Map<String, String> _secrets = <String, String>{};
   int readCallCount = 0;
   Future<void> Function(String secretKey, String tokenValue)? onSave;
+
+  @override
+  bool get isAvailable => true;
 
   @override
   Future<void> deleteSecret(String secretKey) async {

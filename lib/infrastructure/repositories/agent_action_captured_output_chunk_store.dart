@@ -3,11 +3,14 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
-import 'package:plug_agente/application/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/core/constants/agent_action_captured_output_constants.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
+import 'package:plug_agente/domain/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/domain/actions/captured_output_utf8_window.dart';
+import 'package:plug_agente/infrastructure/infrastructure.dart' show AgentActionRepository;
+import 'package:plug_agente/infrastructure/repositories/agent_action_repository.dart' show AgentActionRepository;
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:plug_agente/infrastructure/repositories/repositories.dart' show AgentActionRepository;
 
 /// Drift persistence for spilled stdout/stderr captured output.
 final class AgentActionCapturedOutputChunkStore {
@@ -15,6 +18,11 @@ final class AgentActionCapturedOutputChunkStore {
 
   final AppDatabase _database;
 
+  /// Replaces all chunk rows for [stream] on [executionId].
+  ///
+  /// When `PRAGMA foreign_keys=ON`, the parent execution row must already exist
+  /// and this method must run in the same Drift `Transaction` as that insert.
+  /// [AgentActionRepository.saveExecution] satisfies both requirements.
   Future<void> replaceStream({
     required String executionId,
     required String stream,

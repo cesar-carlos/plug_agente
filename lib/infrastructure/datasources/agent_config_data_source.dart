@@ -13,7 +13,6 @@ class ConfigTable extends Table {
   TextColumn get odbcDriverName => text().withDefault(const Constant(''))();
   TextColumn get connectionString => text()();
   TextColumn get username => text()();
-  TextColumn get password => text().nullable()();
   TextColumn get databaseName => text()();
   TextColumn get host => text()();
   IntColumn get port => integer()();

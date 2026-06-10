@@ -27,17 +27,12 @@ import '../helpers/e2e_env.dart';
 ///   $env:E2E_HUB_URL = 'http://localhost:3000'
 ///   $env:E2E_HUB_TOKEN = '`<token>`'
 ///   flutter test test/live/auto_update_diagnostics_push_e2e_test.dart --tags live
-void main() {
-  late bool liveEnabled;
-  late String hubUrl;
-  late String hubToken;
+void main() async {
+  await E2EEnv.load();
 
-  setUpAll(() async {
-    await E2EEnv.load();
-    liveEnabled = (Platform.environment['RUN_LIVE_HUB_TESTS'] ?? '').toLowerCase() == 'true';
-    hubUrl = Platform.environment['E2E_HUB_URL'] ?? '';
-    hubToken = Platform.environment['E2E_HUB_TOKEN'] ?? '';
-  });
+  final liveEnabled = E2EEnv.runLiveHubTests;
+  final hubUrl = E2EEnv.e2eHubUrl ?? '';
+  final hubToken = E2EEnv.e2eHubToken ?? '';
 
   test(
     'pushes diagnostics to the hub and respects the throttle window',

@@ -1,6 +1,6 @@
-import 'package:plug_agente/application/ports/i_hub_access_token_renewer.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_hub_access_token_renewer.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Retries a hub HTTP request once after renewing the access token on 401.

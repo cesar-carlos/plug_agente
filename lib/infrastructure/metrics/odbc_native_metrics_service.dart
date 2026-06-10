@@ -1,12 +1,12 @@
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
-import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
+import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
@@ -17,14 +17,14 @@ import 'package:result_dart/result_dart.dart';
 class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
   OdbcNativeMetricsService(
     this._service, {
-    ActiveConfigResolver? activeConfigResolver,
+    IQueryConfigSource? queryConfigSource,
     IAgentConfigRepository? configRepository,
     IConnectionPool? connectionPool,
     IOdbcConnectionSettings? settings,
     OdbcRuntimeTuning? runtimeTuning,
     MetricsCollector? metricsCollector,
     OdbcEventBridge? eventBridge,
-  }) : _activeConfigResolver = activeConfigResolver,
+  }) : _queryConfigSource = queryConfigSource,
        _configRepository = configRepository,
        _connectionPool = connectionPool,
        _settings = settings,
@@ -33,7 +33,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
        _eventBridge = eventBridge;
 
   final OdbcService _service;
-  final ActiveConfigResolver? _activeConfigResolver;
+  final IQueryConfigSource? _queryConfigSource;
   final IAgentConfigRepository? _configRepository;
   final IConnectionPool? _connectionPool;
   final IOdbcConnectionSettings? _settings;
@@ -163,15 +163,13 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
   }
 
   Future<String?> _resolveConnectionString() async {
-    final resolver = _activeConfigResolver;
-    if (resolver == null && _configRepository == null) {
+    final queryConfigSource = _queryConfigSource;
+    if (queryConfigSource == null && _configRepository == null) {
       return null;
     }
 
-    final configResult = resolver != null
-        ? await resolver.resolveActiveOrFallback(
-            metadataOnly: true,
-          )
+    final configResult = queryConfigSource != null
+        ? await queryConfigSource.resolveActiveConfig()
         : await _configRepository!.getCurrentConfigMetadata();
     return configResult.fold(
       (config) {

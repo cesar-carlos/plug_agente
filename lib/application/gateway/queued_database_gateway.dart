@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
@@ -41,6 +42,10 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
 
   int get maxLongQueryWorkers => _queue.maxConcurrentLongQueryWorkers;
 
+  int get activeStreamingWorkers => _queue.activeStreamingWorkers;
+
+  int get maxStreamingWorkers => _queue.maxConcurrentStreamingWorkers;
+
   int get activeNonQueryWorkers => _queue.activeNonQueryWorkers;
 
   int get maxNonQueryWorkers => _queue.maxConcurrentNonQueryWorkers;
@@ -58,16 +63,19 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     QueryRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
   }) {
-    // Route through queue with requestId for tracking
+    final lifecycleToken = cancellationToken ?? CancellationToken();
     return _queue.submit(
       () => _delegate.executeQuery(
         request,
         timeout: timeout,
         database: database,
+        cancellationToken: lifecycleToken,
       ),
       requestId: request.id,
       kind: _classifyQuery(request, timeout),
+      cooperativeCancellationToken: lifecycleToken,
     );
   }
 

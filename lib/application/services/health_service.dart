@@ -21,10 +21,13 @@ import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_direct_connection_limiter_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_global_storage_health_snapshot_builder.dart';
+import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 
 /// Service for reporting application health and metrics.
@@ -51,6 +54,9 @@ class HealthService {
     IGlobalStorageHealthSnapshotBuilder? globalStorageHealthSnapshotBuilder,
     GlobalStorageContext? globalStorageContext,
     IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
+    IOdbcCredentialSecretStore? odbcCredentialSecretStore,
+    IHubAuthSecretStore? hubAuthSecretStore,
+    ITokenSecretStore? tokenSecretStore,
     Duration poolSnapshotTtl = const Duration(seconds: 2),
   }) : _metrics = metricsCollector,
        _gateway = gateway,
@@ -73,6 +79,9 @@ class HealthService {
        _globalStorageHealthSnapshotBuilder = globalStorageHealthSnapshotBuilder,
        _globalStorageContext = globalStorageContext,
        _comObjectInvocationDiagnostics = comObjectInvocationDiagnostics,
+       _odbcCredentialSecretStore = odbcCredentialSecretStore,
+       _hubAuthSecretStore = hubAuthSecretStore,
+       _tokenSecretStore = tokenSecretStore,
        _poolSnapshotTtl = poolSnapshotTtl;
 
   final IMetricsCollector _metrics;
@@ -96,6 +105,9 @@ class HealthService {
   final IGlobalStorageHealthSnapshotBuilder? _globalStorageHealthSnapshotBuilder;
   final GlobalStorageContext? _globalStorageContext;
   final IComObjectInvocationDiagnostics? _comObjectInvocationDiagnostics;
+  final IOdbcCredentialSecretStore? _odbcCredentialSecretStore;
+  final IHubAuthSecretStore? _hubAuthSecretStore;
+  final ITokenSecretStore? _tokenSecretStore;
   final Duration _poolSnapshotTtl;
   Future<String?>? _driverTypeResolution;
   String? _cachedDriverType;
@@ -173,7 +185,7 @@ class HealthService {
 
   /// Derives an overall status string from the available pool/queue diagnostics.
   ///
-  /// - 'degraded': native circuit open, or SQL queue ≥90% saturated right now.
+  /// - 'degraded': native circuit open, SQL queue ≥90% saturated, or secure storage noop.
   /// - 'healthy': no degradation signals detected.
   ///
   /// Hub consumers should treat absence of 'healthy' as actionable.
@@ -181,6 +193,7 @@ class HealthService {
     required Map<String, Object?> poolDiagnostics,
     required QueuedDatabaseGateway? queuedGateway,
     required Map<String, Object?> metrics,
+    required Map<String, Object?>? secureStorage,
   }) {
     if (poolDiagnostics['native_circuit_open'] == true) {
       return 'degraded';
@@ -192,6 +205,10 @@ class HealthService {
       if (maxSize > 0 && currentSize / maxSize >= 0.9) {
         return 'degraded';
       }
+    }
+
+    if (secureStorage?['degraded'] == true) {
+      return 'degraded';
     }
 
     return 'healthy';
@@ -208,10 +225,12 @@ class HealthService {
     final nativeFallbacks = metrics['odbc_native_pool_fallback'] as int? ?? 0;
 
     final identity = _agentRuntimeIdentity;
+    final secureStorage = _buildSecureStorageHealth();
     final status = _deriveOverallStatus(
       poolDiagnostics: poolDiagnostics,
       queuedGateway: queuedGateway,
       metrics: metrics,
+      secureStorage: secureStorage,
     );
     return {
       'status': status,
@@ -268,11 +287,15 @@ class HealthService {
               'max_batch_workers': queuedGateway.maxBatchWorkers,
               'active_long_query_workers': queuedGateway.activeLongQueryWorkers,
               'max_long_query_workers': queuedGateway.maxLongQueryWorkers,
+              'active_streaming_workers': queuedGateway.activeStreamingWorkers,
+              'max_streaming_workers': queuedGateway.maxStreamingWorkers,
               'active_non_query_workers': queuedGateway.activeNonQueryWorkers,
               'max_non_query_workers': queuedGateway.maxNonQueryWorkers,
               'enqueue_timeout_seconds': queuedGateway.enqueueTimeout.inSeconds,
               'rejections_total': metrics['sql_queue_rejection_count'] ?? 0,
               'timeouts_total': metrics['sql_queue_timeout_count'] ?? 0,
+              'timeouts_after_worker_started_total':
+                  metrics['sql_queue_timeout_after_worker_started_count'] ?? 0,
               'avg_wait_time_ms': (metrics['sql_queue_avg_wait_time_ms'] as num?)?.toInt() ?? 0,
               'p95_wait_time_ms': (metrics['sql_queue_p95_wait_time_ms'] as num?)?.toInt() ?? 0,
               'max_recent_wait_time_ms': (metrics['sql_queue_max_recent_wait_time_ms'] as num?)?.toInt() ?? 0,
@@ -284,6 +307,14 @@ class HealthService {
               'saturation_90_total': metrics['sql_queue_saturation_90_count'] ?? 0,
               'workers_equal_pool_total': metrics['sql_queue_workers_equal_pool_count'] ?? 0,
               'pool_wait_timeouts_total': metrics['pool_acquire_timeout_count'] ?? 0,
+              'streaming_worker_hold_avg_ms':
+                  (metrics['streaming_worker_hold_avg_time_ms'] as num?)?.toInt() ?? 0,
+              'streaming_worker_hold_p95_ms':
+                  (metrics['streaming_worker_hold_p95_time_ms'] as num?)?.toInt() ?? 0,
+              'streaming_worker_hold_max_recent_ms':
+                  (metrics['streaming_worker_hold_max_recent_time_ms'] as num?)?.toInt() ?? 0,
+              'streaming_worker_hold_sample_count':
+                  metrics['streaming_worker_hold_sample_count'] ?? 0,
             }
           : {
               'enabled': false,
@@ -318,6 +349,8 @@ class HealthService {
       'batch': {
         'read_only_parallel_total': metrics['read_only_batch_parallel'] ?? 0,
         'read_only_parallel_capped_total': metrics['read_only_batch_parallel_capped'] ?? 0,
+        'read_only_native_pool_total': metrics['read_only_batch_native_pool_path'] ?? 0,
+        'read_only_native_pool_fallback_total': metrics['read_only_batch_native_pool_fallback'] ?? 0,
         'transactional_direct_total': metrics['transactional_batch_direct_path'] ?? 0,
         'transactional_native_pool_total': metrics['transactional_batch_native_pool_path'] ?? 0,
         'transactional_native_pool_fallback_total': metrics['transactional_batch_native_pool_fallback'] ?? 0,
@@ -336,7 +369,34 @@ class HealthService {
       },
       if (_buildAgentActionsHealth(metrics) case final Map<String, Object?> agentActions) 'agent_actions': agentActions,
       if (_buildGlobalStorageHealth() case final Map<String, Object?> globalStorage) 'global_storage': globalStorage,
+      if (secureStorage case final Map<String, Object?> storage) 'secure_storage': storage,
       'uptime_seconds': AppUptime.uptimeSeconds,
+    };
+  }
+
+  Map<String, Object?>? _buildSecureStorageHealth() {
+    final odbcStore = _odbcCredentialSecretStore;
+    final hubAuthStore = _hubAuthSecretStore;
+    final tokenStore = _tokenSecretStore;
+    if (odbcStore == null && hubAuthStore == null && tokenStore == null) {
+      return null;
+    }
+
+    final odbcAvailable = odbcStore?.isAvailable ?? false;
+    final hubAuthAvailable = hubAuthStore?.isAvailable ?? false;
+    final clientTokensAvailable = tokenStore?.isAvailable ?? false;
+    final unavailable = <String>[
+      if (!odbcAvailable) 'odbc',
+      if (!hubAuthAvailable) 'hub_auth',
+      if (!clientTokensAvailable) 'client_tokens',
+    ];
+
+    return <String, Object?>{
+      'odbc_available': odbcAvailable,
+      'hub_auth_available': hubAuthAvailable,
+      'client_tokens_available': clientTokensAvailable,
+      'degraded': unavailable.isNotEmpty,
+      if (unavailable.isNotEmpty) 'unavailable': unavailable,
     };
   }
 
@@ -609,6 +669,15 @@ class HealthService {
       'materialized_responses_total': metrics['rpc_sql_execute_materialized_response'] ?? 0,
       'cancel_requests_total': metrics['stream_cancel_request'] ?? 0,
       'backpressure_cancels_total': metrics['stream_cancel_backpressure'] ?? 0,
+      'batched_path_total': metrics['streaming_batched_path'] ?? 0,
+      'single_chunk_path_total': metrics['streaming_single_chunk_path'] ?? 0,
+      'native_batched_path_observable': diagnostics['native_batched_path_observable'] ?? false,
+      'native_path_inference': diagnostics['native_path_inference'],
+      'worker_hold_avg_ms': (metrics['streaming_worker_hold_avg_time_ms'] as num?)?.toInt() ?? 0,
+      'worker_hold_p95_ms': (metrics['streaming_worker_hold_p95_time_ms'] as num?)?.toInt() ?? 0,
+      'worker_hold_max_recent_ms':
+          (metrics['streaming_worker_hold_max_recent_time_ms'] as num?)?.toInt() ?? 0,
+      'worker_hold_sample_count': metrics['streaming_worker_hold_sample_count'] ?? 0,
     };
   }
 

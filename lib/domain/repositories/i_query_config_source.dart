@@ -4,9 +4,8 @@ import 'package:result_dart/result_dart.dart';
 /// Resolves the database [Config] used to execute a query.
 ///
 /// This is the boundary the ODBC gateway depends on so that infrastructure does
-/// not reach into application services directly. Implementations decide how to
-/// resolve an explicit config id versus the active/current config (metadata
-/// only, since query execution never needs secrets eagerly materialized here).
+/// not reach into application services directly. Implementations must merge ODBC
+/// credentials from secure storage; metadata-only config must not be used here.
 abstract interface class IQueryConfigSource {
   /// Resolves the config for a query, by explicit [configId] when provided,
   /// otherwise the active/current config.

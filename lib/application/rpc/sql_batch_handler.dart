@@ -2,86 +2,59 @@ import 'dart:async';
 
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
-import 'package:plug_agente/application/rpc/sql_rpc_method_handler_operations.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/application/use_cases/validate_sql_batch.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
-import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
-import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/utils/json_primitive_coercion.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-typedef SqlBatchRecordAuthDenied =
-    void Function(
-      RpcRequest request, {
-      required String sql,
-      domain.Failure? failure,
-      String? explicitReason,
-    });
-
 typedef SqlBatchSupportsPageOffsetPagination = bool Function(
   Map<String, dynamic> negotiatedExtensions,
 );
-
-typedef SqlBatchLogMissingClientToken = void Function(RpcRequest request);
 
 /// Handles `sql.executeBatch` RPC requests.
 class SqlBatchHandler {
   SqlBatchHandler({
     required FeatureFlags featureFlags,
     required SqlRpcMethodHandlerSupport support,
+    required SqlRpcClientTokenGate clientTokenGate,
     required Uuid uuid,
     required ExecuteSqlBatch executeSqlBatch,
     required Duration sqlBatchTotalBudget,
     required Duration batchExecutionStageBudget,
-    IAuthorizationMetricsCollector? authMetrics,
     ValidateSqlBatch? validateSqlBatch,
-    SqlBatchRecordAuthDenied? recordAuthSqlDenied,
     SqlBatchSupportsPageOffsetPagination? supportsPageOffsetPagination,
-    SqlBatchLogMissingClientToken? logMissingClientToken,
   }) : _featureFlags = featureFlags,
        _support = support,
+       _clientTokenGate = clientTokenGate,
        _uuid = uuid,
        _executeSqlBatch = executeSqlBatch,
        _validateSqlBatch = validateSqlBatch ?? const ValidateSqlBatch(),
        _sqlBatchTotalBudgetDuration = sqlBatchTotalBudget,
        _batchExecutionStageBudgetDuration = batchExecutionStageBudget,
-       _authMetrics = authMetrics,
-       _recordAuthSqlDenied = recordAuthSqlDenied ?? _noopRecordAuthSqlDenied,
-       _supportsPageOffsetPagination = supportsPageOffsetPagination ?? _allowPageOffsetPagination,
-       _logMissingClientToken = logMissingClientToken ?? _noopLogMissingClientToken;
-
-  static void _noopRecordAuthSqlDenied(
-    RpcRequest request, {
-    required String sql,
-    domain.Failure? failure,
-    String? explicitReason,
-  }) {}
-
-  static void _noopLogMissingClientToken(RpcRequest request) {}
+       _supportsPageOffsetPagination = supportsPageOffsetPagination ?? _allowPageOffsetPagination;
 
   static bool _allowPageOffsetPagination(Map<String, dynamic> negotiatedExtensions) => true;
 
   static const int _sqlInvestigationBatchPreviewMaxChars = 8000;
-  static final RegExp _authorizationSqlWhitespaceCollapse = RegExp(r'\s+');
 
   final FeatureFlags _featureFlags;
   final SqlRpcMethodHandlerSupport _support;
+  final SqlRpcClientTokenGate _clientTokenGate;
   final Uuid _uuid;
   final ExecuteSqlBatch _executeSqlBatch;
   final ValidateSqlBatch _validateSqlBatch;
   final Duration _sqlBatchTotalBudgetDuration;
   final Duration _batchExecutionStageBudgetDuration;
-  final IAuthorizationMetricsCollector? _authMetrics;
-  final SqlBatchRecordAuthDenied _recordAuthSqlDenied;
   final SqlBatchSupportsPageOffsetPagination _supportsPageOffsetPagination;
-  final SqlBatchLogMissingClientToken _logMissingClientToken;
 
   Future<RpcResponse> handleSqlExecuteBatch(
     RpcRequest request,
@@ -197,77 +170,18 @@ class SqlBatchHandler {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
-    if (_featureFlags.enableClientTokenAuthorization && (clientToken == null || clientToken.isEmpty)) {
-      _logMissingClientToken(request);
-      _authMetrics?.recordDenied(
-        requestId: request.id?.toString(),
-        method: request.method,
-        reason: RpcClientTokenConstants.missingClientTokenReason,
-      );
-      _recordAuthSqlDenied(
-        request,
-        sql: _sqlPreviewForBatch(commands),
-        explicitReason: RpcClientTokenConstants.missingClientTokenReason,
-      );
-      final rpcError = FailureToRpcErrorMapper.map(
-        _support.buildMissingClientTokenFailure(),
-        instance: request.id?.toString(),
-        useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-      );
-      return RpcResponse.error(id: request.id, error: rpcError);
-    }
-
     final database = params['database'] as String?;
-
-    if (_featureFlags.enableClientTokenAuthorization && clientToken != null && clientToken.isNotEmpty) {
-      final authorizedSqlFingerprints = <String>{};
-      for (final cmd in commands) {
-        final authFingerprint = _authorizationFingerprint(cmd.sql);
-        if (authorizedSqlFingerprints.contains(authFingerprint)) {
-          continue;
-        }
-
-        final authStopwatch = Stopwatch()..start();
-        final authResult = await _support.authorizeWithBudget(
-          token: clientToken,
-          sql: cmd.sql,
-          requestDatabase: database,
-          requestId: request.id?.toString(),
-          method: request.method,
-          deadline: deadline,
-        );
-        authStopwatch.stop();
-        if (authResult.isError()) {
-          final failure = authResult.exceptionOrNull()! as domain.Failure;
-          final ctx = failure.context;
-          _authMetrics?.recordDenied(
-            requestId: request.id?.toString(),
-            method: request.method,
-            latencyMs: authStopwatch.elapsedMilliseconds,
-            clientId: ctx['client_id'] as String?,
-            operation: ctx['operation'] as String?,
-            resource: ctx['resource'] as String?,
-            reason: ctx['reason'] as String?,
-          );
-          _recordAuthSqlDenied(
-            request,
-            sql: cmd.sql,
-            failure: failure,
-          );
-          final rpcError = FailureToRpcErrorMapper.map(
-            failure,
-            instance: request.id?.toString(),
-            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-          );
-          return RpcResponse.error(id: request.id, error: rpcError);
-        }
-        _authMetrics?.recordAuthorized(
-          requestId: request.id?.toString(),
-          method: request.method,
-          latencyMs: authStopwatch.elapsedMilliseconds,
-        );
-        authorizedSqlFingerprints.add(authFingerprint);
-      }
+    final authDenied = await _clientTokenGate.enforce(
+      request: request,
+      clientToken: clientToken,
+      sqlStatements: commands.map((SqlCommand command) => command.sql),
+      investigationSqlOnDeny: _sqlPreviewForBatch(commands),
+      requestDatabase: database,
+      deadline: deadline,
+      deduplicateEquivalentSql: true,
+    );
+    if (authDenied != null) {
+      return authDenied;
     }
 
     final optionsJson = params['options'] as Map<String, dynamic>?;
@@ -413,10 +327,6 @@ class SqlBatchHandler {
       return joined;
     }
     return '${joined.substring(0, _sqlInvestigationBatchPreviewMaxChars)}\n... [truncated]';
-  }
-
-  String _authorizationFingerprint(String sql) {
-    return sql.trim().replaceAll(_authorizationSqlWhitespaceCollapse, ' ').toLowerCase();
   }
 
   static String _executionTimestampUtcIso(DateTime timestamp) {

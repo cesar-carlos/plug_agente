@@ -1,6 +1,7 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -175,6 +176,118 @@ void main() {
           preparedExecution: _prepared('SELECT id FROM users'),
           acquireOptions: null,
           timeout: null,
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('NativeCompatibleAcquirePolicy.shouldUseReadOnlyBatchParallel', () {
+    test('returns false by default when env gate is off', () async {
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseReadOnlyBatchParallel(
+          databaseType: DatabaseType.sqlServer,
+          commands: const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'SELECT 2'),
+          ],
+          timeout: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('returns true for homogeneous SELECT batch on SQL Server when gate is on', () async {
+      dotenv.loadFromString(envString: 'ODBC_READ_ONLY_BATCH_NATIVE_POOL_ENABLED=true');
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseReadOnlyBatchParallel(
+          databaseType: DatabaseType.sqlServer,
+          commands: const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'SELECT 2'),
+          ],
+          timeout: null,
+          connectionString: 'Driver={ODBC Driver};Server=localhost;',
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns false for SQL Anywhere and parameterized commands', () async {
+      dotenv.loadFromString(envString: 'ODBC_READ_ONLY_BATCH_NATIVE_POOL_ENABLED=true');
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseReadOnlyBatchParallel(
+          databaseType: DatabaseType.sybaseAnywhere,
+          commands: const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'SELECT 2'),
+          ],
+          timeout: null,
+        ),
+        isFalse,
+      );
+      expect(
+        policy.shouldUseReadOnlyBatchParallel(
+          databaseType: DatabaseType.sqlServer,
+          commands: const [
+            SqlCommand(sql: 'SELECT 1 WHERE id = @id', params: {'id': 1}),
+            SqlCommand(sql: 'SELECT 2'),
+          ],
+          timeout: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('returns false for non-default timeout until remembered compatible', () async {
+      dotenv.loadFromString(envString: 'ODBC_READ_ONLY_BATCH_NATIVE_POOL_ENABLED=true');
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      expect(
+        policy.shouldUseReadOnlyBatchParallel(
+          databaseType: DatabaseType.sqlServer,
+          commands: const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'SELECT 2'),
+          ],
+          timeout: const Duration(seconds: 5),
+          connectionString: connectionString,
+        ),
+        isFalse,
+      );
+      policy.rememberNativeCompatibleTimeout(
+        connectionString: connectionString,
+        timeout: const Duration(seconds: 5),
+      );
+      expect(
+        policy.shouldUseReadOnlyBatchParallel(
+          databaseType: DatabaseType.sqlServer,
+          commands: const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'SELECT 2'),
+          ],
+          timeout: const Duration(seconds: 5),
+          connectionString: connectionString,
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns true when timeout matches configured default', () async {
+      dotenv.loadFromString(envString: 'ODBC_READ_ONLY_BATCH_NATIVE_POOL_ENABLED=true');
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseReadOnlyBatchParallel(
+          databaseType: DatabaseType.postgresql,
+          commands: const [
+            SqlCommand(sql: 'SELECT 1'),
+            SqlCommand(sql: 'SELECT 2'),
+          ],
+          timeout: ConnectionConstants.defaultQueryTimeout,
+          connectionString: 'Driver={PostgreSQL};Server=localhost;',
         ),
         isTrue,
       );

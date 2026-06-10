@@ -1,4 +1,3 @@
-import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
@@ -11,6 +10,7 @@ import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';

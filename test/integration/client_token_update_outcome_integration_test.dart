@@ -187,6 +187,9 @@ class _InMemorySecretStore implements ITokenSecretStore {
   final Map<String, String> values = <String, String>{};
 
   @override
+  bool get isAvailable => true;
+
+  @override
   Future<void> deleteSecret(String secretKey) async {
     values.remove(secretKey);
   }

@@ -176,6 +176,18 @@ class ConnectionConstants {
         );
   }
 
+  static int sqlQueueMaxStreamingWorkersForWorkers(
+    int maxWorkers, {
+    int? persistedPoolSize,
+  }) {
+    return _positiveIntEnv('SQL_QUEUE_MAX_STREAMING_WORKERS') ??
+        _sqlQueuePerKindWorkerCap(
+          maxWorkers: maxWorkers,
+          persistedPoolSize: persistedPoolSize,
+          operationClass: DirectOdbcOperationClass.streaming,
+        );
+  }
+
   static int sqlQueueMaxNonQueryWorkersForWorkers(
     int maxWorkers, {
     int? persistedPoolSize,
@@ -207,7 +219,15 @@ class ConnectionConstants {
 
   static int? get directOdbcConnectionMaxConcurrentOverride => _positiveIntEnv('ODBC_DIRECT_CONNECTION_MAX_CONCURRENT');
 
-  /// SQL execution queue enqueue timeout in seconds (configurable via SQL_QUEUE_TIMEOUT_SEC env var).
+  /// SQL execution queue **wait** timeout (configurable via `SQL_QUEUE_TIMEOUT_SEC`).
+  ///
+  /// Bounds only how long a request may wait for a worker slot before the caller
+  /// receives a queue-timeout failure. It does **not** cancel ODBC work once a
+  /// worker has started: materialized `sql.execute` and streaming observe a
+  /// cooperative cancellation token wired at the gateway layer, and still rely
+  /// on per-request ODBC timeouts when native work is already in flight. A queue-wait timeout that races with worker start can
+  /// leave an in-flight ODBC task running ("ghost query"); see `SqlExecutionQueue`
+  /// and metric `sql_queue_timeout_after_worker_started`.
   static Duration get sqlQueueEnqueueTimeout => Duration(
     seconds: int.tryParse(_optionalEnv('SQL_QUEUE_TIMEOUT_SEC') ?? '') ?? 5,
   );
@@ -267,6 +287,7 @@ class ConnectionConstants {
   static const int defaultBulkInsertChunkRowCount = 10000;
   static const int defaultBulkInsertParallelRowThreshold = 50000;
   static const bool defaultBulkInsertParallelEnabled = true;
+  static const bool defaultReadOnlyBatchNativePoolEnabled = false;
   static const bool defaultNativeWarmUpEnabled = true;
   static const int defaultBatchBulkInsertRecommendationThreshold = 50;
   static const int defaultBatchBulkInsertRouteThreshold = 50;
@@ -276,6 +297,25 @@ class ConnectionConstants {
   /// Override with env `ODBC_BULK_INSERT_CHUNK_ROWS` (positive integer).
   static int get bulkInsertChunkRowCount =>
       _positiveIntEnv('ODBC_BULK_INSERT_CHUNK_ROWS') ?? defaultBulkInsertChunkRowCount;
+
+  /// When true, homogeneous read-only parallel batches may acquire worker
+  /// connections through the native-compatible ODBC pool path.
+  ///
+  /// Override with env `ODBC_READ_ONLY_BATCH_NATIVE_POOL_ENABLED` (`true`/`false`).
+  static bool get readOnlyBatchNativePoolEnabled {
+    final raw = _optionalEnv('ODBC_READ_ONLY_BATCH_NATIVE_POOL_ENABLED');
+    if (raw == null || raw.isEmpty) {
+      return defaultReadOnlyBatchNativePoolEnabled;
+    }
+    final normalized = raw.toLowerCase();
+    if (normalized == 'true' || normalized == '1') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0') {
+      return false;
+    }
+    return defaultReadOnlyBatchNativePoolEnabled;
+  }
 
   /// When true, large SQL Server bulk inserts may use `bulkInsertParallel`.
   ///

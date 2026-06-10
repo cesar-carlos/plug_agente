@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
@@ -145,6 +147,47 @@ void main() {
       expect(result.isError(), isTrue);
       expect((result.exceptionOrNull()! as domain.Failure).context['operation'], 'transaction_commit');
       verify(() => service.rollbackTransaction('c1', 11)).called(1);
+    });
+  });
+
+  group('rollbackIfNeeded', () {
+    test('marks connection for discard when rollback fails', () async {
+      final discarded = <String>[];
+      manager = OdbcBatchTransactionManager(
+        service: service,
+        metrics: metrics,
+        onRollbackUnconfirmed: discarded.add,
+      );
+      when(() => service.rollbackTransaction('c1', 3)).thenAnswer(
+        (_) async => Failure(Exception('rollback boom')),
+      );
+
+      await manager.rollbackIfNeeded('c1', 3);
+
+      expect(discarded, ['c1']);
+      expect(metrics.getSnapshot()['transaction_rollback_failure'], 1);
+    });
+
+    test('marks connection for discard when rollback times out', () async {
+      final discarded = <String>[];
+      manager = OdbcBatchTransactionManager(
+        service: service,
+        metrics: metrics,
+        rollbackTimeout: const Duration(milliseconds: 20),
+        onRollbackUnconfirmed: discarded.add,
+      );
+      when(() => service.rollbackTransaction('c1', 4)).thenAnswer(
+        (_) => Completer<Result<void>>().future,
+      );
+
+      await manager.rollbackIfNeeded(
+        'c1',
+        4,
+        timeout: const Duration(milliseconds: 20),
+      );
+
+      expect(discarded, ['c1']);
+      expect(metrics.getSnapshot()['transaction_rollback_failure'], 1);
     });
   });
 

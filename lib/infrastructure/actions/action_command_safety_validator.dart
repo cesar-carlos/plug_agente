@@ -1,6 +1,6 @@
-import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
 import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/i_action_command_safety_assessor.dart';
 
 class ActionCommandSafetyMatch {
   const ActionCommandSafetyMatch({

@@ -12,6 +12,18 @@
     "request_id": {
       "type": "string",
       "description": "Request ID of the tracked streaming query to cancel"
+    },
+    "client_token": {
+      "type": "string",
+      "description": "Opaque token (hex) or JWT for authorization. Required when enableClientTokenAuthorization is active and the stream was started with a client token. Aliases: clientToken, auth"
+    },
+    "clientToken": {
+      "type": "string",
+      "description": "Alias for client_token"
+    },
+    "auth": {
+      "type": "string",
+      "description": "Alias for client_token"
     }
   },
   "anyOf": [

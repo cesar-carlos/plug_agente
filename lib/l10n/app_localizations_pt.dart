@@ -3012,6 +3012,22 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configBackupErrApplyWrite => 'Não foi possível aplicar os ficheiros da cópia.';
 
   @override
+  String get configBackupErrExportSecretsUnavailable =>
+      'O armazenamento seguro não está disponível, por isso os segredos não puderam ser exportados.';
+
+  @override
+  String get configBackupErrExportSecretsEncrypt =>
+      'Falha ao encriptar segredos do armazenamento seguro para exportação.';
+
+  @override
+  String get configBackupErrRestoreSecretsDecrypt =>
+      'Não foi possível desencriptar segredos do armazenamento seguro da cópia.';
+
+  @override
+  String get configBackupErrRestoreSecretsApply =>
+      'Não foi possível restaurar segredos do armazenamento seguro da cópia.';
+
+  @override
   String get configBackupRestoreFailedTitle => 'Falha na restauração';
 
   @override
@@ -3024,6 +3040,34 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get configBackupRestoreOlderSchemaNote =>
       'Esta cópia usa um esquema de base de dados mais antigo. A aplicação irá migrá-lo no próximo arranque.';
+
+  @override
+  String get configBackupSecureStorageSecretsNote =>
+      'Palavras-passe ODBC, segredos do hub e segredos de client token guardados no armazenamento seguro do Windows não são incluídos no ZIP de cópia de segurança por predefinição. Permanecem apenas nesta máquina, salvo se optar abaixo.';
+
+  @override
+  String get configBackupIncludeSecureStorageSecretsLabel =>
+      'Incluir segredos encriptados do armazenamento seguro no ZIP de cópia';
+
+  @override
+  String get configBackupIncludeSecureStorageSecretsWarning =>
+      'A cópia conterá um blob encriptado com palavras-passe ODBC, tokens do hub e segredos de client token. Qualquer pessoa com este ZIP e a aplicação Plug Agente pode desencriptá-lo. Guarde o ficheiro apenas num local de confiança.';
+
+  @override
+  String get configBackupExportSecretsNotIncludedNote =>
+      'Segredos do armazenamento seguro não foram copiados—o ZIP não inclui segredos ODBC, do hub ou de client token.';
+
+  @override
+  String get configBackupExportSecretsIncludedNote =>
+      'Foi incluído um blob encriptado de segredos do armazenamento seguro no ZIP de cópia.';
+
+  @override
+  String get configBackupRestoreOdbcSecretsWarning =>
+      'Esta cópia não inclui segredos do armazenamento seguro. Numa máquina nova ou após restaurar, volte a introduzir as credenciais ODBC nas definições de ligação e autentique-se novamente no hub.';
+
+  @override
+  String get configBackupRestoreSecretsIncludedNote =>
+      'Esta cópia inclui um blob encriptado de segredos do armazenamento seguro. Palavras-passe ODBC, tokens do hub e segredos de client token serão restaurados quando confirmar.';
 
   @override
   String get configLastUpdateNever => 'Nunca verificado';

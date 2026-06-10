@@ -15,6 +15,7 @@ import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/backup_failure_localizer.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 
@@ -27,6 +28,7 @@ class BackupConfigSection extends StatefulWidget {
 
 class _BackupConfigSectionState extends State<BackupConfigSection> {
   bool _busy = false;
+  bool _includeSecureStorageSecrets = false;
   String? _busySemanticsLabel;
   String? _pendingRestoreFailure;
 
@@ -85,7 +87,10 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
       }
 
       await _setBusy(value: true, semanticsLabel: l10n.configBackupExporting);
-      final result = await getIt<ILocalAppDataBackupService>().exportBackupZip(path);
+      final result = await getIt<ILocalAppDataBackupService>().exportBackupZip(
+        path,
+        includeSecureStorageSecrets: _includeSecureStorageSecrets,
+      );
       await _setBusy(value: false);
 
       if (!mounted) {
@@ -104,7 +109,8 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
       await SettingsFeedback.showSuccess(
         context: context,
         title: l10n.configBackupExportSuccessTitle,
-        message: l10n.configBackupExportSuccessMessage,
+        message:
+            '${l10n.configBackupExportSuccessMessage}\n\n${_includeSecureStorageSecrets ? l10n.configBackupExportSecretsIncludedNote : l10n.configBackupExportSecretsNotIncludedNote}',
       );
     } on Exception catch (e, st) {
       developer.log('backup export failed', name: 'backup_config_section', error: e, stackTrace: st);
@@ -262,6 +268,29 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
               l10n.configBackupRestoreDiagnosticsHint(AppConstants.lastRestoreErrorFileName),
               style: context.captionText,
             ),
+            const SizedBox(height: AppSpacing.md),
+            InlineFeedbackCard(
+              key: const ValueKey('backup_secure_storage_secrets_notice'),
+              severity: InfoBarSeverity.info,
+              message: l10n.configBackupSecureStorageSecretsNote,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Checkbox(
+              key: const ValueKey('backup_include_secure_storage_secrets_checkbox'),
+              checked: _includeSecureStorageSecrets,
+              onChanged: _busy
+                  ? null
+                  : (bool? value) => setState(() => _includeSecureStorageSecrets = value ?? false),
+              content: Text(l10n.configBackupIncludeSecureStorageSecretsLabel),
+            ),
+            if (_includeSecureStorageSecrets) ...[
+              const SizedBox(height: AppSpacing.sm),
+              InlineFeedbackCard(
+                key: const ValueKey('backup_include_secure_storage_secrets_warning'),
+                severity: InfoBarSeverity.warning,
+                message: l10n.configBackupIncludeSecureStorageSecretsWarning,
+              ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             Wrap(
               spacing: AppSpacing.md,
@@ -366,6 +395,20 @@ class _RestoreConfirmDialogState extends State<_RestoreConfirmDialog> {
                 Text(l10n.configBackupRestoreInstallationMismatch, style: context.captionText),
                 const SizedBox(height: AppSpacing.sm),
               ],
+              InlineFeedbackCard(
+                key: ValueKey(
+                  staging.manifestSecureStorageSecretsIncluded
+                      ? 'restore_secure_storage_secrets_included_notice'
+                      : 'restore_odbc_secrets_warning',
+                ),
+                severity: staging.manifestSecureStorageSecretsIncluded
+                    ? InfoBarSeverity.info
+                    : InfoBarSeverity.warning,
+                message: staging.manifestSecureStorageSecretsIncluded
+                    ? l10n.configBackupRestoreSecretsIncludedNote
+                    : l10n.configBackupRestoreOdbcSecretsWarning,
+              ),
+              const SizedBox(height: AppSpacing.md),
               Text(l10n.configBackupRestoreRestartNotice, style: context.captionText),
               const SizedBox(height: AppSpacing.md),
               if (needsDup) ...[

@@ -16,9 +16,11 @@ import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_br
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/i_odbc_batched_streaming_query_source.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_chunk_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_native_options.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
@@ -47,10 +49,12 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   OdbcStreamingGateway(
     this._service,
     this._settings, {
+    IOdbcBatchedStreamingQuerySource? batchedQuerySource,
     DirectOdbcConnectionLimiter? directConnectionLimiter,
     MetricsCollector? metricsCollector,
     Duration cancelDisconnectTimeout = _defaultCancelDisconnectTimeout,
-  }) : _directConnectionLimiter =
+  }) : _batchedQuerySource = batchedQuerySource,
+       _directConnectionLimiter =
            directConnectionLimiter ??
            DirectOdbcConnectionLimiter(
              maxConcurrent: ConnectionConstants.directOdbcConnectionConcurrency(
@@ -63,6 +67,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
        _cancelDisconnectTimeout = cancelDisconnectTimeout;
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
+  final IOdbcBatchedStreamingQuerySource? _batchedQuerySource;
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
   final MetricsCollector? _metrics;
   final Duration _cancelDisconnectTimeout;
@@ -97,6 +102,10 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       'direct_limiter_max_concurrent': _directConnectionLimiter.maxConcurrent,
       'direct_limiter_saturated': _directConnectionLimiter.isSaturated,
       'direct_limiter_by_operation_class': _directConnectionLimiter.getOperationClassDiagnostics(),
+      // odbc_fast selects batched vs legacy inside streamQuery; plug_agente
+      // infers batched usage only when multiple native chunks are observed.
+      'native_batched_path_observable': false,
+      'native_path_inference': 'multi_chunk_implies_batched',
     };
   }
 
@@ -106,24 +115,26 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     int chunkSizeBytes, {
     int? hintedBufferBytes,
     Duration? queryTimeout,
+    int? maxResultBufferBytes,
   }) {
     final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
-    final maxResultBufferBytes = max(
-      normalizedChunkSize,
-      max(
-        hintedBufferBytes ?? 0,
-        OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024,
-      ),
-    );
+    final resolvedMaxResultBufferBytes = maxResultBufferBytes ??
+        max(
+          normalizedChunkSize,
+          max(
+            hintedBufferBytes ?? 0,
+            OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024,
+          ),
+        );
     final initialResultBufferBytes = min(
       ConnectionConstants.defaultInitialResultBufferBytes,
-      maxResultBufferBytes,
+      resolvedMaxResultBufferBytes,
     );
 
     return ConnectionOptions(
       loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
       queryTimeout: queryTimeout ?? ConnectionConstants.defaultStreamingQueryTimeout,
-      maxResultBufferBytes: maxResultBufferBytes,
+      maxResultBufferBytes: resolvedMaxResultBufferBytes,
       initialResultBufferBytes: initialResultBufferBytes,
       autoReconnectOnConnectionLost: true,
       maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
@@ -172,6 +183,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     Duration? queryTimeout,
     CancellationToken? cancellationToken,
     StreamingCancelReason? Function()? cancellationReasonProvider,
+    void Function()? onSetupComplete,
   }) async {
     final initResult = await _ensureInitialized();
     if (initResult.isError()) {
@@ -233,10 +245,19 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
         ),
       );
     }
+    final nativeStreamingOptions = OdbcStreamingNativeOptions.resolve(
+      fetchSize: fetchSize,
+      chunkSizeBytes: chunkSizeBytes,
+      settingsMaxResultBufferMb: OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(
+        _settings,
+      ),
+      hintedBufferBytes: hintedBufferBytes,
+    );
     final streamingOptions = _buildStreamingConnectionOptions(
-      chunkSizeBytes,
+      nativeStreamingOptions.nativeChunkSizeBytes,
       hintedBufferBytes: hintedBufferBytes,
       queryTimeout: queryTimeout,
+      maxResultBufferBytes: nativeStreamingOptions.maxResultBufferBytes,
     );
 
     final circuitBreaker = _getCircuitBreaker(connectionString);
@@ -303,12 +324,16 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       lease: directLease,
     );
     _activeStreams[streamExecutionId] = activeStream;
+    onSetupComplete?.call();
+    var nativeChunkCount = 0;
     try {
-      // Usar streaming real para processar chunks incrementalmente
-      await for (final chunkResult in _service.streamQuery(
-        connection.id,
-        query,
-      )) {
+      final queryStream = _openStreamingQueryStream(
+        connectionId: connection.id,
+        query: query,
+        nativeStreamingOptions: nativeStreamingOptions,
+      );
+      await for (final chunkResult in queryStream) {
+        nativeChunkCount++;
         if ((cancellationToken?.isCancelled ?? false) && !activeStream.isCancelRequested) {
           activeStream.isCancelRequested = true;
           activeStream.cancelReason = cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect;
@@ -358,7 +383,12 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
 
         await chunkResult.fold(
           (queryResult) async {
-            await _emitQueryResultRows(queryResult, fetchSize, onChunk, activeStream: activeStream);
+            await _emitQueryResultRows(
+              queryResult,
+              nativeStreamingOptions.fetchSize,
+              onChunk,
+              activeStream: activeStream,
+            );
           },
           (error) {
             throw error;
@@ -396,6 +426,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
         ),
       );
     } finally {
+      _recordNativeStreamingPathMetrics(nativeChunkCount);
       await _disconnectActiveStream(activeStream);
       activeStream.lease.release();
       _activeStreams.remove(streamExecutionId);
@@ -527,32 +558,63 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     }
   }
 
+  void _recordNativeStreamingPathMetrics(int nativeChunkCount) {
+    if (nativeChunkCount <= 0) {
+      return;
+    }
+    if (nativeChunkCount > 1) {
+      _metrics?.recordStreamingBatchedPath();
+      return;
+    }
+    _metrics?.recordStreamingSingleChunkPath();
+  }
+
+  Stream<Result<QueryResult>> _openStreamingQueryStream({
+    required String connectionId,
+    required String query,
+    required OdbcStreamingNativeOptions nativeStreamingOptions,
+  }) {
+    final batchedSource = _batchedQuerySource;
+    if (batchedSource == null) {
+      return _service.streamQuery(connectionId, query);
+    }
+
+    final nativeConnectionId = int.tryParse(connectionId);
+    if (nativeConnectionId == null || nativeConnectionId <= 0) {
+      return _service.streamQuery(connectionId, query);
+    }
+
+    return batchedSource.streamQuery(
+      nativeConnectionId,
+      query,
+      nativeStreamingOptions,
+    );
+  }
+
   Future<void> _emitQueryResultRows(
     QueryResult result,
     int fetchSize,
     Future<void> Function(List<Map<String, dynamic>> chunk) onChunk, {
     _ActiveStreamingConnection? activeStream,
   }) async {
-    final safeFetchSize = fetchSize > 0 ? fetchSize : 1000;
-    final columns = result.columns;
-    var chunk = <Map<String, dynamic>>[];
+    final chunks = mapQueryRowsToChunks(
+      OdbcStreamingChunkMapperInput(
+        columns: result.columns,
+        rows: result.rows,
+        fetchSize: fetchSize,
+      ),
+    );
 
-    for (final row in result.rows) {
-      chunk.add(mapOdbcRowToStreamingMap(columns, row));
-      if (chunk.length >= safeFetchSize) {
-        await onChunk(chunk);
-        chunk = <Map<String, dynamic>>[];
+    for (final chunk in chunks) {
+      await onChunk(chunk);
+      if (chunks.length > 1) {
         // Yield between chunks so a large driver-delivered result does not
         // monopolize the UI isolate while it is being re-framed for Socket.IO.
         await Future<void>.delayed(Duration.zero);
-        if (activeStream?.isCancelRequested ?? false) {
-          return;
-        }
       }
-    }
-
-    if (chunk.isNotEmpty && !(activeStream?.isCancelRequested ?? false)) {
-      await onChunk(chunk);
+      if (activeStream?.isCancelRequested ?? false) {
+        return;
+      }
     }
   }
 }

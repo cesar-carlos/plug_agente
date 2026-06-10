@@ -1066,6 +1066,61 @@ cancelar uma execucao em streaming ativa.
 
 Pelo menos um de `execution_id` ou `request_id` e obrigatorio.
 
+Quando `enableClientTokenAuthorization` esta ativo, o cancelamento pode incluir
+`client_token` (ou aliases `clientToken` / `auth`) com as mesmas regras de schema
+que `sql.execute`. Se o stream foi iniciado com um token de cliente, o
+`sql.cancel` deve reapresentar **o mesmo token**; caso contrario o agente rejeita
+o pedido antes de sinalizar cancelamento cooperativo.
+
+### Propriedade do token (token ownership)
+
+O runtime associa cada execucao em streaming rastreada ao `client_token` que
+iniciou o `sql.execute` correspondente (quando informado). Um peer do hub que
+nao possua o mesmo token nao pode cancelar streams de outro emissor, mesmo
+conhecendo `execution_id` ou `request_id`.
+
+Streams iniciados sem `client_token` (por exemplo, hub autenticado apenas na
+sessao `/agents`) nao exigem token no cancelamento.
+
+### Erro quando o token nao corresponde ao dono do stream
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "req-cancel-mismatch",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {
+      "reason": "invalid_params",
+      "category": "validation",
+      "retryable": false,
+      "user_message": "sql.cancel: clientToken does not match the token that started the stream.",
+      "technical_message": "sql.cancel: clientToken does not match the token that started the stream.",
+      "correlation_id": "corr-cancel-mismatch",
+      "timestamp": "2026-03-12T10:00:04Z",
+      "detail": "sql.cancel: clientToken does not match the token that started the stream."
+    }
+  }
+}
+```
+
+O dominio interno registra a causa estruturada `cancel_token_mismatch` para
+correlacao em logs; o contrato publicado expõe `-32602` com `reason:
+invalid_params` e `detail` acionavel para o hub.
+
+### Cancelamento cooperativo e tokens da fila SQL
+
+`sql.cancel` sinaliza cancelamento cooperativo no `SqlStreamingCoordinator`
+(local) e, quando aplicavel, no gateway de streaming ODBC. Execucoes que ainda
+estao aguardando vaga na fila SQL (`sql_queue`) recebem um
+`CancellationToken` cooperativo: timeouts de fila (`timeouts_total`,
+`timeouts_after_worker_started_total` no health) cancelam esse token antes do
+worker iniciar; apos o worker comecar, o ODBC pode continuar ate concluir ou
+ate o driver observar o cancelamento cooperativo — o health expõe
+`streaming_worker_hold_*` e `sql_queue.streaming_worker_hold_*` para medir esse
+intervalo.
+
 ### Response de sucesso
 
 ```json
@@ -1137,16 +1192,105 @@ quando a autorizacao por token esta ativa. Com auth ativa, token ausente ou
 invalido segue o mesmo mapeamento de erro do fluxo SQL. Params extras sao
 rejeitados pelo schema publicado.
 - **Result:** objeto alinhado a
-`docs/communication/schemas/rpc.result.agent-get-health.schema.json`, com
-`status`, `timestamp`, `version`, `pool`, `sql_queue`, `agent_actions`,
-`queries`, `batch` e `uptime_seconds`. O bloco `batch` inclui diagnosticos de
-paralelismo, caminho transacional e recomendacao de migrar grandes lotes de
-`INSERT` para `sql.bulkInsert`. O bloco `agent_actions` e seguro para o Hub e
-inclui feature flags efetivas, estado operacional do subsistema e tipos
-suportados/indisponiveis.
+`docs/communication/schemas/rpc.result.agent-get-health.schema.json`. Campos
+obrigatorios: `status`, `timestamp`, `version`, `pool`, `sql_queue`, `queries`
+e `uptime_seconds`. Blocos opcionais documentados abaixo aparecem quando o
+runtime os injeta.
 - **Erros:** os mesmos cenarios de token invalido/ausente/revogado/nao
 encontrado que o fluxo de autorizacao SQL, mapeados via
 `FailureToRpcErrorMapper`.
+
+### Bloco `secure_storage`
+
+Disponibilidade do `flutter_secure_storage` por dominio de segredo. Quando
+presente, inclui `odbc_available`, `hub_auth_available`,
+`client_tokens_available` e `degraded` (true quando qualquer dominio esta
+indisponivel). Quando degradado, `unavailable` lista os dominios afetados
+(`odbc`, `hub_auth`, `client_tokens`). O snapshot pode elevar `status` para
+`degraded` quando `secure_storage.degraded` e true.
+
+### Bloco `global_storage`
+
+Diagnostico do diretorio compartilhado em ProgramData para acesso multi-usuario:
+`app_directory_path`, `acl_marker_present`, `acl_normalized_at`,
+`acl_marker_outcome` e `acl_last_outcome`.
+
+### Bloco `streaming`
+
+Schema fechado (`additionalProperties: false`) com propriedades explicitas
+alinhadas a `HealthService._buildStreamingHealth`: flags efetivas
+(`enabled`, `gateway_available`, `db_streaming_flag_enabled`,
+`chunk_streaming_flag_enabled`, `auto_db_streaming_policy_enabled`) e contadores
+de roteamento de resposta (`from_db_responses_total`,
+`auto_from_db_responses_total`, `prefer_from_db_responses_total`,
+`allowlist_from_db_responses_total`, `from_db_skip_total`,
+`from_db_skip_reasons`, `chunked_materialized_responses_total`,
+`materialized_responses_total`), streams ativos, saturacao do limiter direto
+(`direct_limiter_*`), cancelamentos (`cancel_requests_total`,
+`backpressure_cancels_total`) e caminhos nativos (`batched_path_total`,
+`single_chunk_path_total`, `native_batched_path_observable`,
+`native_path_inference`). Tempos de retencao de worker em streaming:
+`worker_hold_avg_ms`, `worker_hold_p95_ms`, `worker_hold_max_recent_ms`,
+`worker_hold_sample_count`.
+
+### Bloco `direct_connections`
+
+Limiter de conexoes ODBC diretas para streaming/fallback: ocupacao
+(`active_count`, `max_concurrent`, `effective_cap`, `is_saturated`),
+override (`override_requested`, `override_exceeds_pool`, `capacity_strategy`,
+`pool_size_reference`), totais (`opened_total`, `closed_total`,
+`acquire_timeouts_total`), amostras de espera (`wait_avg_ms`, `wait_p95_ms`,
+`wait_p99_ms`, `wait_sample_count`) e `by_operation_class` (contagem por classe
+de operacao).
+
+### Bloco `sql_queue`
+
+Schema fechado (`additionalProperties: false`) com `oneOf` para fila inativa ou
+ativa. Quando a fila esta desabilitada: `{ "enabled": false }`. Quando ativa,
+inclui
+tamanho atual/maximo, workers por tipo (`active_*` / `max_*` para batch, long
+query, streaming e non-query), `enqueue_timeout_seconds`, rejeicoes e timeouts
+(`rejections_total`, `timeouts_total`, `timeouts_after_worker_started_total`),
+tempos de espera na fila (`avg_wait_time_ms`, `p95_wait_time_ms`,
+`max_recent_wait_time_ms`), espera no pool (`pool_wait_avg_time_ms`,
+`pool_wait_p95_time_ms`, `pool_wait_timeouts_total`), tempos de conexao/execucao
+(`connect_avg_time_ms`, `sql_execution_avg_time_ms`), saturacao
+(`saturation_70_total`, `saturation_90_total`, `workers_equal_pool_total`) e
+retencao de worker em streaming na fila (`streaming_worker_hold_*`).
+
+### Bloco `prepared`
+
+Cache de prepared statements: `reuse_total`, `cache_hit_total`,
+`cache_miss_total`, `prepare_avg_ms`, `prepare_p95_ms`.
+
+### Bloco `timeouts`
+
+Agregados de timeout e cancelamento por timeout: `sql_total`, `pool_total`,
+`cancel_success_total`, `cancel_failure_total`.
+
+### Bloco `diagnostics`
+
+Razoes recentes de diagnostico ODBC/SQL: `top_recent_reasons` (mapa contagem) e
+`recent_reasons` (lista ordenada).
+
+### Bloco `sql_execution_by_mode`
+
+Mapa de modos de gateway (por exemplo `pooled`, `native_compatible`, `direct`,
+`direct_non_query`, caminhos de batch) para amostras de tempo
+(`avg_time_ms`, `p95_time_ms`, `p99_time_ms`, `max_recent_time_ms`,
+`sample_count`, `ops_per_second`).
+
+### Bloco `batch`
+
+Paralelismo de batch somente-leitura, caminhos transacionais, recomendacao de
+`sql.bulkInsert` (`bulk_insert_recommended_total`, `bulk_insert_routed_total`)
+e amostras de espera global de paralelismo (`parallel_global_wait_*`).
+
+### Bloco `agent_actions`
+
+Seguro para o Hub: feature flags efetivas, estado operacional do subsistema,
+tipos suportados/indisponiveis, contadores de fila/execucao/RPC remoto,
+retencao e scheduler.
 
 ## Metodos `agent.action.*`
 

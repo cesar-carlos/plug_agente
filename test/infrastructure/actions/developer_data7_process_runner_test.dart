@@ -12,6 +12,8 @@ import 'package:plug_agente/infrastructure/actions/developer_data7_connection_ca
 import 'package:plug_agente/infrastructure/actions/developer_data7_definition_resolver.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_process_runner.dart';
 
+import 'agent_action_process_runner_test_support.dart';
+
 void main() {
   group('DeveloperData7ProcessRunner', () {
     test('should run Executor.exe with structured arguments', () async {
@@ -19,6 +21,9 @@ void main() {
       late List<String> arguments;
       late String? capturedWorkingDirectory;
       final runner = DeveloperData7ProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         definitionResolver: _resolverForCatalog(),
         processStarter:
             (
@@ -69,6 +74,9 @@ void main() {
 
     test('should reject runtime parameter overrides before start', () async {
       final runner = DeveloperData7ProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         definitionResolver: _resolverForCatalog(),
       );
 
@@ -93,6 +101,9 @@ void main() {
 
     test('should map process start failure with structured diagnostics', () async {
       final runner = DeveloperData7ProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         definitionResolver: _resolverForCatalog(),
         processStarter:
             (
@@ -133,6 +144,8 @@ void main() {
     test('should disable parent environment inheritance in prod operational profile by default', () async {
       late bool capturedIncludeParentEnvironment;
       final runner = DeveloperData7ProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         definitionResolver: _resolverForCatalog(),
         operationalProfileResolver: const _FixedProfileResolver('prod'),
         processStarter:
@@ -170,6 +183,9 @@ void main() {
       final processRegistered = Completer<void>();
       final process = _FakeProcess.pendingExit(pid: 4321);
       final runner = DeveloperData7ProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         definitionResolver: _resolverForCatalog(),
         processStarter:
             (

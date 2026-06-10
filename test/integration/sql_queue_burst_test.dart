@@ -8,6 +8,7 @@ import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
@@ -314,12 +315,14 @@ final class _DelayedQueryGateway implements IDatabaseGateway {
     QueryRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
   }) async {
     await Future<void>.delayed(queryDelay);
     return _delegate.executeQuery(
       request,
       timeout: timeout,
       database: database,
+      cancellationToken: cancellationToken,
     );
   }
 

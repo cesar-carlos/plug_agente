@@ -1,8 +1,11 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/value_objects/hub_auth_secrets.dart';
+import 'package:plug_agente/infrastructure/stores/batch_secret_store_mixin.dart';
 
-class FlutterSecureHubAuthSecretStore implements IHubAuthSecretStore {
+class FlutterSecureHubAuthSecretStore
+    with BatchHubAuthSecretStoreMixin
+    implements IHubAuthSecretStore {
   FlutterSecureHubAuthSecretStore({
     FlutterSecureStorage? secureStorage,
     this.keyPrefix = 'hub_auth_secret_',

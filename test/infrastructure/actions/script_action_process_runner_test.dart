@@ -8,10 +8,15 @@ import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.dart';
 import 'package:plug_agente/infrastructure/actions/script_action_process_runner.dart';
 
+import 'agent_action_process_runner_test_support.dart';
+
 void main() {
   group('ScriptActionProcessRunner', () {
     test('should run script through default interpreter and return succeeded status', () async {
       final runner = ScriptActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
       );
@@ -42,6 +47,9 @@ void main() {
 
     test('should mark failed when exit code is not in acceptedExitCodes', () async {
       final runner = ScriptActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(
           _FakeProcess(pid: 1234, exitCode: 5, stderrText: 'script failed'),
@@ -73,6 +81,9 @@ void main() {
 
     test('should redact captured stdout when redactBeforePersisting is enabled by default', () async {
       final runner = ScriptActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(
           _FakeProcess(
@@ -109,6 +120,9 @@ void main() {
     test('should not call processStarter when config type is wrong', () async {
       var processStarterCalled = false;
       final runner = ScriptActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter:
             (
@@ -174,6 +188,9 @@ void main() {
           late String capturedExecutable;
           late List<String> capturedArguments;
           final runner = ScriptActionProcessRunner(
+            environmentResolver: kTestActionEnvironmentResolver,
+            operationalProfileResolver: kTestAgentOperationalProfileResolver,
+            stdinSetup: kTestActionProcessStdinSetup,
             pathValidator: _acceptingPathValidator(),
             processStarter:
                 (

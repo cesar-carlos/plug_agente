@@ -59,7 +59,7 @@ class RetryManager implements IRetryManager {
 
         // Se não deve retry ou última tentativa, propagar erro
         if (!isTransientFailure(lastException!) || attempts >= maxAttempts) {
-          return Failure(lastException!);
+          return Failure(_typedFailure(lastException!));
         }
 
         final jitteredDelay = _applyJitter(delayMs);
@@ -86,7 +86,7 @@ class RetryManager implements IRetryManager {
 
       // Se não deve retry ou última tentativa, propagar erro
       if (!isTransientFailure(lastException!) || attempts >= maxAttempts) {
-        return Failure(lastException!);
+        return Failure(_typedFailure(lastException!));
       }
 
       final jitteredDelay = _applyJitter(delayMs);
@@ -101,17 +101,7 @@ class RetryManager implements IRetryManager {
     // All attempts failed — normalize to a typed domain Failure so callers
     // receive a consistent Result<T> type regardless of whether the operation
     // threw an Exception or returned a Failure Result.
-    final last = lastException!;
-    if (last is domain.Failure) {
-      return Failure(last);
-    }
-    return Failure(
-      domain.ServerFailure.withContext(
-        message: last.toString(),
-        cause: last,
-        context: {'operation': 'retry_manager.execute'},
-      ),
-    );
+    return Failure(_typedFailure(lastException!));
   }
 
   @override
@@ -159,7 +149,18 @@ class RetryManager implements IRetryManager {
         message.contains('temporarily');
   }
 
-  /// Returns [baseDelayMs] perturbed by ±[_jitterFactor] (default ±20%).
+  domain.Failure _typedFailure(Exception exception) {
+    if (exception is domain.Failure) {
+      return exception;
+    }
+    return domain.ServerFailure.withContext(
+      message: 'Operation failed after retries',
+      cause: exception,
+      context: {'operation': 'retry_manager.execute'},
+    );
+  }
+
+  /// Returns `baseDelayMs` perturbed by ±`_jitterFactor` (default ±20%).
   ///
   /// Avoids synchronized retry storms across concurrent operations. The result
   /// is clamped to at least `1ms` so the caller always yields the event loop.

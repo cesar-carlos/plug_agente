@@ -1,4 +1,5 @@
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
@@ -10,6 +11,7 @@ abstract class IDatabaseGateway {
     QueryRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
   });
   Future<Result<List<SqlCommandResult>>> executeBatch(
     String agentId,

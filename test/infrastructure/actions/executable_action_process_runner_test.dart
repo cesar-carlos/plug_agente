@@ -8,6 +8,8 @@ import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.dart';
 import 'package:plug_agente/infrastructure/actions/executable_action_process_runner.dart';
 
+import 'agent_action_process_runner_test_support.dart';
+
 void main() {
   group('ExecutableActionProcessRunner', () {
     test('should run executable directly and return succeeded status', () async {
@@ -15,6 +17,9 @@ void main() {
       late List<String> capturedArguments;
       final process = _FakeProcess(pid: 1234, exitCode: 0);
       final runner = ExecutableActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter:
             (
@@ -61,6 +66,9 @@ void main() {
 
     test('should mark failed when exit code is not in acceptedExitCodes', () async {
       final runner = ExecutableActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(
           _FakeProcess(pid: 1234, exitCode: 7, stderrText: 'boom'),
@@ -92,6 +100,9 @@ void main() {
 
     test('should redact captured stdout when redactBeforePersisting is enabled by default', () async {
       final runner = ExecutableActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(
           _FakeProcess(
@@ -128,6 +139,9 @@ void main() {
     test('should not call processStarter when config type is wrong', () async {
       var processStarterCalled = false;
       final runner = ExecutableActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter:
             (
@@ -166,6 +180,9 @@ void main() {
     test('should mark timed out and kill main process when maxRuntime exceeded', () async {
       final process = _FakeProcess.pendingExit(pid: 4321);
       final runner = ExecutableActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter: _starterFor(process),
       );
@@ -201,6 +218,9 @@ void main() {
       late String capturedExecutable;
       late List<String> capturedArguments;
       final runner = ExecutableActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
         pathValidator: _acceptingPathValidator(),
         processStarter:
             (

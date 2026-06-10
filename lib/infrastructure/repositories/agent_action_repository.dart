@@ -1,7 +1,8 @@
 import 'package:drift/drift.dart';
-import 'package:plug_agente/application/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_captured_output_chunk_store.dart';
@@ -442,8 +443,9 @@ class AgentActionRepository implements IAgentActionRepository {
       if (requestedAfter != null) {
         query.where((table) => table.requestedAt.isBiggerOrEqualValue(requestedAfter));
       }
-      if (limit != null) {
-        query.limit(limit);
+      final effectiveLimit = AgentActionRuntimeStateConstants.resolveListExecutionsLimit(limit);
+      if (effectiveLimit != null) {
+        query.limit(effectiveLimit);
       }
 
       final rows = await query.get();
@@ -474,20 +476,23 @@ class AgentActionRepository implements IAgentActionRepository {
     required DateTime olderThan,
   }) async {
     try {
-      await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
-      final deleted =
-          await (_database.delete(_database.agentActionExecutionTable)..where((table) {
-                final finishedBeforeRetention = table.finishedAt.isSmallerThanValue(olderThan);
-                final requestedBeforeRetention = table.requestedAt.isSmallerThanValue(olderThan);
-                final isTerminal = table.status.isIn(
-                  AgentActionExecutionStatus.values
-                      .where((status) => status.isTerminal)
-                      .map((status) => status.name)
-                      .toList(growable: false),
-                );
-                return isTerminal & (finishedBeforeRetention | requestedBeforeRetention);
-              }))
-              .go();
+      late final int deleted;
+      await _database.transaction(() async {
+        await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
+        deleted =
+            await (_database.delete(_database.agentActionExecutionTable)..where((table) {
+                  final finishedBeforeRetention = table.finishedAt.isSmallerThanValue(olderThan);
+                  final requestedBeforeRetention = table.requestedAt.isSmallerThanValue(olderThan);
+                  final isTerminal = table.status.isIn(
+                    AgentActionExecutionStatus.values
+                        .where((status) => status.isTerminal)
+                        .map((status) => status.name)
+                        .toList(growable: false),
+                  );
+                  return isTerminal & (finishedBeforeRetention | requestedBeforeRetention);
+                }))
+                .go();
+      });
       return Success(deleted);
     } on Exception catch (error) {
       return Failure(
@@ -508,33 +513,36 @@ class AgentActionRepository implements IAgentActionRepository {
     required DateTime olderThan,
   }) async {
     try {
-      await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
-      final terminalStatusNames = AgentActionExecutionStatus.values
-          .where((AgentActionExecutionStatus status) => status.isTerminal)
-          .map((AgentActionExecutionStatus status) => status.name)
-          .toList(growable: false);
-      final updated =
-          await (_database.update(_database.agentActionExecutionTable)..where((table) {
-                final finishedBeforeRetention = table.finishedAt.isSmallerThanValue(olderThan);
-                final requestedBeforeRetention = table.requestedAt.isSmallerThanValue(olderThan);
-                final isTerminal = table.status.isIn(terminalStatusNames);
-                final hasCapturedOutput =
-                    table.stdoutText.isNotNull() |
-                    table.stderrText.isNotNull() |
-                    table.stdoutStoredInChunks.equals(true) |
-                    table.stderrStoredInChunks.equals(true);
-                return isTerminal & (finishedBeforeRetention | requestedBeforeRetention) & hasCapturedOutput;
-              }))
-              .write(
-                const AgentActionExecutionTableCompanion(
-                  stdoutText: Value(null),
-                  stderrText: Value(null),
-                  stdoutTruncated: Value(false),
-                  stderrTruncated: Value(false),
-                  stdoutStoredInChunks: Value(false),
-                  stderrStoredInChunks: Value(false),
-                ),
-              );
+      late final int updated;
+      await _database.transaction(() async {
+        await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
+        final terminalStatusNames = AgentActionExecutionStatus.values
+            .where((AgentActionExecutionStatus status) => status.isTerminal)
+            .map((AgentActionExecutionStatus status) => status.name)
+            .toList(growable: false);
+        updated =
+            await (_database.update(_database.agentActionExecutionTable)..where((table) {
+                  final finishedBeforeRetention = table.finishedAt.isSmallerThanValue(olderThan);
+                  final requestedBeforeRetention = table.requestedAt.isSmallerThanValue(olderThan);
+                  final isTerminal = table.status.isIn(terminalStatusNames);
+                  final hasCapturedOutput =
+                      table.stdoutText.isNotNull() |
+                      table.stderrText.isNotNull() |
+                      table.stdoutStoredInChunks.equals(true) |
+                      table.stderrStoredInChunks.equals(true);
+                  return isTerminal & (finishedBeforeRetention | requestedBeforeRetention) & hasCapturedOutput;
+                }))
+                .write(
+                  const AgentActionExecutionTableCompanion(
+                    stdoutText: Value(null),
+                    stderrText: Value(null),
+                    stdoutTruncated: Value(false),
+                    stderrTruncated: Value(false),
+                    stdoutStoredInChunks: Value(false),
+                    stderrStoredInChunks: Value(false),
+                  ),
+                );
+      });
       return Success(updated);
     } on Exception catch (error) {
       return Failure(

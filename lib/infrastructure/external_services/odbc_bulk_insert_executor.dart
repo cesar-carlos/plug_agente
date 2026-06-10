@@ -12,6 +12,7 @@ import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/bulk_insert_parallel_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
@@ -85,7 +86,7 @@ final class OdbcBulkInsertExecutor {
     return _executeChunkedBulkInsert(
       connectionId: connectionId,
       request: request,
-      deadline: deadline ?? _deadlineFor(timeout),
+      deadline: deadline ?? OdbcExecutionDeadline.deadlineFor(timeout),
       timeout: timeout,
     );
   }
@@ -116,7 +117,7 @@ final class OdbcBulkInsertExecutor {
       );
     }
 
-    final deadline = _deadlineFor(timeout);
+    final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final leaseResult = await _connectionManager.acquireDirectLease(
       operation: 'bulk_insert_direct',
       deadline: deadline,
@@ -138,7 +139,7 @@ final class OdbcBulkInsertExecutor {
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
         options: _optionsResolver.forTimeout(
-          _remainingTimeoutFromDeadline(deadline) ?? timeout,
+          OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
         ).toOdbcConnectionOptions(),
       );
       return await connectResult.fold(
@@ -199,7 +200,7 @@ final class OdbcBulkInsertExecutor {
     required int parallelism,
     Duration? timeout,
   }) async {
-    final deadline = _deadlineFor(timeout);
+    final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final poolIdResult = await _parallelPool!.ensurePoolId(connectionString);
     if (poolIdResult.isError()) {
       return Failure(poolIdResult.exceptionOrNull()!);
@@ -273,7 +274,7 @@ final class OdbcBulkInsertExecutor {
       builder.rowCount,
       parallelism: parallelism,
     );
-    final remaining = _remainingTimeoutFromDeadline(deadline) ?? timeout;
+    final remaining = OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout;
     try {
       final result = remaining == null ? await operation : await operation.timeout(remaining);
       return result.fold(
@@ -355,7 +356,7 @@ final class OdbcBulkInsertExecutor {
       builder.build(),
       builder.rowCount,
     );
-    final remaining = _remainingTimeoutFromDeadline(deadline) ?? timeout;
+    final remaining = OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout;
     final result = remaining == null ? await operation : await operation.timeout(remaining);
     return result.fold(
       Success.new,
@@ -419,17 +420,5 @@ final class OdbcBulkInsertExecutor {
       }
       return value;
     });
-  }
-
-  DateTime? _deadlineFor(Duration? timeout) {
-    return timeout == null ? null : DateTime.now().add(timeout);
-  }
-
-  Duration? _remainingTimeoutFromDeadline(DateTime? deadline) {
-    if (deadline == null) {
-      return null;
-    }
-    final remaining = deadline.difference(DateTime.now());
-    return remaining <= Duration.zero ? Duration.zero : remaining;
   }
 }

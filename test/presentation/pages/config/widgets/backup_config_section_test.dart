@@ -24,7 +24,10 @@ class _FakeBackupService implements ILocalAppDataBackupService {
   int get liveAgentConfigSchemaVersion => 1;
 
   @override
-  Future<Result<void>> exportBackupZip(String destinationZipPath) => throw UnimplementedError();
+  Future<Result<void>> exportBackupZip(
+    String destinationZipPath, {
+    bool includeSecureStorageSecrets = false,
+  }) => throw UnimplementedError();
 
   @override
   Future<Result<RestoreStagingSnapshot>> stageRestoreFromZip(String zipPath) => throw UnimplementedError();
@@ -39,6 +42,12 @@ class _FakeBackupService implements ILocalAppDataBackupService {
   void disposeStaging(RestoreStagingSnapshot staging) => throw UnimplementedError();
 }
 
+Future<void> _pumpBackupSection(WidgetTester tester, Widget child) async {
+  await tester.binding.setSurfaceSize(const Size(1400, 900));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(child);
+}
+
 void main() {
   tearDown(() async {
     await getIt.reset();
@@ -46,7 +55,8 @@ void main() {
 
   testWidgets('renders section title and diagnostics footnote (EN)', (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-    await tester.pumpWidget(
+    await _pumpBackupSection(
+      tester,
       const FluentApp(
         locale: Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -60,11 +70,39 @@ void main() {
 
     expect(find.text(l10n.configBackupSectionTitle), findsOneWidget);
     expect(find.textContaining('last_restore_error.txt'), findsOneWidget);
+    expect(find.byKey(const ValueKey('backup_secure_storage_secrets_notice')), findsOneWidget);
+    expect(find.text(l10n.configBackupSecureStorageSecretsNote), findsOneWidget);
+    expect(find.byKey(const ValueKey('backup_include_secure_storage_secrets_checkbox')), findsOneWidget);
     expect(find.text(AppStrings.singleInstanceMessage), findsNothing);
   });
 
+  testWidgets('shows secure storage export warning when opt-in checkbox is checked', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await _pumpBackupSection(
+      tester,
+      const FluentApp(
+        locale: Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ScaffoldPage(
+          content: BackupConfigSection(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('backup_include_secure_storage_secrets_warning')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('backup_include_secure_storage_secrets_checkbox')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('backup_include_secure_storage_secrets_warning')), findsOneWidget);
+    expect(find.text(l10n.configBackupIncludeSecureStorageSecretsWarning), findsOneWidget);
+  });
+
   testWidgets('shows AppStrings single-instance line in Portuguese locale', (tester) async {
-    await tester.pumpWidget(
+    await _pumpBackupSection(
+      tester,
       const FluentApp(
         locale: Locale('pt'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -82,7 +120,8 @@ void main() {
   testWidgets('does not show restore failure notice when there is none', (tester) async {
     getIt.registerSingleton<ILocalAppDataBackupService>(_FakeBackupService());
 
-    await tester.pumpWidget(
+    await _pumpBackupSection(
+      tester,
       const FluentApp(
         locale: Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -101,7 +140,8 @@ void main() {
       _FakeBackupService(pendingFailure: 'code: applyMissingDb\nmessage: staged db missing'),
     );
 
-    await tester.pumpWidget(
+    await _pumpBackupSection(
+      tester,
       const FluentApp(
         locale: Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -120,7 +160,8 @@ void main() {
     final fake = _FakeBackupService(pendingFailure: 'code: applyMissingDb');
     getIt.registerSingleton<ILocalAppDataBackupService>(fake);
 
-    await tester.pumpWidget(
+    await _pumpBackupSection(
+      tester,
       const FluentApp(
         locale: Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,

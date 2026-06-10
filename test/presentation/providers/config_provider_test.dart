@@ -49,6 +49,9 @@ void main() {
       when(() => mockUuid.v4()).thenReturn('generated-id');
       when(
         () => mockConfigService.generateConnectionString(any()),
+      ).thenReturn('DRIVER={SQL Server};SERVER=localhost,1433;PWD=secret');
+      when(
+        () => mockConfigService.generateConnectionStringForPersistence(any()),
       ).thenReturn('DRIVER={SQL Server};SERVER=localhost,1433;');
       when(() => mockLoad.call(any())).thenAnswer((_) async {
         return Success(persistedConfig);

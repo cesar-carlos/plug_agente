@@ -6,7 +6,10 @@ import 'package:result_dart/result_dart.dart';
 class ConfigValidator {
   ConfigValidator();
 
-  Result<bool> validate(Config config) {
+  Result<void> validate(
+    Config config, {
+    bool forPersistence = false,
+  }) {
     final errors = <String>[];
 
     final idResult = _validateId(config.id);
@@ -23,7 +26,9 @@ class ConfigValidator {
       );
     }
 
-    final connResult = _validateConnectionString(config.connectionString);
+    final connResult = forPersistence
+        ? _validateConnectionStringForPersistence(config)
+        : _validateConnectionString(config.connectionString);
     if (connResult.isError()) {
       errors.add(
         'Connection string: ${(connResult.exceptionOrNull() as domain.Failure?)?.message ?? 'Invalid connection string'}',
@@ -62,7 +67,7 @@ class ConfigValidator {
       return Failure(domain.ValidationFailure(errors.join('; ')));
     }
 
-    return const Success(true);
+    return const Success(unit);
   }
 
   Result<String> _validateId(String id) {
@@ -84,6 +89,30 @@ class ConfigValidator {
       connectionString,
       minLength: 1,
     ).map((_) => connectionString);
+  }
+
+  Result<String> _validateConnectionStringForPersistence(Config config) {
+    final connectionString = config.connectionString.trim();
+    if (connectionString.isNotEmpty) {
+      return Success(connectionString);
+    }
+
+    if (_hasStructuredConnectionFields(config)) {
+      return const Success('');
+    }
+
+    return Failure(
+      domain.ValidationFailure(
+        'Connection string or database connection fields are required',
+      ),
+    );
+  }
+
+  bool _hasStructuredConnectionFields(Config config) {
+    return config.driverName.trim().isNotEmpty &&
+        config.host.trim().isNotEmpty &&
+        config.username.trim().isNotEmpty &&
+        config.databaseName.trim().isNotEmpty;
   }
 
   Result<String> _validateUsername(String username) {

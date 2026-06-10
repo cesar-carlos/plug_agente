@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
-import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
@@ -10,6 +9,7 @@ import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
+import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart' as app_db;
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
@@ -36,7 +36,7 @@ final class AdaptiveOdbcConnectionPool
     required OdbcNativeConnectionPool nativePool,
     required FeatureFlags featureFlags,
     required MetricsCollector metricsCollector,
-    ActiveConfigResolver? activeConfigResolver,
+    IQueryConfigSource? queryConfigSource,
     IAgentConfigRepository? configRepository,
     Duration nativeCircuitBreakDuration = const Duration(minutes: 1),
     int nativeCircuitBreakThreshold = 3,
@@ -47,7 +47,7 @@ final class AdaptiveOdbcConnectionPool
        _nativePool = nativePool,
        _featureFlags = featureFlags,
        _metrics = metricsCollector,
-       _activeConfigResolver = activeConfigResolver,
+       _queryConfigSource = queryConfigSource,
        _configRepository = configRepository,
        _nativeCircuitBreakDuration = nativeCircuitBreakDuration,
        _nativeCircuitBreakThreshold = nativeCircuitBreakThreshold,
@@ -62,7 +62,7 @@ final class AdaptiveOdbcConnectionPool
   OdbcNativeConnectionPool get nativeBulkInsertPool => _nativePool;
   final FeatureFlags _featureFlags;
   final MetricsCollector _metrics;
-  final ActiveConfigResolver? _activeConfigResolver;
+  final IQueryConfigSource? _queryConfigSource;
   final IAgentConfigRepository? _configRepository;
   final Duration _nativeCircuitBreakDuration;
   final int _nativeCircuitBreakThreshold;
@@ -418,7 +418,7 @@ final class AdaptiveOdbcConnectionPool
     }
 
     if (errors.isNotEmpty) {
-      return Failure(Exception(errors.join(', ')));
+      return Failure(_aggregatePoolFailure(errors, operation: 'pool_health_check'));
     }
 
     return const Success(unit);
@@ -601,15 +601,13 @@ final class AdaptiveOdbcConnectionPool
   }
 
   Future<_AdaptiveDriverInfo?> _loadDriverInfo() async {
-    final resolver = _activeConfigResolver;
-    if (resolver == null && _configRepository == null) {
+    final queryConfigSource = _queryConfigSource;
+    if (queryConfigSource == null && _configRepository == null) {
       return null;
     }
 
-    final configResult = resolver != null
-        ? await resolver.resolveActiveOrFallback(
-            metadataOnly: true,
-          )
+    final configResult = queryConfigSource != null
+        ? await queryConfigSource.resolveActiveConfig()
         : await _configRepository!.getCurrentConfigMetadata();
     return configResult.fold(
       (config) {

@@ -20,13 +20,16 @@ final class OdbcBatchTransactionManager {
     required OdbcService service,
     required MetricsCollector metrics,
     Duration rollbackTimeout = _defaultRollbackTimeout,
+    void Function(String connectionId)? onRollbackUnconfirmed,
   }) : _service = service,
        _metrics = metrics,
-       _rollbackTimeout = rollbackTimeout;
+       _rollbackTimeout = rollbackTimeout,
+       _onRollbackUnconfirmed = onRollbackUnconfirmed;
 
   final OdbcService _service;
   final MetricsCollector _metrics;
   final Duration _rollbackTimeout;
+  final void Function(String connectionId)? _onRollbackUnconfirmed;
 
   static const Duration _defaultRollbackTimeout = Duration(seconds: 15);
 
@@ -127,6 +130,7 @@ final class OdbcBatchTransactionManager {
           level: 900,
           error: rollback.exceptionOrNull(),
         );
+        _onRollbackUnconfirmed?.call(connectionId);
       }
     } on TimeoutException catch (error) {
       _metrics.recordTransactionRollbackFailure();
@@ -136,6 +140,7 @@ final class OdbcBatchTransactionManager {
         level: 900,
         error: error,
       );
+      _onRollbackUnconfirmed?.call(connectionId);
     }
   }
 

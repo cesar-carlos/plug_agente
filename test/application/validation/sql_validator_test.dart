@@ -1,8 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:plug_agente/application/validation/sql_validator.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 
 void main() {
   group('SqlValidator', () {

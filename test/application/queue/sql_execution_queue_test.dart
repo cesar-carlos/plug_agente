@@ -3,20 +3,24 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
+import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart' as res;
 
 class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
   int queueAddedCount = 0;
   int queueRejectionCount = 0;
   int queueTimeoutCount = 0;
+  int queueTimeoutAfterWorkerStartedCount = 0;
   int workerStartedCount = 0;
   int workerCompletedCount = 0;
   final List<int> saturationThresholds = [];
   final List<Duration> waitTimes = [];
   final List<int> queueSizes = [];
   final List<int> workerCounts = [];
+  final List<Duration> streamingWorkerHoldTimes = [];
 
   @override
   void recordQueueAdded(int currentSize) {
@@ -37,6 +41,11 @@ class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
   @override
   void recordQueueTimeout() {
     queueTimeoutCount++;
+  }
+
+  @override
+  void recordQueueTimeoutAfterWorkerStarted() {
+    queueTimeoutAfterWorkerStartedCount++;
   }
 
   @override
@@ -62,6 +71,11 @@ class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
   @override
   void recordWorkerCompleted(int activeCount) {
     workerCompletedCount++;
+  }
+
+  @override
+  void recordStreamingWorkerHoldTime(Duration holdTime) {
+    streamingWorkerHoldTimes.add(holdTime);
   }
 }
 
@@ -450,6 +464,76 @@ void main() {
       expect(metrics.queueTimeoutCount, equals(1));
     });
 
+    test('should cancel cooperative token when queue wait times out before worker starts', () async {
+      final metrics = _MockMetricsCollector();
+      final cooperativeToken = CancellationToken();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 1,
+        metricsCollector: metrics,
+      );
+      final blocker = Completer<void>();
+
+      unawaited(
+        queue.submit<int>(() async {
+          await blocker.future;
+          return const res.Success(1);
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final result = await queue.submit<int>(
+        () async => const res.Success(2),
+        enqueueTimeout: const Duration(milliseconds: 20),
+        cooperativeCancellationToken: cooperativeToken,
+      );
+
+      expect(result.isError(), isTrue);
+      expect(cooperativeToken.isCancelled, isTrue);
+      expect(metrics.queueTimeoutAfterWorkerStartedCount, 0);
+
+      blocker.complete();
+    });
+
+    test('should record after-worker-started timeout metric and cooperative cancel', () {
+      final metrics = _MockMetricsCollector();
+      final cooperativeToken = CancellationToken();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 4,
+        maxConcurrentWorkers: 1,
+        metricsCollector: metrics,
+      );
+
+      final failure = queue.recordQueueWaitTimeoutForTesting(
+        workerStarted: true,
+        cooperativeCancellationToken: cooperativeToken,
+        requestId: 'ghost-race',
+      );
+
+      expect(failure.context['ghost_query_risk'], isTrue);
+      expect(failure.context['worker_started'], isTrue);
+      expect(cooperativeToken.isCancelled, isTrue);
+      expect(metrics.queueTimeoutCount, 1);
+      expect(metrics.queueTimeoutAfterWorkerStartedCount, 1);
+    });
+
+    test('mock ODBC worker may continue when queue layer only signals cooperative cancel', () async {
+      final cooperativeToken = CancellationToken();
+      var mockOdbcCompleted = false;
+
+      unawaited(
+        Future<void>(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+          mockOdbcCompleted = true;
+        }),
+      );
+      cooperativeToken.cancel();
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(mockOdbcCompleted, isTrue);
+      expect(cooperativeToken.isCancelled, isTrue);
+    });
+
     test('should apply enqueue timeout only before task starts', () async {
       final queue = SqlExecutionQueue(
         maxQueueSize: 10,
@@ -466,6 +550,38 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow(), equals(7));
+    });
+
+    test('should not execute a request cancelled after dequeue race', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 1,
+      );
+      final firstStarted = Completer<void>();
+
+      unawaited(
+        queue.submit<int>(() async {
+          await firstStarted.future;
+          return const res.Success(1);
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      var executedCancelledTask = false;
+      final cancelled = queue.submit<int>(
+        () async {
+          executedCancelledTask = true;
+          return const res.Success(2);
+        },
+        enqueueTimeout: const Duration(milliseconds: 20),
+      );
+
+      final result = await cancelled;
+      expect(result.isError(), isTrue);
+
+      firstStarted.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(executedCancelledTask, isFalse);
     });
 
     test('should not execute a request that timed out before start', () async {
@@ -891,6 +1007,146 @@ void main() {
         expect(failure.context['timeout'], isTrue);
         expect(failure.context['timeout_stage'], equals('shutdown'));
       });
+    });
+
+    test('should let short queries bypass queued streams when streaming worker limit is reached', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 2,
+        maxConcurrentStreamingWorkers: 1,
+      );
+      final firstStreamBlocker = Completer<void>();
+      final executionOrder = <String>[];
+
+      final firstStream = queue.submit<String>(
+        () async {
+          executionOrder.add('stream-1-start');
+          await firstStreamBlocker.future;
+          executionOrder.add('stream-1-end');
+          return const res.Success('stream-1');
+        },
+        kind: SqlExecutionKind.streaming,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final secondStream = queue.submit<String>(
+        () async {
+          executionOrder.add('stream-2');
+          return const res.Success('stream-2');
+        },
+        kind: SqlExecutionKind.streaming,
+      );
+      final shortQuery = queue.submit<String>(
+        () async {
+          executionOrder.add('short');
+          return const res.Success('short');
+        },
+        kind: SqlExecutionKind.shortQuery,
+      );
+
+      await shortQuery;
+      expect(executionOrder, containsAllInOrder(<String>['stream-1-start', 'short']));
+      expect(executionOrder, isNot(contains('stream-2')));
+
+      firstStreamBlocker.complete();
+      await Future.wait([firstStream, secondStream]);
+      expect(executionOrder, containsAllInOrder(<String>['short', 'stream-1-end', 'stream-2']));
+      expect(queue.activeStreamingWorkers, 0);
+    });
+
+    test('should record streaming worker hold time while stream task runs', () async {
+      final metrics = _MockMetricsCollector();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 4,
+        maxConcurrentWorkers: 1,
+        metricsCollector: metrics,
+      );
+
+      await queue.submit<String>(
+        () async {
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+          return const res.Success('stream');
+        },
+        kind: SqlExecutionKind.streaming,
+      );
+
+      expect(metrics.streamingWorkerHoldTimes, hasLength(1));
+      expect(metrics.streamingWorkerHoldTimes.first.inMilliseconds, greaterThanOrEqualTo(35));
+    });
+
+    test('should cancel cooperative token on releasable streaming queue wait timeout', () async {
+      final cooperativeToken = CancellationToken();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 4,
+        maxConcurrentWorkers: 1,
+      );
+      final blocker = Completer<void>();
+
+      unawaited(
+        queue.submit<int>(() async {
+          await blocker.future;
+          return const res.Success(1);
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final result = await queue.submitWithReleasableWorker<int>(
+        (releaseWorker) async {
+          releaseWorker();
+          await Future<void>.delayed(const Duration(seconds: 1));
+          return const res.Success(2);
+        },
+        enqueueTimeout: const Duration(milliseconds: 20),
+        kind: SqlExecutionKind.streaming,
+        cooperativeCancellationToken: cooperativeToken,
+      );
+
+      expect(result.isError(), isTrue);
+      expect(cooperativeToken.isCancelled, isTrue);
+
+      blocker.complete();
+    });
+
+    test('should release worker before releasable streaming task completes', () async {
+      final metrics = _MockMetricsCollector();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 4,
+        maxConcurrentWorkers: 1,
+        metricsCollector: metrics,
+      );
+      final streamBlocker = Completer<void>();
+      var secondTaskStarted = false;
+
+      final streamFuture = queue.submitWithReleasableWorker<String>(
+        (releaseWorker) async {
+          releaseWorker();
+          await streamBlocker.future;
+          return const res.Success('stream');
+        },
+        kind: SqlExecutionKind.streaming,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(queue.activeWorkers, 0);
+      expect(queue.activeStreamingWorkers, 0);
+      expect(metrics.streamingWorkerHoldTimes, hasLength(1));
+
+      final secondFuture = queue.submit<String>(
+        () async {
+          secondTaskStarted = true;
+          return const res.Success('query');
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(secondTaskStarted, isTrue);
+
+      streamBlocker.complete();
+      final streamResult = await streamFuture;
+      final secondResult = await secondFuture;
+
+      expect(streamResult.isSuccess(), isTrue);
+      expect(secondResult.isSuccess(), isTrue);
+      expect(queue.activeWorkers, 0);
     });
 
     test('should execute streaming tasks through the shared worker pool', () async {

@@ -1,6 +1,7 @@
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -29,6 +30,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
     QueryRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
   }) async {
     // Simulate query execution
     if (request.query.toLowerCase().contains('error')) {

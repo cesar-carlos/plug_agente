@@ -66,38 +66,30 @@ class ClientTokenLocalDataSource {
   }
 
   Future<void> replaceTokens(List<ClientTokenSummary> tokens) async {
-    final previousRows = await _database.select(_database.clientTokenCacheTable).get();
+    if (tokens.isEmpty) {
+      return;
+    }
+
     final previousRowsById = {
-      for (final row in previousRows) row.id: row,
+      for (final row in await _database.select(_database.clientTokenCacheTable).get())
+        row.id: row,
     };
-    final nextIds = tokens.map((token) => token.id).toSet();
-    await _syncSecretsForReplacement(tokens);
 
     await _database.transaction(() async {
-      await _database.delete(_database.clientTokenCacheTable).go();
-
-      if (tokens.isEmpty) {
-        return;
-      }
-
       final now = DateTime.now().toUtc();
-      final companions = tokens.map((token) => _toCompanion(token, syncedAt: now)).toList();
-
-      await _database.batch((batch) {
-        batch.insertAll(_database.clientTokenCacheTable, companions);
-      });
+      for (final token in tokens) {
+        await _database
+            .into(_database.clientTokenCacheTable)
+            .insertOnConflictUpdate(
+              _toCompanion(token, syncedAt: now),
+            );
+      }
     });
 
-    for (final staleId in previousRowsById.keys.toSet().difference(nextIds)) {
-      final previousRow = previousRowsById[staleId];
-      if (previousRow == null) {
-        continue;
-      }
-      await _deleteStoredSecretsBestEffort(
-        tokenId: staleId,
-        tokenHash: previousRow.tokenHash,
-      );
-    }
+    await _syncSecretsForReplacement(
+      tokens,
+      previousRowsById: previousRowsById,
+    );
   }
 
   Future<List<ClientTokenSummary>> listTokens({
@@ -550,16 +542,17 @@ class ClientTokenLocalDataSource {
     if (tokenValue == null || tokenValue.isEmpty) {
       return null;
     }
-    return _secretStore == null ? tokenValue : _secureStorageMarker;
+    return _secureStorageEnabled ? _secureStorageMarker : tokenValue;
   }
+
+  bool get _secureStorageEnabled => _secretStore?.isAvailable ?? false;
 
   Future<String?> _resolveTokenValue({
     required String tokenId,
     required String tokenHash,
     required String? persistedTokenValue,
   }) async {
-    final secretStore = _secretStore;
-    if (secretStore != null) {
+    if (_secureStorageEnabled) {
       final secret = await _readSecretBestEffort(tokenHash);
       if (secret != null && secret.isNotEmpty) {
         return secret;
@@ -596,7 +589,7 @@ class ClientTokenLocalDataSource {
     required String tokenHash,
     required String tokenValue,
   }) async {
-    if (_secretStore == null) {
+    if (!_secureStorageEnabled) {
       return;
     }
     final didSave = await _saveSecretBestEffort(tokenHash, tokenValue);
@@ -629,7 +622,7 @@ class ClientTokenLocalDataSource {
 
   Future<bool> _saveSecretBestEffort(String secretKey, String tokenValue) async {
     final secretStore = _secretStore;
-    if (secretStore == null) {
+    if (secretStore == null || !secretStore.isAvailable) {
       return false;
     }
     try {
@@ -689,19 +682,29 @@ class ClientTokenLocalDataSource {
     await _deleteSecretBestEffort(tokenId);
   }
 
-  Future<void> _syncSecretsForReplacement(List<ClientTokenSummary> tokens) async {
+  Future<void> _syncSecretsForReplacement(
+    List<ClientTokenSummary> tokens, {
+    required Map<String, ClientTokenCacheData> previousRowsById,
+  }) async {
     for (final token in tokens) {
+      final previousRow = previousRowsById[token.id];
       final tokenValue = token.tokenValue?.trim();
       if (tokenValue == null || tokenValue.isEmpty) {
         await _deleteStoredSecretsBestEffort(
           tokenId: token.id,
           tokenHash: _fallbackStoredTokenHash(token),
         );
+        if (previousRow != null) {
+          await _deleteSecretBestEffort(previousRow.tokenHash);
+        }
         continue;
       }
       final tokenHash = _fallbackStoredTokenHash(token);
       await _saveSecretBestEffort(tokenHash, tokenValue);
       await _deleteSecretBestEffort(token.id);
+      if (previousRow != null && previousRow.tokenHash != tokenHash) {
+        await _deleteSecretBestEffort(previousRow.tokenHash);
+      }
     }
   }
 }

@@ -3,7 +3,9 @@ import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_hub_session_store.dart';
+import 'package:plug_agente/domain/value_objects/config_row_legacy_secrets.dart';
 import 'package:plug_agente/domain/value_objects/hub_auth_secrets.dart';
+import 'package:plug_agente/domain/value_objects/hub_session_legacy_row_bundle.dart';
 import 'package:plug_agente/domain/value_objects/hub_stored_credentials.dart';
 import 'package:plug_agente/domain/value_objects/hub_stored_credentials_state.dart';
 import 'package:plug_agente/domain/value_objects/hub_stored_session.dart';
@@ -165,6 +167,85 @@ class HubSessionStore implements IHubSessionStore {
   }
 
   @override
+  Future<Result<HubSessionLegacyRowBundle>> readLegacyRowBundle(
+    List<ConfigRowLegacySecrets> rows,
+  ) async {
+    try {
+      if (rows.isEmpty) {
+        return const Success(
+          HubSessionLegacyRowBundle(
+            sessions: <String, HubStoredSession>{},
+            credentials: <String, HubStoredCredentialsState>{},
+          ),
+        );
+      }
+
+      final secretsResult = await _loadMergedHubSecretsForLegacyRows(rows);
+      if (secretsResult.isError()) {
+        return Failure(secretsResult.exceptionOrNull()!);
+      }
+
+      final secretsById = secretsResult.getOrThrow();
+      final sessions = <String, HubStoredSession>{};
+      final credentialsById = <String, HubStoredCredentialsState>{};
+      for (final row in rows) {
+        final secrets = secretsById[row.configId] ?? const HubAuthSecrets();
+        final authToken = _normalize(secrets.authToken);
+        final refreshToken = _normalize(secrets.refreshToken);
+        if (authToken == null || refreshToken == null) {
+          sessions[row.configId] = const HubStoredSession();
+        } else {
+          sessions[row.configId] = HubStoredSession(
+            token: AuthToken(
+              token: authToken,
+              refreshToken: refreshToken,
+            ),
+          );
+        }
+
+        final username = row.normalizedAuthUsername;
+        if (username == null) {
+          credentialsById[row.configId] = const HubStoredCredentialsState();
+          continue;
+        }
+
+        final password = _normalize(secrets.authPassword);
+        if (password == null) {
+          credentialsById[row.configId] = const HubStoredCredentialsState();
+          continue;
+        }
+
+        credentialsById[row.configId] = HubStoredCredentialsState(
+          credentials: HubStoredCredentials(
+            username: username,
+            password: password,
+          ),
+        );
+      }
+
+      return Success(
+        HubSessionLegacyRowBundle(
+          sessions: sessions,
+          credentials: credentialsById,
+        ),
+      );
+    } on domain.Failure catch (failure) {
+      return Failure(failure);
+    } on Exception catch (error) {
+      return Failure(
+        _buildDatabaseFailure(
+          'Failed to read stored hub session bundle',
+          cause: error,
+          context: {
+            'operation': 'readLegacyRowBundle',
+            'configCount': rows.length,
+          },
+        ),
+      );
+    }
+  }
+
+  @override
   Future<Result<HubStoredCredentialsState>> readStoredCredentials(
     String configId,
   ) async {
@@ -242,23 +323,49 @@ class HubSessionStore implements IHubSessionStore {
   }
 
   Future<Result<HubAuthSecrets>> _loadMergedSecrets(ConfigData data) async {
-    final legacySecrets = HubAuthSecrets(
-      authToken: data.authToken,
-      refreshToken: data.refreshToken,
-      authPassword: data.authPassword,
+    final secretsResult = await _loadMergedHubSecretsForLegacyRows(
+      [_legacySecretsFromConfigData(data)],
     );
+    if (secretsResult.isError()) {
+      return Failure(secretsResult.exceptionOrNull()!);
+    }
+
+    return Success(
+      secretsResult.getOrThrow()[data.id] ?? const HubAuthSecrets(),
+    );
+  }
+
+  Future<Result<Map<String, HubAuthSecrets>>> _loadMergedHubSecretsForLegacyRows(
+    List<ConfigRowLegacySecrets> rows,
+  ) async {
+    if (rows.isEmpty) {
+      return const Success(<String, HubAuthSecrets>{});
+    }
+
     if (!_authSecretStore.isAvailable) {
-      return Success(legacySecrets);
+      return Success({
+        for (final row in rows) row.configId: row.hubAuthSecrets,
+      });
     }
 
     try {
-      final storedSecrets = await _authSecretStore.readSecrets(data.id);
-      final mergedSecrets = storedSecrets.mergeMissingFrom(legacySecrets);
-      if (_needsSecureMigration(storedSecrets, legacySecrets)) {
-        await _authSecretStore.saveSecrets(data.id, mergedSecrets);
-        await _clearLegacySecretColumns(data.id);
+      final storedSecretsById = await _authSecretStore.readSecretsForConfigIds(
+        rows.map((row) => row.configId),
+      );
+      final mergedSecretsById = <String, HubAuthSecrets>{};
+
+      for (final row in rows) {
+        final legacySecrets = row.hubAuthSecrets;
+        final storedSecrets = storedSecretsById[row.configId] ?? const HubAuthSecrets();
+        final mergedSecrets = storedSecrets.mergeMissingFrom(legacySecrets);
+        if (_needsSecureMigration(storedSecrets, legacySecrets)) {
+          await _authSecretStore.saveSecrets(row.configId, mergedSecrets);
+          await _clearLegacySecretColumns(row.configId);
+        }
+        mergedSecretsById[row.configId] = mergedSecrets;
       }
-      return Success(mergedSecrets);
+
+      return Success(mergedSecretsById);
     } on Exception catch (error) {
       return Failure(
         _buildDatabaseFailure(
@@ -266,11 +373,22 @@ class HubSessionStore implements IHubSessionStore {
           cause: error,
           context: {
             'operation': 'readSecureHubAuthSecrets',
-            'configId': data.id,
+            'configCount': rows.length,
           },
         ),
       );
     }
+  }
+
+  ConfigRowLegacySecrets _legacySecretsFromConfigData(ConfigData data) {
+    return ConfigRowLegacySecrets(
+      configId: data.id,
+      authToken: data.authToken,
+      refreshToken: data.refreshToken,
+      authPassword: data.authPassword,
+      authUsername: data.authUsername,
+      connectionString: data.connectionString,
+    );
   }
 
   Future<void> _updateLegacySecrets(

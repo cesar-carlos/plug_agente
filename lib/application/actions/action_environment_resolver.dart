@@ -4,10 +4,11 @@ import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/i_action_environment_resolver.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Builds the child-process environment from action policy and runtime injection rules.
-class ActionEnvironmentResolver {
+class ActionEnvironmentResolver implements IActionEnvironmentResolver {
   const ActionEnvironmentResolver({
     AgentActionSecretPlaceholderResolver? secretPlaceholderResolver,
   }) : _secretPlaceholderResolver = secretPlaceholderResolver ?? const AgentActionSecretPlaceholderResolver();
@@ -18,6 +19,7 @@ class ActionEnvironmentResolver {
 
   final AgentActionSecretPlaceholderResolver _secretPlaceholderResolver;
 
+  @override
   bool resolveIncludeParentEnvironment({
     required AgentActionEnvironmentPolicy policy,
     String? operationalProfile,
@@ -89,6 +91,7 @@ class ActionEnvironmentResolver {
     return null;
   }
 
+  @override
   Future<Result<Map<String, String>>> resolveForProcess({
     required AgentActionDefinition definition,
     required AgentActionExecutionRequest request,

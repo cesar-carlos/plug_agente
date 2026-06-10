@@ -22,6 +22,7 @@ import 'package:plug_agente/infrastructure/actions/script_action_process_runner.
 import 'package:plug_agente/infrastructure/stores/noop_agent_action_secret_store.dart';
 
 import '../../../tool/agent_action_security_gate_checklist.dart';
+import 'agent_action_process_runner_test_support.dart';
 
 /// Mirrors production registration in `plug_dependency_registrar` for MVP 5 types.
 ({
@@ -78,10 +79,30 @@ buildMvp5AgentActionRegistries() {
   ]);
 
   final runners = AgentActionLocalRunnerRegistry([
-    CommandLineActionProcessRunner(pathValidator: pathValidator),
-    ExecutableActionProcessRunner(pathValidator: pathValidator),
-    ScriptActionProcessRunner(pathValidator: pathValidator),
-    JarActionProcessRunner(pathValidator: pathValidator),
+    CommandLineActionProcessRunner(
+      environmentResolver: kTestActionEnvironmentResolver,
+      operationalProfileResolver: kTestAgentOperationalProfileResolver,
+      stdinSetup: kTestActionProcessStdinSetup,
+      pathValidator: pathValidator,
+    ),
+    ExecutableActionProcessRunner(
+      environmentResolver: kTestActionEnvironmentResolver,
+      operationalProfileResolver: kTestAgentOperationalProfileResolver,
+      stdinSetup: kTestActionProcessStdinSetup,
+      pathValidator: pathValidator,
+    ),
+    ScriptActionProcessRunner(
+      environmentResolver: kTestActionEnvironmentResolver,
+      operationalProfileResolver: kTestAgentOperationalProfileResolver,
+      stdinSetup: kTestActionProcessStdinSetup,
+      pathValidator: pathValidator,
+    ),
+    JarActionProcessRunner(
+      environmentResolver: kTestActionEnvironmentResolver,
+      operationalProfileResolver: kTestAgentOperationalProfileResolver,
+      stdinSetup: kTestActionProcessStdinSetup,
+      pathValidator: pathValidator,
+    ),
     EmailActionMailerRunner(
       pathValidator: pathValidator,
       secretStore: secretStore,
@@ -90,7 +111,12 @@ buildMvp5AgentActionRegistries() {
       invocationRegistry: comObjectRegistry,
       pathValidator: pathValidator,
     ),
-    DeveloperData7ProcessRunner(definitionResolver: definitionResolver),
+    DeveloperData7ProcessRunner(
+      definitionResolver: definitionResolver,
+      environmentResolver: kTestActionEnvironmentResolver,
+      operationalProfileResolver: kTestAgentOperationalProfileResolver,
+      stdinSetup: kTestActionProcessStdinSetup,
+    ),
   ]);
 
   return (adapters: adapters, runners: runners);

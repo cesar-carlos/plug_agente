@@ -1,11 +1,12 @@
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_scanner.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/i_agent_action_secret_placeholder_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Resolves `${secret:name}` placeholders using [IAgentActionSecretStore] at execution time.
-class AgentActionSecretPlaceholderResolver {
+class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlaceholderResolver {
   const AgentActionSecretPlaceholderResolver({IAgentActionSecretStore? secretStore}) : _secretStore = secretStore;
 
   final IAgentActionSecretStore? _secretStore;
@@ -308,6 +309,7 @@ class AgentActionSecretPlaceholderResolver {
     return Success(List<String>.unmodifiable(resolved));
   }
 
+  @override
   Future<Result<String>> resolveText({
     required String text,
     required String actionId,

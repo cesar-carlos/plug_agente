@@ -1,7 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/application/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_drift_mapper.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_action_repository.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
@@ -191,6 +191,70 @@ void main() {
       expect(listResult.getOrThrow().map((item) => item.id), ['trigger-1']);
       expect(deleteResult.isSuccess(), isTrue);
       expect(afterDelete.getOrThrow(), isEmpty);
+    });
+
+    test('cleanupExecutions rolls back when execution delete fails inside transaction', () async {
+      final largeStdout = 'z' * 20 * 1024;
+      final execution = AgentActionExecution(
+        id: 'cleanup-rollback',
+        actionId: 'action-1',
+        actionType: AgentActionType.commandLine,
+        status: AgentActionExecutionStatus.succeeded,
+        requestedAt: DateTime.utc(2026, 5, 10),
+        source: AgentActionRequestSource.scheduler,
+        finishedAt: DateTime.utc(2026, 5, 10, 1),
+        stdoutText: largeStdout,
+      );
+
+      await repository.saveExecution(execution);
+
+      final chunksBefore = await database.select(database.agentActionCapturedOutputChunkTable).get();
+      expect(chunksBefore, isNotEmpty);
+
+      await database.customStatement('''
+        CREATE TRIGGER test_abort_cleanup_exec_delete
+        BEFORE DELETE ON agent_action_execution_table
+        WHEN OLD.id = 'cleanup-rollback'
+        BEGIN
+          SELECT RAISE(ABORT, 'test simulated failure');
+        END;
+      ''');
+
+      final cleanupResult = await repository.cleanupExecutions(
+        olderThan: DateTime.utc(2026, 5, 12),
+      );
+
+      expect(cleanupResult.isError(), isTrue);
+      final loaded = await repository.getExecution('cleanup-rollback');
+      expect(loaded.isSuccess(), isTrue);
+      expect(loaded.getOrThrow().id, 'cleanup-rollback');
+      final chunksAfter = await database.select(database.agentActionCapturedOutputChunkTable).get();
+      expect(chunksAfter, isNotEmpty);
+    });
+
+    test('should apply default listExecutions limit when limit is omitted', () async {
+      for (var index = 0; index < 505; index++) {
+        await repository.saveExecution(
+          AgentActionExecution(
+            id: 'exec-limit-$index',
+            actionId: 'action-1',
+            actionType: AgentActionType.commandLine,
+            status: AgentActionExecutionStatus.succeeded,
+            requestedAt: DateTime.utc(2026, 5, 15, 0, 0, index),
+            source: AgentActionRequestSource.localUi,
+            finishedAt: DateTime.utc(2026, 5, 15, 1),
+          ),
+        );
+      }
+
+      final defaultResult = await repository.listExecutions(actionId: 'action-1');
+      final unlimitedResult = await repository.listExecutions(
+        actionId: 'action-1',
+        limit: 0,
+      );
+
+      expect(defaultResult.getOrThrow(), hasLength(500));
+      expect(unlimitedResult.getOrThrow(), hasLength(505));
     });
 
     test('should save, list and cleanup executions without removing non-terminal rows', () async {
