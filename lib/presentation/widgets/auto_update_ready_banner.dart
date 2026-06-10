@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/application/services/user_initiated_apply_failure.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
@@ -11,7 +12,10 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/updates_settings_provider.dart';
 import 'package:plug_agente/presentation/widgets/auto_update_banner_activity.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/app_confirm_dialog.dart';
+import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// In-app banner shown across the app shell when a silent update either
@@ -33,33 +37,18 @@ enum _BannerMode { pendingDownloaded, awaitingUserConsent }
 class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
   static const Duration _dismissTtl = Duration(hours: 6);
 
-  IAutoUpdateOrchestrator? _orchestrator;
   IAppSettingsStore? _settingsStore;
-  StreamSubscription<void>? _changesSubscription;
   AutoUpdateBannerActivity _activity = const AutoUpdateBannerIdle();
   String? _dismissedForVersion;
   DateTime? _dismissedUntil;
 
-  /// Snapshot of the latest "has pending downloaded update" answer. The
-  /// orchestrator getter is async now (it inspects on-disk artifacts
-  /// through an injected reader); we hydrate this flag from
-  /// [_handleChange] / [didChangeDependencies] so [build] stays
-  /// synchronous and the rebuild path is jank-free.
-  bool _hasPendingDownloaded = false;
-
   @override
   void initState() {
     super.initState();
-    if (!getIt.isRegistered<IAutoUpdateOrchestrator>()) {
-      return;
-    }
-    _orchestrator = getIt<IAutoUpdateOrchestrator>();
-    _changesSubscription = _orchestrator!.changes.listen((_) => _handleChange());
     if (getIt.isRegistered<IAppSettingsStore>()) {
       _settingsStore = getIt<IAppSettingsStore>();
       _hydrateDismissState();
     }
-    unawaited(_refreshPendingState());
   }
 
   void _hydrateDismissState() {
@@ -90,43 +79,26 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
 
   @override
   void dispose() {
-    _changesSubscription?.cancel();
     super.dispose();
   }
 
-  void _handleChange() {
-    if (!mounted) return;
-    unawaited(_refreshPendingState());
-  }
-
-  Future<void> _refreshPendingState() async {
-    final orchestrator = _orchestrator;
-    if (orchestrator == null) return;
-    final result = await orchestrator.hasPendingDownloadedUpdate;
-    if (!mounted) return;
-    if (_hasPendingDownloaded != result) {
-      setState(() => _hasPendingDownloaded = result);
-    } else {
-      setState(() {});
-    }
-  }
-
-  _BannerMode? get _mode {
-    final orchestrator = _orchestrator;
-    if (orchestrator == null) return null;
-    if (_hasPendingDownloaded) return _BannerMode.pendingDownloaded;
+  _BannerMode? _mode(UpdatesSettingsProvider updatesSettings) {
+    final orchestrator = updatesSettings.orchestrator;
+    if (updatesSettings.hasPendingDownloadedUpdate) return _BannerMode.pendingDownloaded;
     if (orchestrator.hasUpdateAwaitingUserConsent) return _BannerMode.awaitingUserConsent;
     return null;
   }
 
-  bool get _shouldShow {
-    final orchestrator = _orchestrator;
-    if (orchestrator != null && !orchestrator.updateNotificationsEnabled) {
+  bool _shouldShow(UpdatesSettingsProvider updatesSettings) {
+    final orchestrator = updatesSettings.orchestrator;
+    if (!AppPreferencesPolicy.shouldShowUpdateBanner(
+      updateNotificationsEnabled: orchestrator.updateNotificationsEnabled,
+    )) {
       return false;
     }
-    final mode = _mode;
+    final mode = _mode(updatesSettings);
     if (mode == null) return false;
-    final pendingVersion = _pendingVersion(_orchestrator!);
+    final pendingVersion = _pendingVersion(orchestrator);
     if (pendingVersion == null) return false;
     if (_dismissedForVersion == pendingVersion) {
       final until = _dismissedUntil;
@@ -142,12 +114,15 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     return diagnostics?.pendingVersion ?? diagnostics?.remoteVersion;
   }
 
-  Future<void> _onPrimaryAction(AppLocalizations l10n, _BannerMode mode) async {
-    final orchestrator = _orchestrator;
-    if (orchestrator == null || _activity.isBusy) return;
+  Future<void> _onPrimaryAction(
+    AppLocalizations l10n,
+    _BannerMode mode,
+    IAutoUpdateOrchestrator orchestrator,
+  ) async {
+    if (_activity.isBusy) return;
     final version = _pendingVersion(orchestrator) ?? '';
     final confirmed = await _showConfirmDialog(l10n, version, mode);
-    if (!mounted || confirmed != true) return;
+    if (!mounted || !confirmed) return;
 
     // The notification service does not get a localizations context, so
     // we materialize the body using the resolved delay from the orchestrator
@@ -196,9 +171,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     }
   }
 
-  void _onDefer(AppLocalizations l10n) {
-    final orchestrator = _orchestrator;
-    if (orchestrator == null) return;
+  void _onDefer(AppLocalizations l10n, IAutoUpdateOrchestrator orchestrator) {
     final version = _pendingVersion(orchestrator);
     if (version == null) return;
     final until = DateTime.now().add(_dismissTtl);
@@ -229,7 +202,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     }
   }
 
-  Future<bool?> _showConfirmDialog(
+  Future<bool> _showConfirmDialog(
     AppLocalizations l10n,
     String version,
     _BannerMode mode,
@@ -243,24 +216,12 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     final confirmLabel = mode == _BannerMode.pendingDownloaded
         ? l10n.autoUpdateReadyDialogConfirm
         : l10n.autoUpdateConsentDialogConfirm;
-    return showDialog<bool>(
+    return AppConfirmDialog.show(
       context: context,
-      builder: (context) {
-        return ContentDialog(
-          title: Text(title),
-          content: Text(body),
-          actions: [
-            Button(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(l10n.autoUpdateReadyDialogCancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(confirmLabel),
-            ),
-          ],
-        );
-      },
+      title: title,
+      message: body,
+      confirmLabel: confirmLabel,
+      cancelLabel: l10n.autoUpdateReadyDialogCancel,
     );
   }
 
@@ -306,11 +267,12 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_shouldShow) {
+    final updatesSettings = context.watch<UpdatesSettingsProvider>();
+    if (!_shouldShow(updatesSettings)) {
       return const SizedBox.shrink();
     }
-    final orchestrator = _orchestrator!;
-    final mode = _mode!;
+    final orchestrator = updatesSettings.orchestrator;
+    final mode = _mode(updatesSettings)!;
     final l10n = AppLocalizations.of(context);
     if (l10n == null) {
       return const SizedBox.shrink();
@@ -371,12 +333,12 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
           ),
           const SizedBox(width: AppSpacing.md),
           Button(
-            onPressed: _activity.isBusy ? null : () => _onDefer(l10n),
+            onPressed: _activity.isBusy ? null : () => _onDefer(l10n, orchestrator),
             child: Text(l10n.autoUpdateReadyBannerDefer),
           ),
           const SizedBox(width: AppSpacing.sm),
           FilledButton(
-            onPressed: _activity.isBusy ? null : () => _onPrimaryAction(l10n, mode),
+            onPressed: _activity.isBusy ? null : () => _onPrimaryAction(l10n, mode, orchestrator),
             child: _activity.isBusy
                 ? Row(
                     mainAxisSize: MainAxisSize.min,

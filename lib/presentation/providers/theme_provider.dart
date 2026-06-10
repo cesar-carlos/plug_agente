@@ -1,16 +1,15 @@
 import 'dart:developer' as developer;
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/settings/app_settings_keys.dart';
-import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/application/repositories/i_app_preferences_repository.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  ThemeProvider(this._prefs) {
-    _isDarkMode = _prefs.getBool(AppSettingsKeys.isDarkModeEnabled) ?? true;
+  ThemeProvider(this._preferences) {
+    _isDarkMode = _preferences.isDarkModeEnabled;
   }
 
-  final IAppSettingsStore _prefs;
+  final IAppPreferencesRepository _preferences;
   late bool _isDarkMode;
   SystemSettingsErrorState? _persistenceError;
 
@@ -35,7 +34,7 @@ class ThemeProvider extends ChangeNotifier {
     }
 
     try {
-      await _prefs.setBool(AppSettingsKeys.isDarkModeEnabled, value);
+      await _preferences.setIsDarkModeEnabled(value);
     } on Object catch (error, stackTrace) {
       developer.log(
         'Failed to persist dark mode preference',

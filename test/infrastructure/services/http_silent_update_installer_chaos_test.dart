@@ -8,7 +8,7 @@ import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/security/helper_signature_probe.dart';
-import 'package:plug_agente/infrastructure/services/http_silent_update_installer.dart';
+import 'package:plug_agente/infrastructure/services/dio_silent_update_installer.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Chaos suite that fuzzes the installer download path against an HTTP

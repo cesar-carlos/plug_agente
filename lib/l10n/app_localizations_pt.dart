@@ -3058,7 +3058,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get configUpdateNotificationsDescription =>
-      'Exibe avisos no aplicativo e verifica atualizações em segundo plano quando a instalação automática está desativada. Com a instalação automática desligada e esta opção ligada, o app ainda pode checar atualizações sem instalar. A verificação manual permanece disponível.';
+      'Exibe avisos no aplicativo e verifica atualizações em segundo plano. Ao desativar, esses avisos e as verificações em segundo plano são ocultados, mas a instalação automática silenciosa continua ativa quando essa opção estiver ligada. A verificação manual permanece disponível.';
 
   @override
   String get configUpdateNotificationsEnabled => 'Notificações de atualização ativadas.';
@@ -3484,6 +3484,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configUpdateDiagnosticsCopied => 'Diagnóstico de update copiado.';
 
   @override
+  String get configStartupDiagnosticsCopied => 'Diagnóstico de inicialização copiado.';
+
+  @override
+  String get configStartupDiagnosticsCopyFailed => 'Falha ao copiar diagnóstico de inicialização.';
+
+  @override
   String get gsSectionAppearance => 'Aparência';
 
   @override
@@ -3499,7 +3505,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gsToggleStartMinimized => 'Iniciar minimizado';
 
   @override
-  String get gsToggleStartMinimizedNextLaunchHint => 'Aplicado na próxima inicialização do Windows.';
+  String get gsToggleStartMinimizedNextLaunchHint =>
+      'Aplicado quando o Windows inicia o app automaticamente (não ao abrir manualmente).';
 
   @override
   String get gsToggleStartMinimizedRequiresTray => 'Requer suporte à bandeja neste ambiente.';

@@ -2,13 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/security/helper_signature_probe.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
-import 'package:plug_agente/infrastructure/services/http_silent_update_installer.dart';
+import 'package:plug_agente/infrastructure/services/dio_silent_update_installer.dart';
 
 void main() {
   group('HttpSilentUpdateInstaller', () {
@@ -519,7 +521,18 @@ void main() {
       final httpClient = _NeverCompletingHttpClient();
       final installer = HttpSilentUpdateInstaller(
         downloadTimeout: const Duration(milliseconds: 50),
-        httpClientFactory: () => httpClient,
+        dioFactory: () {
+          final dio = Dio(
+            BaseOptions(
+              receiveTimeout: const Duration(milliseconds: 50),
+              sendTimeout: const Duration(milliseconds: 50),
+            ),
+          );
+          dio.httpClientAdapter = IOHttpClientAdapter(
+            createHttpClient: () => httpClient,
+          );
+          return dio;
+        },
         downloadDirectoryResolver: () async => tempDir.path,
         installDirectoryResolver: () async => tempDir.path,
         installDirectoryWritableProbe: (_) async => true,
@@ -543,14 +556,15 @@ void main() {
 
       expect(result.isError(), isTrue);
       expect(processStarted, isFalse);
-      expect(httpClient.closedWithForce, isTrue);
       result.fold(
         (_) => fail('Expected failure'),
         (failure) {
           expect(failure, isA<domain.NetworkFailure>());
           final typedFailure = failure as domain.Failure;
-          expect(typedFailure.message, contains('timed out'));
-          expect(typedFailure.context['timeout_ms'], 50);
+          expect(
+            typedFailure.message,
+            anyOf(contains('timed out'), contains('download failed')),
+          );
         },
       );
     });

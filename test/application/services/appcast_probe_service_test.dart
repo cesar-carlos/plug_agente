@@ -1,7 +1,22 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
+
+Dio _localProbeDio() {
+  final dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+    ),
+  );
+  dio.httpClientAdapter = IOHttpClientAdapter();
+  return dio;
+}
+
+AppcastProbeService _probeService() => AppcastProbeService(dio: _localProbeDio());
 
 void main() {
   group('AppcastProbeService', () {
@@ -37,7 +52,7 @@ void main() {
         await request.response.close();
       });
 
-      const service = AppcastProbeService();
+      final service = _probeService();
       final result = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
@@ -67,7 +82,7 @@ void main() {
         await request.response.close();
       });
 
-      const service = AppcastProbeService();
+      final service = _probeService();
       final result = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
@@ -111,7 +126,7 @@ void main() {
         await request.response.close();
       });
 
-      const service = AppcastProbeService();
+      final service = _probeService();
       final result = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
@@ -145,7 +160,7 @@ void main() {
         await request.response.close();
       });
 
-      const service = AppcastProbeService();
+      final service = _probeService();
       final result = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
@@ -184,7 +199,7 @@ void main() {
         await request.response.close();
       });
 
-      const service = AppcastProbeService();
+      final service = _probeService();
       final result = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );
@@ -218,7 +233,7 @@ void main() {
         await request.response.close();
       });
 
-      const service = AppcastProbeService();
+      final service = _probeService();
       final result = await service.probeLatest(
         feedUrl: 'http://127.0.0.1:${server.port}/appcast.xml',
       );

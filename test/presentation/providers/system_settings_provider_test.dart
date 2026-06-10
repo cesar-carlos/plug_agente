@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/use_cases/set_tray_behavior_preference.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
+import 'package:plug_agente/infrastructure/repositories/startup_preferences_repository.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:result_dart/result_dart.dart';
@@ -25,7 +27,27 @@ class FailingAppSettingsStore extends InMemoryAppSettingsStore {
   }
 }
 
+SystemSettingsProvider createSystemSettingsProvider({
+  required IAppSettingsStore prefs,
+  IStartupService? startupService,
+  IWindowManagerService? windowManagerService,
+}) {
+  final repository = StartupPreferencesRepository(
+    prefs,
+    startupService: startupService,
+  );
+  return SystemSettingsProvider(
+    repository,
+    setTrayBehaviorPreference: SetTrayBehaviorPreference(
+      repository,
+      windowManagerService: windowManagerService,
+    ),
+  );
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late InMemoryAppSettingsStore prefs;
   late MockWindowManagerService mockWindowManager;
   late MockStartupService mockStartupService;
@@ -51,7 +73,7 @@ void main() {
 
   group('SystemSettingsProvider', () {
     test('should load default values when no settings are saved', () async {
-      final provider = SystemSettingsProvider(prefs);
+      final provider = createSystemSettingsProvider(prefs: prefs);
 
       check(provider.startWithWindows).equals(false);
       check(provider.startMinimized).equals(false);
@@ -65,7 +87,7 @@ void main() {
       await prefs.setBool(AppSettingsKeys.minimizeToTray, false);
       await prefs.setBool(AppSettingsKeys.closeToTray, false);
 
-      final provider = SystemSettingsProvider(prefs);
+      final provider = createSystemSettingsProvider(prefs: prefs);
 
       check(provider.startWithWindows).equals(true);
       check(provider.startMinimized).equals(true);
@@ -80,8 +102,8 @@ void main() {
           () => mockStartupService.enable(),
         ).thenAnswer((_) async => const Success(unit));
 
-        final provider = SystemSettingsProvider(
-          prefs,
+        final provider = createSystemSettingsProvider(
+          prefs: prefs,
           startupService: mockStartupService,
         );
 
@@ -100,8 +122,8 @@ void main() {
       ).thenAnswer((_) async => const Success(unit));
 
       await prefs.setBool(AppSettingsKeys.startWithWindows, true);
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -114,8 +136,8 @@ void main() {
     });
 
     test('should return null outcome when value is unchanged', () async {
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -135,8 +157,8 @@ void main() {
         ),
       );
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -153,8 +175,8 @@ void main() {
         () => mockStartupService.enable(),
       ).thenAnswer((_) async => const Success(unit));
 
-      final provider = SystemSettingsProvider(
-        failingPrefs,
+      final provider = createSystemSettingsProvider(
+        prefs: failingPrefs,
         startupService: mockStartupService,
       );
 
@@ -169,7 +191,7 @@ void main() {
     test(
       'should update startMinimized and persist to settings store',
       () async {
-        final provider = SystemSettingsProvider(prefs);
+        final provider = createSystemSettingsProvider(prefs: prefs);
 
         await provider.setStartMinimized(true);
 
@@ -181,8 +203,8 @@ void main() {
     test(
       'should update minimizeToTray and apply to WindowManagerService',
       () async {
-        final provider = SystemSettingsProvider(
-          prefs,
+        final provider = createSystemSettingsProvider(
+          prefs: prefs,
           windowManagerService: mockWindowManager,
         );
 
@@ -199,8 +221,8 @@ void main() {
     test(
       'should update closeToTray and apply to WindowManagerService',
       () async {
-        final provider = SystemSettingsProvider(
-          prefs,
+        final provider = createSystemSettingsProvider(
+          prefs: prefs,
           windowManagerService: mockWindowManager,
         );
 
@@ -213,7 +235,7 @@ void main() {
     );
 
     test('should not call WindowManagerService when it is null', () async {
-      final provider = SystemSettingsProvider(prefs);
+      final provider = createSystemSettingsProvider(prefs: prefs);
 
       await provider.setMinimizeToTray(false);
       await provider.setCloseToTray(false);
@@ -227,8 +249,8 @@ void main() {
         () => mockStartupService.isEnabled(),
       ).thenAnswer((_) async => const Success(true));
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -244,8 +266,8 @@ void main() {
         () => mockStartupService.isEnabled(),
       ).thenAnswer((_) async => const Success(true));
 
-      SystemSettingsProvider(
-        prefs,
+      createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -260,8 +282,8 @@ void main() {
         () => mockStartupService.isEnabled(),
       ).thenAnswer((_) => syncCompleter.future);
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
       var notificationCount = 0;
@@ -279,7 +301,7 @@ void main() {
     });
 
     test(
-      'should not update settings when startup status sync fails with error',
+      'should surface startup error when startup status sync fails on init',
       () async {
         when(() => mockStartupService.isEnabled()).thenAnswer(
           (_) async => const Failure(
@@ -289,14 +311,16 @@ void main() {
           ),
         );
 
-        final provider = SystemSettingsProvider(
-          prefs,
+        final provider = createSystemSettingsProvider(
+          prefs: prefs,
           startupService: mockStartupService,
         );
 
         await Future<void>.delayed(const Duration(milliseconds: 100));
 
         check(provider.startWithWindows).equals(false);
+        check(provider.startupError).isNotNull();
+        check(provider.startupError!.code).equals(SystemSettingsErrorCode.startupToggleFailed);
       },
     );
 
@@ -309,8 +333,8 @@ void main() {
         ),
       );
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -328,8 +352,8 @@ void main() {
         () => mockStartupService.ensureLaunchConfiguration(),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -350,8 +374,8 @@ void main() {
         ),
       );
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -371,8 +395,8 @@ void main() {
         () => mockStartupService.ensureLaunchConfiguration(allowElevation: false),
       ).thenThrow(StateError('repair failed unexpectedly'));
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -392,8 +416,8 @@ void main() {
         () => mockStartupService.ensureLaunchConfiguration(allowElevation: false),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -411,8 +435,8 @@ void main() {
         () => mockStartupService.ensureLaunchConfiguration(allowElevation: false),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.needsRepair));
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -428,8 +452,8 @@ void main() {
         () => mockStartupService.ensureLaunchConfiguration(),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -444,8 +468,8 @@ void main() {
         () => mockStartupService.ensureLaunchConfiguration(),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.unchanged));
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -456,7 +480,7 @@ void main() {
 
     test('should keep startMinimized unchanged when persistence fails', () async {
       final failingPrefs = FailingAppSettingsStore();
-      final provider = SystemSettingsProvider(failingPrefs);
+      final provider = createSystemSettingsProvider(prefs: failingPrefs);
 
       await provider.setStartMinimized(true);
 
@@ -467,8 +491,8 @@ void main() {
 
     test('should not apply minimizeToTray runtime change when persistence fails', () async {
       final failingPrefs = FailingAppSettingsStore();
-      final provider = SystemSettingsProvider(
-        failingPrefs,
+      final provider = createSystemSettingsProvider(
+        prefs: failingPrefs,
         windowManagerService: mockWindowManager,
       );
 
@@ -484,8 +508,8 @@ void main() {
         (_) async => Failure(Exception('generic')),
       );
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -504,8 +528,8 @@ void main() {
         ),
       );
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -517,7 +541,7 @@ void main() {
     });
 
     test('should set startupServiceUnavailable when service is null', () async {
-      final provider = SystemSettingsProvider(prefs);
+      final provider = createSystemSettingsProvider(prefs: prefs);
 
       await provider.openStartupSettings();
 
@@ -533,8 +557,8 @@ void main() {
         ),
       );
 
-      final provider = SystemSettingsProvider(
-        prefs,
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
         startupService: mockStartupService,
       );
 
@@ -549,8 +573,8 @@ void main() {
     test(
       'should call openSystemSettings when openStartupSettings is called',
       () async {
-        final provider = SystemSettingsProvider(
-          prefs,
+        final provider = createSystemSettingsProvider(
+          prefs: prefs,
           startupService: mockStartupService,
         );
 
@@ -559,5 +583,44 @@ void main() {
         verify(() => mockStartupService.openSystemSettings()).called(1);
       },
     );
+
+    test('copyStartupDiagnosticToClipboard returns false when startup service is unavailable', () async {
+      final provider = createSystemSettingsProvider(prefs: prefs);
+
+      final copied = await provider.copyStartupDiagnosticToClipboard();
+
+      check(copied).equals(false);
+    });
+
+    test('copyStartupDiagnosticToClipboard copies report when build succeeds', () async {
+      when(
+        () => mockStartupService.buildStartupDiagnosticReport(),
+      ).thenAnswer((_) async => const Success('Plug Agente startup diagnostic\nscope: user'));
+
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
+        startupService: mockStartupService,
+      );
+
+      final copied = await provider.copyStartupDiagnosticToClipboard();
+
+      check(copied).equals(true);
+      verify(() => mockStartupService.buildStartupDiagnosticReport()).called(1);
+    });
+
+    test('copyStartupDiagnosticToClipboard returns false when build fails', () async {
+      when(
+        () => mockStartupService.buildStartupDiagnosticReport(),
+      ).thenAnswer((_) async => Failure(Exception('diagnostic build failed')));
+
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
+        startupService: mockStartupService,
+      );
+
+      final copied = await provider.copyStartupDiagnosticToClipboard();
+
+      check(copied).equals(false);
+    });
   });
 }

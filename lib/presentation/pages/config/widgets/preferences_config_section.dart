@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -55,7 +56,10 @@ class PreferencesConfigSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final startMinimizedEnabled = startMinimizedSupported && startWithWindows;
+    final startMinimizedEnabled = AppPreferencesPolicy.canConfigureStartMinimized(
+      supportsTray: startMinimizedSupported,
+      startWithWindows: startWithWindows,
+    );
     final startMinimizedDescription = !startMinimizedSupported
         ? l10n.gsToggleStartMinimizedRequiresTray
         : !startWithWindows

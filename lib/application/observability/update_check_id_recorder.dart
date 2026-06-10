@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/settings/auto_update_settings_keys.dart';
 import 'package:uuid/uuid.dart';
 
 /// Generates time-ordered correlation IDs (UUIDv7) for each auto-update
@@ -13,8 +14,6 @@ class UpdateCheckIdRecorder {
   UpdateCheckIdRecorder({IAppSettingsStore? settingsStore, Uuid? uuid})
     : _settingsStore = settingsStore,
       _uuid = uuid ?? const Uuid();
-
-  static const String _ringBufferKey = 'auto_update.recent_check_ids';
 
   /// Max number of IDs the ring buffer retains. Older entries fall off the
   /// front; new IDs are appended at the back. 20 is enough to debug a
@@ -70,7 +69,7 @@ class UpdateCheckIdRecorder {
       while (existing.length > maxBufferSize) {
         existing.removeAt(0);
       }
-      await store.setString(_ringBufferKey, jsonEncode(existing));
+      await store.setString(AutoUpdateSettingsKeys.recentCheckIds, jsonEncode(existing));
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to persist auto-update check id ring buffer entry',
@@ -103,7 +102,7 @@ class UpdateCheckIdRecorder {
   }
 
   List<dynamic> _readBuffer(IAppSettingsStore store) {
-    final raw = store.getString(_ringBufferKey);
+    final raw = store.getString(AutoUpdateSettingsKeys.recentCheckIds);
     if (raw == null || raw.isEmpty) return <dynamic>[];
     try {
       final decoded = jsonDecode(raw);

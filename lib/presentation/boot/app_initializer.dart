@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
+import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
 import 'package:plug_agente/application/services/agent_action_execution_periodic_purge.dart';
@@ -78,8 +79,11 @@ StartupWindowPreferences resolveStartupWindowPreferences(
   bool isAutostartLaunch = false,
 }) {
   return (
-    startMinimized:
-        canStartMinimized && isAutostartLaunch && (settingsStore.getBool(AppSettingsKeys.startMinimized) ?? false),
+    startMinimized: AppPreferencesPolicy.shouldStartMinimizedAtLaunch(
+      supportsTray: canStartMinimized,
+      isAutostartLaunch: isAutostartLaunch,
+      startMinimizedPreference: settingsStore.getBool(AppSettingsKeys.startMinimized) ?? false,
+    ),
     minimizeToTray: settingsStore.getBool(AppSettingsKeys.minimizeToTray) ?? true,
     closeToTray: settingsStore.getBool(AppSettingsKeys.closeToTray) ?? true,
   );
@@ -102,6 +106,7 @@ class AppInitializer {
   final ResolveInitialRouteOverride? resolveInitialRouteOverride;
   final NativeWindowVisibilityFallback _nativeWindowVisibilityFallback;
   RuntimeDetectionDiagnostics? _lastRuntimeDetectionDiagnostics;
+  RuntimeCapabilities? _lastRuntimeCapabilities;
   bool _isAutostartLaunch = false;
 
   Future<AppBootstrapData> initialize(List<String> args) async {
@@ -110,6 +115,7 @@ class AppInitializer {
     _isAutostartLaunch = isAutostartLaunch(args);
 
     final capabilities = await _resolveRuntimeCapabilities();
+    _lastRuntimeCapabilities = capabilities;
     await (setupDependenciesOverride ?? setupDependencies)(
       capabilities: capabilities,
       runtimeDetectionDiagnostics: _lastRuntimeDetectionDiagnostics,
@@ -216,6 +222,7 @@ class AppInitializer {
     await _warmUpConnectionPool();
     await _startAgentActionScheduler();
     await _dispatchAppStartAgentActions();
+    await _startAutomaticUpdateChecks();
   }
 
   String? _resolveInitialRoute(List<String> args) {
@@ -684,34 +691,36 @@ class AppInitializer {
     }
 
     await _initializeNotifications();
-    await _initializeAutoUpdate(capabilities);
   }
 
-  Future<void> _initializeAutoUpdate(
-    RuntimeCapabilities capabilities,
-  ) async {
-    if (!capabilities.supportsAutoUpdate) {
-      developer.log(
-        'Auto-update skipped: not supported in current runtime mode',
-        name: 'app_initializer',
-        level: 800,
-      );
-      return;
-    }
-
+  Future<void> _startAutomaticUpdateChecks() async {
     try {
+      final capabilities = _lastRuntimeCapabilities;
+      if (capabilities != null && !capabilities.supportsAutoUpdate) {
+        developer.log(
+          'Auto-update skipped: not supported in current runtime mode',
+          name: 'app_initializer',
+          level: 800,
+        );
+        return;
+      }
+
+      if (!getIt.isRegistered<IAutoUpdateOrchestrator>()) {
+        return;
+      }
+
       final orchestrator = getIt<IAutoUpdateOrchestrator>();
       await orchestrator.startAutomaticChecks();
       if (orchestrator.isAvailable) {
         developer.log(
-          'Auto-update initialized and automatic check scheduling started',
+          'Auto-update automatic check scheduling started',
           name: 'app_initializer',
           level: 800,
         );
       }
     } on Exception catch (e, stackTrace) {
       developer.log(
-        'Failed to initialize auto-update (continuing without)',
+        'Failed to start automatic update checks (continuing without)',
         name: 'app_initializer',
         level: 900,
         error: e,

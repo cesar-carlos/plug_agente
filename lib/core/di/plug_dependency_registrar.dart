@@ -31,6 +31,10 @@ import 'package:plug_agente/application/observability/i_auto_update_diagnostics_
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/application/repositories/app_preferences_repository.dart';
+import 'package:plug_agente/application/repositories/i_app_preferences_repository.dart';
+import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
+import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/application/rpc/agent_action_remote_authorization_service.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -114,8 +118,11 @@ import 'package:plug_agente/application/use_cases/save_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_auth_token.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
+import 'package:plug_agente/application/use_cases/set_start_with_windows.dart';
+import 'package:plug_agente/application/use_cases/set_tray_behavior_preference.dart';
 import 'package:plug_agente/application/use_cases/slice_agent_action_captured_output.dart';
 import 'package:plug_agente/application/use_cases/sync_agent_profile_with_hub.dart';
+import 'package:plug_agente/application/use_cases/sync_startup_status.dart';
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
@@ -137,6 +144,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
 import 'package:plug_agente/core/services/tray_manager_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
@@ -187,6 +195,7 @@ import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
+import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
@@ -233,13 +242,14 @@ import 'package:plug_agente/infrastructure/repositories/agent_action_repository.
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_repository.dart';
 import 'package:plug_agente/infrastructure/repositories/client_token_repository.dart';
+import 'package:plug_agente/infrastructure/repositories/startup_preferences_repository.dart';
 import 'package:plug_agente/infrastructure/retry/retry_manager.dart';
 import 'package:plug_agente/infrastructure/runtime/windows_uac_detector.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:plug_agente/infrastructure/services/authorization_policy_resolver.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
+import 'package:plug_agente/infrastructure/services/dio_silent_update_installer.dart';
 import 'package:plug_agente/infrastructure/services/file_silent_update_launcher_status_reader.dart';
-import 'package:plug_agente/infrastructure/services/http_silent_update_installer.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
@@ -1397,21 +1407,28 @@ void registerPlugDependencyGraph(
         getIt<FeatureFlags>(),
       ),
     )
+    ..registerLazySingleton<IUpdatePreferencesRepository>(
+      () => UpdatePreferencesRepository(settingsStore: getIt<IAppSettingsStore>()),
+    )
     ..registerLazySingleton<ISilentUpdateInstaller>(
-      () => HttpSilentUpdateInstaller(
-        downloadTimeout: Duration(
+      () {
+        final downloadTimeout = Duration(
           seconds: resolveAutoUpdateDownloadTimeoutSeconds(
             environment: AppEnvironment.snapshot(),
           ),
-        ),
-      ),
+        );
+        return DioSilentUpdateInstaller(
+          downloadTimeout: downloadTimeout,
+          dioFactory: () => DioFactory.createDio(requestTimeout: downloadTimeout),
+        );
+      },
     )
     ..registerLazySingleton<IUacDetector>(
       () => Platform.isWindows ? WindowsUacDetector() : const NoopUacDetector(),
     )
     ..registerLazySingleton<IPendingSilentUpdateStore>(
       () => SettingsBackedPendingSilentUpdateStore(
-        settingsStore: getIt<IAppSettingsStore>(),
+        preferences: getIt<IUpdatePreferencesRepository>(),
       ),
     )
     ..registerLazySingleton<ISilentUpdateLauncherStatusReader>(
@@ -1448,6 +1465,7 @@ void registerPlugDependencyGraph(
         getIt<RuntimeCapabilities>(),
         silentUpdateInstaller: getIt<ISilentUpdateInstaller>(),
         settingsStore: getIt<IAppSettingsStore>(),
+        updatePreferencesRepository: getIt<IUpdatePreferencesRepository>(),
         metricsCollector: getIt<MetricsCollector>(),
         diagnosticsGateway: getIt<IAutoUpdateDiagnosticsGateway>(),
         pendingStore: getIt<IPendingSilentUpdateStore>(),
@@ -1559,6 +1577,31 @@ void registerPlugCapabilityServices(
       AutoStartService.new,
     );
   }
+
+  getIt.registerLazySingleton<IStartupPreferencesRepository>(
+    () => StartupPreferencesRepository(
+      getIt<IAppSettingsStore>(),
+      startupService: getIt.isRegistered<IStartupService>() ? getIt<IStartupService>() : null,
+    ),
+  );
+
+  getIt.registerLazySingleton<IAppPreferencesRepository>(
+    () => AppPreferencesRepository(
+      settingsStore: getIt<IAppSettingsStore>(),
+      startup: getIt<IStartupPreferencesRepository>(),
+      updates: getIt<IUpdatePreferencesRepository>(),
+    ),
+  );
+
+  getIt
+    ..registerLazySingleton(() => SyncStartupStatus(getIt<IStartupPreferencesRepository>()))
+    ..registerLazySingleton(() => SetStartWithWindows(getIt<IStartupPreferencesRepository>()))
+    ..registerLazySingleton(
+      () => SetTrayBehaviorPreference(
+        getIt<IStartupPreferencesRepository>(),
+        windowManagerService: getIt.isRegistered<IWindowManagerService>() ? getIt<IWindowManagerService>() : null,
+      ),
+    );
 
   if (capabilities.supportsNotifications) {
     developer.log(

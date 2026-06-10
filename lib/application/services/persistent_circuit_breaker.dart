@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/application/repositories/i_circuit_breaker_persistence.dart';
 
 /// Snapshot returned by [PersistentCircuitBreaker.recordFailure] so the
 /// caller can mirror the failure count and cooldown deadline into
@@ -12,43 +12,31 @@ class PersistentCircuitBreakerState {
   final DateTime? cooldownUntil;
 }
 
-/// Generic "N consecutive failures → cooldown window" gate persisted on
-/// disk via [IAppSettingsStore]. Deduplicates the two cooldowns the
+/// Generic "N consecutive failures → cooldown window" gate persisted via
+/// [ICircuitBreakerPersistence]. Deduplicates the two cooldowns the
 /// auto-update flow needs:
 ///
 /// - **manual check timeout circuit** (in the orchestrator);
 /// - **automatic silent failure cooldown** (in the coordinator).
-///
-/// Each instance owns two settings keys (`countKey`, `cooldownKey`).
-/// Pass distinct names for distinct breakers — the breaker does not own
-/// the namespace.
 class PersistentCircuitBreaker {
   PersistentCircuitBreaker({
-    required this.countKey,
-    required this.cooldownKey,
+    required ICircuitBreakerPersistence persistence,
     required this.threshold,
     required this.cooldown,
     required this.logName,
-    IAppSettingsStore? settingsStore,
     DateTime Function()? clock,
-  }) : _settingsStore = settingsStore,
+  }) : _persistence = persistence,
        _clock = clock ?? DateTime.now;
 
-  final String countKey;
-  final String cooldownKey;
+  final ICircuitBreakerPersistence _persistence;
   final int threshold;
   final Duration cooldown;
   final String logName;
-  final IAppSettingsStore? _settingsStore;
   final DateTime Function() _clock;
 
-  int get failureCount => _settingsStore?.getInt(countKey) ?? 0;
+  int get failureCount => _persistence.failureCount;
 
-  DateTime? get cooldownUntil {
-    final timestamp = _settingsStore?.getInt(cooldownKey);
-    if (timestamp == null || timestamp <= 0) return null;
-    return DateTime.fromMillisecondsSinceEpoch(timestamp);
-  }
+  DateTime? get cooldownUntil => _persistence.cooldownUntil;
 
   /// Returns the remaining cooldown when the breaker is open, `null`
   /// when it is closed (no cooldown active). Resets the persisted state
@@ -69,19 +57,16 @@ class PersistentCircuitBreaker {
   /// computes a new cooldown deadline. Returns both values so the caller
   /// can mirror them into diagnostics in a single round-trip.
   Future<PersistentCircuitBreakerState> recordFailure() async {
-    final settingsStore = _settingsStore;
-    if (settingsStore == null) {
-      return const PersistentCircuitBreakerState(failureCount: 0);
-    }
     final nextCount = failureCount + 1;
     DateTime? newCooldownUntil;
-    final values = <String, Object>{countKey: nextCount};
     if (nextCount >= threshold) {
       newCooldownUntil = _clock().add(cooldown);
-      values[cooldownKey] = newCooldownUntil.millisecondsSinceEpoch;
     }
     try {
-      await settingsStore.setValues(values);
+      await _persistence.persistFailure(
+        failureCount: nextCount,
+        cooldownUntil: newCooldownUntil,
+      );
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to persist $logName cooldown state',
@@ -100,14 +85,8 @@ class PersistentCircuitBreaker {
   /// Clears the breaker. No-op when neither key is present so the common
   /// "no failures yet" path stays a single map lookup.
   Future<void> reset() async {
-    final settingsStore = _settingsStore;
-    if (settingsStore == null) return;
-    final hasCount = settingsStore.containsKey(countKey);
-    final hasCooldown = settingsStore.containsKey(cooldownKey);
-    if (!hasCount && !hasCooldown) return;
     try {
-      await settingsStore.remove(countKey);
-      await settingsStore.remove(cooldownKey);
+      await _persistence.clear();
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to reset $logName cooldown state',

@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
@@ -61,13 +61,29 @@ abstract interface class IAppcastProbeService {
 }
 
 class AppcastProbeService implements IAppcastProbeService {
-  const AppcastProbeService();
+  AppcastProbeService({Dio? dio}) : _dio = dio ?? _createProbeDio();
+
+  final Dio _dio;
 
   static const int _maxAppcastBytes = 1024 * 1024;
   static const String _sparkleNamespace = 'http://www.andymatuschak.org/xml-namespaces/sparkle';
   static const String _plugNamespace = 'https://plug.se7esistemas.com/appcast';
 
   static String get _userAgent => 'PlugAgente/${AppConstants.appVersion} (Windows; Sparkle/appcast-probe)';
+
+  static Dio _createProbeDio() {
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        sendTimeout: const Duration(seconds: 10),
+        headers: <String, dynamic>{
+          'Accept': 'application/rss+xml,text/xml,*/*',
+        },
+      ),
+    );
+    return dio;
+  }
 
   @override
   Future<AppcastProbeResult> probeLatest({
@@ -82,28 +98,29 @@ class AppcastProbeService implements IAppcastProbeService {
       );
     }
 
-    final client = HttpClient();
-    client.connectionTimeout = timeout;
     try {
-      final request = await client.getUrl(uri).timeout(timeout);
-      request.headers.set(HttpHeaders.userAgentHeader, _userAgent);
-      request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
-      request.headers.set(HttpHeaders.pragmaHeader, 'no-cache');
-      request.headers.set(
-        HttpHeaders.acceptHeader,
-        'application/rss+xml,text/xml,*/*',
+      final response = await _dio.get<List<int>>(
+        feedUrl,
+        options: Options(
+          responseType: ResponseType.bytes,
+          receiveTimeout: timeout,
+          sendTimeout: timeout,
+          headers: <String, String>{
+            'User-Agent': _userAgent,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+        ),
       );
-
-      final response = await request.close().timeout(timeout);
-      final bytes = await response.expand((chunk) => chunk).take(_maxAppcastBytes + 1).toList();
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
+      final statusCode = response.statusCode ?? 0;
+      if (statusCode < 200 || statusCode >= 300) {
         return AppcastProbeResult(
           requestUrl: feedUrl,
-          errorMessage: 'HTTP ${response.statusCode}',
+          errorMessage: 'HTTP $statusCode',
         );
       }
 
+      final bytes = response.data ?? const <int>[];
       if (bytes.length > _maxAppcastBytes) {
         return AppcastProbeResult(
           requestUrl: feedUrl,
@@ -130,9 +147,6 @@ class AppcastProbeService implements IAppcastProbeService {
         );
       }
 
-      // Collect all Windows-eligible candidates and pick the highest version.
-      // Previously the first matching item was returned immediately, which meant
-      // a misordered feed could offer the wrong (older) build.
       _ProbeCandidate? bestWindowsCandidate;
       _ProbeCandidate? bestLegacyCandidate;
       String? firstCandidateError;
@@ -162,14 +176,11 @@ class AppcastProbeService implements IAppcastProbeService {
             bestWindowsCandidate = candidate;
           }
         } else if (os == null || os.isEmpty) {
-          // Legacy entries without an explicit OS are used only when no
-          // explicit Windows entry exists.
           if (bestLegacyCandidate == null ||
               AppVersionComparator.compare(latestVersion, bestLegacyCandidate.latestVersion) > 0) {
             bestLegacyCandidate = candidate;
           }
         }
-        // Items with an explicit non-windows OS are silently skipped.
       }
 
       if (bestWindowsCandidate != null) {
@@ -201,13 +212,23 @@ class AppcastProbeService implements IAppcastProbeService {
         itemCount: items.length,
         errorMessage: 'Appcast missing supported Windows item',
       );
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode != null) {
+        return AppcastProbeResult(
+          requestUrl: feedUrl,
+          errorMessage: 'HTTP $statusCode',
+        );
+      }
+      return AppcastProbeResult(
+        requestUrl: feedUrl,
+        errorMessage: error.message ?? error.toString(),
+      );
     } on Exception catch (e) {
       return AppcastProbeResult(
         requestUrl: feedUrl,
         errorMessage: e.toString(),
       );
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -392,7 +413,6 @@ class _ProbeCandidate {
     required this.os,
   });
 
-  /// Parent `<item>` element. Carries release notes, pubDate, etc.
   final XmlElement item;
   final XmlElement enclosure;
   final String latestVersion;

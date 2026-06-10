@@ -3,32 +3,34 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:plug_agente/core/services/i_startup_service.dart';
-import 'package:plug_agente/core/services/i_window_manager_service.dart';
-import 'package:plug_agente/core/settings/app_settings_keys.dart';
-import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
+import 'package:plug_agente/application/use_cases/set_start_with_windows.dart';
+import 'package:plug_agente/application/use_cases/set_tray_behavior_preference.dart';
+import 'package:plug_agente/application/use_cases/startup_launch_configuration_mapper.dart';
+import 'package:plug_agente/application/use_cases/sync_startup_status.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
+import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
-import 'package:result_dart/result_dart.dart';
+import 'package:plug_agente/presentation/providers/system_settings_failure_mapper.dart';
 
-/// Resultado emitido após uma alteração de inicialização automática. Permite
-/// que a UI apresente feedback de sucesso de forma desacoplada do provider.
-enum StartupChangeOutcome {
-  enabled,
-  disabled,
-}
+export 'package:plug_agente/application/models/startup_preferences_outcomes.dart'
+    show StartupChangeOutcome;
 
 class SystemSettingsProvider extends ChangeNotifier {
   SystemSettingsProvider(
-    this._prefs, {
-    IWindowManagerService? windowManagerService,
-    IStartupService? startupService,
-  }) : _windowManagerService = windowManagerService,
-       _startupService = startupService {
-    _startWithWindows = _prefs.getBool(AppSettingsKeys.startWithWindows) ?? false;
-    _startMinimized = _prefs.getBool(AppSettingsKeys.startMinimized) ?? false;
-    _minimizeToTray = _prefs.getBool(AppSettingsKeys.minimizeToTray) ?? true;
-    _closeToTray = _prefs.getBool(AppSettingsKeys.closeToTray) ?? true;
+    IStartupPreferencesRepository repository, {
+    SyncStartupStatus? syncStartupStatus,
+    SetStartWithWindows? setStartWithWindows,
+    SetTrayBehaviorPreference? setTrayBehaviorPreference,
+  }) : _repository = repository,
+       _syncStartupStatus = syncStartupStatus ?? SyncStartupStatus(repository),
+       _setStartWithWindows = setStartWithWindows ?? SetStartWithWindows(repository),
+       _setTrayBehaviorPreference =
+           setTrayBehaviorPreference ?? SetTrayBehaviorPreference(repository) {
+    _startWithWindows = repository.startWithWindows;
+    _startMinimized = repository.startMinimized;
+    _minimizeToTray = repository.minimizeToTray;
+    _closeToTray = repository.closeToTray;
 
     unawaited(
       _initializeAsync().catchError((Object error, StackTrace stackTrace) {
@@ -43,13 +45,11 @@ class SystemSettingsProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> _initializeAsync() async {
-    await _syncStartupStatus();
-  }
+  final IStartupPreferencesRepository _repository;
+  final SyncStartupStatus _syncStartupStatus;
+  final SetStartWithWindows _setStartWithWindows;
+  final SetTrayBehaviorPreference _setTrayBehaviorPreference;
 
-  final IAppSettingsStore _prefs;
-  final IWindowManagerService? _windowManagerService;
-  final IStartupService? _startupService;
   late bool _startWithWindows;
   late bool _startMinimized;
   late bool _minimizeToTray;
@@ -60,12 +60,15 @@ class SystemSettingsProvider extends ChangeNotifier {
   SystemSettingsErrorState? _preferenceError;
   SystemSettingsNoticeState? _startupNotice;
 
-  /// Backward-compatible view of the latest visible error.
   SystemSettingsErrorState? get lastError => _startupError ?? _preferenceError;
-
   SystemSettingsErrorState? get startupError => _startupError;
   SystemSettingsErrorState? get preferenceError => _preferenceError;
   SystemSettingsNoticeState? get startupNotice => _startupNotice;
+
+  bool get startWithWindows => _startWithWindows;
+  bool get startMinimized => _startMinimized;
+  bool get minimizeToTray => _minimizeToTray;
+  bool get closeToTray => _closeToTray;
 
   void clearError() {
     if (_startupError != null || _preferenceError != null || _startupNotice != null) {
@@ -91,160 +94,29 @@ class SystemSettingsProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _syncStartupStatus() async {
-    final startupService = _startupService;
-    if (startupService == null) {
-      return;
-    }
-
-    final result = await startupService.isEnabled();
+  Future<void> _initializeAsync() async {
+    final result = await _syncStartupStatus();
     if (_isDisposed) {
       return;
     }
 
     result.fold(
-      (isEnabled) {
-        if (isEnabled != _startWithWindows) {
-          developer.log(
-            'Startup status out of sync (system: $isEnabled, settings: $_startWithWindows), updating settings',
-            name: 'system_settings_provider',
-            level: 800,
-          );
-          _startWithWindows = isEnabled;
-          unawaited(_persistBoolSetting(AppSettingsKeys.startWithWindows, isEnabled));
-          _notifyIfActive();
+      (outcome) {
+        if (outcome.reconciledStartWithWindows != null) {
+          _startWithWindows = outcome.reconciledStartWithWindows!;
         }
-        if (isEnabled) {
-          _ensureStartupLaunchConfiguration(startupService);
-        }
-      },
-      (failure) {
-        developer.log(
-          'Failed to sync startup status: $failure',
-          name: 'system_settings_provider',
-          level: 900,
-        );
-      },
-    );
-  }
-
-  void _ensureStartupLaunchConfiguration(IStartupService startupService) {
-    unawaited(_ensureStartupLaunchConfigurationAsync(startupService));
-  }
-
-  Future<void> _ensureStartupLaunchConfigurationAsync(IStartupService startupService) async {
-    try {
-      final result = await startupService.ensureLaunchConfiguration(allowElevation: false);
-      if (_isDisposed) {
-        return;
-      }
-      _mapLaunchConfigurationResult(result);
-    } on Object catch (error, stackTrace) {
-      developer.log(
-        'Startup launch configuration validation threw',
-        name: 'system_settings_provider',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (_isDisposed) {
-        return;
-      }
-      _startupError = null;
-      _startupNotice = const SystemSettingsNoticeState(
-        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-      );
-      _notifyIfActive();
-    }
-  }
-
-  void _mapLaunchConfigurationResult(Result<StartupLaunchConfigurationStatus> result) {
-    result.fold(
-      (status) {
-        _startupError = null;
-        final notice = _noticeForLaunchConfigurationStatus(status);
-        if (notice == null) {
-          _startupNotice = null;
-        } else {
-          _startupNotice = notice;
+        if (outcome.launchConfiguration != null) {
+          _applyLaunchConfigurationOutcome(outcome.launchConfiguration);
         }
         _notifyIfActive();
       },
       (failure) {
-        developer.log(
-          'Startup launch configuration failed: $failure',
-          name: 'system_settings_provider',
-          level: 900,
-        );
-        _startupError = null;
-        _startupNotice = _noticeForLaunchConfigurationFailure(failure);
+        _startupError = SystemSettingsFailureMapper.startupFailure(failure);
         _notifyIfActive();
       },
     );
   }
 
-  SystemSettingsNoticeState? _noticeForLaunchConfigurationStatus(
-    StartupLaunchConfigurationStatus status,
-  ) {
-    return switch (status) {
-      StartupLaunchConfigurationStatus.unchanged => null,
-      StartupLaunchConfigurationStatus.repaired => const SystemSettingsNoticeState(
-        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepaired,
-      ),
-      StartupLaunchConfigurationStatus.needsRepair => const SystemSettingsNoticeState(
-        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-      ),
-      StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry => const SystemSettingsNoticeState(
-        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry,
-      ),
-    };
-  }
-
-  SystemSettingsNoticeState _noticeForLaunchConfigurationFailure(Object failure) {
-    if (failure is StartupServiceFailure) {
-      developer.log(
-        failure.message,
-        name: 'system_settings_provider',
-        level: 900,
-      );
-      return SystemSettingsNoticeState(
-        code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-        startupFailureCode: failure.code,
-      );
-    }
-    return const SystemSettingsNoticeState(
-      code: SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
-    );
-  }
-
-  SystemSettingsErrorState _errorForStartupFailure(Object failure) {
-    if (failure is StartupServiceFailure) {
-      developer.log(
-        failure.message,
-        name: 'system_settings_provider',
-        level: 900,
-      );
-      return SystemSettingsErrorState(
-        code: SystemSettingsErrorCode.startupToggleFailed,
-        startupFailureCode: failure.code,
-      );
-    }
-    return const SystemSettingsErrorState(
-      code: SystemSettingsErrorCode.startupToggleFailed,
-    );
-  }
-
-  bool get startWithWindows => _startWithWindows;
-  bool get startMinimized => _startMinimized;
-  bool get minimizeToTray => _minimizeToTray;
-  bool get closeToTray => _closeToTray;
-
-  /// Atualiza o flag de inicialização com o Windows.
-  ///
-  /// Retorna [StartupChangeOutcome.enabled] ou [StartupChangeOutcome.disabled]
-  /// quando a alteração foi aplicada (inclusive no SO, se o serviço estiver
-  /// disponível). Retorna `null` quando nada mudou (no-op) ou quando houve
-  /// falha — neste caso [lastError] é populado.
   Future<StartupChangeOutcome?> setStartWithWindows(bool value) async {
     if (_startWithWindows == value) {
       return null;
@@ -252,80 +124,35 @@ class SystemSettingsProvider extends ChangeNotifier {
 
     clearStartupFeedback();
 
-    final startupService = _startupService;
-    var systemStateChanged = false;
-    if (startupService != null) {
-      final result = value ? await startupService.enable() : await startupService.disable();
-      if (_isDisposed) {
-        return null;
-      }
-
-      final success = result.fold(
-        (_) {
-          developer.log(
-            'Startup ${value ? "enabled" : "disabled"} successfully',
-            name: 'system_settings_provider',
-            level: 800,
-          );
-          systemStateChanged = true;
-          return true;
-        },
-        (failure) {
-          developer.log(
-            'Failed to ${value ? "enable" : "disable"} startup: $failure',
-            name: 'system_settings_provider',
-            level: 900,
-          );
-
-          _startupError = _errorForStartupFailure(failure);
-          _notifyIfActive();
-
-          return false;
-        },
-      );
-
-      if (!success) {
-        return null;
-      }
-
-      if (value) {
-        final repairResult = await startupService.ensureLaunchConfiguration();
-        if (_isDisposed) {
-          return null;
-        }
-        _mapLaunchConfigurationResult(repairResult);
-      }
-    }
-
-    if (systemStateChanged) {
-      _startWithWindows = value;
-      final persisted = await _persistBoolSetting(AppSettingsKeys.startWithWindows, value);
-      if (_isDisposed) {
-        return null;
-      }
-      if (persisted) {
-        _notifyIfActive();
-      }
-      return value ? StartupChangeOutcome.enabled : StartupChangeOutcome.disabled;
-    }
-
-    if (!await _persistBoolSetting(AppSettingsKeys.startWithWindows, value)) {
-      return null;
-    }
+    final result = await _setStartWithWindows(value);
     if (_isDisposed) {
       return null;
     }
 
-    _startWithWindows = value;
-    _notifyIfActive();
-    return value ? StartupChangeOutcome.enabled : StartupChangeOutcome.disabled;
+    return result.fold(
+      (outcome) {
+        _startWithWindows = value;
+        if (!outcome.preferencePersisted) {
+          _preferenceError = const SystemSettingsErrorState(
+            code: SystemSettingsErrorCode.settingsPersistenceFailed,
+          );
+        }
+        _applyLaunchConfigurationOutcome(outcome.launchConfiguration);
+        _notifyIfActive();
+        return outcome.change;
+      },
+      (failure) {
+        _startupError = SystemSettingsFailureMapper.startupFailure(failure);
+        _notifyIfActive();
+        return null;
+      },
+    );
   }
 
   Future<void> repairStartupLaunchConfiguration() async {
     clearStartupFeedback();
 
-    final startupService = _startupService;
-    if (startupService == null) {
+    if (!_repository.isStartupServiceAvailable) {
       _startupError = const SystemSettingsErrorState(
         code: SystemSettingsErrorCode.startupServiceUnavailable,
       );
@@ -333,20 +160,20 @@ class SystemSettingsProvider extends ChangeNotifier {
       return;
     }
 
-    final result = await startupService.ensureLaunchConfiguration();
+    final outcome = await StartupLaunchConfigurationMapper.validate(_repository);
     if (_isDisposed) {
       return;
     }
-    _mapLaunchConfigurationResult(result);
+    _applyLaunchConfigurationOutcome(outcome);
+    _notifyIfActive();
   }
 
   Future<bool> copyStartupDiagnosticToClipboard() async {
-    final startupService = _startupService;
-    if (startupService == null) {
+    if (!_repository.isStartupServiceAvailable) {
       return false;
     }
 
-    final result = await startupService.buildStartupDiagnosticReport();
+    final result = await _repository.buildStartupDiagnosticReport();
     if (_isDisposed) {
       return false;
     }
@@ -354,27 +181,14 @@ class SystemSettingsProvider extends ChangeNotifier {
     return result.fold(
       (report) async {
         await Clipboard.setData(ClipboardData(text: report));
-        developer.log(
-          'Startup diagnostic copied to clipboard',
-          name: 'system_settings_provider',
-          level: 800,
-        );
         return true;
       },
-      (failure) {
-        developer.log(
-          'Failed to build startup diagnostic: $failure',
-          name: 'system_settings_provider',
-          level: 900,
-        );
-        return false;
-      },
+      (_) => false,
     );
   }
 
   Future<void> openStartupSettings() async {
-    final startupService = _startupService;
-    if (startupService == null) {
+    if (!_repository.isStartupServiceAvailable) {
       _startupError = const SystemSettingsErrorState(
         code: SystemSettingsErrorCode.startupServiceUnavailable,
       );
@@ -382,23 +196,15 @@ class SystemSettingsProvider extends ChangeNotifier {
       return;
     }
 
-    final result = await startupService.openSystemSettings();
+    final result = await _repository.openStartupSettings();
     if (_isDisposed) {
       return;
     }
+
     result.fold(
-      (_) {
-        developer.log(
-          'Opened startup settings successfully',
-          name: 'system_settings_provider',
-          level: 800,
-        );
-      },
+      (_) {},
       (failure) {
-        _startupError = SystemSettingsErrorState(
-          code: SystemSettingsErrorCode.startupOpenSystemSettingsFailed,
-          startupFailureCode: failure is StartupServiceFailure ? failure.code : null,
-        );
+        _startupError = SystemSettingsFailureMapper.openSystemSettingsFailure(failure);
         if (failure is StartupServiceFailure) {
           developer.log(
             failure.message,
@@ -418,15 +224,21 @@ class SystemSettingsProvider extends ChangeNotifier {
 
     clearPreferenceError();
 
-    if (!await _persistBoolSetting(AppSettingsKeys.startMinimized, value)) {
-      return;
-    }
+    final result = await _repository.persistStartMinimized(value);
     if (_isDisposed) {
       return;
     }
 
-    _startMinimized = value;
-    _notifyIfActive();
+    result.fold(
+      (_) {
+        _startMinimized = value;
+        _notifyIfActive();
+      },
+      (failure) {
+        _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
+        _notifyIfActive();
+      },
+    );
   }
 
   Future<void> setMinimizeToTray(bool value) async {
@@ -435,17 +247,7 @@ class SystemSettingsProvider extends ChangeNotifier {
     }
 
     clearPreferenceError();
-
-    if (!await _persistBoolSetting(AppSettingsKeys.minimizeToTray, value)) {
-      return;
-    }
-    if (_isDisposed) {
-      return;
-    }
-
-    _minimizeToTray = value;
-    _notifyIfActive();
-    _windowManagerService?.setMinimizeToTray(value: value);
+    await _applyTrayBehaviorPreference(TrayBehaviorKind.minimizeToTray, value);
   }
 
   Future<void> setCloseToTray(bool value) async {
@@ -454,38 +256,35 @@ class SystemSettingsProvider extends ChangeNotifier {
     }
 
     clearPreferenceError();
+    await _applyTrayBehaviorPreference(TrayBehaviorKind.closeToTray, value);
+  }
 
-    if (!await _persistBoolSetting(AppSettingsKeys.closeToTray, value)) {
-      return;
-    }
+  Future<void> _applyTrayBehaviorPreference(TrayBehaviorKind kind, bool value) async {
+    final result = await _setTrayBehaviorPreference(kind, value);
     if (_isDisposed) {
       return;
     }
 
-    _closeToTray = value;
-    _notifyIfActive();
-    _windowManagerService?.setCloseToTray(value: value);
+    result.fold(
+      (appliedValue) {
+        switch (kind) {
+          case TrayBehaviorKind.minimizeToTray:
+            _minimizeToTray = appliedValue;
+          case TrayBehaviorKind.closeToTray:
+            _closeToTray = appliedValue;
+        }
+        _notifyIfActive();
+      },
+      (failure) {
+        _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
+        _notifyIfActive();
+      },
+    );
   }
 
-  Future<bool> _persistBoolSetting(String key, bool value) async {
-    try {
-      await _prefs.setBool(key, value);
-      return true;
-    } on Object catch (error, stackTrace) {
-      developer.log(
-        'Failed to persist setting $key',
-        name: 'system_settings_provider',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-      _preferenceError = SystemSettingsErrorState(
-        code: SystemSettingsErrorCode.settingsPersistenceFailed,
-        detail: error.toString(),
-      );
-      _notifyIfActive();
-      return false;
-    }
+  void _applyLaunchConfigurationOutcome(StartupLaunchConfigurationOutcome? outcome) {
+    _startupError = null;
+    _startupNotice = SystemSettingsFailureMapper.noticeFromLaunchOutcome(outcome);
   }
 
   void _notifyIfActive() {

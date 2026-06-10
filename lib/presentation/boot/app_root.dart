@@ -9,6 +9,7 @@ import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.d
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
 import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
+import 'package:plug_agente/application/repositories/i_app_preferences_repository.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/hub_access_token_refresh_gate.dart';
@@ -48,7 +49,10 @@ import 'package:plug_agente/application/use_cases/save_agent_action_trigger.dart
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
+import 'package:plug_agente/application/use_cases/set_start_with_windows.dart';
+import 'package:plug_agente/application/use_cases/set_tray_behavior_preference.dart';
 import 'package:plug_agente/application/use_cases/slice_agent_action_captured_output.dart';
+import 'package:plug_agente/application/use_cases/sync_startup_status.dart';
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
 import 'package:plug_agente/application/use_cases/update_client_token.dart';
@@ -57,16 +61,16 @@ import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
-import 'package:plug_agente/core/services/i_startup_service.dart';
-import 'package:plug_agente/core/services/i_window_manager_service.dart';
+import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
+import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
-import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
+import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/presentation/adapters/connection_provider_playground_db_gateway.dart';
@@ -85,6 +89,7 @@ import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
 import 'package:plug_agente/presentation/providers/sql_investigation_provider.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
+import 'package:plug_agente/presentation/providers/updates_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -109,15 +114,26 @@ class AppRoot extends StatelessWidget {
           create: (context) => RuntimeModeProvider(getIt<RuntimeCapabilities>()),
         ),
         ChangeNotifierProvider(
-          create: (context) => ThemeProvider(getIt<IAppSettingsStore>()),
+          create: (context) => ThemeProvider(getIt<IAppPreferencesRepository>()),
         ),
         ChangeNotifierProvider(
           create: (context) => SystemSettingsProvider(
-            getIt<IAppSettingsStore>(),
-            windowManagerService: getIt.isRegistered<IWindowManagerService>() ? getIt<IWindowManagerService>() : null,
-            startupService: getIt.isRegistered<IStartupService>() ? getIt<IStartupService>() : null,
+            getIt<IStartupPreferencesRepository>(),
+            syncStartupStatus: getIt<SyncStartupStatus>(),
+            setStartWithWindows: getIt<SetStartWithWindows>(),
+            setTrayBehaviorPreference: getIt<SetTrayBehaviorPreference>(),
           ),
         ),
+        if (getIt.isRegistered<IAutoUpdateOrchestrator>())
+          ChangeNotifierProvider(
+            create: (context) => UpdatesSettingsProvider(
+              getIt<IAutoUpdateOrchestrator>(),
+              capabilities: getIt<RuntimeCapabilities>(),
+              runtimeDiagnostics: getIt.isRegistered<RuntimeDetectionDiagnostics>()
+                  ? getIt<RuntimeDetectionDiagnostics>()
+                  : null,
+            ),
+          ),
         ChangeNotifierProvider(
           create: (context) => ConfigProvider(
             getIt<SaveAgentConfig>(),

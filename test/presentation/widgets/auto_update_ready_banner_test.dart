@@ -11,7 +11,9 @@ import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/updates_settings_provider.dart';
 import 'package:plug_agente/presentation/widgets/auto_update_ready_banner.dart';
+import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
 class _FakeOrchestrator implements IAutoUpdateOrchestrator {
@@ -146,14 +148,17 @@ Future<void> _pumpBanner(
     getIt.registerSingleton<IAppSettingsStore>(settingsStore);
   }
   await tester.pumpWidget(
-    const FluentApp(
-      locale: Locale('en'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: SizedBox(
-        width: 1024,
-        height: 200,
-        child: AutoUpdateReadyBanner(),
+    ChangeNotifierProvider(
+      create: (_) => UpdatesSettingsProvider(orchestrator),
+      child: const FluentApp(
+        locale: Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: SizedBox(
+          width: 1024,
+          height: 200,
+          child: AutoUpdateReadyBanner(),
+        ),
       ),
     ),
   );

@@ -3052,7 +3052,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get configUpdateNotificationsDescription =>
-      'Shows in-app notices and checks for updates in the background when automatic installation is off. With automatic installation off and this option on, the app may still check for updates without installing. Manual check remains available.';
+      'Shows in-app banners and background update checks. Turning this off hides those notices and stops background checks, but does not stop automatic silent installation when that option is on. Manual check remains available.';
 
   @override
   String get configUpdateNotificationsEnabled => 'Update notifications enabled.';
@@ -3476,6 +3476,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get configUpdateDiagnosticsCopied => 'Update diagnostics copied.';
 
   @override
+  String get configStartupDiagnosticsCopied => 'Startup diagnostic copied.';
+
+  @override
+  String get configStartupDiagnosticsCopyFailed => 'Failed to copy startup diagnostic.';
+
+  @override
   String get gsSectionAppearance => 'Appearance';
 
   @override
@@ -3491,7 +3497,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gsToggleStartMinimized => 'Start minimized';
 
   @override
-  String get gsToggleStartMinimizedNextLaunchHint => 'Applies on the next Windows startup.';
+  String get gsToggleStartMinimizedNextLaunchHint =>
+      'Applies when Windows starts the app automatically (not when opened manually).';
 
   @override
   String get gsToggleStartMinimizedRequiresTray => 'Requires tray support in this environment.';

@@ -4,7 +4,10 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
+import 'package:plug_agente/application/repositories/app_preferences_repository.dart';
+import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
@@ -13,14 +16,19 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
+import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/repositories/startup_preferences_repository.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config_page.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
+import 'package:plug_agente/presentation/providers/updates_settings_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
+
+class MockStartupService extends Mock implements IStartupService {}
 
 class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   FakeAutoUpdateOrchestrator({
@@ -157,6 +165,10 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     lastApplyAvailableNoticeBody = noticeBody;
     return applyAvailableUpdateResult;
   }
+
+  void emitChange() {
+    _changesController.add(null);
+  }
 }
 
 void main() {
@@ -182,21 +194,43 @@ void main() {
     WidgetTester tester, {
     required FakeAutoUpdateOrchestrator orchestrator,
     RuntimeDetectionDiagnostics? runtimeDiagnostics,
+    IStartupService? startupService,
   }) async {
     getIt.registerSingleton<RuntimeCapabilities>(RuntimeCapabilities.full());
     if (runtimeDiagnostics != null) {
       getIt.registerSingleton<RuntimeDetectionDiagnostics>(runtimeDiagnostics);
     }
+    if (startupService != null) {
+      getIt.registerSingleton<IStartupService>(startupService);
+    }
     getIt.registerSingleton<IAutoUpdateOrchestrator>(orchestrator);
+
+    final startupRepository = StartupPreferencesRepository(
+      settingsStore,
+      startupService: startupService,
+    );
 
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider<ThemeProvider>(
-            create: (_) => ThemeProvider(settingsStore),
+            create: (_) => ThemeProvider(
+              AppPreferencesRepository(
+                settingsStore: settingsStore,
+                startup: startupRepository,
+                updates: UpdatePreferencesRepository(settingsStore: settingsStore),
+              ),
+            ),
           ),
           ChangeNotifierProvider<SystemSettingsProvider>(
-            create: (_) => SystemSettingsProvider(settingsStore),
+            create: (_) => SystemSettingsProvider(startupRepository),
+          ),
+          ChangeNotifierProvider<UpdatesSettingsProvider>(
+            create: (_) => UpdatesSettingsProvider(
+              orchestrator,
+              capabilities: getIt<RuntimeCapabilities>(),
+              runtimeDiagnostics: runtimeDiagnostics,
+            ),
           ),
         ],
         child: const FluentApp(
@@ -342,6 +376,7 @@ void main() {
   testWidgets('shows latest automatic check details when only background diagnostics exist', (tester) async {
     final orchestrator = FakeAutoUpdateOrchestrator(
       isAvailable: true,
+      automaticSilentUpdatesEnabled: false,
       lastBackgroundDiagnostics: UpdateCheckDiagnostics(
         checkedAt: DateTime(2026, 5, 8, 9, 15),
         configuredFeedUrl: officialAutoUpdateFeedUrl,
@@ -642,6 +677,187 @@ void main() {
     expect(clipboardPayload, contains(ptL10n.configUpdateTechnicalPreferencesTitle));
     expect(clipboardPayload, contains(ptL10n.configUpdateTechnicalNotificationsEnabled));
     expect(clipboardPayload, contains(ptL10n.configUpdateTechnicalAutomaticSilentEnabled));
+  });
+
+  testWidgets('shows SettingsFeedback success modal when startup diagnostic is copied', (tester) async {
+    final mockStartup = MockStartupService();
+    when(mockStartup.isEnabled).thenAnswer((_) async => const Success(false));
+    when(
+      mockStartup.ensureLaunchConfiguration,
+    ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.needsRepair));
+    when(
+      mockStartup.buildStartupDiagnosticReport,
+    ).thenAnswer((_) async => const Success('Plug Agente startup diagnostic\nscope: user'));
+
+    String? clipboardPayload;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'Clipboard.setData') {
+          final args = methodCall.arguments as Map<dynamic, dynamic>;
+          clipboardPayload = args['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: true);
+    await pumpPage(tester, orchestrator: orchestrator, startupService: mockStartup);
+
+    final provider = tester.element(find.byType(ConfigPage)).read<SystemSettingsProvider>();
+    await provider.repairStartupLaunchConfiguration();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(ptL10n.gsButtonCopyStartupDiagnostic));
+    await tester.pumpAndSettle();
+
+    expect(clipboardPayload, 'Plug Agente startup diagnostic\nscope: user');
+    expect(find.byType(ContentDialog), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ContentDialog),
+        matching: find.text(ptL10n.gsSectionSystem),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(ContentDialog),
+        matching: find.text(ptL10n.configStartupDiagnosticsCopied),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows error feedback when startup diagnostic copy fails', (tester) async {
+    final mockStartup = MockStartupService();
+    when(mockStartup.isEnabled).thenAnswer((_) async => const Success(false));
+    when(
+      mockStartup.ensureLaunchConfiguration,
+    ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.needsRepair));
+    when(
+      mockStartup.buildStartupDiagnosticReport,
+    ).thenAnswer((_) async => Failure(Exception('diagnostic build failed')));
+
+    final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: true);
+    await pumpPage(tester, orchestrator: orchestrator, startupService: mockStartup);
+
+    final provider = tester.element(find.byType(ConfigPage)).read<SystemSettingsProvider>();
+    await provider.repairStartupLaunchConfiguration();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(ptL10n.gsButtonCopyStartupDiagnostic));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(find.text(ptL10n.configStartupDiagnosticsCopyFailed), findsOneWidget);
+  });
+
+  testWidgets('does not update last check label when manual check times out', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      lastManualDiagnostics: UpdateCheckDiagnostics(
+        checkedAt: DateTime(2026, 3, 1, 8),
+        configuredFeedUrl: officialAutoUpdateFeedUrl,
+        requestedFeedUrl: officialAutoUpdateFeedUrl,
+        currentVersion: '1.0.0+1',
+        completedAt: DateTime(2026, 3, 1, 8, 1),
+        completionSource: UpdateCheckCompletionSource.completionTimeout,
+      ),
+      onCheckManual: () async => const Success(ManualCheckOutcome.completionTimeout),
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('${ptL10n.configLastUpdatePrefix}01/03/2026 08:00'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('updates_check_now_button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('${ptL10n.configLastUpdatePrefix}01/03/2026 08:00'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('refreshes background label when orchestrator emits changes', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      automaticSilentUpdatesEnabled: false,
+      lastBackgroundDiagnostics: UpdateCheckDiagnostics(
+        checkedAt: DateTime(2026, 5, 8, 9, 15),
+        configuredFeedUrl: officialAutoUpdateFeedUrl,
+        requestedFeedUrl: officialAutoUpdateFeedUrl,
+        currentVersion: '1.6.0+1',
+        completedAt: DateTime(2026, 5, 8, 9, 15, 2),
+        completionSource: UpdateCheckCompletionSource.updateNotAvailable,
+        updateAvailable: false,
+      ),
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('${ptL10n.configLastBackgroundUpdatePrefix}08/05/2026 09:15'),
+      findsOneWidget,
+    );
+
+    orchestrator.lastBackgroundDiagnostics = UpdateCheckDiagnostics(
+      checkedAt: DateTime(2026, 5, 9, 10, 30),
+      configuredFeedUrl: officialAutoUpdateFeedUrl,
+      requestedFeedUrl: officialAutoUpdateFeedUrl,
+      currentVersion: '1.6.0+1',
+      completedAt: DateTime(2026, 5, 9, 10, 30, 1),
+      completionSource: UpdateCheckCompletionSource.updateNotAvailable,
+      updateAvailable: false,
+    );
+    orchestrator.emitChange();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('${ptL10n.configLastBackgroundUpdatePrefix}09/05/2026 10:30'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('hides background label when automatic silent updates are enabled', (tester) async {
+    final orchestrator = FakeAutoUpdateOrchestrator(
+      isAvailable: true,
+      lastBackgroundDiagnostics: UpdateCheckDiagnostics(
+        checkedAt: DateTime(2026, 5, 8, 9, 15),
+        configuredFeedUrl: officialAutoUpdateFeedUrl,
+        requestedFeedUrl: officialAutoUpdateFeedUrl,
+        currentVersion: '1.6.0+1',
+        completedAt: DateTime(2026, 5, 8, 9, 15, 2),
+        completionSource: UpdateCheckCompletionSource.updateNotAvailable,
+        updateAvailable: false,
+      ),
+    );
+
+    await pumpPage(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining(ptL10n.configLastBackgroundUpdatePrefix),
+      findsNothing,
+    );
   });
 
   testWidgets('manual check still works when manual-only mode is active', (tester) async {

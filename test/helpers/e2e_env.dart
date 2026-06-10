@@ -68,6 +68,31 @@ class E2EEnv {
   /// Whether live API tests should run (RUN_LIVE_API_TESTS=true).
   static bool get runLiveApiTests => _get('RUN_LIVE_API_TESTS') == 'true';
 
+  /// Explicit base URL for API E2E tests (`API_TEST_BASE_URL`). Null when unset.
+  static String? get apiTestBaseUrlOrNull {
+    final value = _get('API_TEST_BASE_URL');
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    final trimmed = value.trim();
+    return _isValidHttpUrl(trimmed) ? trimmed : null;
+  }
+
+  /// Whether live API HTTP tests can run (opt-in flag + explicit base URL).
+  static bool get isLiveApiReady => liveApiReadinessSkipMessage == null;
+
+  /// Skip reason for live API tests; `null` when [isLiveApiReady].
+  static String? get liveApiReadinessSkipMessage {
+    if (!runLiveApiTests) {
+      return 'Set RUN_LIVE_API_TESTS=true in .env to run API live tests.';
+    }
+    final baseUrl = apiTestBaseUrlOrNull;
+    if (baseUrl == null || baseUrl.isEmpty) {
+      return 'Set API_TEST_BASE_URL (hub HTTP base URL, e.g. http://host:port/).';
+    }
+    return null;
+  }
+
   /// Whether live hub Socket.IO tests should run (RUN_LIVE_HUB_TESTS=true).
   static bool get runLiveHubTests => _get('RUN_LIVE_HUB_TESTS') == 'true';
 
@@ -188,11 +213,8 @@ class E2EEnv {
   static const String _defaultApiBaseUrl = 'http://31.97.29.223:3000/';
   static const String _defaultTimeoutUrl = 'http://10.255.255.1:9999/';
 
-  /// Base URL for API E2E tests (default: http://31.97.29.223:3000/).
-  static String get apiTestBaseUrl => _validatedUrl(
-    _get('API_TEST_BASE_URL') ?? _defaultApiBaseUrl,
-    _defaultApiBaseUrl,
-  );
+  /// Base URL for API E2E tests when [apiTestBaseUrlOrNull] is unset (docs/preflight only).
+  static String get apiTestBaseUrl => apiTestBaseUrlOrNull ?? _defaultApiBaseUrl;
 
   /// URL for timeout test (must not respond). Default: non-routable IP.
   static String get apiTestTimeoutUrl => _validatedUrl(

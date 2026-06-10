@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/utils/external_url_launcher.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/updates_about_config_section.dart';
 
@@ -314,16 +315,42 @@ void main() {
     });
 
     testWidgets('renders release notes URL when only URL is provided', (tester) async {
+      const releaseUrl = 'https://github.com/cesar-carlos/plug_agente/releases/tag/v1.7.0';
       await pumpSection(
         tester,
-        releaseNotesUrl: 'https://github.com/cesar-carlos/plug_agente/releases/tag/v1.7.0',
+        releaseNotesUrl: releaseUrl,
       );
 
       expect(find.byKey(const ValueKey('updates_release_notes_expander')), findsOneWidget);
-      // The expander shows the URL as selectable plain text under the link
-      // label; the user can copy it because we deliberately avoid pulling
-      // in a browser-launcher dependency.
       expect(find.byKey(const ValueKey('updates_release_notes_link')), findsOneWidget);
+      expect(find.textContaining(releaseUrl), findsOneWidget);
+      expect(find.text(ptL10n.configAutoUpdateReleaseNotesLink), findsOneWidget);
+    });
+
+    testWidgets('release notes hyperlink launches external URL', (tester) async {
+      const releaseUrl = 'https://example.com/releases/v1.7.0';
+      final defaultLaunchCallback = ExternalUrlLauncher.launchCallback;
+      String? launchedUrl;
+      addTearDown(() {
+        ExternalUrlLauncher.launchCallback = defaultLaunchCallback;
+      });
+      ExternalUrlLauncher.launchCallback = (url) async {
+        launchedUrl = url;
+        return true;
+      };
+
+      await pumpSection(
+        tester,
+        releaseNotesUrl: releaseUrl,
+      );
+
+      await tester.tap(find.text(ptL10n.configAutoUpdateReleaseNotesHeader));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(ptL10n.configAutoUpdateReleaseNotesLink));
+      await tester.pumpAndSettle();
+
+      expect(launchedUrl, releaseUrl);
     });
   });
 }

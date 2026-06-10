@@ -1,4 +1,5 @@
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
+import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/support/support_diagnostics_section.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -349,7 +350,10 @@ class UpdateSupportDiagnosticsBuilder {
     required bool automaticSilentUpdatesEnabled,
     required String Function(DateTime dateTime) formatCheckedAt,
   }) {
-    final isManualOnlyMode = !updateNotificationsEnabled && !automaticSilentUpdatesEnabled;
+    final isManualOnlyMode = AppPreferencesPolicy.isManualOnlyUpdateMode(
+      updateNotificationsEnabled: updateNotificationsEnabled,
+      automaticSilentUpdatesEnabled: automaticSilentUpdatesEnabled,
+    );
     if (isManualOnlyMode || diagnostics == null) {
       return '${l10n.configLastAutomaticUpdatePrefix}${l10n.configLastUpdateNever}';
     }
@@ -375,7 +379,10 @@ class UpdateSupportDiagnosticsBuilder {
     required bool automaticSilentUpdatesEnabled,
     required String Function(DateTime dateTime) formatCheckedAt,
   }) {
-    final isManualOnlyMode = !updateNotificationsEnabled && !automaticSilentUpdatesEnabled;
+    final isManualOnlyMode = AppPreferencesPolicy.isManualOnlyUpdateMode(
+      updateNotificationsEnabled: updateNotificationsEnabled,
+      automaticSilentUpdatesEnabled: automaticSilentUpdatesEnabled,
+    );
     if (isManualOnlyMode || diagnostics == null) {
       return '';
     }

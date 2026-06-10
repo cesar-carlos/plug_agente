@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/core/utils/external_url_launcher.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/models/update_check_inline_notice.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/update_check_inline_notice_bar.dart';
@@ -64,7 +68,10 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   final String? releaseNotesUrl;
   final UpdateCheckInlineNotice? updateCheckNotice;
 
-  bool get _isManualOnlyMode => !updateNotificationsEnabled && !automaticSilentUpdatesEnabled;
+  bool get _isManualOnlyMode => AppPreferencesPolicy.isManualOnlyUpdateMode(
+    updateNotificationsEnabled: updateNotificationsEnabled,
+    automaticSilentUpdatesEnabled: automaticSilentUpdatesEnabled,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -280,16 +287,21 @@ class _ReleaseNotesExpander extends StatelessWidget {
             ),
           if (trimmedNotes.isNotEmpty && trimmedUrl.isNotEmpty) const SizedBox(height: AppSpacing.sm),
           if (trimmedUrl.isNotEmpty)
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            Wrap(
+              key: const ValueKey('updates_release_notes_link'),
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
               children: [
-                Text('$linkLabel: ', style: context.captionText),
-                Flexible(
-                  child: SelectableText(
-                    trimmedUrl,
-                    key: const ValueKey('updates_release_notes_link'),
-                    style: context.captionText,
-                  ),
+                SelectableText(
+                  trimmedUrl,
+                  style: context.captionText.copyWith(fontWeight: FontWeight.w600),
+                ),
+                HyperlinkButton(
+                  onPressed: () {
+                    unawaited(ExternalUrlLauncher.launch(trimmedUrl));
+                  },
+                  child: Text(linkLabel),
                 ),
               ],
             ),

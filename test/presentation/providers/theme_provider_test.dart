@@ -2,10 +2,22 @@ import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/repositories/app_preferences_repository.dart';
+import 'package:plug_agente/application/repositories/i_app_preferences_repository.dart';
+import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/infrastructure/repositories/startup_preferences_repository.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
+
+IAppPreferencesRepository createThemePreferences(IAppSettingsStore store) {
+  return AppPreferencesRepository(
+    settingsStore: store,
+    startup: StartupPreferencesRepository(store),
+    updates: UpdatePreferencesRepository(settingsStore: store),
+  );
+}
 
 class _ThrowingOnBoolSettingsStore extends InMemoryAppSettingsStore {
   @override
@@ -17,7 +29,7 @@ class _ThrowingOnBoolSettingsStore extends InMemoryAppSettingsStore {
 void main() {
   group('ThemeProvider', () {
     test('defaults to dark mode when no preference is stored', () {
-      final provider = ThemeProvider(InMemoryAppSettingsStore());
+      final provider = ThemeProvider(createThemePreferences(InMemoryAppSettingsStore()));
 
       expect(provider.isDarkMode, isTrue);
       expect(provider.themeMode, ThemeMode.dark);
@@ -26,9 +38,11 @@ void main() {
 
     test('reads the persisted preference on construction', () {
       final provider = ThemeProvider(
-        InMemoryAppSettingsStore(<String, Object>{
-          AppSettingsKeys.isDarkModeEnabled: false,
-        }),
+        createThemePreferences(
+          InMemoryAppSettingsStore(<String, Object>{
+            AppSettingsKeys.isDarkModeEnabled: false,
+          }),
+        ),
       );
 
       expect(provider.isDarkMode, isFalse);
@@ -37,7 +51,7 @@ void main() {
 
     test('persists and notifies on a successful change', () async {
       final store = InMemoryAppSettingsStore();
-      final provider = ThemeProvider(store);
+      final provider = ThemeProvider(createThemePreferences(store));
       var notifications = 0;
       provider.addListener(() => notifications++);
 
@@ -50,7 +64,7 @@ void main() {
     });
 
     test('is a no-op when the value does not change', () async {
-      final provider = ThemeProvider(InMemoryAppSettingsStore());
+      final provider = ThemeProvider(createThemePreferences(InMemoryAppSettingsStore()));
       var notifications = 0;
       provider.addListener(() => notifications++);
 
@@ -61,7 +75,7 @@ void main() {
     });
 
     test('keeps the previous value and exposes a typed error on persistence failure', () async {
-      final provider = ThemeProvider(_ThrowingOnBoolSettingsStore());
+      final provider = ThemeProvider(createThemePreferences(_ThrowingOnBoolSettingsStore()));
       var notifications = 0;
       provider.addListener(() => notifications++);
 
@@ -77,7 +91,7 @@ void main() {
     });
 
     test('clearPersistenceError resets the error and notifies', () async {
-      final provider = ThemeProvider(_ThrowingOnBoolSettingsStore());
+      final provider = ThemeProvider(createThemePreferences(_ThrowingOnBoolSettingsStore()));
       await provider.setIsDarkMode(false);
       expect(provider.persistenceError, isNotNull);
 

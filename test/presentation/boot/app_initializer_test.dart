@@ -251,6 +251,32 @@ void main() {
     expect(initializerSource.contains('prepareElevatedActionRunner'), isFalse);
     expect(initializerSource.contains('_refreshElevatedActionRunnerReadiness'), isTrue);
   });
+
+  test('bootstrap source starts automatic update checks only in deferred phases', () {
+    final initializerSource = File(
+      p.join('lib', 'presentation', 'boot', 'app_initializer.dart'),
+    ).readAsStringSync();
+
+    expect(initializerSource.contains('_startAutomaticUpdateChecks'), isTrue);
+    expect(
+      RegExp(
+        r'Future<void> _runDeferredBootstrapPhases\(\)[\s\S]*_startAutomaticUpdateChecks',
+      ).hasMatch(initializerSource),
+      isTrue,
+    );
+
+    final desktopFeaturesStart = initializerSource.indexOf('Future<void> _initializeDesktopFeatures');
+    final nextMethodAfterDesktop = initializerSource.indexOf(
+      'Future<void> _',
+      desktopFeaturesStart + 'Future<void> _initializeDesktopFeatures'.length,
+    );
+    final desktopFeaturesBody = initializerSource.substring(
+      desktopFeaturesStart,
+      nextMethodAfterDesktop,
+    );
+    expect(desktopFeaturesBody.contains('_startAutomaticUpdateChecks'), isFalse);
+    expect(desktopFeaturesBody.contains('startAutomaticChecks'), isFalse);
+  });
 }
 
 class _FakeWindowsRuntimeProbe implements IWindowsRuntimeProbe {

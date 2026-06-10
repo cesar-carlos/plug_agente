@@ -1,31 +1,29 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
-import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/settings/auto_update_settings_keys.dart';
 
 /// Default key used to persist the silent update pending record inside
 /// the global settings store. Kept stable so records written by previous
 /// versions of the agent are still recoverable.
-const String pendingSilentUpdateSettingsKey = 'auto_update.pending_silent_update';
+const String pendingSilentUpdateSettingsKey = AutoUpdateSettingsKeys.pendingSilentUpdate;
 
-/// Pure-Dart store that reads/writes the pending record as JSON inside
-/// [IAppSettingsStore]. Lives in the application layer because it has no
-/// `dart:io` dependency — the settings store itself owns the file IO.
+/// Pure-Dart store that reads/writes the pending record as JSON through
+/// [IUpdatePreferencesRepository]. Lives in the application layer because it
+/// has no `dart:io` dependency — the repository delegates to settings IO.
 class SettingsBackedPendingSilentUpdateStore implements IPendingSilentUpdateStore {
   SettingsBackedPendingSilentUpdateStore({
-    required IAppSettingsStore settingsStore,
-    String storageKey = pendingSilentUpdateSettingsKey,
-  }) : _settingsStore = settingsStore,
-       _storageKey = storageKey;
+    required IUpdatePreferencesRepository preferences,
+  }) : _preferences = preferences;
 
-  final IAppSettingsStore _settingsStore;
-  final String _storageKey;
+  final IUpdatePreferencesRepository _preferences;
 
   @override
   Future<PendingSilentUpdate?> read() async {
-    final raw = _settingsStore.getString(_storageKey);
+    final raw = _preferences.readPendingSilentUpdateJson();
     if (raw == null || raw.isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -46,11 +44,11 @@ class SettingsBackedPendingSilentUpdateStore implements IPendingSilentUpdateStor
 
   @override
   Future<void> write(PendingSilentUpdate pending) {
-    return _settingsStore.setString(_storageKey, jsonEncode(pending.toJson()));
+    return _preferences.writePendingSilentUpdateJson(jsonEncode(pending.toJson()));
   }
 
   @override
-  Future<void> clear() => _settingsStore.remove(_storageKey);
+  Future<void> clear() => _preferences.clearPendingSilentUpdateJson();
 }
 
 /// In-memory implementation used by tests and fallback when no settings

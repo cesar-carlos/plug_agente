@@ -6,6 +6,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
+import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
+import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
@@ -16,89 +18,17 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
-// Minimal fakes reused from orchestrator tests.
-class _FakeProbe implements IAppcastProbeService {
-  AppcastProbeResult result = const AppcastProbeResult(
-    requestUrl: 'https://example.com/appcast.xml',
-    latestVersion: '99.0.0+1',
-    assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
-    assetSize: 5,
-    assetName: 'PlugAgente-Setup-99.0.0.exe',
-    sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
-    itemCount: 1,
-  );
-  int callCount = 0;
-
-  @override
-  Future<AppcastProbeResult> probeLatest({
-    required String feedUrl,
-    Duration timeout = const Duration(seconds: 10),
-  }) async {
-    callCount++;
-    return AppcastProbeResult(
-      requestUrl: feedUrl,
-      latestVersion: result.latestVersion,
-      assetUrl: result.assetUrl,
-      assetSize: result.assetSize,
-      assetName: result.assetName,
-      sha256: result.sha256,
-      os: result.os,
-      channel: result.channel,
-      rolloutPercentage: result.rolloutPercentage,
-      itemCount: result.itemCount,
-      errorMessage: result.errorMessage,
-    );
-  }
-}
-
-class _FakeInstaller implements ISilentUpdateInstaller {
-  SilentUpdateInstallRequest? request;
-  Result<SilentUpdateInstallResult> result = const Success(
-    SilentUpdateInstallResult(
-      installerPath: r'C:\App\updates\PlugAgente-Setup-99.0.0.exe',
-      logPath: r'C:\App\updates\PlugAgente-Update-99.0.0+1.log',
-      launcherPath: r'C:\App\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
-      launcherStatusPath: r'C:\App\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
-      installDirectory: r'C:\App',
-      strategy: SilentUpdateInstallStrategy.currentUserThenElevated,
-      installDirectoryWritable: true,
-      appPid: 9876,
-      updateDirectorySecurityStatus: 'restricted',
-    ),
-  );
-  int installCount = 0;
-  int cleanupCount = 0;
-  int launchHelperCount = 0;
-  SilentUpdateLaunchRequest? lastLaunchRequest;
-  Result<void> launchResult = const Success(unit);
-
-  @override
-  Future<Result<SilentUpdateInstallResult>> install(SilentUpdateInstallRequest request) async {
-    installCount++;
-    this.request = request;
-    return result;
-  }
-
-  @override
-  Future<Result<void>> launchPreparedHelper(SilentUpdateLaunchRequest request) async {
-    launchHelperCount++;
-    lastLaunchRequest = request;
-    return launchResult;
-  }
-
-  @override
-  Future<Result<void>> cleanupObsoleteArtifacts() async {
-    cleanupCount++;
-    return const Success(unit);
-  }
-}
+import '../../helpers/auto_update_test_fakes.dart';
 
 SilentUpdateCoordinator _makeCoordinator({
   InMemoryAppSettingsStore? store,
-  _FakeProbe? probe,
-  _FakeInstaller? installer,
+  FakeAppcastProbeService? probe,
+  FakeSilentUpdateInstaller? installer,
   CloseApplicationForSilentUpdate? closeApp,
   IUacDetector? uacDetector,
+  ISilentUpdateLauncherStatusReader? launcherStatusReader,
+  DateTime Function()? clock,
+  Duration helperWaitDuration = const Duration(minutes: 30),
 }) {
   final settings = store ?? InMemoryAppSettingsStore();
   dotenv.clean();
@@ -113,12 +43,74 @@ SilentUpdateCoordinator _makeCoordinator({
       const url = 'https://example.com/appcast.xml';
       return url;
     },
-    appcastProbeService: probe ?? _FakeProbe(),
-    silentUpdateInstaller: installer ?? _FakeInstaller(),
+    appcastProbeService: probe ?? FakeAppcastProbeService(),
+    silentUpdateInstaller: installer ?? FakeSilentUpdateInstaller(),
     settingsStore: settings,
     closeApplicationForSilentUpdate: closeApp,
     uacDetector: uacDetector,
+    launcherStatusReader: launcherStatusReader,
+    clock: clock,
+    helperWaitDuration: helperWaitDuration,
   );
+}
+
+Map<String, Object?> _downloadedPendingJson({
+  required String version,
+  required DateTime startedAt,
+}) {
+  return <String, Object?>{
+    'version': version,
+    'startedAt': startedAt.toIso8601String(),
+    'installerPath': r'C:\App\updates\PlugAgente-Setup-99.0.0.exe',
+    'launcherPath': r'C:\App\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+    'launcherStatusPath': r'C:\App\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+    'logPath': r'C:\App\updates\PlugAgente-Update-99.0.0+1.log',
+    'installDirectory': r'C:\App',
+    'strategy': 'currentUserThenElevated',
+    'appPid': 9999,
+    'updateDirectorySecurityStatus': 'restricted',
+  };
+}
+
+SilentUpdateLauncherStatus _launcherStatus({
+  required String state,
+  required DateTime lastUpdatedAt,
+  String? errorMessage,
+}) {
+  return SilentUpdateLauncherStatus(
+    state: state,
+    strategy: 'currentUserThenElevated',
+    installDirectory: r'C:\App',
+    installerPath: r'C:\App\updates\PlugAgente-Setup-99.0.0.exe',
+    logPath: r'C:\App\updates\PlugAgente-Update-99.0.0+1.log',
+    nonAdminExitCode: null,
+    nonAdminDurationMs: null,
+    elevatedExitCode: null,
+    elevatedDurationMs: null,
+    elevatedRetryStarted: null,
+    waitForAppExitDurationMs: null,
+    appPid: 9999,
+    signatureStatus: null,
+    signatureRequired: null,
+    actualSha256: null,
+    hashValidationStatus: null,
+    installDirectoryWritable: true,
+    elevatedCancelled: null,
+    errorMessage: errorMessage,
+    lastUpdatedAt: lastUpdatedAt,
+  );
+}
+
+class _FakeLauncherStatusReader implements ISilentUpdateLauncherStatusReader {
+  _FakeLauncherStatusReader({this.status});
+
+  final SilentUpdateLauncherStatus? status;
+
+  @override
+  Future<bool> fileExists(String? path) async => path != null && path.isNotEmpty;
+
+  @override
+  Future<SilentUpdateLauncherStatus?> read(String? statusPath) async => status;
 }
 
 class _StubUacDetector implements IUacDetector {
@@ -158,7 +150,7 @@ void main() {
       test('returns false without calling installer when silent updates are disabled', () async {
         final store = InMemoryAppSettingsStore();
         await store.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
-        final installer = _FakeInstaller();
+        final installer = FakeSilentUpdateInstaller();
         final coordinator = _makeCoordinator(store: store, installer: installer);
 
         final result = await coordinator.checkSilently();
@@ -178,7 +170,7 @@ void main() {
       test(
         'stages installer without closing app when newer version is found',
         () async {
-          final installer = _FakeInstaller();
+          final installer = FakeSilentUpdateInstaller();
           var closeCalled = false;
           final coordinator = _makeCoordinator(
             installer: installer,
@@ -224,7 +216,7 @@ void main() {
       test(
         'applyPendingDownloadedUpdate launches helper and invokes close',
         () async {
-          final installer = _FakeInstaller();
+          final installer = FakeSilentUpdateInstaller();
           var closeCalled = false;
           String? capturedTitle;
           String? capturedBody;
@@ -267,7 +259,7 @@ void main() {
       test(
         'applyPendingDownloadedUpdate with triggerAppClose=false skips close',
         () async {
-          final installer = _FakeInstaller();
+          final installer = FakeSilentUpdateInstaller();
           var closeCalled = false;
           final coordinator = _makeCoordinator(
             installer: installer,
@@ -303,7 +295,7 @@ void main() {
       test(
         'applyPendingDownloadedUpdate is idempotent: a second call does not relaunch the helper',
         () async {
-          final installer = _FakeInstaller();
+          final installer = FakeSilentUpdateInstaller();
           var closeCount = 0;
           final coordinator = _makeCoordinator(
             installer: installer,
@@ -336,7 +328,7 @@ void main() {
       );
 
       test('returns false when probe reports no newer version', () async {
-        final probe = _FakeProbe()
+        final probe = FakeAppcastProbeService()
           ..result = const AppcastProbeResult(
             requestUrl: 'https://example.com/appcast.xml',
             latestVersion: '0.0.1+1',
@@ -346,7 +338,7 @@ void main() {
             sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
             itemCount: 1,
           );
-        final installer = _FakeInstaller();
+        final installer = FakeSilentUpdateInstaller();
         final coordinator = _makeCoordinator(probe: probe, installer: installer);
 
         final result = await coordinator.checkSilently();
@@ -360,7 +352,7 @@ void main() {
       });
 
       test('records probe error and increments failure count', () async {
-        final probe = _FakeProbe()
+        final probe = FakeAppcastProbeService()
           ..result = const AppcastProbeResult(
             requestUrl: 'https://example.com/appcast.xml',
             errorMessage: 'HTTP 503',
@@ -378,7 +370,7 @@ void main() {
       });
 
       test('pauses after reaching failure cooldown threshold', () async {
-        final probe = _FakeProbe()
+        final probe = FakeAppcastProbeService()
           ..result = const AppcastProbeResult(
             requestUrl: 'https://example.com/appcast.xml',
             errorMessage: 'network error',
@@ -388,7 +380,7 @@ void main() {
           RuntimeCapabilities.full(),
           () => 'https://example.com/appcast.xml',
           appcastProbeService: probe,
-          silentUpdateInstaller: _FakeInstaller(),
+          silentUpdateInstaller: FakeSilentUpdateInstaller(),
           settingsStore: store,
           automaticFailureCooldownThreshold: 2,
           automaticFailureCooldown: const Duration(hours: 1),
@@ -411,7 +403,7 @@ void main() {
 
       test('rollout bucket is consistent within a single check', () async {
         final store = InMemoryAppSettingsStore();
-        final probe = _FakeProbe()
+        final probe = FakeAppcastProbeService()
           ..result = const AppcastProbeResult(
             requestUrl: 'https://example.com/appcast.xml',
             latestVersion: '99.0.0+1',
@@ -435,13 +427,13 @@ void main() {
         final store = InMemoryAppSettingsStore();
         var closeCalled = false;
         late SilentUpdateCoordinator coordinator;
-        final installer = _FakeInstaller()..installCount = 0;
+        final installer = FakeSilentUpdateInstaller()..installCount = 0;
 
         // Coordinator reference needed inside onBeforeReturn — build it before using it.
         coordinator = SilentUpdateCoordinator(
           RuntimeCapabilities.full(),
           () => 'https://example.com/appcast.xml',
-          appcastProbeService: _FakeProbe(),
+          appcastProbeService: FakeAppcastProbeService(),
           silentUpdateInstaller: _InstallerWithHook(
             delegate: installer,
             beforeReturn: () async {
@@ -469,8 +461,42 @@ void main() {
         );
       });
 
+      test('returns skippedByQuietHours during configured quiet window without probing', () async {
+        dotenv.clean();
+        dotenv.loadFromString(
+          envString:
+              'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
+              'AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600\n'
+              'AUTO_UPDATE_QUIET_HOURS_START=22:00\n'
+              'AUTO_UPDATE_QUIET_HOURS_END=06:00',
+        );
+        final probe = FakeAppcastProbeService();
+        final coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: probe,
+          silentUpdateInstaller: FakeSilentUpdateInstaller(),
+          settingsStore: InMemoryAppSettingsStore(),
+          clock: () => DateTime(2026, 6, 10, 3, 30),
+        );
+
+        final result = await coordinator.checkSilently();
+
+        expect(probe.callCount, 0);
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.skippedByQuietHours),
+          (_) => fail('Expected success'),
+        );
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticQuietHours,
+        );
+        expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isFalse);
+      });
+
       test('blocks automatic download when UAC detector requires user consent', () async {
-        final installer = _FakeInstaller();
+        final installer = FakeSilentUpdateInstaller();
         final uacDetector = _StubUacDetector(requiresConsent: true);
         final coordinator = _makeCoordinator(
           installer: installer,
@@ -496,7 +522,7 @@ void main() {
       });
 
       test('userInitiated bypasses UAC gate and runs full download', () async {
-        final installer = _FakeInstaller();
+        final installer = FakeSilentUpdateInstaller();
         final uacDetector = _StubUacDetector(requiresConsent: true);
         final coordinator = _makeCoordinator(
           installer: installer,
@@ -518,7 +544,7 @@ void main() {
       });
 
       test('automatic download proceeds when UAC detector reports no consent needed', () async {
-        final installer = _FakeInstaller();
+        final installer = FakeSilentUpdateInstaller();
         final uacDetector = _StubUacDetector(requiresConsent: false);
         final coordinator = _makeCoordinator(
           installer: installer,
@@ -536,7 +562,7 @@ void main() {
       });
 
       test('isSilentCheckInProgress is true during check and false after', () async {
-        final probe = _FakeProbe();
+        final probe = FakeAppcastProbeService();
         var wasInProgressDuringProbe = false;
         final capturingProbe = _CapturingProbe(
           delegate: probe,
@@ -549,7 +575,7 @@ void main() {
           RuntimeCapabilities.full(),
           () => 'https://example.com/appcast.xml',
           appcastProbeService: capturingProbe..setCoordinator(() => coordinator),
-          silentUpdateInstaller: _FakeInstaller(),
+          silentUpdateInstaller: FakeSilentUpdateInstaller(),
           settingsStore: InMemoryAppSettingsStore(),
         );
 
@@ -569,7 +595,7 @@ void main() {
         coordinator = SilentUpdateCoordinator(
           RuntimeCapabilities.full(),
           () => 'https://example.com/appcast.xml',
-          appcastProbeService: _FakeProbe(),
+          appcastProbeService: FakeAppcastProbeService(),
           silentUpdateInstaller: cancellableInstaller,
           settingsStore: store,
           closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
@@ -645,6 +671,105 @@ void main() {
         expect(store.getString('auto_update.pending_silent_update'), isNull);
       });
 
+      test('keeps pending and records automaticInstallStarted when installer is still running', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final startedAt = now.subtract(const Duration(minutes: 5));
+     await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
+        );
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(
+            status: _launcherStatus(state: 'started', lastUpdatedAt: startedAt),
+          ),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(
+          store.getString('auto_update.pending_silent_update'),
+          isNotNull,
+          reason: 'in-flight installer must remain pending until it finishes',
+        );
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallStarted,
+        );
+        expect(
+          coordinator.lastAutomaticDiagnostics?.errorMessage,
+          'Silent update installer is still running',
+        );
+        expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isTrue);
+        expect(store.getInt('auto_update.automatic_failure_count'), isNull);
+      });
+
+      test('clears pending and records automaticPendingCompleted when app version caught up', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final startedAt = now.subtract(const Duration(hours: 2));
+     await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '1.8.4+1', startedAt: startedAt)),
+        );
+        await store.setInt('auto_update.automatic_failure_count', 2);
+
+        final coordinator = _makeCoordinator(store: store, clock: () => now);
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNull);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticPendingCompleted,
+        );
+        expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isFalse);
+        expect(
+          store.getInt('auto_update.automatic_failure_count'),
+          isNull,
+          reason: 'successful reconciliation must reset the automatic failure breaker',
+        );
+      });
+
+      test('clears failed pending install and increments automatic failure count', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final startedAt = now.subtract(const Duration(minutes: 5));
+     await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
+        );
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(
+            status: _launcherStatus(
+              state: 'failed',
+              lastUpdatedAt: startedAt,
+              errorMessage: 'Installer exited with code 1',
+            ),
+          ),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNull);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticPendingFailed,
+        );
+        expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isTrue);
+        expect(coordinator.lastAutomaticDiagnostics?.automaticFailureCount, 1);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.errorMessage,
+          'Installer exited with code 1',
+        );
+      });
+
       test('clears stale pending with null paths from a pre-download crash', () async {
         // Reproduces the window where the coordinator persisted the pending
         // record (before install) and the process crashed before paths were
@@ -691,12 +816,12 @@ void main() {
       // slow CI runners.
       test('bootJitterProvider defers the immediate boot check', () {
         FakeAsync().run((async) {
-          final probe = _FakeProbe();
+          final probe = FakeAppcastProbeService();
           final coordinator = SilentUpdateCoordinator(
             RuntimeCapabilities.full(),
             () => 'https://example.com/appcast.xml',
             appcastProbeService: probe,
-            silentUpdateInstaller: _FakeInstaller(),
+            silentUpdateInstaller: FakeSilentUpdateInstaller(),
             settingsStore: InMemoryAppSettingsStore(),
             bootJitterProvider: () => const Duration(seconds: 30),
           );
@@ -716,12 +841,12 @@ void main() {
 
       test('null jitter provider preserves immediate boot check (backward compat)', () {
         FakeAsync().run((async) {
-          final probe = _FakeProbe();
+          final probe = FakeAppcastProbeService();
           final coordinator = SilentUpdateCoordinator(
             RuntimeCapabilities.full(),
             () => 'https://example.com/appcast.xml',
             appcastProbeService: probe,
-            silentUpdateInstaller: _FakeInstaller(),
+            silentUpdateInstaller: FakeSilentUpdateInstaller(),
             settingsStore: InMemoryAppSettingsStore(),
           );
 
@@ -737,12 +862,12 @@ void main() {
 
       test('zero jitter behaves like no jitter (runs immediately)', () {
         FakeAsync().run((async) {
-          final probe = _FakeProbe();
+          final probe = FakeAppcastProbeService();
           final coordinator = SilentUpdateCoordinator(
             RuntimeCapabilities.full(),
             () => 'https://example.com/appcast.xml',
             appcastProbeService: probe,
-            silentUpdateInstaller: _FakeInstaller(),
+            silentUpdateInstaller: FakeSilentUpdateInstaller(),
             settingsStore: InMemoryAppSettingsStore(),
             bootJitterProvider: () => Duration.zero,
           );
@@ -759,7 +884,7 @@ void main() {
 
     group('stop / scheduleAndStart', () {
       test('stop cancels the periodic timer (no further checks after stop)', () async {
-        final probe = _FakeProbe();
+        final probe = FakeAppcastProbeService();
         final coordinator = _makeCoordinator(probe: probe);
 
         coordinator.scheduleAndStart();

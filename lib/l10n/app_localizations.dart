@@ -5681,7 +5681,7 @@ abstract class AppLocalizations {
   /// No description provided for @configUpdateNotificationsDescription.
   ///
   /// In en, this message translates to:
-  /// **'Shows in-app notices and checks for updates in the background when automatic installation is off. With automatic installation off and this option on, the app may still check for updates without installing. Manual check remains available.'**
+  /// **'Shows in-app banners and background update checks. Turning this off hides those notices and stops background checks, but does not stop automatic silent installation when that option is on. Manual check remains available.'**
   String get configUpdateNotificationsDescription;
 
   /// No description provided for @configUpdateNotificationsEnabled.
@@ -6482,6 +6482,18 @@ abstract class AppLocalizations {
   /// **'Update diagnostics copied.'**
   String get configUpdateDiagnosticsCopied;
 
+  /// No description provided for @configStartupDiagnosticsCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup diagnostic copied.'**
+  String get configStartupDiagnosticsCopied;
+
+  /// No description provided for @configStartupDiagnosticsCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to copy startup diagnostic.'**
+  String get configStartupDiagnosticsCopyFailed;
+
   /// No description provided for @gsSectionAppearance.
   ///
   /// In en, this message translates to:
@@ -6515,7 +6527,7 @@ abstract class AppLocalizations {
   /// No description provided for @gsToggleStartMinimizedNextLaunchHint.
   ///
   /// In en, this message translates to:
-  /// **'Applies on the next Windows startup.'**
+  /// **'Applies when Windows starts the app automatically (not when opened manually).'**
   String get gsToggleStartMinimizedNextLaunchHint;
 
   /// No description provided for @gsToggleStartMinimizedRequiresTray.

@@ -3,6 +3,8 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/services/silent_update_failure.dart';
@@ -14,6 +16,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 import 'package:win32/win32.dart' as win32;
 
+typedef DioFactoryFn = Dio Function();
 typedef HttpClientFactory = HttpClient Function();
 typedef SilentUpdateProcessStarter =
     Future<Process> Function(
@@ -28,9 +31,11 @@ typedef CurrentProcessIdResolver = int Function();
 typedef UpdateDirectorySecurityHardener = Future<String> Function(String updateDirectory);
 typedef DiskFreeSpaceResolver = Future<int?> Function(String directoryPath);
 
-class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
-  HttpSilentUpdateInstaller({
-    HttpClientFactory? httpClientFactory,
+/// Silent update installer that downloads assets via [Dio] per project stack rules.
+class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
+  DioSilentUpdateInstaller({
+    DioFactoryFn? dioFactory,
+    @Deprecated('Use dioFactory instead') HttpClientFactory? httpClientFactory,
     SilentUpdateProcessStarter? processStarter,
     Future<String> Function()? downloadDirectoryResolver,
     InstallDirectoryResolver? installDirectoryResolver,
@@ -41,7 +46,22 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     IHelperSignatureProbe? helperSignatureProbe,
     DiskFreeSpaceResolver? diskFreeSpaceResolver,
     Duration downloadTimeout = _defaultDownloadTimeout,
-  }) : _httpClientFactory = httpClientFactory ?? HttpClient.new,
+  }) : _dioFactory =
+           dioFactory ??
+           (httpClientFactory != null
+               ? () {
+                   final dio = Dio(
+                     BaseOptions(
+                       receiveTimeout: downloadTimeout,
+                       sendTimeout: downloadTimeout,
+                     ),
+                   );
+                   dio.httpClientAdapter = IOHttpClientAdapter(
+                     createHttpClient: httpClientFactory,
+                   );
+                   return dio;
+                 }
+               : () => _createPlainDio(downloadTimeout)),
        _processStarter = processStarter ?? Process.start,
        _downloadDirectoryResolver = downloadDirectoryResolver ?? _resolveDefaultDownloadDirectory,
        _installDirectoryResolver = installDirectoryResolver ?? _resolveDefaultInstallDirectory,
@@ -53,7 +73,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
        _diskFreeSpaceResolver = diskFreeSpaceResolver ?? _resolveDefaultDiskFreeSpace,
        _downloadTimeout = downloadTimeout;
 
-  final HttpClientFactory _httpClientFactory;
+  final DioFactoryFn _dioFactory;
   final SilentUpdateProcessStarter _processStarter;
   final Future<String> Function() _downloadDirectoryResolver;
   final InstallDirectoryResolver _installDirectoryResolver;
@@ -77,6 +97,20 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
   static const Duration _defaultDownloadTimeout = Duration(minutes: 5);
   static const Duration _icaclsTimeout = Duration(seconds: 30);
   static const Duration _cancelPollInterval = Duration(milliseconds: 100);
+
+  static Dio _createPlainDio(Duration timeout) {
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: timeout,
+        receiveTimeout: timeout,
+        sendTimeout: timeout,
+      ),
+    );
+    dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () => HttpClient()..autoUncompress = true,
+    );
+    return dio;
+  }
 
   @override
   Future<Result<SilentUpdateInstallResult>> install(
@@ -496,10 +530,6 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       return _cancelledDownloadFailure(assetUri, version);
     }
 
-    // Compute the resume offset *before* opening the network connection.
-    // We delete any .part that already looks bigger than expected — the
-    // SHA validation downstream would fail anyway, and a smaller restart
-    // is cheaper than detecting a poisoned cache later.
     var startOffset = 0;
     if (resume && destination.existsSync()) {
       final existing = destination.lengthSync();
@@ -510,61 +540,70 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
       }
     }
 
-    final client = _httpClientFactory();
-    client.connectionTimeout = _downloadTimeout;
+    final dio = _dioFactory();
+    dio.options.connectTimeout = _downloadTimeout;
+    dio.options.receiveTimeout = _downloadTimeout;
+    dio.options.sendTimeout = _downloadTimeout;
     var didTimeOut = false;
     var didCancel = false;
     final timeoutTimer = Timer(_downloadTimeout, () {
       didTimeOut = true;
-      client.close(force: true);
+      didCancel = true;
+      dio.close(force: true);
     });
-    // Poll the cancel token even when the response stream is blocked waiting
-    // for more bytes. Without this, a slow server keeps `await for` parked
-    // and cancellation only triggers between chunks.
     Timer? cancelPollTimer;
     if (cancelRequested != null) {
       cancelPollTimer = Timer.periodic(_cancelPollInterval, (_) {
         if (cancelRequested.call()) {
           didCancel = true;
-          client.close(force: true);
+          dio.close(force: true);
         }
       });
     }
     try {
-      final request = await client.getUrl(assetUri).timeout(_downloadTimeout);
-      request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
+      final headers = <String, String>{'Cache-Control': 'no-cache'};
       if (startOffset > 0) {
-        // RFC 7233: open-ended range starts from the offset; server responds
-        // 206 + Content-Range. A server that ignores Range either returns
-        // 200 (full body) — handled below by restarting from zero — or
-        // breaks contract (rare). We do not request a specific upper bound
-        // to leave the server free to send the rest in one stream.
-        request.headers.set(HttpHeaders.rangeHeader, 'bytes=$startOffset-');
+        headers['Range'] = 'bytes=$startOffset-';
       }
-      final response = await request.close().timeout(_downloadTimeout);
+      final response = await dio
+          .get<ResponseBody>(
+            assetUri.toString(),
+            options: Options(
+              responseType: ResponseType.stream,
+              connectTimeout: _downloadTimeout,
+              receiveTimeout: _downloadTimeout,
+              sendTimeout: _downloadTimeout,
+              headers: headers,
+            ),
+          )
+          .timeout(
+            _downloadTimeout,
+            onTimeout: () {
+              didTimeOut = true;
+              dio.close(force: true);
+              throw TimeoutException('Silent update asset download timed out', _downloadTimeout);
+            },
+          );
       if (cancelRequested?.call() ?? false) {
         didCancel = true;
-        client.close(force: true);
         return _cancelledDownloadFailure(assetUri, version);
       }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
+      final statusCode = response.statusCode ?? 0;
+      if (statusCode < 200 || statusCode >= 300) {
         return Failure(
           domain.NetworkFailure.withContext(
             message: 'Silent update asset download failed',
             context: <String, dynamic>{
               'operation': 'silentUpdateDownload',
-              'status_code': response.statusCode,
+              'status_code': statusCode,
               'asset_url': assetUri.toString(),
             },
           ),
         );
       }
 
-      // If we asked for Range and server ignored it (200 + full body),
-      // start from zero by truncating the .part. Without this, the cached
-      // bytes would prepend the freshly-streamed full file.
       var effectiveStartOffset = startOffset;
-      final acceptedResume = response.statusCode == 206;
+      final acceptedResume = statusCode == 206;
       if (startOffset > 0 && !acceptedResume) {
         effectiveStartOffset = 0;
         if (destination.existsSync()) {
@@ -572,10 +611,9 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         }
       }
 
-      // For partial responses, content-length is the remainder; total must
-      // not exceed the expected size when added to the offset.
-      final reported = response.contentLength;
-      if (reported > 0 && effectiveStartOffset + reported > expectedSize) {
+      final reported = response.headers.value(HttpHeaders.contentLengthHeader);
+      final reportedLength = reported == null ? -1 : int.tryParse(reported) ?? -1;
+      if (reportedLength > 0 && effectiveStartOffset + reportedLength > expectedSize) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Silent update asset download exceeded appcast length',
@@ -583,7 +621,7 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
               'operation': 'silentUpdateDownload',
               'version': version,
               'expected_size': expectedSize,
-              'content_length': reported,
+              'content_length': reportedLength,
               'start_offset': effectiveStartOffset,
               'asset_url': assetUri.toString(),
             },
@@ -591,16 +629,25 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         );
       }
 
-      // Append when resuming (206) or truncate otherwise. `openWrite`
-      // defaults to `FileMode.write` (truncate); `append` keeps existing
-      // bytes intact.
+      final body = response.data;
+      if (body == null) {
+        return Failure(
+          domain.NetworkFailure.withContext(
+            message: 'Silent update asset download failed',
+            context: <String, dynamic>{
+              'operation': 'silentUpdateDownload',
+              'asset_url': assetUri.toString(),
+            },
+          ),
+        );
+      }
+
       final sink = effectiveStartOffset > 0 ? destination.openWrite(mode: FileMode.append) : destination.openWrite();
       try {
         var downloadedBytes = effectiveStartOffset;
-        await for (final chunk in response) {
+        await for (final chunk in body.stream) {
           if (cancelRequested?.call() ?? false) {
             didCancel = true;
-            client.close(force: true);
             break;
           }
           downloadedBytes += chunk.length;
@@ -627,16 +674,49 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
         return _cancelledDownloadFailure(assetUri, version);
       }
       return const Success(unit);
-    } on TimeoutException catch (error) {
-      didTimeOut = true;
-      client.close(force: true);
-      return _downloadTimeoutFailure(assetUri, error);
-    } on Exception catch (error) {
-      if (didCancel) {
-        return _cancelledDownloadFailure(assetUri, version);
-      }
+    } on DioException catch (error) {
       if (didTimeOut) {
         return _downloadTimeoutFailure(assetUri, error);
+      }
+      if (didCancel || (cancelRequested?.call() ?? false)) {
+        return _cancelledDownloadFailure(assetUri, version);
+      }
+      if (error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.connectionTimeout) {
+        return _downloadTimeoutFailure(assetUri, error);
+      }
+      final statusCode = error.response?.statusCode;
+      if (statusCode != null) {
+        return Failure(
+          domain.NetworkFailure.withContext(
+            message: 'Silent update asset download failed',
+            context: <String, dynamic>{
+              'operation': 'silentUpdateDownload',
+              'status_code': statusCode,
+              'asset_url': assetUri.toString(),
+            },
+          ),
+        );
+      }
+      return Failure(
+        domain.NetworkFailure.withContext(
+          message: 'Silent update asset download failed',
+          cause: error,
+          context: <String, dynamic>{
+            'operation': 'silentUpdateDownload',
+            'asset_url': assetUri.toString(),
+          },
+        ),
+      );
+    } on TimeoutException catch (error) {
+      return _downloadTimeoutFailure(assetUri, error);
+    } on Exception catch (error) {
+      if (didTimeOut) {
+        return _downloadTimeoutFailure(assetUri, error);
+      }
+      if (didCancel) {
+        return _cancelledDownloadFailure(assetUri, version);
       }
       return Failure(
         domain.NetworkFailure.withContext(
@@ -651,7 +731,6 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     } finally {
       timeoutTimer.cancel();
       cancelPollTimer?.cancel();
-      client.close(force: true);
     }
   }
 
@@ -903,3 +982,6 @@ class HttpSilentUpdateInstaller implements ISilentUpdateInstaller {
     }
   }
 }
+
+/// Backward-compatible alias kept for existing tests and imports.
+typedef HttpSilentUpdateInstaller = DioSilentUpdateInstaller;

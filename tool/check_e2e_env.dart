@@ -98,8 +98,11 @@ void main(List<String> args) {
   print(
     'API_TEST_TIMEOUT_URL: ${apiTimeoutUrl ?? "http://10.255.255.1:9999/ (default)"}',
   );
+  final apiBaseUrlOk = apiBaseUrl != null && apiBaseUrl.trim().isNotEmpty;
   if (!runLiveApi) {
     print('  -> api_test: testes serão ignorados');
+  } else if (!apiBaseUrlOk) {
+    print('  -> api_test: testes serão ignorados (defina API_TEST_BASE_URL)');
   } else {
     print('  -> api_test: será executado');
   }
