@@ -25,6 +25,9 @@ class ActionValidationFailure extends ActionFailure {
     super.timestamp,
     super.context,
   }) : super.withContext(code: code ?? 'ACTION_VALIDATION_ERROR');
+
+  @override
+  bool get isRecoverable => false;
 }
 
 class ActionQueueFailure extends ActionFailure {
@@ -49,6 +52,9 @@ class ActionAuthorizationFailure extends ActionFailure {
     super.timestamp,
     super.context,
   }) : super.withContext(code: code ?? 'ACTION_AUTHORIZATION_ERROR');
+
+  @override
+  bool get isRecoverable => false;
 }
 
 class ActionRuntimeFailure extends ActionFailure {

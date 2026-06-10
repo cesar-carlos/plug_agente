@@ -1164,7 +1164,7 @@ void main() {
     await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
-    expect(find.byKey(const ValueKey('agent_actions_developer_connection_changed_info_bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent_actions_developer_connection_changed_info_bar')), findsNothing);
     expect(find.text(ptL10n.agentActionsFormConnectionChangedTitle), findsOneWidget);
     expect(
       find.text(ptL10n.agentActionsFormConnectionChangedMessage),
@@ -1172,7 +1172,49 @@ void main() {
     );
   });
 
-  testWidgets('warns when typed developer connection id is outside loaded catalog', (
+  testWidgets('auto-loads developer connections when editing action with config path', (
+    tester,
+  ) async {
+    final harness = AgentActionsPageHarness(
+      developerConnectionGateway: MultiDeveloperData7ConnectionGateway(),
+    );
+    harness.repository.definitions['action-1'] = AgentActionDefinition(
+      id: 'action-1',
+      name: 'Transmitir Data7',
+      state: AgentActionState.active,
+      config: DeveloperActionConfig.data7Executor(
+        executorPath: const AgentActionPathReference(
+          originalPath: r'C:\Data7\bin\Executor.exe',
+        ),
+        projectPath: const AgentActionPathReference(
+          originalPath: r'C:\Data7\Transmissao\Transmissor.7Proj',
+        ),
+        data7ConfigPath: const AgentActionPathReference(
+          originalPath: r'C:\Data7\bin\Data7.Config',
+        ),
+        connectionId: '34512A51-672C-4ECE-9991-F43E175E7A8B',
+        connectionLabel: 'Estacao',
+      ),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await harness.pumpPage(tester);
+    await openSelectedActionDialog(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsFormConnectionSearch), findsOneWidget);
+    expect(formComboBox(ptL10n.agentActionsFormConnectionSelector), findsOneWidget);
+    expect(
+      tester.widget<TextBox>(agentActionFormTextBox(ptL10n.agentActionsFormConnectionId)).controller?.text,
+      '34512A51-672C-4ECE-9991-F43E175E7A8B',
+    );
+    expect(
+      tester.widget<TextBox>(agentActionFormTextBox(ptL10n.agentActionsFormConnectionLabel)).controller?.text,
+      'Estacao',
+    );
+  });
+
+  testWidgets('keeps developer connection id read-only and synced from selector', (
     tester,
   ) async {
     final harness = AgentActionsPageHarness();
@@ -1198,18 +1240,11 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
-
-    await tester.enterText(
-      agentActionFormTextBox(ptL10n.agentActionsFormConnectionId),
-      '00000000-0000-0000-0000-000000000000',
-    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('agent_actions_developer_connection_unknown_info_bar')), findsOneWidget);
-    expect(find.text(ptL10n.agentActionsFormConnectionUnknownTitle), findsOneWidget);
     expect(
-      find.text(ptL10n.agentActionsFormConnectionUnknownMessage),
-      findsOneWidget,
+      tester.widget<TextBox>(agentActionFormTextBox(ptL10n.agentActionsFormConnectionId)).readOnly,
+      isTrue,
     );
   });
 
@@ -1242,15 +1277,9 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      agentActionFormTextBox(ptL10n.agentActionsFormConnectionId),
-      '34512A51-672C-4ECE-9991-F43E175E7A8B',
-    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('agent_actions_developer_connection_missing_info_bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent_actions_developer_connection_missing_info_bar')), findsNothing);
     expect(find.text(ptL10n.agentActionsFormConnectionMissingTitle), findsOneWidget);
     expect(
       find.text(ptL10n.agentActionsFormConnectionMissingMessage),

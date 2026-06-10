@@ -31,6 +31,7 @@ class DeveloperData7ConfigLocator {
     required AgentActionPathReference configuredPath,
     required AgentActionPathPolicy pathPolicy,
     required String phase,
+    bool enforceWorkingDirectoryAllowlist = true,
   }) async {
     final configuredDisplayPath = configuredPath.displayPath.trim();
     if (configuredDisplayPath.isNotEmpty) {
@@ -40,6 +41,7 @@ class DeveloperData7ConfigLocator {
         pathPolicy: pathPolicy,
         phase: phase,
         usedDefaultLocation: false,
+        enforceWorkingDirectoryAllowlist: enforceWorkingDirectoryAllowlist,
       );
     }
 
@@ -50,6 +52,7 @@ class DeveloperData7ConfigLocator {
         pathPolicy: pathPolicy,
         phase: phase,
         usedDefaultLocation: true,
+        enforceWorkingDirectoryAllowlist: enforceWorkingDirectoryAllowlist,
       );
       if (result.isSuccess()) {
         return result;
@@ -84,6 +87,7 @@ class DeveloperData7ConfigLocator {
     required AgentActionPathPolicy pathPolicy,
     required String phase,
     required bool usedDefaultLocation,
+    required bool enforceWorkingDirectoryAllowlist,
   }) async {
     if (!_isData7ConfigFileName(candidatePath)) {
       return Failure(
@@ -107,8 +111,11 @@ class DeveloperData7ConfigLocator {
       field: 'data7ConfigPath',
       path: AgentActionPathReference(originalPath: candidatePath),
       allowedExtensions: const {'.config'},
-      allowedDirectories: pathPolicy.allowedWorkingDirectories,
+      allowedDirectories: enforceWorkingDirectoryAllowlist
+          ? pathPolicy.allowedWorkingDirectories
+          : const <String>{},
       phase: phase,
+      enforceWorkingDirectoryAllowlist: enforceWorkingDirectoryAllowlist,
       invalidPathReason: AgentActionDeveloperData7Constants.developerData7ConfigInvalidPathReason,
       notFoundReason: AgentActionDeveloperData7Constants.developerData7ConfigNotFoundReason,
       extensionNotAllowedReason: AgentActionDeveloperData7Constants.developerData7ConfigExtensionNotAllowedReason,

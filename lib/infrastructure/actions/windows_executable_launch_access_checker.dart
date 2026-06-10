@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:plug_agente/core/constants/agent_action_path_context_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
+import 'package:plug_agente/core/utils/path_extension.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/windows_action_path_normalizer.dart';
 import 'package:win32/win32.dart';
@@ -26,8 +27,6 @@ abstract final class WindowsExecutableLaunchAccessChecker {
     return shouldValidateLaunchAccess(phase: phase, extension: extensionOf(path));
   }
 
-  static String? extensionOf(String path) => _extensionOf(path);
-
   static bool extensionRequiresLaunchAccess(String? extension) {
     if (extension == null || extension.isEmpty) {
       return false;
@@ -45,7 +44,7 @@ abstract final class WindowsExecutableLaunchAccessChecker {
     required String path,
     required String phase,
   }) {
-    if (!Platform.isWindows || !extensionRequiresLaunchAccess(_extensionOf(path))) {
+    if (!Platform.isWindows || !extensionRequiresLaunchAccess(extensionOf(path))) {
       return null;
     }
 
@@ -101,13 +100,4 @@ abstract final class WindowsExecutableLaunchAccessChecker {
     }
   }
 
-  static String? _extensionOf(String path) {
-    final fileName = path.split(RegExp(r'[\\/]')).last;
-    final dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex == fileName.length - 1) {
-      return null;
-    }
-
-    return fileName.substring(dotIndex).toLowerCase();
-  }
 }

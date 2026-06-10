@@ -23,6 +23,7 @@ class DeveloperData7ConnectionGateway implements IDeveloperData7ConnectionGatewa
       configuredPath: request.data7ConfigPath,
       pathPolicy: request.pathPolicy,
       phase: 'definition_validation',
+      enforceWorkingDirectoryAllowlist: false,
     );
     if (locatedPathResult.isError()) {
       return Failure(locatedPathResult.exceptionOrNull()!);

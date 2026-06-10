@@ -1,13 +1,8 @@
 import 'dart:async';
-import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
-import 'package:plug_agente/application/actions/agent_action_definition_assembler.dart';
-import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
 import 'package:plug_agente/application/actions/agent_action_failure_diagnostics.dart';
-import 'package:plug_agente/application/actions/agent_action_preflight_validity.dart';
-import 'package:plug_agente/application/actions/agent_action_remote_audit_support_export.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_availability_checker.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_scanner.dart';
@@ -38,32 +33,33 @@ import 'package:plug_agente/application/use_cases/slice_agent_action_captured_ou
 import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_bundle_transfer_controller.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_definitions_controller.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_executions_controller.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_history_controller.dart';
-import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_filter_helpers.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_remote_audit_controller.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_runtime_controller.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_secrets_controller.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_triggers_controller.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 export 'agent_actions/agent_actions_history_controller.dart' show AgentActionHistoryPeriod;
-
-part 'agent_actions/agent_actions_provider_bundle_transfer.dart';
-part 'agent_actions/agent_actions_provider_definition_list.dart';
-part 'agent_actions/agent_actions_provider_remote_audit.dart';
+export 'agent_actions/agent_actions_runtime_controller.dart' show AgentActionsLoadBootstrap;
 
 class AgentActionsProvider extends ChangeNotifier {
   AgentActionsProvider(
-    this._listDefinitions,
-    this._listExecutions,
+    ListAgentActionDefinitions listDefinitions,
+    ListAgentActionExecutions listExecutions,
     this._saveDefinition,
     this._deleteDefinition,
     this._listTriggers,
@@ -79,10 +75,10 @@ class AgentActionsProvider extends ChangeNotifier {
     this._listRecentRemoteAudit,
     this._exportBundle,
     this._importBundle,
-    this._featureFlags,
+    FeatureFlags featureFlags,
     this._uuid,
     this._commandSafetyAssessor,
-    this._retentionSettings,
+    AgentActionRetentionSettings retentionSettings,
     this._bundleFileGateway, {
     AgentActionRuntimeStateGuard? runtimeStateGuard,
     AgentActionSubsystemCoordinator? subsystemCoordinator,
@@ -95,29 +91,90 @@ class AgentActionsProvider extends ChangeNotifier {
     GlobalStorageContext? globalStorageContext,
     AgentActionTriggerScheduler? triggerScheduler,
     IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
-    AgentActionDefinitionSnapshotter? definitionSnapshotter,
     AgentActionPreflightSettings? preflightSettings,
     DateTime Function()? now,
     AgentActionsHistoryController? historyController,
-  }) : _runtimeStateGuard = runtimeStateGuard,
-       _subsystemCoordinator = subsystemCoordinator,
-       _executionQueue = executionQueue,
-       _secretAvailabilityChecker = secretAvailabilityChecker ?? const AgentActionSecretAvailabilityChecker(),
-       _saveAgentActionSecret = saveAgentActionSecret,
-       _deleteAgentActionSecret = deleteAgentActionSecret,
-       _elevatedRunnerReadiness = elevatedRunnerReadiness,
-       _prepareElevatedActionRunner = prepareElevatedActionRunner,
-       _globalStorageContext = globalStorageContext,
+    AgentActionsDefinitionsController? definitionsController,
+    AgentActionsExecutionsController? executionsController,
+    AgentActionsTriggersController? triggersController,
+    AgentActionsSecretsController? secretsController,
+    AgentActionsRemoteAuditController? remoteAuditController,
+    AgentActionsBundleTransferController? bundleTransferController,
+    AgentActionsRuntimeController? runtimeController,
+  }) : _executionQueue = executionQueue,
        _triggerScheduler = triggerScheduler,
        _comObjectInvocationDiagnostics = comObjectInvocationDiagnostics,
-       _definitionSnapshotter = definitionSnapshotter ?? const AgentActionDefinitionSnapshotter(),
-       _preflightSettings = preflightSettings,
        _now = now ?? DateTime.now,
-       _historyController = historyController ?? AgentActionsHistoryController();
-  static const AgentActionRemoteAuditSupportExport _remoteAuditExport = AgentActionRemoteAuditSupportExport();
+       _historyController = historyController ?? AgentActionsHistoryController() {
+    _runtimeController = runtimeController ??
+        AgentActionsRuntimeController(
+          listDefinitions: listDefinitions,
+          listExecutions: listExecutions,
+          featureFlags: featureFlags,
+          retentionSettings: retentionSettings,
+          messageFor: _messageFor,
+          onStateChanged: notifyListeners,
+          preflightSettings: preflightSettings,
+          runtimeStateGuard: runtimeStateGuard,
+          subsystemCoordinator: subsystemCoordinator,
+          elevatedRunnerReadiness: elevatedRunnerReadiness,
+          prepareElevatedActionRunner: prepareElevatedActionRunner,
+          globalStorageContext: globalStorageContext,
+        );
+    _definitionsController = definitionsController ??
+        AgentActionsDefinitionsController(
+          saveDefinition: _saveDefinition,
+          deleteDefinition: _deleteDefinition,
+          listDeveloperData7Connections: _listDeveloperData7Connections,
+          uuid: _uuid,
+          messageFor: _messageFor,
+          onStateChanged: notifyListeners,
+          preflightSettings: preflightSettings,
+          now: _now,
+        );
+    _executionsController = executionsController ??
+        AgentActionsExecutionsController(
+          listExecutions: listExecutions,
+          runAction: _runAction,
+          testDefinition: _testDefinition,
+          previewDefinition: _previewDefinition,
+          cancelExecution: _cancelExecution,
+          messageFor: _messageFor,
+          onStateChanged: notifyListeners,
+        );
+    _triggersController = triggersController ??
+        AgentActionsTriggersController(
+          listTriggers: _listTriggers,
+          saveTrigger: _saveTrigger,
+          deleteTrigger: _deleteTrigger,
+          messageFor: _messageFor,
+          onStateChanged: notifyListeners,
+        );
+    _secretsController = secretsController ??
+        AgentActionsSecretsController(
+          secretAvailabilityChecker: secretAvailabilityChecker ?? const AgentActionSecretAvailabilityChecker(),
+          saveAgentActionSecret: saveAgentActionSecret,
+          deleteAgentActionSecret: deleteAgentActionSecret,
+          messageFor: _messageFor,
+          onStateChanged: notifyListeners,
+        );
+    _remoteAuditController = remoteAuditController ??
+        AgentActionsRemoteAuditController(
+          listRecentRemoteAudit: _listRecentRemoteAudit,
+          getExecution: _getExecution,
+          messageFor: _messageFor,
+          onStateChanged: notifyListeners,
+        );
+    _bundleTransferController = bundleTransferController ??
+        AgentActionsBundleTransferController(
+          exportBundle: _exportBundle,
+          importBundle: _importBundle,
+          bundleFileGateway: _bundleFileGateway,
+          messageFor: _messageFor,
+          onStateChanged: notifyListeners,
+        );
+  }
 
-  final ListAgentActionDefinitions _listDefinitions;
-  final ListAgentActionExecutions _listExecutions;
   final SaveAgentActionDefinition _saveDefinition;
   final DeleteAgentActionDefinition _deleteDefinition;
   final ListAgentActionTriggers _listTriggers;
@@ -133,122 +190,65 @@ class AgentActionsProvider extends ChangeNotifier {
   final ListRecentAgentActionRemoteAudit _listRecentRemoteAudit;
   final ExportAgentActionsBundle _exportBundle;
   final ImportAgentActionsBundle _importBundle;
-  final FeatureFlags _featureFlags;
   final Uuid _uuid;
   final IActionCommandSafetyAssessor _commandSafetyAssessor;
-  final AgentActionRetentionSettings _retentionSettings;
   final IAgentActionsBundleFileGateway _bundleFileGateway;
-  final AgentActionRuntimeStateGuard? _runtimeStateGuard;
-  final AgentActionSubsystemCoordinator? _subsystemCoordinator;
   final ActionExecutionQueue? _executionQueue;
-  final AgentActionSecretAvailabilityChecker _secretAvailabilityChecker;
-  final SaveAgentActionSecret? _saveAgentActionSecret;
-  final DeleteAgentActionSecret? _deleteAgentActionSecret;
-  final ElevatedActionRunnerReadinessService? _elevatedRunnerReadiness;
-  final PrepareElevatedActionRunner? _prepareElevatedActionRunner;
-  final GlobalStorageContext? _globalStorageContext;
   final AgentActionTriggerScheduler? _triggerScheduler;
   final IComObjectInvocationDiagnostics? _comObjectInvocationDiagnostics;
-  final AgentActionDefinitionSnapshotter _definitionSnapshotter;
-  final AgentActionDefinitionAssembler _assembler = const AgentActionDefinitionAssembler();
-  final AgentActionPreflightSettings? _preflightSettings;
   final DateTime Function() _now;
 
-  bool _isPreparingElevatedRunner = false;
+  late final AgentActionsDefinitionsController _definitionsController;
+  late final AgentActionsExecutionsController _executionsController;
+  late final AgentActionsTriggersController _triggersController;
+  late final AgentActionsSecretsController _secretsController;
+  late final AgentActionsRemoteAuditController _remoteAuditController;
+  late final AgentActionsBundleTransferController _bundleTransferController;
+  late final AgentActionsRuntimeController _runtimeController;
+  final AgentActionsHistoryController _historyController;
 
-  final Map<String, String> _sessionPreflightSnapshotHashes = <String, String>{};
-  final Map<String, DateTime> _sessionPreflightValidatedAt = <String, DateTime>{};
-
-  List<AgentActionDefinition> _definitions = <AgentActionDefinition>[];
-  List<AgentActionExecution> _executions = <AgentActionExecution>[];
-  bool _isLoading = false;
-  bool _isSaving = false;
-  bool _isDeleting = false;
-  bool _isRunning = false;
-  bool _isTesting = false;
-  bool _isLoadingDeveloperConnections = false;
-  bool _isLoadingTriggers = false;
-  bool _isSavingTrigger = false;
-  bool _isTransferringBundle = false;
-  final Set<String> _cancellingExecutionIds = <String>{};
-  final Set<String> _deletingTriggerIds = <String>{};
-  List<AgentActionTrigger> _triggers = <AgentActionTrigger>[];
-  String? _selectedActionId;
-  int _loadGeneration = 0;
   int _periodReloadGeneration = 0;
   String? _errorMessage;
-  String? _triggerErrorMessage;
-  String? _lastTestedActionId;
-  bool? _lastTestCanRun;
-  String? _lastTestCommandPreview;
-  String? _lastTestPreviewErrorMessage;
-  Map<String, Object?> _lastTestDiagnostics = const <String, Object?>{};
-  final AgentActionsHistoryController _historyController;
-  AgentActionType? _definitionTypeFilter;
-  AgentActionState? _definitionStateFilter;
-  String _definitionSearchQuery = '';
-  AgentActionSecretAvailabilityReport? _selectedSecretReport;
-  String? _savingActionSecretName;
-  String? _deletingActionSecretName;
-  String? _secretOperationErrorMessage;
-  List<DeveloperData7ConnectionOption> _developerConnections = <DeveloperData7ConnectionOption>[];
-  String? _developerConnectionLookupMessage;
-  String? _resolvedDeveloperData7ConfigPath;
-  bool _usedDefaultDeveloperData7ConfigPath = false;
-  List<AgentActionRemoteAuditRecord> _remoteAuditEntries = <AgentActionRemoteAuditRecord>[];
-  String? _remoteAuditLoadError;
-  bool _isLoadingRemoteAudit = false;
-  String? _auditCorrelationExecutionId;
 
-  UnmodifiableListView<AgentActionDefinition>? _definitionsViewCache;
-  UnmodifiableListView<AgentActionExecution>? _executionsViewCache;
-  UnmodifiableListView<AgentActionTrigger>? _triggersViewCache;
-  UnmodifiableListView<DeveloperData7ConnectionOption>? _developerConnectionsViewCache;
-  UnmodifiableListView<AgentActionRemoteAuditRecord>? _remoteAuditEntriesViewCache;
-  List<AgentActionDefinition>? _filteredDefinitionsCache;
-  List<AgentActionExecution>? _filteredSelectedExecutionsCache;
-
-  List<AgentActionDefinition> get definitions =>
-      _definitionsViewCache ??= UnmodifiableListView<AgentActionDefinition>(_definitions);
-  AgentActionType? get definitionTypeFilter => _definitionTypeFilter;
-  AgentActionState? get definitionStateFilter => _definitionStateFilter;
-  String get definitionSearchQuery => _definitionSearchQuery;
-  List<AgentActionDefinition> get filteredDefinitions => filteredDefinitionsFor(this);
-  bool get hasDefinitionListFilters => hasDefinitionListFiltersFor(this);
-  List<AgentActionExecution> get executions =>
-      _executionsViewCache ??= UnmodifiableListView<AgentActionExecution>(_executions);
-  bool get isLoading => _isLoading;
-  bool get isSaving => _isSaving;
-  bool get isDeleting => _isDeleting;
-  bool get isRunning => _isRunning;
-  bool get isTesting => _isTesting;
-  bool get isLoadingDeveloperConnections => _isLoadingDeveloperConnections;
-  bool get isLoadingTriggers => _isLoadingTriggers;
-  bool get isSavingTrigger => _isSavingTrigger;
-  bool get isTransferringBundle => _isTransferringBundle;
-  List<AgentActionTrigger> get triggers => _triggersViewCache ??= UnmodifiableListView<AgentActionTrigger>(_triggers);
-  String? get errorMessage => _errorMessage;
-  String? get triggerErrorMessage => _triggerErrorMessage;
-  bool get isFeatureEnabled => _featureFlags.enableAgentActions;
-  bool get isRemoteAgentActionsEnabled => _featureFlags.enableRemoteAgentActions;
-  bool get isRemoteAdHocAgentActionsEnabled => _featureFlags.enableRemoteAdHocAgentActions;
-  bool get isElevatedAgentActionsEnabled => _featureFlags.enableElevatedAgentActions;
-  bool get isElevatedRunnerConfigured => _elevatedRunnerReadiness?.isConfigured ?? false;
-  bool get isElevatedRunnerDegraded => _elevatedRunnerReadiness?.isDegraded ?? false;
-  bool get isPreparingElevatedRunner => _isPreparingElevatedRunner;
-  bool get isMaintenanceMode => _featureFlags.enableAgentActionsMaintenanceMode;
-  bool get isMaintenanceStrictMode => _featureFlags.enableAgentActionsMaintenanceStrictMode;
-  bool get isDangerousCommandWarnModeEnabled => _featureFlags.enableAgentActionDangerousCommandWarnMode;
+  List<AgentActionDefinition> get definitions => _definitionsController.definitionsView;
+  AgentActionType? get definitionTypeFilter => _definitionsController.definitionTypeFilter;
+  AgentActionState? get definitionStateFilter => _definitionsController.definitionStateFilter;
+  String get definitionSearchQuery => _definitionsController.definitionSearchQuery;
+  List<AgentActionDefinition> get filteredDefinitions => _definitionsController.filteredDefinitions();
+  bool get hasDefinitionListFilters => _definitionsController.hasDefinitionListFilters;
+  List<AgentActionExecution> get executions => _executionsController.executionsView;
+  bool get isLoading => _runtimeController.isLoading;
+  bool get isSaving => _definitionsController.isSaving;
+  bool get isDeleting => _definitionsController.isDeleting;
+  bool get isRunning => _executionsController.isRunning;
+  bool get isTesting => _executionsController.isTesting;
+  bool get isLoadingDeveloperConnections => _definitionsController.isLoadingDeveloperConnections;
+  bool get isLoadingTriggers => _triggersController.isLoadingTriggers;
+  bool get isSavingTrigger => _triggersController.isSavingTrigger;
+  bool get isTransferringBundle => _bundleTransferController.isTransferring;
+  List<AgentActionTrigger> get triggers => _triggersController.triggersView;
+  String? get errorMessage =>
+      _errorMessage ?? _runtimeController.errorMessage ?? _definitionsController.lastOperationErrorMessage;
+  String? get triggerErrorMessage => _triggersController.triggerErrorMessage;
+  bool get isFeatureEnabled => _runtimeController.isFeatureEnabled;
+  bool get isRemoteAgentActionsEnabled => _runtimeController.isRemoteAgentActionsEnabled;
+  bool get isRemoteAdHocAgentActionsEnabled => _runtimeController.isRemoteAdHocAgentActionsEnabled;
+  bool get isElevatedAgentActionsEnabled => _runtimeController.isElevatedAgentActionsEnabled;
+  bool get isElevatedRunnerConfigured => _runtimeController.isElevatedRunnerConfigured;
+  bool get isElevatedRunnerDegraded => _runtimeController.isElevatedRunnerDegraded;
+  bool get isPreparingElevatedRunner => _runtimeController.isPreparingElevatedRunner;
+  bool get isMaintenanceMode => _runtimeController.isMaintenanceMode;
+  bool get isMaintenanceStrictMode => _runtimeController.isMaintenanceStrictMode;
+  bool get isDangerousCommandWarnModeEnabled => _runtimeController.isDangerousCommandWarnModeEnabled;
   bool get canManageTriggers => isFeatureEnabled && !isMaintenanceMode;
   bool get canTransferBundle =>
-      canManageTriggers && !_isLoading && !_isTransferringBundle && !_isSaving && !_isDeleting;
-  AgentActionRuntimeStateSnapshot get runtimeSubsystemSnapshot =>
-      _runtimeStateGuard?.snapshot ?? const AgentActionRuntimeStateSnapshot(status: AgentActionSubsystemStatus.ready);
-  String? get lastTestedActionId => _lastTestedActionId;
-  bool? get lastTestCanRun => _lastTestCanRun;
-  String? get lastTestCommandPreview => _lastTestCommandPreview;
-  String? get lastTestPreviewErrorMessage => _lastTestPreviewErrorMessage;
-  Map<String, Object?> get lastTestDiagnostics => Map.unmodifiable(_lastTestDiagnostics);
+      canManageTriggers && !isLoading && !isTransferringBundle && !isSaving && !isDeleting;
+  AgentActionRuntimeStateSnapshot get runtimeSubsystemSnapshot => _runtimeController.runtimeSubsystemSnapshot;
+  String? get lastTestedActionId => _executionsController.lastTestedActionId;
+  bool? get lastTestCanRun => _executionsController.lastTestCanRun;
+  String? get lastTestCommandPreview => _executionsController.lastTestCommandPreview;
+  String? get lastTestPreviewErrorMessage => _executionsController.lastTestPreviewErrorMessage;
+  Map<String, Object?> get lastTestDiagnostics => Map.unmodifiable(_executionsController.lastTestDiagnostics);
   AgentActionExecutionStatus? get historyStatusFilter => _historyController.statusFilter;
   AgentActionRequestSource? get historySourceFilter => _historyController.sourceFilter;
   AgentActionHistoryPeriod get historyPeriodFilter => _historyController.periodFilter;
@@ -256,39 +256,39 @@ class AgentActionsProvider extends ChangeNotifier {
   String get historySearchQuery => _historyController.searchQuery;
   @visibleForTesting
   AgentActionsHistoryController get historyController => _historyController;
-  AgentActionSecretAvailabilityReport? get selectedSecretReport => _selectedSecretReport;
-  Set<String> get selectedSecretPlaceholderNames => _selectedSecretReport?.referencedSecretNames ?? const <String>{};
-  Set<String> get selectedMissingSecretNames => _selectedSecretReport?.missingSecretNames ?? const <String>{};
-  bool get isActionSecretStoreAvailable => _saveAgentActionSecret != null && _deleteAgentActionSecret != null;
-  String? get secretOperationErrorMessage => _secretOperationErrorMessage;
+  @visibleForTesting
+  AgentActionsDefinitionsController get definitionsController => _definitionsController;
+  @visibleForTesting
+  AgentActionsExecutionsController get executionsController => _executionsController;
+  @visibleForTesting
+  AgentActionsTriggersController get triggersController => _triggersController;
+  @visibleForTesting
+  AgentActionsSecretsController get secretsController => _secretsController;
+  @visibleForTesting
+  AgentActionsRemoteAuditController get remoteAuditController => _remoteAuditController;
+  @visibleForTesting
+  AgentActionsBundleTransferController get bundleTransferController => _bundleTransferController;
+  @visibleForTesting
+  AgentActionsRuntimeController get runtimeController => _runtimeController;
+  AgentActionSecretAvailabilityReport? get selectedSecretReport => _secretsController.selectedSecretReport;
+  Set<String> get selectedSecretPlaceholderNames => _secretsController.selectedSecretPlaceholderNames;
+  Set<String> get selectedMissingSecretNames => _secretsController.selectedMissingSecretNames;
+  bool get isActionSecretStoreAvailable => _secretsController.isActionSecretStoreAvailable;
+  String? get secretOperationErrorMessage => _secretsController.secretOperationErrorMessage;
+  bool isActionSecretConfigured(String secretName) => _secretsController.isActionSecretConfigured(secretName);
+  bool isSavingActionSecret(String secretName) => _secretsController.isSavingActionSecret(secretName);
+  bool isDeletingActionSecret(String secretName) => _secretsController.isDeletingActionSecret(secretName);
+  List<DeveloperData7ConnectionOption> get developerConnections => _definitionsController.developerConnectionsView;
+  String? get developerConnectionLookupMessage => _definitionsController.developerConnectionLookupMessage;
+  String? get resolvedDeveloperData7ConfigPath => _definitionsController.resolvedDeveloperData7ConfigPath;
+  bool get usedDefaultDeveloperData7ConfigPath => _definitionsController.usedDefaultDeveloperData7ConfigPath;
+  bool get isRemoteAuditSectionVisible => _runtimeController.isRemoteAuditSectionVisible;
+  List<AgentActionRemoteAuditRecord> get remoteAuditEntries => _remoteAuditController.entriesView;
+  String? get remoteAuditLoadError => _remoteAuditController.loadError;
+  bool get isLoadingRemoteAudit => _remoteAuditController.isLoading;
+  String? get auditCorrelationExecutionId => _remoteAuditController.auditCorrelationExecutionId;
+  String? get selectedActionId => _definitionsController.selectedActionId;
 
-  bool isActionSecretConfigured(String secretName) {
-    final report = _selectedSecretReport;
-    if (report == null) {
-      return false;
-    }
-    return report.referencedSecretNames.contains(secretName) && !report.missingSecretNames.contains(secretName);
-  }
-
-  bool isSavingActionSecret(String secretName) => _savingActionSecretName == secretName;
-
-  bool isDeletingActionSecret(String secretName) => _deletingActionSecretName == secretName;
-  List<DeveloperData7ConnectionOption> get developerConnections =>
-      _developerConnectionsViewCache ??= UnmodifiableListView<DeveloperData7ConnectionOption>(_developerConnections);
-  String? get developerConnectionLookupMessage => _developerConnectionLookupMessage;
-  String? get resolvedDeveloperData7ConfigPath => _resolvedDeveloperData7ConfigPath;
-  bool get usedDefaultDeveloperData7ConfigPath => _usedDefaultDeveloperData7ConfigPath;
-
-  bool get isRemoteAuditSectionVisible => isFeatureEnabled && _featureFlags.enableAgentActionRemoteAudit;
-  List<AgentActionRemoteAuditRecord> get remoteAuditEntries =>
-      _remoteAuditEntriesViewCache ??= UnmodifiableListView<AgentActionRemoteAuditRecord>(_remoteAuditEntries);
-  String? get remoteAuditLoadError => _remoteAuditLoadError;
-  bool get isLoadingRemoteAudit => _isLoadingRemoteAudit;
-  String? get auditCorrelationExecutionId => _auditCorrelationExecutionId;
-
-  String? get selectedActionId => _selectedActionId;
-
-  /// When temporal scheduling did not start, exposes a stable reason for operator messaging.
   String? get schedulerOperationalIssueReason {
     if (!isFeatureEnabled) {
       return null;
@@ -302,7 +302,6 @@ class AgentActionsProvider extends ChangeNotifier {
     return scheduler.lastStartIssueReason;
   }
 
-  /// Registered COM handler count when diagnostics are wired; `null` when COM is unavailable or diagnostics omitted.
   int? get comObjectHandlersRegisteredCount {
     if (!isFeatureEnabled || isActionTypeUnavailable(AgentActionType.comObject)) {
       return null;
@@ -311,14 +310,13 @@ class AgentActionsProvider extends ChangeNotifier {
     return _comObjectInvocationDiagnostics?.registeredHandlerCount;
   }
 
-  /// True when COM actions exist but no ProgID/member handlers are configured.
   bool get shouldWarnComObjectHandlersMissing {
     if (!isFeatureEnabled || isActionTypeUnavailable(AgentActionType.comObject)) {
       return false;
     }
 
-    final hasComObjectDefinitions = _definitions.any(
-      (AgentActionDefinition definition) => definition.type == AgentActionType.comObject,
+    final hasComObjectDefinitions = _definitionsController.definitions.any(
+      (definition) => definition.type == AgentActionType.comObject,
     );
     if (!hasComObjectDefinitions) {
       return false;
@@ -332,15 +330,7 @@ class AgentActionsProvider extends ChangeNotifier {
     return diagnostics.registeredHandlerCount <= 0;
   }
 
-  AgentActionDefinition? get selectedDefinition {
-    final selectedId = _selectedActionId;
-    if (selectedId == null) {
-      return _definitions.firstOrNull;
-    }
-    // When an id is set but not found (e.g. after delete or filter), return null
-    // instead of silently showing the first item as if the user had selected it.
-    return _definitions.where((definition) => definition.id == selectedId).firstOrNull;
-  }
+  AgentActionDefinition? get selectedDefinition => _definitionsController.selectedDefinition;
 
   bool get canRunSelected {
     final definition = selectedDefinition;
@@ -352,60 +342,19 @@ class AgentActionsProvider extends ChangeNotifier {
     return definition != null && canTestDefinition(definition);
   }
 
-  bool get canSaveAction {
-    return isFeatureEnabled && !_isSaving;
-  }
+  bool get canSaveAction => _definitionsController.canSaveAction(isFeatureEnabled: isFeatureEnabled);
 
-  bool canSetDefinitionActive(String? actionId, {required bool draftModified}) {
-    if (draftModified || actionId == null || actionId.trim().isEmpty) {
-      return false;
-    }
+  bool canSetDefinitionActive(String? actionId, {required bool draftModified}) =>
+      _definitionsController.canSetDefinitionActive(actionId, draftModified: draftModified);
 
-    final definition = _existingDefinition(actionId);
-    if (definition == null) {
-      return false;
-    }
+  bool isPreflightValidForDefinition(AgentActionDefinition definition) =>
+      _definitionsController.isPreflightValidForDefinition(definition);
 
-    return isPreflightValidForDefinition(definition);
-  }
+  bool isPreflightExpiredForDefinition(AgentActionDefinition definition) =>
+      _definitionsController.isPreflightExpiredForDefinition(definition);
 
-  bool isPreflightValidForDefinition(AgentActionDefinition definition) {
-    final recordedPreflightHash =
-        _sessionPreflightSnapshotHashes[definition.id] ?? definition.lastPreflightSnapshotHash;
-    final recordedPreflightValidatedAt =
-        _sessionPreflightValidatedAt[definition.id] ?? definition.lastPreflightValidatedAt;
-
-    return AgentActionPreflightValidity.isValid(
-      recordedHash: recordedPreflightHash,
-      expectedHash: _preflightContentSnapshotHash(definition),
-      lastValidatedAt: recordedPreflightValidatedAt,
-      now: _now(),
-      settings: _preflightSettings,
-    );
-  }
-
-  bool isPreflightExpiredForDefinition(AgentActionDefinition definition) {
-    final recordedPreflightHash =
-        _sessionPreflightSnapshotHashes[definition.id] ?? definition.lastPreflightSnapshotHash;
-    final expectedHash = _preflightContentSnapshotHash(definition);
-    if (recordedPreflightHash == null || recordedPreflightHash != expectedHash) {
-      return false;
-    }
-
-    final recordedPreflightValidatedAt =
-        _sessionPreflightValidatedAt[definition.id] ?? definition.lastPreflightValidatedAt;
-    return !AgentActionPreflightValidity.isTimestampValid(
-      recordedPreflightValidatedAt,
-      now: _now(),
-      settings: _preflightSettings,
-    );
-  }
-
-  DateTime? preflightExpiresAtForDefinition(AgentActionDefinition definition) {
-    final recordedPreflightValidatedAt =
-        _sessionPreflightValidatedAt[definition.id] ?? definition.lastPreflightValidatedAt;
-    return AgentActionPreflightValidity.expiresAt(recordedPreflightValidatedAt, settings: _preflightSettings);
-  }
+  DateTime? preflightExpiresAtForDefinition(AgentActionDefinition definition) =>
+      _definitionsController.preflightExpiresAtForDefinition(definition);
 
   bool get canDeleteSelected {
     final definition = selectedDefinition;
@@ -413,20 +362,18 @@ class AgentActionsProvider extends ChangeNotifier {
   }
 
   bool canRunDefinition(AgentActionDefinition definition) {
-    return isFeatureEnabled && !_isRunning && definition.canRun && _allowsLocalManualOperation(definition.type);
+    return isFeatureEnabled && !isRunning && definition.canRun && _allowsLocalManualOperation(definition.type);
   }
 
   bool canTestDefinition(AgentActionDefinition definition) {
-    return isFeatureEnabled && !_isTesting && _allowsLocalManualOperation(definition.type);
+    return isFeatureEnabled && !isTesting && _allowsLocalManualOperation(definition.type);
   }
 
   bool canDeleteDefinition(AgentActionDefinition definition) {
-    if (!isFeatureEnabled || _isDeleting) {
-      return false;
-    }
-
-    return !_executions.any(
-      (execution) => execution.actionId == definition.id && !execution.isTerminal,
+    return _definitionsController.canDeleteDefinition(
+      definition: definition,
+      isFeatureEnabled: isFeatureEnabled,
+      hasActiveExecution: _executionsController.hasActiveExecutionForDefinition(definition.id),
     );
   }
 
@@ -451,211 +398,89 @@ class AgentActionsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  int get preflightValidityDays =>
-      _preflightSettings?.validityDays ?? AgentActionPolicyDefaults.preflightValidityDuration.inDays;
+  int get preflightValidityDays => _definitionsController.preflightValidityDays;
 
-  bool get hasPreflightPersistedOverride => _preflightSettings?.hasPersistedOverride ?? false;
+  bool get hasPreflightPersistedOverride => _definitionsController.hasPreflightPersistedOverride;
 
-  Future<void> savePreflightValidityDays(int days) async {
-    final settings = _preflightSettings;
-    if (settings == null) {
-      return;
-    }
-    await settings.save(validityDays: days);
-    notifyListeners();
-  }
+  Future<void> savePreflightValidityDays(int days) => _runtimeController.savePreflightValidityDays(days);
 
-  Future<void> clearPreflightPersistedOverride() async {
-    final settings = _preflightSettings;
-    if (settings == null) {
-      return;
-    }
-    await settings.clearPersistedOverride();
-    notifyListeners();
-  }
+  Future<void> clearPreflightPersistedOverride() => _runtimeController.clearPreflightPersistedOverride();
 
-  int get executionRetentionDays => _retentionSettings.executionRetentionDays;
-
-  int get remoteAuditRetentionDays => _retentionSettings.remoteAuditRetentionDays;
-
-  int get capturedOutputRetentionHours => _retentionSettings.capturedOutputRetentionHours;
-
-  bool get hasRetentionPersistedOverrides => _retentionSettings.hasPersistedOverrides;
+  int get executionRetentionDays => _runtimeController.executionRetentionDays;
+  int get remoteAuditRetentionDays => _runtimeController.remoteAuditRetentionDays;
+  int get capturedOutputRetentionHours => _runtimeController.capturedOutputRetentionHours;
+  bool get hasRetentionPersistedOverrides => _runtimeController.hasRetentionPersistedOverrides;
 
   Future<void> saveRetentionSettings({
     required int executionDays,
     required int remoteAuditDays,
     required int capturedOutputHours,
-  }) async {
-    await _retentionSettings.save(
-      executionDays: executionDays,
-      remoteAuditDays: remoteAuditDays,
-      capturedOutputHours: capturedOutputHours,
-    );
-    notifyListeners();
-  }
+  }) =>
+      _runtimeController.saveRetentionSettings(
+        executionDays: executionDays,
+        remoteAuditDays: remoteAuditDays,
+        capturedOutputHours: capturedOutputHours,
+      );
 
-  Future<void> clearRetentionPersistedOverrides() async {
-    await _retentionSettings.clearPersistedOverrides();
-    notifyListeners();
-  }
+  Future<void> clearRetentionPersistedOverrides() => _runtimeController.clearRetentionPersistedOverrides();
 
-  List<AgentActionExecution> get filteredSelectedExecutions {
-    final cached = _filteredSelectedExecutionsCache;
-    if (cached != null) {
-      return cached;
-    }
+  List<AgentActionExecution> get filteredSelectedExecutions => _executionsController.filteredSelectedExecutions(
+    selectedDefinition: selectedDefinition,
+    historyController: _historyController,
+    now: _now,
+  );
 
-    final selected = selectedDefinition;
-    if (selected == null) {
-      return const <AgentActionExecution>[];
-    }
+  bool hasCancellationInProgress(String executionId) =>
+      _executionsController.hasCancellationInProgress(executionId);
 
-    final filtered = _executions
-        .where(
-          (execution) => _historyController.matchesExecution(
-            execution: execution,
-            selectedActionId: selected.id,
-            now: _now,
-          ),
-        )
-        .toList(growable: false);
+  bool isDeletingTrigger(String triggerId) => _triggersController.isDeletingTrigger(triggerId);
 
-    filtered.sort((left, right) => right.requestedAt.compareTo(left.requestedAt));
-    return _filteredSelectedExecutionsCache = List<AgentActionExecution>.unmodifiable(filtered);
-  }
+  bool canCancelExecution(AgentActionExecution execution) => _executionsController.canCancelExecution(
+    execution: execution,
+    isFeatureEnabled: isFeatureEnabled,
+  );
 
-  bool hasCancellationInProgress(String executionId) {
-    return _cancellingExecutionIds.contains(executionId);
-  }
-
-  bool isDeletingTrigger(String triggerId) {
-    return _deletingTriggerIds.contains(triggerId);
-  }
-
-  bool canCancelExecution(AgentActionExecution execution) {
-    return isFeatureEnabled &&
-        !execution.isTerminal &&
-        !hasCancellationInProgress(execution.id) &&
-        (execution.status == AgentActionExecutionStatus.queued ||
-            execution.status == AgentActionExecutionStatus.running);
-  }
-
-  int get queuedCount {
-    return _executions.where((execution) => execution.status == AgentActionExecutionStatus.queued).length;
-  }
-
-  int get runningCount {
-    return _executions.where((execution) => execution.status == AgentActionExecutionStatus.running).length;
-  }
-
+  int get queuedCount => _executionsController.queuedCount;
+  int get runningCount => _executionsController.runningCount;
   int get liveQueuePendingCount => _executionQueue?.queuedCount ?? 0;
-
   int get liveQueueRunningCount => _executionQueue?.runningCount ?? 0;
-
   bool get hasLiveQueueActivity => liveQueuePendingCount > 0 || liveQueueRunningCount > 0;
-
   int get summaryQueuedCount => _executionQueue != null ? liveQueuePendingCount : queuedCount;
-
   int get summaryRunningCount => _executionQueue != null ? liveQueueRunningCount : runningCount;
+  bool isActionTypeUnavailable(AgentActionType type) => _runtimeController.isActionTypeUnavailable(type);
+  int get failedCount => _executionsController.failedCount;
 
-  bool isActionTypeUnavailable(AgentActionType type) => runtimeSubsystemSnapshot.blocksType(type);
+  Future<void> load() => _runtimeController.load(
+        AgentActionsLoadBootstrap(
+          historyController: _historyController,
+          definitionsController: _definitionsController,
+          executionsController: _executionsController,
+          remoteAuditController: _remoteAuditController,
+          isPreflightValidForDefinition: isPreflightValidForDefinition,
+          syncTriggersForSelection: _syncTriggersForSelection,
+          refreshSelectedSecretReport: _refreshSelectedSecretReport,
+          now: _now,
+        ),
+      );
 
-  int get failedCount {
-    return _executions.where((execution) => execution.status == AgentActionExecutionStatus.failed).length;
-  }
+  Future<void> prepareElevatedRunner() => _runtimeController.prepareElevatedRunner();
 
-  Future<void> load() async {
-    // Generation guard: if a newer load() starts while this one is awaiting,
-    // discard the stale result to prevent out-of-order state overwrites.
-    final generation = ++_loadGeneration;
+  Future<void> refreshRemoteAudit() => _remoteAuditController.refresh(sectionVisible: isRemoteAuditSectionVisible);
 
-    _isLoading = true;
-    _errorMessage = null;
-    _auditCorrelationExecutionId = null;
-    notifyListeners();
-
-    final definitionsResult = await _listDefinitions();
-    if (generation != _loadGeneration) return;
-
-    if (definitionsResult.isError()) {
-      _isLoading = false;
-      _errorMessage = _messageFor(definitionsResult.exceptionOrNull()!);
-      _executions = <AgentActionExecution>[];
-      _executionsViewCache = null;
-      _filteredSelectedExecutionsCache = null;
-      notifyListeners();
-      return;
-    }
-
-    final executionsResult = await _listExecutions(
-      requestedAfter: _historyController.periodStart(_now),
-      limit: _historyController.executionFetchLimit(),
-    );
-    if (generation != _loadGeneration) return;
-
-    if (executionsResult.isError()) {
-      _isLoading = false;
-      _errorMessage = _messageFor(executionsResult.exceptionOrNull()!);
-      notifyListeners();
-      return;
-    }
-
-    _definitions = definitionsResult.getOrThrow();
-    _executions = executionsResult.getOrThrow();
-    _syncSessionPreflightSnapshotHashes();
-    _selectedActionId = _resolveSelectedActionId();
-
-    await loadRemoteAuditDuringLoadFor(this);
-    if (generation != _loadGeneration) return;
-
-    _refreshElevatedRunnerReadiness();
-    _isLoading = false;
-    notifyListeners();
-    unawaited(_syncTriggersForSelection());
-    unawaited(_refreshSelectedSecretReport());
-  }
-
-  Future<void> prepareElevatedRunner() async {
-    final prepare = _prepareElevatedActionRunner;
-    if (prepare == null || !isElevatedAgentActionsEnabled) {
-      return;
-    }
-
-    _isPreparingElevatedRunner = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    final result = await prepare();
-    _isPreparingElevatedRunner = false;
-    result.fold(
-      (_) {
-        _refreshElevatedRunnerReadiness();
-        _errorMessage = null;
-      },
-      (failure) {
-        _errorMessage = _messageFor(failure);
-      },
-    );
-    notifyListeners();
-  }
-
-  void _refreshElevatedRunnerReadiness() {
-    final readiness = _elevatedRunnerReadiness;
-    final storage = _globalStorageContext;
-    if (readiness == null || storage == null) {
-      return;
-    }
-    readiness.refresh(storage);
-  }
-
-  Future<void> refreshRemoteAudit() => refreshRemoteAuditFor(this);
-
-  String buildRemoteAuditJsonExport() => buildRemoteAuditJsonExportFor(this);
+  String buildRemoteAuditJsonExport() => _remoteAuditController.buildJsonExport();
 
   Future<AgentActionRemoteAuditFocusResult> focusExecutionFromRemoteAudit(
     AgentActionRemoteAuditRecord record,
-  ) => focusExecutionFromRemoteAuditFor(this, record);
+  ) => _remoteAuditController.focusExecution(
+    record: record,
+    isFeatureEnabled: isFeatureEnabled,
+    definitionsController: _definitionsController,
+    executionsController: _executionsController,
+    historyController: _historyController,
+    now: _now,
+    syncTriggers: _syncTriggersForSelection,
+    refreshSecrets: _refreshSelectedSecretReport,
+  );
 
   @override
   void notifyListeners() {
@@ -664,13 +489,10 @@ class AgentActionsProvider extends ChangeNotifier {
   }
 
   void _invalidateDerivedCaches() {
-    _definitionsViewCache = null;
-    _executionsViewCache = null;
-    _triggersViewCache = null;
-    _developerConnectionsViewCache = null;
-    _remoteAuditEntriesViewCache = null;
-    _filteredDefinitionsCache = null;
-    _filteredSelectedExecutionsCache = null;
+    _definitionsController.invalidateCaches();
+    _executionsController.invalidateCaches();
+    _triggersController.invalidateCaches();
+    _remoteAuditController.invalidateCaches();
   }
 
   Future<Result<CapturedOutputUtf8Window>> sliceCapturedOutput({
@@ -687,152 +509,83 @@ class AgentActionsProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> setMaintenanceMode({required bool enabled}) async {
-    final coordinator = _subsystemCoordinator;
-    if (coordinator != null) {
-      if (enabled) {
-        await coordinator.enterMaintenanceMode();
-      } else {
-        await coordinator.exitMaintenanceMode();
-      }
-    } else {
-      await _featureFlags.setEnableAgentActionsMaintenanceMode(enabled);
-      final guard = _runtimeStateGuard;
-      if (guard != null) {
-        if (enabled) {
-          guard.markMaintenance();
-        } else if (isFeatureEnabled) {
-          guard.markReady();
-        }
-      }
-    }
-    notifyListeners();
-  }
+  Future<void> setMaintenanceMode({required bool enabled}) =>
+      _runtimeController.setMaintenanceMode(enabled: enabled);
 
-  Future<void> setMaintenanceStrictMode({required bool enabled}) async {
-    await _featureFlags.setEnableAgentActionsMaintenanceStrictMode(enabled);
-    notifyListeners();
-  }
+  Future<void> setMaintenanceStrictMode({required bool enabled}) =>
+      _runtimeController.setMaintenanceStrictMode(enabled: enabled);
 
-  bool _allowsLocalManualOperation(AgentActionType actionType) {
-    final guard = _runtimeStateGuard;
-    if (guard == null) {
-      return true;
-    }
-
-    return guard
-        .ensureCanAcceptExecution(
-          request: const AgentActionExecutionRequest(
-            actionId: 'manual-probe',
-            source: AgentActionRequestSource.localUi,
-          ),
-          actionType: actionType,
-        )
-        .isSuccess();
-  }
+  bool _allowsLocalManualOperation(AgentActionType actionType) =>
+      _runtimeController.allowsLocalManualOperation(actionType);
 
   void setHistoryStatusFilter(AgentActionExecutionStatus? status) {
-    if (_historyController.statusFilter == status) {
+    if (!_historyController.updateStatusFilter(status)) {
       return;
     }
 
-    _auditCorrelationExecutionId = null;
-    _historyController.statusFilter = status;
-    _filteredSelectedExecutionsCache = null;
-    notifyListeners();
+    _applyHistoryFilterChange(reloadForPeriod: false);
   }
 
   void setHistorySourceFilter(AgentActionRequestSource? source) {
-    if (_historyController.sourceFilter == source) {
+    if (!_historyController.updateSourceFilter(source)) {
       return;
     }
 
-    _auditCorrelationExecutionId = null;
-    _historyController.sourceFilter = source;
-    _filteredSelectedExecutionsCache = null;
-    notifyListeners();
+    _applyHistoryFilterChange(reloadForPeriod: false);
   }
 
   void setHistoryPeriodFilter(AgentActionHistoryPeriod period) {
-    if (_historyController.periodFilter == period) {
+    if (!_historyController.updatePeriodFilter(period)) {
       return;
     }
 
-    _auditCorrelationExecutionId = null;
-    _historyController.periodFilter = period;
-    _filteredSelectedExecutionsCache = null;
-    notifyListeners();
-    unawaited(_reloadExecutionsForPeriod());
+    _applyHistoryFilterChange(reloadForPeriod: true);
   }
 
   Future<void> _reloadExecutionsForPeriod() async {
-    if (_isLoading) {
-      return;
-    }
-
-    // Guard against rapid period switches landing out-of-order.
-    final generation = ++_periodReloadGeneration;
-    final result = await _listExecutions(
-      requestedAfter: _historyController.periodStart(_now),
-      limit: _historyController.executionFetchLimit(),
+    final errorMessage = await _executionsController.reloadForPeriod(
+      historyController: _historyController,
+      now: _now,
+      isLoading: isLoading,
+      nextPeriodReloadGeneration: () => ++_periodReloadGeneration,
+      isPeriodReloadCurrent: (generation) => generation == _periodReloadGeneration,
     );
-    // A newer reload (or a full load()) already raced past us; discard.
-    if (generation != _periodReloadGeneration || _isLoading) {
-      return;
+    if (errorMessage != null) {
+      _errorMessage = errorMessage;
+      notifyListeners();
     }
-    result.fold(
-      (executions) {
-        _executions = executions;
-        _executionsViewCache = null;
-        _filteredSelectedExecutionsCache = null;
-        notifyListeners();
-      },
-      (failure) {
-        _errorMessage = _messageFor(failure);
-        notifyListeners();
-      },
-    );
   }
 
   void setHistoryFailurePhaseFilter(String? phase) {
-    final normalized = phase?.trim();
-    final resolved = normalized == null || normalized.isEmpty ? null : normalized;
-    if (_historyController.failurePhaseFilter == resolved) {
+    if (!_historyController.updateFailurePhaseFilter(phase)) {
       return;
     }
 
-    _auditCorrelationExecutionId = null;
-    _historyController.failurePhaseFilter = resolved;
-    _filteredSelectedExecutionsCache = null;
-    notifyListeners();
+    _applyHistoryFilterChange(reloadForPeriod: false);
   }
 
   void setHistorySearchQuery(String query) {
-    final normalized = query.trim();
-    if (_historyController.searchQuery == normalized) {
+    if (!_historyController.updateSearchQuery(query)) {
       return;
     }
 
-    _auditCorrelationExecutionId = null;
-    _historyController.searchQuery = normalized;
-    _filteredSelectedExecutionsCache = null;
-    notifyListeners();
+    _applyHistoryFilterChange(reloadForPeriod: false);
   }
 
-  void setDefinitionTypeFilter(AgentActionType? type) => setDefinitionTypeFilterFor(this, type);
+  void _applyHistoryFilterChange({required bool reloadForPeriod}) {
+    _remoteAuditController.clearCorrelation();
+    _executionsController.invalidateCaches();
+    notifyListeners();
+    if (reloadForPeriod) {
+      unawaited(_reloadExecutionsForPeriod());
+    }
+  }
 
-  void setDefinitionStateFilter(AgentActionState? state) => setDefinitionStateFilterFor(this, state);
+  void setDefinitionTypeFilter(AgentActionType? type) => _definitionsController.setDefinitionTypeFilter(type);
+  void setDefinitionStateFilter(AgentActionState? state) => _definitionsController.setDefinitionStateFilter(state);
+  void setDefinitionSearchQuery(String query) => _definitionsController.setDefinitionSearchQuery(query);
+  void clearDefinitionFilters() => _definitionsController.clearDefinitionFilters();
 
-  void setDefinitionSearchQuery(String query) => setDefinitionSearchQueryFor(this, query);
-
-  void clearDefinitionFilters() => clearDefinitionFiltersFor(this);
-
-  /// Applies persisted UI preferences in a single transaction.
-  ///
-  /// Each individual setter normally emits its own [notifyListeners] call;
-  /// restoring 5+ filters on page mount triggered a rebuild storm and even
-  /// duplicated the executions fetch (period setter -> reload + load()).
-  /// This method batches the mutation and emits a single notification.
   void applyRestoredPreferences({
     required AgentActionType? definitionType,
     required AgentActionState? definitionState,
@@ -843,7 +596,6 @@ class AgentActionsProvider extends ChangeNotifier {
     required String? historyFailurePhase,
     required String historySearch,
   }) {
-    final normalizedDefinitionSearch = definitionSearch.trim();
     final historyRestore = _historyController.applyRestored(
       historyStatus: historyStatus,
       historySource: historySource,
@@ -852,182 +604,73 @@ class AgentActionsProvider extends ChangeNotifier {
       historySearch: historySearch,
     );
 
+    final normalizedDefinitionSearch = definitionSearch.trim();
     final didChange =
-        _definitionTypeFilter != definitionType ||
-        _definitionStateFilter != definitionState ||
-        _definitionSearchQuery != normalizedDefinitionSearch ||
+        _definitionsController.definitionTypeFilter != definitionType ||
+        _definitionsController.definitionStateFilter != definitionState ||
+        _definitionsController.definitionSearchQuery != normalizedDefinitionSearch ||
         historyRestore.didChange;
 
     if (!didChange) {
       return;
     }
 
-    final periodChanged = historyRestore.periodChanged;
-
-    _definitionTypeFilter = definitionType;
-    _definitionStateFilter = definitionState;
-    _definitionSearchQuery = normalizedDefinitionSearch;
-    _auditCorrelationExecutionId = null;
-    _filteredSelectedExecutionsCache = null;
-
+    _definitionsController.applyRestoredFilters(
+      definitionType: definitionType,
+      definitionState: definitionState,
+      definitionSearch: definitionSearch,
+    );
+    _remoteAuditController.clearCorrelation();
+    _executionsController.invalidateCaches();
     notifyListeners();
-
-    // The page calls load() right after restoring preferences, so reloading
-    // executions here would duplicate the fetch. Only trigger an extra reload
-    // when the caller wires us up without a follow-up load (rare); the period
-    // change is recorded but the data refresh is deferred to load().
-    if (periodChanged && !_isLoading) {
-      // No-op intentionally: load() called by the page right after restore
-      // will fetch with the new period. We avoid the previous race where
-      // setHistoryPeriodFilter fired _reloadExecutionsForPeriod in parallel
-      // with load().
-    }
   }
 
-  /// Collects secret placeholder names from a definition's config.
-  ///
-  /// Delegates to [AgentActionSecretPlaceholderScanner] so that presentation
-  /// widgets do not need to import the application layer directly.
   Set<String> secretPlaceholderNamesFor(AgentActionDefinition definition) =>
       AgentActionSecretPlaceholderScanner.collectFromDefinition(definition);
 
   bool get hasHistoryFilters => _historyController.hasFilters;
 
   void clearHistoryFilters() {
-    _auditCorrelationExecutionId = null;
-    _historyController.clearFilters();
-    _filteredSelectedExecutionsCache = null;
-    notifyListeners();
-  }
-
-  Future<void> _refreshSelectedSecretReport() async {
-    final definition = selectedDefinition;
-    if (definition == null) {
-      _selectedSecretReport = null;
-      notifyListeners();
+    if (!_historyController.clearAllFilters()) {
       return;
     }
 
-    _selectedSecretReport = await _secretAvailabilityChecker.check(definition);
-    notifyListeners();
+    _applyHistoryFilterChange(reloadForPeriod: false);
   }
 
-  void clearSecretOperationError() {
-    if (_secretOperationErrorMessage == null) {
-      return;
-    }
-    _secretOperationErrorMessage = null;
-    notifyListeners();
-  }
+  Future<void> _refreshSelectedSecretReport() =>
+      _secretsController.refreshForDefinition(selectedDefinition);
+
+  void clearSecretOperationError() => _secretsController.clearSecretOperationError();
 
   Future<Result<Unit>> saveActionSecret({
     required String secretName,
     required String secretValue,
-  }) async {
-    final saveSecret = _saveAgentActionSecret;
-    if (saveSecret == null) {
-      return Failure(
-        domain_errors.ValidationFailure('Action secret store is not available.'),
-      );
-    }
+  }) => _secretsController.saveActionSecret(
+    secretName: secretName,
+    secretValue: secretValue,
+    selectedDefinition: selectedDefinition,
+  );
 
-    _savingActionSecretName = secretName.trim();
-    _secretOperationErrorMessage = null;
-    notifyListeners();
-
-    final result = await saveSecret(
-      secretName: secretName,
-      secretValue: secretValue,
-    );
-
-    _savingActionSecretName = null;
-    result.fold(
-      (_) {
-        _secretOperationErrorMessage = null;
-      },
-      (failure) {
-        _secretOperationErrorMessage = _messageFor(failure);
-      },
-    );
-    await _refreshSelectedSecretReport();
-    return result;
-  }
-
-  Future<Result<Unit>> deleteActionSecret(String secretName) async {
-    final deleteSecret = _deleteAgentActionSecret;
-    if (deleteSecret == null) {
-      return Failure(
-        domain_errors.ValidationFailure('Action secret store is not available.'),
-      );
-    }
-
-    _deletingActionSecretName = secretName.trim();
-    _secretOperationErrorMessage = null;
-    notifyListeners();
-
-    final result = await deleteSecret(secretName);
-
-    _deletingActionSecretName = null;
-    result.fold(
-      (_) {
-        _secretOperationErrorMessage = null;
-      },
-      (failure) {
-        _secretOperationErrorMessage = _messageFor(failure);
-      },
-    );
-    await _refreshSelectedSecretReport();
-    return result;
-  }
+  Future<Result<Unit>> deleteActionSecret(String secretName) => _secretsController.deleteActionSecret(
+    secretName: secretName,
+    selectedDefinition: selectedDefinition,
+  );
 
   Future<void> loadDeveloperData7Connections({
     required String actionId,
     required String data7ConfigPath,
     String? selectedConnectionId,
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) async {
-    _isLoadingDeveloperConnections = true;
-    _developerConnectionLookupMessage = null;
-    notifyListeners();
+  }) => _definitionsController.loadDeveloperData7Connections(
+    actionId: actionId,
+    data7ConfigPath: data7ConfigPath,
+    selectedConnectionId: selectedConnectionId,
+    pathPolicy: pathPolicy,
+  );
 
-    final result = await _listDeveloperData7Connections(
-      DeveloperData7ConnectionLookupRequest(
-        actionId: actionId.trim(),
-        data7ConfigPath: AgentActionPathReference(originalPath: data7ConfigPath.trim()),
-        pathPolicy: pathPolicy,
-        selectedConnectionId: selectedConnectionId,
-      ),
-    );
-
-    result.fold(
-      (lookup) {
-        _developerConnections = lookup.connections;
-        _resolvedDeveloperData7ConfigPath = lookup.resolvedConfigPath.displayPath;
-        _usedDefaultDeveloperData7ConfigPath = lookup.usedDefaultLocation;
-        _developerConnectionLookupMessage = null;
-      },
-      (failure) {
-        _developerConnections = <DeveloperData7ConnectionOption>[];
-        _resolvedDeveloperData7ConfigPath = null;
-        _usedDefaultDeveloperData7ConfigPath = false;
-        _developerConnectionLookupMessage = _messageFor(failure);
-      },
-    );
-
-    _isLoadingDeveloperConnections = false;
-    notifyListeners();
-  }
-
-  void clearDeveloperData7Connections({bool notify = true}) {
-    _developerConnections = <DeveloperData7ConnectionOption>[];
-    _developerConnectionLookupMessage = null;
-    _resolvedDeveloperData7ConfigPath = null;
-    _usedDefaultDeveloperData7ConfigPath = false;
-    _isLoadingDeveloperConnections = false;
-    if (notify) {
-      notifyListeners();
-    }
-  }
+  void clearDeveloperData7Connections({bool notify = true}) =>
+      _definitionsController.clearDeveloperData7Connections(notify: notify);
 
   Future<bool> saveCommandLineAction({
     required String name,
@@ -1051,36 +694,32 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) {
-    final trimmedWorkingDirectory = workingDirectory?.trim();
-    return _saveDraftDefinition(
+  }) => _saveWithReload(
+    () => _definitionsController.saveCommandLineAction(
       name: name,
+      command: command,
       actionId: actionId,
       description: description,
+      workingDirectory: workingDirectory,
       state: state,
-      config: CommandLineActionConfig(
-        command: command.trim(),
-        workingDirectory: _assembler.optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
-      ),
-      buildPolicies: (existing) => _assembler.policiesForSave(
-        existing: existing,
-        notificationPolicy: notificationPolicy,
-        retryPolicy: retryPolicy,
-        timeoutPolicy: timeoutPolicy,
-        environmentPolicy: environmentPolicy,
-        exitCodePolicy: exitCodePolicy,
-        processPolicy: processPolicy,
-        lifecyclePolicy: lifecyclePolicy,
-        remotePolicy: remotePolicy,
-        elevatedPolicy: elevatedPolicy,
-        contextPolicy: contextPolicy,
-        encodingPolicy: encodingPolicy,
-        capturePolicy: capturePolicy,
-        queuePolicy: queuePolicy,
-        pathPolicy: pathPolicy,
-      ),
-    );
-  }
+      notificationPolicy: notificationPolicy,
+      retryPolicy: retryPolicy,
+      timeoutPolicy: timeoutPolicy,
+      environmentPolicy: environmentPolicy,
+      exitCodePolicy: exitCodePolicy,
+      processPolicy: processPolicy,
+      lifecyclePolicy: lifecyclePolicy,
+      remotePolicy: remotePolicy,
+      elevatedPolicy: elevatedPolicy,
+      contextPolicy: contextPolicy,
+      pathChangePolicy: pathChangePolicy,
+      encodingPolicy: encodingPolicy,
+      capturePolicy: capturePolicy,
+      queuePolicy: queuePolicy,
+      pathPolicy: pathPolicy,
+      canSave: canSaveAction,
+    ),
+  );
 
   Future<bool> saveExecutableAction({
     required String name,
@@ -1105,37 +744,33 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) {
-    final trimmedWorkingDirectory = workingDirectory?.trim();
-    return _saveDraftDefinition(
+  }) => _saveWithReload(
+    () => _definitionsController.saveExecutableAction(
       name: name,
+      executablePath: executablePath,
+      arguments: arguments,
       actionId: actionId,
       description: description,
+      workingDirectory: workingDirectory,
       state: state,
-      config: ExecutableActionConfig(
-        executablePath: _assembler.pathReference(executablePath.trim(), pathChangePolicy: pathChangePolicy),
-        arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: _assembler.optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
-      ),
-      buildPolicies: (existing) => _assembler.policiesForSave(
-        existing: existing,
-        notificationPolicy: notificationPolicy,
-        retryPolicy: retryPolicy,
-        timeoutPolicy: timeoutPolicy,
-        environmentPolicy: environmentPolicy,
-        exitCodePolicy: exitCodePolicy,
-        processPolicy: processPolicy,
-        lifecyclePolicy: lifecyclePolicy,
-        remotePolicy: remotePolicy,
-        elevatedPolicy: elevatedPolicy,
-        contextPolicy: contextPolicy,
-        encodingPolicy: encodingPolicy,
-        capturePolicy: capturePolicy,
-        queuePolicy: queuePolicy,
-        pathPolicy: pathPolicy,
-      ),
-    );
-  }
+      notificationPolicy: notificationPolicy,
+      retryPolicy: retryPolicy,
+      timeoutPolicy: timeoutPolicy,
+      environmentPolicy: environmentPolicy,
+      exitCodePolicy: exitCodePolicy,
+      processPolicy: processPolicy,
+      lifecyclePolicy: lifecyclePolicy,
+      remotePolicy: remotePolicy,
+      elevatedPolicy: elevatedPolicy,
+      contextPolicy: contextPolicy,
+      pathChangePolicy: pathChangePolicy,
+      encodingPolicy: encodingPolicy,
+      capturePolicy: capturePolicy,
+      queuePolicy: queuePolicy,
+      pathPolicy: pathPolicy,
+      canSave: canSaveAction,
+    ),
+  );
 
   Future<bool> saveScriptAction({
     required String name,
@@ -1161,39 +796,34 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) {
-    final trimmedInterpreterPath = interpreterPath?.trim();
-    final trimmedWorkingDirectory = workingDirectory?.trim();
-    return _saveDraftDefinition(
+  }) => _saveWithReload(
+    () => _definitionsController.saveScriptAction(
       name: name,
+      scriptPath: scriptPath,
+      arguments: arguments,
       actionId: actionId,
       description: description,
+      interpreterPath: interpreterPath,
+      workingDirectory: workingDirectory,
       state: state,
-      config: ScriptActionConfig(
-        scriptPath: _assembler.pathReference(scriptPath.trim(), pathChangePolicy: pathChangePolicy),
-        interpreterPath: _assembler.optionalPathReference(trimmedInterpreterPath, pathChangePolicy: pathChangePolicy),
-        arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: _assembler.optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
-      ),
-      buildPolicies: (existing) => _assembler.policiesForSave(
-        existing: existing,
-        notificationPolicy: notificationPolicy,
-        retryPolicy: retryPolicy,
-        timeoutPolicy: timeoutPolicy,
-        environmentPolicy: environmentPolicy,
-        exitCodePolicy: exitCodePolicy,
-        processPolicy: processPolicy,
-        lifecyclePolicy: lifecyclePolicy,
-        remotePolicy: remotePolicy,
-        elevatedPolicy: elevatedPolicy,
-        contextPolicy: contextPolicy,
-        encodingPolicy: encodingPolicy,
-        capturePolicy: capturePolicy,
-        queuePolicy: queuePolicy,
-        pathPolicy: pathPolicy,
-      ),
-    );
-  }
+      notificationPolicy: notificationPolicy,
+      retryPolicy: retryPolicy,
+      timeoutPolicy: timeoutPolicy,
+      environmentPolicy: environmentPolicy,
+      exitCodePolicy: exitCodePolicy,
+      processPolicy: processPolicy,
+      lifecyclePolicy: lifecyclePolicy,
+      remotePolicy: remotePolicy,
+      elevatedPolicy: elevatedPolicy,
+      contextPolicy: contextPolicy,
+      pathChangePolicy: pathChangePolicy,
+      encodingPolicy: encodingPolicy,
+      capturePolicy: capturePolicy,
+      queuePolicy: queuePolicy,
+      pathPolicy: pathPolicy,
+      canSave: canSaveAction,
+    ),
+  );
 
   Future<bool> saveJarAction({
     required String name,
@@ -1219,39 +849,34 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) {
-    final trimmedJavaPath = javaExecutablePath?.trim();
-    final trimmedWorkingDirectory = workingDirectory?.trim();
-    return _saveDraftDefinition(
+  }) => _saveWithReload(
+    () => _definitionsController.saveJarAction(
       name: name,
+      jarPath: jarPath,
+      arguments: arguments,
       actionId: actionId,
       description: description,
+      javaExecutablePath: javaExecutablePath,
+      workingDirectory: workingDirectory,
       state: state,
-      config: JarActionConfig(
-        jarPath: _assembler.pathReference(jarPath.trim(), pathChangePolicy: pathChangePolicy),
-        javaExecutablePath: _assembler.optionalPathReference(trimmedJavaPath, pathChangePolicy: pathChangePolicy),
-        arguments: List<String>.unmodifiable(arguments),
-        workingDirectory: _assembler.optionalPathReference(trimmedWorkingDirectory, pathChangePolicy: pathChangePolicy),
-      ),
-      buildPolicies: (existing) => _assembler.policiesForSave(
-        existing: existing,
-        notificationPolicy: notificationPolicy,
-        retryPolicy: retryPolicy,
-        timeoutPolicy: timeoutPolicy,
-        environmentPolicy: environmentPolicy,
-        exitCodePolicy: exitCodePolicy,
-        processPolicy: processPolicy,
-        lifecyclePolicy: lifecyclePolicy,
-        remotePolicy: remotePolicy,
-        elevatedPolicy: elevatedPolicy,
-        contextPolicy: contextPolicy,
-        encodingPolicy: encodingPolicy,
-        capturePolicy: capturePolicy,
-        queuePolicy: queuePolicy,
-        pathPolicy: pathPolicy,
-      ),
-    );
-  }
+      notificationPolicy: notificationPolicy,
+      retryPolicy: retryPolicy,
+      timeoutPolicy: timeoutPolicy,
+      environmentPolicy: environmentPolicy,
+      exitCodePolicy: exitCodePolicy,
+      processPolicy: processPolicy,
+      lifecyclePolicy: lifecyclePolicy,
+      remotePolicy: remotePolicy,
+      elevatedPolicy: elevatedPolicy,
+      contextPolicy: contextPolicy,
+      pathChangePolicy: pathChangePolicy,
+      encodingPolicy: encodingPolicy,
+      capturePolicy: capturePolicy,
+      queuePolicy: queuePolicy,
+      pathPolicy: pathPolicy,
+      canSave: canSaveAction,
+    ),
+  );
 
   Future<bool> saveEmailAction({
     required String name,
@@ -1279,39 +904,36 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathChangePolicy? pathChangePolicy,
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) {
-    return _saveDraftDefinition(
+  }) => _saveWithReload(
+    () => _definitionsController.saveEmailAction(
       name: name,
+      smtpProfileId: smtpProfileId,
+      from: from,
+      to: to,
+      subjectTemplate: subjectTemplate,
+      bodyTemplate: bodyTemplate,
       actionId: actionId,
       description: description,
+      cc: cc,
+      bcc: bcc,
+      attachmentPaths: attachmentPaths,
       state: state,
-      config: EmailActionConfig(
-        smtpProfileId: smtpProfileId.trim(),
-        from: from.trim(),
-        to: List<String>.unmodifiable(to),
-        cc: List<String>.unmodifiable(cc),
-        bcc: List<String>.unmodifiable(bcc),
-        subjectTemplate: subjectTemplate.trim(),
-        bodyTemplate: bodyTemplate.trim(),
-        attachmentPaths: List<AgentActionPathReference>.unmodifiable(attachmentPaths),
-      ),
-      buildPolicies: (existing) => _assembler.policiesForSave(
-        existing: existing,
-        notificationPolicy: notificationPolicy,
-        retryPolicy: retryPolicy,
-        timeoutPolicy: timeoutPolicy,
-        environmentPolicy: environmentPolicy,
-        exitCodePolicy: exitCodePolicy,
-        processPolicy: processPolicy,
-        lifecyclePolicy: lifecyclePolicy,
-        remotePolicy: remotePolicy,
-        elevatedPolicy: elevatedPolicy,
-        contextPolicy: contextPolicy,
-        queuePolicy: queuePolicy,
-        pathPolicy: pathPolicy,
-      ),
-    );
-  }
+      notificationPolicy: notificationPolicy,
+      retryPolicy: retryPolicy,
+      timeoutPolicy: timeoutPolicy,
+      environmentPolicy: environmentPolicy,
+      exitCodePolicy: exitCodePolicy,
+      processPolicy: processPolicy,
+      lifecyclePolicy: lifecyclePolicy,
+      remotePolicy: remotePolicy,
+      elevatedPolicy: elevatedPolicy,
+      contextPolicy: contextPolicy,
+      pathChangePolicy: pathChangePolicy,
+      queuePolicy: queuePolicy,
+      pathPolicy: pathPolicy,
+      canSave: canSaveAction,
+    ),
+  );
 
   Future<bool> saveComObjectAction({
     required String name,
@@ -1334,34 +956,31 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionPathChangePolicy? pathChangePolicy,
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) {
-    return _saveDraftDefinition(
+  }) => _saveWithReload(
+    () => _definitionsController.saveComObjectAction(
       name: name,
+      progId: progId,
+      memberName: memberName,
+      arguments: arguments,
       actionId: actionId,
       description: description,
       state: state,
-      config: ComObjectActionConfig(
-        progId: progId.trim(),
-        memberName: memberName.trim(),
-        arguments: Map<String, Object?>.unmodifiable(arguments),
-      ),
-      buildPolicies: (existing) => _assembler.policiesForSave(
-        existing: existing,
-        notificationPolicy: notificationPolicy,
-        retryPolicy: retryPolicy,
-        timeoutPolicy: timeoutPolicy,
-        environmentPolicy: environmentPolicy,
-        exitCodePolicy: exitCodePolicy,
-        processPolicy: processPolicy,
-        lifecyclePolicy: lifecyclePolicy,
-        remotePolicy: remotePolicy,
-        elevatedPolicy: elevatedPolicy,
-        contextPolicy: contextPolicy,
-        queuePolicy: queuePolicy,
-        pathPolicy: pathPolicy,
-      ),
-    );
-  }
+      notificationPolicy: notificationPolicy,
+      retryPolicy: retryPolicy,
+      timeoutPolicy: timeoutPolicy,
+      environmentPolicy: environmentPolicy,
+      exitCodePolicy: exitCodePolicy,
+      processPolicy: processPolicy,
+      lifecyclePolicy: lifecyclePolicy,
+      remotePolicy: remotePolicy,
+      elevatedPolicy: elevatedPolicy,
+      contextPolicy: contextPolicy,
+      pathChangePolicy: pathChangePolicy,
+      queuePolicy: queuePolicy,
+      pathPolicy: pathPolicy,
+      canSave: canSaveAction,
+    ),
+  );
 
   Future<bool> saveDeveloperData7Action({
     required String name,
@@ -1388,46 +1007,81 @@ class AgentActionsProvider extends ChangeNotifier {
     AgentActionCapturePolicy capturePolicy = const AgentActionCapturePolicy(),
     AgentActionQueuePolicy queuePolicy = const AgentActionQueuePolicy(),
     AgentActionPathPolicy pathPolicy = const AgentActionPathPolicy(),
-  }) {
-    final trimmedData7ConfigPath = data7ConfigPath?.trim() ?? '';
-    final trimmedConnectionId = connectionId.trim();
-    return _saveDraftDefinition(
+  }) => _saveWithReload(
+    () => _definitionsController.saveDeveloperData7Action(
       name: name,
+      executorPath: executorPath,
+      projectPath: projectPath,
+      connectionId: connectionId,
+      connectionLabel: connectionLabel,
       actionId: actionId,
       description: description,
+      data7ConfigPath: data7ConfigPath,
       state: state,
-      config: DeveloperActionConfig.data7Executor(
-        executorPath: _assembler.pathReference(executorPath.trim()),
-        projectPath: _assembler.pathReference(projectPath.trim()),
-        data7ConfigPath: _assembler.pathReference(trimmedData7ConfigPath),
-        connectionId: trimmedConnectionId,
-        connectionLabel: connectionLabel.trim().isEmpty ? trimmedConnectionId : connectionLabel.trim(),
-      ),
-      buildPolicies: (existing) => _assembler.policiesForSave(
-        existing: existing,
-        notificationPolicy: notificationPolicy,
-        retryPolicy: retryPolicy,
-        timeoutPolicy: timeoutPolicy,
-        environmentPolicy: environmentPolicy,
-        exitCodePolicy: exitCodePolicy,
-        processPolicy: processPolicy,
-        lifecyclePolicy: lifecyclePolicy,
-        remotePolicy: remotePolicy,
-        elevatedPolicy: elevatedPolicy,
-        contextPolicy: contextPolicy,
-        encodingPolicy: encodingPolicy,
-        capturePolicy: capturePolicy,
-        queuePolicy: queuePolicy,
-        pathPolicy: pathPolicy,
-      ),
-    );
+      notificationPolicy: notificationPolicy,
+      retryPolicy: retryPolicy,
+      timeoutPolicy: timeoutPolicy,
+      environmentPolicy: environmentPolicy,
+      exitCodePolicy: exitCodePolicy,
+      processPolicy: processPolicy,
+      lifecyclePolicy: lifecyclePolicy,
+      remotePolicy: remotePolicy,
+      elevatedPolicy: elevatedPolicy,
+      contextPolicy: contextPolicy,
+      pathChangePolicy: pathChangePolicy,
+      encodingPolicy: encodingPolicy,
+      capturePolicy: capturePolicy,
+      queuePolicy: queuePolicy,
+      pathPolicy: pathPolicy,
+      canSave: canSaveAction,
+    ),
+  );
+
+  Future<bool> _saveWithReload(Future<bool> Function() save) async {
+    _errorMessage = null;
+    _definitionsController.lastOperationErrorMessage = null;
+    _executionsController.clearTestStateForSelectionChange();
+    final shouldReload = await save();
+    if (shouldReload) {
+      await load();
+      return true;
+    }
+    return false;
   }
 
-  Future<bool> exportBundleToFile(String filePath, {required AppLocalizations l10n}) =>
-      exportBundleToFileFor(this, filePath, l10n: l10n);
+  Future<bool> exportBundleToFile(String filePath, {required AppLocalizations l10n}) async {
+    _errorMessage = null;
+    final outcome = await _bundleTransferController.exportToFile(
+      filePath: filePath,
+      l10n: l10n,
+      canTransfer: canTransferBundle,
+    );
+    if (outcome.errorMessage != null) {
+      _errorMessage = outcome.errorMessage;
+      notifyListeners();
+    }
+    return outcome.succeeded;
+  }
 
-  Future<ImportAgentActionsBundleSummary?> importBundleFromFile(String filePath, {required AppLocalizations l10n}) =>
-      importBundleFromFileFor(this, filePath, l10n: l10n);
+  Future<ImportAgentActionsBundleSummary?> importBundleFromFile(String filePath, {required AppLocalizations l10n}) async {
+    _errorMessage = null;
+    final outcome = await _bundleTransferController.importFromFile(
+      filePath: filePath,
+      l10n: l10n,
+      canTransfer: canTransferBundle,
+    );
+    if (outcome.errorMessage != null) {
+      _errorMessage = outcome.errorMessage;
+      notifyListeners();
+      return null;
+    }
+
+    final summary = outcome.summary;
+    if (summary != null) {
+      await load();
+    }
+    return summary;
+  }
 
   Future<void> deleteSelectedAction() async {
     final definition = selectedDefinition;
@@ -1435,49 +1089,33 @@ class AgentActionsProvider extends ChangeNotifier {
       return;
     }
 
-    _isDeleting = true;
     _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final result = await _deleteDefinition(definition.id);
-    var shouldReload = false;
-    result.fold(
-      (_) {
-        _selectedActionId = null;
-        shouldReload = true;
-      },
-      (failure) {
-        _errorMessage = _messageFor(failure);
-      },
+    _executionsController.clearTestStateForSelectionChange();
+    final outcome = await _definitionsController.deleteSelectedAction(
+      definition: definition,
+      canDelete: canDeleteSelected,
     );
 
-    _isDeleting = false;
-    if (shouldReload) {
+    if (outcome.shouldReload) {
       await load();
       return;
     }
 
-    notifyListeners();
+    if (outcome.errorMessage != null) {
+      _errorMessage = outcome.errorMessage;
+      notifyListeners();
+    }
   }
 
   void selectAction(String actionId) {
-    if (_selectedActionId == actionId) {
+    if (_definitionsController.selectedActionId == actionId) {
       return;
     }
 
-    _auditCorrelationExecutionId = null;
-    _selectedActionId = actionId;
-    // Stale per-action test results must not bleed into the newly selected
-    // action. Consumers rely on (lastTestedActionId == definition.id) to
-    // gate the test InfoBar / preview, but resetting here keeps the public
-    // state honest for any future consumer that forgets the guard.
-    if (_lastTestedActionId != actionId) {
-      _lastTestedActionId = null;
-      _lastTestCanRun = null;
-      _clearLastTestPreviewState();
+    _remoteAuditController.clearCorrelation();
+    _definitionsController.selectAction(actionId);
+    if (_executionsController.lastTestedActionId != actionId) {
+      _executionsController.clearTestStateForSelectionChange();
     }
     notifyListeners();
     unawaited(_syncTriggersForSelection());
@@ -1486,89 +1124,40 @@ class AgentActionsProvider extends ChangeNotifier {
 
   Future<void> refreshTriggersForSelection() => _syncTriggersForSelection();
 
-  void clearTriggerOperationError() {
-    if (_triggerErrorMessage == null) {
-      return;
-    }
-
-    _triggerErrorMessage = null;
-    notifyListeners();
-  }
+  void clearTriggerOperationError() => _triggersController.clearTriggerOperationError();
 
   Future<bool> saveTrigger(AgentActionTrigger trigger) async {
-    if (!canManageTriggers || _isSavingTrigger) {
-      return false;
-    }
-
-    _isSavingTrigger = true;
-    _triggerErrorMessage = null;
-    notifyListeners();
-
-    final result = await _saveTrigger(trigger);
-    var ok = false;
-    result.fold(
-      (_) {
-        ok = true;
-      },
-      (Exception failure) {
-        _triggerErrorMessage = _messageFor(failure);
-      },
+    final ok = await _triggersController.saveTrigger(
+      trigger: trigger,
+      canManageTriggers: canManageTriggers,
     );
-
-    _isSavingTrigger = false;
     if (ok) {
       await _syncTriggersForSelection();
-    } else {
-      notifyListeners();
     }
-
     return ok;
   }
 
   Future<void> deleteTrigger(String triggerId) async {
-    final trimmedId = triggerId.trim();
-    if (!isFeatureEnabled || trimmedId.isEmpty || _deletingTriggerIds.contains(trimmedId)) {
-      return;
-    }
-
-    _deletingTriggerIds.add(trimmedId);
-    _triggerErrorMessage = null;
-    notifyListeners();
-
-    final result = await _deleteTrigger(trimmedId);
-    result.fold(
-      (_) {},
-      (failure) {
-        _triggerErrorMessage = _messageFor(failure);
-      },
+    await _triggersController.deleteTrigger(
+      triggerId: triggerId,
+      isFeatureEnabled: isFeatureEnabled,
     );
-
-    _deletingTriggerIds.remove(trimmedId);
     await _syncTriggersForSelection();
   }
 
-  Future<void> runSelectedAction() async {
+  Future<void> runSelectedAction({bool dangerousCommandConfirmed = false}) async {
     final definition = selectedDefinition;
     if (definition == null || !canRunSelected) {
       return;
     }
 
-    _isRunning = true;
     _errorMessage = null;
-    notifyListeners();
-
-    final result = await _runAction(
-      AgentActionExecutionRequest(
-        actionId: definition.id,
-        source: AgentActionRequestSource.localUi,
-      ),
+    final errorMessage = await _executionsController.runAction(
+      definition: definition,
+      dangerousCommandConfirmed: dangerousCommandConfirmed,
     );
-
-    _isRunning = false;
-    if (result.isError()) {
-      // Surface the failure to the user. load() would clear _errorMessage
-      // before the InfoBar had a chance to render.
-      _errorMessage = _messageFor(result.exceptionOrNull()!);
+    if (errorMessage != null) {
+      _errorMessage = errorMessage;
       notifyListeners();
       return;
     }
@@ -1582,51 +1171,21 @@ class AgentActionsProvider extends ChangeNotifier {
       return;
     }
 
-    _isTesting = true;
     _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final result = await _testDefinition(definition.id);
-    if (result.isError()) {
-      final failure = result.exceptionOrNull()!;
-      _lastTestedActionId = definition.id;
-      _lastTestCanRun = false;
-      _sessionPreflightSnapshotHashes.remove(definition.id);
-      _errorMessage = _messageFor(failure);
-      _applyTestFailurePreview(failure);
-      _isTesting = false;
-      notifyListeners();
-      return;
-    }
-
-    final preflight = result.getOrThrow();
-    _lastTestedActionId = definition.id;
-    _lastTestCanRun = preflight.canRun;
-    _lastTestDiagnostics = preflight.redactedDiagnostics;
-
-    await _recordPreflightSuccess(definition);
-
-    final previewResult = await _previewDefinition(definition.id);
-    previewResult.fold(
-      (preview) {
-        _lastTestCommandPreview = preview.redactedCommandPreview;
-        _lastTestDiagnostics = <String, Object?>{
-          ..._lastTestDiagnostics,
-          ...preview.redactedDiagnostics,
-        };
-        _lastTestPreviewErrorMessage = null;
+    final outcome = await _executionsController.testAction(
+      definition: definition,
+      onPreflightSuccess: (testedDefinition) async {
+        final errorMessage = await _definitionsController.recordPreflightSuccess(testedDefinition);
+        if (errorMessage != null) {
+          _errorMessage = errorMessage;
+        }
       },
-      (failure) {
-        _lastTestCommandPreview = null;
-        _lastTestPreviewErrorMessage = _messageFor(failure);
-      },
+      onPreflightFailure: _definitionsController.clearPreflightSessionForDefinition,
     );
 
-    _isTesting = false;
-    notifyListeners();
+    if (outcome.errorMessage != null) {
+      _errorMessage = outcome.errorMessage;
+    }
   }
 
   Future<void> cancelExecution(AgentActionExecution execution) async {
@@ -1634,16 +1193,10 @@ class AgentActionsProvider extends ChangeNotifier {
       return;
     }
 
-    _cancellingExecutionIds.add(execution.id);
     _errorMessage = null;
-    notifyListeners();
-
-    final result = await _cancelExecution(execution.id);
-
-    _cancellingExecutionIds.remove(execution.id);
-    if (result.isError()) {
-      // Preserve the failure message; load() would zero it out.
-      _errorMessage = _messageFor(result.exceptionOrNull()!);
+    final errorMessage = await _executionsController.cancelExecution(execution);
+    if (errorMessage != null) {
+      _errorMessage = errorMessage;
       notifyListeners();
       return;
     }
@@ -1651,223 +1204,10 @@ class AgentActionsProvider extends ChangeNotifier {
     await load();
   }
 
-  String? _resolveSelectedActionId() {
-    final selectedId = _selectedActionId;
-    if (selectedId != null && _definitions.any((definition) => definition.id == selectedId)) {
-      return selectedId;
-    }
-    if (_definitions.isEmpty) {
-      return null;
-    }
+  String _messageFor(Exception failure) => AgentActionFailureDiagnosticsResolver.userMessage(failure);
 
-    return _definitions.first.id;
-  }
-
-  String _messageFor(Exception failure) {
-    return AgentActionFailureDiagnosticsResolver.userMessage(failure);
-  }
-
-  void _applyTestFailurePreview(Exception failure) {
-    _lastTestCommandPreview = null;
-    _lastTestPreviewErrorMessage = _messageFor(failure);
-    if (failure is ActionFailure) {
-      _lastTestDiagnostics = const AgentActionFailureDiagnosticsResolver().redactedDiagnosticsForTestPreview(failure);
-    } else {
-      _lastTestDiagnostics = const <String, Object?>{};
-    }
-  }
-
-  AgentActionDefinition? _existingDefinition(String? actionId) {
-    if (actionId == null || actionId.isEmpty) {
-      return null;
-    }
-
-    return _definitions.where((definition) => definition.id == actionId).firstOrNull;
-  }
-
-  /// Shared scaffold for all save*Action methods.
-  ///
-  /// Handles guard, state reset, definition assembly and persistence so that
-  /// each public save method only needs to build its specific config.
-  Future<bool> _saveDraftDefinition({
-    required String name,
-    required String? actionId,
-    required String? description,
-    required AgentActionState state,
-    required AgentActionConfig config,
-    required AgentActionDefinitionPolicies Function(AgentActionDefinition? existing) buildPolicies,
-  }) async {
-    if (!canSaveAction) {
-      return false;
-    }
-
-    _isSaving = true;
-    _errorMessage = null;
-    _lastTestedActionId = null;
-    _lastTestCanRun = null;
-    _clearLastTestPreviewState();
-    notifyListeners();
-
-    final trimmedId = actionId?.trim();
-    final trimmedDesc = description?.trim();
-    final existing = _existingDefinition(trimmedId);
-    final definition = AgentActionDefinition(
-      id: existing?.id ?? _uuid.v4(),
-      name: name.trim(),
-      description: trimmedDesc == null || trimmedDesc.isEmpty ? null : trimmedDesc,
-      state: state,
-      config: config,
-      policies: buildPolicies(existing),
-      definitionVersion: existing?.definitionVersion ?? 1,
-      lastPreflightSnapshotHash: _resolveLastPreflightSnapshotHash(existing),
-      lastPreflightValidatedAt: _resolveLastPreflightValidatedAt(existing),
-      createdAt: existing?.createdAt ?? _now(),
-      updatedAt: _now(),
-    );
-
-    return _persistDefinition(definition);
-  }
-
-  Future<bool> _persistDefinition(AgentActionDefinition definition) async {
-    final result = await _saveDefinition(definition);
-    var shouldReload = false;
-    result.fold(
-      (savedDefinition) {
-        _selectedActionId = savedDefinition.id;
-        shouldReload = true;
-      },
-      (failure) {
-        _errorMessage = _messageFor(failure);
-      },
-    );
-
-    _isSaving = false;
-    if (shouldReload) {
-      await load();
-      return true;
-    }
-
-    notifyListeners();
-    return false;
-  }
-
-  void _clearLastTestPreviewState() {
-    _lastTestCommandPreview = null;
-    _lastTestPreviewErrorMessage = null;
-    _lastTestDiagnostics = const <String, Object?>{};
-  }
-
-  String _preflightContentSnapshotHash(AgentActionDefinition definition) {
-    return _definitionSnapshotter.snapshotHash(
-      definition.copyWith(state: AgentActionState.needsValidation),
-    );
-  }
-
-  String? _resolveLastPreflightSnapshotHash(AgentActionDefinition? existing) {
-    if (existing == null) {
-      return null;
-    }
-
-    return _sessionPreflightSnapshotHashes[existing.id] ?? existing.lastPreflightSnapshotHash;
-  }
-
-  DateTime? _resolveLastPreflightValidatedAt(AgentActionDefinition? existing) {
-    if (existing == null) {
-      return null;
-    }
-
-    return _sessionPreflightValidatedAt[existing.id] ?? existing.lastPreflightValidatedAt;
-  }
-
-  void _syncSessionPreflightSnapshotHashes() {
-    _sessionPreflightSnapshotHashes.clear();
-    _sessionPreflightValidatedAt.clear();
-    for (final definition in _definitions) {
-      if (!isPreflightValidForDefinition(definition)) {
-        continue;
-      }
-
-      final hash = definition.lastPreflightSnapshotHash;
-      final validatedAt = definition.lastPreflightValidatedAt;
-      if (hash != null && hash.isNotEmpty && validatedAt != null) {
-        _sessionPreflightSnapshotHashes[definition.id] = hash;
-        _sessionPreflightValidatedAt[definition.id] = validatedAt;
-      }
-    }
-  }
-
-  Future<void> _recordPreflightSuccess(AgentActionDefinition definition) async {
-    final preflightSnapshotHash = _preflightContentSnapshotHash(definition);
-    final validatedAt = _now().toUtc();
-    _sessionPreflightSnapshotHashes[definition.id] = preflightSnapshotHash;
-    _sessionPreflightValidatedAt[definition.id] = validatedAt;
-
-    final result = await _saveDefinition(
-      definition.copyWith(
-        lastPreflightSnapshotHash: preflightSnapshotHash,
-        lastPreflightValidatedAt: validatedAt,
-      ),
-    );
-    result.fold(
-      (savedDefinition) {
-        _definitions = _definitions
-            .map(
-              (AgentActionDefinition item) => item.id == savedDefinition.id ? savedDefinition : item,
-            )
-            .toList(growable: false);
-        _errorMessage = null;
-      },
-      (failure) {
-        _errorMessage = _messageFor(failure);
-      },
-    );
-    notifyListeners();
-  }
-
-  Future<void> _syncTriggersForSelection() async {
-    final definition = selectedDefinition;
-    if (definition == null) {
-      if (_triggers.isNotEmpty || _isLoadingTriggers) {
-        _triggers = <AgentActionTrigger>[];
-        _isLoadingTriggers = false;
-        notifyListeners();
-      }
-      return;
-    }
-
-    // Capture the action id before the await so we can detect a selection
-    // change that arrived while the DB query was in flight.
-    final expectedActionId = definition.id;
-    _isLoadingTriggers = true;
-    notifyListeners();
-
-    final result = await _listTriggers(actionId: definition.id);
-
-    // Discard stale result if the user switched to a different action.
-    if (_selectedActionId != expectedActionId) return;
-
-    if (result.isError()) {
-      _isLoadingTriggers = false;
-      _errorMessage = _messageFor(result.exceptionOrNull()!);
-      _triggers = <AgentActionTrigger>[];
-      notifyListeners();
-      return;
-    }
-
-    final loaded = result.getOrThrow().toList(growable: false);
-    loaded.sort((AgentActionTrigger left, AgentActionTrigger right) {
-      final leftName = (left.name ?? '').trim();
-      final rightName = (right.name ?? '').trim();
-      final nameCompare = leftName.toLowerCase().compareTo(rightName.toLowerCase());
-      if (nameCompare != 0) {
-        return nameCompare;
-      }
-
-      return left.id.compareTo(right.id);
-    });
-
-    _triggers = loaded;
-    _isLoadingTriggers = false;
-    notifyListeners();
-  }
+  Future<void> _syncTriggersForSelection() => _triggersController.syncForSelection(
+    actionId: selectedDefinition?.id,
+    selectedActionId: _definitionsController.selectedActionId,
+  );
 }

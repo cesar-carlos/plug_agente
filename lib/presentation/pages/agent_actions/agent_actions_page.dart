@@ -9,7 +9,6 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
-import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_page_editor.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_ui_preferences.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_actions_tab.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_history_tab.dart';
@@ -18,6 +17,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actio
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_selected_detail.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_settings_tab.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_status_strip.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_deferred.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_details_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';

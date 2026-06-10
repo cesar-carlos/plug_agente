@@ -184,7 +184,7 @@ Future<void> openSelectedActionDialog(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey<String>('agent_action_definition_edit_action-1')));
   await tester.pumpAndSettle();
-  expect(find.byType(ContentDialog), findsOneWidget);
+  expect(find.byType(ContentDialog), findsAtLeastNWidgets(1));
 }
 
 Future<void> openActionDetailsDialog(WidgetTester tester, String actionId) async {

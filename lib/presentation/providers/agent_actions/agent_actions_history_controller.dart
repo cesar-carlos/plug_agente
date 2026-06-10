@@ -59,6 +59,63 @@ class AgentActionsHistoryController {
     searchQuery = '';
   }
 
+  bool updateStatusFilter(AgentActionExecutionStatus? status) {
+    if (statusFilter == status) {
+      return false;
+    }
+
+    statusFilter = status;
+    return true;
+  }
+
+  bool updateSourceFilter(AgentActionRequestSource? source) {
+    if (sourceFilter == source) {
+      return false;
+    }
+
+    sourceFilter = source;
+    return true;
+  }
+
+  bool updatePeriodFilter(AgentActionHistoryPeriod period) {
+    if (periodFilter == period) {
+      return false;
+    }
+
+    periodFilter = period;
+    return true;
+  }
+
+  bool updateFailurePhaseFilter(String? phase) {
+    final normalized = phase?.trim();
+    final resolved = normalized == null || normalized.isEmpty ? null : normalized;
+    if (failurePhaseFilter == resolved) {
+      return false;
+    }
+
+    failurePhaseFilter = resolved;
+    return true;
+  }
+
+  bool updateSearchQuery(String query) {
+    final normalized = query.trim();
+    if (searchQuery == normalized) {
+      return false;
+    }
+
+    searchQuery = normalized;
+    return true;
+  }
+
+  bool clearAllFilters() {
+    if (!hasFilters) {
+      return false;
+    }
+
+    clearFilters();
+    return true;
+  }
+
   void prepareForRemoteAuditFocus() {
     statusFilter = null;
     sourceFilter = null;

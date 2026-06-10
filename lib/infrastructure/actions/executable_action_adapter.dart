@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/constants/agent_action_executable_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
+import 'package:plug_agente/core/utils/path_extension.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_preflight_metadata.dart';
@@ -106,10 +107,11 @@ class ExecutableActionAdapter implements AgentActionAdapter {
         redactedCommandPreview: resolved.invocation.redactedPreview,
         workingDirectory:
             resolved.workingDirectoryValidation.path?.canonicalPath ?? config.workingDirectory?.displayPath,
+        contextHash: contextValidation.getOrThrow().path?.contentHash,
         redactedDiagnostics: {
           ...redactedDiagnostics,
           'argument_count': resolved.invocation.arguments.length,
-          'context_path_extension': _extensionOf(request.contextPath),
+          'context_path_extension': extensionOf(request.contextPath),
           'uses_context_path': request.contextPath != null,
           'run_in_shell': resolved.invocation.runInShell,
           'executable_path': ActionPathPreflightMetadata.forValidatedPath(resolved.executablePath),
@@ -120,6 +122,21 @@ class ExecutableActionAdapter implements AgentActionAdapter {
         },
       ),
     );
+  }
+
+  Future<Result<AgentActionCommandInvocation>> resolveInvocationCommand(
+    AgentActionDefinition definition, {
+    String phase = 'execution_preflight',
+  }) async {
+    final resolvedResult = await _resolveInvocation(
+      definition: definition,
+      phase: phase,
+    );
+    if (resolvedResult.isError()) {
+      return Failure(resolvedResult.exceptionOrNull()!);
+    }
+
+    return Success(resolvedResult.getOrThrow().invocation);
   }
 
   @override
@@ -210,7 +227,7 @@ class ExecutableActionAdapter implements AgentActionAdapter {
       phase: phase,
       requireLaunchAccess: WindowsExecutableLaunchAccessChecker.shouldValidateLaunchAccess(
         phase: phase,
-        extension: _extensionOf(config.executablePath.displayPath),
+        extension: extensionOf(config.executablePath.displayPath),
       ),
       invalidPathUserMessage: 'Informe um executavel ou arquivo .bat valido para esta acao.',
       notFoundUserMessage: 'Arquivo executavel nao encontrado. Verifique o caminho informado.',
@@ -251,19 +268,6 @@ class ExecutableActionAdapter implements AgentActionAdapter {
         hasWorkingDirectory: config.workingDirectory != null,
       ),
     );
-  }
-
-  String? _extensionOf(String? path) {
-    if (path == null) {
-      return null;
-    }
-    final lastSeparator = path.lastIndexOf(RegExp(r'[\\/]'));
-    final fileName = lastSeparator >= 0 ? path.substring(lastSeparator + 1) : path;
-    final dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex == fileName.length - 1) {
-      return null;
-    }
-    return fileName.substring(dotIndex).toLowerCase();
   }
 
   AgentActionPathReference _normalizedPathReference({

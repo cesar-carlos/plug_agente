@@ -109,6 +109,7 @@ void main() {
       live.copyWith(state: AgentActionState.needsValidation),
     );
     harness.repository.definitions['action-1'] = live.copyWith(
+      state: AgentActionState.needsValidation,
       lastPreflightSnapshotHash: preflightHash,
       lastPreflightValidatedAt: DateTime.utc(2020),
     );
@@ -120,6 +121,14 @@ void main() {
     expect(harness.provider.isPreflightExpiredForDefinition(fromProvider), isTrue);
 
     await openSelectedActionDialog(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsPreflightExpiredTitle), findsNothing);
+
+    await tester.tap(formComboBox(ptL10n.agentActionsFormState).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(ptL10n.agentActionsStateActive).last);
+    await tester.pumpAndSettle();
 
     expect(find.text(ptL10n.agentActionsPreflightExpiredTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsPreflightExpiredForActive), findsOneWidget);

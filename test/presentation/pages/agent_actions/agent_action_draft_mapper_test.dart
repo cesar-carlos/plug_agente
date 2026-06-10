@@ -177,6 +177,44 @@ void main() {
       expect(draft.email.attachments.text, isEmpty);
     });
 
+    test('developer definition schedules connection reload with saved connection id', () {
+      final draft = AgentActionDraft();
+      final definition = AgentActionDefinition(
+        id: 'dev-1',
+        name: 'Transmitir Data7',
+        config: DeveloperActionConfig.data7Executor(
+          executorPath: const AgentActionPathReference(originalPath: r'C:\Data7\bin\Executor.exe'),
+          projectPath: const AgentActionPathReference(originalPath: r'C:\Data7\Transmissao\Transmissor.7Proj'),
+          data7ConfigPath: const AgentActionPathReference(originalPath: r'C:\Data7\bin\Data7.Config'),
+          connectionId: '34512A51-672C-4ECE-9991-F43E175E7A8B',
+          connectionLabel: 'Estacao',
+        ),
+      );
+
+      String? scheduledConnectionId;
+      AgentActionPathPolicy? scheduledPathPolicy;
+
+      const AgentActionDraftMapper().applyDefinition(
+        draft,
+        definition,
+        capabilities: const AgentActionDraftCapabilities(remoteAdHocEnabled: false, elevatedEnabled: false),
+        hooks: AgentActionDraftMapperHooks(
+          clearDeveloperConnections: () {},
+          markDirty: (_) {},
+          setDraftKind: (_) {},
+          scheduleDeveloperConnectionReload: ({required pathPolicy, required selectedConnectionId}) {
+            scheduledPathPolicy = pathPolicy;
+            scheduledConnectionId = selectedConnectionId;
+          },
+        ),
+      );
+
+      expect(draft.developer.data7ConfigPath.text, r'C:\Data7\bin\Data7.Config');
+      expect(draft.developer.connectionId.text, '34512A51-672C-4ECE-9991-F43E175E7A8B');
+      expect(scheduledConnectionId, '34512A51-672C-4ECE-9991-F43E175E7A8B');
+      expect(scheduledPathPolicy, definition.policies.path);
+    });
+
     test('capabilities flags gate remote ad-hoc and elevated', () {
       final draft = AgentActionDraft();
       const definition = AgentActionDefinition(

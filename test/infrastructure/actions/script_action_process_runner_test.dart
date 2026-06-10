@@ -17,7 +17,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
       );
 
@@ -50,7 +50,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(
           _FakeProcess(pid: 1234, exitCode: 5, stderrText: 'script failed'),
         ),
@@ -84,7 +84,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(
           _FakeProcess(
             pid: 1234,
@@ -123,7 +123,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
               String executable,
@@ -156,6 +156,41 @@ void main() {
       expect(result.isError(), isTrue);
       expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
       expect(processStarterCalled, isFalse);
+    });
+
+    test('should kill process when stdin setup fails after start', () async {
+      final process = _FakeProcess(
+        pid: 1234,
+        exitCode: 0,
+        shouldFailStdinClose: true,
+      );
+      final runner = ScriptActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
+        processStarter: _starterFor(process),
+      );
+
+      final result = await runner.run(
+        executionId: 'execution-1',
+        definition: const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Run script',
+          state: AgentActionState.active,
+          config: ScriptActionConfig(
+            scriptPath: AgentActionPathReference(originalPath: r'C:\Jobs\daily.ps1'),
+          ),
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<ActionRuntimeFailure>());
+      expect(process.killCalled, isTrue);
     });
 
     group('default interpreter selection', () {
@@ -191,7 +226,7 @@ void main() {
             environmentResolver: kTestActionEnvironmentResolver,
             operationalProfileResolver: kTestAgentOperationalProfileResolver,
             stdinSetup: kTestActionProcessStdinSetup,
-            pathValidator: _acceptingPathValidator(),
+            adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
             processStarter:
                 (
                   String executable,

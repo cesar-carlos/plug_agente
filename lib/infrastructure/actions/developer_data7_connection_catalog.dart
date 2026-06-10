@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/core/constants/agent_action_developer_data7_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/infrastructure/actions/windows_action_path_normalizer.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:xml/xml.dart';
 
@@ -103,7 +104,8 @@ class DeveloperData7ConnectionCatalog {
             'phase': phase,
             'path': configPath,
             'reason': AgentActionDeveloperData7Constants.developerData7ConfigInvalidReason,
-            'user_message': 'O arquivo Data7.Config informado nao contem um XML valido.',
+            'user_message':
+                'O arquivo Data7.Config informado nao contem um XML valido. O formato esperado usa itens <Item ID="..."> com Descricao/Descrição e Conexao/Conexão.',
           },
         ),
       );
@@ -169,7 +171,8 @@ class DeveloperData7ConnectionCatalog {
             'phase': phase,
             'path': configPath,
             'reason': AgentActionDeveloperData7Constants.developerData7ConnectionMissingReason,
-            'user_message': 'O arquivo Data7.Config nao possui conexoes disponiveis para esta acao.',
+            'user_message':
+                'O arquivo Data7.Config nao possui conexoes disponiveis. Verifique se o XML contem itens <Item ID="..."> com Descricao/Descrição e Conexao/Conexão.',
           },
         ),
       );
@@ -224,7 +227,23 @@ class DeveloperData7ConnectionCatalog {
     return null;
   }
 
-  static Future<String> _defaultReadConfig(String path) => File(path).readAsString();
+  static Future<String> _defaultReadConfig(String path) async {
+    final ioPath = WindowsActionPathNormalizer.forLocalIo(path);
+    final bytes = await File(ioPath).readAsBytes();
+    return _decodeConfigText(bytes);
+  }
+
+  static String _decodeConfigText(List<int> bytes) {
+    if (bytes.length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) {
+      return utf8.decode(bytes.sublist(3));
+    }
+
+    try {
+      return utf8.decode(bytes);
+    } on FormatException {
+      return latin1.decode(bytes, allowInvalid: true);
+    }
+  }
 }
 
 String _normalizeConnectionId(String value) {

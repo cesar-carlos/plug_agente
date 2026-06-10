@@ -1,4 +1,5 @@
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
+import 'package:plug_agente/core/utils/path_extension.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_preflight_metadata.dart';
@@ -149,9 +150,10 @@ class CommandLineActionAdapter implements AgentActionAdapter {
         redactedCommandPreview: invocation.redactedPreview,
         workingDirectory:
             workingDirectoryValidation.getOrThrow().path?.canonicalPath ?? config.workingDirectory?.displayPath,
+        contextHash: contextValidation.getOrThrow().path?.contentHash,
         redactedDiagnostics: {
           ...redactedDiagnostics,
-          'context_path_extension': _extensionOf(request.contextPath),
+          'context_path_extension': extensionOf(request.contextPath),
           'uses_context_path': request.contextPath != null,
           if (workingDirectoryValidation.getOrThrow().path != null)
             'working_directory': ActionPathPreflightMetadata.forValidatedPath(
@@ -163,6 +165,34 @@ class CommandLineActionAdapter implements AgentActionAdapter {
             ),
         },
       ),
+    );
+  }
+
+  Future<Result<AgentActionCommandInvocation>> resolveInvocationCommand(
+    AgentActionDefinition definition, {
+    String phase = 'execution_preflight',
+  }) async {
+    final config = definition.config;
+    if (config is! CommandLineActionConfig) {
+      return Failure(
+        ActionValidationFailure.withContext(
+          message: 'Command line action config is invalid.',
+          context: {
+            'action_id': definition.id,
+            'action_type': definition.type.name,
+            'expected_type': AgentActionType.commandLine.name,
+            'phase': phase,
+            'reason': AgentActionProcessConstants.invalidActionConfigReason,
+            'user_message': 'A configuracao da acao de linha de comando e invalida.',
+          },
+        ),
+      );
+    }
+
+    return _commandNormalizer.normalizeCommandLine(
+      actionId: definition.id,
+      command: config.command,
+      phase: phase,
     );
   }
 
@@ -208,19 +238,6 @@ class CommandLineActionAdapter implements AgentActionAdapter {
         ),
       ),
     );
-  }
-
-  String? _extensionOf(String? path) {
-    if (path == null) {
-      return null;
-    }
-    final lastSeparator = path.lastIndexOf(RegExp(r'[\\/]'));
-    final fileName = lastSeparator >= 0 ? path.substring(lastSeparator + 1) : path;
-    final dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex == fileName.length - 1) {
-      return null;
-    }
-    return fileName.substring(dotIndex).toLowerCase();
   }
 
   AgentActionPathReference? _normalizedWorkingDirectory({

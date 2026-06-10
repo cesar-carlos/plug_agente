@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/constants/agent_action_com_object_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
+import 'package:plug_agente/core/utils/path_extension.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
 import 'package:plug_agente/infrastructure/actions/com_object_argument_validator.dart';
@@ -82,7 +83,7 @@ class ComObjectActionAdapter implements AgentActionAdapter {
         redactedCommandPreview: resolved.redactedPreview,
         redactedDiagnostics: {
           'argument_count': resolved.config.arguments.length,
-          'context_path_extension': _extensionOf(request.contextPath),
+          'context_path_extension': extensionOf(request.contextPath),
           'uses_context_path': request.contextPath != null,
         },
       ),
@@ -203,18 +204,6 @@ class ComObjectActionAdapter implements AgentActionAdapter {
     );
   }
 
-  String? _extensionOf(String? path) {
-    if (path == null) {
-      return null;
-    }
-    final lastSeparator = path.lastIndexOf(RegExp(r'[\\/]'));
-    final fileName = lastSeparator >= 0 ? path.substring(lastSeparator + 1) : path;
-    final dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex == fileName.length - 1) {
-      return null;
-    }
-    return fileName.substring(dotIndex).toLowerCase();
-  }
 }
 
 class _ResolvedComObjectConfig {

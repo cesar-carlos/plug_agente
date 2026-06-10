@@ -8,6 +8,7 @@ export 'action_process_window_mode_resolver.dart';
 export 'agent_action_orphan_process_terminator.dart';
 export 'agent_action_process_kill_guard.dart';
 export 'agent_action_process_killer.dart';
+export 'agent_action_process_lifecycle.dart';
 export 'agent_action_process_starter.dart';
 export 'agent_action_scheduler_instance_lock.dart';
 export 'com_object_action_adapter.dart';

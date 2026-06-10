@@ -1,3 +1,4 @@
+import 'package:plug_agente/domain/actions/action_adapter.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
 
 class AgentActionExecutionRequest {
@@ -10,10 +11,12 @@ class AgentActionExecutionRequest {
     this.runtimeParameters = const {},
     this.contextPath,
     this.returnWhenQueued = false,
+    this.dangerousCommandConfirmed = false,
     this.triggerId,
     this.triggerType,
     this.scheduledAt,
     this.triggeredAt,
+    this.cachedPreparedExecution,
   });
 
   final String actionId;
@@ -24,10 +27,51 @@ class AgentActionExecutionRequest {
   final Map<String, Object?> runtimeParameters;
   final String? contextPath;
   final bool returnWhenQueued;
+  final bool dangerousCommandConfirmed;
   final String? triggerId;
   final AgentActionTriggerType? triggerType;
   final DateTime? scheduledAt;
   final DateTime? triggeredAt;
+
+  /// Populated by the execution orchestrator after a Hub validate-run cache hit.
+  final AgentActionPreparedExecution? cachedPreparedExecution;
+
+  AgentActionExecutionRequest copyWith({
+    String? actionId,
+    AgentActionRequestSource? source,
+    String? idempotencyKey,
+    String? requestedBy,
+    String? traceId,
+    Map<String, Object?>? runtimeParameters,
+    String? contextPath,
+    bool? returnWhenQueued,
+    bool? dangerousCommandConfirmed,
+    String? triggerId,
+    AgentActionTriggerType? triggerType,
+    DateTime? scheduledAt,
+    DateTime? triggeredAt,
+    AgentActionPreparedExecution? cachedPreparedExecution,
+    bool clearCachedPreparedExecution = false,
+  }) {
+    return AgentActionExecutionRequest(
+      actionId: actionId ?? this.actionId,
+      source: source ?? this.source,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+      requestedBy: requestedBy ?? this.requestedBy,
+      traceId: traceId ?? this.traceId,
+      runtimeParameters: runtimeParameters ?? this.runtimeParameters,
+      contextPath: contextPath ?? this.contextPath,
+      returnWhenQueued: returnWhenQueued ?? this.returnWhenQueued,
+      dangerousCommandConfirmed: dangerousCommandConfirmed ?? this.dangerousCommandConfirmed,
+      triggerId: triggerId ?? this.triggerId,
+      triggerType: triggerType ?? this.triggerType,
+      scheduledAt: scheduledAt ?? this.scheduledAt,
+      triggeredAt: triggeredAt ?? this.triggeredAt,
+      cachedPreparedExecution: clearCachedPreparedExecution
+          ? null
+          : cachedPreparedExecution ?? this.cachedPreparedExecution,
+    );
+  }
 }
 
 class AgentActionExecution {

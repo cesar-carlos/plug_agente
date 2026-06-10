@@ -1,1784 +1,11 @@
-import 'dart:async';
-import 'dart:io';
-
-import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/application/actions/action_execution_queue.dart';
-import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
-import 'package:plug_agente/application/actions/agent_action_remote_lifecycle_audit_recorder.dart';
-import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
-import 'package:plug_agente/application/actions/agent_action_secret_reference_fingerprinter.dart';
-import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
-import 'package:plug_agente/application/actions/elevated_action_status_file_syncer.dart';
-import 'package:plug_agente/application/actions/elevated_agent_action_execution_service.dart';
-import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
-import 'package:plug_agente/application/use_cases/cleanup_agent_action_captured_output.dart';
-import 'package:plug_agente/application/use_cases/cleanup_agent_action_executions.dart';
-import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
-import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.dart';
-import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.dart';
-import 'package:plug_agente/application/use_cases/get_agent_action_definition.dart';
-import 'package:plug_agente/application/use_cases/get_agent_action_execution.dart';
-import 'package:plug_agente/application/use_cases/get_agent_action_trigger.dart';
-import 'package:plug_agente/application/use_cases/list_agent_action_definitions.dart';
-import 'package:plug_agente/application/use_cases/list_agent_action_executions.dart';
-import 'package:plug_agente/application/use_cases/list_agent_action_triggers.dart';
-import 'package:plug_agente/application/use_cases/reconcile_agent_action_executions.dart';
-import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
-import 'package:plug_agente/application/use_cases/save_agent_action_definition.dart';
-import 'package:plug_agente/application/use_cases/save_agent_action_execution.dart';
-import 'package:plug_agente/application/use_cases/save_agent_action_trigger.dart';
-import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
-import 'package:plug_agente/application/use_cases/validate_agent_action_definition.dart';
-import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.dart';
-import 'package:plug_agente/core/config/feature_flags.dart';
-import 'package:plug_agente/core/constants/agent_action_elevated_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_queue_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_remote_audit_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
-import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
-import 'package:plug_agente/core/settings/app_settings_store.dart';
-import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
-import 'package:plug_agente/domain/actions/actions.dart';
-import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
-import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
-import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
-import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
-import 'package:plug_agente/domain/repositories/i_elevated_action_execution_canceller.dart';
-import 'package:plug_agente/domain/repositories/i_elevated_action_runner_bridge.dart';
-import 'package:result_dart/result_dart.dart';
-import 'package:uuid/uuid.dart';
-
-Future<Result<AgentActionDefinition>> saveDefinitionForTest(
-  SaveAgentActionDefinition useCase,
-  AgentActionDefinition definition,
-) async {
-  if (definition.state != AgentActionState.active) {
-    return useCase(definition);
-  }
-
-  final staged = await useCase(
-    definition.copyWith(state: AgentActionState.needsValidation),
-  );
-  if (staged.isError()) {
-    return staged;
-  }
-
-  final saved = staged.getOrThrow();
-  const snapshotter = AgentActionDefinitionSnapshotter();
-  final preflightHash = snapshotter.snapshotHash(
-    saved.copyWith(state: AgentActionState.needsValidation),
-  );
-  return useCase(
-    saved.copyWith(
-      state: AgentActionState.active,
-      lastPreflightSnapshotHash: preflightHash,
-      lastPreflightValidatedAt: DateTime.now().toUtc(),
-    ),
-  );
-}
-
-class FakeCommandLineActionAdapter implements AgentActionAdapter {
-  const FakeCommandLineActionAdapter({
-    this.normalizedDefinitionFactory,
-  });
-
-  final AgentActionDefinition Function(AgentActionDefinition definition)? normalizedDefinitionFactory;
-
-  @override
-  AgentActionType get type => AgentActionType.commandLine;
-
-  @override
-  Future<Result<AgentActionPreflight>> validateDefinition(
-    AgentActionDefinition definition,
-  ) async {
-    return Success(
-      AgentActionPreflight(
-        actionType: type,
-        canRun: definition.canRun,
-      ),
-    );
-  }
-
-  @override
-  Future<Result<AgentActionPreparedExecution>> prepareExecution({
-    required AgentActionDefinition definition,
-    required AgentActionExecutionRequest request,
-  }) async {
-    return Success(
-      AgentActionPreparedExecution(
-        actionType: type,
-        redactedCommandPreview: 'cmd.exe /C ***',
-      ),
-    );
-  }
-
-  @override
-  Future<Result<AgentActionDefinition>> normalizeDefinition(
-    AgentActionDefinition definition,
-  ) async {
-    return Success(
-      normalizedDefinitionFactory?.call(definition) ?? definition,
-    );
-  }
-}
-
-class FakeAgentActionRepository implements IAgentActionRepository {
-  final Map<String, AgentActionDefinition> definitions = {};
-  final Map<String, AgentActionTrigger> triggers = {};
-  final Map<String, AgentActionExecution> executions = {};
-  final List<AgentActionExecution> savedExecutions = [];
-  DateTime? lastCleanupOlderThan;
-  DateTime? lastClearCapturedOutputOlderThan;
-
-  @override
-  Future<Result<AgentActionDefinition>> saveDefinition(
-    AgentActionDefinition definition,
-  ) async {
-    definitions[definition.id] = definition;
-    return Success(definition);
-  }
-
-  @override
-  Future<Result<AgentActionDefinition>> getDefinition(String id) async {
-    final definition = definitions[id];
-    if (definition == null) {
-      return Failure(
-        ActionNotFoundFailure.withContext(
-          message: 'Action definition was not found.',
-          context: {
-            'action_id': id,
-            'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-          },
-        ),
-      );
-    }
-
-    return Success(definition);
-  }
-
-  @override
-  Future<Result<List<AgentActionDefinition>>> listDefinitions() async {
-    return Success(definitions.values.toList(growable: false));
-  }
-
-  @override
-  Future<Result<void>> deleteDefinition(String id) async {
-    if (!definitions.containsKey(id)) {
-      return Failure(
-        ActionNotFoundFailure.withContext(
-          message: 'Action definition was not found.',
-          context: {
-            'action_id': id,
-            'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-          },
-        ),
-      );
-    }
-
-    definitions.remove(id);
-    triggers.removeWhere((_, AgentActionTrigger trigger) => trigger.actionId == id);
-    return const Success(unit);
-  }
-
-  @override
-  Future<Result<AgentActionTrigger>> saveTrigger(
-    AgentActionTrigger trigger,
-  ) async {
-    triggers[trigger.id] = trigger;
-    return Success(trigger);
-  }
-
-  @override
-  Future<Result<AgentActionTrigger>> getTrigger(String id) async {
-    final trigger = triggers[id];
-    if (trigger == null) {
-      return Failure(
-        ActionNotFoundFailure.withContext(
-          message: 'Action trigger was not found.',
-          context: {
-            'trigger_id': id,
-            'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-          },
-        ),
-      );
-    }
-
-    return Success(trigger);
-  }
-
-  @override
-  Future<Result<List<AgentActionTrigger>>> listTriggers({
-    String? actionId,
-    bool? isEnabled,
-    Set<AgentActionTriggerType>? types,
-  }) async {
-    final filtered = triggers.values
-        .where((trigger) {
-          final matchesAction = actionId == null || trigger.actionId == actionId;
-          final matchesEnabled = isEnabled == null || trigger.isEnabled == isEnabled;
-          final matchesType = types == null || types.isEmpty || types.contains(trigger.type);
-          return matchesAction && matchesEnabled && matchesType;
-        })
-        .toList(growable: false);
-
-    return Success(filtered);
-  }
-
-  @override
-  Future<Result<void>> deleteTrigger(String id) async {
-    if (!triggers.containsKey(id)) {
-      return Failure(
-        ActionNotFoundFailure.withContext(
-          message: 'Action trigger was not found.',
-          context: {
-            'trigger_id': id,
-            'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-          },
-        ),
-      );
-    }
-
-    triggers.remove(id);
-    return const Success(unit);
-  }
-
-  @override
-  Future<Result<AgentActionExecution>> saveExecution(
-    AgentActionExecution execution,
-  ) async {
-    savedExecutions.add(execution);
-    executions[execution.id] = execution;
-    return Success(execution);
-  }
-
-  @override
-  Future<Result<AgentActionExecution>> getExecution(
-    String id, {
-    bool hydrateCapturedOutput = true,
-  }) async {
-    final execution = executions[id];
-    if (execution == null) {
-      return Failure(
-        ActionNotFoundFailure.withContext(
-          message: 'Action execution was not found.',
-          context: {
-            'execution_id': id,
-            'reason': AgentActionRpcConstants.agentActionExecutionNotFoundContextReason,
-          },
-        ),
-      );
-    }
-
-    return Success(execution);
-  }
-
-  @override
-  Future<Result<CapturedOutputUtf8Window>> sliceCapturedOutput({
-    required String executionId,
-    required String stream,
-    required int offsetUtf8,
-    required int maxBytes,
-  }) async {
-    return Success(
-      (
-        text: '',
-        nextOffset: offsetUtf8,
-        totalBytes: 0,
-        responseTruncated: false,
-        effectiveStart: offsetUtf8,
-      ),
-    );
-  }
-
-  @override
-  Future<Result<List<AgentActionExecution>>> listExecutions({
-    String? actionId,
-    String? idempotencyKey,
-    Set<AgentActionExecutionStatus>? statuses,
-    DateTime? requestedAfter,
-    int? limit,
-  }) async {
-    final filtered = executions.values
-        .where((execution) {
-          final matchesAction = actionId == null || execution.actionId == actionId;
-          final matchesIdempotencyKey = idempotencyKey == null || execution.idempotencyKey == idempotencyKey;
-          final matchesStatus = statuses == null || statuses.isEmpty || statuses.contains(execution.status);
-          final matchesRequestedAfter = requestedAfter == null || !execution.requestedAt.isBefore(requestedAfter);
-          return matchesAction && matchesIdempotencyKey && matchesStatus && matchesRequestedAfter;
-        })
-        .toList(growable: false);
-
-    return Success(
-      limit == null ? filtered : filtered.take(limit).toList(growable: false),
-    );
-  }
-
-  @override
-  Future<Result<int>> cleanupExecutions({
-    required DateTime olderThan,
-  }) async {
-    lastCleanupOlderThan = olderThan;
-    final before = executions.length;
-    executions.removeWhere((_, execution) {
-      final finishedAt = execution.finishedAt;
-      return finishedAt != null && finishedAt.isBefore(olderThan);
-    });
-
-    return Success(before - executions.length);
-  }
-
-  @override
-  Future<Result<int>> clearCapturedOutputOlderThan({
-    required DateTime olderThan,
-  }) async {
-    lastClearCapturedOutputOlderThan = olderThan;
-    var cleared = 0;
-    for (final id in executions.keys.toList()) {
-      final execution = executions[id]!;
-      if (!execution.status.isTerminal) {
-        continue;
-      }
-      final finishedAt = execution.finishedAt;
-      final requestedAt = execution.requestedAt;
-      final isOld =
-          (finishedAt != null && finishedAt.isBefore(olderThan)) ||
-          (finishedAt == null && requestedAt.isBefore(olderThan));
-      if (!isOld) {
-        continue;
-      }
-      if (execution.stdoutText == null && execution.stderrText == null) {
-        continue;
-      }
-      executions[id] = AgentActionExecution(
-        id: execution.id,
-        actionId: execution.actionId,
-        actionType: execution.actionType,
-        status: execution.status,
-        requestedAt: execution.requestedAt,
-        source: execution.source,
-        idempotencyKey: execution.idempotencyKey,
-        requestedBy: execution.requestedBy,
-        traceId: execution.traceId,
-        runtimeInstanceId: execution.runtimeInstanceId,
-        runtimeSessionId: execution.runtimeSessionId,
-        triggerId: execution.triggerId,
-        triggerType: execution.triggerType,
-        scheduledAt: execution.scheduledAt,
-        triggeredAt: execution.triggeredAt,
-        queueStartedAt: execution.queueStartedAt,
-        processStartedAt: execution.processStartedAt,
-        finishedAt: execution.finishedAt,
-        timeoutAt: execution.timeoutAt,
-        pid: execution.pid,
-        exitCode: execution.exitCode,
-        processExecutable: execution.processExecutable,
-        processArgumentCount: execution.processArgumentCount,
-        processCommandPreview: execution.processCommandPreview,
-        definitionSnapshotHash: execution.definitionSnapshotHash,
-        contextHash: execution.contextHash,
-        redactionApplied: execution.redactionApplied,
-        failureCode: execution.failureCode,
-        failurePhase: execution.failurePhase,
-        failureMessage: execution.failureMessage,
-      );
-      cleared++;
-    }
-    return Success(cleared);
-  }
-}
-
-class CountingSaveAgentActionExecution extends SaveAgentActionExecution {
-  CountingSaveAgentActionExecution(super.repository);
-
-  int invocationCount = 0;
-
-  @override
-  Future<Result<AgentActionExecution>> call(AgentActionExecution execution) async {
-    invocationCount++;
-    return super.call(execution);
-  }
-}
-
-class FakeElevatedActionExecutionCanceller implements IElevatedActionExecutionCanceller {
-  FakeElevatedActionExecutionCanceller({required this.cancelResult});
-
-  final Result<AgentActionCancellationResult> cancelResult;
-  String? lastExecutionId;
-
-  @override
-  Future<Result<AgentActionCancellationResult>> cancel({
-    required String executionId,
-  }) async {
-    lastExecutionId = executionId;
-    return cancelResult;
-  }
-}
-
-class FakeAgentActionLocalRunner implements AgentActionLocalRunner {
-  FakeAgentActionLocalRunner({
-    required this.result,
-    Result<AgentActionCancellationResult>? cancelResult,
-  }) : cancelResult =
-           cancelResult ??
-           const Success(
-             AgentActionCancellationResult(
-               executionId: 'execution-1',
-               status: AgentActionExecutionStatus.killed,
-               killed: true,
-               pid: 1234,
-               message: 'Processo principal finalizado.',
-             ),
-           );
-
-  final Result<AgentActionProcessResult> result;
-  final Result<AgentActionCancellationResult> cancelResult;
-  int? lastExpectedPid;
-  String? lastExpectedProcessExecutable;
-  DateTime? lastExpectedProcessStartedAt;
-  int cancelInvocationCount = 0;
-
-  @override
-  AgentActionType get type => AgentActionType.commandLine;
-
-  @override
-  Future<Result<AgentActionProcessResult>> run({
-    required String executionId,
-    required AgentActionDefinition definition,
-    required AgentActionExecutionRequest request,
-  }) async {
-    return result;
-  }
-
-  @override
-  Future<Result<AgentActionCancellationResult>> cancel({
-    required String executionId,
-    int? expectedPid,
-    String? expectedProcessExecutable,
-    DateTime? expectedProcessStartedAt,
-  }) async {
-    cancelInvocationCount++;
-    lastExpectedPid = expectedPid;
-    lastExpectedProcessExecutable = expectedProcessExecutable;
-    lastExpectedProcessStartedAt = expectedProcessStartedAt;
-    return cancelResult;
-  }
-}
-
-class RetryThenSucceedAgentActionLocalRunner implements AgentActionLocalRunner {
-  int callCount = 0;
-
-  @override
-  AgentActionType get type => AgentActionType.commandLine;
-
-  @override
-  Future<Result<AgentActionCancellationResult>> cancel({
-    required String executionId,
-    int? expectedPid,
-    String? expectedProcessExecutable,
-    DateTime? expectedProcessStartedAt,
-  }) async {
-    return Success(
-      AgentActionCancellationResult(
-        executionId: executionId,
-        status: AgentActionExecutionStatus.killed,
-        killed: true,
-        pid: expectedPid,
-        message: 'Processo principal finalizado.',
-      ),
-    );
-  }
-
-  @override
-  Future<Result<AgentActionProcessResult>> run({
-    required String executionId,
-    required AgentActionDefinition definition,
-    required AgentActionExecutionRequest request,
-  }) async {
-    callCount++;
-    if (callCount == 1) {
-      return Success(
-        AgentActionProcessResult(
-          status: AgentActionExecutionStatus.failed,
-          pid: 1111,
-          exitCode: 1,
-          processStartedAt: DateTime(2026, 5, 15, 10),
-          finishedAt: DateTime(2026, 5, 15, 10),
-          stdout: AgentActionCapturedOutput.disabled,
-          stderr: AgentActionCapturedOutput.disabled,
-          redactionApplied: true,
-        ),
-      );
-    }
-
-    return Success(
-      AgentActionProcessResult(
-        status: AgentActionExecutionStatus.succeeded,
-        pid: 4321,
-        exitCode: 0,
-        processStartedAt: DateTime(2026, 5, 15, 10, 1),
-        finishedAt: DateTime(2026, 5, 15, 10, 2),
-        stdout: AgentActionCapturedOutput.disabled,
-        stderr: AgentActionCapturedOutput.disabled,
-        redactionApplied: true,
-      ),
-    );
-  }
-}
-
-class ControlledAgentActionLocalRunner implements AgentActionLocalRunner {
-  final List<Completer<Result<AgentActionProcessResult>>> completions = <Completer<Result<AgentActionProcessResult>>>[];
-  final List<Completer<void>> starts = <Completer<void>>[];
-
-  int get startedCount => starts.length;
-
-  @override
-  AgentActionType get type => AgentActionType.commandLine;
-
-  @override
-  Future<Result<AgentActionProcessResult>> run({
-    required String executionId,
-    required AgentActionDefinition definition,
-    required AgentActionExecutionRequest request,
-  }) {
-    final started = Completer<void>();
-    starts.add(started);
-    started.complete();
-
-    final completion = Completer<Result<AgentActionProcessResult>>();
-    completions.add(completion);
-    return completion.future;
-  }
-
-  @override
-  Future<Result<AgentActionCancellationResult>> cancel({
-    required String executionId,
-    int? expectedPid,
-    String? expectedProcessExecutable,
-    DateTime? expectedProcessStartedAt,
-  }) async {
-    return Success(
-      AgentActionCancellationResult(
-        executionId: executionId,
-        status: AgentActionExecutionStatus.killed,
-        killed: true,
-        pid: 4321,
-        message: 'Processo principal finalizado.',
-      ),
-    );
-  }
-}
+import '../../helpers/agent_action_use_case_test_support.dart';
 
 void main() {
   late FakeAgentActionRepository repository;
-  late ValidateAgentActionDefinition validateDefinition;
-  late FeatureFlags featureFlags;
 
   setUp(() {
-    repository = FakeAgentActionRepository();
-    featureFlags = FeatureFlags(InMemoryAppSettingsStore());
-    validateDefinition = ValidateAgentActionDefinition(
-      AgentActionAdapterRegistry([
-        const FakeCommandLineActionAdapter(),
-      ]),
-    );
-  });
-
-  group('agent action definition use cases', () {
-    test('should save valid definition after adapter validation', () async {
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-
-      final result = await saveDefinitionForTest(useCase, definition);
-
-      expect(result.isSuccess(), isTrue);
-      final saved = repository.definitions['action-1']!;
-      expect(saved.definitionSnapshotHash, startsWith('sha256:'));
-      expect(result.getOrThrow().definitionSnapshotHash, saved.definitionSnapshotHash);
-    });
-
-    test('should reject saving active definition without successful preflight', () async {
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-
-      final result = await useCase(definition);
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-      expect(
-        (result.exceptionOrNull()! as ActionValidationFailure).code,
-        AgentActionFailureCode.preflightRequiredForActive,
-      );
-      expect(repository.definitions, isEmpty);
-    });
-
-    test('should allow saving active definition after preflight hash is recorded', () async {
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-
-      final result = await saveDefinitionForTest(useCase, definition);
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().state, AgentActionState.active);
-      expect(result.getOrThrow().lastPreflightSnapshotHash, isNotNull);
-    });
-
-    test('should reject saving active definition when preflight validation expired', () async {
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-        now: () => DateTime.utc(2026, 6, 25),
-      );
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-
-      final staged = await useCase(definition.copyWith(state: AgentActionState.needsValidation));
-      expect(staged.isSuccess(), isTrue);
-
-      const snapshotter = AgentActionDefinitionSnapshotter();
-      final preflightHash = snapshotter.snapshotHash(
-        definition.copyWith(state: AgentActionState.needsValidation),
-      );
-      repository.definitions['action-1'] = staged.getOrThrow().copyWith(
-        lastPreflightSnapshotHash: preflightHash,
-        lastPreflightValidatedAt: DateTime.utc(2026, 4),
-      );
-
-      final result = await useCase(
-        repository.definitions['action-1']!.copyWith(state: AgentActionState.active),
-      );
-
-      expect(result.isError(), isTrue);
-      expect(
-        (result.exceptionOrNull()! as ActionValidationFailure).code,
-        AgentActionFailureCode.preflightExpiredForActive,
-      );
-    });
-
-    test('should invalidate preflight hash when definition content changes on save', () async {
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-
-      final first = await saveDefinitionForTest(useCase, definition);
-      expect(first.isSuccess(), isTrue);
-
-      final activeWithoutPreflight = await useCase(
-        first.getOrThrow().copyWith(
-          config: const CommandLineActionConfig(command: 'dir /b'),
-          lastPreflightSnapshotHash: first.getOrThrow().lastPreflightSnapshotHash,
-        ),
-      );
-
-      expect(activeWithoutPreflight.isError(), isTrue);
-      expect(
-        (activeWithoutPreflight.exceptionOrNull()! as ActionValidationFailure).code,
-        AgentActionFailureCode.preflightRequiredForActive,
-      );
-    });
-
-    test('should clear runElevated when elevated feature flag is disabled', () async {
-      await featureFlags.setEnableElevatedAgentActions(false);
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      const definition = AgentActionDefinition(
-        id: 'action-elevated',
-        name: 'Elevated action',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          elevated: AgentActionElevatedPolicy(runElevated: true),
-        ),
-      );
-
-      final result = await saveDefinitionForTest(useCase, definition);
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().policies.elevated.runElevated, isFalse);
-    });
-
-    test('should require remote reapproval on save when secret reference fingerprint changes', () async {
-      final secretStore = _InMemoryAgentActionSecretStoreForRunTests();
-      await secretStore.saveSecret('api', 'v1');
-      const snapshotter = AgentActionDefinitionSnapshotter();
-      final fingerprinter = AgentActionSecretReferenceFingerprinter(secretStore);
-      const base = AgentActionDefinition(
-        id: 'action-secret',
-        name: 'Secret cmd',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: r'echo ${secret:api}'),
-      );
-      final approvedAt = DateTime.utc(2026, 5, 20, 9);
-      final initialFingerprints = await fingerprinter.fingerprintsFor(base);
-      final preflightHash = snapshotter.snapshotHash(
-        base.copyWith(state: AgentActionState.needsValidation),
-      );
-      repository.definitions['action-secret'] = base.copyWith(
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: approvedAt,
-            approvedBy: 'local-ui',
-            riskFingerprint: snapshotter.riskFingerprint(
-              base,
-              secretReferenceFingerprints: initialFingerprints,
-            ),
-          ),
-        ),
-        lastPreflightSnapshotHash: preflightHash,
-      );
-
-      await secretStore.saveSecret('api', 'v2');
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        snapshotter,
-        featureFlags,
-        secretReferenceFingerprinter: fingerprinter,
-      );
-      final result = await useCase(
-        base.copyWith(
-          state: AgentActionState.needsValidation,
-          lastPreflightSnapshotHash: null,
-          policies: AgentActionDefinitionPolicies(
-            remote: AgentActionRemotePolicy(
-              isEnabled: true,
-              approvedAt: approvedAt,
-              approvedBy: 'local-ui',
-            ),
-          ),
-        ),
-      );
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().policies.remote.requiresReapproval, isTrue);
-      expect(result.getOrThrow().policies.remote.canRunSavedAction, isFalse);
-    });
-
-    test('should clear allowAdHoc when remote ad-hoc feature flag is disabled', () async {
-      await featureFlags.setEnableRemoteAdHocAgentActions(false);
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      final definition = AgentActionDefinition(
-        id: 'action-adhoc',
-        name: 'Remote ad-hoc',
-        state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            allowAdHoc: true,
-            approvedAt: DateTime.utc(2026, 5, 19),
-            approvedBy: 'local-ui',
-          ),
-        ),
-      );
-
-      final result = await saveDefinitionForTest(useCase, definition);
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().policies.remote.allowAdHoc, isFalse);
-    });
-
-    test('should trim definition id and name when saving', () async {
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      const definition = AgentActionDefinition(
-        id: '  action-x  ',
-        name: '  Run  ',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-
-      final result = await saveDefinitionForTest(useCase, definition);
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().id, 'action-x');
-      expect(result.getOrThrow().name, 'Run');
-      expect(repository.definitions['action-x'], isNotNull);
-      expect(repository.definitions.containsKey('  action-x  '), isFalse);
-    });
-
-    test('should reject saving remote-approved definition when app-close trigger exists', () async {
-      repository.triggers['t1'] = const AgentActionTrigger(
-        id: 't1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.appClose,
-      );
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      final definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: DateTime.utc(2026),
-          ),
-        ),
-      );
-
-      final result = await useCase(definition);
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-      expect(repository.definitions, isEmpty);
-    });
-
-    test('should save remote-enabled definition when app-close exists but reapproval is required', () async {
-      repository.triggers['t1'] = const AgentActionTrigger(
-        id: 't1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.appClose,
-      );
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      final definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: DateTime.utc(2026),
-            requiresReapproval: true,
-          ),
-        ),
-      );
-
-      final result = await saveDefinitionForTest(useCase, definition);
-
-      expect(result.isSuccess(), isTrue);
-      expect(repository.definitions['action-1'], isNotNull);
-    });
-
-    test('should not save invalid definition', () async {
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-
-      final result = await useCase(
-        const AgentActionDefinition(
-          id: 'action-1',
-          name: '',
-          config: CommandLineActionConfig(command: 'dir'),
-        ),
-      );
-
-      expect(result.isError(), isTrue);
-      expect(repository.definitions, isEmpty);
-    });
-
-    test('should require remote reapproval when risk fingerprint changes on save', () async {
-      const snapshotter = AgentActionDefinitionSnapshotter();
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        snapshotter,
-        featureFlags,
-      );
-      final approvedAt = DateTime.utc(2026, 5, 19, 10);
-      final initial = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: approvedAt,
-            approvedBy: 'local-ui',
-          ),
-        ),
-      );
-
-      final first = await saveDefinitionForTest(useCase, initial);
-      expect(first.isSuccess(), isTrue);
-      expect(first.getOrThrow().policies.remote.canRunSavedAction, isTrue);
-
-      final changed = first.getOrThrow().copyWith(
-        config: const CommandLineActionConfig(command: 'dir /b'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: approvedAt,
-            approvedBy: 'local-ui',
-          ),
-        ),
-        state: AgentActionState.needsValidation,
-        lastPreflightSnapshotHash: null,
-      );
-
-      final staged = await useCase(changed);
-      expect(staged.isSuccess(), isTrue);
-      final preflightHash = snapshotter.snapshotHash(
-        staged.getOrThrow().copyWith(state: AgentActionState.needsValidation),
-      );
-      final second = await useCase(
-        staged.getOrThrow().copyWith(
-          state: AgentActionState.active,
-          lastPreflightSnapshotHash: preflightHash,
-        ),
-      );
-
-      expect(second.isSuccess(), isTrue);
-      final remote = second.getOrThrow().policies.remote;
-      expect(remote.requiresReapproval, isTrue);
-      expect(remote.canRunSavedAction, isFalse);
-    });
-
-    test('should change definition snapshot hash when relevant definition fields change', () async {
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validateDefinition,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-      const baseDefinition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-
-      final first = await saveDefinitionForTest(useCase, baseDefinition);
-      final second = await saveDefinitionForTest(
-        useCase,
-        baseDefinition.copyWith(
-          config: const CommandLineActionConfig(command: 'dir /b'),
-        ),
-      );
-
-      expect(first.isSuccess(), isTrue);
-      expect(second.isSuccess(), isTrue);
-      expect(
-        first.getOrThrow().definitionSnapshotHash,
-        isNot(equals(second.getOrThrow().definitionSnapshotHash)),
-      );
-    });
-
-    test('should persist normalized path metadata before hashing definition', () async {
-      final validatingUseCase = ValidateAgentActionDefinition(
-        AgentActionAdapterRegistry([
-          FakeCommandLineActionAdapter(
-            normalizedDefinitionFactory: (definition) {
-              final config = definition.config as CommandLineActionConfig;
-              return definition.copyWith(
-                config: CommandLineActionConfig(
-                  command: config.command,
-                  workingDirectory: AgentActionPathReference(
-                    originalPath: r'C:\Jobs',
-                    canonicalPath: r'C:\Canonical\Jobs',
-                    existsAtValidation: true,
-                    validatedAt: DateTime.utc(2026, 5, 15, 12),
-                  ),
-                ),
-              );
-            },
-          ),
-        ]),
-      );
-      final useCase = SaveAgentActionDefinition(
-        repository,
-        validatingUseCase,
-        const AgentActionDefinitionSnapshotter(),
-        featureFlags,
-      );
-
-      final result = await saveDefinitionForTest(
-        useCase,
-        const AgentActionDefinition(
-          id: 'action-1',
-          name: 'Run command',
-          state: AgentActionState.active,
-          config: CommandLineActionConfig(
-            command: 'dir',
-            workingDirectory: AgentActionPathReference(
-              originalPath: r'C:\Jobs',
-            ),
-          ),
-        ),
-      );
-
-      expect(result.isSuccess(), isTrue);
-      final saved = repository.definitions['action-1']!;
-      final config = saved.config as CommandLineActionConfig;
-      expect(config.workingDirectory?.canonicalPath, r'C:\Canonical\Jobs');
-      expect(config.workingDirectory?.existsAtValidation, isTrue);
-      expect(config.workingDirectory?.validatedAt, DateTime.utc(2026, 5, 15, 12));
-      expect(saved.definitionSnapshotHash, startsWith('sha256:'));
-    });
-
-    test('should get, list and delete definitions through repository', () async {
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-      repository.definitions[definition.id] = definition;
-
-      final getResult = await GetAgentActionDefinition(repository)('action-1');
-      final listResult = await ListAgentActionDefinitions(repository)();
-      final deleteResult = await DeleteAgentActionDefinition(repository)('action-1');
-
-      expect(getResult.getOrThrow(), definition);
-      expect(listResult.getOrThrow(), [definition]);
-      expect(deleteResult.isSuccess(), isTrue);
-      expect(repository.definitions, isEmpty);
-    });
-
-    test('should test saved definition without executing action', () async {
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-      repository.definitions[definition.id] = definition;
-      final useCase = TestAgentActionDefinition(
-        repository,
-        validateDefinition,
-      );
-
-      final result = await useCase('action-1');
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().actionType, AgentActionType.commandLine);
-      expect(result.getOrThrow().canRun, isTrue);
-      expect(repository.savedExecutions, isEmpty);
-    });
-
-    test('should reject test definition with empty action id', () async {
-      final useCase = TestAgentActionDefinition(
-        repository,
-        validateDefinition,
-      );
-
-      final result = await useCase(' ');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-      expect(repository.savedExecutions, isEmpty);
-    });
-
-    test('should return not found failure when deleting missing definition', () async {
-      final result = await DeleteAgentActionDefinition(repository)('missing');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionNotFoundFailure>());
-    });
-
-    test('should reject delete definition with blank id', () async {
-      final result = await DeleteAgentActionDefinition(repository)('  \t');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-    });
-
-    test('should trim action id when deleting definition', () async {
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-      repository.definitions[definition.id] = definition;
-
-      final result = await DeleteAgentActionDefinition(repository)('  action-1  ');
-
-      expect(result.isSuccess(), isTrue);
-      expect(repository.definitions, isEmpty);
-    });
-
-    test('should reject get definition with blank id', () async {
-      final result = await GetAgentActionDefinition(repository)('  \t');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-    });
-
-    test('should trim id when getting definition', () async {
-      const definition = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-      repository.definitions[definition.id] = definition;
-
-      final result = await GetAgentActionDefinition(repository)('  action-1  ');
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().id, 'action-1');
-    });
-  });
-
-  group('agent action trigger use cases', () {
-    setUp(() {
-      repository.definitions['action-1'] = const AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-    });
-
-    test('should reject trigger save when maintenance mode is enabled', () async {
-      await featureFlags.setEnableAgentActionsMaintenanceMode(true);
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: 'trigger-maint',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.appStart,
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isError(), isTrue);
-      expect((result.exceptionOrNull()! as ActionValidationFailure).code, AgentActionFailureCode.maintenanceMode);
-    });
-
-    test('should save valid app start trigger for an existing action', () async {
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.appStart,
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isSuccess(), isTrue);
-      final saved = repository.triggers['trigger-1'];
-      expect(saved, isNotNull);
-      expect(saved!.id, trigger.id);
-      expect(saved.actionId, trigger.actionId);
-      expect(saved.type, trigger.type);
-    });
-
-    test('should trim trigger id and action id when saving trigger', () async {
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: '  trigger-spaced  ',
-        actionId: '  action-1  ',
-        type: AgentActionTriggerType.manual,
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().id, 'trigger-spaced');
-      expect(result.getOrThrow().actionId, 'action-1');
-      expect(repository.triggers['trigger-spaced'], isNotNull);
-      expect(repository.triggers['trigger-spaced']!.actionId, 'action-1');
-      expect(repository.triggers.containsKey('  trigger-spaced  '), isFalse);
-    });
-
-    test('should reject app-close trigger when action is approved for remote execution', () async {
-      repository.definitions['action-1'] = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Remote ready',
-        state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: DateTime.utc(2026),
-          ),
-        ),
-      );
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.appClose,
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-      expect(repository.triggers, isEmpty);
-    });
-
-    test('should reject app-close trigger when action requires elevated execution', () async {
-      repository.definitions['action-1'] = const AgentActionDefinition(
-        id: 'action-1',
-        name: 'Elevated command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          elevated: AgentActionElevatedPolicy(runElevated: true),
-        ),
-      );
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.appClose,
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-      expect(repository.triggers, isEmpty);
-    });
-
-    test('should save app-close trigger when remote policy requires reapproval', () async {
-      repository.definitions['action-1'] = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Remote stale',
-        state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: DateTime.utc(2026),
-            requiresReapproval: true,
-          ),
-        ),
-      );
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.appClose,
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isSuccess(), isTrue);
-      final saved = repository.triggers['trigger-1'];
-      expect(saved, isNotNull);
-      expect(saved!.id, trigger.id);
-      expect(saved.actionId, trigger.actionId);
-      expect(saved.type, trigger.type);
-    });
-
-    test('should save temporal interval trigger with positive interval', () async {
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.interval,
-        schedule: AgentActionTriggerSchedule(
-          interval: Duration(minutes: 15),
-        ),
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().schedule.interval, const Duration(minutes: 15));
-    });
-
-    test('should reject invalid weekly trigger before saving', () async {
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.weekly,
-        schedule: AgentActionTriggerSchedule(
-          timeOfDayMinutes: 8 * 60,
-          weekdays: {0},
-        ),
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-      expect(repository.triggers, isEmpty);
-    });
-
-    test('should return not found when trigger references missing action', () async {
-      final useCase = SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      );
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'missing-action',
-        type: AgentActionTriggerType.appClose,
-      );
-
-      final result = await useCase(trigger);
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionNotFoundFailure>());
-      expect(repository.triggers, isEmpty);
-    });
-
-    test('should get, list and delete triggers through repository', () async {
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.daily,
-        schedule: AgentActionTriggerSchedule(
-          timeOfDayMinutes: 9 * 60,
-        ),
-      );
-      repository.triggers[trigger.id] = trigger;
-
-      final getResult = await GetAgentActionTrigger(repository)('trigger-1');
-      final listResult = await ListAgentActionTriggers(repository)(
-        actionId: 'action-1',
-        isEnabled: true,
-        types: {AgentActionTriggerType.daily},
-      );
-      final deleteResult = await DeleteAgentActionTrigger(repository)('trigger-1');
-
-      expect(getResult.getOrThrow(), trigger);
-      expect(listResult.getOrThrow(), [trigger]);
-      expect(deleteResult.isSuccess(), isTrue);
-      expect(repository.triggers, isEmpty);
-    });
-
-    test('should reject delete trigger with blank id', () async {
-      final result = await DeleteAgentActionTrigger(repository)('   ');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-    });
-
-    test('should return not found when deleting missing trigger', () async {
-      final result = await DeleteAgentActionTrigger(repository)('missing-trigger');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionNotFoundFailure>());
-    });
-
-    test('should reject get trigger with blank id', () async {
-      final result = await GetAgentActionTrigger(repository)('');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-    });
-
-    test('should trim id when getting trigger', () async {
-      const trigger = AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.manual,
-      );
-      repository.triggers[trigger.id] = trigger;
-
-      final result = await GetAgentActionTrigger(repository)(' trigger-1 ');
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().id, 'trigger-1');
-    });
-
-    test('should reject list triggers with blank action id filter', () async {
-      final result = await ListAgentActionTriggers(repository)(actionId: '  ');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-    });
-
-    test('should trim action id when listing triggers', () async {
-      repository.triggers['t1'] = const AgentActionTrigger(
-        id: 't1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.manual,
-      );
-
-      final result = await ListAgentActionTriggers(repository)(actionId: '  action-1  ');
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow(), hasLength(1));
-    });
-
-    test('should dispatch temporal trigger through local action runner with trigger metadata', () async {
-      repository.triggers['trigger-1'] = const AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.daily,
-        schedule: AgentActionTriggerSchedule(
-          timeOfDayMinutes: 9 * 60,
-        ),
-      );
-      final runUseCase = RunAgentActionLocally(
-        repository,
-        AgentActionLocalRunnerRegistry([
-          FakeAgentActionLocalRunner(
-            result: Success(
-              AgentActionProcessResult(
-                status: AgentActionExecutionStatus.succeeded,
-                pid: 1234,
-                exitCode: 0,
-                processStartedAt: DateTime(2026, 5, 15, 9),
-                finishedAt: DateTime(2026, 5, 15, 9, 1),
-                stdout: AgentActionCapturedOutput.disabled,
-                stderr: AgentActionCapturedOutput.disabled,
-                redactionApplied: true,
-              ),
-            ),
-          ),
-        ]),
-        const Uuid(),
-        now: () => DateTime(2026, 5, 15, 8, 59),
-      );
-      final dispatchUseCase = DispatchAgentActionTrigger(
-        repository,
-        runUseCase,
-        now: () => DateTime(2026, 5, 15, 9),
-      );
-
-      final result = await dispatchUseCase(
-        triggerId: 'trigger-1',
-        scheduledAt: DateTime.utc(2026, 5, 15, 13),
-      );
-
-      expect(result.isSuccess(), isTrue);
-      final execution = result.getOrThrow();
-      expect(execution.source, AgentActionRequestSource.scheduler);
-      expect(execution.triggerId, 'trigger-1');
-      expect(execution.triggerType, AgentActionTriggerType.daily);
-      expect(execution.scheduledAt, DateTime.utc(2026, 5, 15, 13));
-      expect(execution.triggeredAt, DateTime(2026, 5, 15, 9));
-      expect(execution.idempotencyKey, 'trigger:trigger-1:2026-05-15T13:00:00.000Z');
-    });
-
-    test('should trim trigger action id when dispatching temporal trigger', () async {
-      repository.definitions['action-1'] = const AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
-      );
-      repository.triggers['trigger-1'] = const AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: '  action-1  ',
-        type: AgentActionTriggerType.daily,
-        schedule: AgentActionTriggerSchedule(
-          timeOfDayMinutes: 9 * 60,
-        ),
-      );
-      final runUseCase = RunAgentActionLocally(
-        repository,
-        AgentActionLocalRunnerRegistry([
-          FakeAgentActionLocalRunner(
-            result: Success(
-              AgentActionProcessResult(
-                status: AgentActionExecutionStatus.succeeded,
-                pid: 1234,
-                exitCode: 0,
-                processStartedAt: DateTime(2026, 5, 15, 9),
-                finishedAt: DateTime(2026, 5, 15, 9, 1),
-                stdout: AgentActionCapturedOutput.disabled,
-                stderr: AgentActionCapturedOutput.disabled,
-                redactionApplied: true,
-              ),
-            ),
-          ),
-        ]),
-        const Uuid(),
-        now: () => DateTime(2026, 5, 15, 8, 59),
-      );
-      final dispatchUseCase = DispatchAgentActionTrigger(
-        repository,
-        runUseCase,
-        now: () => DateTime(2026, 5, 15, 9),
-      );
-
-      final result = await dispatchUseCase(
-        triggerId: 'trigger-1',
-        scheduledAt: DateTime.utc(2026, 5, 15, 13),
-      );
-
-      expect(result.isSuccess(), isTrue);
-      expect(result.getOrThrow().actionId, 'action-1');
-    });
-
-    test('should reject dispatch when trigger action id is only whitespace', () async {
-      repository.triggers['bad-trigger'] = const AgentActionTrigger(
-        id: 'bad-trigger',
-        actionId: '   ',
-        type: AgentActionTriggerType.manual,
-      );
-      final runUseCase = RunAgentActionLocally(
-        repository,
-        AgentActionLocalRunnerRegistry([
-          FakeAgentActionLocalRunner(
-            result: Failure(ActionRuntimeFailure('Should not run')),
-          ),
-        ]),
-        const Uuid(),
-      );
-      final dispatchUseCase = DispatchAgentActionTrigger(repository, runUseCase);
-
-      final result = await dispatchUseCase(triggerId: 'bad-trigger');
-
-      expect(result.isError(), isTrue);
-      final failure = result.exceptionOrNull();
-      expect(failure, isA<ActionValidationFailure>());
-      expect((failure! as ActionValidationFailure).code, AgentActionFailureCode.triggerActionIdBlank);
-    });
-
-    test('should dispatch remote trigger through the same local action runner flow', () async {
-      repository.definitions['action-1'] = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: DateTime(2026, 5, 15),
-            approvedBy: 'local-admin',
-          ),
-        ),
-      );
-      repository.triggers['remote-trigger'] = const AgentActionTrigger(
-        id: 'remote-trigger',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.remote,
-      );
-      final flags = FeatureFlags(InMemoryAppSettingsStore());
-      await flags.setEnableRemoteAgentActions(true);
-      final runUseCase = RunAgentActionLocally(
-        repository,
-        AgentActionLocalRunnerRegistry([
-          FakeAgentActionLocalRunner(
-            result: Success(
-              AgentActionProcessResult(
-                status: AgentActionExecutionStatus.succeeded,
-                pid: 1234,
-                exitCode: 0,
-                processStartedAt: DateTime(2026, 5, 15, 9),
-                finishedAt: DateTime(2026, 5, 15, 9, 1),
-                stdout: AgentActionCapturedOutput.disabled,
-                stderr: AgentActionCapturedOutput.disabled,
-                redactionApplied: true,
-              ),
-            ),
-          ),
-        ]),
-        const Uuid(),
-        featureFlags: flags,
-        now: () => DateTime(2026, 5, 15, 8, 59),
-      );
-      final dispatchUseCase = DispatchAgentActionTrigger(
-        repository,
-        runUseCase,
-        now: () => DateTime(2026, 5, 15, 9),
-      );
-
-      final result = await dispatchUseCase(
-        triggerId: 'remote-trigger',
-        idempotencyKey: 'remote-key-1',
-        requestedBy: 'hub:user-1',
-        traceId: 'trace-1',
-      );
-
-      expect(result.isSuccess(), isTrue);
-      final execution = result.getOrThrow();
-      expect(execution.source, AgentActionRequestSource.remoteHub);
-      expect(execution.triggerId, 'remote-trigger');
-      expect(execution.triggerType, AgentActionTriggerType.remote);
-      expect(execution.requestedBy, 'hub:user-1');
-      expect(execution.traceId, 'trace-1');
-      expect(execution.idempotencyKey, 'remote-key-1');
-      expect(repository.savedExecutions.map((item) => item.status), [
-        AgentActionExecutionStatus.queued,
-        AgentActionExecutionStatus.running,
-        AgentActionExecutionStatus.succeeded,
-      ]);
-    });
-
-    test('should trim optional metadata when dispatching remote trigger', () async {
-      repository.definitions['action-1'] = AgentActionDefinition(
-        id: 'action-1',
-        name: 'Run command',
-        state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
-        policies: AgentActionDefinitionPolicies(
-          remote: AgentActionRemotePolicy(
-            isEnabled: true,
-            approvedAt: DateTime(2026, 5, 15),
-            approvedBy: 'local-admin',
-          ),
-        ),
-      );
-      repository.triggers['remote-trigger'] = const AgentActionTrigger(
-        id: 'remote-trigger',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.remote,
-      );
-      final flags = FeatureFlags(InMemoryAppSettingsStore());
-      await flags.setEnableRemoteAgentActions(true);
-      final runUseCase = RunAgentActionLocally(
-        repository,
-        AgentActionLocalRunnerRegistry([
-          FakeAgentActionLocalRunner(
-            result: Success(
-              AgentActionProcessResult(
-                status: AgentActionExecutionStatus.succeeded,
-                pid: 1234,
-                exitCode: 0,
-                processStartedAt: DateTime(2026, 5, 15, 9),
-                finishedAt: DateTime(2026, 5, 15, 9, 1),
-                stdout: AgentActionCapturedOutput.disabled,
-                stderr: AgentActionCapturedOutput.disabled,
-                redactionApplied: true,
-              ),
-            ),
-          ),
-        ]),
-        const Uuid(),
-        featureFlags: flags,
-        now: () => DateTime(2026, 5, 15, 8, 59),
-      );
-      final dispatchUseCase = DispatchAgentActionTrigger(
-        repository,
-        runUseCase,
-        now: () => DateTime(2026, 5, 15, 9),
-      );
-
-      final result = await dispatchUseCase(
-        triggerId: 'remote-trigger',
-        idempotencyKey: '  remote-key-trimmed  ',
-        requestedBy: '  hub:user-1  ',
-        traceId: '  trace-99  ',
-      );
-
-      expect(result.isSuccess(), isTrue);
-      final execution = result.getOrThrow();
-      expect(execution.requestedBy, 'hub:user-1');
-      expect(execution.traceId, 'trace-99');
-      expect(execution.idempotencyKey, 'remote-key-trimmed');
-    });
-
-    test('should reject dispatch when trigger is disabled', () async {
-      repository.triggers['trigger-1'] = const AgentActionTrigger(
-        id: 'trigger-1',
-        actionId: 'action-1',
-        type: AgentActionTriggerType.appStart,
-        isEnabled: false,
-      );
-      final runUseCase = RunAgentActionLocally(
-        repository,
-        AgentActionLocalRunnerRegistry([
-          FakeAgentActionLocalRunner(
-            result: Failure(ActionRuntimeFailure('Should not run')),
-          ),
-        ]),
-        const Uuid(),
-      );
-      final dispatchUseCase = DispatchAgentActionTrigger(repository, runUseCase);
-
-      final result = await dispatchUseCase(triggerId: 'trigger-1');
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
-      expect(repository.savedExecutions, isEmpty);
-    });
+    setUpAgentActionUseCaseTests();
+    repository = agentActionUseCaseTestRepository;
   });
 
   group('agent action execution use cases', () {
@@ -2323,7 +550,7 @@ void main() {
       final queuedExecution = result.getOrThrow();
       expect(queuedExecution.status, AgentActionExecutionStatus.queued);
       expect(queuedExecution.idempotencyKey, 'remote-key-1');
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
       expect(repository.executions[queuedExecution.id]?.status, AgentActionExecutionStatus.running);
 
       final repeatedResult = await useCase(
@@ -2614,7 +841,7 @@ void main() {
       final flags = FeatureFlags(InMemoryAppSettingsStore());
       await flags.setEnableRemoteAgentActions(true);
       await flags.setEnableAgentActionRemoteAudit(true);
-      final auditStore = _MemoryRemoteAuditStore();
+      final auditStore = MemoryRemoteAuditStore();
       final lifecycleAudit = AgentActionRemoteLifecycleAuditRecorder(
         featureFlags: flags,
         auditStore: auditStore,
@@ -2704,7 +931,7 @@ void main() {
           returnWhenQueued: true,
         ),
       );
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
 
       final validateResult = await useCase.validateRemoteRun(
         const AgentActionExecutionRequest(
@@ -2893,7 +1120,7 @@ void main() {
           idempotencyKey: 'same-key',
         ),
       );
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
       final second = useCase(
         const AgentActionExecutionRequest(
           actionId: 'action-1',
@@ -3031,7 +1258,7 @@ void main() {
           source: AgentActionRequestSource.localUi,
         ),
       );
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
       final second = useCase(
         const AgentActionExecutionRequest(
           actionId: 'action-1',
@@ -3062,7 +1289,7 @@ void main() {
         ),
       );
       expect((await first).isSuccess(), isTrue);
-      await _waitForRunnerStarts(runner, 2);
+      await waitForRunnerStarts(runner, 2);
       expect(runner.startedCount, 2);
       runner.completions[1].complete(
         Success(
@@ -3112,7 +1339,7 @@ void main() {
           source: AgentActionRequestSource.localUi,
         ),
       );
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
 
       final second = await useCase(
         const AgentActionExecutionRequest(
@@ -3175,7 +1402,7 @@ void main() {
           source: AgentActionRequestSource.localUi,
         ),
       );
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
 
       final second = await useCase(
         const AgentActionExecutionRequest(
@@ -3237,7 +1464,7 @@ void main() {
           source: AgentActionRequestSource.localUi,
         ),
       );
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
 
       final second = await useCase(
         const AgentActionExecutionRequest(
@@ -3468,7 +1695,7 @@ void main() {
           source: AgentActionRequestSource.localUi,
         ),
       );
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
       final second = runUseCase(
         const AgentActionExecutionRequest(
           actionId: 'action-1',
@@ -3543,7 +1770,7 @@ void main() {
           source: AgentActionRequestSource.localUi,
         ),
       );
-      await _waitForRunnerStarts(runner, 1);
+      await waitForRunnerStarts(runner, 1);
       final second = runUseCase(
         const AgentActionExecutionRequest(
           actionId: 'action-1',
@@ -3756,7 +1983,7 @@ void main() {
     });
 
     test('should reject remote execution when secret rotation invalidates risk fingerprint', () async {
-      final secretStore = _InMemoryAgentActionSecretStoreForRunTests();
+      final secretStore = InMemoryAgentActionSecretStoreForRunTests();
       await secretStore.saveSecret('api', 'version-one');
       const snapshotter = AgentActionDefinitionSnapshotter();
       final fingerprinter = AgentActionSecretReferenceFingerprinter(secretStore);
@@ -4046,7 +2273,7 @@ void main() {
         featureFlags: flags,
         elevatedRunnerReadiness: readiness,
         elevatedExecutionService: ElevatedAgentActionExecutionService(
-          bridge: _NoOpElevatedBridge(),
+          bridge: NoOpElevatedBridge(),
           statusFileSyncer: ElevatedActionStatusFileSyncer(storageContext: storage),
           readiness: readiness,
         ),
@@ -4258,67 +2485,192 @@ void main() {
       expect(failure.context['reason'], AgentActionRuntimeStateConstants.agentActionsDrainingReason);
       expect(repository.savedExecutions, isEmpty);
     });
+
+    test('should block dangerous remote hub runs even when warn mode is enabled', () async {
+      repository.definitions['action-dangerous'] = AgentActionDefinition(
+        id: 'action-dangerous',
+        name: 'Dangerous',
+        state: AgentActionState.active,
+        config: const CommandLineActionConfig(command: 'format C: /Y'),
+        policies: AgentActionDefinitionPolicies(
+          remote: AgentActionRemotePolicy(
+            isEnabled: true,
+            approvedAt: DateTime(2026, 5, 15, 8),
+            approvedBy: 'local-admin',
+          ),
+        ),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableRemoteAgentActions(true);
+      await flags.setEnableAgentActionDangerousCommandWarnMode(true);
+      final useCase = runUseCaseWithDangerousCommandPolicy(
+        repository: repository,
+        featureFlags: flags,
+        runnerResult: Failure(ActionRuntimeFailure('Should not run')),
+      );
+
+      final result = await useCase(
+        const AgentActionExecutionRequest(
+          actionId: 'action-dangerous',
+          source: AgentActionRequestSource.remoteHub,
+          idempotencyKey: 'remote-dangerous-1',
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(
+        failure.context['reason'],
+        AgentActionCommandSafetyConstants.dangerousCommandPatternReason,
+      );
+      expect(repository.savedExecutions, isEmpty);
+    });
+
+    test('should block dangerous scheduler runs even when warn mode is enabled', () async {
+      repository.definitions['action-dangerous'] = const AgentActionDefinition(
+        id: 'action-dangerous',
+        name: 'Dangerous',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'format C: /Y'),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableAgentActionDangerousCommandWarnMode(true);
+      final useCase = runUseCaseWithDangerousCommandPolicy(
+        repository: repository,
+        featureFlags: flags,
+        runnerResult: Failure(ActionRuntimeFailure('Should not run')),
+      );
+
+      final result = await useCase(
+        const AgentActionExecutionRequest(
+          actionId: 'action-dangerous',
+          source: AgentActionRequestSource.scheduler,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
+      expect(repository.savedExecutions, isEmpty);
+    });
+
+    test('should require dangerous command confirmation for local UI warn mode', () async {
+      repository.definitions['action-dangerous'] = const AgentActionDefinition(
+        id: 'action-dangerous',
+        name: 'Dangerous',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'format C: /Y'),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableAgentActionDangerousCommandWarnMode(true);
+      final useCase = runUseCaseWithDangerousCommandPolicy(
+        repository: repository,
+        featureFlags: flags,
+        runnerResult: Failure(ActionRuntimeFailure('Should not run')),
+      );
+
+      final blocked = await useCase(
+        const AgentActionExecutionRequest(
+          actionId: 'action-dangerous',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(blocked.isError(), isTrue);
+      final failure = blocked.exceptionOrNull()! as ActionValidationFailure;
+      expect(failure.context['confirmation_required'], isTrue);
+      expect(repository.savedExecutions, isEmpty);
+    });
+
+    test('should allow local UI warn mode when dangerous command is confirmed', () async {
+      repository.definitions['action-dangerous'] = const AgentActionDefinition(
+        id: 'action-dangerous',
+        name: 'Dangerous',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'format C: /Y'),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableAgentActionDangerousCommandWarnMode(true);
+      final runner = FakeAgentActionLocalRunner(
+        result: Success(
+          AgentActionProcessResult(
+            status: AgentActionExecutionStatus.succeeded,
+            pid: 1234,
+            exitCode: 0,
+            processStartedAt: DateTime(2026, 5, 15, 10),
+            finishedAt: DateTime(2026, 5, 15, 10, 1),
+            stdout: AgentActionCapturedOutput.disabled,
+            stderr: AgentActionCapturedOutput.disabled,
+            redactionApplied: true,
+          ),
+        ),
+      );
+      final useCase = runUseCaseWithDangerousCommandPolicy(
+        repository: repository,
+        featureFlags: flags,
+        runnerResult: runner.result,
+        runners: <AgentActionLocalRunner>[runner],
+        now: () => DateTime(2026, 5, 15, 9),
+      );
+
+      final result = await useCase(
+        const AgentActionExecutionRequest(
+          actionId: 'action-dangerous',
+          source: AgentActionRequestSource.localUi,
+          dangerousCommandConfirmed: true,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      final execution = result.getOrThrow();
+      expect(execution.status, AgentActionExecutionStatus.succeeded);
+    });
+
+    test('should reject dangerous commands on validateRemoteRun', () async {
+      repository.definitions['action-dangerous'] = AgentActionDefinition(
+        id: 'action-dangerous',
+        name: 'Dangerous',
+        state: AgentActionState.active,
+        config: const CommandLineActionConfig(command: 'format C: /Y'),
+        policies: AgentActionDefinitionPolicies(
+          remote: AgentActionRemotePolicy(
+            isEnabled: true,
+            approvedAt: DateTime(2026, 5, 15, 8),
+            approvedBy: 'local-admin',
+          ),
+        ),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableRemoteAgentActions(true);
+      await flags.setEnableAgentActionDangerousCommandWarnMode(true);
+      final useCase = runUseCaseWithDangerousCommandPolicy(
+        repository: repository,
+        featureFlags: flags,
+        runnerResult: Failure(ActionRuntimeFailure('validate must not invoke runner')),
+      );
+
+      final result = await useCase.validateRemoteRun(
+        const AgentActionExecutionRequest(
+          actionId: 'action-dangerous',
+          source: AgentActionRequestSource.remoteHub,
+          idempotencyKey: 'remote-validate-dangerous',
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
+      expect(repository.savedExecutions, isEmpty);
+    });
+
+    test('validation and authorization action failures are not recoverable', () {
+      expect(
+        ActionValidationFailure.withContext(message: 'invalid').isRecoverable,
+        isFalse,
+      );
+      expect(
+        ActionAuthorizationFailure.withContext(message: 'denied').isRecoverable,
+        isFalse,
+      );
+      expect(ActionRuntimeFailure('runtime').isRecoverable, isTrue);
+    });
   });
-}
-
-class _MemoryRemoteAuditStore implements IAgentActionRemoteAuditStore {
-  final List<AgentActionRemoteAuditRecord> rows = <AgentActionRemoteAuditRecord>[];
-
-  @override
-  Future<void> append(AgentActionRemoteAuditRecord record) async {
-    rows.add(record);
-  }
-
-  @override
-  Future<List<AgentActionRemoteAuditRecord>> listRecent({int limit = 200}) async =>
-      List<AgentActionRemoteAuditRecord>.from(rows);
-
-  @override
-  Future<int> deleteWhereOccurredBefore({
-    required DateTime cutoffUtc,
-    required int limit,
-  }) async => 0;
-}
-
-Future<void> _waitForRunnerStarts(
-  ControlledAgentActionLocalRunner runner,
-  int expectedCount,
-) async {
-  while (runner.startedCount < expectedCount) {
-    await Future<void>.delayed(Duration.zero);
-  }
-  await runner.starts[expectedCount - 1].future;
-}
-
-class _NoOpElevatedBridge implements IElevatedActionRunnerBridge {
-  @override
-  Future<Result<void>> submitExecution({
-    required String executionId,
-    required AgentActionDefinition definition,
-  }) async {
-    return const Success(unit);
-  }
-}
-
-class _InMemoryAgentActionSecretStoreForRunTests implements IAgentActionSecretStore {
-  final Map<String, String> _secrets = <String, String>{};
-
-  @override
-  bool get isAvailable => true;
-
-  @override
-  Future<void> deleteSecret(String secretName) async {
-    _secrets.remove(secretName);
-  }
-
-  @override
-  Future<bool> exists(String secretName) async => _secrets.containsKey(secretName);
-
-  @override
-  Future<String?> readSecret(String secretName) async => _secrets[secretName];
-
-  @override
-  Future<void> saveSecret(String secretName, String secretValue) async {
-    _secrets[secretName] = secretValue;
-  }
 }

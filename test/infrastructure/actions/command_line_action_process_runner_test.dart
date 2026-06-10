@@ -28,7 +28,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
               String command,
@@ -86,7 +86,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(
           _FakeProcess(
             pid: 1234,
@@ -120,7 +120,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
       );
 
@@ -149,7 +149,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(process),
       );
 
@@ -184,7 +184,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(
           _FakeProcess(
             pid: 1234,
@@ -228,7 +228,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
               String executable,
@@ -275,13 +275,15 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: ActionPathValidator(
-          fileExists: (_) async => true,
-          directoryExists: (_) async => true,
-          canonicalizeFile: (path) async => path,
-          canonicalizeDirectory: (_) async => r'C:\Current\Jobs',
-          fileLength: (_) async => 2,
-          readText: (_) async => '{}',
+        adapterRegistry: createTestAdapterRegistry(
+          pathValidator: ActionPathValidator(
+            fileExists: (_) async => true,
+            directoryExists: (_) async => true,
+            canonicalizeFile: (path) async => path,
+            canonicalizeDirectory: (_) async => r'C:\Current\Jobs',
+            fileLength: (_) async => 2,
+            readText: (_) async => '{}',
+          ),
         ),
         processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
       );
@@ -314,18 +316,17 @@ void main() {
     });
 
     test('should map stdin close errors to runtime failure', () async {
+      final process = _FakeProcess(
+        pid: 1234,
+        exitCode: 0,
+        shouldFailStdinClose: true,
+      );
       final runner = CommandLineActionProcessRunner(
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
-        processStarter: _starterFor(
-          _FakeProcess(
-            pid: 1234,
-            exitCode: 0,
-            shouldFailStdinClose: true,
-          ),
-        ),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
+        processStarter: _starterFor(process),
       );
 
       final result = await runner.run(
@@ -353,6 +354,7 @@ void main() {
       expect(failure.context, containsPair('executable', 'cmd.exe'));
       expect(failure.context, containsPair('command_preview', 'cmd.exe /C [REDACTED_COMMAND]'));
       expect(failure.context.toString(), isNot(contains('echo ok')));
+      expect(process.killCalled, isTrue);
     });
 
     test('should cancel active process by execution id', () async {
@@ -361,7 +363,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(process),
       );
 
@@ -397,7 +399,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(process),
       );
 
@@ -446,7 +448,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
       );
 
@@ -466,7 +468,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: const _FixedProfileResolver('prod'),
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
               String executable,

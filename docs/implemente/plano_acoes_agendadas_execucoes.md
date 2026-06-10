@@ -123,6 +123,35 @@ auditoria append-only; retencao UI; correlacao auditoria/historico.
 Revisao alinhada ao repositorio em **2026-05-20** (backlog pos-MVP); checkpoint
 tecnico abaixo mantido desde **2026-05-18** com atualizacoes pontuais.
 
+### Implemented architecture (2026)
+
+Refactor delivered focused execution and presentation boundaries; details below
+are in English for technical cross-referencing.
+
+- **`AgentActionExecutionGateChain`** (`lib/application/actions/`): shared
+  pre-execution gate pipeline for local runs and remote dry-run validation;
+  composes runtime validators, secret resolution, elevated readiness, and
+  **`AgentActionDangerousCommandPolicyEnforcer`** (block/warn policy by request
+  source).
+- **`AgentActionExecutionOrchestrator`** (`lib/application/actions/`):
+  post-gate orchestration — queue admission, idempotency reuse, persistence,
+  retry loop, elevated routing, and terminal metrics/audit hooks. Consumed by
+  `RunAgentActionLocally` after the gate chain succeeds.
+- **`AgentActionProcessLifecycle`** (`lib/infrastructure/actions/`): extracted
+  process start/wait/kill/output capture shared by command-line, script,
+  executable, JAR, and developer runners.
+- **RPC split modules** (`lib/application/rpc/`): `AgentActionRpcMethodHandlerOperations`
+  delegates to `agent_action_rpc_execution_operations.dart`,
+  `agent_action_rpc_audit_operations.dart`, `agent_action_rpc_remote_infrastructure.dart`,
+  and `agent_action_rpc_method_handler_support.dart` (replacing a single monolith).
+- **Provider controllers pattern** (`lib/presentation/providers/agent_actions/`):
+  `AgentActionsProvider` composes focused `ChangeNotifier` controllers
+  (definitions, executions, triggers, secrets, remote audit, runtime, bundle
+  transfer, history) instead of monolithic provider mixins.
+
+Contract gate: `test/application/actions/agent_action_execution_orchestrator_test.dart`,
+`test/presentation/providers/agent_actions/agent_actions_definitions_controller_test.dart`.
+
 - **Roteamento `agent.action.*`:** `RpcMethodDispatcher.dispatch` consulta o
   registry de handlers (`_handlersByMethod`) montado em
   `lib/application/rpc/handlers/rpc_method_handlers.dart` e delega para

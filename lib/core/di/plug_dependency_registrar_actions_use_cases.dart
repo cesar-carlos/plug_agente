@@ -199,6 +199,30 @@ void _registerActionsUseCases(GetIt getIt) {
       ),
     )
     ..registerLazySingleton(
+      () => AgentActionDangerousCommandPolicyEnforcer(
+        commandSafetyAssessor: getIt<IActionCommandSafetyAssessor>(),
+        featureFlags: getIt<FeatureFlags>(),
+      ),
+    )
+    ..registerLazySingleton(AgentActionPreparedExecutionCache.new)
+    ..registerLazySingleton(
+      () => AgentActionExecutionGateChain(
+        repository: getIt<IAgentActionRepository>(),
+        runnerRegistry: getIt<AgentActionLocalRunnerRegistry>(),
+        runtimeRequestValidator: getIt<AgentActionRuntimeRequestValidator>(),
+        runtimeExecutionValidator: const AgentActionRuntimeExecutionValidator(),
+        runtimeStateGuard: getIt<AgentActionRuntimeStateGuard>(),
+        featureFlags: getIt<FeatureFlags>(),
+        operationalProfileResolver: const AgentOperationalProfileResolver(),
+        secretPlaceholderResolver: getIt<AgentActionSecretPlaceholderResolver>(),
+        dangerousCommandPolicyEnforcer: getIt<AgentActionDangerousCommandPolicyEnforcer>(),
+        elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
+        elevatedExecutionService: getIt<ElevatedAgentActionExecutionService>(),
+        definitionSnapshotter: getIt<AgentActionDefinitionSnapshotter>(),
+        secretReferenceFingerprinter: getIt<AgentActionSecretReferenceFingerprinter>(),
+      ),
+    )
+    ..registerLazySingleton(
       () => RunAgentActionLocally(
         getIt<IAgentActionRepository>(),
         getIt<AgentActionLocalRunnerRegistry>(),
@@ -224,6 +248,9 @@ void _registerActionsUseCases(GetIt getIt) {
         remoteLifecycleAudit: getIt<AgentActionRemoteLifecycleAuditRecorder>(),
         definitionSnapshotter: getIt<AgentActionDefinitionSnapshotter>(),
         secretReferenceFingerprinter: getIt<AgentActionSecretReferenceFingerprinter>(),
+        dangerousCommandPolicyEnforcer: getIt<AgentActionDangerousCommandPolicyEnforcer>(),
+        executionGateChain: getIt<AgentActionExecutionGateChain>(),
+        preparedExecutionCache: getIt<AgentActionPreparedExecutionCache>(),
       ),
     )
     ..registerLazySingleton(

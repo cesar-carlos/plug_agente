@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_email_address_validator.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_email_template_renderer.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_prepare_execution_resolver.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_smtp_profile_loader.dart';
 import 'package:plug_agente/infrastructure/actions/email_action_adapter.dart';
 import 'package:result_dart/result_dart.dart';
@@ -68,7 +69,8 @@ class EmailActionMailerRunner implements AgentActionLocalRunner {
       pathValidator: _pathValidator,
       secretStore: _secretStore,
     );
-    final preparedResult = await adapter.prepareExecution(
+    final preparedResult = await resolvePreparedExecution(
+      adapter: adapter,
       definition: definition,
       request: request,
     );

@@ -400,7 +400,6 @@ class AgentActionDeveloperFieldsCallbacks {
     required this.onPickConfigPath,
     required this.onApplyDefaultConfigBinPath,
     required this.onApplyDefaultConfigRootPath,
-    required this.onConnectionIdChanged,
     required this.onConnectionSearchChanged,
     required this.onConnectionSelected,
     required this.onSubmitted,
@@ -415,7 +414,6 @@ class AgentActionDeveloperFieldsCallbacks {
   final VoidCallback onPickConfigPath;
   final VoidCallback onApplyDefaultConfigBinPath;
   final VoidCallback onApplyDefaultConfigRootPath;
-  final ValueChanged<String> onConnectionIdChanged;
   final ValueChanged<String> onConnectionSearchChanged;
   final ValueChanged<String?> onConnectionSelected;
   final VoidCallback onSubmitted;
@@ -449,6 +447,7 @@ class AgentActionDeveloperFields extends StatelessWidget {
     required this.configPathHints,
     required this.resolvedConfigHints,
     required this.callbacks,
+    this.showInlineFeedback = true,
     super.key,
   });
 
@@ -471,6 +470,7 @@ class AgentActionDeveloperFields extends StatelessWidget {
   final List<Widget> configPathHints;
   final List<Widget> resolvedConfigHints;
   final AgentActionDeveloperFieldsCallbacks callbacks;
+  final bool showInlineFeedback;
 
   @override
   Widget build(BuildContext context) {
@@ -557,7 +557,7 @@ class AgentActionDeveloperFields extends StatelessWidget {
               ),
           ],
         ),
-        if (connectionLookupMessage != null) ...[
+        if (showInlineFeedback && connectionLookupMessage != null) ...[
           const SizedBox(height: AppSpacing.sm),
           InfoBar(
             title: Text(l10n.agentActionsValidationTitle),
@@ -594,9 +594,9 @@ class AgentActionDeveloperFields extends StatelessWidget {
                 helpTitle: l10n.agentActionsHelpDeveloperTitle,
                 helpMessage: l10n.agentActionsHelpDeveloperMessage,
                 controller: connectionIdController,
-                enabled: enabled,
+                enabled: false,
+                readOnly: true,
                 textInputAction: TextInputAction.next,
-                onChanged: callbacks.onConnectionIdChanged,
               ),
             ),
           ],

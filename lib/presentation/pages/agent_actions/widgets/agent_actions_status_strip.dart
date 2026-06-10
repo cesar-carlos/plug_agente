@@ -45,6 +45,18 @@ class AgentActionsStatusStrip extends StatelessWidget {
           severity: InfoBarSeverity.error,
           isLong: true,
         ),
+      if (provider.triggerErrorMessage != null)
+        InfoBar(
+          key: const ValueKey<String>('agent_actions_trigger_operation_error'),
+          title: Text(l10n.agentActionsErrorTitle),
+          content: SelectableText(provider.triggerErrorMessage!),
+          severity: InfoBarSeverity.error,
+          isLong: true,
+          action: Button(
+            onPressed: provider.clearTriggerOperationError,
+            child: Text(l10n.btnClose),
+          ),
+        ),
     ];
 
     if (statusWidgets.isEmpty) {

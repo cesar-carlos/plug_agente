@@ -23,6 +23,7 @@ class AgentActionTriggersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final triggerError = provider.triggerErrorMessage;
     if (provider.isLoadingTriggers) {
       return Row(
         children: [
@@ -41,28 +42,49 @@ class AgentActionTriggersSection extends StatelessWidget {
       );
     }
 
-    if (provider.triggers.isEmpty) {
-      return Text(
-        l10n.agentActionsTriggersEmpty,
-        style: context.bodyMuted,
-      );
+    final triggersList = provider.triggers.isEmpty
+        ? Text(
+            l10n.agentActionsTriggersEmpty,
+            style: context.bodyMuted,
+          )
+        : SizedBox(
+            height: 220,
+            child: ListView.separated(
+              itemCount: provider.triggers.length,
+              separatorBuilder: (_, _) => const Divider(),
+              itemBuilder: (BuildContext context, int index) {
+                final trigger = provider.triggers[index];
+                return AgentActionTriggerRow(
+                  trigger: trigger,
+                  provider: provider,
+                  l10n: l10n,
+                  actionId: actionId,
+                );
+              },
+            ),
+          );
+
+    if (triggerError == null) {
+      return triggersList;
     }
 
-    return SizedBox(
-      height: 220,
-      child: ListView.separated(
-        itemCount: provider.triggers.length,
-        separatorBuilder: (_, _) => const Divider(),
-        itemBuilder: (BuildContext context, int index) {
-          final trigger = provider.triggers[index];
-          return AgentActionTriggerRow(
-            trigger: trigger,
-            provider: provider,
-            l10n: l10n,
-            actionId: actionId,
-          );
-        },
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InfoBar(
+          key: const ValueKey<String>('agent_actions_triggers_section_error'),
+          title: Text(l10n.agentActionsErrorTitle),
+          content: SelectableText(triggerError),
+          severity: InfoBarSeverity.error,
+          isLong: true,
+          action: Button(
+            onPressed: provider.clearTriggerOperationError,
+            child: Text(l10n.btnClose),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        triggersList,
+      ],
     );
   }
 }

@@ -17,7 +17,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
       );
 
@@ -50,7 +50,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(
           _FakeProcess(pid: 1234, exitCode: 42, stderrText: 'jar crashed'),
         ),
@@ -84,7 +84,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(
           _FakeProcess(
             pid: 1234,
@@ -123,7 +123,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
               String executable,
@@ -164,7 +164,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter: _starterFor(process),
       );
 
@@ -195,6 +195,41 @@ void main() {
       expect(process.killCalled, isTrue);
     });
 
+    test('should kill process when stdin setup fails after start', () async {
+      final process = _FakeProcess(
+        pid: 1234,
+        exitCode: 0,
+        shouldFailStdinClose: true,
+      );
+      final runner = JarActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
+        processStarter: _starterFor(process),
+      );
+
+      final result = await runner.run(
+        executionId: 'execution-1',
+        definition: const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Run jar',
+          state: AgentActionState.active,
+          config: JarActionConfig(
+            jarPath: AgentActionPathReference(originalPath: r'C:\Apps\job.jar'),
+          ),
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<ActionRuntimeFailure>());
+      expect(process.killCalled, isTrue);
+    });
+
     test('should invoke java with -jar argument and forward jar args', () async {
       late String capturedExecutable;
       late List<String> capturedArguments;
@@ -202,7 +237,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        pathValidator: _acceptingPathValidator(),
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
               String executable,

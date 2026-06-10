@@ -37,6 +37,23 @@ class AgentActionSecretPlaceholderScanner {
       names.addAll(collectFromText(value));
     }
 
+    void visitPath(AgentActionPathReference? path) {
+      if (path == null) {
+        return;
+      }
+      visit(path.originalPath);
+      final canonicalPath = path.canonicalPath;
+      if (canonicalPath != null &&
+          canonicalPath.isNotEmpty &&
+          canonicalPath != path.originalPath) {
+        visit(canonicalPath);
+      }
+    }
+
+    void visitPaths(Iterable<AgentActionPathReference> paths) {
+      paths.forEach(visitPath);
+    }
+
     visit(definition.name);
     visit(definition.description);
 
@@ -46,13 +63,36 @@ class AgentActionSecretPlaceholderScanner {
     }
 
     switch (definition.config) {
-      case CommandLineActionConfig(:final command):
+      case CommandLineActionConfig(:final command, :final workingDirectory):
         visit(command);
-      case ExecutableActionConfig(:final arguments):
+        visitPath(workingDirectory);
+      case ExecutableActionConfig(
+        :final executablePath,
+        :final arguments,
+        :final workingDirectory,
+      ):
+        visitPath(executablePath);
+        visitPath(workingDirectory);
         arguments.forEach(visit);
-      case ScriptActionConfig(:final arguments):
+      case ScriptActionConfig(
+        :final scriptPath,
+        :final interpreterPath,
+        :final arguments,
+        :final workingDirectory,
+      ):
+        visitPath(scriptPath);
+        visitPath(interpreterPath);
+        visitPath(workingDirectory);
         arguments.forEach(visit);
-      case JarActionConfig(:final arguments):
+      case JarActionConfig(
+        :final jarPath,
+        :final javaExecutablePath,
+        :final arguments,
+        :final workingDirectory,
+      ):
+        visitPath(jarPath);
+        visitPath(javaExecutablePath);
+        visitPath(workingDirectory);
         arguments.forEach(visit);
       case EmailActionConfig(
         :final subjectTemplate,
@@ -62,13 +102,17 @@ class AgentActionSecretPlaceholderScanner {
         :final to,
         :final cc,
         :final bcc,
+        :final attachmentPaths,
       ):
         visit(smtpProfileId);
         visit(from);
         visit(subjectTemplate);
         visit(bodyTemplate);
         [...to, ...cc, ...bcc].forEach(visit);
-      case ComObjectActionConfig(:final arguments):
+        visitPaths(attachmentPaths);
+      case ComObjectActionConfig(:final progId, :final memberName, :final arguments):
+        visit(progId);
+        visit(memberName);
         for (final entry in arguments.entries) {
           visit(entry.key);
           final value = entry.value;
@@ -76,7 +120,15 @@ class AgentActionSecretPlaceholderScanner {
             visit(value);
           }
         }
-      case DeveloperActionConfig(:final connectionLabel):
+      case DeveloperActionConfig(
+        :final executorPath,
+        :final projectPath,
+        :final data7ConfigPath,
+        :final connectionLabel,
+      ):
+        visitPath(executorPath);
+        visitPath(projectPath);
+        visitPath(data7ConfigPath);
         visit(connectionLabel);
     }
 

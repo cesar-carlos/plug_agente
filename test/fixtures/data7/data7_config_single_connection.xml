@@ -1,0 +1,14 @@
+<Configurações>
+  <ArquivosVersao></ArquivosVersao>
+  <Item ID="43134396-D875-4FBB-8EA0-85B2DAFFF69C">
+    <Descrição>Data7</Descrição>
+    <Conexão>
+      <Servidor>127.0.0.1\Data7</Servidor>
+      <BaseDados>Estacao</BaseDados>
+      <Porta>1433</Porta>
+      <Usuario>sa</Usuario>
+      <Senha>fake-test-password</Senha>
+      <RDBMS>MSSQLServer</RDBMS>
+    </Conexão>
+  </Item>
+</Configurações>

@@ -13,6 +13,7 @@ class AppLabeledField extends StatelessWidget {
     this.helpMessage,
     this.helpTooltip,
     this.helpButtonKey,
+    this.reserveHelpAffordance = false,
   });
 
   final String label;
@@ -22,6 +23,7 @@ class AppLabeledField extends StatelessWidget {
   final String? helpMessage;
   final String? helpTooltip;
   final Key? helpButtonKey;
+  final bool reserveHelpAffordance;
 
   bool get _hasHelp {
     return (helpTitle?.trim().isNotEmpty ?? false) && (helpMessage?.trim().isNotEmpty ?? false);
@@ -65,10 +67,33 @@ class AppLabeledField extends StatelessWidget {
         : child;
 
     if (!_hasHelp) {
-      return InfoLabel(
-        label: label,
-        labelStyle: context.bodyStrong,
-        child: content,
+      if (!reserveHelpAffordance) {
+        return InfoLabel(
+          label: label,
+          labelStyle: context.bodyStrong,
+          child: content,
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: context.bodyStrong,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const SizedBox.square(dimension: 24),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          content,
+        ],
       );
     }
 

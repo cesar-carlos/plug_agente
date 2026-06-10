@@ -82,7 +82,9 @@ Future<void> runAgentActionWithDangerousCommandCheck(
     }
   }
 
-  await provider.runSelectedAction();
+  await provider.runSelectedAction(
+    dangerousCommandConfirmed: assessment.requiresConfirmation,
+  );
 }
 
 List<Widget> buildAgentActionDangerousCommandRunGuidance({

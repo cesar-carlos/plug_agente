@@ -15,6 +15,7 @@ class AppDropdown<T> extends StatefulWidget {
     this.helpMessage,
     this.helpTooltip,
     this.helpButtonKey,
+    this.reserveHelpAffordance = false,
   });
 
   final String label;
@@ -27,6 +28,7 @@ class AppDropdown<T> extends StatefulWidget {
   final String? helpMessage;
   final String? helpTooltip;
   final Key? helpButtonKey;
+  final bool reserveHelpAffordance;
 
   @override
   State<AppDropdown<T>> createState() => _AppDropdownState<T>();
@@ -70,6 +72,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
       helpMessage: widget.helpMessage,
       helpTooltip: widget.helpTooltip,
       helpButtonKey: widget.helpButtonKey,
+      reserveHelpAffordance: widget.reserveHelpAffordance,
       child: dropdown,
     );
   }

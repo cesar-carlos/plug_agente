@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/constants/agent_action_email_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
+import 'package:plug_agente/core/utils/path_extension.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_preflight_metadata.dart';
@@ -111,7 +112,7 @@ class EmailActionAdapter implements AgentActionAdapter {
           'recipient_count': config.to.length,
           'cc_count': config.cc.length,
           'bcc_count': config.bcc.length,
-          'context_path_extension': _extensionOf(request.contextPath),
+          'context_path_extension': extensionOf(request.contextPath),
           'uses_context_path': request.contextPath != null,
           'smtp_host': smtpProfileResult.getOrThrow().host,
           if (contextValidation.getOrThrow().path != null)
@@ -374,19 +375,6 @@ class EmailActionAdapter implements AgentActionAdapter {
             'email smtp-profile=[REDACTED] from=[REDACTED] to=${normalizedConfig.to.length} recipients attachments=${attachments.length}',
       ),
     );
-  }
-
-  String? _extensionOf(String? path) {
-    if (path == null) {
-      return null;
-    }
-    final lastSeparator = path.lastIndexOf(RegExp(r'[\\/]'));
-    final fileName = lastSeparator >= 0 ? path.substring(lastSeparator + 1) : path;
-    final dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex == fileName.length - 1) {
-      return null;
-    }
-    return fileName.substring(dotIndex).toLowerCase();
   }
 
   AgentActionPathReference _normalizedPathReference({

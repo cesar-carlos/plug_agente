@@ -869,6 +869,19 @@ class _NotificationCheckbox extends StatelessWidget {
   }
 }
 
+/// Warning payload for modal feedback in the action editor dialog.
+class AgentActionEditorDialogWarning {
+  const AgentActionEditorDialogWarning({
+    required this.key,
+    required this.title,
+    required this.message,
+  });
+
+  final String key;
+  final String title;
+  final String message;
+}
+
 /// Identity row of the editor (name + kind + state) plus the preflight
 /// gate info bar. Extracted from the editor's monolithic `build()` so
 /// the layout-builder + 3 fields + info bar are testable in isolation
@@ -891,6 +904,7 @@ class AgentActionIdentitySection extends StatelessWidget {
     required this.onStateChanged,
     required this.preflightInfoBar,
     required this.actionTypeDropdownKey,
+    this.showInlineFeedback = true,
     super.key,
   });
 
@@ -910,6 +924,7 @@ class AgentActionIdentitySection extends StatelessWidget {
   final ValueChanged<AgentActionState> onStateChanged;
   final Widget preflightInfoBar;
   final ValueKey<String> actionTypeDropdownKey;
+  final bool showInlineFeedback;
 
   @override
   Widget build(BuildContext context) {
@@ -921,6 +936,7 @@ class AgentActionIdentitySection extends StatelessWidget {
           controller: nameController,
           enabled: enabled,
           textInputAction: TextInputAction.next,
+          reserveHelpAffordance: true,
         );
         final typeField = isEditing
             ? AppTextField(
@@ -972,7 +988,6 @@ class AgentActionIdentitySection extends StatelessWidget {
               .map(
                 (value) => ComboBoxItem<AgentActionState>(
                   value: value,
-                  enabled: value != AgentActionState.active || canSelectActiveState,
                   child: Text(stateLabelForValue(value)),
                 ),
               )
@@ -985,6 +1000,8 @@ class AgentActionIdentitySection extends StatelessWidget {
                 },
         );
 
+        final inlinePreflight = showInlineFeedback ? preflightInfoBar : const SizedBox.shrink();
+
         if (stackFields) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -994,7 +1011,7 @@ class AgentActionIdentitySection extends StatelessWidget {
               typeField,
               const SizedBox(height: AppSpacing.sm),
               stateField,
-              preflightInfoBar,
+              inlinePreflight,
             ],
           );
         }
@@ -1007,12 +1024,12 @@ class AgentActionIdentitySection extends StatelessWidget {
               children: [
                 Expanded(child: nameField),
                 const SizedBox(width: AppSpacing.md),
-                SizedBox(width: 220, child: typeField),
+                Expanded(child: typeField),
                 const SizedBox(width: AppSpacing.md),
-                SizedBox(width: 220, child: stateField),
+                Expanded(child: stateField),
               ],
             ),
-            preflightInfoBar,
+            inlinePreflight,
           ],
         );
       },
@@ -1051,6 +1068,22 @@ class AgentActionPreflightGateInfoBar extends StatelessWidget {
   final AppLocalizations l10n;
   final AgentActionPreflightGateState state;
 
+  static AgentActionEditorDialogWarning? resolveWarning(
+    AgentActionPreflightGateState state,
+    AppLocalizations l10n,
+  ) {
+    if (state.canSelectActiveState) {
+      return null;
+    }
+
+    final isExpired = state.hasDefinition && !state.isDraftModifiedSinceLoad && state.isPreflightExpired;
+    return AgentActionEditorDialogWarning(
+      key: 'preflight_gate',
+      title: isExpired ? l10n.agentActionsPreflightExpiredTitle : l10n.agentActionsPreflightRequiredTitle,
+      message: isExpired ? l10n.agentActionsPreflightExpiredForActive : l10n.agentActionsPreflightRequiredForActive,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (state.canSelectActiveState) {
@@ -1061,20 +1094,14 @@ class AgentActionPreflightGateInfoBar extends StatelessWidget {
       if (expiresAt == null) {
         return const SizedBox.shrink();
       }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: AppSpacing.sm),
-          InfoBar(
-            title: Text(l10n.agentActionsPreflightValidTitle),
-            content: Text(
-              l10n.agentActionsPreflightExpiresAt(
-                DateFormat.yMMMd().add_jm().format(expiresAt.toLocal()),
-              ),
-            ),
-            isLong: true,
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.sm),
+        child: Text(
+          l10n.agentActionsPreflightExpiresAt(
+            DateFormat.yMMMd().add_jm().format(expiresAt.toLocal()),
           ),
-        ],
+          style: context.bodyMuted,
+        ),
       );
     }
 

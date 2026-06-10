@@ -29,6 +29,7 @@ class AppTextField extends StatefulWidget {
     this.helpMessage,
     this.helpTooltip,
     this.helpButtonKey,
+    this.reserveHelpAffordance = false,
   });
 
   final String label;
@@ -53,6 +54,7 @@ class AppTextField extends StatefulWidget {
   final String? helpMessage;
   final String? helpTooltip;
   final Key? helpButtonKey;
+  final bool reserveHelpAffordance;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -174,6 +176,7 @@ class _AppTextFieldState extends State<AppTextField> {
       helpMessage: widget.helpMessage,
       helpTooltip: widget.helpTooltip,
       helpButtonKey: widget.helpButtonKey,
+      reserveHelpAffordance: widget.reserveHelpAffordance,
       child: textBox,
     );
   }

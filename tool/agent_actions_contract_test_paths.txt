@@ -14,6 +14,7 @@ test/application/actions/agent_action_runtime_request_validator_test.dart
 test/application/actions/agent_action_runtime_execution_validator_test.dart
 test/application/actions/agent_action_runtime_execution_validator_environment_test.dart
 test/application/actions/agent_action_runtime_state_guard_test.dart
+test/application/actions/agent_action_execution_orchestrator_test.dart
 test/infrastructure/external_services/transport/rpc_inbound_handler_test.dart
 test/application/rpc/rpc_method_dispatcher_agent_action_test.dart
 test/application/use_cases/backfill_agent_action_execution_correlation_test.dart
@@ -65,7 +66,9 @@ test/application/use_cases/save_agent_action_secret_test.dart
 test/application/use_cases/delete_agent_action_secret_test.dart
 test/application/actions/agent_action_failure_process_metadata_test.dart
 test/application/use_cases/list_recent_agent_action_remote_audit_test.dart
-test/application/use_cases/agent_action_use_cases_test.dart
+test/application/use_cases/agent_action_definition_use_cases_test.dart
+test/application/use_cases/agent_action_trigger_use_cases_test.dart
+test/application/use_cases/agent_action_execution_use_cases_test.dart
 test/application/mappers/failure_to_rpc_error_mapper_test.dart
 test/domain/entities/client_token_policy_agent_action_authorization_test.dart
 test/application/actions/action_execution_queue_metrics_test.dart
@@ -100,6 +103,7 @@ test/tool/agent_action_test_manifest_test.dart
 test/tool/agent_actions_ci_gate_paths_sync_test.dart
 test/tool/agent_action_security_gate_checklist_test.dart
 test/presentation/providers/agent_actions_provider_test.dart
+test/presentation/providers/agent_actions/agent_actions_definitions_controller_test.dart
 test/presentation/widgets/agent_actions/iana_timezone_id_field_test.dart
 test/domain/actions/agent_action_redactor_test.dart
 test/docs/communication/contract_fixtures_test.dart

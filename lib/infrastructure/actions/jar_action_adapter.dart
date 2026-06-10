@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/constants/agent_action_jar_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
+import 'package:plug_agente/core/utils/path_extension.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_preflight_metadata.dart';
@@ -117,10 +118,11 @@ class JarActionAdapter implements AgentActionAdapter {
         redactedCommandPreview: resolved.invocation.redactedPreview,
         workingDirectory:
             resolved.workingDirectoryValidation.path?.canonicalPath ?? config.workingDirectory?.displayPath,
+        contextHash: contextValidation.getOrThrow().path?.contentHash,
         redactedDiagnostics: {
           ...redactedDiagnostics,
           'argument_count': resolved.invocation.arguments.length,
-          'context_path_extension': _extensionOf(request.contextPath),
+          'context_path_extension': extensionOf(request.contextPath),
           'uses_context_path': request.contextPath != null,
           'uses_default_java': resolved.usesDefaultJava,
           'jar_path': ActionPathPreflightMetadata.forValidatedPath(resolved.jarPath),
@@ -327,19 +329,6 @@ class JarActionAdapter implements AgentActionAdapter {
         hasWorkingDirectory: config.workingDirectory != null,
       ),
     );
-  }
-
-  String? _extensionOf(String? path) {
-    if (path == null) {
-      return null;
-    }
-    final lastSeparator = path.lastIndexOf(RegExp(r'[\\/]'));
-    final fileName = lastSeparator >= 0 ? path.substring(lastSeparator + 1) : path;
-    final dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex == fileName.length - 1) {
-      return null;
-    }
-    return fileName.substring(dotIndex).toLowerCase();
   }
 
   AgentActionPathReference _normalizedPathReference({

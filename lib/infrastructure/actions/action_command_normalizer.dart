@@ -8,6 +8,7 @@ import 'package:plug_agente/core/constants/agent_action_path_context_constants.d
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_script_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
+import 'package:plug_agente/core/utils/path_extension.dart';
 import 'package:plug_agente/core/utils/windows_command_line_quoter.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
@@ -126,7 +127,7 @@ class ActionCommandNormalizer {
       return Failure(normalizedArgumentsResult.exceptionOrNull()!);
     }
     final normalizedArguments = normalizedArgumentsResult.getOrThrow();
-    final extension = _extensionOf(normalizedExecutable);
+    final extension = extensionOf(normalizedExecutable);
 
     if (extension == '.bat' || extension == '.cmd') {
       final invocationArguments = <String>[
@@ -223,7 +224,7 @@ class ActionCommandNormalizer {
       return Failure(normalizedArgumentsResult.exceptionOrNull()!);
     }
     final normalizedArguments = normalizedArgumentsResult.getOrThrow();
-    final scriptExtension = _extensionOf(normalizedScript);
+    final scriptExtension = extensionOf(normalizedScript);
     if (scriptExtension == null || !AgentActionScriptConstants.allowedScriptExtensions.contains(scriptExtension)) {
       return Failure(
         ActionValidationFailure.withContext(
@@ -317,7 +318,7 @@ class ActionCommandNormalizer {
       );
     }
 
-    final extension = _extensionOf(normalizedJar);
+    final extension = extensionOf(normalizedJar);
     if (extension != '.jar') {
       return Failure(
         ActionValidationFailure.withContext(
@@ -518,17 +519,6 @@ class ActionCommandNormalizer {
     }
 
     return Success(normalizedArguments);
-  }
-
-  String? _extensionOf(String path) {
-    final lastSeparator = path.lastIndexOf(RegExp(r'[\\/]'));
-    final fileName = lastSeparator >= 0 ? path.substring(lastSeparator + 1) : path;
-    final dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex == fileName.length - 1) {
-      return null;
-    }
-
-    return fileName.substring(dotIndex).toLowerCase();
   }
 
   String _fileNameOf(String path) {

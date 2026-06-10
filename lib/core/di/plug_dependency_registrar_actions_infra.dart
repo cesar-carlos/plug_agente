@@ -95,8 +95,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
     )
     ..registerLazySingleton<CommandLineActionProcessRunner>(
       () => CommandLineActionProcessRunner(
-        commandNormalizer: getIt<ActionCommandNormalizer>(),
-        pathValidator: getIt<ActionPathValidator>(),
+        adapterRegistry: getIt<AgentActionAdapterRegistry>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
@@ -104,8 +103,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
     )
     ..registerLazySingleton<ExecutableActionProcessRunner>(
       () => ExecutableActionProcessRunner(
-        commandNormalizer: getIt<ActionCommandNormalizer>(),
-        pathValidator: getIt<ActionPathValidator>(),
+        adapterRegistry: getIt<AgentActionAdapterRegistry>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
@@ -113,8 +111,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
     )
     ..registerLazySingleton<ScriptActionProcessRunner>(
       () => ScriptActionProcessRunner(
-        commandNormalizer: getIt<ActionCommandNormalizer>(),
-        pathValidator: getIt<ActionPathValidator>(),
+        adapterRegistry: getIt<AgentActionAdapterRegistry>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
@@ -122,8 +119,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
     )
     ..registerLazySingleton<JarActionProcessRunner>(
       () => JarActionProcessRunner(
-        commandNormalizer: getIt<ActionCommandNormalizer>(),
-        pathValidator: getIt<ActionPathValidator>(),
+        adapterRegistry: getIt<AgentActionAdapterRegistry>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
@@ -143,7 +139,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
     )
     ..registerLazySingleton<DeveloperData7ProcessRunner>(
       () => DeveloperData7ProcessRunner(
-        definitionResolver: getIt<DeveloperData7DefinitionResolver>(),
+        adapterRegistry: getIt<AgentActionAdapterRegistry>(),
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),

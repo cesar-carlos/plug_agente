@@ -1,7 +1,5 @@
 import 'package:plug_agente/domain/actions/action_policies.dart'
     show AgentActionEnvironmentPolicy, AgentActionRemotePolicy;
-import 'package:plug_agente/domain/actions/actions.dart' show AgentActionEnvironmentPolicy, AgentActionRemotePolicy;
-import 'package:plug_agente/domain/domain.dart' show AgentActionEnvironmentPolicy, AgentActionRemotePolicy;
 
 /// Stable `failure.context['reason']` for agent action feature, maintenance, remote, and lifecycle gates.
 abstract final class AgentActionGateConstants {
@@ -42,4 +40,7 @@ abstract final class AgentActionGateConstants {
   static const String operationalProfileEnvironmentKey = 'AGENT_OPERATIONAL_PROFILE';
 
   static const String prodOperationalProfileName = 'prod';
+
+  /// Short-lived cache for adapter prepare results between Hub validateRun and run.
+  static const Duration remotePreparedExecutionCacheTtl = Duration(minutes: 2);
 }

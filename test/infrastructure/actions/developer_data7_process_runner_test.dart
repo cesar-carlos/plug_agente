@@ -7,6 +7,8 @@ import 'package:plug_agente/application/actions/agent_operational_profile_resolv
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.dart';
+import 'package:plug_agente/infrastructure/actions/developer_data7_action_adapter.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_config_locator.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_connection_catalog.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_definition_resolver.dart';
@@ -24,7 +26,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        definitionResolver: _resolverForCatalog(),
+        adapterRegistry: _adapterRegistryForCatalog(),
         processStarter:
             (
               String command,
@@ -77,7 +79,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        definitionResolver: _resolverForCatalog(),
+        adapterRegistry: _adapterRegistryForCatalog(),
       );
 
       final result = await runner.run(
@@ -104,7 +106,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        definitionResolver: _resolverForCatalog(),
+        adapterRegistry: _adapterRegistryForCatalog(),
         processStarter:
             (
               String executable,
@@ -146,7 +148,7 @@ void main() {
       final runner = DeveloperData7ProcessRunner(
         environmentResolver: kTestActionEnvironmentResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        definitionResolver: _resolverForCatalog(),
+        adapterRegistry: _adapterRegistryForCatalog(),
         operationalProfileResolver: const _FixedProfileResolver('prod'),
         processStarter:
             (
@@ -186,7 +188,7 @@ void main() {
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
-        definitionResolver: _resolverForCatalog(),
+        adapterRegistry: _adapterRegistryForCatalog(),
         processStarter:
             (
               String executable,
@@ -225,7 +227,63 @@ void main() {
       expect(runResult.isSuccess(), isTrue);
       expect(runResult.getOrThrow().status, AgentActionExecutionStatus.killed);
     });
+
+    test('should kill process when stdin setup fails after start', () async {
+      final process = _FakeProcess(
+        pid: 5432,
+        exitCode: 0,
+        shouldFailStdinClose: true,
+      );
+      final runner = DeveloperData7ProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
+        adapterRegistry: _adapterRegistryForCatalog(),
+        processStarter: _starterFor(process),
+      );
+
+      final result = await runner.run(
+        executionId: 'execution-1',
+        definition: _definition(),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<ActionRuntimeFailure>());
+      final failure = result.exceptionOrNull()! as ActionRuntimeFailure;
+      expect(
+        failure.context,
+        containsPair('reason', AgentActionProcessConstants.stdinCloseFailedReason),
+      );
+      expect(failure.context, containsPair('phase', 'stdin_setup'));
+      expect(failure.context, containsPair('executable', r'C:\Data7\bin\Executor.exe'));
+      expect(failure.context, containsPair('command_preview', contains('Executor.exe')));
+      expect(process.killCalled, isTrue);
+    });
   });
+}
+
+AgentActionProcessStarter _starterFor(Process process) {
+  return (
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    bool includeParentEnvironment = true,
+    bool runInShell = false,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) async {
+    return process;
+  };
+}
+
+AgentActionAdapterRegistry _adapterRegistryForCatalog() {
+  return AgentActionAdapterRegistry([
+    DeveloperData7ActionAdapter(definitionResolver: _resolverForCatalog()),
+  ]);
 }
 
 class _FixedProfileResolver extends AgentOperationalProfileResolver {
@@ -298,9 +356,10 @@ class _FakeProcess implements Process {
     required int exitCode,
     String stdoutText = '',
     String stderrText = '',
+    bool shouldFailStdinClose = false,
   }) : stdout = _streamText(stdoutText),
        stderr = _streamText(stderrText),
-       _stdin = _FakeIOSink(),
+       _stdin = _FakeIOSink(shouldFailClose: shouldFailStdinClose),
        _exitCodeCompleter = Completer<int>() {
     _exitCodeCompleter.complete(exitCode);
   }
@@ -350,8 +409,16 @@ class _FakeProcess implements Process {
 }
 
 class _FakeIOSink implements IOSink {
+  _FakeIOSink({this.shouldFailClose = false});
+
+  final bool shouldFailClose;
+
   @override
-  Future<void> close() async {}
+  Future<void> close() async {
+    if (shouldFailClose) {
+      throw const FileSystemException('stdin close failed');
+    }
+  }
 
   @override
   Future<void> get done => Future<void>.value();

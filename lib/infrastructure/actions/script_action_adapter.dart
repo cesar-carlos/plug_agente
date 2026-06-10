@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_script_constants.dart';
+import 'package:plug_agente/core/utils/path_extension.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_preflight_metadata.dart';
@@ -118,10 +119,11 @@ class ScriptActionAdapter implements AgentActionAdapter {
         redactedCommandPreview: resolved.invocation.redactedPreview,
         workingDirectory:
             resolved.workingDirectoryValidation.path?.canonicalPath ?? config.workingDirectory?.displayPath,
+        contextHash: contextValidation.getOrThrow().path?.contentHash,
         redactedDiagnostics: {
           ...redactedDiagnostics,
           'argument_count': resolved.invocation.arguments.length,
-          'context_path_extension': _extensionOf(request.contextPath),
+          'context_path_extension': extensionOf(request.contextPath),
           'uses_context_path': request.contextPath != null,
           'script_extension': resolved.scriptExtension,
           'uses_default_interpreter': resolved.usesDefaultInterpreter,
@@ -267,7 +269,7 @@ class ScriptActionAdapter implements AgentActionAdapter {
       return Failure(scriptValidation.exceptionOrNull()!);
     }
     final scriptPath = scriptValidation.getOrThrow().path!;
-    final scriptExtension = _extensionOf(scriptPath.originalPath);
+    final scriptExtension = extensionOf(scriptPath.originalPath);
     if (scriptExtension == null) {
       return Failure(
         ActionValidationFailure.withContext(
@@ -296,7 +298,7 @@ class ScriptActionAdapter implements AgentActionAdapter {
         phase: phase,
         requireLaunchAccess: WindowsExecutableLaunchAccessChecker.shouldValidateLaunchAccess(
           phase: phase,
-          extension: _extensionOf(config.interpreterPath!.displayPath),
+          extension: extensionOf(config.interpreterPath!.displayPath),
         ),
         invalidPathUserMessage: 'Informe um interpretador .exe valido para esta acao.',
         notFoundUserMessage: 'Interpretador nao encontrado. Verifique o caminho informado.',
@@ -361,19 +363,6 @@ class ScriptActionAdapter implements AgentActionAdapter {
         hasWorkingDirectory: config.workingDirectory != null,
       ),
     );
-  }
-
-  String? _extensionOf(String? path) {
-    if (path == null) {
-      return null;
-    }
-    final lastSeparator = path.lastIndexOf(RegExp(r'[\\/]'));
-    final fileName = lastSeparator >= 0 ? path.substring(lastSeparator + 1) : path;
-    final dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex == fileName.length - 1) {
-      return null;
-    }
-    return fileName.substring(dotIndex).toLowerCase();
   }
 
   AgentActionPathReference _normalizedPathReference({

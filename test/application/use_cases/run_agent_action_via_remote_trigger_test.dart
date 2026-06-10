@@ -9,7 +9,8 @@ import 'package:result_dart/result_dart.dart';
 import 'package:test/test.dart';
 import 'package:uuid/uuid.dart';
 
-import '../use_cases/agent_action_use_cases_test.dart' show FakeAgentActionLocalRunner, FakeAgentActionRepository;
+import '../../helpers/agent_action_use_case_test_support.dart'
+    show FakeAgentActionLocalRunner, FakeAgentActionRepository;
 
 void main() {
   group('RunAgentActionViaRemoteTrigger', () {

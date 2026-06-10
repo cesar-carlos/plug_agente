@@ -1,13 +1,20 @@
+import 'dart:io';
+
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_definition_resolver.dart';
+import 'package:plug_agente/infrastructure/actions/developer_executor_command_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
 class DeveloperData7ActionAdapter implements AgentActionAdapter {
   DeveloperData7ActionAdapter({
     DeveloperData7DefinitionResolver? definitionResolver,
-  }) : _definitionResolver = definitionResolver ?? DeveloperData7DefinitionResolver();
+    DeveloperExecutorCommandBuilder commandBuilder = const DeveloperExecutorCommandBuilder(),
+  }) : _definitionResolver = definitionResolver ?? DeveloperData7DefinitionResolver(),
+       _commandBuilder = commandBuilder;
 
   final DeveloperData7DefinitionResolver _definitionResolver;
+  final DeveloperExecutorCommandBuilder _commandBuilder;
 
   @override
   AgentActionType get type => AgentActionType.developer;
@@ -79,6 +86,41 @@ class DeveloperData7ActionAdapter implements AgentActionAdapter {
         redactedCommandPreview: prepared.command.redactedPreview,
         workingDirectory: prepared.command.workingDirectory,
         redactedDiagnostics: prepared.redactedDiagnostics,
+      ),
+    );
+  }
+
+  Future<Result<AgentActionCommandInvocation>> resolveInvocationCommand(
+    AgentActionDefinition definition, {
+    String phase = 'execution_preflight',
+  }) async {
+    final resolvedResult = await _definitionResolver.resolveDefinition(
+      definition: definition,
+      phase: phase,
+      compareSavedSnapshots: true,
+    );
+    if (resolvedResult.isError()) {
+      return Failure(resolvedResult.exceptionOrNull()!);
+    }
+    final resolved = resolvedResult.getOrThrow();
+    final command = _commandBuilder.build(
+      executorPath: resolved.executorPath.canonicalPath,
+      projectPath: resolved.projectPath.canonicalPath,
+      connectionId: resolved.connection.id,
+      workingDirectory: resolved.workingDirectory,
+    );
+
+    return Success(
+      AgentActionCommandInvocation(
+        executable: command.executable,
+        arguments: command.arguments,
+        runInShell: false,
+        mode: ProcessStartMode.normal,
+        redactedPreview: command.redactedPreview,
+        normalizedCommandLength: command.arguments.fold<int>(
+          command.executable.length,
+          (length, argument) => length + argument.length,
+        ),
       ),
     );
   }

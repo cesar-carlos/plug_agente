@@ -6,6 +6,7 @@ import 'package:plug_agente/core/constants/agent_action_com_object_constants.dar
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_prepare_execution_resolver.dart';
 import 'package:plug_agente/infrastructure/actions/com_object_action_adapter.dart';
 import 'package:plug_agente/infrastructure/actions/com_object_invocation_handler.dart';
 import 'package:plug_agente/infrastructure/actions/com_object_invocation_registry.dart';
@@ -69,7 +70,8 @@ class ComObjectActionRunner implements AgentActionLocalRunner {
       invocationRegistry: _invocationRegistry,
       pathValidator: _pathValidator,
     );
-    final preparedResult = await adapter.prepareExecution(
+    final preparedResult = await resolvePreparedExecution(
+      adapter: adapter,
       definition: definition,
       request: request,
     );

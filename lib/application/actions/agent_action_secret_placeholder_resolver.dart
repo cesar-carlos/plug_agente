@@ -71,11 +71,18 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
         if (commandResult.isError()) {
           return Failure(commandResult.exceptionOrNull()!);
         }
+        final workingDirectoryResult = await _resolveOptionalPathReference(
+          path: workingDirectory,
+          actionId: definition.id,
+        );
+        if (workingDirectoryResult.isError()) {
+          return Failure(workingDirectoryResult.exceptionOrNull()!);
+        }
         return Success(
           definition.copyWith(
             config: CommandLineActionConfig(
               command: commandResult.getOrThrow(),
-              workingDirectory: workingDirectory,
+              workingDirectory: workingDirectoryResult.getOrThrow().path,
             ),
           ),
         );
@@ -84,13 +91,27 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
         :final arguments,
         :final workingDirectory,
       ):
+        final executablePathResult = await _resolvePathReference(
+          path: executablePath,
+          actionId: definition.id,
+        );
+        if (executablePathResult.isError()) {
+          return Failure(executablePathResult.exceptionOrNull()!);
+        }
+        final workingDirectoryResult = await _resolveOptionalPathReference(
+          path: workingDirectory,
+          actionId: definition.id,
+        );
+        if (workingDirectoryResult.isError()) {
+          return Failure(workingDirectoryResult.exceptionOrNull()!);
+        }
         return _resolveDefinitionWithStringList(
           definition: definition,
           arguments: arguments,
           buildConfig: (resolvedArguments) => ExecutableActionConfig(
-            executablePath: executablePath,
+            executablePath: executablePathResult.getOrThrow(),
             arguments: resolvedArguments,
-            workingDirectory: workingDirectory,
+            workingDirectory: workingDirectoryResult.getOrThrow().path,
           ),
         );
       case ScriptActionConfig(
@@ -99,14 +120,35 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
         :final arguments,
         :final workingDirectory,
       ):
+        final scriptPathResult = await _resolvePathReference(
+          path: scriptPath,
+          actionId: definition.id,
+        );
+        if (scriptPathResult.isError()) {
+          return Failure(scriptPathResult.exceptionOrNull()!);
+        }
+        final interpreterPathResult = await _resolveOptionalPathReference(
+          path: interpreterPath,
+          actionId: definition.id,
+        );
+        if (interpreterPathResult.isError()) {
+          return Failure(interpreterPathResult.exceptionOrNull()!);
+        }
+        final workingDirectoryResult = await _resolveOptionalPathReference(
+          path: workingDirectory,
+          actionId: definition.id,
+        );
+        if (workingDirectoryResult.isError()) {
+          return Failure(workingDirectoryResult.exceptionOrNull()!);
+        }
         return _resolveDefinitionWithStringList(
           definition: definition,
           arguments: arguments,
           buildConfig: (resolvedArguments) => ScriptActionConfig(
-            scriptPath: scriptPath,
-            interpreterPath: interpreterPath,
+            scriptPath: scriptPathResult.getOrThrow(),
+            interpreterPath: interpreterPathResult.getOrThrow().path,
             arguments: resolvedArguments,
-            workingDirectory: workingDirectory,
+            workingDirectory: workingDirectoryResult.getOrThrow().path,
           ),
         );
       case JarActionConfig(
@@ -115,14 +157,35 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
         :final arguments,
         :final workingDirectory,
       ):
+        final jarPathResult = await _resolvePathReference(
+          path: jarPath,
+          actionId: definition.id,
+        );
+        if (jarPathResult.isError()) {
+          return Failure(jarPathResult.exceptionOrNull()!);
+        }
+        final javaExecutablePathResult = await _resolveOptionalPathReference(
+          path: javaExecutablePath,
+          actionId: definition.id,
+        );
+        if (javaExecutablePathResult.isError()) {
+          return Failure(javaExecutablePathResult.exceptionOrNull()!);
+        }
+        final workingDirectoryResult = await _resolveOptionalPathReference(
+          path: workingDirectory,
+          actionId: definition.id,
+        );
+        if (workingDirectoryResult.isError()) {
+          return Failure(workingDirectoryResult.exceptionOrNull()!);
+        }
         return _resolveDefinitionWithStringList(
           definition: definition,
           arguments: arguments,
           buildConfig: (resolvedArguments) => JarActionConfig(
-            jarPath: jarPath,
-            javaExecutablePath: javaExecutablePath,
+            jarPath: jarPathResult.getOrThrow(),
+            javaExecutablePath: javaExecutablePathResult.getOrThrow().path,
             arguments: resolvedArguments,
-            workingDirectory: workingDirectory,
+            workingDirectory: workingDirectoryResult.getOrThrow().path,
           ),
         );
       case EmailActionConfig(
@@ -154,6 +217,28 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
           arguments: arguments,
         );
       case DeveloperActionConfig(:final connectionLabel):
+        final config = definition.config as DeveloperActionConfig;
+        final executorPathResult = await _resolvePathReference(
+          path: config.executorPath,
+          actionId: definition.id,
+        );
+        if (executorPathResult.isError()) {
+          return Failure(executorPathResult.exceptionOrNull()!);
+        }
+        final projectPathResult = await _resolvePathReference(
+          path: config.projectPath,
+          actionId: definition.id,
+        );
+        if (projectPathResult.isError()) {
+          return Failure(projectPathResult.exceptionOrNull()!);
+        }
+        final data7ConfigPathResult = await _resolvePathReference(
+          path: config.data7ConfigPath,
+          actionId: definition.id,
+        );
+        if (data7ConfigPathResult.isError()) {
+          return Failure(data7ConfigPathResult.exceptionOrNull()!);
+        }
         final labelResult = await resolveText(
           text: connectionLabel,
           actionId: definition.id,
@@ -161,13 +246,12 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
         if (labelResult.isError()) {
           return Failure(labelResult.exceptionOrNull()!);
         }
-        final config = definition.config as DeveloperActionConfig;
         return Success(
           definition.copyWith(
             config: DeveloperActionConfig.data7Executor(
-              executorPath: config.executorPath,
-              projectPath: config.projectPath,
-              data7ConfigPath: config.data7ConfigPath,
+              executorPath: executorPathResult.getOrThrow(),
+              projectPath: projectPathResult.getOrThrow(),
+              data7ConfigPath: data7ConfigPathResult.getOrThrow(),
               connectionId: config.connectionId,
               connectionLabel: labelResult.getOrThrow(),
               connectionSnapshotHash: config.connectionSnapshotHash,
@@ -237,6 +321,13 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
     if (bccResult.isError()) {
       return Failure(bccResult.exceptionOrNull()!);
     }
+    final attachmentPathsResult = await _resolvePathReferenceList(
+      paths: attachmentPaths,
+      actionId: definition.id,
+    );
+    if (attachmentPathsResult.isError()) {
+      return Failure(attachmentPathsResult.exceptionOrNull()!);
+    }
 
     return Success(
       definition.copyWith(
@@ -248,7 +339,7 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
           bcc: bccResult.getOrThrow(),
           subjectTemplate: subjectResult.getOrThrow(),
           bodyTemplate: bodyResult.getOrThrow(),
-          attachmentPaths: attachmentPaths,
+          attachmentPaths: attachmentPathsResult.getOrThrow(),
         ),
       ),
     );
@@ -260,6 +351,15 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
     required String memberName,
     required Map<String, Object?> arguments,
   }) async {
+    final progIdResult = await resolveText(text: progId, actionId: definition.id);
+    if (progIdResult.isError()) {
+      return Failure(progIdResult.exceptionOrNull()!);
+    }
+    final memberNameResult = await resolveText(text: memberName, actionId: definition.id);
+    if (memberNameResult.isError()) {
+      return Failure(memberNameResult.exceptionOrNull()!);
+    }
+
     final resolvedArguments = <String, Object?>{};
     for (final entry in arguments.entries) {
       final keyResult = await resolveText(text: entry.key, actionId: definition.id);
@@ -281,12 +381,85 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
     return Success(
       definition.copyWith(
         config: ComObjectActionConfig(
-          progId: progId,
-          memberName: memberName,
+          progId: progIdResult.getOrThrow(),
+          memberName: memberNameResult.getOrThrow(),
           arguments: resolvedArguments,
         ),
       ),
     );
+  }
+
+  Future<Result<_OptionalResolvedPath>> _resolveOptionalPathReference({
+    required AgentActionPathReference? path,
+    required String actionId,
+  }) async {
+    if (path == null) {
+      return const Success(_OptionalResolvedPath(null));
+    }
+
+    final pathResult = await _resolvePathReference(path: path, actionId: actionId);
+    if (pathResult.isError()) {
+      return Failure(pathResult.exceptionOrNull()!);
+    }
+
+    return Success(_OptionalResolvedPath(pathResult.getOrThrow()));
+  }
+
+  Future<Result<AgentActionPathReference>> _resolvePathReference({
+    required AgentActionPathReference path,
+    required String actionId,
+  }) async {
+    final originalPathResult = await resolveText(
+      text: path.originalPath,
+      actionId: actionId,
+    );
+    if (originalPathResult.isError()) {
+      return Failure(originalPathResult.exceptionOrNull()!);
+    }
+
+    String? resolvedCanonicalPath;
+    final canonicalPath = path.canonicalPath;
+    if (canonicalPath != null && canonicalPath.isNotEmpty) {
+      final canonicalPathResult = await resolveText(
+        text: canonicalPath,
+        actionId: actionId,
+      );
+      if (canonicalPathResult.isError()) {
+        return Failure(canonicalPathResult.exceptionOrNull()!);
+      }
+      resolvedCanonicalPath = canonicalPathResult.getOrThrow();
+    }
+
+    return Success(
+      AgentActionPathReference(
+        originalPath: originalPathResult.getOrThrow(),
+        canonicalPath: resolvedCanonicalPath,
+        existsAtValidation: path.existsAtValidation,
+        validatedAt: path.validatedAt,
+        validationHash: path.validationHash,
+        pathChangePolicy: path.pathChangePolicy,
+      ),
+    );
+  }
+
+  Future<Result<List<AgentActionPathReference>>> _resolvePathReferenceList({
+    required List<AgentActionPathReference> paths,
+    required String actionId,
+  }) async {
+    if (paths.isEmpty) {
+      return const Success(<AgentActionPathReference>[]);
+    }
+
+    final resolved = <AgentActionPathReference>[];
+    for (final path in paths) {
+      final pathResult = await _resolvePathReference(path: path, actionId: actionId);
+      if (pathResult.isError()) {
+        return Failure(pathResult.exceptionOrNull()!);
+      }
+      resolved.add(pathResult.getOrThrow());
+    }
+
+    return Success(List<AgentActionPathReference>.unmodifiable(resolved));
   }
 
   Future<Result<List<String>>> _resolveStringList({
@@ -386,4 +559,10 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
       },
     );
   }
+}
+
+class _OptionalResolvedPath {
+  const _OptionalResolvedPath(this.path);
+
+  final AgentActionPathReference? path;
 }

@@ -22,12 +22,14 @@ class AgentActionPreparedExecution {
     required this.actionType,
     required this.redactedCommandPreview,
     this.workingDirectory,
+    this.contextHash,
     this.redactedDiagnostics = const {},
   });
 
   final AgentActionType actionType;
   final String redactedCommandPreview;
   final String? workingDirectory;
+  final String? contextHash;
   final Map<String, Object?> redactedDiagnostics;
 }
 

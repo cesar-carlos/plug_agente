@@ -80,28 +80,28 @@ buildMvp5AgentActionRegistries() {
 
   final runners = AgentActionLocalRunnerRegistry([
     CommandLineActionProcessRunner(
+      adapterRegistry: adapters,
       environmentResolver: kTestActionEnvironmentResolver,
       operationalProfileResolver: kTestAgentOperationalProfileResolver,
       stdinSetup: kTestActionProcessStdinSetup,
-      pathValidator: pathValidator,
     ),
     ExecutableActionProcessRunner(
+      adapterRegistry: adapters,
       environmentResolver: kTestActionEnvironmentResolver,
       operationalProfileResolver: kTestAgentOperationalProfileResolver,
       stdinSetup: kTestActionProcessStdinSetup,
-      pathValidator: pathValidator,
     ),
     ScriptActionProcessRunner(
+      adapterRegistry: adapters,
       environmentResolver: kTestActionEnvironmentResolver,
       operationalProfileResolver: kTestAgentOperationalProfileResolver,
       stdinSetup: kTestActionProcessStdinSetup,
-      pathValidator: pathValidator,
     ),
     JarActionProcessRunner(
+      adapterRegistry: adapters,
       environmentResolver: kTestActionEnvironmentResolver,
       operationalProfileResolver: kTestAgentOperationalProfileResolver,
       stdinSetup: kTestActionProcessStdinSetup,
-      pathValidator: pathValidator,
     ),
     EmailActionMailerRunner(
       pathValidator: pathValidator,
@@ -112,7 +112,7 @@ buildMvp5AgentActionRegistries() {
       pathValidator: pathValidator,
     ),
     DeveloperData7ProcessRunner(
-      definitionResolver: definitionResolver,
+      adapterRegistry: adapters,
       environmentResolver: kTestActionEnvironmentResolver,
       operationalProfileResolver: kTestAgentOperationalProfileResolver,
       stdinSetup: kTestActionProcessStdinSetup,

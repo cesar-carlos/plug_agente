@@ -12,6 +12,13 @@ abstract final class AgentActionCommandSafetyConstants {
     return 'O comando contem um padrao de alto risco ($patternId: $patternDescription). Revise antes de executar em producao.';
   }
 
+  static String userMessageDangerousCommandConfirmationRequired({
+    required String patternId,
+    required String patternDescription,
+  }) {
+    return 'O comando corresponde ao padrao de alto risco "$patternId" ($patternDescription). Confirme a execucao manual antes de continuar.';
+  }
+
   /// Default enforcement for MVP security hardening.
   static const AgentActionCommandSafetyMode defaultMode = AgentActionCommandSafetyMode.block;
 }
