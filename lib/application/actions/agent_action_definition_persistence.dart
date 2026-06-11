@@ -1,8 +1,9 @@
-﻿import 'package:plug_agente/application/actions/agent_action_definition_assembler.dart';
+import 'package:plug_agente/application/actions/agent_action_definition_assembler.dart';
 import 'package:plug_agente/application/actions/agent_actions_definitions_save_host.dart';
 import 'package:plug_agente/application/use_cases/save_agent_action_definition.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:uuid/uuid.dart';
+
 final class AgentActionDefinitionPersistence {
   AgentActionDefinitionPersistence({
     required SaveAgentActionDefinition saveDefinition,
@@ -527,4 +528,3 @@ final class AgentActionDefinitionPersistence {
     return host.sessionPreflightValidatedAt[existing.id] ?? existing.lastPreflightValidatedAt;
   }
 }
-

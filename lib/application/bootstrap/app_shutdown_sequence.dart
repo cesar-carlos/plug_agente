@@ -9,14 +9,10 @@ import 'package:plug_agente/application/services/agent_action_remote_audit_perio
 import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
 import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
+import 'package:plug_agente/core/services/i_app_infrastructure_shutdown_port.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
-import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
-import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
-import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
-import 'package:plug_agente/infrastructure/metrics/sql_investigation_collector.dart';
-import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 
 /// Runs the post-hub teardown steps for application shutdown.
 final class AppShutdownSequence {
@@ -38,9 +34,7 @@ final class AppShutdownSequence {
     await runEarlyShutdownCoordinator();
     await _disposeSqlExecutionQueue();
     await _closeConnectionPool();
-    await _closeLocalDatabase();
-    _disposeMetricsCollectors();
-    await _disposeOdbcEventBridge();
+    await _disposeInfrastructureResources();
     await _disposeTrayService();
     shutdownOdbcWorker();
     resetShutdownStateForTesting();
@@ -109,29 +103,15 @@ final class AppShutdownSequence {
     await _getIt<IConnectionPool>().closeAll();
   }
 
-  Future<void> _closeLocalDatabase() async {
-    if (!_getIt.isRegistered<AppDatabase>()) {
+  Future<void> _disposeInfrastructureResources() async {
+    if (!_getIt.isRegistered<IAppInfrastructureShutdownPort>()) {
       return;
     }
-    await _getIt<AppDatabase>().close();
-  }
 
-  void _disposeMetricsCollectors() {
-    if (_getIt.isRegistered<MetricsCollector>()) {
-      _getIt<MetricsCollector>().dispose();
-    }
-    if (_getIt.isRegistered<ProtocolMetricsCollector>()) {
-      _getIt<ProtocolMetricsCollector>().dispose();
-    }
-    if (_getIt.isRegistered<SqlInvestigationCollector>()) {
-      _getIt<SqlInvestigationCollector>().dispose();
-    }
-  }
-
-  Future<void> _disposeOdbcEventBridge() async {
-    if (_getIt.isRegistered<OdbcEventBridge>()) {
-      await _getIt<OdbcEventBridge>().dispose();
-    }
+    final port = _getIt<IAppInfrastructureShutdownPort>();
+    await port.closeLocalDatabase();
+    port.disposeMetricsCollectors();
+    await port.disposeOdbcEventBridge();
   }
 
   Future<void> _disposeTrayService() async {

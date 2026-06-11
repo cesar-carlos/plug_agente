@@ -144,6 +144,7 @@ import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
+import 'package:plug_agente/core/services/i_app_infrastructure_shutdown_port.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
@@ -213,6 +214,7 @@ import 'package:plug_agente/infrastructure/actions/scheduler_lock_metadata_reade
 import 'package:plug_agente/infrastructure/actions/scheduler_stale_lock_recovery.dart';
 import 'package:plug_agente/infrastructure/actions/windows_process_lifetime_checker.dart';
 import 'package:plug_agente/infrastructure/backup/local_app_data_backup_service.dart';
+import 'package:plug_agente/infrastructure/bootstrap/infrastructure_shutdown_port.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
@@ -295,6 +297,7 @@ part 'plug_dependency_registrar_actions_use_cases.dart';
 part 'plug_dependency_registrar_auto_update.dart';
 part 'plug_dependency_registrar_auth_tokens.dart';
 part 'plug_dependency_registrar_capability.dart';
+part 'plug_dependency_registrar_shutdown.dart';
 
 /// Registers transport, ODBC, auth, and application use-case graph on [getIt].
 void registerPlugDependencyGraph(
@@ -341,6 +344,7 @@ void registerPlugDependencyGraph(
   _registerActionsUseCases(getIt);
   _registerAutoUpdate(getIt);
   _registerAuthTokens(getIt);
+  _registerShutdown(getIt);
 }
 
 Duration _autoUpdateBootJitter() {

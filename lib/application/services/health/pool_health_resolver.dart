@@ -3,7 +3,6 @@ import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
-import 'package:result_dart/result_dart.dart';
 
 final class PoolHealthSnapshot {
   const PoolHealthSnapshot({

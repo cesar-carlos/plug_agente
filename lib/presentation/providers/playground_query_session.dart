@@ -1,6 +1,5 @@
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
-import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
 
 final class PlaygroundQuerySession {
@@ -75,16 +74,14 @@ final class PlaygroundQuerySession {
     if (!_hasNextPage) {
       return null;
     }
-    _currentPage++;
-    return _currentPage;
+    return ++_currentPage;
   }
 
   int? retreatPage() {
     if (_currentPage <= 1) {
       return null;
     }
-    _currentPage--;
-    return _currentPage;
+    return --_currentPage;
   }
 
   void resetPageForStreaming() {

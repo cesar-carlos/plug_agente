@@ -17,7 +17,7 @@ void main() {
 
       expect(failure, isNotNull);
       expect(failure!.message, 'SQL execution cancelled');
-      expect(failure.context?['cooperative_cancel'], isTrue);
+      expect(failure.context['cooperative_cancel'], isTrue);
     });
 
     test('cooperativeCancelFailure returns null when token is absent or active', () {
@@ -77,27 +77,42 @@ void main() {
 }
 
 QueryRequest _request({bool expectMultipleResults = false}) {
+  if (expectMultipleResults) {
+    return QueryRequest(
+      id: 'req-1',
+      agentId: 'agent-1',
+      query: 'SELECT 1',
+      timestamp: DateTime(2026),
+      expectMultipleResults: true,
+    );
+  }
   return QueryRequest(
     id: 'req-1',
     agentId: 'agent-1',
     query: 'SELECT 1',
-    timestamp: DateTime(2026, 1, 1),
-    expectMultipleResults: expectMultipleResults,
+    timestamp: DateTime(2026),
   );
 }
 
 QueryResponse _response({
   List<Map<String, dynamic>> data = const [],
   List<QueryResultSet> resultSets = const [],
-  List<QueryResponseItem> items = const [],
 }) {
+  if (resultSets.isNotEmpty) {
+    return QueryResponse(
+      id: 'resp-1',
+      requestId: 'req-1',
+      agentId: 'agent-1',
+      data: data,
+      timestamp: DateTime(2026),
+      resultSets: resultSets,
+    );
+  }
   return QueryResponse(
     id: 'resp-1',
     requestId: 'req-1',
     agentId: 'agent-1',
     data: data,
-    timestamp: DateTime(2026, 1, 1),
-    resultSets: resultSets,
-    items: items,
+    timestamp: DateTime(2026),
   );
 }

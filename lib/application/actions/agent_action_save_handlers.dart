@@ -1,7 +1,7 @@
 import 'package:plug_agente/application/actions/agent_action_definition_persistence.dart';
+import 'package:plug_agente/application/actions/agent_action_definition_save_options.dart';
 import 'package:plug_agente/application/actions/agent_actions_definitions_save_host.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
-import 'package:plug_agente/presentation/providers/agent_actions/agent_action_definition_save_options.dart';
 
 abstract interface class AgentActionSaveHandler {
   AgentActionType get actionType;
