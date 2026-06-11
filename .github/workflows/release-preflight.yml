@@ -51,7 +51,7 @@ concurrency:
 
 jobs:
   preflight:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       VERSION_SHORT: ${{ inputs.version }}
       FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}

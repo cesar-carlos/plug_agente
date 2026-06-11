@@ -53,7 +53,9 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: windows-latest
+    # Pin VS 2022 toolchain: windows-latest may redirect to windows-2025-vs2026,
+    # which breaks flutter_local_notifications_windows (STL1011 coroutine).
+    runs-on: windows-2022
     env:
       VERSION_SHORT: ${{ inputs.version }}
       FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}
