@@ -3,24 +3,17 @@ import 'dart:io' as io;
 
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
-import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/bootstrap/app_shutdown_coordinator.dart';
+import 'package:plug_agente/application/bootstrap/app_shutdown_sequence.dart';
 import 'package:plug_agente/application/bootstrap/hub_connection_shutdown_registry.dart';
-import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
-import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
-import 'package:plug_agente/application/services/agent_action_execution_periodic_purge.dart';
-import 'package:plug_agente/application/services/agent_action_remote_audit_periodic_purge.dart';
-import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
-import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
 import 'package:plug_agente/application/use_cases/apply_agent_action_on_app_exit_policies.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/feature_flags_env_seeder.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
-import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/plug_dependency_registrar.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
@@ -29,7 +22,6 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
-import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/core/timezone/iana_timezone_data.dart';
@@ -42,8 +34,6 @@ import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
-import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
-import 'package:plug_agente/infrastructure/metrics/sql_investigation_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/security/payload_signing_key_resolver.dart';
@@ -81,116 +71,16 @@ void resetShutdownStateForTesting() {
 /// 7. Encerrar metricas e tray
 /// 8. Encerrar worker ODBC
 Future<void> shutdownApp() async {
-  // Before tearing down anything else, check whether the silent update
-  // path left an installer + helper staged on disk waiting to be applied.
-  // The helper expects to PID-watch this process; firing it here gives it
-  // the rest of the shutdown sequence to attach, then install once we
-  // exit. When no pending download exists this is a cheap no-op.
   await _launchPendingSilentUpdateHelperIfReady();
-
   await _runEarlyShutdownCoordinator();
 
-  if (getIt.isRegistered<RpcIdempotencyCachePeriodicPurge>()) {
-    getIt<RpcIdempotencyCachePeriodicPurge>().stop();
-  }
-
-  if (getIt.isRegistered<AgentActionRemoteAuditPeriodicPurge>()) {
-    getIt<AgentActionRemoteAuditPeriodicPurge>().stop();
-  }
-
-  if (getIt.isRegistered<AgentActionCapturedOutputPeriodicPurge>()) {
-    getIt<AgentActionCapturedOutputPeriodicPurge>().stop();
-  }
-
-  if (getIt.isRegistered<AgentActionExecutionPeriodicPurge>()) {
-    getIt<AgentActionExecutionPeriodicPurge>().stop();
-  }
-
-  if (getIt.isRegistered<ElevatedBridgeArtifactsPeriodicPurge>()) {
-    getIt<ElevatedBridgeArtifactsPeriodicPurge>().stop();
-  }
-
-  if (getIt.isRegistered<AgentActionRuntimeStateGuard>()) {
-    getIt<AgentActionRuntimeStateGuard>().markDraining(reason: AgentActionRuntimeStateConstants.shutdownReason);
-  }
-
-  // 2. Despachar gatilhos app-close (draining ja bloqueou novas execucoes nao-app-close).
-  await _dispatchAppCloseAgentActions();
-
-  await _applyAgentActionOnAppExitPolicies();
-
-  // 3. Parar auto-update e desconectar hub (cancela timers de recovery via ConnectionProvider)
-  await _runEarlyShutdownCoordinator();
-
-  // 4. Dispor fila SQL (antes de fechar o pool)
-  //
-  // Use disposeGracefully so in-flight ODBC workers can release their pool
-  // leases before closeAll() tears down the underlying connections. Pending
-  // queue entries are still failed immediately; only active workers are awaited.
-  if (getIt.isRegistered<IDatabaseGateway>()) {
-    final gateway = getIt<IDatabaseGateway>();
-    if (gateway is QueuedDatabaseGateway) {
-      final disposeResult = await gateway.disposeGracefully();
-      disposeResult.fold(
-        (_) => developer.log(
-          'SQL execution queue disposed',
-          name: 'service_locator',
-          level: 800,
-        ),
-        (failure) => developer.log(
-          'SQL execution queue dispose timed out; proceeding to pool close',
-          name: 'service_locator',
-          level: 900,
-          error: failure,
-        ),
-      );
-    }
-  }
-
-  // 5. Fechar pool de conexoes
-  if (getIt.isRegistered<IConnectionPool>()) {
-    final pool = getIt<IConnectionPool>();
-    await pool.closeAll();
-  }
-
-  // 6. Fechar banco local
-  if (getIt.isRegistered<AppDatabase>()) {
-    final db = getIt<AppDatabase>();
-    await db.close();
-  }
-
-  // 7. Dispose metrics collectors
-  if (getIt.isRegistered<MetricsCollector>()) {
-    getIt<MetricsCollector>().dispose();
-  }
-  if (getIt.isRegistered<ProtocolMetricsCollector>()) {
-    getIt<ProtocolMetricsCollector>().dispose();
-  }
-  if (getIt.isRegistered<SqlInvestigationCollector>()) {
-    getIt<SqlInvestigationCollector>().dispose();
-  }
-  if (getIt.isRegistered<OdbcEventBridge>()) {
-    await getIt<OdbcEventBridge>().dispose();
-  }
-
-  if (getIt.isRegistered<ITrayService>()) {
-    try {
-      getIt<ITrayService>().dispose();
-    } on Object catch (error, stackTrace) {
-      developer.log(
-        'Failed to dispose tray service during shutdown',
-        name: 'service_locator',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
-  // 8. Encerrar worker ODBC (synchronous)
-  _odbcLocator.shutdown();
-
-  resetShutdownStateForTesting();
+  await AppShutdownSequence(getIt).run(
+    runEarlyShutdownCoordinator: _runEarlyShutdownCoordinator,
+    dispatchAppCloseAgentActions: _dispatchAppCloseAgentActions,
+    applyOnAppExitPolicies: _applyAgentActionOnAppExitPolicies,
+    shutdownOdbcWorker: () => _odbcLocator.shutdown(),
+    resetShutdownStateForTesting: resetShutdownStateForTesting,
+  );
 }
 
 Future<void> _runEarlyShutdownCoordinator() async {

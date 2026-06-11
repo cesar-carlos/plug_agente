@@ -5,7 +5,6 @@ import 'package:plug_agente/application/ports/i_playground_db_connection_gateway
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/validation/query_validation_messages.dart';
-import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -13,8 +12,9 @@ import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
-import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
+import 'package:plug_agente/presentation/providers/playground_query_session.dart';
+import 'package:plug_agente/presentation/providers/playground_streaming_session.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class _NoOpPlaygroundDbConnectionGateway implements IPlaygroundDbConnectionGateway {
@@ -37,15 +37,21 @@ class _NoOpPlaygroundDbConnectionGateway implements IPlaygroundDbConnectionGatew
 class PlaygroundProvider extends ChangeNotifier {
   PlaygroundProvider(
     this._executePlaygroundQuery,
-    this._executeStreamingQuery, {
+    ExecuteStreamingQuery executeStreamingQuery, {
     IPlaygroundDbConnectionGateway? dbConnectionGateway,
     PlaygroundUiStrings? uiStrings,
   }) : _dbConnectionGateway = dbConnectionGateway ?? _NoOpPlaygroundDbConnectionGateway(),
-       _ui = uiStrings ?? PlaygroundUiStrings.english;
+       _ui = uiStrings ?? PlaygroundUiStrings.english,
+       _querySession = PlaygroundQuerySession(uiStrings: uiStrings),
+       _streamingSession = PlaygroundStreamingSession(
+         executeStreamingQuery: executeStreamingQuery,
+       );
+
   final ExecutePlaygroundQuery _executePlaygroundQuery;
-  final ExecuteStreamingQuery _executeStreamingQuery;
+  final PlaygroundStreamingSession _streamingSession;
   IPlaygroundDbConnectionGateway _dbConnectionGateway;
   PlaygroundUiStrings _ui;
+  final PlaygroundQuerySession _querySession;
 
   void bindDbConnectionGateway(IPlaygroundDbConnectionGateway gateway) {
     _dbConnectionGateway = gateway;
@@ -53,6 +59,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   void bindUiStrings(PlaygroundUiStrings strings) {
     _ui = strings;
+    _querySession.bindUiStrings(strings);
   }
 
   String _displayExecuteFailure(Object failure) {
@@ -142,15 +149,14 @@ class PlaygroundProvider extends ChangeNotifier {
     _error = _ui.queryValidationEmpty;
     _canRetry = false;
     _isLoading = false;
-    _hasExecutedQuery = true;
-    _paginationAvailable = false;
+    _querySession.markExecuted();
+    _querySession.disablePagination();
     _results = [];
     _resultSets = [];
     _executionDuration = null;
     _affectedRows = null;
     _columnMetadata = null;
     _selectedResultSetIndex = 0;
-    _hasNextPage = false;
     _lastExecutionHint = null;
     _logValidationExpected(QueryValidationMessages.queryCannotBeEmpty);
     notifyListeners();
@@ -161,10 +167,9 @@ class PlaygroundProvider extends ChangeNotifier {
     _canRetry = false;
     _isLoading = false;
     _isStreaming = false;
-    _streamingStoppedByCap = false;
-    _streamingCapCancelRequested = false;
-    _hasExecutedQuery = true;
-    _paginationAvailable = false;
+    _streamingSession.resetCapState();
+    _querySession.markExecuted();
+    _querySession.disablePagination();
     _rowsProcessed = 0;
     _progress = 0;
     _results = [];
@@ -173,10 +178,8 @@ class PlaygroundProvider extends ChangeNotifier {
     _affectedRows = null;
     _columnMetadata = null;
     _selectedResultSetIndex = 0;
-    _currentPage = 1;
-    _hasNextPage = false;
+    _querySession.resetPageForStreaming();
     _lastExecutionHint = null;
-    _lastStreamingNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
     _logValidationExpected(message);
     notifyListeners();
   }
@@ -196,26 +199,11 @@ class PlaygroundProvider extends ChangeNotifier {
   int _selectedResultSetIndex = 0;
   final CancellationToken _cancellationToken = CancellationToken();
 
-  // Streaming support
   bool _isStreaming = false;
   int _rowsProcessed = 0;
   double _progress = 0;
-  DateTime _lastStreamingNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
-  int _currentPage = 1;
-  int _pageSize = 50;
-  bool _hasNextPage = false;
-  bool _hasExecutedQuery = false;
-  bool _paginationAvailable = false;
   SqlHandlingMode _sqlHandlingMode = SqlHandlingMode.managed;
   String? _lastExecutionHint;
-  bool _streamingStoppedByCap = false;
-  bool _streamingCapCancelRequested = false;
-
-  static const Duration _streamingUiUpdateInterval = Duration(
-    milliseconds: 200,
-  );
-  static const int _progressEstimateOffset = 100;
-  static const List<int> _pageSizeOptions = [25, 50, 100, 250];
 
   String get query => _query;
   List<Map<String, dynamic>> get results => selectedResultSet?.rows ?? _results;
@@ -242,21 +230,19 @@ class PlaygroundProvider extends ChangeNotifier {
   bool get hasMultipleResultSets => _resultSets.length > 1;
   int get selectedResultSetIndex => _selectedResultSetIndex;
 
-  // Streaming getters
   bool get isStreaming => _isStreaming;
   int get rowsProcessed => _rowsProcessed;
   double get progress => _progress;
-  int get currentPage => _currentPage;
-  int get pageSize => _pageSize;
-  bool get hasNextPage => _hasNextPage;
-  bool get hasPreviousPage => _currentPage > 1;
-  bool get hasPagination => _paginationAvailable && _hasExecutedQuery && !_isStreaming && _error == null;
-  List<int> get pageSizeOptions => _pageSizeOptions;
+  int get currentPage => _querySession.currentPage;
+  int get pageSize => _querySession.pageSize;
+  bool get hasNextPage => _querySession.hasNextPage;
+  bool get hasPreviousPage => _querySession.hasPreviousPage;
+  bool get hasPagination => _querySession.hasPagination(isStreaming: _isStreaming, error: _error);
+  List<int> get pageSizeOptions => PlaygroundQuerySession.pageSizeOptions;
   SqlHandlingMode get sqlHandlingMode => _sqlHandlingMode;
   String? get lastExecutionHint => _lastExecutionHint;
 
-  /// True when streaming ended because [ConnectionConstants.playgroundStreamingMaxResultRows] was hit.
-  bool get streamingStoppedByRowCap => _streamingStoppedByCap;
+  bool get streamingStoppedByRowCap => _streamingSession.streamingStoppedByCap;
 
   void setSqlHandlingMode(SqlHandlingMode mode) {
     if (_sqlHandlingMode == mode) return;
@@ -268,8 +254,7 @@ class PlaygroundProvider extends ChangeNotifier {
     final shouldResetPagination = value != _query;
     _query = value;
     if (shouldResetPagination) {
-      _currentPage = 1;
-      _hasNextPage = false;
+      _querySession.resetPaginationForQueryChange();
     }
     _clearError();
     notifyListeners();
@@ -279,15 +264,12 @@ class PlaygroundProvider extends ChangeNotifier {
     bool resetPagination = false,
     String? configId,
   }) async {
-    // Reject concurrent executions: a second call while loading would race
-    // on shared state (_results, _executionDuration, etc.) and the last
-    // response to arrive would overwrite the most recent result.
     if (_isLoading) return;
 
     final effectiveConfigId = configId ?? _currentConfigId;
     _currentConfigId = effectiveConfigId;
     if (resetPagination) {
-      _currentPage = 1;
+      _querySession.resetPaginationForQueryChange();
     }
     _clearError();
     _lastExecutionHint = null;
@@ -298,8 +280,7 @@ class PlaygroundProvider extends ChangeNotifier {
     }
 
     _isLoading = true;
-    _hasExecutedQuery = true;
-    _paginationAvailable = true;
+    _querySession.markExecuted();
     _results = [];
     _resultSets = [];
     _executionDuration = null;
@@ -315,8 +296,8 @@ class PlaygroundProvider extends ChangeNotifier {
         _query,
         configId: effectiveConfigId,
         pagination: QueryPaginationRequest(
-          page: _currentPage,
-          pageSize: _pageSize,
+          page: _querySession.currentPage,
+          pageSize: _querySession.pageSize,
         ),
         sqlHandlingMode: _sqlHandlingMode,
       );
@@ -331,8 +312,7 @@ class PlaygroundProvider extends ChangeNotifier {
             _results = [];
             _resultSets = [];
             _columnMetadata = null;
-            _hasNextPage = false;
-            _paginationAvailable = false;
+            _querySession.disablePagination();
             _lastExecutionHint = null;
           } else {
             _canRetry = false;
@@ -341,8 +321,11 @@ class PlaygroundProvider extends ChangeNotifier {
             _results = response.data;
             _affectedRows = response.affectedRows ?? 0;
             _columnMetadata = selectedResultSet?.columnMetadata ?? response.columnMetadata;
-            _syncPaginationState(response.pagination);
-            _lastExecutionHint = _buildLastExecutionHint(response.pagination);
+            _querySession.syncFromResponse(response.pagination);
+            _lastExecutionHint = _querySession.buildLastExecutionHint(
+              sqlHandlingMode: _sqlHandlingMode,
+              pagination: response.pagination,
+            );
             _notifyDbConnectionIndicator(true);
           }
           _executionDuration = stopwatch.elapsed;
@@ -352,8 +335,7 @@ class PlaygroundProvider extends ChangeNotifier {
           _columnMetadata = null;
           _resultSets = [];
           _executionDuration = stopwatch.elapsed;
-          _hasNextPage = false;
-          _paginationAvailable = false;
+          _querySession.disablePagination();
           _lastExecutionHint = null;
         },
       );
@@ -369,8 +351,7 @@ class PlaygroundProvider extends ChangeNotifier {
       _columnMetadata = null;
       _resultSets = [];
       _executionDuration = stopwatch.elapsed;
-      _hasNextPage = false;
-      _paginationAvailable = false;
+      _querySession.disablePagination();
       _lastExecutionHint = null;
       AppLogger.error(
         'Query execution threw: ${failure.toDisplayMessage()}',
@@ -409,18 +390,13 @@ class PlaygroundProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Executa query com streaming para grandes datasets.
-  ///
-  /// Processa os resultados em chunks, atualizando a UI progressivamente.
-  /// Útil para queries que retornam milhares ou milhões de linhas.
   Future<void> executeQueryWithStreaming(
     String query,
     String connectionString,
   ) async {
     _clearError();
     _lastExecutionHint = null;
-    _streamingStoppedByCap = false;
-    _streamingCapCancelRequested = false;
+    _streamingSession.resetCapState();
     _cancellationToken.reset();
 
     if (query.trim().isEmpty) {
@@ -436,8 +412,8 @@ class PlaygroundProvider extends ChangeNotifier {
 
     _isLoading = true;
     _isStreaming = true;
-    _hasExecutedQuery = true;
-    _paginationAvailable = false;
+    _querySession.markExecuted();
+    _querySession.resetPageForStreaming();
     _rowsProcessed = 0;
     _results = [];
     _resultSets = [];
@@ -446,41 +422,14 @@ class PlaygroundProvider extends ChangeNotifier {
     _columnMetadata = null;
     _selectedResultSetIndex = 0;
     _progress = 0.0;
-    _currentPage = 1;
-    _hasNextPage = false;
-    _lastStreamingNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
     notifyListeners();
 
     final stopwatch = Stopwatch()..start();
 
     try {
-      // Executar streaming real com chunks incrementais
-      final result = await _executeStreamingQuery(
+      final result = await _executeStreamingQueryFromSession(
         query,
         connectionString,
-        (chunk) async {
-          if (_streamingCapCancelRequested) {
-            return;
-          }
-          final cap = ConnectionConstants.playgroundStreamingMaxResultRows;
-          final remaining = cap - _results.length;
-          if (remaining <= 0) {
-            _requestStreamingStopAtRowCap(cap);
-            return;
-          }
-          if (chunk.length > remaining) {
-            _results.addAll(chunk.sublist(0, remaining));
-          } else {
-            _results.addAll(chunk);
-          }
-          _rowsProcessed = _results.length;
-          _affectedRows = _rowsProcessed;
-          _progress = _rowsProcessed / (_rowsProcessed + _progressEstimateOffset);
-          _notifyStreamingProgressIfNeeded();
-          if (_results.length >= cap) {
-            _requestStreamingStopAtRowCap(cap);
-          }
-        },
       );
 
       result.fold(
@@ -488,8 +437,10 @@ class PlaygroundProvider extends ChangeNotifier {
           _isStreaming = false;
           _progress = 1.0;
           _canRetry = false;
-          if (!_streamingStoppedByCap) {
-            _lastExecutionHint = _buildStreamingExecutionHint();
+          if (!_streamingSession.streamingStoppedByCap) {
+            _lastExecutionHint = _querySession.buildStreamingExecutionHint(
+              sqlHandlingMode: _sqlHandlingMode,
+            );
           }
           _notifyDbConnectionIndicator(true);
         },
@@ -497,7 +448,7 @@ class PlaygroundProvider extends ChangeNotifier {
           _error = _displayExecuteFailure(failure);
           _canRetry = failure is Failure && failure.isTransient;
           _isStreaming = false;
-          if (!_streamingStoppedByCap) {
+          if (!_streamingSession.streamingStoppedByCap) {
             _lastExecutionHint = null;
           }
           _logStreamingQueryFailure(failure);
@@ -528,6 +479,29 @@ class PlaygroundProvider extends ChangeNotifier {
     }
   }
 
+  Future<rd.Result<void>> _executeStreamingQueryFromSession(
+    String query,
+    String connectionString,
+  ) {
+    return _streamingSession.executeStreamingQuery(
+      query: query,
+      connectionString: connectionString,
+      onChunk: (chunk) => _streamingSession.processChunk(
+        chunk: chunk,
+        results: _results,
+        onProgress: (rowsProcessed, progress) {
+          _rowsProcessed = rowsProcessed;
+          _affectedRows = rowsProcessed;
+          _progress = progress;
+        },
+        notifyProgress: notifyListeners,
+        onRowCapReached: (cap) {
+          _lastExecutionHint = _ui.streamingRowCapHint(cap);
+        },
+      ),
+    );
+  }
+
   void clearResults() {
     _query = '';
     _results = [];
@@ -543,39 +517,20 @@ class PlaygroundProvider extends ChangeNotifier {
     _rowsProcessed = 0;
     _progress = 0.0;
     _selectedResultSetIndex = 0;
-    _currentPage = 1;
-    _hasNextPage = false;
-    _hasExecutedQuery = false;
-    _paginationAvailable = false;
+    _querySession.resetForClear();
     _lastExecutionHint = null;
-    _streamingStoppedByCap = false;
-    _streamingCapCancelRequested = false;
+    _streamingSession.resetCapState();
     _cancellationToken.reset();
     notifyListeners();
   }
 
-  void _requestStreamingStopAtRowCap(int cap) {
-    if (_streamingCapCancelRequested) {
-      return;
-    }
-    _streamingCapCancelRequested = true;
-    _streamingStoppedByCap = true;
-    _lastExecutionHint = _ui.streamingRowCapHint(cap);
-    unawaited(
-      _executeStreamingQuery.cancelActiveStream(
-        reason: StreamingCancelReason.playgroundRowCap,
-      ),
-    );
-  }
-
-  /// Cancela a query em execução.
   void cancelQuery() {
     if (_isLoading) {
       _cancellationToken.cancel();
       unawaited(
         (() async {
           try {
-            await _executeStreamingQuery.cancelActiveStream();
+            await _streamingSession.cancelActiveStream();
           } on Exception catch (e, s) {
             AppLogger.warning(
               'Failed to cancel active stream',
@@ -593,88 +548,43 @@ class PlaygroundProvider extends ChangeNotifier {
     }
   }
 
-  void _notifyStreamingProgressIfNeeded() {
-    final now = DateTime.now();
-    final shouldNotify = now.difference(_lastStreamingNotifyAt) >= _streamingUiUpdateInterval;
-    if (!shouldNotify) {
-      return;
-    }
-
-    _lastStreamingNotifyAt = now;
-    notifyListeners();
-  }
-
   void _clearError() {
     _error = null;
     _canRetry = false;
   }
 
   Future<void> goToNextPage() async {
-    if (_isLoading || !_hasNextPage) {
+    if (_isLoading || _querySession.advancePage() == null) {
       return;
     }
-    _currentPage++;
     await executeQuery();
   }
 
   Future<void> goToPreviousPage() async {
-    if (_isLoading || _currentPage <= 1) {
+    if (_isLoading || _querySession.retreatPage() == null) {
       return;
     }
-    _currentPage--;
     await executeQuery();
   }
 
   Future<void> setPageSize(int pageSize) async {
-    if (_pageSize == pageSize) {
+    if (_querySession.pageSize == pageSize) {
       return;
     }
-    _pageSize = pageSize;
-    _currentPage = 1;
-    _hasNextPage = false;
+    _querySession.setPageSize(pageSize);
     notifyListeners();
 
-    if (_hasExecutedQuery && _query.trim().isNotEmpty && !_isStreaming) {
+    if (_querySession.hasExecutedQuery && _query.trim().isNotEmpty && !_isStreaming) {
       await executeQuery();
     }
   }
 
   void setSelectedResultSetIndex(int index) {
-    if (index < 0 || index >= _resultSets.length) {
+    if (!_querySession.setSelectedResultSetIndex(index, _resultSets.length)) {
       return;
     }
     _selectedResultSetIndex = index;
     _columnMetadata = _resultSets[index].columnMetadata;
     notifyListeners();
-  }
-
-  void _syncPaginationState(QueryPaginationInfo? pagination) {
-    if (pagination == null) {
-      _hasNextPage = false;
-      _paginationAvailable = false;
-      return;
-    }
-
-    _currentPage = pagination.page;
-    _pageSize = pagination.pageSize;
-    _hasNextPage = pagination.hasNextPage;
-    _paginationAvailable = true;
-  }
-
-  String _buildLastExecutionHint(QueryPaginationInfo? pagination) {
-    if (_sqlHandlingMode == SqlHandlingMode.preserve) {
-      return _ui.queryPlaygroundHintLastRunPreserve;
-    }
-    if (pagination != null) {
-      return _ui.queryPlaygroundHintLastRunManagedPagination;
-    }
-    return _ui.queryPlaygroundHintLastRunManaged;
-  }
-
-  String _buildStreamingExecutionHint() {
-    if (_sqlHandlingMode == SqlHandlingMode.preserve) {
-      return _ui.queryPlaygroundHintLastRunPreserve;
-    }
-    return _ui.queryPlaygroundHintLastRunStreaming;
   }
 }
