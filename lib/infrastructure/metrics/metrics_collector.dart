@@ -389,6 +389,19 @@ class MetricsCollectorCore {
 
   void recordQueueTimeoutAfterWorkerStarted() {
     _incrementEventCounter(sqlQueueTimeoutAfterWorkerStartedCounter);
+    final count = sqlQueueTimeoutAfterWorkerStartedCount;
+    recordDiagnosticReason(category: 'sql_queue', reason: 'ghost_query_risk');
+    if (count == 1 || count % 5 == 0) {
+      developer.log(
+        'SQL queue timeout after worker started — ghost query risk (in-flight ODBC may continue)',
+        name: 'metrics',
+        level: 900,
+        error: {
+          'ghost_query_risk': true,
+          'sql_queue_timeout_after_worker_started_count': count,
+        },
+      );
+    }
   }
 
   void recordQueueSaturation({required int thresholdPercent, required int currentSize, required int maxSize}) {

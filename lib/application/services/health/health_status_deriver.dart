@@ -10,6 +10,7 @@ String deriveHealthOverallStatus({
   required Map<String, Object?> poolDiagnostics,
   required QueuedDatabaseGateway? queuedGateway,
   required Map<String, Object?>? secureStorage,
+  int sqlQueueTimeoutAfterWorkerStartedCount = 0,
 }) {
   if (poolDiagnostics['native_circuit_open'] == true) {
     return 'degraded';
@@ -24,6 +25,10 @@ String deriveHealthOverallStatus({
   }
 
   if (secureStorage?['degraded'] == true) {
+    return 'degraded';
+  }
+
+  if (sqlQueueTimeoutAfterWorkerStartedCount > 0) {
     return 'degraded';
   }
 

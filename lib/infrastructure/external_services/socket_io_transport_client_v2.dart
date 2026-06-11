@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
-import 'package:plug_agente/core/config/payload_signing_diagnostics.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/logger/log_rate_limiter.dart';
@@ -33,6 +32,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/rpc_strea
 import 'package:plug_agente/infrastructure/external_services/transport/socket_io_capabilities_lifecycle_handler.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/socket_io_transport_connection_error_handler.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_local_capabilities_builder.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/transport_payload_signing_diagnostic_publisher.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_pipeline_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_socket_event_binder.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -318,6 +318,14 @@ class SocketIOTransportClientV2 implements ITransportClient {
   final RpcRequestSchemaValidator _schemaValidator = const RpcRequestSchemaValidator();
   final RpcContractValidator _contractValidator = const RpcContractValidator();
   final LogRateLimiter _diagnosticLogLimiter = LogRateLimiter();
+  late final TransportPayloadSigningDiagnosticPublisher _payloadSigningDiagnosticPublisher =
+      TransportPayloadSigningDiagnosticPublisher(
+        featureFlags: _featureFlags,
+        payloadSigningConfig: _payloadSigningConfig,
+        payloadSigner: _payloadSigner,
+        diagnosticLogLimiter: _diagnosticLogLimiter,
+        logMessage: _logMessage,
+      );
 
   @override
   void setMessageCallback(
@@ -756,36 +764,11 @@ class SocketIOTransportClientV2 implements ITransportClient {
   }
 
   void _publishPayloadSigningDiagnostic(String stage) {
-    final signer = _payloadSigner;
-    final diagnostics = PayloadSigningDiagnostics.evaluate(
-      featureFlags: _featureFlags,
-      config: _payloadSigningConfig,
+    _payloadSigningDiagnosticPublisher.publish(
+      stage: stage,
+      hasReceivedCapabilities: _hasReceivedCapabilities,
+      currentProtocol: _currentProtocol,
     );
-    final diagnostic = <String, dynamic>{
-      'stage': stage,
-      'outgoing_signing_enabled': _featureFlags.enablePayloadSigning,
-      'incoming_signature_required_before_negotiation': _featureFlags.requireIncomingPayloadSignatures,
-      'signer_configured': signer != null,
-      'active_key_id': signer?.activeKeyId,
-      'key_count': signer?.keyCount ?? 0,
-      'key_source': _payloadSigningConfig.sourceName,
-      'secure_storage_available': _payloadSigningConfig.secureStorageAvailable,
-      'health': diagnostics.toJson(),
-      if (_hasReceivedCapabilities) ...{
-        'negotiated_signature_required': _currentProtocol.signatureRequired,
-        'negotiated_signature_algorithms': _currentProtocol.signatureAlgorithms,
-      },
-      if (diagnostics.issues.isNotEmpty) 'warnings': diagnostics.issues.map((issue) => issue.code).toList(),
-    };
-    _logMessage('SECURITY', 'payload_signing:diagnostic', diagnostic);
-    if (diagnostics.hasBlockingIssue && _diagnosticLogLimiter.shouldLog('payload_signing_blocking_issue')) {
-      AppLogger.warning(
-        'Payload signing configuration has blocking issues '
-        '(status=${diagnostics.status.name}, source=${diagnostics.keySource}, '
-        'secure_storage=${diagnostics.secureStorageAvailable}, '
-        'issues=${diagnostics.issues.map((issue) => issue.code).join(",")})',
-      );
-    }
   }
 
   /// Emits a minimal internal-error [rpc:response] so the hub is never left

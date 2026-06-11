@@ -5,6 +5,10 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 ///
 /// User choices in SharedPreferences always win; env only fills unset keys so
 /// deployments can opt in (e.g. socket backpressure) without flipping code defaults.
+///
+/// Persisted prefs live in the global `settings.json` under the app data folder;
+/// values already stored there override `.env` seeding and survive reinstalls of
+/// the same profile. VS Code `.vscode/settings.json` does not affect runtime flags.
 class FeatureFlagsEnvSeeder {
   FeatureFlagsEnvSeeder._();
 

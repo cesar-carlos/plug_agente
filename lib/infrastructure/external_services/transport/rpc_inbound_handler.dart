@@ -14,13 +14,13 @@ import 'package:plug_agente/infrastructure/external_services/transport/payload_f
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_batch_inbound_handler.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_guard_mapping.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_schema_validation_pipeline.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_validation_error_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_method_schema_catalog.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validator.dart';
-import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
 /// Handles inbound `rpc:request` events (single and batch) from the hub.
 ///
@@ -82,6 +82,11 @@ class RpcInboundHandler {
        _schemaCatalog = schemaCatalog,
        _metricsCollector = metricsCollector,
        _setHubSqlDashboardCapturePaused = setHubSqlDashboardCapturePaused {
+    _schemaValidationPipeline = RpcInboundSchemaValidationPipeline(
+      jsonSchemaValidator: _jsonSchemaValidator,
+      logSummarizer: _logSummarizer,
+      schemaCatalog: _schemaCatalog,
+    );
     _batchHandler = RpcBatchInboundHandler(
       featureFlags: _featureFlags,
       protocolProvider: _protocolProvider,
@@ -125,6 +130,7 @@ class RpcInboundHandler {
   final MetricsCollector? _metricsCollector;
   final void Function(bool paused)? _setHubSqlDashboardCapturePaused;
 
+  late final RpcInboundSchemaValidationPipeline _schemaValidationPipeline;
   late final RpcBatchInboundHandler _batchHandler;
 
   int _activeRpcHandlers = 0;
@@ -571,25 +577,13 @@ class RpcInboundHandler {
   }
 
   Future<bool> _validateBatchRequestJsonSchemasOrEmit(List<dynamic> data) async {
-    final jsonSchemaValidator = _jsonSchemaValidator;
-    if (jsonSchemaValidator == null) {
-      return true;
-    }
-
-    final batchValidation = jsonSchemaValidator.validate(
-      schemaId: TransportSchemaIds.rpcBatchRequest,
-      payload: data,
-      direction: 'inbound',
-    );
-    if (batchValidation.isError()) {
-      final failure = batchValidation.exceptionOrNull()! as domain.Failure;
-      // Include the id of the first well-formed item so the hub can identify
-      // which request triggered validation failure without resending the batch.
+    final batchFailure = _schemaValidationPipeline.validateBatchEnvelope(data);
+    if (batchFailure != null) {
       final firstId = data.whereType<Map<String, dynamic>>().firstOrNull?['id'];
       await _sendSchemaValidationError(
         firstId,
         RpcErrorCode.invalidRequest,
-        failure.message,
+        batchFailure.message,
         method: data.whereType<Map<String, dynamic>>().firstOrNull?['method'],
       );
       return false;
@@ -604,14 +598,12 @@ class RpcInboundHandler {
   }
 
   Future<bool> _validateSingleRequestJsonSchemasOrEmit(Map<String, dynamic> requestMap) async {
-    // Skip JSON Schema validation for very large payloads: the size limit was
-    // already enforced upstream; re-walking a large tree here is O(payload).
-    if (_logSummarizer.exceedsByteBudget(requestMap, ConnectionConstants.schemaValidationSkipAboveBytes)) {
-      _jsonSchemaValidator?.recordSkippedLargePayload(direction: 'inbound');
+    if (_schemaValidationPipeline.shouldSkipLargePayload(requestMap)) {
+      _schemaValidationPipeline.recordSkippedLargePayload();
       return true;
     }
 
-    final envelopeFailure = _validateRequestEnvelopeJsonSchema(requestMap);
+    final envelopeFailure = _schemaValidationPipeline.validateRequestEnvelope(requestMap);
     if (envelopeFailure != null) {
       await _sendSchemaValidationError(
         requestMap['id'],
@@ -622,7 +614,7 @@ class RpcInboundHandler {
       return false;
     }
 
-    final paramsFailure = _validateRequestParamsJsonSchema(requestMap);
+    final paramsFailure = _schemaValidationPipeline.validateRequestParams(requestMap);
     if (paramsFailure != null) {
       await _sendSchemaValidationError(
         requestMap['id'],
@@ -634,56 +626,6 @@ class RpcInboundHandler {
     }
 
     return true;
-  }
-
-  domain.Failure? _validateRequestEnvelopeJsonSchema(Map<String, dynamic> requestMap) {
-    final jsonSchemaValidator = _jsonSchemaValidator;
-    if (jsonSchemaValidator == null) {
-      return null;
-    }
-
-    final validation = jsonSchemaValidator.validate(
-      schemaId: TransportSchemaIds.rpcRequest,
-      payload: requestMap,
-      direction: 'inbound',
-    );
-    if (validation.isError()) {
-      return validation.exceptionOrNull()! as domain.Failure;
-    }
-    return null;
-  }
-
-  domain.Failure? _validateRequestParamsJsonSchema(Map<String, dynamic> requestMap) {
-    final jsonSchemaValidator = _jsonSchemaValidator;
-    if (jsonSchemaValidator == null) {
-      return null;
-    }
-
-    final method = requestMap['method'];
-    if (method is! String || !requestMap.containsKey('params')) {
-      return null;
-    }
-
-    final schemaId = _schemaCatalog.paramsSchemaFor(method);
-    if (schemaId == null) {
-      return null;
-    }
-
-    // Short-circuit: skip validation when the schema is not loaded rather than
-    // paying the allocation cost of the validate() call.
-    if (!jsonSchemaValidator.isLoaded(schemaId)) {
-      return null;
-    }
-
-    final validation = jsonSchemaValidator.validate(
-      schemaId: schemaId,
-      payload: requestMap['params'],
-      direction: 'inbound',
-    );
-    if (validation.isError()) {
-      return validation.exceptionOrNull()! as domain.Failure;
-    }
-    return null;
   }
 
   Future<void> _sendSchemaValidationError(

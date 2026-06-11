@@ -88,6 +88,8 @@ class SqlRpcDbStreamingExecutor {
       sql: sql,
       negotiatedExtensions: negotiatedExtensions,
       preferDbStreaming: preferDbStreaming,
+      effectiveMaxRows: effectiveMaxRows,
+      limits: limits,
     );
     final autoStreaming = autoStreamingReason != DbStreamingAutoReason.none;
     if (!supportsStreamingChunks(negotiatedExtensions)) {
@@ -289,6 +291,8 @@ class SqlRpcDbStreamingExecutor {
         switch (autoStreamingReason) {
           case DbStreamingAutoReason.prefer:
             _dispatchMetrics?.recordSqlExecutePreferDbStreamingResponse();
+          case DbStreamingAutoReason.largeMaxRows:
+            _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
           case DbStreamingAutoReason.allowlist:
             _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
             _dispatchMetrics?.recordSqlExecuteAllowlistDbStreamingResponse();

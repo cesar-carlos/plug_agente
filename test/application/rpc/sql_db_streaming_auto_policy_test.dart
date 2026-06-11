@@ -61,6 +61,33 @@ void main() {
       expect(reason, DbStreamingAutoReason.allowlist);
     });
 
+    test('returns largeMaxRows when effective max rows meets streaming threshold', () {
+      const limits = TransportLimits();
+      final reason = policy.resolveAutoReason(
+        featureFlags: featureFlags,
+        queryRequest: queryRequest(),
+        sql: 'SELECT * FROM users',
+        negotiatedExtensions: const {'streamingResults': true},
+        preferDbStreaming: false,
+        effectiveMaxRows: limits.streamingRowThreshold,
+      );
+
+      expect(reason, DbStreamingAutoReason.largeMaxRows);
+    });
+
+    test('shouldMaterializeBoundedDbStreaming is false for large explicit TOP', () {
+      const limits = TransportLimits();
+      final normalized = policy.normalizeSqlForDbStreaming('SELECT TOP 1000 * FROM users');
+      expect(
+        policy.shouldMaterializeBoundedDbStreaming(
+          normalized,
+          effectiveMaxRows: 100,
+          limits: limits,
+        ),
+        isFalse,
+      );
+    });
+
     test('returns sqlLength for long simple select', () {
       final longSql = 'SELECT ${'x' * 260} FROM users';
 

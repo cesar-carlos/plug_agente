@@ -9,6 +9,9 @@ dsa_priv.pem
 # Miscellaneous
 *.class
 *.log
+debug-*.log
+debug-*.log.*
+test_output_full.txt
 *.pyc
 *.swp
 .DS_Store

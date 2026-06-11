@@ -243,6 +243,9 @@ class FeatureFlags {
 
   /// Whether to apply backpressure via rpc:stream.pull (client controls
   /// consumption rate).
+  ///
+  /// Seeded from `.env` (`feature_enable_socket_backpressure`) on first boot when
+  /// unset; persisted app prefs in global `settings.json` always override env.
   bool get enableSocketBackpressure => _prefs.getBool(_keyEnableSocketBackpressure) ?? false;
 
   Future<void> setEnableSocketBackpressure(bool value) async {

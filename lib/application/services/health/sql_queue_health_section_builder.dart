@@ -29,6 +29,8 @@ final class SqlQueueHealthSectionBuilder {
       'rejections_total': metrics['sql_queue_rejection_count'] ?? 0,
       'timeouts_total': metrics['sql_queue_timeout_count'] ?? 0,
       'timeouts_after_worker_started_total': metrics['sql_queue_timeout_after_worker_started_count'] ?? 0,
+      'ghost_query_risk_total': metrics['sql_queue_timeout_after_worker_started_count'] ?? 0,
+      'ghost_query_alert': ((metrics['sql_queue_timeout_after_worker_started_count'] as num?)?.toInt() ?? 0) > 0,
       'avg_wait_time_ms': (metrics['sql_queue_avg_wait_time_ms'] as num?)?.toInt() ?? 0,
       'p95_wait_time_ms': (metrics['sql_queue_p95_wait_time_ms'] as num?)?.toInt() ?? 0,
       'max_recent_wait_time_ms': (metrics['sql_queue_max_recent_wait_time_ms'] as num?)?.toInt() ?? 0,

@@ -154,6 +154,8 @@ class HealthService {
       poolDiagnostics: poolDiagnostics,
       queuedGateway: queuedGateway,
       secureStorage: secureStorage,
+      sqlQueueTimeoutAfterWorkerStartedCount:
+          (metrics['sql_queue_timeout_after_worker_started_count'] as num?)?.toInt() ?? 0,
     );
 
     return {

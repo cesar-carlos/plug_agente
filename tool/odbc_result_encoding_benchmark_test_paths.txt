@@ -1,0 +1,2 @@
+test/infrastructure/external_services/odbc_result_encoding_executor_test.dart
+test/infrastructure/external_services/odbc_database_gateway_test.dart

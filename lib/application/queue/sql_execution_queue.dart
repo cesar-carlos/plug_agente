@@ -3,6 +3,9 @@ import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:meta/meta.dart';
+
+import 'package:plug_agente/application/queue/sql_execution_kind.dart';
+import 'package:plug_agente/application/queue/sql_queue_lane_scheduler.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
@@ -10,6 +13,8 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
+
+export 'package:plug_agente/application/queue/sql_execution_kind.dart';
 
 /// Bounded FIFO queue for SQL execution requests to prevent pool overload.
 ///
@@ -110,6 +115,7 @@ class SqlExecutionQueue {
   final Map<SqlExecutionKind, Queue<_QueuedRequest>> _queues = {
     for (final kind in SqlExecutionKind.values) kind: Queue<_QueuedRequest>(),
   };
+  static const SqlQueueLaneScheduler<_QueuedRequest> _laneScheduler = SqlQueueLaneScheduler<_QueuedRequest>();
   int _queuedCount = 0;
   int _nextSequence = 0;
   int _activeWorkers = 0;
@@ -479,26 +485,15 @@ class SqlExecutionQueue {
   }
 
   _QueuedRequest? _takeNextEligibleRequest() {
-    MapEntry<SqlExecutionKind, Queue<_QueuedRequest>>? selected;
-    for (final entry in _queues.entries) {
-      if (entry.value.isEmpty) {
-        continue;
-      }
-      final candidate = entry.value.first;
-      if (!_canStartRequest(candidate)) {
-        continue;
-      }
-      final current = selected;
-      if (current == null || candidate.sequence < current.value.first.sequence) {
-        selected = entry;
-      }
-    }
-
-    if (selected == null) {
+    final request = _laneScheduler.takeNextEligibleRequest(
+      queues: _queues,
+      canStartRequest: _canStartRequest,
+    );
+    if (request == null) {
       return null;
     }
     _queuedCount--;
-    return selected.value.removeFirst();
+    return request;
   }
 
   bool _canStartRequest(_QueuedRequest request) {
@@ -650,21 +645,12 @@ class SqlExecutionQueue {
   }
 
   _QueuedRequest? _takeNextQueuedRequest() {
-    MapEntry<SqlExecutionKind, Queue<_QueuedRequest>>? selected;
-    for (final entry in _queues.entries) {
-      if (entry.value.isEmpty) {
-        continue;
-      }
-      final current = selected;
-      if (current == null || entry.value.first.sequence < current.value.first.sequence) {
-        selected = entry;
-      }
-    }
-    if (selected == null) {
+    final request = _laneScheduler.takeNextQueuedRequest(queues: _queues);
+    if (request == null) {
       return null;
     }
     _queuedCount--;
-    return selected.value.removeFirst();
+    return request;
   }
 
   domain.QueryExecutionFailure _completeQueueWaitTimeout<T extends Object>({
@@ -807,18 +793,4 @@ class _QueuedRequest<T extends Object> {
       completer.complete(Failure<T, Exception>(failure));
     }
   }
-}
-
-enum SqlExecutionKind {
-  /// Generic kind — treated identically to `shortQuery`. Used as the default
-  /// for callers that do not classify the request (e.g. direct
-  /// [SqlExecutionQueue.submit] calls outside `QueuedDatabaseGateway`).
-  query,
-  shortQuery,
-  longQuery,
-  nonQuery,
-  batch,
-
-  /// ODBC streaming execution — shares the global worker pool with SQL queue.
-  streaming,
 }

@@ -8,6 +8,7 @@ import 'package:plug_agente/domain/value_objects/database_driver.dart';
 enum DbStreamingAutoReason {
   none,
   prefer,
+  largeMaxRows,
   sqlLength,
   allowlist,
   sqlSignal,
@@ -48,6 +49,8 @@ class SqlDbStreamingAutoPolicy {
     required String sql,
     required Map<String, dynamic> negotiatedExtensions,
     required bool preferDbStreaming,
+    int? effectiveMaxRows,
+    TransportLimits limits = const TransportLimits(),
   }) {
     if (!featureFlags.enableSocketStreamingFromDb ||
         featureFlags.enableSocketStreamingChunks ||
@@ -77,6 +80,10 @@ class SqlDbStreamingAutoPolicy {
     if (matchesTableAllowlist(normalized)) {
       return DbStreamingAutoReason.allowlist;
     }
+    if (effectiveMaxRows != null &&
+        effectiveMaxRows >= limits.streamingRowThreshold) {
+      return DbStreamingAutoReason.largeMaxRows;
+    }
     if (largeSqlSignals.any(normalized.contains)) {
       return DbStreamingAutoReason.sqlSignal;
     }
@@ -88,7 +95,30 @@ class SqlDbStreamingAutoPolicy {
     required int effectiveMaxRows,
     required TransportLimits limits,
   }) {
-    return containsExplicitRowLimit(normalizedSql) || effectiveMaxRows < limits.streamingRowThreshold;
+    if (containsExplicitRowLimit(normalizedSql)) {
+      final explicitLimit = parseExplicitRowLimit(normalizedSql);
+      if (explicitLimit != null && explicitLimit >= limits.streamingRowThreshold) {
+        return false;
+      }
+      return true;
+    }
+    return effectiveMaxRows < limits.streamingRowThreshold;
+  }
+
+  int? parseExplicitRowLimit(String normalizedSql) {
+    final topMatch = RegExp(r'\btop\s+(\d+)\b', caseSensitive: false).firstMatch(normalizedSql);
+    if (topMatch != null) {
+      return int.tryParse(topMatch.group(1)!);
+    }
+    final limitMatch = RegExp(r'\blimit\s+(\d+)\b', caseSensitive: false).firstMatch(normalizedSql);
+    if (limitMatch != null) {
+      return int.tryParse(limitMatch.group(1)!);
+    }
+    final fetchMatch = RegExp(r'\bfetch\s+first\s+(\d+)\b', caseSensitive: false).firstMatch(normalizedSql);
+    if (fetchMatch != null) {
+      return int.tryParse(fetchMatch.group(1)!);
+    }
+    return null;
   }
 
   bool isDriverAllowed(String driverName) {
