@@ -49,7 +49,9 @@ void main() {
       return WindowsProcessLifetimeChecker(processRunningPredicate: (_) async => false);
     }
 
-    test('should normalize lock file ACL after successful acquire', () async {
+    test(
+      'should normalize lock file ACL after successful acquire',
+      () async {
       var fileNormalized = false;
       final lock = AgentActionSchedulerInstanceLock(
         storageContext: storageContext,
@@ -70,7 +72,9 @@ void main() {
       expect((await lock.tryAcquire()).isSuccess(), isTrue);
       expect(fileNormalized, isTrue);
       await lock.release();
-    });
+      },
+      skip: Platform.isWindows ? false : 'Lock file ACL normalization requires Windows',
+    );
 
     test('should allow acquire and release in sequence', () async {
       final lock = AgentActionSchedulerInstanceLock(
