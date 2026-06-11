@@ -225,7 +225,7 @@ jobs:
         if: ${{ !cancelled() }}
         continue-on-error: true
         run: |
-          latest="$(ls -1d benchmarks/results/*/summary.json 2>/dev/null | sort -r | head -n 1)"
+          latest="$(find benchmarks/results -mindepth 2 -maxdepth 2 -type f -name summary.json 2>/dev/null | sort -r | head -n 1)"
           if [ -z "$latest" ]; then
             echo "No benchmark summary produced; skipping baseline compare."
             exit 0
