@@ -35,7 +35,7 @@ void main() {
       final buildScript = File('installer/build_installer.py').readAsStringSync();
 
       expect(buildScript, contains('plug_agente_elevated_runner.exe'));
-      expect(buildScript, contains('build_elevated_runner.ps1'));
+      expect(buildScript, contains('build_elevated_runner.py'));
     });
 
     test('installer build injects auto update channel and signature defines', () {

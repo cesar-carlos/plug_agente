@@ -1,24 +1,24 @@
 import 'dart:developer' as developer;
 
-import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/bootstrap/agent_actions_boot_phases.dart';
 import 'package:plug_agente/application/bootstrap/deferred_boot_phase_outcome.dart';
-import 'package:plug_agente/application/services/active_config_resolver.dart';
+import 'package:plug_agente/application/bootstrap/deferred_boot_phase_runner_dependencies.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
-import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 
 class DeferredBootPhaseRunner {
   DeferredBootPhaseRunner({
-    AgentActionsBootPhasesContract? agentActionsBootPhases,
+    required AgentActionsBootPhasesContract agentActionsBootPhases,
+    DeferredBootPhaseRunnerDependencies? dependencies,
     RuntimeCapabilities? capabilities,
-  }) : _agentActionsBootPhases = agentActionsBootPhases ?? const AgentActionsBootPhases(),
+  }) : _agentActionsBootPhases = agentActionsBootPhases,
+       _dependencies = dependencies ?? const DeferredBootPhaseRunnerDependencies(),
        _capabilities = capabilities;
 
   final AgentActionsBootPhasesContract _agentActionsBootPhases;
+  final DeferredBootPhaseRunnerDependencies _dependencies;
   final RuntimeCapabilities? _capabilities;
 
   Future<DeferredBootPhaseOutcome> run() async {
@@ -56,10 +56,10 @@ class DeferredBootPhaseRunner {
     required bool schedulerStarted,
     required bool hadCriticalFailure,
   }) {
-    if (!getIt.isRegistered<AgentActionRuntimeStateGuard>()) {
+    final guard = _dependencies.runtimeStateGuard;
+    if (guard == null) {
       return;
     }
-    final guard = getIt<AgentActionRuntimeStateGuard>();
     if (hadCriticalFailure) {
       guard.markDisabled(
         reason: AgentActionRuntimeStateConstants.deferredBootstrapCriticalFailureReason,
@@ -77,12 +77,14 @@ class DeferredBootPhaseRunner {
   }
 
   Future<void> _warmUpConnectionPool() async {
-    if (!getIt.isRegistered<ActiveConfigResolver>() || !getIt.isRegistered<IConnectionPool>()) {
+    final configResolver = _dependencies.activeConfigResolver;
+    final pool = _dependencies.connectionPool;
+    if (configResolver == null || pool == null) {
       return;
     }
 
     try {
-      final configResult = await getIt<ActiveConfigResolver>().resolveActiveOrFallback(
+      final configResult = await configResolver.resolveActiveOrFallback(
         metadataOnly: true,
       );
 
@@ -97,7 +99,6 @@ class DeferredBootPhaseRunner {
             return;
           }
 
-          final pool = getIt<IConnectionPool>();
           if (pool is IConnectionPoolWarmUp) {
             final warmUpPool = pool as IConnectionPoolWarmUp;
             final warmUpResult = await warmUpPool.warmUp(agentConfig.connectionString);
@@ -145,11 +146,11 @@ class DeferredBootPhaseRunner {
         return;
       }
 
-      if (!getIt.isRegistered<IAutoUpdateOrchestrator>()) {
+      final orchestrator = _dependencies.autoUpdateOrchestrator;
+      if (orchestrator == null) {
         return;
       }
 
-      final orchestrator = getIt<IAutoUpdateOrchestrator>();
       await orchestrator.startAutomaticChecks();
       if (orchestrator.isAvailable) {
         developer.log(

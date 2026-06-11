@@ -204,10 +204,10 @@ Future<Result<User>> getById(String id) async {
   testes
 - Consulte `docs/testing/e2e_setup.md` para lista completa de variaveis e comandos
 - Acoes agendadas (`agent.action.*`): gate local/CI sem Hub via
-  `tool/run_agent_actions_operational_gate.ps1` ou
-  `tool/homologate_hub_agent_actions.ps1 -RunContractTests` (manifestos
+  `python tool/run_agent_actions_operational_gate.py` ou
+  `python tool/homologate_hub_agent_actions.py --run-contract-tests` (manifestos
   `tool/agent_actions_*_test_paths.txt`); preflight estatico:
-  `tool/preflight_agent_actions_production.ps1`; live Hub opt-in com `RUN_LIVE_HUB_*`,
+  `python tool/preflight_agent_actions_production.py`; live Hub opt-in com `RUN_LIVE_HUB_*`,
   `E2E_HUB_URL`, `E2E_HUB_TOKEN`,
   assinatura `PAYLOAD_SIGNING_*` e `-ValidateLiveEnv -RunLiveTests`; preflight live:
   `dart run tool/validate_live_hub_agent_actions_env.dart` (ver

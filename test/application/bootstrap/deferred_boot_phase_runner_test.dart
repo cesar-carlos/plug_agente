@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/bootstrap/agent_actions_boot_phases.dart';
 import 'package:plug_agente/application/bootstrap/deferred_boot_phase_runner.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/application/bootstrap/deferred_boot_phase_runner_dependencies.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 
 class _FakeAgentActionsBootPhases implements AgentActionsBootPhasesContract {
@@ -40,20 +40,23 @@ void main() {
   group('DeferredBootPhaseRunner', () {
     late AgentActionRuntimeStateGuard runtimeStateGuard;
 
-    setUp(() async {
-      await getIt.reset();
+    setUp(() {
       runtimeStateGuard = AgentActionRuntimeStateGuard()..markStarting(reason: 'boot');
-      getIt.registerSingleton<AgentActionRuntimeStateGuard>(runtimeStateGuard);
     });
 
-    tearDown(() async {
-      await getIt.reset();
-    });
+    DeferredBootPhaseRunner createRunner(AgentActionsBootPhasesContract bootPhases) {
+      return DeferredBootPhaseRunner(
+        agentActionsBootPhases: bootPhases,
+        dependencies: DeferredBootPhaseRunnerDependencies(
+          runtimeStateGuard: runtimeStateGuard,
+        ),
+      );
+    }
 
     test('marks runtime guard ready only after deferred phases complete', () async {
       final callOrder = <String>[];
-      final runner = DeferredBootPhaseRunner(
-        agentActionsBootPhases: _FakeAgentActionsBootPhases(
+      final runner = createRunner(
+        _FakeAgentActionsBootPhases(
           onDeferredMaintenance: () async {
             callOrder.add('deferred');
             expect(runtimeStateGuard.snapshot.status, AgentActionSubsystemStatus.starting);
@@ -73,8 +76,8 @@ void main() {
     });
 
     test('marks runtime guard disabled when deferred phases throw before scheduler', () async {
-      final runner = DeferredBootPhaseRunner(
-        agentActionsBootPhases: _FakeAgentActionsBootPhases(
+      final runner = createRunner(
+        _FakeAgentActionsBootPhases(
           throwOnDeferredMaintenance: true,
         ),
       );
@@ -87,8 +90,8 @@ void main() {
     });
 
     test('marks runtime guard degraded when scheduler does not start', () async {
-      final runner = DeferredBootPhaseRunner(
-        agentActionsBootPhases: _FakeAgentActionsBootPhases(
+      final runner = createRunner(
+        _FakeAgentActionsBootPhases(
           schedulerStarted: false,
         ),
       );

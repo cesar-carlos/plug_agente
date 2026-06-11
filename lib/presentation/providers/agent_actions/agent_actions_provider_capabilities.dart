@@ -6,7 +6,7 @@ extension AgentActionsProviderCapabilities on AgentActionsProvider {
       definition: definition,
       isFeatureEnabled: isFeatureEnabled,
       isRunning: isRunning,
-      allowsLocalManualOperation: _runtimeSurfaceCoordinator.allowsLocalManualOperation(definition.type),
+      allowsLocalManualOperation: _runtimeController.allowsLocalManualOperation(definition.type),
     );
   }
 
@@ -14,7 +14,7 @@ extension AgentActionsProviderCapabilities on AgentActionsProvider {
     return _localOperationPolicy.canTestDefinition(
       isFeatureEnabled: isFeatureEnabled,
       isTesting: isTesting,
-      allowsLocalManualOperation: _runtimeSurfaceCoordinator.allowsLocalManualOperation(definition.type),
+      allowsLocalManualOperation: _runtimeController.allowsLocalManualOperation(definition.type),
     );
   }
 

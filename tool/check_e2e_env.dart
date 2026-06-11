@@ -327,9 +327,9 @@ void main(List<String> args) {
       '  -> build local encontrado: ${defaultElevatedBuild.path} (defina ELEVATED_ACTION_RUNNER_EXE ou copie para o runner Release)',
     );
   } else {
-    print(r'  -> helper elevado: rode .\tool\build_elevated_runner.ps1 antes de homologar elevado na UI');
+    print('  -> helper elevado: rode python tool/build_elevated_runner.py antes de homologar elevado na UI');
   }
-  print(r'  -> homologacao elevada: .\tool\homologate_elevated_runner.ps1 -Build [-RunUnitTests]');
+  print('  -> homologacao elevada: python tool/homologate_elevated_runner.py --build [--run-unit-tests]');
   print('     manual UI/UAC: docs/testing/e2e_setup.md');
 
   print('');
@@ -340,11 +340,11 @@ void main(List<String> args) {
     'Hub agent.action (opt-in): flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags live',
   );
   print(
-    r'Agent actions local gate (sem Hub): .\tool\homologate_hub_agent_actions.ps1 -RunContractTests',
+    'Agent actions local gate (sem Hub): python tool/homologate_hub_agent_actions.py --run-contract-tests',
   );
   print('Agent actions live Hub env only: dart run tool/validate_live_hub_agent_actions_env.dart');
   print(
-    r'Agent actions live Hub full: .\tool\homologate_hub_agent_actions.ps1 -ValidateLiveEnv -RunContractTests -RunLiveTests',
+    'Agent actions live Hub full: python tool/homologate_hub_agent_actions.py --validate-live-env --run-contract-tests --run-live-tests',
   );
   print(
     'Elevated (unit): flutter test test/infrastructure/actions/elevated_action_runner_installer_test.dart',

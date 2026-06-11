@@ -1,0 +1,62 @@
+{
+  "$schema": "../schema/summary.schema.json",
+  "schema_version": 1,
+  "run_id": "20260606_122349",
+  "captured_at": "2026-06-06T12:23:49",
+  "git": {
+    "commit_sha": "migrated-legacy",
+    "branch": "migrated-legacy",
+    "dirty": false
+  },
+  "machine": {
+    "platform": "legacy-e2e",
+    "machine": "migrated",
+    "processor": "benchmark_logs-import"
+  },
+  "env_flags": {
+    "odbc_e2e_dml_stress_tests": true,
+    "odbc_pool_size": 8,
+    "odbc_test_dsn_configured": true
+  },
+  "suites": [
+    {
+      "id": "odbc_dml_stress_live_e2e.sqlAnywhere",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "insert_ms": 1335.0,
+        "update_ms": 74.0,
+        "delete_ms": 73.0,
+        "total_ms": 1564.0,
+        "queued_elapsed_ms": 1355.0,
+        "rows": 100.0,
+        "concurrency": 8.0,
+        "insert_rows_per_sec": 74.91,
+        "update_rows_per_sec": 1351.35,
+        "delete_rows_per_sec": 1369.86
+      }
+    },
+    {
+      "id": "odbc_dml_stress_live_e2e.sqlServer",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "insert_ms": 1174.0,
+        "update_ms": 55.0,
+        "delete_ms": 75.0,
+        "total_ms": 1385.0,
+        "queued_elapsed_ms": 1248.0,
+        "rows": 100.0,
+        "concurrency": 8.0,
+        "insert_rows_per_sec": 85.18,
+        "update_rows_per_sec": 1818.18,
+        "delete_rows_per_sec": 1333.33
+      }
+    }
+  ],
+  "notes": [
+    "Migrated from legacy benchmark_logs/ E2E summary (schema v1).",
+    "Connection strings, URLs, tokens and host-specific config were stripped.",
+    "Source: D:/Developer/plug_database/plug_agente/benchmark_logs/20260606_122349/summary.json"
+  ]
+}

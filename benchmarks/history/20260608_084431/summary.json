@@ -1,0 +1,142 @@
+{
+  "$schema": "../schema/summary.schema.json",
+  "schema_version": 1,
+  "run_id": "20260608_084431",
+  "captured_at": "2026-06-08T08:44:31",
+  "git": {
+    "commit_sha": "migrated-legacy",
+    "branch": "migrated-legacy",
+    "dirty": false
+  },
+  "machine": {
+    "platform": "legacy-e2e",
+    "machine": "migrated",
+    "processor": "benchmark_logs-import"
+  },
+  "env_flags": {
+    "run_live_api_tests": true,
+    "odbc_e2e_dml_stress_tests": true,
+    "odbc_e2e_codcliente_tests": true,
+    "odbc_e2e_transactional_batch": true,
+    "odbc_test_dsn_configured": true
+  },
+  "suites": [
+    {
+      "id": "odbc_dml_stress_live_e2e.sqlAnywhere",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "cases": 2.0,
+        "insert_ms": 1323.0,
+        "update_ms": 87.0,
+        "delete_ms": 90.0,
+        "total_ms": 1584.0,
+        "queued_elapsed_ms": 1374.0,
+        "rows": 100.0,
+        "concurrency": 8.0
+      }
+    },
+    {
+      "id": "odbc_dml_stress_live_e2e.sqlServer",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "cases": 2.0,
+        "insert_ms": 1257.0,
+        "update_ms": 56.0,
+        "delete_ms": 55.0,
+        "total_ms": 1449.0,
+        "queued_elapsed_ms": 1235.0,
+        "rows": 100.0,
+        "concurrency": 8.0
+      }
+    },
+    {
+      "id": "odbc_sql_execute_codcliente_live_e2e.sqlAnywhere",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "cases": 1.0
+      }
+    },
+    {
+      "id": "odbc_sql_execute_codcliente_live_e2e.sqlServer",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "cases": 1.0
+      }
+    },
+    {
+      "id": "odbc_rpc_execute_coverage_live_e2e.sqlAnywhere",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "cases": 4.0
+      }
+    },
+    {
+      "id": "odbc_rpc_execute_coverage_live_e2e.sqlServer",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "cases": 4.0
+      }
+    },
+    {
+      "id": "api_test.n/a",
+      "kind": "flutter_test",
+      "status": "fail",
+      "metrics": {
+        "passed": 2.0,
+        "failed": 2.0
+      }
+    },
+    {
+      "id": "sqlAnywhere_odbc_optin",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "passed": 7.0,
+        "skipped": 0.0,
+        "failed": 0.0,
+        "wall_ms": 9378.0
+      },
+      "wall_ms": 9378.0,
+      "log_file": "sqlAnywhere_odbc_optin.log"
+    },
+    {
+      "id": "sqlServer_odbc_optin",
+      "kind": "flutter_test",
+      "status": "pass",
+      "metrics": {
+        "passed": 7.0,
+        "skipped": 0.0,
+        "failed": 0.0,
+        "wall_ms": 9203.0
+      },
+      "wall_ms": 9203.0,
+      "log_file": "sqlServer_odbc_optin.log"
+    },
+    {
+      "id": "api_http",
+      "kind": "flutter_test",
+      "status": "fail",
+      "metrics": {
+        "passed": 2.0,
+        "skipped": 0.0,
+        "failed": 2.0,
+        "wall_ms": 62095.0
+      },
+      "wall_ms": 62095.0,
+      "log_file": "api_test.log",
+      "reason": "should successfully connect to production server; should handle different endpoints correctly"
+    }
+  ],
+  "notes": [
+    "Migrated from legacy benchmark_logs/ E2E summary (schema v1).",
+    "Connection strings, URLs, tokens and host-specific config were stripped.",
+    "Legacy scope: opt_in_e2e_excluding_live_hub",
+    "Source: D:/Developer/plug_database/plug_agente/benchmark_logs/20260608_084431/summary.json"
+  ]
+}

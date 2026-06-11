@@ -10,7 +10,7 @@ on:
       - 'installer/setup.iss'
       - 'lib/core/constants/app_version.g.dart'
       - 'lib/core/constants/app_strings.dart'
-      - 'scripts/verify_autostart_constant.ps1'
+      - 'scripts/verify_autostart_constant.py'
       - 'windows/runner/launch_args_constants.h'
   pull_request:
     paths:
@@ -20,7 +20,7 @@ on:
       - 'installer/setup.iss'
       - 'lib/core/constants/app_version.g.dart'
       - 'lib/core/constants/app_strings.dart'
-      - 'scripts/verify_autostart_constant.ps1'
+      - 'scripts/verify_autostart_constant.py'
       - 'windows/runner/launch_args_constants.h'
 
 jobs:
@@ -52,4 +52,4 @@ jobs:
 
       - name: Validate autostart argument constants
         shell: pwsh
-        run: ./scripts/verify_autostart_constant.ps1
+        run: python scripts/verify_autostart_constant.py

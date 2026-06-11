@@ -1,33 +1,24 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math' show max, min;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
-import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
-import 'package:plug_agente/domain/entities/client_token_create_request.dart';
 import 'package:plug_agente/domain/entities/client_token_list_query.dart';
-import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
-import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
-import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_content.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_footer.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_shell.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_list_panel.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_section_controller.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_details_dialog.dart';
-import 'package:plug_agente/presentation/pages/config/widgets/client_token_list_preferences.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_file_service.dart';
-import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
 import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
@@ -50,239 +41,108 @@ class ClientTokenSection extends StatefulWidget {
 }
 
 class _ClientTokenSectionState extends State<ClientTokenSection> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _clientIdController = TextEditingController();
-  final TextEditingController _agentIdController = TextEditingController();
-  final TextEditingController _payloadController = TextEditingController();
-  final TextEditingController _listClientFilterController = TextEditingController();
-  final List<ClientTokenRuleDraft> _rules = <ClientTokenRuleDraft>[];
-  final ClientTokenRuleFileService _ruleFileService = const ClientTokenRuleFileService();
-  late final ClientTokenListPreferences _listPreferences;
-  var _listPreferencesInitialized = false;
-  Timer? _clientFilterDebounceTimer;
-  final ValueNotifier<int> _createTokenDialogRevision = ValueNotifier<int>(0);
-  final FocusNode _createTokenDialogAgentFocusNode = FocusNode();
-  bool _isCreateTokenDialogOpen = false;
-
-  bool _allTables = false;
-  bool _allViews = false;
-  bool _globalCanRead = false;
-  bool _globalCanUpdate = false;
-  bool _globalCanDelete = false;
-  bool _globalCanDdl = false;
-  ClientTokenStatusFilter _tokenStatusFilter = ClientTokenStatusFilter.all;
-  ClientTokenSortOption _tokenSortOption = ClientTokenSortOption.newest;
-  bool _autoRefreshAfterCreate = true;
-  String _formError = '';
-  String? _editingTokenId;
-  int? _editingTokenVersion;
-  ClientTokenSummary? _editingTokenSnapshot;
-  bool _dialogControllerListenersAttached = false;
-
-  bool get _isGlobalScopeMode => _allTables || _allViews;
+  late final ClientTokenSectionController _controller;
+  var _controllerInitialized = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_listPreferencesInitialized) {
-      _listPreferencesInitialized = true;
-      _listPreferences = ClientTokenListPreferences(
-        () => readOptionalPresentationProvider<IAppSettingsStore>(context),
+    if (!_controllerInitialized) {
+      _controllerInitialized = true;
+      _controller = ClientTokenSectionController(
+        settingsStoreLookup: () => readOptionalPresentationProvider<IAppSettingsStore>(context),
+        onSectionChanged: () {
+          if (mounted) {
+            setState(() {});
+          }
+        },
       );
-      unawaited(_initializeTokenListState());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_initializeTokenListState());
+      });
     }
   }
 
   Future<void> _initializeTokenListState() async {
-    await _restoreTokenListPreferences();
+    final restored = _controller.restoreListPreferences();
+    if (restored != null && mounted) {
+      setState(() => _controller.applyRestoredListPreferences(restored));
+    }
     if (!mounted) {
       return;
     }
     final provider = context.read<ClientTokenProvider>();
     if (!provider.hasLoaded) {
-      await provider.loadTokens(query: _buildListQuery());
+      await provider.loadTokens(query: _controller.buildListQuery());
     }
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _clientIdController.dispose();
-    _agentIdController.dispose();
-    _payloadController.dispose();
-    _listClientFilterController.dispose();
-    _clientFilterDebounceTimer?.cancel();
-    _createTokenDialogRevision.dispose();
-    _createTokenDialogAgentFocusNode.dispose();
+    if (_controllerInitialized) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
-  void _notifyCreateTokenDialogChanged() {
-    if (_isCreateTokenDialogOpen) {
-      _createTokenDialogRevision.value++;
-      return;
-    }
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _attachDialogControllerListeners() {
-    if (_dialogControllerListenersAttached) {
-      return;
-    }
-    _nameController.addListener(_notifyCreateTokenDialogChanged);
-    _clientIdController.addListener(_notifyCreateTokenDialogChanged);
-    _agentIdController.addListener(_notifyCreateTokenDialogChanged);
-    _payloadController.addListener(_notifyCreateTokenDialogChanged);
-    _dialogControllerListenersAttached = true;
-  }
-
-  void _detachDialogControllerListeners() {
-    if (!_dialogControllerListenersAttached) {
-      return;
-    }
-    _nameController.removeListener(_notifyCreateTokenDialogChanged);
-    _clientIdController.removeListener(_notifyCreateTokenDialogChanged);
-    _agentIdController.removeListener(_notifyCreateTokenDialogChanged);
-    _payloadController.removeListener(_notifyCreateTokenDialogChanged);
-    _dialogControllerListenersAttached = false;
-  }
-
-  ClientTokenCreateRequest? _tryBuildDraftRequestFromForm() {
-    final (:payload, :error) = parseClientTokenPayloadJson(_payloadController.text);
-    if (error != null || payload == null) {
-      return null;
-    }
-    final globalPermissions = _buildGlobalPermissions();
-    return ClientTokenCreateRequest(
-      clientId: _clientIdController.text.trim(),
-      name: _nameController.text.trim(),
-      agentId: _agentIdController.text.trim().isEmpty ? null : _agentIdController.text.trim(),
-      payload: payload,
-      allTables: _allTables,
-      allViews: _allViews,
-      globalPermissions: globalPermissions,
-      rules: _isGlobalScopeMode ? const <ClientTokenRule>[] : _buildRules(),
-    );
-  }
-
-  bool _hasFormChanges() {
-    final snapshot = _editingTokenSnapshot;
-    if (snapshot == null) {
-      return true;
-    }
-    final draft = _tryBuildDraftRequestFromForm();
-    if (draft == null) {
-      return true;
-    }
-    return draft.changesAuthorizationPolicyFrom(snapshot) || draft.changesMetadataFrom(snapshot);
-  }
-
-  bool _hasPolicyChanges() {
-    final snapshot = _editingTokenSnapshot;
-    if (snapshot == null) {
-      return false;
-    }
-    final draft = _tryBuildDraftRequestFromForm();
-    if (draft == null) {
-      return false;
-    }
-    return draft.changesAuthorizationPolicyFrom(snapshot);
-  }
-
-  void _mergeRules(List<ClientTokenRuleDraft> incoming) {
-    final seen = <String>{};
-    final deduped = incoming.reversed
-        .where((d) => seen.add('${d.resource.toLowerCase()}:${d.resourceType.name}'))
-        .toList()
-        .reversed
-        .toList();
-
-    for (final draft in deduped) {
-      final existingIndex = _rules.indexWhere(
-        (r) => r.resource.toLowerCase() == draft.resource.toLowerCase() && r.resourceType == draft.resourceType,
-      );
-      if (existingIndex >= 0) {
-        _rules[existingIndex] = draft;
-      } else {
-        _rules.add(draft);
-      }
-    }
+  String _formErrorMessage(AppLocalizations l10n) {
+    return switch (_controller.formErrorKey) {
+      ClientTokenFormErrorKey.globalPermissionRequired => l10n.ctErrorGlobalPermissionRequired,
+      ClientTokenFormErrorKey.ruleOrGlobalPermissionsRequired => l10n.ctErrorRuleOrGlobalPermissionsRequired,
+      ClientTokenFormErrorKey.payloadInvalidJson => l10n.ctErrorPayloadInvalidJson,
+      ClientTokenFormErrorKey.payloadMustBeJsonObject => l10n.ctErrorPayloadMustBeJsonObject,
+      ClientTokenFormErrorKey.payloadDatabaseMustBeString => l10n.ctErrorPayloadDatabaseMustBeString,
+      ClientTokenFormErrorKey.payloadDatabaseCannotBeEmpty => l10n.ctErrorPayloadDatabaseCannotBeEmpty,
+      null => '',
+    };
   }
 
   Future<void> _openAddRuleModal() async {
-    if (_isGlobalScopeMode) {
+    if (_controller.isGlobalScopeMode) {
       return;
     }
     final result = await showClientTokenRuleDialog(
       context: context,
-      existingRules: List.unmodifiable(_rules),
+      existingRules: List.unmodifiable(_controller.rules),
     );
     if (!mounted || result == null) return;
 
-    _mergeRules(result);
+    _controller.mergeRules(result);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _notifyCreateTokenDialogChanged();
+      _controller.notifyCreateTokenDialogChanged();
     });
   }
 
   Future<void> _openEditRuleModal(int index) async {
     final result = await showClientTokenRuleDialog(
       context: context,
-      initialRule: _rules[index],
-      existingRules: List.unmodifiable(_rules),
+      initialRule: _controller.rules[index],
+      existingRules: List.unmodifiable(_controller.rules),
     );
     if (!mounted || result == null) return;
 
-    _rules[index] = result.first;
-    _notifyCreateTokenDialogChanged();
-  }
-
-  void _removeRule(int index) {
-    _rules.removeAt(index);
-    _notifyCreateTokenDialogChanged();
-  }
-
-  bool _isImportingRules = false;
-
-  void _setImportingRules(bool value) {
-    _isImportingRules = value;
-    _notifyCreateTokenDialogChanged();
+    _controller.rules[index] = result.first;
+    _controller.notifyCreateTokenDialogChanged();
   }
 
   Future<void> _handleImportRulesFromSection() async {
-    if (!mounted || _isImportingRules || _isGlobalScopeMode) return;
+    if (!mounted || _controller.isImportingRules || _controller.isGlobalScopeMode) return;
     final l10n = AppLocalizations.of(context)!;
 
-    FilePickerResult? picked;
     try {
-      picked = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['txt'],
-      );
-    } on Exception catch (e, st) {
-      developer.log('Rule import picker failed', name: 'client_token_section', error: e, stackTrace: st);
-      if (mounted) {
-        SettingsFeedback.showError(
-          context: context,
-          title: l10n.ctButtonImportRules,
-          message: l10n.ctImportRulesErrorReadFailed,
-        );
-      }
-      return;
-    }
+      final picked = await _controller.pickRulesImportFile();
+      if (picked == null || picked.files.isEmpty) return;
+      final filePath = picked.files.single.path;
+      if (filePath == null) return;
 
-    if (picked == null || picked.files.isEmpty) return;
-    final filePath = picked.files.single.path;
-    if (filePath == null) return;
+      _controller.setImportingRules(true);
 
-    _setImportingRules(true);
-
-    try {
-      final outcome = await _ruleFileService.importFromFile(filePath);
+      final outcome = await _controller.importRulesFromPath(filePath);
       if (!mounted) return;
 
       switch (outcome) {
@@ -312,37 +172,41 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             message: l10n.ctImportRulesErrorEmpty,
           );
         case ClientTokenRuleImportLoaded(:final drafts):
-          _mergeRules(drafts);
-          _notifyCreateTokenDialogChanged();
+          _controller.mergeRules(drafts);
+          _controller.notifyCreateTokenDialogChanged();
           SettingsFeedback.showSuccess(
             context: context,
             title: l10n.ctButtonImportRules,
             message: l10n.ctImportRulesSuccess(drafts.length),
           );
       }
+    } on Exception catch (e, st) {
+      developer.log('Rule import picker failed', name: 'client_token_section', error: e, stackTrace: st);
+      if (mounted) {
+        SettingsFeedback.showError(
+          context: context,
+          title: l10n.ctButtonImportRules,
+          message: l10n.ctImportRulesErrorReadFailed,
+        );
+      }
     } finally {
-      if (mounted) _setImportingRules(false);
+      if (mounted) _controller.setImportingRules(false);
     }
   }
 
   Future<void> _handleExportRules() async {
-    if (_rules.isEmpty) return;
+    if (_controller.rules.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
 
-    final tokenName = _nameController.text.trim();
+    final tokenName = _controller.nameController.text.trim();
     final defaultFileName = tokenName.isNotEmpty
         ? '${tokenName.toLowerCase().replaceAll(RegExp('[^a-z0-9]+'), '_').replaceAll(RegExp(r'_+$'), '')}.txt'
         : l10n.ctExportRulesDefaultFileName;
 
     try {
-      final savePath = await FilePicker.platform.saveFile(
-        dialogTitle: l10n.ctButtonExportRules,
-        fileName: defaultFileName,
-        type: FileType.custom,
-        allowedExtensions: ['txt'],
-      );
+      final savePath = await _controller.pickRulesExportPath(defaultFileName);
       if (savePath == null) return;
-      await _ruleFileService.exportToFile(savePath, _rules);
+      await _controller.exportRulesToPath(savePath);
     } on Exception catch (e, st) {
       developer.log(
         'Failed to export rules',
@@ -367,48 +231,14 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     final l10n = AppLocalizations.of(context)!;
     final isEditingToken = baseToken != null;
 
-    final initialRules =
-        baseToken?.rules
-            .map(
-              (rule) => ClientTokenRuleDraft(
-                resource: rule.resource.name,
-                resourceType: rule.resource.resourceType,
-                effect: rule.effect,
-                canRead: rule.permissions.canRead,
-                canUpdate: rule.permissions.canUpdate,
-                canDelete: rule.permissions.canDelete,
-                canDdl: rule.permissions.canDdl,
-              ),
-            )
-            .toList() ??
-        <ClientTokenRuleDraft>[];
-
-    setState(() {
-      _formError = '';
-      _editingTokenId = baseToken?.id;
-      _editingTokenVersion = baseToken?.version;
-      _editingTokenSnapshot = baseToken;
-      _nameController.text = baseToken?.name ?? '';
-      _clientIdController.text = baseToken?.clientId ?? _generateClientId();
-      _agentIdController.text = baseToken?.agentId ?? '';
-      _payloadController.text = baseToken?.payload.isEmpty ?? true ? '' : jsonEncode(baseToken!.payload);
-      _rules
-        ..clear()
-        ..addAll(initialRules);
-      _allTables = baseToken?.allTables ?? false;
-      _allViews = baseToken?.allViews ?? false;
-      _globalCanRead = baseToken?.globalPermissions.canRead ?? false;
-      _globalCanUpdate = baseToken?.globalPermissions.canUpdate ?? false;
-      _globalCanDelete = baseToken?.globalPermissions.canDelete ?? false;
-      _globalCanDdl = baseToken?.globalPermissions.canDdl ?? false;
-    });
+    setState(() => _controller.loadTokenIntoForm(baseToken));
     final provider = context.read<ClientTokenProvider>();
     provider.clearError();
     provider.clearLastCreatedToken();
     provider.clearLastUpdateOutcome();
 
-    _attachDialogControllerListeners();
-    _isCreateTokenDialogOpen = true;
+    _controller.attachDialogControllerListeners();
+    _controller.markCreateTokenDialogOpen(true);
     try {
       await showGeneralDialog<void>(
         context: context,
@@ -418,7 +248,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         ),
         pageBuilder: (_, primaryAnimation, secondaryAnimation) {
           return ValueListenableBuilder<int>(
-            valueListenable: _createTokenDialogRevision,
+            valueListenable: _controller.createTokenDialogRevision,
             builder: (dialogContext, revision, child) {
               final mediaQuery = MediaQuery.of(dialogContext);
               final availableHeight =
@@ -439,19 +269,21 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
               final dialogOuterMaxHeight = max(factorHeight, minPreferredOuter);
               final isCompact = dialogWidth < createTokenDialogCompactWidthBreakpoint;
               final theme = FluentTheme.of(dialogContext);
+              final dialogL10n = AppLocalizations.of(dialogContext)!;
+              final formError = _formErrorMessage(dialogL10n);
 
               return ChangeNotifierProvider<ClientTokenProvider>.value(
                 value: provider,
                 child: ClientTokenCreateDialogShell(
                   navigatorContext: dialogContext,
-                  agentFocusNode: _createTokenDialogAgentFocusNode,
+                  agentFocusNode: _controller.createTokenDialogAgentFocusNode,
                   dialogWidth: dialogWidth,
                   dialogOuterMaxHeight: dialogOuterMaxHeight,
                   theme: theme,
                   isEditingToken: isEditingToken,
                   body: (context, tokenProvider) {
-                    final hasChanges = _hasFormChanges();
-                    final policyChanged = _hasPolicyChanges();
+                    final hasChanges = _controller.hasFormChanges();
+                    final policyChanged = _controller.hasPolicyChanges();
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -461,51 +293,51 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                             isEditingToken: isEditingToken,
                             policyChanged: policyChanged,
                             hasFormChanges: hasChanges,
-                            agentFocusNode: _createTokenDialogAgentFocusNode,
-                            nameController: _nameController,
-                            clientIdController: _clientIdController,
-                            agentIdController: _agentIdController,
-                            payloadController: _payloadController,
-                            rules: _rules,
-                            allTables: _allTables,
-                            allViews: _allViews,
-                            globalCanRead: _globalCanRead,
-                            globalCanUpdate: _globalCanUpdate,
-                            globalCanDelete: _globalCanDelete,
-                            globalCanDdl: _globalCanDdl,
-                            formError: _formError,
+                            agentFocusNode: _controller.createTokenDialogAgentFocusNode,
+                            nameController: _controller.nameController,
+                            clientIdController: _controller.clientIdController,
+                            agentIdController: _controller.agentIdController,
+                            payloadController: _controller.payloadController,
+                            rules: _controller.rules,
+                            allTables: _controller.allTables,
+                            allViews: _controller.allViews,
+                            globalCanRead: _controller.globalCanRead,
+                            globalCanUpdate: _controller.globalCanUpdate,
+                            globalCanDelete: _controller.globalCanDelete,
+                            globalCanDdl: _controller.globalCanDdl,
+                            formError: formError,
                             providerError: tokenProvider.error,
                             lastCreatedToken: tokenProvider.lastCreatedToken,
                             onToggleAllTables: (value) {
-                              _allTables = value;
-                              _notifyCreateTokenDialogChanged();
+                              _controller.allTables = value;
+                              _controller.notifyCreateTokenDialogChanged();
                             },
                             onToggleAllViews: (value) {
-                              _allViews = value;
-                              _notifyCreateTokenDialogChanged();
+                              _controller.allViews = value;
+                              _controller.notifyCreateTokenDialogChanged();
                             },
                             onToggleGlobalRead: (value) {
-                              _globalCanRead = value;
-                              _notifyCreateTokenDialogChanged();
+                              _controller.globalCanRead = value;
+                              _controller.notifyCreateTokenDialogChanged();
                             },
                             onToggleGlobalUpdate: (value) {
-                              _globalCanUpdate = value;
-                              _notifyCreateTokenDialogChanged();
+                              _controller.globalCanUpdate = value;
+                              _controller.notifyCreateTokenDialogChanged();
                             },
                             onToggleGlobalDelete: (value) {
-                              _globalCanDelete = value;
-                              _notifyCreateTokenDialogChanged();
+                              _controller.globalCanDelete = value;
+                              _controller.notifyCreateTokenDialogChanged();
                             },
                             onToggleGlobalDdl: (value) {
-                              _globalCanDdl = value;
-                              _notifyCreateTokenDialogChanged();
+                              _controller.globalCanDdl = value;
+                              _controller.notifyCreateTokenDialogChanged();
                             },
                             onAddRule: _openAddRuleModal,
                             onExportRules: _handleExportRules,
                             onImportRules: _handleImportRulesFromSection,
-                            isImportingRules: _isImportingRules,
+                            isImportingRules: _controller.isImportingRules,
                             onEditRule: _openEditRuleModal,
-                            onDeleteRule: _removeRule,
+                            onDeleteRule: _controller.removeRule,
                             onDismissCreatedToken: tokenProvider.clearLastCreatedToken,
                             onFieldSubmitted: _handleSubmitToken,
                           ),
@@ -545,53 +377,27 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         },
       );
     } finally {
-      _isCreateTokenDialogOpen = false;
-      _detachDialogControllerListeners();
+      _controller.markCreateTokenDialogOpen(false);
+      _controller.detachDialogControllerListeners();
     }
   }
 
   Future<void> _handleSubmitToken() async {
-    _formError = '';
-    _notifyCreateTokenDialogChanged();
+    _controller.clearFormError();
+    _controller.notifyCreateTokenDialogChanged();
 
     final navigator = Navigator.of(context, rootNavigator: true);
     final provider = context.read<ClientTokenProvider>();
     provider.clearError();
     provider.clearLastCreatedToken();
 
-    final clientId = _clientIdController.text.trim();
-
-    final payloadResult = _parsePayload();
-    if (payloadResult == null) {
+    final request = _controller.buildSubmitRequest();
+    if (request == null) {
       return;
     }
-
-    final globalPermissions = _buildGlobalPermissions();
-    final rules = _buildRules();
-    if (_isGlobalScopeMode && !globalPermissions.hasAnyPermission) {
-      _formError = AppLocalizations.of(context)!.ctErrorGlobalPermissionRequired;
-      _notifyCreateTokenDialogChanged();
-      return;
-    }
-    if (!_isGlobalScopeMode && rules.isEmpty) {
-      _formError = AppLocalizations.of(context)!.ctErrorRuleOrGlobalPermissionsRequired;
-      _notifyCreateTokenDialogChanged();
-      return;
-    }
-
-    final request = ClientTokenCreateRequest(
-      clientId: clientId,
-      name: _nameController.text.trim(),
-      agentId: _agentIdController.text.trim().isEmpty ? null : _agentIdController.text.trim(),
-      payload: payloadResult,
-      allTables: _allTables,
-      allViews: _allViews,
-      globalPermissions: globalPermissions,
-      rules: _isGlobalScopeMode ? const <ClientTokenRule>[] : rules,
-    );
 
     final previousOffset = _getCurrentScrollOffset();
-    final currentEditingTokenId = _editingTokenId;
+    final currentEditingTokenId = _controller.editingTokenId;
     final isSuccess = currentEditingTokenId == null
         ? await provider.createToken(
             request,
@@ -601,20 +407,20 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             currentEditingTokenId,
             request,
             refreshTokens: false,
-            expectedVersion: _editingTokenVersion,
+            expectedVersion: _controller.editingTokenVersion,
           );
 
     if (isSuccess && mounted) {
-      if (_autoRefreshAfterCreate) {
+      if (_controller.autoRefreshAfterCreate) {
         await _refreshTokensPreservingPosition(previousOffset);
       }
       if (!mounted) return;
-      _formError = '';
-      _notifyCreateTokenDialogChanged();
+      _controller.clearFormError();
+      _controller.notifyCreateTokenDialogChanged();
       if (provider.error.isEmpty) {
         final outcome = provider.lastUpdateOutcome;
         final rotatedTokenValue = provider.lastCreatedToken;
-        _clearTokenDraftForm();
+        _controller.clearTokenDraftForm();
         navigator.pop();
         if (currentEditingTokenId != null) {
           _showEditOutcomeFeedback(
@@ -678,91 +484,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     }
   }
 
-  void _clearTokenDraftForm() {
-    _editingTokenId = null;
-    _editingTokenVersion = null;
-    _editingTokenSnapshot = null;
-    _clientIdController.text = _generateClientId();
-    _agentIdController.clear();
-    _payloadController.clear();
-    _rules.clear();
-    _allTables = false;
-    _allViews = false;
-    _globalCanRead = false;
-    _globalCanUpdate = false;
-    _globalCanDelete = false;
-    _globalCanDdl = false;
-  }
-
-  Map<String, dynamic>? _parsePayload() {
-    final (:payload, :error) = parseClientTokenPayloadJson(_payloadController.text);
-    if (error == null) {
-      final payloadValidationError = validateClientTokenPayload(payload!);
-      if (payloadValidationError == null) {
-        return payload;
-      }
-      _formError = switch (payloadValidationError) {
-        ClientTokenPayloadValidationError.databaseMustBeString => AppLocalizations.of(
-          context,
-        )!.ctErrorPayloadDatabaseMustBeString,
-        ClientTokenPayloadValidationError.databaseCannotBeEmpty => AppLocalizations.of(
-          context,
-        )!.ctErrorPayloadDatabaseCannotBeEmpty,
-      };
-      _notifyCreateTokenDialogChanged();
-      return null;
-    }
-    _formError = switch (error) {
-      ClientTokenPayloadParseError.invalidJson => AppLocalizations.of(context)!.ctErrorPayloadInvalidJson,
-      ClientTokenPayloadParseError.notAnObject => AppLocalizations.of(context)!.ctErrorPayloadMustBeJsonObject,
-    };
-    _notifyCreateTokenDialogChanged();
-    return null;
-  }
-
-  ClientPermissionSet _buildGlobalPermissions() {
-    if (!_isGlobalScopeMode) {
-      return ClientPermissionSet.none;
-    }
-
-    return ClientPermissionSet(
-      canRead: _globalCanRead,
-      canUpdate: _globalCanUpdate,
-      canDelete: _globalCanDelete,
-      canDdl: _globalCanDdl,
-    );
-  }
-
-  String _generateClientId() {
-    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    return 'client_$timestamp';
-  }
-
-  List<ClientTokenRule> _buildRules() {
-    final rules = <ClientTokenRule>[];
-    for (final draft in _rules) {
-      if (!draft.hasAnyPermission) {
-        continue;
-      }
-      rules.add(
-        ClientTokenRule(
-          resource: DatabaseResource(
-            resourceType: draft.resourceType,
-            name: draft.resource,
-          ),
-          permissions: ClientPermissionSet(
-            canRead: draft.canRead,
-            canUpdate: draft.canUpdate,
-            canDelete: draft.canDelete,
-            canDdl: draft.canDdl,
-          ),
-          effect: draft.effect,
-        ),
-      );
-    }
-    return rules;
-  }
-
   String _statusFilterLabel(ClientTokenStatusFilter value) {
     final l10n = AppLocalizations.of(context)!;
     return switch (value) {
@@ -782,36 +503,10 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     };
   }
 
-  void _clearTokenFilters() {
-    _listClientFilterController.clear();
-    setState(() {
-      _tokenStatusFilter = ClientTokenStatusFilter.all;
-      _tokenSortOption = ClientTokenSortOption.newest;
-    });
-    _saveTokenListPreferences();
-    _reloadTokensForCurrentFilters();
-  }
-
-  Future<void> _restoreTokenListPreferences() async {
-    final data = _listPreferences.restore();
-    if (data == null || !mounted) {
-      return;
-    }
-    setState(() {
-      _listClientFilterController.text = data.clientFilter;
-      _tokenStatusFilter = data.statusFilter;
-      _tokenSortOption = data.sortOption;
-      _autoRefreshAfterCreate = data.autoRefreshAfterCreate;
-    });
-  }
-
-  Future<void> _saveTokenListPreferences() {
-    return _listPreferences.save((
-      clientFilter: _listClientFilterController.text.trim(),
-      statusFilter: _tokenStatusFilter,
-      sortOption: _tokenSortOption,
-      autoRefreshAfterCreate: _autoRefreshAfterCreate,
-    ));
+  Future<void> _clearTokenFilters() async {
+    _controller.clearTokenFilters();
+    await _controller.saveListPreferences();
+    await _reloadTokensForCurrentFilters();
   }
 
   double? _getCurrentScrollOffset() {
@@ -826,7 +521,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     final provider = context.read<ClientTokenProvider>();
     final refreshed = await provider.loadTokens(
       silent: true,
-      query: _buildListQuery(),
+      query: _controller.buildListQuery(),
     );
     if (!refreshed || previousOffset == null || !mounted) {
       return;
@@ -950,39 +645,11 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     }
   }
 
-  void _handleClientFilterChanged(String _) {
-    _clientFilterDebounceTimer?.cancel();
-    _clientFilterDebounceTimer = Timer(
-      AppConstants.clientTokenDebounceDelay,
-      () {
-        if (!mounted) {
-          return;
-        }
-        _saveTokenListPreferences();
-        _reloadTokensForCurrentFilters();
-      },
-    );
-  }
-
-  ClientTokenListQuery _buildListQuery() {
-    return ClientTokenListQuery(
-      clientIdContains: _listClientFilterController.text.trim(),
-      status: _tokenStatusFilter,
-      sort: _tokenSortOption,
-    );
-  }
-
-  bool _hasActiveFilters() {
-    return _listClientFilterController.text.trim().isNotEmpty ||
-        _tokenStatusFilter != ClientTokenStatusFilter.all ||
-        _tokenSortOption != ClientTokenSortOption.newest;
-  }
-
   Future<void> _reloadTokensForCurrentFilters() async {
     final provider = context.read<ClientTokenProvider>();
     await provider.loadTokens(
       silent: true,
-      query: _buildListQuery(),
+      query: _controller.buildListQuery(),
     );
   }
 
@@ -1030,37 +697,39 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 hasLoaded: provider.hasLoaded,
                 isLoading: provider.isLoading,
                 hasLoadError: provider.error.isNotEmpty,
-                hasActiveFilters: _hasActiveFilters(),
-                clientFilterController: _listClientFilterController,
-                tokenStatusFilter: _tokenStatusFilter,
-                tokenSortOption: _tokenSortOption,
-                autoRefreshAfterCreate: _autoRefreshAfterCreate,
+                hasActiveFilters: _controller.hasActiveFilters(),
+                clientFilterController: _controller.listClientFilterController,
+                tokenStatusFilter: _controller.tokenStatusFilter,
+                tokenSortOption: _controller.tokenSortOption,
+                autoRefreshAfterCreate: _controller.autoRefreshAfterCreate,
                 statusLabelBuilder: _statusFilterLabel,
                 sortLabelBuilder: _sortFilterLabel,
-                onClientFilterChanged: _handleClientFilterChanged,
-                onStatusChanged: (value) {
-                  setState(() {
-                    _tokenStatusFilter = value;
+                onClientFilterChanged: (_) {
+                  _controller.handleClientFilterChanged(() async {
+                    if (!mounted) {
+                      return;
+                    }
+                    await _controller.saveListPreferences();
+                    await _reloadTokensForCurrentFilters();
                   });
-                  _saveTokenListPreferences();
-                  _reloadTokensForCurrentFilters();
                 },
-                onSortChanged: (value) {
-                  setState(() {
-                    _tokenSortOption = value;
-                  });
-                  _saveTokenListPreferences();
-                  _reloadTokensForCurrentFilters();
+                onStatusChanged: (value) async {
+                  _controller.updateTokenStatusFilter(value);
+                  await _controller.saveListPreferences();
+                  await _reloadTokensForCurrentFilters();
+                },
+                onSortChanged: (value) async {
+                  _controller.updateTokenSortOption(value);
+                  await _controller.saveListPreferences();
+                  await _reloadTokensForCurrentFilters();
                 },
                 onClearFilters: _clearTokenFilters,
-                onRefresh: () => provider.loadTokens(query: _buildListQuery()),
-                onToggleAutoRefresh: () {
-                  setState(() {
-                    _autoRefreshAfterCreate = !_autoRefreshAfterCreate;
-                  });
-                  _saveTokenListPreferences();
+                onRefresh: () => provider.loadTokens(query: _controller.buildListQuery()),
+                onToggleAutoRefresh: () async {
+                  _controller.toggleAutoRefreshAfterCreate();
+                  await _controller.saveListPreferences();
                 },
-                onRetryLoad: () => provider.loadTokens(query: _buildListQuery()),
+                onRetryLoad: () => provider.loadTokens(query: _controller.buildListQuery()),
                 scrollController: widget.scrollController,
                 isRevokingToken: provider.isRevokingToken,
                 isDeletingToken: provider.isDeletingToken,

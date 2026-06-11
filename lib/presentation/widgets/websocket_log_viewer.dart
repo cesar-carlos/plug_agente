@@ -15,6 +15,7 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/providers/sql_investigation_provider.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
+import 'package:plug_agente/presentation/widgets/websocket_log_metrics_summary_cards.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
@@ -43,242 +44,6 @@ class WebSocketLogViewer extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-}
-
-class _DeprecationSummaryCard extends StatelessWidget {
-  const _DeprecationSummaryCard({
-    required this.l10n,
-    required this.count,
-  });
-
-  final AppLocalizations l10n;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(
-          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
-        ),
-      ),
-      child: Row(
-        children: [
-          Text(
-            l10n.wsLogPreserveSqlDeprecatedUses,
-            style: context.bodyMuted,
-          ),
-          Text(
-            ': $count',
-            style: context.bodyText.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AuthorizationSummaryCard extends StatelessWidget {
-  const _AuthorizationSummaryCard({
-    required this.l10n,
-    required this.summary,
-  });
-
-  final AppLocalizations l10n;
-  final AuthorizationMetricsSummary? summary;
-
-  @override
-  Widget build(BuildContext context) {
-    if (summary == null) {
-      return const SizedBox.shrink();
-    }
-
-    final colors = context.appColors;
-    final denialRate = (summary!.denialRate * 100).toStringAsFixed(1);
-    final missingPermissionRate = (summary!.reasonRate('missing_permission') * 100).toStringAsFixed(1);
-    final tokenNotFoundRate = (summary!.reasonRate('token_not_found') * 100).toStringAsFixed(1);
-    final tokenRevokedRate = (summary!.reasonRate('token_revoked') * 100).toStringAsFixed(1);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(
-          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
-        ),
-      ),
-      child: Wrap(
-        spacing: AppSpacing.md,
-        runSpacing: AppSpacing.xs,
-        children: [
-          _SummaryChip(
-            label: l10n.wsLogAuthChecks,
-            value: summary!.total.toString(),
-          ),
-          _SummaryChip(
-            label: l10n.wsLogAllowed,
-            value: summary!.totalAuthorized.toString(),
-            valueColor: colors.success,
-          ),
-          _SummaryChip(
-            label: l10n.wsLogDenied,
-            value: summary!.totalDenied.toString(),
-            valueColor: summary!.totalDenied > 0 ? colors.error : null,
-          ),
-          _SummaryChip(
-            label: l10n.wsLogDenialRate,
-            value: '$denialRate%',
-            valueColor: summary!.totalDenied > 0 ? colors.error : null,
-          ),
-          _SummaryChip(
-            label: l10n.wsLogP95Latency,
-            value: _formatLatency(summary!.overallP95LatencyMs),
-          ),
-          _SummaryChip(
-            label: l10n.wsLogP99Latency,
-            value: _formatLatency(summary!.overallP99LatencyMs),
-          ),
-          _SummaryChip(
-            label: l10n.wsLogAuthMissingPermission,
-            value: '$missingPermissionRate%',
-          ),
-          _SummaryChip(
-            label: l10n.wsLogAuthTokenNotFound,
-            value: '$tokenNotFoundRate%',
-          ),
-          _SummaryChip(
-            label: l10n.wsLogAuthTokenRevoked,
-            value: '$tokenRevokedRate%',
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatLatency(int latencyMs) {
-    if (latencyMs <= 0) {
-      return 'n/a';
-    }
-    return '${latencyMs}ms';
-  }
-}
-
-class _ProtocolMetricsSummaryCard extends StatelessWidget {
-  const _ProtocolMetricsSummaryCard({
-    required this.summary,
-  });
-
-  final ProtocolMetricsSummary? summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final current = summary;
-    if (current == null || current.totalMessages == 0) {
-      return const SizedBox.shrink();
-    }
-
-    final colors = context.appColors;
-    final saved = _formatBytes(current.totalBytesSaved);
-    final efficiency = (current.compressionEfficiency * 100).toStringAsFixed(1);
-    final successRate = (current.successRate * 100).toStringAsFixed(1);
-    final p95Total = _formatMicros(current.totalDurationPercentiles.p95Us);
-    final p95Encode = _formatMicros(current.encodeDurationPercentiles.p95Us);
-    final p95Compress = _formatMicros(current.compressDurationPercentiles.p95Us);
-    final p95Decode = _formatMicros(current.decodeDurationPercentiles.p95Us);
-    final p95Sign = _formatMicros(current.signDurationPercentiles.p95Us);
-    final p95Verify = _formatMicros(current.verifyDurationPercentiles.p95Us);
-    final p95Canonicalize = _formatMicros(current.canonicalizeDurationPercentiles.p95Us);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(
-          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
-        ),
-      ),
-      child: Wrap(
-        spacing: AppSpacing.md,
-        runSpacing: AppSpacing.xs,
-        children: [
-          _SummaryChip(label: 'protocol messages', value: current.totalMessages.toString()),
-          _SummaryChip(label: 'success', value: '$successRate%'),
-          _SummaryChip(
-            label: 'errors',
-            value: current.errorCount.toString(),
-            valueColor: current.errorCount > 0 ? colors.error : null,
-          ),
-          _SummaryChip(label: 'saved', value: '$saved ($efficiency%)'),
-          _SummaryChip(label: 'p95 total', value: p95Total),
-          _SummaryChip(label: 'p95 encode', value: p95Encode),
-          _SummaryChip(label: 'p95 gzip', value: p95Compress),
-          _SummaryChip(label: 'p95 decode', value: p95Decode),
-          if (current.signDurationPercentiles.p95Us > 0) _SummaryChip(label: 'p95 sign', value: p95Sign),
-          if (current.verifyDurationPercentiles.p95Us > 0) _SummaryChip(label: 'p95 verify', value: p95Verify),
-          if (current.canonicalizeDurationPercentiles.p95Us > 0)
-            _SummaryChip(label: 'p95 canonicalize', value: p95Canonicalize),
-          _SummaryChip(label: 'isolates', value: current.totalIsolateOperations.toString()),
-        ],
-      ),
-    );
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes.abs() >= 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
-    }
-    if (bytes.abs() >= 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    }
-    return '${bytes}B';
-  }
-
-  String _formatMicros(int micros) {
-    if (micros <= 0) {
-      return 'n/a';
-    }
-    if (micros >= 1000) {
-      return '${(micros / 1000).toStringAsFixed(1)}ms';
-    }
-    return '${micros}us';
-  }
-}
-
-class _SummaryChip extends StatelessWidget {
-  const _SummaryChip({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
-
-  final String label;
-  final String value;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('$label: ', style: context.bodyMuted),
-        Text(
-          value,
-          style: context.bodyText.copyWith(
-            fontWeight: FontWeight.w700,
-            color: valueColor,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -485,14 +250,14 @@ class _WebSocketMessageListPane extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _AuthorizationSummaryCard(l10n: l10n, summary: authSummary),
+              WebSocketLogAuthorizationSummaryCard(l10n: l10n, summary: authSummary),
               if (protocol != null && protocol.totalMessages > 0) ...[
                 const SizedBox(height: AppSpacing.sm),
-                _ProtocolMetricsSummaryCard(summary: protocol),
+                WebSocketLogProtocolMetricsSummaryCard(summary: protocol),
               ],
               if (deprecations != null) ...[
                 const SizedBox(height: AppSpacing.sm),
-                _DeprecationSummaryCard(
+                WebSocketLogDeprecationSummaryCard(
                   l10n: l10n,
                   count: deprecations,
                 ),

@@ -147,7 +147,7 @@ void main() {
   print('');
   print('[ok] Live Hub agent.action environment is ready.');
   print('  Probe: flutter test test/integration/hub_socket_live_e2e_test.dart --name "signed PayloadFrame"');
-  print(r'  Run: .\tool\homologate_hub_agent_actions.ps1 -RunLiveTests');
+  print('  Run: python tool/homologate_hub_agent_actions.py --run-live-tests');
   print('  Or:  flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags live');
   exit(0);
 }

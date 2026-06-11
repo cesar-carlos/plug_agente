@@ -21,6 +21,6 @@ agente. Foco no eixo ODBC + fila SQL + circuit breaker + observabilidade.
   (`sql_execute_handler.dart`, `sql_batch_handler.dart`, etc.); ponto de entrada
   `sql_rpc_method_handler_operations.dart`. Mapa resumido em
   `docs/project_overview.md` (secao Sql RPC).
-- Wrappers operacionais Windows: `tool/run_odbc_operational_validation.ps1`,
-  `tool/odbc_async_benchmark.ps1`, `tool/odbc_streaming_benchmark.ps1`,
-  `tool/odbc_driver_matrix_benchmark.ps1`.
+- Wrappers operacionais: `python tool/run_odbc_operational_validation.py`,
+  `python tool/odbc_async_benchmark.py`, `python tool/odbc_streaming_benchmark.py`,
+  `python tool/odbc_driver_matrix_benchmark.py`.

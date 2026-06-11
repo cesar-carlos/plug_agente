@@ -32,8 +32,8 @@ timestampada e versionada por execucao em `artifacts/odbc_validation/`.
 No Windows:
 
 ```powershell
-.\tool\run_odbc_operational_validation.ps1
-.\tool\run_odbc_operational_validation.ps1 -All
+python tool/run_odbc_operational_validation.py
+python tool/run_odbc_operational_validation.py --all
 ```
 
 Cada execucao gera uma subpasta timestampada em `artifacts/odbc_validation/`
@@ -87,19 +87,19 @@ etapas rodar.
 6. Benchmark async ODBC:
 
    ```powershell
-   .\tool\odbc_async_benchmark.ps1
+   python tool/odbc_async_benchmark.py
    ```
 
 7. Benchmark streaming:
 
    ```powershell
-   .\tool\odbc_streaming_benchmark.ps1
+   python tool/odbc_streaming_benchmark.py
    ```
 
 8. Driver matrix (se houver mais de um DSN configurado):
 
    ```powershell
-   .\tool\odbc_driver_matrix_benchmark.ps1
+   python tool/odbc_driver_matrix_benchmark.py
    ```
 
 ## Como ler o snapshot de health

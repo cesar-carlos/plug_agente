@@ -36,32 +36,32 @@ void main() {
 
   test('should require homologate script to load contract paths from manifest', () {
     final script = File(
-      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}homologate_hub_agent_actions.ps1',
+      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}homologate_hub_agent_actions.py',
     ).readAsStringSync();
 
     expect(script, contains('agent_actions_contract_test_paths.txt'));
     expect(script, contains('agent_actions_ui_test_paths.txt'));
-    expect(script, contains('Get-ManifestTestPaths'));
+    expect(script, contains('read_manifest_test_paths'));
   });
 
-  test('should pass RunContractTests switch from operational gate script', () {
+  test('should pass run-contract-tests flag from operational gate script', () {
     final script = File(
-      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}run_agent_actions_operational_gate.ps1',
+      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}run_agent_actions_operational_gate.py',
     ).readAsStringSync();
 
-    expect(script, contains(r'RunContractTests = $true'));
-    expect(script, isNot(contains("@('-RunContractTests')")));
-    expect(script, isNot(contains('@("-RunContractTests")')));
+    expect(script, contains('--run-contract-tests'));
+    expect(script, isNot(contains("'-RunContractTests'")));
+    expect(script, isNot(contains('"-RunContractTests"')));
   });
 
-  test('should pass homologate switches via hashtable from preflight script', () {
+  test('should pass homologate flags from preflight script', () {
     final script = File(
-      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}preflight_agent_actions_production.ps1',
+      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}preflight_agent_actions_production.py',
     ).readAsStringSync();
 
-    expect(script, contains(r"homologateParams['RunContractTests'] = $true"));
-    expect(script, contains('@homologateParams'));
-    expect(script, isNot(contains('homologateArgs += "-RunContractTests"')));
+    expect(script, contains('"--run-contract-tests": args.run_contract_tests'));
+    expect(script, contains('homologate_args'));
+    expect(script, isNot(contains('homologate_args += "--run-contract-tests"')));
   });
 
   test('should not contain duplicate entries in contract manifest', () {
@@ -89,12 +89,12 @@ void main() {
     );
   });
 
-  test('should run security gate checklist when homologate RunContractTests is enabled', () {
+  test('should run security gate checklist when homologate run-contract-tests is enabled', () {
     final script = File(
-      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}homologate_hub_agent_actions.ps1',
+      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}homologate_hub_agent_actions.py',
     ).readAsStringSync();
 
     expect(script, contains('agent_action_security_gate_checklist.dart'));
-    expect(script, contains(r'if ($RunContractTests)'));
+    expect(script, contains('if args.run_contract_tests'));
   });
 }

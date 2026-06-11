@@ -4,9 +4,8 @@ import 'dart:math' as math;
 
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/constants/direct_odbc_operation_class.dart';
-import 'package:plug_agente/domain/domain.dart' show IIdempotencyStore;
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart' show IIdempotencyStore;
-import 'package:plug_agente/domain/repositories/repositories.dart' show IIdempotencyStore;
+
 /// Constantes para configuração de conexões ODBC e Socket.IO.
 class ConnectionConstants {
   ConnectionConstants._();

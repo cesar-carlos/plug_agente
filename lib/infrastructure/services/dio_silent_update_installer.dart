@@ -1,35 +1,20 @@
-import 'dart:async';
-import 'dart:ffi';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/security/helper_signature_probe.dart';
-import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/errors/silent_install_failure.dart';
 import 'package:plug_agente/domain/services/silent_update_installer.dart';
+import 'package:plug_agente/infrastructure/services/silent_update_installer_download.dart';
+import 'package:plug_agente/infrastructure/services/silent_update_installer_file_ops.dart';
+import 'package:plug_agente/infrastructure/services/silent_update_installer_platform.dart';
+import 'package:plug_agente/infrastructure/services/silent_update_installer_types.dart';
 import 'package:result_dart/result_dart.dart';
-import 'package:win32/win32.dart' as win32;
 
-typedef DioFactoryFn = Dio Function();
-typedef HttpClientFactory = HttpClient Function();
-typedef SilentUpdateProcessStarter =
-    Future<Process> Function(
-      String executable,
-      List<String> arguments, {
-      ProcessStartMode mode,
-    });
-typedef InstallDirectoryResolver = Future<String> Function();
-typedef InstallDirectoryWritableProbe = Future<bool> Function(String installDirectory);
-typedef UpdateHelperPathResolver = Future<String> Function();
-typedef CurrentProcessIdResolver = int Function();
-typedef UpdateDirectorySecurityHardener = Future<String> Function(String updateDirectory);
-typedef DiskFreeSpaceResolver = Future<int?> Function(String directoryPath);
+export 'silent_update_installer_types.dart';
 
 /// Silent update installer that downloads assets via [Dio] per project stack rules.
 class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
@@ -46,34 +31,40 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
     IHelperSignatureProbe? helperSignatureProbe,
     DiskFreeSpaceResolver? diskFreeSpaceResolver,
     Duration downloadTimeout = _defaultDownloadTimeout,
-  }) : _dioFactory =
-           dioFactory ??
-           (httpClientFactory != null
-               ? () {
-                   final dio = Dio(
-                     BaseOptions(
-                       receiveTimeout: downloadTimeout,
-                       sendTimeout: downloadTimeout,
-                     ),
-                   );
-                   dio.httpClientAdapter = IOHttpClientAdapter(
-                     createHttpClient: httpClientFactory,
-                   );
-                   return dio;
-                 }
-               : () => _createPlainDio(downloadTimeout)),
-       _processStarter = processStarter ?? Process.start,
-       _downloadDirectoryResolver = downloadDirectoryResolver ?? _resolveDefaultDownloadDirectory,
-       _installDirectoryResolver = installDirectoryResolver ?? _resolveDefaultInstallDirectory,
-       _installDirectoryWritableProbe = installDirectoryWritableProbe ?? _canWriteToInstallDirectory,
-       _updateHelperPathResolver = updateHelperPathResolver ?? _resolveDefaultUpdateHelperPath,
-       _currentProcessIdResolver = currentProcessIdResolver ?? _resolveCurrentProcessId,
-       _updateDirectorySecurityHardener = updateDirectorySecurityHardener ?? _hardenUpdateDirectoryBestEffort,
+  }) : _processStarter = processStarter ?? Process.start,
+       _downloadDirectoryResolver =
+           downloadDirectoryResolver ?? SilentUpdateInstallerPlatform.resolveDefaultDownloadDirectory,
+       _installDirectoryResolver =
+           installDirectoryResolver ?? SilentUpdateInstallerPlatform.resolveDefaultInstallDirectory,
+       _installDirectoryWritableProbe =
+           installDirectoryWritableProbe ?? SilentUpdateInstallerPlatform.canWriteToInstallDirectory,
+       _updateHelperPathResolver =
+           updateHelperPathResolver ?? SilentUpdateInstallerPlatform.resolveDefaultUpdateHelperPath,
+       _currentProcessIdResolver = currentProcessIdResolver ?? SilentUpdateInstallerPlatform.resolveCurrentProcessId,
+       _updateDirectorySecurityHardener =
+           updateDirectorySecurityHardener ?? SilentUpdateInstallerPlatform.hardenUpdateDirectoryBestEffort,
        _helperSignatureProbe = helperSignatureProbe ?? PowerShellHelperSignatureProbe(),
-       _diskFreeSpaceResolver = diskFreeSpaceResolver ?? _resolveDefaultDiskFreeSpace,
-       _downloadTimeout = downloadTimeout;
+       _diskFreeSpaceResolver = diskFreeSpaceResolver ?? SilentUpdateInstallerPlatform.resolveDefaultDiskFreeSpace,
+       _downloader = SilentUpdateInstallerDownload(
+         dioFactory:
+             dioFactory ??
+             (httpClientFactory != null
+                 ? () {
+                     final dio = Dio(
+                       BaseOptions(
+                         receiveTimeout: downloadTimeout,
+                         sendTimeout: downloadTimeout,
+                       ),
+                     );
+                     dio.httpClientAdapter = IOHttpClientAdapter(
+                       createHttpClient: httpClientFactory,
+                     );
+                     return dio;
+                   }
+                 : () => _createPlainDio(downloadTimeout)),
+         downloadTimeout: downloadTimeout,
+       );
 
-  final DioFactoryFn _dioFactory;
   final SilentUpdateProcessStarter _processStarter;
   final Future<String> Function() _downloadDirectoryResolver;
   final InstallDirectoryResolver _installDirectoryResolver;
@@ -83,20 +74,18 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
   final UpdateDirectorySecurityHardener _updateDirectorySecurityHardener;
   final IHelperSignatureProbe _helperSignatureProbe;
   final DiskFreeSpaceResolver _diskFreeSpaceResolver;
-  final Duration _downloadTimeout;
+  final SilentUpdateInstallerDownload _downloader;
 
   /// Multiplier used to budget free space relative to the asset size. The
   /// install path writes the `.part`, renames to `.exe`, and the helper
   /// later runs the setup which extracts its payload — a 2x headroom keeps
   /// rare cases (chunky filesystem, AV temp files) from running out of
   /// space mid-install.
-  static const int _diskSpaceBudgetMultiplier = 2;
+  static const int diskSpaceBudgetMultiplier = 2;
 
   static final RegExp _sha256Pattern = RegExp(r'^[0-9a-f]{64}$');
   static const int _waitPidTimeoutSeconds = 45;
   static const Duration _defaultDownloadTimeout = Duration(minutes: 5);
-  static const Duration _icaclsTimeout = Duration(seconds: 30);
-  static const Duration _cancelPollInterval = Duration(milliseconds: 100);
 
   static Dio _createPlainDio(Duration timeout) {
     final dio = Dio(
@@ -151,10 +140,7 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
     final downloadDirectory = Directory(downloadDirectoryPath);
     await downloadDirectory.create(recursive: true);
 
-    // Pre-flight: refuse to start when the filesystem cannot hold the
-    // download plus headroom. Bubbles a clear ValidationFailure instead of
-    // letting the stream blow up half-way with a generic FileSystemException.
-    final requiredBytes = request.assetSize * _diskSpaceBudgetMultiplier;
+    final requiredBytes = request.assetSize * diskSpaceBudgetMultiplier;
     final freeBytes = await _diskFreeSpaceResolver(downloadDirectory.path);
     if (freeBytes != null && freeBytes < requiredBytes) {
       return Failure<SilentUpdateInstallResult, Exception>(
@@ -177,42 +163,33 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
 
     final updateDirectorySecurityStatus = await _updateDirectorySecurityHardener(downloadDirectory.path);
 
-    final installerName = _sanitizeFileName(
+    final installerName = SilentUpdateInstallerFileOps.sanitizeFileName(
       request.assetName.isNotEmpty ? request.assetName : p.basename(assetUri.path),
     );
     final installerPath = p.join(downloadDirectory.path, installerName);
     final partPath = '$installerPath.part';
     final logPath = p.join(
       downloadDirectory.path,
-      'PlugAgente-Update-${_sanitizeFileName(request.version)}.log',
+      'PlugAgente-Update-${SilentUpdateInstallerFileOps.sanitizeFileName(request.version)}.log',
     );
     final launcherPath = p.join(
       downloadDirectory.path,
-      'PlugAgente-Update-Helper-${_sanitizeFileName(request.version)}.exe',
+      'PlugAgente-Update-Helper-${SilentUpdateInstallerFileOps.sanitizeFileName(request.version)}.exe',
     );
     final launcherStatusPath = p.join(
       downloadDirectory.path,
-      'PlugAgente-Update-Helper-${_sanitizeFileName(request.version)}.status.json',
+      'PlugAgente-Update-Helper-${SilentUpdateInstallerFileOps.sanitizeFileName(request.version)}.status.json',
     );
 
     final partFile = File(partPath);
     final resumeEnabled = request.allowDownloadResume;
-    // Set to true only when a transient transport error leaves a usable
-    // partial behind; in that case the `finally` keeps the `.part` so the
-    // next attempt can resume via Range instead of re-downloading the whole
-    // installer. Every other exit (success, validation/hash mismatch,
-    // cancellation) wipes it.
     var preservePartForResume = false;
     try {
-      // When resume is on we keep the .part across retries; the _download
-      // helper inspects it to decide between Range and full restart. When
-      // resume is off we always start fresh to preserve the pre-existing
-      // contract (each install attempt downloads the whole file).
       if (!resumeEnabled && partFile.existsSync()) {
         partFile.deleteSync();
       }
 
-      final downloadResult = await _download(
+      final downloadResult = await _downloader.download(
         assetUri,
         partFile,
         expectedSize: request.assetSize,
@@ -226,18 +203,19 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
         (error) => downloadError = error,
       );
       if (downloadError != null) {
-        preservePartForResume = resumeEnabled && _isResumableDownloadError(downloadError!);
+        preservePartForResume =
+            resumeEnabled && SilentUpdateInstallerDownload.isResumableDownloadError(downloadError!);
         return Failure<SilentUpdateInstallResult, Exception>(downloadError!);
       }
 
       if (request.cancelRequested?.call() ?? false) {
-        _deleteIfExists(partFile);
+        SilentUpdateInstallerFileOps.deleteIfExists(partFile);
         return _cancelledFailure(request.version);
       }
 
       final actualSize = partFile.lengthSync();
       if (actualSize != request.assetSize) {
-        _deleteIfExists(partFile);
+        SilentUpdateInstallerFileOps.deleteIfExists(partFile);
         return Failure<SilentUpdateInstallResult, Exception>(
           domain.ValidationFailure.withContext(
             message: 'Silent update asset size does not match appcast length',
@@ -251,9 +229,9 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
         );
       }
 
-      final actualSha256 = await _sha256OfStreaming(partFile);
+      final actualSha256 = await SilentUpdateInstallerFileOps.sha256OfStreaming(partFile);
       if (actualSha256 != sha256Value) {
-        _deleteIfExists(partFile);
+        SilentUpdateInstallerFileOps.deleteIfExists(partFile);
         return Failure<SilentUpdateInstallResult, Exception>(
           domain.ValidationFailure.withContext(
             message: 'Silent update asset SHA-256 does not match appcast digest',
@@ -274,7 +252,7 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       partFile.renameSync(installerPath);
 
       if (request.cancelRequested?.call() ?? false) {
-        _deleteIfExists(installerFile);
+        SilentUpdateInstallerFileOps.deleteIfExists(installerFile);
         return _cancelledFailure(request.version);
       }
 
@@ -301,11 +279,6 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       if (launcherFile.existsSync()) {
         launcherFile.deleteSync();
       }
-      // Probe the source helper's Authenticode signature *before* copying
-      // it to the updates directory, so a tampered helper is rejected on
-      // the install path rather than caught by Windows later. Probe is
-      // cached per session in the implementation so repeated checks within
-      // a single process cost nothing after the first.
       final helperSignatureStatus = await _helperSignatureProbe.probe(installedHelperPath);
       if (request.requireValidSignature && helperSignatureStatus != HelperSignatureStatus.valid) {
         return Failure<SilentUpdateInstallResult, Exception>(
@@ -326,11 +299,11 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
 
       installedHelperFile.copySync(launcherPath);
       final appPid = _currentProcessIdResolver();
-      final helperSha256 = await _sha256OfFileBestEffort(installedHelperFile);
+      final helperSha256 = await SilentUpdateInstallerFileOps.sha256OfFileBestEffort(installedHelperFile);
 
       if (request.cancelRequested?.call() ?? false) {
-        _deleteIfExists(launcherFile);
-        _deleteIfExists(installerFile);
+        SilentUpdateInstallerFileOps.deleteIfExists(launcherFile);
+        SilentUpdateInstallerFileOps.deleteIfExists(installerFile);
         return _cancelledFailure(request.version);
       }
 
@@ -381,22 +354,9 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       );
     } finally {
       if (!preservePartForResume) {
-        _deleteIfExists(partFile);
+        SilentUpdateInstallerFileOps.deleteIfExists(partFile);
       }
     }
-  }
-
-  /// A `.part` is only worth keeping for a follow-up resume when the failure
-  /// was a transient transport error (timeout, dropped connection, 5xx, etc.,
-  /// all mapped to [domain.NetworkFailure]). Validation failures (size/hash
-  /// mismatch, appcast length overrun) mean the bytes on disk are poisoned,
-  /// and cancellations are explicit user intent — both must wipe the partial
-  /// so the next attempt starts clean.
-  static bool _isResumableDownloadError(Exception error) {
-    if (error is SilentInstallCancellationFailure) {
-      return false;
-    }
-    return error is domain.NetworkFailure;
   }
 
   @override
@@ -420,13 +380,6 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       );
     }
 
-    // Defense-in-depth against TOCTOU: the staged helper lives in the updates
-    // directory, where the current user keeps Modify rights so the agent can
-    // write there. `install()` only verified the *source* helper before
-    // copying it; by the time apply runs (user click or shutdown, possibly
-    // long after the download) a same-user process could have swapped the
-    // copy. Re-probe the *copied* helper's Authenticode right before launch so
-    // a tampered binary cannot be handed to the elevation prompt.
     if (request.requireValidSignature) {
       final launcherSignatureStatus = await _helperSignatureProbe.probe(request.launcherPath);
       if (launcherSignatureStatus != HelperSignatureStatus.valid) {
@@ -518,222 +471,6 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
     );
   }
 
-  Future<Result<void>> _download(
-    Uri assetUri,
-    File destination, {
-    required int expectedSize,
-    required String version,
-    required bool resume,
-    bool Function()? cancelRequested,
-  }) async {
-    if (cancelRequested?.call() ?? false) {
-      return _cancelledDownloadFailure(assetUri, version);
-    }
-
-    var startOffset = 0;
-    if (resume && destination.existsSync()) {
-      final existing = destination.lengthSync();
-      if (existing > 0 && existing < expectedSize) {
-        startOffset = existing;
-      } else if (existing >= expectedSize) {
-        destination.deleteSync();
-      }
-    }
-
-    final dio = _dioFactory();
-    dio.options.connectTimeout = _downloadTimeout;
-    dio.options.receiveTimeout = _downloadTimeout;
-    dio.options.sendTimeout = _downloadTimeout;
-    var didTimeOut = false;
-    var didCancel = false;
-    final timeoutTimer = Timer(_downloadTimeout, () {
-      didTimeOut = true;
-      didCancel = true;
-      dio.close(force: true);
-    });
-    Timer? cancelPollTimer;
-    if (cancelRequested != null) {
-      cancelPollTimer = Timer.periodic(_cancelPollInterval, (_) {
-        if (cancelRequested.call()) {
-          didCancel = true;
-          dio.close(force: true);
-        }
-      });
-    }
-    try {
-      final headers = <String, String>{'Cache-Control': 'no-cache'};
-      if (startOffset > 0) {
-        headers['Range'] = 'bytes=$startOffset-';
-      }
-      final response = await dio
-          .get<ResponseBody>(
-            assetUri.toString(),
-            options: Options(
-              responseType: ResponseType.stream,
-              connectTimeout: _downloadTimeout,
-              receiveTimeout: _downloadTimeout,
-              sendTimeout: _downloadTimeout,
-              headers: headers,
-            ),
-          )
-          .timeout(
-            _downloadTimeout,
-            onTimeout: () {
-              didTimeOut = true;
-              dio.close(force: true);
-              throw TimeoutException('Silent update asset download timed out', _downloadTimeout);
-            },
-          );
-      if (cancelRequested?.call() ?? false) {
-        didCancel = true;
-        return _cancelledDownloadFailure(assetUri, version);
-      }
-      final statusCode = response.statusCode ?? 0;
-      if (statusCode < 200 || statusCode >= 300) {
-        return Failure(
-          domain.NetworkFailure.withContext(
-            message: 'Silent update asset download failed',
-            context: <String, dynamic>{
-              'operation': 'silentUpdateDownload',
-              'status_code': statusCode,
-              'asset_url': assetUri.toString(),
-            },
-          ),
-        );
-      }
-
-      var effectiveStartOffset = startOffset;
-      final acceptedResume = statusCode == 206;
-      if (startOffset > 0 && !acceptedResume) {
-        effectiveStartOffset = 0;
-        if (destination.existsSync()) {
-          destination.deleteSync();
-        }
-      }
-
-      final reported = response.headers.value(HttpHeaders.contentLengthHeader);
-      final reportedLength = reported == null ? -1 : int.tryParse(reported) ?? -1;
-      if (reportedLength > 0 && effectiveStartOffset + reportedLength > expectedSize) {
-        return Failure(
-          domain.ValidationFailure.withContext(
-            message: 'Silent update asset download exceeded appcast length',
-            context: <String, dynamic>{
-              'operation': 'silentUpdateDownload',
-              'version': version,
-              'expected_size': expectedSize,
-              'content_length': reportedLength,
-              'start_offset': effectiveStartOffset,
-              'asset_url': assetUri.toString(),
-            },
-          ),
-        );
-      }
-
-      final body = response.data;
-      if (body == null) {
-        return Failure(
-          domain.NetworkFailure.withContext(
-            message: 'Silent update asset download failed',
-            context: <String, dynamic>{
-              'operation': 'silentUpdateDownload',
-              'asset_url': assetUri.toString(),
-            },
-          ),
-        );
-      }
-
-      final sink = effectiveStartOffset > 0 ? destination.openWrite(mode: FileMode.append) : destination.openWrite();
-      try {
-        var downloadedBytes = effectiveStartOffset;
-        await for (final chunk in body.stream) {
-          if (cancelRequested?.call() ?? false) {
-            didCancel = true;
-            break;
-          }
-          downloadedBytes += chunk.length;
-          if (downloadedBytes > expectedSize) {
-            return Failure(
-              domain.ValidationFailure.withContext(
-                message: 'Silent update asset download exceeded appcast length',
-                context: <String, dynamic>{
-                  'operation': 'silentUpdateDownload',
-                  'version': version,
-                  'expected_size': expectedSize,
-                  'downloaded_size': downloadedBytes,
-                  'asset_url': assetUri.toString(),
-                },
-              ),
-            );
-          }
-          sink.add(chunk);
-        }
-      } finally {
-        await sink.close();
-      }
-      if (didCancel) {
-        return _cancelledDownloadFailure(assetUri, version);
-      }
-      return const Success(unit);
-    } on DioException catch (error) {
-      if (didTimeOut) {
-        return _downloadTimeoutFailure(assetUri, error);
-      }
-      if (didCancel || (cancelRequested?.call() ?? false)) {
-        return _cancelledDownloadFailure(assetUri, version);
-      }
-      if (error.type == DioExceptionType.receiveTimeout ||
-          error.type == DioExceptionType.sendTimeout ||
-          error.type == DioExceptionType.connectionTimeout) {
-        return _downloadTimeoutFailure(assetUri, error);
-      }
-      final statusCode = error.response?.statusCode;
-      if (statusCode != null) {
-        return Failure(
-          domain.NetworkFailure.withContext(
-            message: 'Silent update asset download failed',
-            context: <String, dynamic>{
-              'operation': 'silentUpdateDownload',
-              'status_code': statusCode,
-              'asset_url': assetUri.toString(),
-            },
-          ),
-        );
-      }
-      return Failure(
-        domain.NetworkFailure.withContext(
-          message: 'Silent update asset download failed',
-          cause: error,
-          context: <String, dynamic>{
-            'operation': 'silentUpdateDownload',
-            'asset_url': assetUri.toString(),
-          },
-        ),
-      );
-    } on TimeoutException catch (error) {
-      return _downloadTimeoutFailure(assetUri, error);
-    } on Exception catch (error) {
-      if (didTimeOut) {
-        return _downloadTimeoutFailure(assetUri, error);
-      }
-      if (didCancel) {
-        return _cancelledDownloadFailure(assetUri, version);
-      }
-      return Failure(
-        domain.NetworkFailure.withContext(
-          message: 'Silent update asset download failed',
-          cause: error,
-          context: <String, dynamic>{
-            'operation': 'silentUpdateDownload',
-            'asset_url': assetUri.toString(),
-          },
-        ),
-      );
-    } finally {
-      timeoutTimer.cancel();
-      cancelPollTimer?.cancel();
-    }
-  }
-
   Result<SilentUpdateInstallResult> _cancelledFailure(String version) {
     return Failure<SilentUpdateInstallResult, Exception>(
       SilentInstallCancellationFailure(
@@ -746,147 +483,6 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
     );
   }
 
-  Result<void> _cancelledDownloadFailure(Uri assetUri, String version) {
-    return Failure(
-      SilentInstallCancellationFailure(
-        message: 'Silent update download cancelled before completion',
-        context: <String, dynamic>{
-          'operation': 'silentUpdateDownload',
-          'asset_url': assetUri.toString(),
-          'version': version,
-        },
-      ),
-    );
-  }
-
-  Result<void> _downloadTimeoutFailure(
-    Uri assetUri,
-    Exception error,
-  ) {
-    return Failure(
-      domain.NetworkFailure.withContext(
-        message: 'Silent update asset download timed out',
-        cause: error,
-        context: <String, dynamic>{
-          'operation': 'silentUpdateDownload',
-          'asset_url': assetUri.toString(),
-          'timeout_ms': _downloadTimeout.inMilliseconds,
-        },
-      ),
-    );
-  }
-
-  static Future<String> _resolveDefaultDownloadDirectory() async {
-    final context = await GlobalStoragePathResolver.resolveContext();
-    return p.join(context.appDirectoryPath, 'updates');
-  }
-
-  static Future<String> _resolveDefaultInstallDirectory() async {
-    return File(Platform.resolvedExecutable).parent.path;
-  }
-
-  static Future<String> _resolveDefaultUpdateHelperPath() async {
-    return p.join(File(Platform.resolvedExecutable).parent.path, 'plug_update_helper.exe');
-  }
-
-  static int _resolveCurrentProcessId() => pid;
-
-  /// Resolves free disk space on the volume that hosts [directoryPath].
-  ///
-  /// On Windows uses `GetDiskFreeSpaceExW` via FFI; on other platforms or
-  /// when the syscall fails returns `null` so the installer falls back to
-  /// best-effort (skips the check). Returning `null` is intentionally
-  /// distinct from `0` so a real "no space" answer can still block.
-  static Future<int?> _resolveDefaultDiskFreeSpace(String directoryPath) async {
-    if (!Platform.isWindows) return null;
-    final pathPtr = directoryPath.toNativeUtf16();
-    final freeBytesAvailable = calloc<Uint64>();
-    final totalNumberOfBytes = calloc<Uint64>();
-    final totalNumberOfFreeBytes = calloc<Uint64>();
-    try {
-      final ok = win32.GetDiskFreeSpaceEx(
-        pathPtr,
-        freeBytesAvailable.cast(),
-        totalNumberOfBytes.cast(),
-        totalNumberOfFreeBytes.cast(),
-      );
-      if (ok == 0) return null;
-      // FreeBytesAvailable reports the space available to the caller's
-      // quota (preferred when ACLs limit the process), falling back to
-      // total free when zero (rare).
-      final available = freeBytesAvailable.value;
-      if (available > 0) return available;
-      final totalFree = totalNumberOfFreeBytes.value;
-      return totalFree > 0 ? totalFree : 0;
-    } on Object {
-      return null;
-    } finally {
-      calloc.free(pathPtr);
-      calloc.free(freeBytesAvailable);
-      calloc.free(totalNumberOfBytes);
-      calloc.free(totalNumberOfFreeBytes);
-    }
-  }
-
-  static Future<String> _hardenUpdateDirectoryBestEffort(String updateDirectory) async {
-    if (!Platform.isWindows) {
-      return 'skippedNotWindows';
-    }
-
-    final programData = Platform.environment['ProgramData'] ?? Platform.environment['ALLUSERSPROFILE'];
-    if (programData == null || programData.isEmpty) {
-      return 'skippedNoProgramData';
-    }
-    final normalizedUpdateDirectory = p.normalize(updateDirectory).toLowerCase();
-    final normalizedProgramData = p.normalize(programData).toLowerCase();
-    if (!p.isWithin(normalizedProgramData, normalizedUpdateDirectory) &&
-        normalizedUpdateDirectory != normalizedProgramData) {
-      return 'skippedNonGlobalDirectory';
-    }
-
-    final username = Platform.environment['USERNAME']?.trim() ?? '';
-    final userDomain = Platform.environment['USERDOMAIN']?.trim() ?? '';
-    if (username.isEmpty) {
-      return 'skippedNoUser';
-    }
-    final account = userDomain.isEmpty ? username : '$userDomain\\$username';
-
-    try {
-      final result = await Process.run(
-        'icacls',
-        <String>[
-          updateDirectory,
-          '/inheritance:r',
-          '/grant:r',
-          '*S-1-5-18:(OI)(CI)F',
-          '*S-1-5-32-544:(OI)(CI)F',
-          '$account:(OI)(CI)M',
-        ],
-      ).timeout(_icaclsTimeout);
-      return result.exitCode == 0 ? 'restricted' : 'failed:${result.exitCode}';
-    } on TimeoutException {
-      return 'failedTimeout';
-    } on ProcessException {
-      return 'failedToStart';
-    }
-  }
-
-  static Future<bool> _canWriteToInstallDirectory(String installDirectory) async {
-    final probeFile = File(
-      p.join(
-        installDirectory,
-        '.plug_agente_update_probe_${DateTime.now().microsecondsSinceEpoch}.tmp',
-      ),
-    );
-    try {
-      probeFile.writeAsStringSync('probe');
-      probeFile.deleteSync();
-      return true;
-    } on FileSystemException {
-      return false;
-    }
-  }
-
   @override
   Future<Result<void>> cleanupObsoleteArtifacts() async {
     try {
@@ -894,19 +490,19 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       if (!downloadDirectory.existsSync()) {
         return const Success(unit);
       }
-      _cleanupFamily(
+      SilentUpdateInstallerFileOps.cleanupFamily(
         downloadDirectory,
         prefix: 'PlugAgente-Setup-',
         keepLatestCount: 3,
         maxAge: const Duration(days: 30),
       );
-      _cleanupFamily(
+      SilentUpdateInstallerFileOps.cleanupFamily(
         downloadDirectory,
         prefix: 'PlugAgente-Update-Helper-',
         keepLatestCount: 3,
         maxAge: const Duration(days: 30),
       );
-      _cleanupFamily(
+      SilentUpdateInstallerFileOps.cleanupFamily(
         downloadDirectory,
         prefix: 'PlugAgente-Update-',
         excludePrefix: 'PlugAgente-Update-Helper-',
@@ -922,63 +518,6 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
           context: <String, dynamic>{'operation': 'silentUpdateCleanup'},
         ),
       );
-    }
-  }
-
-  static void _cleanupFamily(
-    Directory directory, {
-    required String prefix,
-    required int keepLatestCount,
-    required Duration maxAge,
-    String? excludePrefix,
-  }) {
-    final now = DateTime.now();
-    final files = directory.listSync().whereType<File>().where((file) {
-      final name = p.basename(file.path);
-      return name.startsWith(prefix) && (excludePrefix == null || !name.startsWith(excludePrefix));
-    }).toList()..sort((left, right) => right.lastModifiedSync().compareTo(left.lastModifiedSync()));
-    for (var index = 0; index < files.length; index++) {
-      final file = files[index];
-      final isOld = now.difference(file.lastModifiedSync()) > maxAge;
-      if (index >= keepLatestCount || isOld) {
-        _deleteIfExists(file);
-      }
-    }
-  }
-
-  static String _sanitizeFileName(String raw) {
-    final sanitized = raw.trim().replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_');
-    if (sanitized.isEmpty) {
-      return 'PlugAgente-Setup.exe';
-    }
-    return sanitized;
-  }
-
-  /// Streams the file through SHA-256 instead of loading every byte
-  /// into memory. Matters because installer payloads keep growing
-  /// (runtime + bundled dependencies) and `readAsBytesSync` would
-  /// allocate the whole thing on the heap *and* block the event loop.
-  static Future<String> _sha256OfStreaming(File file) async {
-    final digest = await sha256.bind(file.openRead()).first;
-    return digest.toString();
-  }
-
-  /// Same as [_sha256OfStreaming] but never throws — used for diagnostic
-  /// fingerprints where measurement failure must not abort the install
-  /// pipeline.
-  static Future<String?> _sha256OfFileBestEffort(File file) async {
-    try {
-      return await _sha256OfStreaming(file);
-    } on FileSystemException {
-      return null;
-    } on Exception {
-      return null;
-    }
-  }
-
-  static void _deleteIfExists(File file) {
-    if (file.existsSync()) {
-      file.deleteSync();
     }
   }
 }

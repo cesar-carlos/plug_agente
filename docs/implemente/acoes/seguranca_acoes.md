@@ -33,7 +33,7 @@ Rollback rapido (ordem sugerida no plano §4195 / RA-08):
 | RA-02 | Allowlist/rate limit no Hub | Alinhar policy no `plug_server` e manter paridade com scopes + `action_ids` do agente |
 | RA-03 | Sem contexto remoto inline | Decisao de produto + contrato |
 | RA-04 | Threat model nao e CI | Sign-off humano por tipo |
-| RA-05 | Live Hub opt-in | `.env`, `PAYLOAD_SIGNING_*` reais e `-RunLiveTests` |
+| RA-05 | Live Hub opt-in | `.env`, `PAYLOAD_SIGNING_*` reais e `--run-live-tests` |
 | RA-06 | Elevado sem campo UAC | Homologar helper assinado |
 | RA-07 | Multi-instancia app | Correlacao `runtimeInstanceId` |
 | RA-08 | Ad-hoc remoto off | So com aprovacao explicita |

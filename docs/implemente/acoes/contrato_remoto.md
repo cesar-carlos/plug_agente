@@ -92,7 +92,7 @@ Teste de roteamento: `test/application/rpc/rpc_method_dispatcher_agent_action_te
 ## Validacao local / CI
 
 ```powershell
-.\tool\run_agent_actions_operational_gate.ps1
+python tool/run_agent_actions_operational_gate.py
 ```
 
 Manifesto: `tool/agent_actions_contract_test_paths.txt`.
@@ -103,8 +103,8 @@ Variaveis: ver plano **Roteiro operacional pos-MVP** e `docs/testing/e2e_setup.m
 
 ```powershell
 dart run tool/validate_live_hub_agent_actions_env.dart
-.\tool\homologate_hub_agent_actions.ps1 -PrepareLiveEnv
-.\tool\homologate_hub_agent_actions.ps1 -ValidateLiveEnv -RunLiveTests
+python tool/homologate_hub_agent_actions.py --prepare-live-env
+python tool/homologate_hub_agent_actions.py --validate-live-env --run-live-tests
 ```
 
 Teste: `test/integration/hub_agent_action_rpc_live_e2e_test.dart` (tag `live`).

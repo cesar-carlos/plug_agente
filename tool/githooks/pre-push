@@ -1,5 +1,4 @@
-#!/usr/bin/env pwsh
-# Git for Windows invokes this hook; delegates to pre-push.ps1.
-$hookDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-& (Join-Path $hookDir 'pre-push.ps1') @args
-exit $LASTEXITCODE
+#!/usr/bin/env sh
+# Git for Windows invokes this hook; delegates to pre-push.py.
+hook_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+exec python "$hook_dir/pre-push.py" "$@"

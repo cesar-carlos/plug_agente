@@ -61,14 +61,14 @@ Inicializa o worker async e verifica exports nativos usados pelo modo
 ```powershell
 # Async concurrency
 dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
-.\tool\odbc_async_benchmark.ps1
+python tool/odbc_async_benchmark.py
 
 # Streaming legado vs batched
 dart run D:\Developer\dart_odbc_fast\example\streaming_performance_benchmark.dart
-.\tool\odbc_streaming_benchmark.ps1
+python tool/odbc_streaming_benchmark.py
 ```
 
-`odbc_streaming_benchmark.ps1` usa `ODBC_STREAM_BENCH_QUERY` quando
+`odbc_streaming_benchmark.py` usa `ODBC_STREAM_BENCH_QUERY` quando
 definido; caso contrario, reaproveita a query longa do driver
 (`ODBC_INTEGRATION_LONG_QUERY_*` ou `ODBC_INTEGRATION_LONG_QUERY`). Isso
 evita benchmark acidental com `SELECT 1`.
@@ -76,14 +76,14 @@ evita benchmark acidental com `SELECT 1`.
 ### Driver matrix
 
 ```powershell
-.\tool\odbc_driver_matrix_benchmark.ps1
+python tool/odbc_driver_matrix_benchmark.py
 ```
 
 ### Fluxo operacional completo
 
 ```powershell
-.\tool\run_odbc_operational_validation.ps1
-.\tool\run_odbc_operational_validation.ps1 -All
+python tool/run_odbc_operational_validation.py
+python tool/run_odbc_operational_validation.py --all
 ```
 
 Detalhes em

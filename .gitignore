@@ -47,6 +47,9 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/build/perf_reports/
+/benchmarks/results/
+/benchmark_logs/
 /coverage/
 
 # Symbolication related

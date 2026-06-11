@@ -8,15 +8,13 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
+import 'package:plug_agente/presentation/pages/playground/playground_page_settings_controller.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
 import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/shared/shared.dart';
 import 'package:provider/provider.dart';
-
-const _playgroundStreamingModeKey = 'playground_streaming_mode_enabled';
-const _playgroundSqlHandlingModeKey = 'playground_sql_handling_mode';
 
 class PlaygroundPage extends StatefulWidget {
   const PlaygroundPage({
@@ -31,6 +29,8 @@ class PlaygroundPage extends StatefulWidget {
 }
 
 class _PlaygroundPageState extends State<PlaygroundPage> {
+  static const PlaygroundPageSettingsController _settingsController = PlaygroundPageSettingsController();
+
   late final TextEditingController _queryController;
   late final FocusNode _focusNode;
   bool _streamingModeEnabled = false;
@@ -45,16 +45,8 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
       if (!mounted) {
         return;
       }
-      unawaited(
-        _restoreStreamingMode().catchError(
-          (Object e) => AppLogger.warning('Failed to restore streaming mode', e),
-        ),
-      );
-      unawaited(
-        _restoreSqlHandlingMode().catchError(
-          (Object e) => AppLogger.warning('Failed to restore SQL handling mode', e),
-        ),
-      );
+      unawaited(_restoreStreamingMode());
+      unawaited(_restoreSqlHandlingMode());
     });
 
     if (widget.configId != null) {
@@ -86,54 +78,39 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
       readOptionalPresentationProvider<IAppSettingsStore>(context);
 
   Future<void> _restoreStreamingMode() async {
-    final prefs = _settingsStore(context);
-    if (prefs == null) {
-      return;
-    }
-    final enabled = prefs.getBool(_playgroundStreamingModeKey) ?? false;
-    if (!mounted) {
-      return;
-    }
-    setState(() => _streamingModeEnabled = enabled);
-  }
-
-  Future<void> _saveStreamingMode(bool enabled) async {
-    final prefs = _settingsStore(context);
-    if (prefs == null) {
-      return;
-    }
-    await prefs.setBool(_playgroundStreamingModeKey, enabled);
+    await _settingsController.restoreStreamingModeSafely(
+      _settingsStore(context),
+      (enabled) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _streamingModeEnabled = enabled);
+      },
+    );
   }
 
   Future<void> _restoreSqlHandlingMode() async {
-    final prefs = _settingsStore(context);
-    if (prefs == null) {
-      return;
-    }
-    final preserve = prefs.getBool(_playgroundSqlHandlingModeKey) ?? false;
-    if (!mounted) return;
-    context.read<PlaygroundProvider>().setSqlHandlingMode(
-      preserve ? SqlHandlingMode.preserve : SqlHandlingMode.managed,
+    await _settingsController.restoreSqlHandlingModeSafely(
+      _settingsStore(context),
+      (mode) {
+        if (!mounted) {
+          return;
+        }
+        context.read<PlaygroundProvider>().setSqlHandlingMode(mode);
+        if (mode == SqlHandlingMode.preserve) {
+          setState(() => _streamingModeEnabled = false);
+          unawaited(_settingsController.saveStreamingModeSafely(_settingsStore(context), false));
+        }
+      },
     );
-    if (preserve && mounted) {
-      setState(() => _streamingModeEnabled = false);
-      unawaited(
-        _saveStreamingMode(false).catchError(
-          (Object e) => AppLogger.warning(
-            'Failed to sync streaming mode with preserve',
-            e,
-          ),
-        ),
-      );
-    }
   }
 
-  Future<void> _saveSqlHandlingMode(bool preserve) async {
-    final prefs = _settingsStore(context);
-    if (prefs == null) {
-      return;
-    }
-    await prefs.setBool(_playgroundSqlHandlingModeKey, preserve);
+  Future<void> _saveStreamingMode(bool enabled) {
+    return _settingsController.saveStreamingMode(_settingsStore(context), enabled);
+  }
+
+  Future<void> _saveSqlHandlingMode(bool preserve) {
+    return _settingsController.saveSqlHandlingMode(_settingsStore(context), preserve);
   }
 
   void _onQueryTextChanged() {

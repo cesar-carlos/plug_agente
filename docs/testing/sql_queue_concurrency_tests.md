@@ -207,7 +207,7 @@ The app intentionally keeps `asyncBackpressureMode=failFast` because
 is enabled by default for eligible SQL Server/PostgreSQL drivers, while SQL
 Anywhere stays on the lease/direct path.
 
-For operational runs, prefer `.\tool\run_odbc_operational_validation.ps1 -All`.
+For operational runs, prefer `python tool/run_odbc_operational_validation.py --all`.
 It now writes burst health snapshots automatically and runs the driver matrix
 benchmark for every configured DSN. Track `batch.bulk_insert_recommended_total`
 when bursts are dominated by large homogeneous `INSERT` batches; those should

@@ -19,7 +19,7 @@ Esse comando executa:
    `installer/setup.iss` e `lib/core/constants/app_version.g.dart`)
 2. `flutter build windows --release` (gera `plug_agente.exe` e
    `plug_update_helper.exe` no bundle Release)
-3. `tool/build_elevated_runner.ps1` (compila o helper Dart
+3. `python tool/build_elevated_runner.py` (compila o helper Dart
    `plug_agente_elevated_runner.exe` em `tool/plug_agente_elevated_runner/` e
    copia para o bundle Release/Debug). O script falha cedo se esse helper nao
    estiver no bundle.

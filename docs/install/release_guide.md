@@ -19,7 +19,7 @@ Plug Agente.
 Rode o gate local com paridade ao publish workflow **antes** de disparar o CI:
 
 ```powershell
-.\tool\pre_publish_release.ps1 -Version 1.8.4
+python tool/pre_publish_release.py --version 1.8.4
 ```
 
 Equivalente manual:
@@ -36,7 +36,7 @@ e os comandos `gh workflow run` sugeridos.
 Hook git opcional (pre-push em `main` quando `pubspec.yaml`, `lib/` ou `test/` mudam):
 
 ```powershell
-.\tool\install_git_hooks.ps1
+python tool/install_git_hooks.py
 # pular uma vez: $env:SKIP_RELEASE_GATE = '1'
 ```
 
@@ -48,7 +48,7 @@ Windows, cria commit/tag/release e anexa o asset correto.
 
 Ordem sugerida:
 
-1. `.\tool\pre_publish_release.ps1 -Version X.Y.Z` (local).
+1. `python tool/pre_publish_release.py --version X.Y.Z` (local).
 2. (Opcional) `Actions` > **Release Preflight** com a mesma versao (build no CI
    sem publicar).
 3. (Opcional) **Publish Windows Release** com `dry_run=true`.
@@ -110,7 +110,7 @@ O `installer/build_installer.py` executa:
 
 1. `installer/update_version.py`
 2. `flutter build windows --release`
-3. `tool/build_elevated_runner.ps1` (compila e copia
+3. `python tool/build_elevated_runner.py` (compila e copia
    `plug_agente_elevated_runner.exe` para o bundle Release/Debug; obrigatorio)
 4. Validacao de presenca de `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe` no bundle Release

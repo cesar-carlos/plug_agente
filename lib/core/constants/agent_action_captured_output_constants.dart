@@ -1,12 +1,8 @@
 import 'package:plug_agente/core/config/app_environment.dart';
-import 'package:plug_agente/infrastructure/datasources/agent_config_data_source.dart'
-    show AgentActionCapturedOutputChunkTable;
-import 'package:plug_agente/infrastructure/datasources/datasources.dart' show AgentActionCapturedOutputChunkTable;
-import 'package:plug_agente/infrastructure/infrastructure.dart' show AgentActionCapturedOutputChunkTable;
 
 /// Persistence policy for captured process stdout/stderr.
 abstract final class AgentActionCapturedOutputConstants {
-  /// Stream values stored in [AgentActionCapturedOutputChunkTable.stream].
+  /// Stream values stored in the `agent_action_captured_output_chunk.stream` column.
   static const String stdoutStream = 'stdout';
   static const String stderrStream = 'stderr';
 

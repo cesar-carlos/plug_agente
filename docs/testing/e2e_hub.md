@@ -193,35 +193,35 @@ flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags liv
 ### Runners PowerShell
 
 ```powershell
-.\tool\run_agent_actions_operational_gate.ps1
-.\tool\preflight_agent_actions_production.ps1
-.\tool\preflight_agent_actions_production.ps1 -RunContractTests
-.\tool\homologate_hub_agent_actions.ps1 -RunContractTests
-.\tool\homologate_hub_agent_actions.ps1 -ValidateLiveEnv
-.\tool\homologate_hub_agent_actions.ps1 -RunContractTests -RunLiveTests
-.\tool\homologate_hub_agent_actions.ps1 -PrepareLiveEnv -ValidateLiveEnv -RunContractTests -RunLiveTests
+python tool/run_agent_actions_operational_gate.py
+python tool/preflight_agent_actions_production.py
+python tool/preflight_agent_actions_production.py --run-contract-tests
+python tool/homologate_hub_agent_actions.py --run-contract-tests
+python tool/homologate_hub_agent_actions.py --validate-live-env
+python tool/homologate_hub_agent_actions.py --run-contract-tests --run-live-tests
+python tool/homologate_hub_agent_actions.py --prepare-live-env --validate-live-env --run-contract-tests --run-live-tests
 ```
 
-- `preflight_agent_actions_production.ps1` roda checks estaticos de
+- `preflight_agent_actions_production.py` roda checks estaticos de
   producao (COM handler registry, consistencia live `.env` quando
   `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true`). Use `-StrictCom` antes de
   deploy quando `comObject` nao deve depender do stub.
-- `-RunContractTests` roda o manifesto de contrato
+- `--run-contract-tests` roda o manifesto de contrato
   (`tool/agent_actions_contract_test_paths.txt`) e o manifesto UI
   (`tool/agent_actions_ui_test_paths.txt`) sem hub. Validacao dos
   manifestos: `agent_action_test_manifest_test.dart` e
   `agent_actions_ci_gate_paths_sync_test.dart`.
-- `run_agent_actions_operational_gate.ps1` encadeia preflight + homologate
-  com `-RunContractTests`.
-- `-PrepareLiveEnv` executa, em sequencia:
+- `run_agent_actions_operational_gate.py` encadeia preflight + homologate
+  com `--run-contract-tests`.
+- `--prepare-live-env` executa, em sequencia:
   `sync_e2e_hub_env_from_local.dart --export-secure`,
   `promote_e2e_signing_from_monorepo_env.dart --force` (ou
   `generate_dev_e2e_signing.dart --write`), e
   `fetch_e2e_hub_token_from_local_config.dart --apply-token --force` (JWT
   expirado exige login na Config, credenciais salvas ou
   `E2E_HUB_USERNAME`/`E2E_HUB_PASSWORD` no `.env`).
-- `-ValidateLiveEnv` roda `validate_live_hub_agent_actions_env.dart` antes
-  de `-RunLiveTests`.
+- `--validate-live-env` roda `validate_live_hub_agent_actions_env.dart` antes
+  de `--run-live-tests`.
 
 CI: os mesmos arquivos rodam no **Agent actions homologation gate**
 (`.github/workflows/flutter_ci.yml`). Live Hub `agent.action.*` rodam apenas

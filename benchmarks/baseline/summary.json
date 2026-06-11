@@ -1,0 +1,63 @@
+{
+  "$schema": "../schema/summary.schema.json",
+  "schema_version": 1,
+  "run_id": "baseline",
+  "captured_at": "2026-06-08T08:34:54-03:00",
+  "git": {
+    "commit_sha": "baseline",
+    "branch": "baseline",
+    "dirty": false
+  },
+  "machine": {
+    "platform": "Windows",
+    "machine": "AMD64",
+    "processor": "baseline-placeholder"
+  },
+  "env_flags": {
+    "odbc_test_dsn_configured": true,
+    "odbc_pool_size": 8,
+    "odbc_e2e_dml_perf_row_count": 100,
+    "odbc_e2e_dml_bulk_row_count": 50000
+  },
+  "suites": [
+    {
+      "id": "transport_pipeline",
+      "kind": "flutter_test",
+      "status": "pass",
+      "wall_ms": 60000,
+      "metrics": {}
+    },
+    {
+      "id": "transport_pipeline_json",
+      "kind": "dart_tool",
+      "status": "pass",
+      "wall_ms": 5000,
+      "metrics": {}
+    },
+    {
+      "id": "odbc_async",
+      "kind": "dart_odbc_fast",
+      "status": "pass",
+      "wall_ms": 30000,
+      "metrics": {
+        "wall_ms": 30000
+      }
+    },
+    {
+      "id": "odbc_streaming",
+      "kind": "dart_odbc_fast",
+      "status": "pass",
+      "wall_ms": 45000,
+      "metrics": {
+        "wall_ms": 45000
+      }
+    }
+  ],
+  "notes": [
+    "Placeholder baseline for schema v1. Metrics are wall-time placeholders until promoted.",
+    "After a known-good local run:",
+    "  python tool/run_benchmark_suite.py",
+    "  python tool/promote_benchmark_baseline.py --from benchmarks/results/<run_id>/summary.json",
+    "Legacy E2E samples live under benchmarks/history/ (migrated from benchmark_logs/)."
+  ]
+}

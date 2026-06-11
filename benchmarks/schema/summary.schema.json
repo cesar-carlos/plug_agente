@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plug-agente.local/benchmarks/schema/summary.schema.json",
+  "title": "Plug Agente benchmark summary",
+  "description": "Normalized per-run benchmark summary. No secrets or connection strings.",
+  "type": "object",
+  "required": ["schema_version", "run_id", "captured_at", "git", "machine", "env_flags", "suites"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}_[0-9]{6}$",
+      "description": "Folder timestamp yyyyMMdd_HHmmss"
+    },
+    "captured_at": {
+      "type": "string",
+      "description": "ISO-8601 timestamp with timezone offset"
+    },
+    "git": {
+      "type": "object",
+      "required": ["commit_sha", "branch", "dirty"],
+      "additionalProperties": false,
+      "properties": {
+        "commit_sha": { "type": "string", "minLength": 1 },
+        "branch": { "type": "string", "minLength": 1 },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "machine": {
+      "type": "object",
+      "required": ["platform", "machine"],
+      "additionalProperties": true,
+      "properties": {
+        "platform": { "type": "string" },
+        "machine": { "type": "string" },
+        "processor": { "type": "string" },
+        "python_version": { "type": "string" }
+      }
+    },
+    "env_flags": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "boolean" },
+          { "type": "integer" },
+          { "type": "string" },
+          { "type": "null" }
+        ]
+      },
+      "description": "Non-secret environment toggles and numeric tuning values only"
+    },
+    "suites": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/suite" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "suite_status": {
+      "type": "string",
+      "enum": ["pass", "fail", "skipped", "error"]
+    },
+    "suite": {
+      "type": "object",
+      "required": ["id", "kind", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["flutter_test", "dart_tool", "dart_odbc_fast"]
+        },
+        "status": { "$ref": "#/$defs/suite_status" },
+        "wall_ms": { "type": "number", "minimum": 0 },
+        "exit_code": { "type": "integer" },
+        "log_file": { "type": "string" },
+        "reason": { "type": "string" },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "number" },
+              { "type": "boolean" },
+              { "type": "string" }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

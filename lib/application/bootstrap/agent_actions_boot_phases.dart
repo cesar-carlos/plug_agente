@@ -1,21 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
-import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
-import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
-import 'package:plug_agente/application/services/agent_action_execution_periodic_purge.dart';
-import 'package:plug_agente/application/services/agent_action_remote_audit_periodic_purge.dart';
-import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
-import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
-import 'package:plug_agente/application/use_cases/cleanup_agent_action_captured_output.dart';
-import 'package:plug_agente/application/use_cases/cleanup_agent_action_executions.dart';
-import 'package:plug_agente/application/use_cases/cleanup_expired_agent_action_remote_audit.dart';
-import 'package:plug_agente/application/use_cases/cleanup_expired_elevated_bridge_artifacts.dart';
-import 'package:plug_agente/application/use_cases/cleanup_expired_rpc_idempotency_cache.dart';
-import 'package:plug_agente/application/use_cases/reconcile_agent_action_executions.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
+import 'package:plug_agente/application/bootstrap/agent_actions_boot_phases_dependencies.dart';
 
 abstract interface class AgentActionsBootPhasesContract {
   Future<void> runCritical();
@@ -26,7 +12,10 @@ abstract interface class AgentActionsBootPhasesContract {
 }
 
 class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
-  const AgentActionsBootPhases();
+  const AgentActionsBootPhases({required AgentActionsBootPhasesDependencies dependencies})
+    : _deps = dependencies;
+
+  final AgentActionsBootPhasesDependencies _deps;
 
   @override
   Future<void> runCritical() async {
@@ -59,19 +48,22 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
   }
 
   void _refreshElevatedActionRunnerReadiness() {
-    if (!getIt.isRegistered<ElevatedActionRunnerReadinessService>()) {
+    final readiness = _deps.elevatedActionRunnerReadiness;
+    final storageContext = _deps.globalStorageContext;
+    if (readiness == null || storageContext == null) {
       return;
     }
-    getIt<ElevatedActionRunnerReadinessService>().refresh(getIt<GlobalStorageContext>());
+    readiness.refresh(storageContext);
   }
 
   Future<void> _purgeStaleElevatedBridgeArtifacts() async {
-    if (!getIt.isRegistered<CleanupExpiredElevatedBridgeArtifacts>()) {
+    final cleanup = _deps.cleanupExpiredElevatedBridgeArtifacts;
+    if (cleanup == null) {
       return;
     }
 
     try {
-      final result = await getIt<CleanupExpiredElevatedBridgeArtifacts>()();
+      final result = await cleanup();
       result.fold(
         (int count) {
           if (count > 0) {
@@ -103,12 +95,13 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
   }
 
   void _startElevatedBridgeArtifactsPeriodicPurge() {
-    if (!getIt.isRegistered<ElevatedBridgeArtifactsPeriodicPurge>()) {
+    final purge = _deps.elevatedBridgeArtifactsPeriodicPurge;
+    if (purge == null) {
       return;
     }
 
     try {
-      getIt<ElevatedBridgeArtifactsPeriodicPurge>().start();
+      purge.start();
     } on Exception catch (e, stackTrace) {
       developer.log(
         'Failed to start periodic elevated bridge artifact purge (continuing without)',
@@ -122,7 +115,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
 
   Future<void> _reconcileAgentActionExecutions() async {
     try {
-      final result = await getIt<ReconcileAgentActionExecutions>()();
+      final result = await _deps.reconcileAgentActionExecutions();
       result.fold(
         (count) {
           if (count > 0) {
@@ -155,7 +148,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
 
   Future<void> _purgeExpiredRpcIdempotencyCache() async {
     try {
-      final result = await getIt<CleanupExpiredRpcIdempotencyCache>()();
+      final result = await _deps.cleanupExpiredRpcIdempotencyCache();
       result.fold(
         (int count) {
           if (count > 0) {
@@ -188,7 +181,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
 
   void _startRpcIdempotencyPeriodicPurge() {
     try {
-      getIt<RpcIdempotencyCachePeriodicPurge>().start();
+      _deps.rpcIdempotencyCachePeriodicPurge.start();
     } on Exception catch (e, stackTrace) {
       developer.log(
         'Failed to start periodic RPC idempotency cache purge (continuing without)',
@@ -202,7 +195,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
 
   Future<void> _purgeExpiredAgentActionRemoteAudit() async {
     try {
-      final result = await getIt<CleanupExpiredAgentActionRemoteAudit>()();
+      final result = await _deps.cleanupExpiredAgentActionRemoteAudit();
       result.fold(
         (int count) {
           if (count > 0) {
@@ -235,7 +228,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
 
   void _startAgentActionRemoteAuditPeriodicPurge() {
     try {
-      getIt<AgentActionRemoteAuditPeriodicPurge>().start();
+      _deps.agentActionRemoteAuditPeriodicPurge.start();
     } on Exception catch (e, stackTrace) {
       developer.log(
         'Failed to start periodic agent action remote audit purge (continuing without)',
@@ -248,12 +241,13 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
   }
 
   Future<void> _clearOldAgentActionCapturedOutput() async {
-    if (!getIt.isRegistered<CleanupAgentActionCapturedOutput>()) {
+    final cleanup = _deps.cleanupAgentActionCapturedOutput;
+    if (cleanup == null) {
       return;
     }
 
     try {
-      final result = await getIt<CleanupAgentActionCapturedOutput>()();
+      final result = await cleanup();
       result.fold(
         (int count) {
           if (count > 0) {
@@ -285,12 +279,13 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
   }
 
   void _startAgentActionCapturedOutputPeriodicPurge() {
-    if (!getIt.isRegistered<AgentActionCapturedOutputPeriodicPurge>()) {
+    final purge = _deps.agentActionCapturedOutputPeriodicPurge;
+    if (purge == null) {
       return;
     }
 
     try {
-      getIt<AgentActionCapturedOutputPeriodicPurge>().start();
+      purge.start();
     } on Exception catch (e, stackTrace) {
       developer.log(
         'Failed to start periodic agent action captured output purge (continuing without)',
@@ -304,7 +299,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
 
   Future<void> _purgeOldAgentActionExecutions() async {
     try {
-      final result = await getIt<CleanupAgentActionExecutions>()();
+      final result = await _deps.cleanupAgentActionExecutions();
       result.fold(
         (int count) {
           if (count > 0) {
@@ -337,7 +332,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
 
   void _startAgentActionExecutionPeriodicPurge() {
     try {
-      getIt<AgentActionExecutionPeriodicPurge>().start();
+      _deps.agentActionExecutionPeriodicPurge.start();
     } on Exception catch (e, stackTrace) {
       developer.log(
         'Failed to start periodic agent action execution history purge (continuing without)',
@@ -350,8 +345,8 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
   }
 
   Future<bool> _startAgentActionScheduler() async {
+    final scheduler = _deps.agentActionTriggerScheduler;
     try {
-      final scheduler = getIt<AgentActionTriggerScheduler>();
       final startResult = await scheduler.start();
       return startResult.fold(
         (snapshot) {
@@ -377,9 +372,9 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
       );
     } on Exception catch (e, stackTrace) {
       try {
-        getIt<AgentActionTriggerScheduler>().stop();
+        scheduler.stop();
       } on Object {
-        // Scheduler may not be registered; bootstrap continues without agent actions.
+        // Bootstrap continues without agent actions when scheduler teardown fails.
       }
       developer.log(
         'Failed to initialize agent action scheduler (continuing without)',
@@ -393,7 +388,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
   }
 
   Future<void> _dispatchAppStartAgentActions() async {
-    final scheduler = getIt<AgentActionTriggerScheduler>();
+    final scheduler = _deps.agentActionTriggerScheduler;
     try {
       final result = await scheduler.dispatchAppStartTriggers();
       result.fold(

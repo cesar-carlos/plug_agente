@@ -270,13 +270,13 @@ No Windows, use o wrapper para rodar preflight e gerar uma worksheet pronta
 para validacao:
 
 ```powershell
-.\tool\run_odbc_operational_validation.ps1
+python tool/run_odbc_operational_validation.py
 ```
 
 Para executar smoke, burst e benchmark em sequencia:
 
 ```powershell
-.\tool\run_odbc_operational_validation.ps1 -All
+python tool/run_odbc_operational_validation.py --all
 ```
 
 ## Troubleshooting

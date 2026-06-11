@@ -4,14 +4,15 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
-import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
-import 'package:plug_agente/domain/repositories/i_notification_service.dart';
+import 'package:plug_agente/presentation/boot/desktop_shell_bootstrap_dependencies.dart';
+
+export 'package:plug_agente/presentation/boot/desktop_shell_bootstrap_dependencies.dart'
+    show DesktopShellBootstrapDependencies, WindowManagerRegistrar;
 
 typedef StartupWindowPreferences = ({
   bool startMinimized,
@@ -48,10 +49,13 @@ StartupWindowPreferences resolveStartupWindowPreferences(
 class DesktopShellBootstrap {
   DesktopShellBootstrap({
     required this.isAutostartLaunch,
+    required DesktopShellBootstrapDependencies dependencies,
     NativeWindowVisibilityFallback? nativeWindowVisibilityFallback,
-  }) : _nativeWindowVisibilityFallback = nativeWindowVisibilityFallback ?? showNativeRuntimeWindow;
+  }) : _dependencies = dependencies,
+       _nativeWindowVisibilityFallback = nativeWindowVisibilityFallback ?? showNativeRuntimeWindow;
 
   final bool isAutostartLaunch;
+  final DesktopShellBootstrapDependencies _dependencies;
   final NativeWindowVisibilityFallback _nativeWindowVisibilityFallback;
 
   Future<void> initialize(RuntimeCapabilities capabilities) async {
@@ -90,7 +94,7 @@ class DesktopShellBootstrap {
       final minSize = WindowConstraints.getMainWindowMinSize();
       const initialSize = Size(1200, 800);
 
-      final prefs = getIt<IAppSettingsStore>();
+      final prefs = _dependencies.settingsStore;
       final preferences = resolveStartupWindowPreferences(
         prefs,
         canStartMinimized: capabilities.supportsTray,
@@ -103,8 +107,10 @@ class DesktopShellBootstrap {
         startMinimized: preferences.startMinimized,
       );
 
-      getIt.registerSingleton<WindowManagerService>(windowManagerService);
-      getIt.registerSingleton<IWindowManagerService>(windowManagerService);
+      _dependencies.registerWindowManager?.call(
+        windowManagerService,
+        windowManagerService,
+      );
 
       developer.log(
         'Window manager initialized '
@@ -166,7 +172,7 @@ class DesktopShellBootstrap {
     WindowManagerService windowManagerService,
   ) async {
     try {
-      final trayService = getIt<ITrayService>();
+      final trayService = _dependencies.trayService;
       await trayService.initialize(
         onMenuAction: (action) async {
           switch (action) {
@@ -179,7 +185,7 @@ class DesktopShellBootstrap {
         },
       );
 
-      final prefs = getIt<IAppSettingsStore>();
+      final prefs = _dependencies.settingsStore;
       final preferences = resolveStartupWindowPreferences(prefs);
 
       windowManagerService
@@ -231,7 +237,7 @@ class DesktopShellBootstrap {
 
   Future<void> _initializeNotifications() async {
     try {
-      final result = await getIt<INotificationService>().initialize();
+      final result = await _dependencies.notificationService.initialize();
       result.fold(
         (_) {
           developer.log(

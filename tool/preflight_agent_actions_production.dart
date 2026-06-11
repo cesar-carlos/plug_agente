@@ -47,8 +47,10 @@ Future<void> main(List<String> args) async {
   print('');
   print('Next commands:');
   print('  dart run tool/agent_action_security_gate_checklist.dart [actionType]');
-  print(r'  .\tool\homologate_hub_agent_actions.ps1 -RunContractTests');
-  print(r'  .\tool\homologate_hub_agent_actions.ps1 -PrepareLiveEnv -ValidateLiveEnv -RunLiveTests');
+  print('  python tool/homologate_hub_agent_actions.py --run-contract-tests');
+  print(
+    '  python tool/homologate_hub_agent_actions.py --prepare-live-env --validate-live-env --run-live-tests',
+  );
 
   if (!result.isSuccess) {
     exit(1);

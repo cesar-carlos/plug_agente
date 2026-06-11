@@ -32,6 +32,73 @@ class AgentActionsRemoteAuditController {
   final AgentActionsRemoteAuditStateChanged _onStateChanged;
   final AgentActionRemoteAuditSupportExport _export;
 
+  AgentActionsDefinitionsController? _definitionsController;
+  AgentActionsExecutionsController? _executionsController;
+  AgentActionsHistoryController? _historyController;
+  bool Function()? _isFeatureEnabled;
+  bool Function()? _isRemoteAuditSectionVisible;
+  DateTime Function()? _now;
+  Future<void> Function()? _syncTriggers;
+  Future<void> Function()? _refreshSecrets;
+
+  void bindFocusDependencies({
+    required AgentActionsDefinitionsController definitionsController,
+    required AgentActionsExecutionsController executionsController,
+    required AgentActionsHistoryController historyController,
+    required bool Function() isFeatureEnabled,
+    required bool Function() isRemoteAuditSectionVisible,
+    required DateTime Function() now,
+    required Future<void> Function() syncTriggers,
+    required Future<void> Function() refreshSecrets,
+  }) {
+    _definitionsController = definitionsController;
+    _executionsController = executionsController;
+    _historyController = historyController;
+    _isFeatureEnabled = isFeatureEnabled;
+    _isRemoteAuditSectionVisible = isRemoteAuditSectionVisible;
+    _now = now;
+    _syncTriggers = syncTriggers;
+    _refreshSecrets = refreshSecrets;
+  }
+
+  Future<void> refreshWhenSectionVisible() {
+    return refresh(sectionVisible: _isRemoteAuditSectionVisible?.call() ?? false);
+  }
+
+  Future<AgentActionRemoteAuditFocusResult> focusExecutionFromRecord(
+    AgentActionRemoteAuditRecord record,
+  ) {
+    final definitionsController = _definitionsController;
+    final executionsController = _executionsController;
+    final historyController = _historyController;
+    final isFeatureEnabled = _isFeatureEnabled;
+    final now = _now;
+    final syncTriggers = _syncTriggers;
+    final refreshSecrets = _refreshSecrets;
+    if (definitionsController == null ||
+        executionsController == null ||
+        historyController == null ||
+        isFeatureEnabled == null ||
+        now == null ||
+        syncTriggers == null ||
+        refreshSecrets == null) {
+      return Future<AgentActionRemoteAuditFocusResult>.value(
+        AgentActionRemoteAuditFocusResult.featureDisabled,
+      );
+    }
+
+    return focusExecution(
+      record: record,
+      isFeatureEnabled: isFeatureEnabled(),
+      definitionsController: definitionsController,
+      executionsController: executionsController,
+      historyController: historyController,
+      now: now,
+      syncTriggers: syncTriggers,
+      refreshSecrets: refreshSecrets,
+    );
+  }
+
   List<AgentActionRemoteAuditRecord> entries = <AgentActionRemoteAuditRecord>[];
   String? loadError;
   bool isLoading = false;

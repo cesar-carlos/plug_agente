@@ -43,9 +43,7 @@ import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_h
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_preferences_coordinator.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_dependencies.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_remote_audit_controller.dart';
-import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_remote_audit_coordinator.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_runtime_controller.dart';
-import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_runtime_surface_coordinator.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_save_coordinator.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_secrets_controller.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_secrets_coordinator.dart';
@@ -196,15 +194,11 @@ class AgentActionsProvider extends ChangeNotifier {
       onPreferencesChanged: notifyListeners,
       reloadExecutionsForPeriod: _reloadExecutionsForPeriod,
     );
-    _runtimeSurfaceCoordinator = AgentActionsRuntimeSurfaceCoordinator(
-      runtimeController: _runtimeController,
-    );
     _secretsCoordinator = AgentActionsSecretsCoordinator(
       secretsController: _secretsController,
       selectedDefinition: () => selectedDefinition,
     );
-    _remoteAuditCoordinator = AgentActionsRemoteAuditCoordinator(
-      remoteAuditController: _remoteAuditController,
+    _remoteAuditController.bindFocusDependencies(
       definitionsController: _definitionsController,
       executionsController: _executionsController,
       historyController: _historyController,
@@ -224,6 +218,10 @@ class AgentActionsProvider extends ChangeNotifier {
     _saveCoordinator = AgentActionsSaveCoordinator(
       definitionsController: _definitionsController,
       executionsController: _executionsController,
+      saveDefinition: _saveDefinition,
+      uuid: _uuid,
+      now: _now,
+      messageFor: _messageFor,
       reload: load,
       setErrorMessage: (message) => _errorMessage = message,
     );
@@ -278,9 +276,7 @@ class AgentActionsProvider extends ChangeNotifier {
   late final AgentActionsRuntimeController _runtimeController;
   final AgentActionsHistoryController _historyController;
   late final AgentActionsPreferencesCoordinator _preferencesCoordinator;
-  late final AgentActionsRuntimeSurfaceCoordinator _runtimeSurfaceCoordinator;
   late final AgentActionsSecretsCoordinator _secretsCoordinator;
-  late final AgentActionsRemoteAuditCoordinator _remoteAuditCoordinator;
   late final AgentActionsTriggersCoordinator _triggersCoordinator;
   late final AgentActionsSaveCoordinator _saveCoordinator;
   late final AgentActionsSelectionCoordinator _selectionCoordinator;
@@ -339,13 +335,13 @@ class AgentActionsProvider extends ChangeNotifier {
     ),
   );
 
-  Future<void> refreshRemoteAudit() => _remoteAuditCoordinator.refresh();
+  Future<void> refreshRemoteAudit() => _remoteAuditController.refreshWhenSectionVisible();
 
-  String buildRemoteAuditJsonExport() => _remoteAuditCoordinator.buildJsonExport();
+  String buildRemoteAuditJsonExport() => _remoteAuditController.buildJsonExport();
 
   Future<AgentActionRemoteAuditFocusResult> focusExecutionFromRemoteAudit(
     AgentActionRemoteAuditRecord record,
-  ) => _remoteAuditCoordinator.focusExecutionFromRemoteAudit(record);
+  ) => _remoteAuditController.focusExecutionFromRecord(record);
 
   @override
   void notifyListeners() {

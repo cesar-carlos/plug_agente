@@ -54,7 +54,7 @@ flutter test test/presentation/widgets/agent_actions/
 Ou gate completo:
 
 ```powershell
-.\tool\run_agent_actions_operational_gate.ps1
+python tool/run_agent_actions_operational_gate.py
 ```
 
 Cenarios criticos cobertos nos testes (nao exaustivo):

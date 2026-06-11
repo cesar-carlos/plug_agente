@@ -39,8 +39,8 @@ void printAgentActionSecurityGateChecklist(List<String> types) {
   print('Before enabling remote, elevated, or ad-hoc for a type:');
   print('  1. Review threat model row in docs/implemente/plano_acoes_agendadas_execucoes.md');
   print('     (section "Threat model baseline por adapter").');
-  print(r'  2. Run: .\tool\run_agent_actions_operational_gate.ps1');
-  print(r'     (or .\tool\homologate_hub_agent_actions.ps1 -RunContractTests)');
+  print('  2. Run: python tool/run_agent_actions_operational_gate.py');
+  print('     (or python tool/homologate_hub_agent_actions.py --run-contract-tests)');
   print('  3. If wire/capabilities change: update OpenRPC + docs/communication/schemas');
   print('     in the same PR; gate includes test/docs/openrpc_contract_test.dart.');
   print('  4. Confirm FeatureFlags defaults stay safe; document rollback (gate §4195).');

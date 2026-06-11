@@ -270,11 +270,11 @@ def main() -> None:
         raise SystemExit(f"Erro: pasta de build nao encontrada: {BUILD_DIR}")
 
     print("\n2.1. Build elevated action runner helper...", flush=True)
-    elevated_runner_script = PROJECT_ROOT / "tool" / "build_elevated_runner.ps1"
+    elevated_runner_script = PROJECT_ROOT / "tool" / "build_elevated_runner.py"
     if elevated_runner_script.exists():
-        run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(elevated_runner_script)])
+        run([sys.executable, str(elevated_runner_script)])
     else:
-        raise SystemExit("Erro: tool/build_elevated_runner.ps1 nao encontrado")
+        raise SystemExit("Erro: tool/build_elevated_runner.py nao encontrado")
 
     if not (BUILD_DIR / "plug_agente.exe").exists():
         raise SystemExit("Erro: plug_agente.exe nao encontrado no build")
@@ -283,7 +283,7 @@ def main() -> None:
     if not (BUILD_DIR / "plug_agente_elevated_runner.exe").exists():
         raise SystemExit(
             "Erro: plug_agente_elevated_runner.exe nao encontrado no build. "
-            "Execute tool/build_elevated_runner.ps1 antes do instalador.",
+            "Execute python tool/build_elevated_runner.py antes do instalador.",
         )
 
     app_exe = BUILD_DIR / "plug_agente.exe"

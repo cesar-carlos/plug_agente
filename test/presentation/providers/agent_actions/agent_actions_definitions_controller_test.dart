@@ -1,13 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/delete_agent_action_definition.dart';
+import 'package:plug_agente/application/use_cases/list_agent_action_executions.dart';
 import 'package:plug_agente/application/use_cases/list_developer_data7_connections.dart';
+import 'package:plug_agente/application/use_cases/preview_agent_action_definition.dart';
+import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
 import 'package:plug_agente/application/use_cases/save_agent_action_definition.dart';
+import 'package:plug_agente/application/use_cases/test_agent_action_definition.dart';
 import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/settings/agent_action_preflight_settings.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_definitions_controller.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_executions_controller.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_save_coordinator.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -16,6 +23,16 @@ class _MockSaveDefinition extends Mock implements SaveAgentActionDefinition {}
 class _MockDeleteDefinition extends Mock implements DeleteAgentActionDefinition {}
 
 class _MockListDeveloperConnections extends Mock implements ListDeveloperData7Connections {}
+
+class _MockListExecutions extends Mock implements ListAgentActionExecutions {}
+
+class _MockRunAction extends Mock implements RunAgentActionLocally {}
+
+class _MockTestDefinition extends Mock implements TestAgentActionDefinition {}
+
+class _MockPreviewDefinition extends Mock implements PreviewAgentActionDefinition {}
+
+class _MockCancelExecution extends Mock implements CancelAgentActionExecution {}
 
 class _MockUuid extends Mock implements Uuid {}
 
@@ -411,9 +428,37 @@ void main() {
     });
   });
 
-  group('AgentActionsDefinitionsController saveCommandLineAction', () {
+  group('AgentActionsSaveCoordinator saveCommandLineAction', () {
+    late AgentActionsSaveCoordinator saveCoordinator;
+
+    AgentActionsSaveCoordinator buildSaveCoordinator() {
+      final executionsController = AgentActionsExecutionsController(
+        listExecutions: _MockListExecutions(),
+        runAction: _MockRunAction(),
+        testDefinition: _MockTestDefinition(),
+        previewDefinition: _MockPreviewDefinition(),
+        cancelExecution: _MockCancelExecution(),
+        messageFor: (failure) => failure.toString(),
+        onStateChanged: () {},
+      );
+      return AgentActionsSaveCoordinator(
+        definitionsController: controller,
+        executionsController: executionsController,
+        saveDefinition: saveDefinition,
+        uuid: uuid,
+        now: () => fixedNow,
+        messageFor: (failure) => failure.toString(),
+        reload: () async {},
+        setErrorMessage: (_) {},
+      );
+    }
+
+    setUp(() {
+      saveCoordinator = buildSaveCoordinator();
+    });
+
     test('skips save when canSave is false', () async {
-      final saved = await controller.saveCommandLineAction(
+      final saved = await saveCoordinator.saveCommandLineAction(
         name: 'Run',
         command: 'dir',
         canSave: false,
@@ -430,7 +475,7 @@ void main() {
       when(() => saveDefinition(any())).thenAnswer((_) async => Failure(failure));
       stateChangeCount = 0;
 
-      final saved = await controller.saveCommandLineAction(
+      final saved = await saveCoordinator.saveCommandLineAction(
         name: 'Run',
         command: 'dir',
         canSave: true,
@@ -451,7 +496,7 @@ void main() {
       when(() => uuid.v4()).thenReturn('saved-action');
       when(() => saveDefinition(any())).thenAnswer((_) async => const Success(savedDefinition));
 
-      final saved = await controller.saveCommandLineAction(
+      final saved = await saveCoordinator.saveCommandLineAction(
         name: 'Run',
         command: 'dir',
         canSave: true,
@@ -477,7 +522,7 @@ void main() {
         return Success(definition);
       });
 
-      final saved = await controller.saveCommandLineAction(
+      final saved = await saveCoordinator.saveCommandLineAction(
         name: 'Updated name',
         command: 'dir',
         actionId: 'action-1',

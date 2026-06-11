@@ -46,8 +46,8 @@ No Windows, o wrapper consolidado roda preflight e gera worksheet
 operacional:
 
 ```powershell
-.\tool\run_odbc_operational_validation.ps1
-.\tool\run_odbc_operational_validation.ps1 -All
+python tool/run_odbc_operational_validation.py
+python tool/run_odbc_operational_validation.py --all
 ```
 
 Para preflight especifico do Hub `agent.action.*` live, ver
@@ -56,18 +56,18 @@ Para preflight especifico do Hub `agent.action.*` live, ver
 ### Agent-actions operational gate (local / CI)
 
 Acoes agendadas (`agent.action.*`) tem gate dedicado sem Hub real. No Windows,
-use o atalho `tool/run_agent_actions_operational_gate.ps1` ou os wrappers
+use o atalho `python tool/run_agent_actions_operational_gate.py` ou os wrappers
 equivalentes:
 
-- `tool/preflight_agent_actions_production.ps1 -RunContractTests` — preflight
+- `python tool/preflight_agent_actions_production.py --run-contract-tests` — preflight
   estatico + testes de contrato listados em `tool/agent_actions_*_test_paths.txt`
-- `tool/homologate_hub_agent_actions.ps1 -RunContractTests` — homologacao
+- `python tool/homologate_hub_agent_actions.py --run-contract-tests` — homologacao
   consolidada (contrato local)
 
 Homologacao live contra Hub real e opt-in (`RUN_LIVE_HUB_*`, `E2E_HUB_URL`,
 `E2E_HUB_TOKEN`, assinatura `PAYLOAD_SIGNING_*`); preflight:
 `dart run tool/validate_live_hub_agent_actions_env.dart` com
-`homologate_hub_agent_actions.ps1 -ValidateLiveEnv -RunLiveTests`. Detalhes em
+`python tool/homologate_hub_agent_actions.py --validate-live-env --run-live-tests`. Detalhes em
 `.cursor/rules/project_specifics.mdc` e `docs/implemente/plano_acoes_agendadas_execucoes.md`.
 
 ## Executar
@@ -93,7 +93,7 @@ explicativa.
 - `test/helpers/odbc_e2e_coverage_sql.dart` — DDL/DML por dialeto para E2E ODBC
 - `test/helpers/odbc_e2e_row_assertions.dart` — leitura de colunas ODBC case-insensitive nos testes
 - `test/helpers/odbc_e2e_rpc_harness.dart` — gateway real + `RpcMethodDispatcher` para E2E RPC
-- `tool/run_odbc_operational_validation.ps1` — wrapper operacional Windows
+- `python tool/run_odbc_operational_validation.py` — wrapper operacional
 - `.env.example` — template das variaveis E2E/integracao
 
 ## Notas
