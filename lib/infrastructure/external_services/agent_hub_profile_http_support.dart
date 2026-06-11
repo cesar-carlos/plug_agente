@@ -157,9 +157,7 @@ abstract final class AgentHubProfileHttpSupport {
         );
       case AppConstants.httpStatusConflict:
         return domain.ProfileVersionConflictFailure.withContext(
-          message:
-              messageFromBody ??
-              'Profile was changed on the server. Reload from the server and try again.',
+          message: messageFromBody ?? 'Profile was changed on the server. Reload from the server and try again.',
           context: context,
         );
       case AppConstants.httpStatusTooManyRequests:
@@ -181,8 +179,7 @@ abstract final class AgentHubProfileHttpSupport {
     String? agentId,
     bool success = true,
   }) {
-    final requestId = response.headers.value('x-request-id') ??
-        response.headers.value('X-Request-Id');
+    final requestId = response.headers.value('x-request-id') ?? response.headers.value('X-Request-Id');
     final buffer = StringBuffer(
       'Hub $operation ${success ? 'succeeded' : 'failed'}: '
       'status=${response.statusCode}',

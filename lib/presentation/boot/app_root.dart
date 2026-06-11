@@ -1,13 +1,12 @@
-import 'dart:async';
-
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
-import 'package:plug_agente/application/actions/agent_action_secret_availability_checker.dart';
 import 'package:plug_agente/application/actions/agent_action_subsystem_coordinator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
+import 'package:plug_agente/application/bootstrap/deferred_boot_phase_outcome.dart';
+import 'package:plug_agente/application/bootstrap/hub_connection_shutdown_registry.dart';
 import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
 import 'package:plug_agente/application/repositories/i_app_preferences_repository.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
@@ -77,7 +76,8 @@ import 'package:plug_agente/presentation/adapters/connection_provider_playground
 import 'package:plug_agente/presentation/adapters/hub_recovery_auth_bridge.dart';
 import 'package:plug_agente/presentation/app/app.dart';
 import 'package:plug_agente/presentation/boot/startup_auto_session_initializer.dart';
-import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_dependencies.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_factory.dart';
 import 'package:plug_agente/presentation/providers/agent_operational_readiness_provider.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
@@ -85,6 +85,7 @@ import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/providers/notification_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
+import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
 import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
 import 'package:plug_agente/presentation/providers/sql_investigation_provider.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
@@ -104,12 +105,13 @@ class AppRoot extends StatelessWidget {
 
   final RuntimeCapabilities capabilities;
   final String? initialRoute;
-  final Future<void> Function()? runDeferredBootstrap;
+  final Future<DeferredBootPhaseOutcome> Function()? runDeferredBootstrap;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ...buildPresentationInfrastructureProviders(capabilities: capabilities),
         ChangeNotifierProvider(
           create: (context) => RuntimeModeProvider(getIt<RuntimeCapabilities>()),
         ),
@@ -159,6 +161,9 @@ class AppRoot extends StatelessWidget {
             featureFlags: getIt<FeatureFlags>(),
             hubAccessTokenRefreshGate: getIt<HubAccessTokenRefreshGate>(),
             hubAccessTokenRenewer: getIt<HubAccessTokenRenewer>(),
+            hubConnectionShutdownRegistry: getIt.isRegistered<HubConnectionShutdownRegistry>()
+                ? getIt<HubConnectionShutdownRegistry>()
+                : null,
           ),
           update: (context, auth, connection) {
             final bridge = HubRecoveryAuthBridge(
@@ -216,57 +221,55 @@ class AppRoot extends StatelessWidget {
           },
         ),
         ChangeNotifierProvider(
-          create: (context) => AgentActionsProvider(
-            getIt<ListAgentActionDefinitions>(),
-            getIt<ListAgentActionExecutions>(),
-            getIt<SaveAgentActionDefinition>(),
-            getIt<DeleteAgentActionDefinition>(),
-            getIt<ListAgentActionTriggers>(),
-            getIt<DeleteAgentActionTrigger>(),
-            getIt<SaveAgentActionTrigger>(),
-            getIt<ListDeveloperData7Connections>(),
-            getIt<RunAgentActionLocally>(),
-            getIt<TestAgentActionDefinition>(),
-            getIt<PreviewAgentActionDefinition>(),
-            getIt<CancelAgentActionExecution>(),
-            getIt<GetAgentActionExecution>(),
-            getIt<SliceAgentActionCapturedOutput>(),
-            getIt<ListRecentAgentActionRemoteAudit>(),
-            getIt<ExportAgentActionsBundle>(),
-            getIt<ImportAgentActionsBundle>(),
-            getIt<FeatureFlags>(),
-            getIt<Uuid>(),
-            getIt<IActionCommandSafetyAssessor>(),
-            getIt<AgentActionRetentionSettings>(),
-            getIt<IAgentActionsBundleFileGateway>(),
-            runtimeStateGuard: getIt.isRegistered<AgentActionRuntimeStateGuard>()
-                ? getIt<AgentActionRuntimeStateGuard>()
-                : null,
-            subsystemCoordinator: getIt.isRegistered<AgentActionSubsystemCoordinator>()
-                ? getIt<AgentActionSubsystemCoordinator>()
-                : null,
-            executionQueue: getIt.isRegistered<ActionExecutionQueue>() ? getIt<ActionExecutionQueue>() : null,
-            secretAvailabilityChecker: AgentActionSecretAvailabilityChecker(
+          create: (context) => createAgentActionsProvider(
+            AgentActionsProviderWiring(
+              dependencies: AgentActionsProviderDependencies(
+                listDefinitions: getIt<ListAgentActionDefinitions>(),
+                listExecutions: getIt<ListAgentActionExecutions>(),
+                saveDefinition: getIt<SaveAgentActionDefinition>(),
+                deleteDefinition: getIt<DeleteAgentActionDefinition>(),
+                listTriggers: getIt<ListAgentActionTriggers>(),
+                deleteTrigger: getIt<DeleteAgentActionTrigger>(),
+                saveTrigger: getIt<SaveAgentActionTrigger>(),
+                listDeveloperData7Connections: getIt<ListDeveloperData7Connections>(),
+                runAction: getIt<RunAgentActionLocally>(),
+                testDefinition: getIt<TestAgentActionDefinition>(),
+                previewDefinition: getIt<PreviewAgentActionDefinition>(),
+                cancelExecution: getIt<CancelAgentActionExecution>(),
+                getExecution: getIt<GetAgentActionExecution>(),
+                sliceCapturedOutput: getIt<SliceAgentActionCapturedOutput>(),
+                listRecentRemoteAudit: getIt<ListRecentAgentActionRemoteAudit>(),
+                exportBundle: getIt<ExportAgentActionsBundle>(),
+                importBundle: getIt<ImportAgentActionsBundle>(),
+                featureFlags: getIt<FeatureFlags>(),
+                uuid: getIt<Uuid>(),
+                commandSafetyAssessor: getIt<IActionCommandSafetyAssessor>(),
+                retentionSettings: getIt<AgentActionRetentionSettings>(),
+                bundleFileGateway: getIt<IAgentActionsBundleFileGateway>(),
+                saveAgentActionSecret: getIt.isRegistered<SaveAgentActionSecret>() ? getIt<SaveAgentActionSecret>() : null,
+                deleteAgentActionSecret: getIt.isRegistered<DeleteAgentActionSecret>() ? getIt<DeleteAgentActionSecret>() : null,
+              ),
+              preflightSettings: getIt<AgentActionPreflightSettings>(),
+              runtimeStateGuard: getIt.isRegistered<AgentActionRuntimeStateGuard>()
+                  ? getIt<AgentActionRuntimeStateGuard>()
+                  : null,
+              subsystemCoordinator: getIt.isRegistered<AgentActionSubsystemCoordinator>()
+                  ? getIt<AgentActionSubsystemCoordinator>()
+                  : null,
+              executionQueue: getIt.isRegistered<ActionExecutionQueue>() ? getIt<ActionExecutionQueue>() : null,
               secretStore: getIt.isRegistered<IAgentActionSecretStore>() ? getIt<IAgentActionSecretStore>() : null,
+              elevatedRunnerReadiness: getIt.isRegistered<ElevatedActionRunnerReadinessService>()
+                  ? getIt<ElevatedActionRunnerReadinessService>()
+                  : null,
+              prepareElevatedActionRunner: getIt.isRegistered<PrepareElevatedActionRunner>()
+                  ? getIt<PrepareElevatedActionRunner>()
+                  : null,
+              globalStorageContext: getIt.isRegistered<GlobalStorageContext>() ? getIt<GlobalStorageContext>() : null,
+              triggerScheduler: getIt.isRegistered<AgentActionTriggerScheduler>() ? getIt<AgentActionTriggerScheduler>() : null,
+              comObjectInvocationDiagnostics: getIt.isRegistered<IComObjectInvocationDiagnostics>()
+                  ? getIt<IComObjectInvocationDiagnostics>()
+                  : null,
             ),
-            saveAgentActionSecret: getIt.isRegistered<SaveAgentActionSecret>() ? getIt<SaveAgentActionSecret>() : null,
-            deleteAgentActionSecret: getIt.isRegistered<DeleteAgentActionSecret>()
-                ? getIt<DeleteAgentActionSecret>()
-                : null,
-            elevatedRunnerReadiness: getIt.isRegistered<ElevatedActionRunnerReadinessService>()
-                ? getIt<ElevatedActionRunnerReadinessService>()
-                : null,
-            prepareElevatedActionRunner: getIt.isRegistered<PrepareElevatedActionRunner>()
-                ? getIt<PrepareElevatedActionRunner>()
-                : null,
-            globalStorageContext: getIt.isRegistered<GlobalStorageContext>() ? getIt<GlobalStorageContext>() : null,
-            triggerScheduler: getIt.isRegistered<AgentActionTriggerScheduler>()
-                ? getIt<AgentActionTriggerScheduler>()
-                : null,
-            comObjectInvocationDiagnostics: getIt.isRegistered<IComObjectInvocationDiagnostics>()
-                ? getIt<IComObjectInvocationDiagnostics>()
-                : null,
-            preflightSettings: getIt<AgentActionPreflightSettings>(),
           ),
         ),
         ChangeNotifierProvider(
@@ -301,24 +304,13 @@ class _ProviderInitializer extends StatefulWidget {
 
   final RuntimeCapabilities capabilities;
   final String? initialRoute;
-  final Future<void> Function()? runDeferredBootstrap;
+  final Future<DeferredBootPhaseOutcome> Function()? runDeferredBootstrap;
 
   @override
   State<_ProviderInitializer> createState() => _ProviderInitializerState();
 }
 
 class _ProviderInitializerState extends State<_ProviderInitializer> {
-  @override
-  void initState() {
-    super.initState();
-    final runDeferredBootstrap = widget.runDeferredBootstrap;
-    if (runDeferredBootstrap != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(runDeferredBootstrap());
-      });
-    }
-  }
-
   @override
   void dispose() {
     if (getIt.isRegistered<AgentActionRuntimeStateGuard>()) {
@@ -333,6 +325,7 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
   Widget build(BuildContext context) {
     return StartupAutoSessionInitializer(
       hubSessionCoordinator: getIt<HubSessionCoordinator>(),
+      runDeferredBootstrapBeforeConnect: widget.runDeferredBootstrap,
       child: PlugAgentApp(
         initialRoute: widget.initialRoute,
         capabilities: widget.capabilities,

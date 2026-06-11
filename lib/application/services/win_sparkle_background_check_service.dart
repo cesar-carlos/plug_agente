@@ -206,9 +206,7 @@ class WinSparkleBackgroundCheckService {
               level: 800,
             );
             await Future<void>.delayed(delay);
-            if (!isAvailable ||
-                automaticSilentUpdatesEnabled ||
-                !_preferences.updateNotificationsEnabled) {
+            if (!isAvailable || automaticSilentUpdatesEnabled || !_preferences.updateNotificationsEnabled) {
               developer.log(
                 'Background update retry aborted after delay: '
                 'isAvailable=$isAvailable, '

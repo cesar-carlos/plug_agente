@@ -16,9 +16,10 @@ import 'package:plug_agente/domain/utils/json_primitive_coercion.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-typedef SqlBatchSupportsPageOffsetPagination = bool Function(
-  Map<String, dynamic> negotiatedExtensions,
-);
+typedef SqlBatchSupportsPageOffsetPagination =
+    bool Function(
+      Map<String, dynamic> negotiatedExtensions,
+    );
 
 /// Handles `sql.executeBatch` RPC requests.
 class SqlBatchHandler {
@@ -96,14 +97,16 @@ class SqlBatchHandler {
     }
 
     final idempotencyKey = params['idempotency_key'] as String?;
-    final idempotencyFingerprint = await resolveIdempotencyFingerprint(
-      request.method,
-      params,
+    final idempotencyFingerprint = await resolveIdempotencyFingerprintIfEnabled(
+      enabled: _featureFlags.enableSocketIdempotency,
+      idempotencyKey: idempotencyKey,
+      method: request.method,
+      params: params,
     );
     final idempotentEarly = await _support.consumeIdempotentCacheIfAny(
       request,
       idempotencyKey,
-      idempotencyFingerprint,
+      idempotencyFingerprint ?? '',
     );
     if (idempotentEarly != null) {
       return idempotentEarly;
@@ -196,7 +199,8 @@ class SqlBatchHandler {
     return _support.runIdempotentExecution(
       request: request,
       idempotencyKey: idempotencyKey,
-      idempotencyFingerprint: idempotencyFingerprint,
+      idempotencyFingerprint: idempotencyFingerprint ?? '',
+      idempotentCachePrefetched: true,
       execute: () async {
         final batchStartedAt = DateTime.now().toUtc();
         final result = await _executeSqlBatchWithBudget(

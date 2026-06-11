@@ -299,9 +299,7 @@ class AgentConfigRepository implements IAgentConfigRepository {
   }
 
   Future<List<Config>> _mapDataListToEntities(List<ConfigData> configsData) async {
-    final legacyRows = configsData
-        .map(_legacySecretsFromConfigData)
-        .toList(growable: false);
+    final legacyRows = configsData.map(_legacySecretsFromConfigData).toList(growable: false);
 
     final hubBundleResult = await _hubSessionStore.readLegacyRowBundle(legacyRows);
     if (hubBundleResult.isError()) {
@@ -321,10 +319,8 @@ class AgentConfigRepository implements IAgentConfigRepository {
         .map((data) {
           final metadataConfig = _mapDataToEntityMetadata(data);
           final session = hubBundle.sessions[data.id] ?? const HubStoredSession();
-          final credentials =
-              hubBundle.credentials[data.id] ?? const HubStoredCredentialsState();
-          final odbcCredentials =
-              odbcCredentialsById[data.id] ?? const OdbcCredentialSecrets();
+          final credentials = hubBundle.credentials[data.id] ?? const HubStoredCredentialsState();
+          final odbcCredentials = odbcCredentialsById[data.id] ?? const OdbcCredentialSecrets();
           return metadataConfig.copyWith(
             authToken: session.token?.token,
             refreshToken: session.token?.refreshToken,

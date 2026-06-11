@@ -18,6 +18,7 @@ import 'package:plug_agente/presentation/support/update_support_diagnostics_buil
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:result_dart/result_dart.dart';
+
 class UpdateCheckManualStart {
   UpdateCheckManualStart({
     required this.checkingLabel,
@@ -31,7 +32,8 @@ sealed class UpdateCheckManualCompletion {}
 class UpdateCheckManualSuccess extends UpdateCheckManualCompletion {
   UpdateCheckManualSuccess({
     required this.manualCheckDisplayLabel,
-    required this.diagnosticSections, this.inlineNotice,
+    required this.diagnosticSections,
+    this.inlineNotice,
     this.dialogMessage,
     this.dialogType = MessageType.info,
   });
@@ -59,7 +61,8 @@ sealed class UpdateCheckAutomaticCompletion {}
 
 class UpdateCheckAutomaticSuccess extends UpdateCheckAutomaticCompletion {
   UpdateCheckAutomaticSuccess({
-    required this.diagnosticSections, this.inlineNotice,
+    required this.diagnosticSections,
+    this.inlineNotice,
     this.dialogMessage,
     this.dialogType = MessageType.info,
   });

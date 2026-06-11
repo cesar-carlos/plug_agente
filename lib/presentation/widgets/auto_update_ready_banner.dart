@@ -5,13 +5,13 @@ import 'dart:developer' as developer;
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/application/services/user_initiated_apply_failure.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/providers/updates_settings_provider.dart';
 import 'package:plug_agente/presentation/widgets/auto_update_banner_activity.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/app_confirm_dialog.dart';
@@ -43,10 +43,13 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
   DateTime? _dismissedUntil;
 
   @override
-  void initState() {
-    super.initState();
-    if (getIt.isRegistered<IAppSettingsStore>()) {
-      _settingsStore = getIt<IAppSettingsStore>();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_settingsStore != null) {
+      return;
+    }
+    _settingsStore = readOptionalPresentationProvider<IAppSettingsStore>(context);
+    if (_settingsStore != null) {
       _hydrateDismissState();
     }
   }

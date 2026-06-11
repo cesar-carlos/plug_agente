@@ -125,9 +125,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       service: _service,
       metrics: _metrics,
       settings: _settings,
-      parallelPool: connectionPool is AdaptiveOdbcConnectionPool
-          ? connectionPool.nativeBulkInsertPool
-          : null,
+      parallelPool: connectionPool is AdaptiveOdbcConnectionPool ? connectionPool.nativeBulkInsertPool : null,
     );
     _readOnlyBatchParallelExecutor = OdbcReadOnlyBatchParallelExecutor(
       connectionManager: _connectionManager,

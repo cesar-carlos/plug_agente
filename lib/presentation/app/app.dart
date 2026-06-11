@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/routes/deep_link_service.dart';
 import 'package:plug_agente/core/routes/routes.dart';
@@ -11,6 +10,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/presentation/widgets/auto_update_ready_banner.dart';
 import 'package:provider/provider.dart';
@@ -68,9 +68,10 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
       return;
     }
 
-    if (getIt.isRegistered<IWindowManagerService>()) {
+    final windowManager = readOptionalPresentationProvider<IWindowManagerService>(context);
+    if (windowManager != null) {
       try {
-        await getIt<IWindowManagerService>().show();
+        await windowManager.show();
       } on Object catch (error) {
         AppLogger.warning('Failed to show window for runtime deep link', error);
       }

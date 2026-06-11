@@ -55,8 +55,7 @@ class AgentActionEditorPolicyPanel extends StatelessWidget {
             l10n: l10n,
             enabled: enabled,
             elevatedFeatureEnabled: provider.isElevatedAgentActionsEnabled,
-            elevatedRunnerReady:
-                provider.isElevatedRunnerConfigured && !provider.isElevatedRunnerDegraded,
+            elevatedRunnerReady: provider.isElevatedRunnerConfigured && !provider.isElevatedRunnerDegraded,
             maxAttempts: draft.maxAttempts,
             maxRuntimeMinutesController: draft.executionPolicy.maxRuntimeMinutes,
             killMainProcessOnTimeout: draft.killMainProcessOnTimeout,

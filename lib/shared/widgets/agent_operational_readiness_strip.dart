@@ -15,8 +15,7 @@ class AgentOperationalReadinessStrip extends StatelessWidget {
 
     final hubLabel = switch (snapshot.hubPhase) {
       HubConnectionPhase.connected => l10n.agentOperationalReadinessHubConnected,
-      HubConnectionPhase.connecting || HubConnectionPhase.reconnecting =>
-        l10n.agentOperationalReadinessHubConnecting,
+      HubConnectionPhase.connecting || HubConnectionPhase.reconnecting => l10n.agentOperationalReadinessHubConnecting,
       HubConnectionPhase.error => l10n.agentOperationalReadinessHubError,
       HubConnectionPhase.disconnected => l10n.agentOperationalReadinessHubDisconnected,
     };
@@ -40,9 +39,7 @@ class AgentOperationalReadinessStrip extends StatelessWidget {
             _StatusChip(
               icon: FluentIcons.contact,
               label: tokenLabel,
-              color: snapshot.activeClientTokenCount > 0
-                  ? context.appColors.success
-                  : context.appColors.warning,
+              color: snapshot.activeClientTokenCount > 0 ? context.appColors.success : context.appColors.warning,
             ),
             if (snapshot.hasSchedulerIssue)
               _StatusChip(

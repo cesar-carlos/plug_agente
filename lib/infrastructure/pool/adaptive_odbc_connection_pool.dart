@@ -371,9 +371,7 @@ final class AdaptiveOdbcConnectionPool
       return errors.first as domain.Failure;
     }
 
-    final messages = errors
-        .map((error) => error is domain.Failure ? error.message : error.toString())
-        .join('; ');
+    final messages = errors.map((error) => error is domain.Failure ? error.message : error.toString()).join('; ');
     return domain.ConnectionFailure.withContext(
       message: 'Pool operation completed with errors: $messages',
       cause: errors.first,

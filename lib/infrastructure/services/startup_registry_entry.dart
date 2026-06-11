@@ -8,15 +8,13 @@ enum StartupRegistryScope {
   String get runKeyPath => switch (this) {
     StartupRegistryScope.currentUser => r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run',
     StartupRegistryScope.localMachine => r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run',
-    StartupRegistryScope.localMachineWow6432 =>
-      r'HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run',
+    StartupRegistryScope.localMachineWow6432 => r'HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run',
   };
 
   String get powershellLiteralPath => switch (this) {
     StartupRegistryScope.currentUser => r'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
     StartupRegistryScope.localMachine => r'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
-    StartupRegistryScope.localMachineWow6432 =>
-      r'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run',
+    StartupRegistryScope.localMachineWow6432 => r'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run',
   };
 
   bool get requiresElevation =>

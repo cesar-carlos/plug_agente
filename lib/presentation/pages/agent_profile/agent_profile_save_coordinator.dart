@@ -232,7 +232,11 @@ class AgentProfileSaveCoordinator {
     if (error is Failure) {
       return error;
     }
-    return ServerFailure(error.toString());
+    return ServerFailure.withContext(
+      message: 'Failed to save agent profile',
+      cause: error,
+      context: const {'operation': 'saveAgentProfile'},
+    );
   }
 }
 

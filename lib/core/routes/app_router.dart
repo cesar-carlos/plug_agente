@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/routes/app_routes.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
@@ -14,6 +13,8 @@ import 'package:plug_agente/presentation/pages/database_settings_page.dart';
 import 'package:plug_agente/presentation/pages/main_window.dart';
 import 'package:plug_agente/presentation/pages/playground_page.dart';
 import 'package:plug_agente/presentation/pages/websocket_settings_page.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
+import 'package:provider/provider.dart';
 
 /// Route guard instance.
 ///
@@ -130,10 +131,8 @@ GoRouter createAppRouter({
             builder: (context, state) {
               return AgentActionsPage(
                 runtimeCapabilities: capabilities,
-                runtimeDiagnostics: getIt.isRegistered<RuntimeDetectionDiagnostics>()
-                    ? getIt<RuntimeDetectionDiagnostics>()
-                    : null,
-                appSettingsStore: getIt<IAppSettingsStore>(),
+                runtimeDiagnostics: readOptionalPresentationProvider<RuntimeDetectionDiagnostics>(context),
+                appSettingsStore: context.read<IAppSettingsStore>(),
               );
             },
           ),

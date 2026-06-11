@@ -36,7 +36,8 @@ class AutoStartService implements IStartupService {
        _processStarter = processStarter ?? _defaultProcessStarter,
        _isWindows = isWindows ?? (() => Platform.isWindows),
        _executablePathProvider = executablePathProvider ?? (() => Platform.resolvedExecutable),
-       _elevatedRegistryExecutor = elevatedRegistryExecutor ?? WindowsElevatedRegistryExecutor(processRunner: processRunner);
+       _elevatedRegistryExecutor =
+           elevatedRegistryExecutor ?? WindowsElevatedRegistryExecutor(processRunner: processRunner);
 
   static const String runValueName = 'Plug Agente';
 
@@ -358,8 +359,7 @@ class AutoStartService implements IStartupService {
     final expectedExecutable = _executablePathProvider();
     return entries.any(
       (result) =>
-          result.scope == StartupRegistryScope.currentUser &&
-          (result.entry?.isHealthyFor(expectedExecutable) ?? false),
+          result.scope == StartupRegistryScope.currentUser && (result.entry?.isHealthyFor(expectedExecutable) ?? false),
     );
   }
 
@@ -384,8 +384,7 @@ class AutoStartService implements IStartupService {
 
       final deleteResult = await _deleteStartupEntry(scope);
       if (deleteResult.isError()) {
-        if (_hasHealthyCurrentUserEntry(existingEntries) ||
-            await _hasHealthyCurrentUserEntryAfterQuery()) {
+        if (_hasHealthyCurrentUserEntry(existingEntries) || await _hasHealthyCurrentUserEntryAfterQuery()) {
           legacyMachineEntryRemains = true;
           developer.log(
             'Could not remove legacy machine startup entry (${scope.label}); HKCU entry is healthy.',

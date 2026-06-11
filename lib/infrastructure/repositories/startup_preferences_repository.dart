@@ -15,16 +15,13 @@ class StartupPreferencesRepository implements IStartupPreferencesRepository {
   final IStartupService? _startupService;
 
   @override
-  bool get startWithWindows =>
-      _settings.getBool(AppSettingsKeys.startWithWindows) ?? false;
+  bool get startWithWindows => _settings.getBool(AppSettingsKeys.startWithWindows) ?? false;
 
   @override
-  bool get startMinimized =>
-      _settings.getBool(AppSettingsKeys.startMinimized) ?? false;
+  bool get startMinimized => _settings.getBool(AppSettingsKeys.startMinimized) ?? false;
 
   @override
-  bool get minimizeToTray =>
-      _settings.getBool(AppSettingsKeys.minimizeToTray) ?? true;
+  bool get minimizeToTray => _settings.getBool(AppSettingsKeys.minimizeToTray) ?? true;
 
   @override
   bool get closeToTray => _settings.getBool(AppSettingsKeys.closeToTray) ?? true;
@@ -33,20 +30,16 @@ class StartupPreferencesRepository implements IStartupPreferencesRepository {
   bool get isStartupServiceAvailable => _startupService != null;
 
   @override
-  Future<Result<Unit>> persistStartWithWindows(bool value) =>
-      _persistBool(AppSettingsKeys.startWithWindows, value);
+  Future<Result<Unit>> persistStartWithWindows(bool value) => _persistBool(AppSettingsKeys.startWithWindows, value);
 
   @override
-  Future<Result<Unit>> persistStartMinimized(bool value) =>
-      _persistBool(AppSettingsKeys.startMinimized, value);
+  Future<Result<Unit>> persistStartMinimized(bool value) => _persistBool(AppSettingsKeys.startMinimized, value);
 
   @override
-  Future<Result<Unit>> persistMinimizeToTray(bool value) =>
-      _persistBool(AppSettingsKeys.minimizeToTray, value);
+  Future<Result<Unit>> persistMinimizeToTray(bool value) => _persistBool(AppSettingsKeys.minimizeToTray, value);
 
   @override
-  Future<Result<Unit>> persistCloseToTray(bool value) =>
-      _persistBool(AppSettingsKeys.closeToTray, value);
+  Future<Result<Unit>> persistCloseToTray(bool value) => _persistBool(AppSettingsKeys.closeToTray, value);
 
   @override
   Future<Result<bool>> readSystemStartupEnabled() {

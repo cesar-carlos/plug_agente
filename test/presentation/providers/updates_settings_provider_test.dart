@@ -100,6 +100,9 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
     String? noticeTitle,
     String? noticeBody,
   }) async => const Success(unit);
+
+  @override
+  Future<void> dispose() async {}
 }
 
 void main() {

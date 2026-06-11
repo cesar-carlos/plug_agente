@@ -59,8 +59,7 @@ class _MainWindowState extends State<MainWindow> {
       paneBodyBuilder: (item, body) {
         return Column(
           children: [
-            if (runtimeMode.isDegraded)
-              _DegradedModeBanner(reasons: runtimeMode.degradationReasons),
+            if (runtimeMode.isDegraded) _DegradedModeBanner(reasons: runtimeMode.degradationReasons),
             Expanded(
               child: AppLayout.centeredContent(
                 maxWidth: AppLayout.maxPaneContentWidth,

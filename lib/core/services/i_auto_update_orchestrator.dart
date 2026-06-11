@@ -103,4 +103,7 @@ abstract class IAutoUpdateOrchestrator {
     String? noticeTitle,
     String? noticeBody,
   });
+
+  /// Stops background update scheduling and releases orchestrator resources.
+  Future<void> dispose();
 }

@@ -18,6 +18,9 @@ void main() {
 
     final decoded = ZipDecoder().decodeBytes(zip);
     final names = decoded.files.where((f) => f.isFile).map((f) => f.name).toSet();
-    expect(names, containsAll(<String>['manifest.json', 'agent_config.db', 'settings.json', 'secure_storage_secrets.enc']));
+    expect(
+      names,
+      containsAll(<String>['manifest.json', 'agent_config.db', 'settings.json', 'secure_storage_secrets.enc']),
+    );
   });
 }

@@ -22,11 +22,7 @@ abstract final class AgentActionDraftParsers {
     if (input.trim().isEmpty) {
       return const <String>{};
     }
-    return input
-        .split(',')
-        .map((String part) => part.trim())
-        .where((String part) => part.isNotEmpty)
-        .toSet();
+    return input.split(',').map((String part) => part.trim()).where((String part) => part.isNotEmpty).toSet();
   }
 
   /// Parses `NAME=value` lines into a map. Blank and `#`-prefixed lines are

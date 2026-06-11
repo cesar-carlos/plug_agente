@@ -43,9 +43,7 @@ class AgentActionSecretPlaceholderScanner {
       }
       visit(path.originalPath);
       final canonicalPath = path.canonicalPath;
-      if (canonicalPath != null &&
-          canonicalPath.isNotEmpty &&
-          canonicalPath != path.originalPath) {
+      if (canonicalPath != null && canonicalPath.isNotEmpty && canonicalPath != path.originalPath) {
         visit(canonicalPath);
       }
     }

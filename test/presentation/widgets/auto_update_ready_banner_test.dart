@@ -7,10 +7,12 @@ import 'package:plug_agente/application/observability/update_check_diagnostics.d
 import 'package:plug_agente/application/services/manual_check_outcome.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
 import 'package:plug_agente/presentation/providers/updates_settings_provider.dart';
 import 'package:plug_agente/presentation/widgets/auto_update_ready_banner.dart';
 import 'package:provider/provider.dart';
@@ -115,6 +117,9 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
     applyAvailableCallCount += 1;
     return applyAvailableResult;
   }
+
+  @override
+  Future<void> dispose() async {}
 }
 
 UpdateCheckDiagnostics _diag({
@@ -141,6 +146,9 @@ Future<void> _pumpBanner(
     await getIt.unregister<IAutoUpdateOrchestrator>();
   }
   getIt.registerSingleton<IAutoUpdateOrchestrator>(orchestrator);
+  if (!getIt.isRegistered<RuntimeCapabilities>()) {
+    getIt.registerSingleton<RuntimeCapabilities>(RuntimeCapabilities.full());
+  }
   if (settingsStore != null) {
     if (getIt.isRegistered<IAppSettingsStore>()) {
       await getIt.unregister<IAppSettingsStore>();
@@ -148,8 +156,15 @@ Future<void> _pumpBanner(
     getIt.registerSingleton<IAppSettingsStore>(settingsStore);
   }
   await tester.pumpWidget(
-    ChangeNotifierProvider(
-      create: (_) => UpdatesSettingsProvider(orchestrator),
+    MultiProvider(
+      providers: [
+        ...buildPresentationInfrastructureProviders(
+          capabilities: getIt<RuntimeCapabilities>(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => UpdatesSettingsProvider(orchestrator),
+        ),
+      ],
       child: const FluentApp(
         locale: Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,

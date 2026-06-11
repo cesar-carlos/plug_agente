@@ -268,6 +268,78 @@ void main() {
       );
     });
 
+    test('returns same instance when no result set exceeds maxRows', () {
+      const rs0 = QueryResultSet(
+        index: 0,
+        rows: [
+          {'a': 0},
+        ],
+        rowCount: 1,
+      );
+      const rs1 = QueryResultSet(
+        index: 1,
+        rows: [
+          {'b': 0},
+        ],
+        rowCount: 1,
+      );
+      final response = QueryResponse(
+        id: 'exec-6b',
+        requestId: 'req-6b',
+        agentId: 'agent-1',
+        data: rs0.rows,
+        timestamp: DateTime.utc(2024),
+        resultSets: const [rs0, rs1],
+        items: const [
+          QueryResponseItem.resultSet(index: 0, resultSet: rs0),
+          QueryResponseItem.resultSet(index: 1, resultSet: rs1),
+        ],
+      );
+
+      expect(
+        mapper.applyMaxRowsToMultiResultSets(response, 10),
+        same(response),
+      );
+    });
+
+    test('maps items by result set index without relying on list order', () {
+      const rs0 = QueryResultSet(
+        index: 10,
+        rows: [
+          {'a': 0},
+          {'a': 1},
+        ],
+        rowCount: 2,
+      );
+      const rs1 = QueryResultSet(
+        index: 20,
+        rows: [
+          {'b': 0},
+          {'b': 1},
+        ],
+        rowCount: 2,
+      );
+      final response = QueryResponse(
+        id: 'exec-6c',
+        requestId: 'req-6c',
+        agentId: 'agent-1',
+        data: rs0.rows,
+        timestamp: DateTime.utc(2024),
+        resultSets: const [rs0, rs1],
+        items: const [
+          QueryResponseItem.resultSet(index: 1, resultSet: rs1),
+          QueryResponseItem.resultSet(index: 0, resultSet: rs0),
+        ],
+      );
+
+      final truncated = mapper.applyMaxRowsToMultiResultSets(response, 1);
+
+      expect(truncated.items[0].resultSet!.index, 20);
+      expect(truncated.items[0].resultSet!.rows, hasLength(1));
+      expect(truncated.items[1].resultSet!.index, 10);
+      expect(truncated.items[1].resultSet!.rows, hasLength(1));
+    });
+
     test('truncates each result set independently', () {
       const rs0 = QueryResultSet(
         index: 0,

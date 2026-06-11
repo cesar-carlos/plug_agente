@@ -4,7 +4,6 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
 import 'package:plug_agente/domain/entities/protocol_metrics_summary.dart';
@@ -13,6 +12,7 @@ import 'package:plug_agente/domain/repositories/i_authorization_metrics_collecto
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/providers/sql_investigation_provider.dart';
 import 'package:plug_agente/presentation/providers/websocket_log_provider.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
@@ -296,6 +296,7 @@ class _WebSocketLogTabbedPane extends StatefulWidget {
 
 class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
   int _tabIndex = 0;
+  var _metricsSubscriptionsInitialized = false;
   StreamSubscription<void>? _authMetricsSub;
   StreamSubscription<void>? _deprecationMetricsSub;
   StreamSubscription<void>? _protocolMetricsSub;
@@ -316,29 +317,33 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
   }
 
   void _snapMetrics() {
-    _authSummary = getIt.isRegistered<IAuthorizationMetricsCollector>()
-        ? getIt<IAuthorizationMetricsCollector>().getSummary()
-        : null;
-    _deprecationCount = getIt.isRegistered<IDeprecationMetricsCollector>()
-        ? getIt<IDeprecationMetricsCollector>().preserveSqlUsageCount
-        : null;
+    final authMetrics = readOptionalPresentationProvider<IAuthorizationMetricsCollector>(context);
+    _authSummary = authMetrics?.getSummary();
+    final deprecationMetrics = readOptionalPresentationProvider<IDeprecationMetricsCollector>(context);
+    _deprecationCount = deprecationMetrics?.preserveSqlUsageCount;
     final protocolMetrics = _readProtocolMetricsCollector(context);
     _protocolSummary = protocolMetrics?.getSummary(period: const Duration(minutes: 15));
   }
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_metricsSubscriptionsInitialized) {
+      return;
+    }
+    _metricsSubscriptionsInitialized = true;
     _snapMetrics();
-    if (getIt.isRegistered<IAuthorizationMetricsCollector>()) {
-      _authMetricsSub = getIt<IAuthorizationMetricsCollector>().updates.listen((_) {
+    final authMetrics = readOptionalPresentationProvider<IAuthorizationMetricsCollector>(context);
+    if (authMetrics != null) {
+      _authMetricsSub = authMetrics.updates.listen((_) {
         if (mounted) {
           _scheduleMetricsSnap();
         }
       });
     }
-    if (getIt.isRegistered<IDeprecationMetricsCollector>()) {
-      _deprecationMetricsSub = getIt<IDeprecationMetricsCollector>().updates.listen((_) {
+    final deprecationMetrics = readOptionalPresentationProvider<IDeprecationMetricsCollector>(context);
+    if (deprecationMetrics != null) {
+      _deprecationMetricsSub = deprecationMetrics.updates.listen((_) {
         if (mounted) {
           _scheduleMetricsSnap();
         }
@@ -373,7 +378,7 @@ class _WebSocketLogTabbedPaneState extends State<_WebSocketLogTabbedPane> {
 
   @override
   Widget build(BuildContext context) {
-    final showSqlTab = getIt<FeatureFlags>().enableDashboardSqlInvestigationFeed;
+    final showSqlTab = context.read<FeatureFlags>().enableDashboardSqlInvestigationFeed;
     if (!showSqlTab && _tabIndex > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {

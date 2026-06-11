@@ -220,87 +220,87 @@ class DiagnosticErrorView {
 /// `diagnostics.appcastProbeVersion`.
 extension UpdateCheckDiagnosticsViews on UpdateCheckDiagnostics {
   UpdateCheckContextView get context => UpdateCheckContextView(
-        checkedAt: checkedAt,
-        configuredFeedUrl: configuredFeedUrl,
-        requestedFeedUrl: requestedFeedUrl,
-        checkId: checkId,
-        currentVersion: currentVersion,
-      );
+    checkedAt: checkedAt,
+    configuredFeedUrl: configuredFeedUrl,
+    requestedFeedUrl: requestedFeedUrl,
+    checkId: checkId,
+    currentVersion: currentVersion,
+  );
 
   UpdateCheckTimingView get timing => UpdateCheckTimingView(
-        probeRequestUrl: probeRequestUrl,
-        triggerStartedAt: triggerStartedAt,
-        triggerCompletedAt: triggerCompletedAt,
-        completedAt: completedAt,
-        completionSource: completionSource,
-      );
+    probeRequestUrl: probeRequestUrl,
+    triggerStartedAt: triggerStartedAt,
+    triggerCompletedAt: triggerCompletedAt,
+    completedAt: completedAt,
+    completionSource: completionSource,
+  );
 
   ProbeOutcomeView get probe => ProbeOutcomeView(
-        succeeded: probeSucceeded,
-        version: appcastProbeVersion,
-        os: appcastProbeOs,
-        itemCount: appcastProbeItemCount,
-        errorMessage: probeErrorMessage,
-        matchesSparkle: probeMatchesSparkle,
-      );
+    succeeded: probeSucceeded,
+    version: appcastProbeVersion,
+    os: appcastProbeOs,
+    itemCount: appcastProbeItemCount,
+    errorMessage: probeErrorMessage,
+    matchesSparkle: probeMatchesSparkle,
+  );
 
   AssetMetadataView get asset => AssetMetadataView(
-        remoteVersion: remoteVersion,
-        remoteDisplayVersion: remoteDisplayVersion,
-        assetUrl: assetUrl,
-        assetSize: assetSize,
-        assetName: assetName,
-        expectedSha256: sha256,
-        actualSha256: actualSha256,
-        hashValidationStatus: hashValidationStatus,
-        releaseNotes: releaseNotes,
-        releaseNotesUrl: releaseNotesUrl,
-      );
+    remoteVersion: remoteVersion,
+    remoteDisplayVersion: remoteDisplayVersion,
+    assetUrl: assetUrl,
+    assetSize: assetSize,
+    assetName: assetName,
+    expectedSha256: sha256,
+    actualSha256: actualSha256,
+    hashValidationStatus: hashValidationStatus,
+    releaseNotes: releaseNotes,
+    releaseNotesUrl: releaseNotesUrl,
+  );
 
   LauncherSnapshotView get launcher => LauncherSnapshotView(
-        installerPath: installerPath,
-        installerLogPath: installerLogPath,
-        installDirectory: installDirectory,
-        silentUpdateStrategy: silentUpdateStrategy,
-        launcherPath: launcherPath,
-        launcherStatusPath: launcherStatusPath,
-        launcherState: launcherState,
-        nonAdminExitCode: nonAdminExitCode,
-        nonAdminDurationMs: nonAdminDurationMs,
-        elevatedExitCode: elevatedExitCode,
-        elevatedDurationMs: elevatedDurationMs,
-        elevatedRetryStarted: elevatedRetryStarted,
-        waitForAppExitDurationMs: waitForAppExitDurationMs,
-        appPid: appPid,
-        updateDirectorySecurityStatus: updateDirectorySecurityStatus,
-        installDirectoryWritable: installDirectoryWritable,
-        elevatedCancelled: elevatedCancelled,
-      );
+    installerPath: installerPath,
+    installerLogPath: installerLogPath,
+    installDirectory: installDirectory,
+    silentUpdateStrategy: silentUpdateStrategy,
+    launcherPath: launcherPath,
+    launcherStatusPath: launcherStatusPath,
+    launcherState: launcherState,
+    nonAdminExitCode: nonAdminExitCode,
+    nonAdminDurationMs: nonAdminDurationMs,
+    elevatedExitCode: elevatedExitCode,
+    elevatedDurationMs: elevatedDurationMs,
+    elevatedRetryStarted: elevatedRetryStarted,
+    waitForAppExitDurationMs: waitForAppExitDurationMs,
+    appPid: appPid,
+    updateDirectorySecurityStatus: updateDirectorySecurityStatus,
+    installDirectoryWritable: installDirectoryWritable,
+    elevatedCancelled: elevatedCancelled,
+  );
 
   SignatureSnapshotView get signature => SignatureSnapshotView(
-        helperSignatureStatus: helperSignatureStatus,
-        helperSha256: helperSha256,
-        signatureStatus: signatureStatus,
-        signatureRequired: signatureRequired,
-        feedSignatureStatus: feedSignatureStatus,
-        feedSignatureRequired: feedSignatureRequired,
-      );
+    helperSignatureStatus: helperSignatureStatus,
+    helperSha256: helperSha256,
+    signatureStatus: signatureStatus,
+    signatureRequired: signatureRequired,
+    feedSignatureStatus: feedSignatureStatus,
+    feedSignatureRequired: feedSignatureRequired,
+  );
 
   RolloutSnapshotView get rollout => RolloutSnapshotView(
-        channel: rolloutChannel,
-        percentage: rolloutPercentage,
-        bucket: rolloutBucket,
-        eligible: rolloutEligible,
-      );
+    channel: rolloutChannel,
+    percentage: rolloutPercentage,
+    bucket: rolloutBucket,
+    eligible: rolloutEligible,
+  );
 
   CooldownSnapshotView get cooldown => CooldownSnapshotView(
-        failureCount: automaticFailureCount,
-        cooldownUntil: automaticCooldownUntil,
-      );
+    failureCount: automaticFailureCount,
+    cooldownUntil: automaticCooldownUntil,
+  );
 
   DiagnosticErrorView get errors => DiagnosticErrorView(
-        validationErrorCode: validationErrorCode,
-        errorMessage: errorMessage,
-        probeErrorMessage: probeErrorMessage,
-      );
+    validationErrorCode: validationErrorCode,
+    errorMessage: errorMessage,
+    probeErrorMessage: probeErrorMessage,
+  );
 }

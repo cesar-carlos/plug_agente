@@ -7,8 +7,7 @@ import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:result_dart/result_dart.dart';
 
-class _MockStartupPreferencesRepository extends Mock
-    implements IStartupPreferencesRepository {}
+class _MockStartupPreferencesRepository extends Mock implements IStartupPreferencesRepository {}
 
 void main() {
   late _MockStartupPreferencesRepository repository;

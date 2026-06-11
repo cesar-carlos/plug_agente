@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/di/service_locator.dart' show reloadOdbcRuntimeDependencies;
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -13,6 +13,7 @@ import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dar
 import 'package:plug_agente/shared/widgets/common/form/numeric_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
+import 'package:provider/provider.dart';
 
 class OdbcConnectionPoolSection extends StatefulWidget {
   const OdbcConnectionPoolSection({
@@ -53,7 +54,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _isLoading = true;
       _loadError = null;
     });
-    final settings = getIt<IOdbcConnectionSettings>();
+    final settings = context.read<IOdbcConnectionSettings>();
     try {
       await settings.load();
     } on Object catch (error, stackTrace) {
@@ -75,7 +76,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _streamingChunkSizeController.text = settings.streamingChunkSizeKb.toString();
       _isLoading = false;
     });
-    final healthResult = await getIt<IConnectionPool>().healthCheckAll();
+    final healthResult = await context.read<IConnectionPool>().healthCheckAll();
     healthResult.fold(
       (_) => AppLogger.info('Connection pool health check passed'),
       (failure) => AppLogger.warning(
@@ -113,7 +114,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
 
     setState(() => _isSaving = true);
     try {
-      final settings = getIt<IOdbcConnectionSettings>();
+      final settings = context.read<IOdbcConnectionSettings>();
       await settings.setPoolSize(poolSize);
       await settings.setLoginTimeoutSeconds(loginTimeout);
       await settings.setMaxResultBufferMb(maxResultBuffer);

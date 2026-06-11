@@ -3948,8 +3948,9 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
 
       test('should map a connect failure to a ConnectionFailure', () async {
         when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
-        when(() => mockService.connect(any(), options: any(named: 'options')))
-            .thenAnswer((_) async => Failure(Exception('unreachable')));
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer((_) async => Failure(Exception('unreachable')));
 
         final result = await gateway.testConnection('DSN=x');
 
@@ -3979,8 +3980,9 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
 
       test('should surface a ConfigurationFailure preserving cause when config resolution fails', () async {
         when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
-        when(() => mockConfigRepository.getCurrentConfigMetadata())
-            .thenAnswer((_) async => Failure(domain.NotFoundFailure('no active config')));
+        when(
+          () => mockConfigRepository.getCurrentConfigMetadata(),
+        ).thenAnswer((_) async => Failure(domain.NotFoundFailure('no active config')));
 
         final request = QueryRequest(
           id: 'cfg-fail',

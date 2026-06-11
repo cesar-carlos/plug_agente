@@ -5,6 +5,8 @@ import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
+import 'package:plug_agente/application/bootstrap/app_shutdown_coordinator.dart';
+import 'package:plug_agente/application/bootstrap/hub_connection_shutdown_registry.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
@@ -15,6 +17,7 @@ import 'package:plug_agente/application/services/elevated_bridge_artifacts_perio
 import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
 import 'package:plug_agente/application/use_cases/apply_agent_action_on_app_exit_policies.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/config/feature_flags_env_seeder.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
@@ -26,6 +29,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/runtime/runtime_detection_diagnostics.dart';
 import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
+import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/core/timezone/iana_timezone_data.dart';
@@ -54,18 +58,27 @@ final GetIt getIt = GetIt.instance;
 odbc.ServiceLocator _odbcLocator = odbc.ServiceLocator();
 bool _appCloseActionsDispatched = false;
 
+/// Resets module-level shutdown flags between tests.
+///
+/// Production shutdown does not call [GetIt.reset]; tests that exercise
+/// [shutdownApp] should invoke this helper in tearDown when they need a
+/// clean dispatch gate without tearing down the DI graph.
+void resetShutdownStateForTesting() {
+  _appCloseActionsDispatched = false;
+}
+
 /// Shutdown centralizado de todos os recursos.
 ///
 /// Sequência de encerramento:
-/// 0. Parar purge periodico do cache de idempotencia RPC (timer; evita Drift durante teardown)
-/// 1. Marcar subsistema de acoes como draining (bloqueia novas execucoes exceto gatilhos app-close)
-/// 2. Despachar gatilhos app-close de acoes do agente
-/// 2b. Aplicar onAppExitPolicy (cancelar fila / matar ou preservar processos running)
-/// 3. Desconectar transporte (WebSocket)
+/// 0. Aplicar silent update pendente (antes de parar o orchestrator)
+/// 1. Parar auto-update e desconectar hub via [AppShutdownCoordinator]
+/// 2. Parar purges periodicos
+/// 3. Marcar subsistema de acoes como draining e despachar gatilhos app-close
+/// 3b. Aplicar onAppExitPolicy
 /// 4. Dispor fila SQL
 /// 5. Fechar pool de conexoes ODBC
 /// 6. Fechar banco local (Drift)
-/// 7. Encerrar metricas
+/// 7. Encerrar metricas e tray
 /// 8. Encerrar worker ODBC
 Future<void> shutdownApp() async {
   // Before tearing down anything else, check whether the silent update
@@ -74,6 +87,8 @@ Future<void> shutdownApp() async {
   // the rest of the shutdown sequence to attach, then install once we
   // exit. When no pending download exists this is a cheap no-op.
   await _launchPendingSilentUpdateHelperIfReady();
+
+  await _runEarlyShutdownCoordinator();
 
   if (getIt.isRegistered<RpcIdempotencyCachePeriodicPurge>()) {
     getIt<RpcIdempotencyCachePeriodicPurge>().stop();
@@ -104,11 +119,8 @@ Future<void> shutdownApp() async {
 
   await _applyAgentActionOnAppExitPolicies();
 
-  // 3. Desconectar transporte
-  if (getIt.isRegistered<ITransportClient>()) {
-    final transport = getIt<ITransportClient>();
-    await transport.disconnect();
-  }
+  // 3. Parar auto-update e desconectar hub (cancela timers de recovery via ConnectionProvider)
+  await _runEarlyShutdownCoordinator();
 
   // 4. Dispor fila SQL (antes de fechar o pool)
   //
@@ -161,8 +173,40 @@ Future<void> shutdownApp() async {
     await getIt<OdbcEventBridge>().dispose();
   }
 
+  if (getIt.isRegistered<ITrayService>()) {
+    try {
+      getIt<ITrayService>().dispose();
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Failed to dispose tray service during shutdown',
+        name: 'service_locator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   // 8. Encerrar worker ODBC (synchronous)
   _odbcLocator.shutdown();
+
+  resetShutdownStateForTesting();
+}
+
+Future<void> _runEarlyShutdownCoordinator() async {
+  if (getIt.isRegistered<AppShutdownCoordinator>()) {
+    await getIt<AppShutdownCoordinator>().runEarlyShutdownPhase();
+    return;
+  }
+
+  final shutdownCoordinator = AppShutdownCoordinator(
+    hubConnectionShutdownRegistry: getIt.isRegistered<HubConnectionShutdownRegistry>()
+        ? getIt<HubConnectionShutdownRegistry>()
+        : HubConnectionShutdownRegistry(),
+    transportClient: getIt.isRegistered<ITransportClient>() ? getIt<ITransportClient>() : null,
+    autoUpdateOrchestrator: getIt.isRegistered<IAutoUpdateOrchestrator>() ? getIt<IAutoUpdateOrchestrator>() : null,
+  );
+  await shutdownCoordinator.runEarlyShutdownPhase();
 }
 
 /// Fires the silent update helper when an installer was previously staged
@@ -517,6 +561,7 @@ Future<void> setupDependencies({
 
   // Register capabilities globally
   getIt.registerSingleton<RuntimeCapabilities>(capabilities);
+  getIt.registerSingleton<HubConnectionShutdownRegistry>(HubConnectionShutdownRegistry());
   if (runtimeDetectionDiagnostics != null) {
     getIt.registerSingleton<RuntimeDetectionDiagnostics>(
       runtimeDetectionDiagnostics,
@@ -542,6 +587,7 @@ Future<void> setupDependencies({
     _throwGlobalStorageBootstrapError(error);
   }
   await _migrateLegacyUserPreferences(appSettings);
+  await FeatureFlagsEnvSeeder.applyUnsetOverrides(appSettings);
   getIt.registerSingleton<IAppSettingsStore>(appSettings);
 
   final agentRuntimeIdentity = await AgentRuntimeIdentity.load(settings: appSettings);
@@ -589,6 +635,13 @@ Future<void> setupDependencies({
   getIt.registerSingleton<PayloadSigningConfig>(payloadSigningConfig);
 
   registerPlugDependencyGraph(getIt, odbcWorkerLocator: _odbcLocator);
+  getIt.registerLazySingleton<AppShutdownCoordinator>(
+    () => AppShutdownCoordinator(
+      hubConnectionShutdownRegistry: getIt<HubConnectionShutdownRegistry>(),
+      transportClient: getIt.isRegistered<ITransportClient>() ? getIt<ITransportClient>() : null,
+      autoUpdateOrchestrator: getIt.isRegistered<IAutoUpdateOrchestrator>() ? getIt<IAutoUpdateOrchestrator>() : null,
+    ),
+  );
   registerPlugCapabilityServices(getIt, capabilities);
 
   final transportSchemaLoader = TransportSchemaLoader();

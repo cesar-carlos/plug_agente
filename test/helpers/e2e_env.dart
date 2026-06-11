@@ -401,11 +401,9 @@ class E2EEnv {
     return (parsed ?? 1000).clamp(32, 2000);
   }
 
-  static int get odbcE2eDmlStressQueueSize =>
-      (_parsePositiveInt('ODBC_E2E_DML_STRESS_QUEUE_SIZE') ?? 16).clamp(4, 100);
+  static int get odbcE2eDmlStressQueueSize => (_parsePositiveInt('ODBC_E2E_DML_STRESS_QUEUE_SIZE') ?? 16).clamp(4, 100);
 
-  static int get odbcE2eDmlStressWorkers =>
-      (_parsePositiveInt('ODBC_E2E_DML_STRESS_WORKERS') ?? 8).clamp(1, 32);
+  static int get odbcE2eDmlStressWorkers => (_parsePositiveInt('ODBC_E2E_DML_STRESS_WORKERS') ?? 8).clamp(1, 32);
 
   /// Queue enqueue timeout for the queued-gateway stress scenario
   /// (`ODBC_E2E_DML_STRESS_ENQUEUE_TIMEOUT_MS`). Default 30000ms.
@@ -413,8 +411,7 @@ class E2EEnv {
       (_parsePositiveInt('ODBC_E2E_DML_STRESS_ENQUEUE_TIMEOUT_MS') ?? 30000).clamp(500, 300000);
 
   /// Optional ceiling (ms) per full iteration; null = do not assert on time.
-  static int? get odbcE2eDmlStressMaxMsPerIteration =>
-      _parsePositiveInt('ODBC_E2E_DML_STRESS_MAX_MS_PER_ITERATION');
+  static int? get odbcE2eDmlStressMaxMsPerIteration => _parsePositiveInt('ODBC_E2E_DML_STRESS_MAX_MS_PER_ITERATION');
 
   /// Long-running query for cancellation test.
   /// Uses DB-specific var when available, else generic ODBC_INTEGRATION_LONG_QUERY.

@@ -216,10 +216,8 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       ),
       isDraftModifiedSinceLoad: _draft.isDraftModifiedSinceLoad,
       hasDefinition: definition != null,
-      preflightExpiresAt:
-          definition == null ? null : widget.provider.preflightExpiresAtForDefinition(definition),
-      isPreflightExpired:
-          definition != null && widget.provider.isPreflightExpiredForDefinition(definition),
+      preflightExpiresAt: definition == null ? null : widget.provider.preflightExpiresAtForDefinition(definition),
+      isPreflightExpired: definition != null && widget.provider.isPreflightExpiredForDefinition(definition),
     );
   }
 
@@ -243,7 +241,10 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
   void _syncReadOnlyDisplayControllers() {
     _setControllerText(_draft.displayBindings.actionTypeDisplay, _draftKindLabel(_draft.draftKind));
-    _setControllerText(_draft.displayBindings.powerShellModeDisplay, powerShellDraftModeLabel(_draft.powerShellMode, widget.l10n));
+    _setControllerText(
+      _draft.displayBindings.powerShellModeDisplay,
+      powerShellDraftModeLabel(_draft.powerShellMode, widget.l10n),
+    );
   }
 
   void _setControllerText(TextEditingController controller, String text) {
@@ -479,66 +480,66 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       );
 
   AgentActionEditorPathPickCoordinator get _pathPickCoordinator => AgentActionEditorPathPickCoordinator(
-        draft: _draft,
-        l10n: widget.l10n,
-        filePicker: _filePicker,
-        isMounted: () => mounted,
-        onValidationMessage: (message) {
-          _setValidationMessage(message);
-          if (!_showInlineFeedback) {
-            _publishDialogWarning(
-              AgentActionEditorDialogWarning(
-                key: 'browse_file_error',
-                title: widget.l10n.agentActionsValidationTitle,
-                message: message,
-              ),
-            );
-          }
-        },
-        onPathApplied: (void Function() applyPath) {
-          setState(() {
-            applyPath();
-            _draft.validationMessage = null;
-          });
-        },
-      );
+    draft: _draft,
+    l10n: widget.l10n,
+    filePicker: _filePicker,
+    isMounted: () => mounted,
+    onValidationMessage: (message) {
+      _setValidationMessage(message);
+      if (!_showInlineFeedback) {
+        _publishDialogWarning(
+          AgentActionEditorDialogWarning(
+            key: 'browse_file_error',
+            title: widget.l10n.agentActionsValidationTitle,
+            message: message,
+          ),
+        );
+      }
+    },
+    onPathApplied: (void Function() applyPath) {
+      setState(() {
+        applyPath();
+        _draft.validationMessage = null;
+      });
+    },
+  );
 
   AgentActionEditorDraftFieldsBuilder get _draftFieldsBuilder => AgentActionEditorDraftFieldsBuilder(
-        l10n: widget.l10n,
-        provider: widget.provider,
-        draft: _draft,
-        definition: widget.definition,
-        enabled: widget.provider.canSaveAction,
-        filePicker: _filePicker,
-        showInlineFeedback: _showInlineFeedback,
-        onSave: () => unawaited(_save()),
-        onValidationMessageChanged: (message) {
-          setState(() {
-            _draft.validationMessage = message;
-          });
-          final trimmed = message?.trim();
-          if (!_showInlineFeedback && trimmed != null && trimmed.isNotEmpty) {
-            _publishDialogWarning(
-              AgentActionEditorDialogWarning(
-                key: 'developer_validation',
-                title: widget.l10n.agentActionsValidationTitle,
-                message: trimmed,
-              ),
-            );
-          }
-        },
-        onReloadConnections: _developerConnectionCoordinator.reloadDeveloperConnections,
-        onDialogWarning: _showInlineFeedback ? null : _publishDialogWarning,
-        onPickExecutableTargetPath: () => _pathPickCoordinator.pickExecutableTargetPath(),
-        onPickJarPath: () => _pathPickCoordinator.pickJarPath(),
-        onPickJavaExecutablePath: () => _pathPickCoordinator.pickJavaExecutablePath(),
-        onPickScriptPath: () => _pathPickCoordinator.pickScriptPath(),
-        onPickScriptInterpreterPath: () => _pathPickCoordinator.pickScriptInterpreterPath(),
-        onPickPowerShellScriptPath: () => _pathPickCoordinator.pickPowerShellScriptPath(),
-        isPowerShellModeUnavailable: _isPowerShellModeUnavailable,
-        onPowerShellModeChanged: (value) => setState(() => _setPowerShellMode(value)),
-        onPowerShellExecutableChanged: (value) => setState(() => _draft.powerShellExecutable = value),
-      );
+    l10n: widget.l10n,
+    provider: widget.provider,
+    draft: _draft,
+    definition: widget.definition,
+    enabled: widget.provider.canSaveAction,
+    filePicker: _filePicker,
+    showInlineFeedback: _showInlineFeedback,
+    onSave: () => unawaited(_save()),
+    onValidationMessageChanged: (message) {
+      setState(() {
+        _draft.validationMessage = message;
+      });
+      final trimmed = message?.trim();
+      if (!_showInlineFeedback && trimmed != null && trimmed.isNotEmpty) {
+        _publishDialogWarning(
+          AgentActionEditorDialogWarning(
+            key: 'developer_validation',
+            title: widget.l10n.agentActionsValidationTitle,
+            message: trimmed,
+          ),
+        );
+      }
+    },
+    onReloadConnections: _developerConnectionCoordinator.reloadDeveloperConnections,
+    onDialogWarning: _showInlineFeedback ? null : _publishDialogWarning,
+    onPickExecutableTargetPath: () => _pathPickCoordinator.pickExecutableTargetPath(),
+    onPickJarPath: () => _pathPickCoordinator.pickJarPath(),
+    onPickJavaExecutablePath: () => _pathPickCoordinator.pickJavaExecutablePath(),
+    onPickScriptPath: () => _pathPickCoordinator.pickScriptPath(),
+    onPickScriptInterpreterPath: () => _pathPickCoordinator.pickScriptInterpreterPath(),
+    onPickPowerShellScriptPath: () => _pathPickCoordinator.pickPowerShellScriptPath(),
+    isPowerShellModeUnavailable: _isPowerShellModeUnavailable,
+    onPowerShellModeChanged: (value) => setState(() => _setPowerShellMode(value)),
+    onPowerShellExecutableChanged: (value) => setState(() => _draft.powerShellExecutable = value),
+  );
 
   Widget _buildContent(BuildContext context) {
     final saving = widget.provider.isSaving;
@@ -634,35 +635,35 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   }
 
   Future<void> _onRemoteEnabledChanged(bool enabled) => AgentActionEditorPolicyConfirmations.handleRemoteEnabledChanged(
-        context: context,
-        l10n: widget.l10n,
-        definition: widget.definition,
-        enabled: enabled,
-        onEnable: () => setState(() {
-          _draft.remoteEnabled = true;
-          _draft.remoteApprovalGranted = true;
-        }),
-        onDisable: () => setState(() {
-          _draft.remoteEnabled = false;
-          _draft.remoteAdHoc = false;
-          _draft.remoteApprovalGranted = false;
-        }),
-      );
+    context: context,
+    l10n: widget.l10n,
+    definition: widget.definition,
+    enabled: enabled,
+    onEnable: () => setState(() {
+      _draft.remoteEnabled = true;
+      _draft.remoteApprovalGranted = true;
+    }),
+    onDisable: () => setState(() {
+      _draft.remoteEnabled = false;
+      _draft.remoteAdHoc = false;
+      _draft.remoteApprovalGranted = false;
+    }),
+  );
 
   Future<void> _onRemoteAdHocChanged(bool enabled) => AgentActionEditorPolicyConfirmations.handleRemoteAdHocChanged(
-        context: context,
-        l10n: widget.l10n,
-        enabled: enabled,
-        onApply: () => setState(() => _draft.remoteAdHoc = enabled),
-      );
+    context: context,
+    l10n: widget.l10n,
+    enabled: enabled,
+    onApply: () => setState(() => _draft.remoteAdHoc = enabled),
+  );
 
   Future<void> _onRunElevatedChanged(bool enabled) => AgentActionEditorPolicyConfirmations.handleRunElevatedChanged(
-        context: context,
-        l10n: widget.l10n,
-        enabled: enabled,
-        onEnable: () => setState(() => _draft.runElevated = true),
-        onDisable: () => setState(() => _draft.runElevated = false),
-      );
+    context: context,
+    l10n: widget.l10n,
+    enabled: enabled,
+    onEnable: () => setState(() => _draft.runElevated = true),
+    onDisable: () => setState(() => _draft.runElevated = false),
+  );
 
   void _applyDeveloperConnectionSelection(String? connectionId) {
     if (connectionId == null || connectionId.trim().isEmpty) {
@@ -681,5 +682,4 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       _draft.developer.connectionLabel.text = selectedOption.label;
     });
   }
-
 }

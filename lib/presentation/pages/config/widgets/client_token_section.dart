@@ -4,13 +4,10 @@ import 'dart:developer' as developer;
 import 'dart:math' show max, min;
 
 import 'package:file_picker/file_picker.dart';
-
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/application/client_tokens/client_token_payload_parser.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_create_request.dart';
@@ -22,25 +19,23 @@ import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_content.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_footer.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_shell.dart';
+import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_list_panel.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_details_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_list_preferences.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_dialog.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rule_file_service.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
-import 'package:plug_agente/presentation/pages/config/widgets/client_token_ui_formatters.dart';
 import 'package:plug_agente/presentation/providers/client_token_provider.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
-import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
-import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
-import 'package:plug_agente/shared/widgets/common/layout/app_data_grid.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
 import 'package:provider/provider.dart';
-
-part 'client_token_section_dialog_shell.dart';
-part 'client_token_section_widgets.dart';
 
 class ClientTokenSection extends StatefulWidget {
   const ClientTokenSection({
@@ -62,9 +57,8 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   final TextEditingController _listClientFilterController = TextEditingController();
   final List<ClientTokenRuleDraft> _rules = <ClientTokenRuleDraft>[];
   final ClientTokenRuleFileService _ruleFileService = const ClientTokenRuleFileService();
-  final ClientTokenListPreferences _listPreferences = ClientTokenListPreferences(
-    () => getIt.isRegistered<IAppSettingsStore>() ? getIt<IAppSettingsStore>() : null,
-  );
+  late final ClientTokenListPreferences _listPreferences;
+  var _listPreferencesInitialized = false;
   Timer? _clientFilterDebounceTimer;
   final ValueNotifier<int> _createTokenDialogRevision = ValueNotifier<int>(0);
   final FocusNode _createTokenDialogAgentFocusNode = FocusNode();
@@ -88,9 +82,15 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   bool get _isGlobalScopeMode => _allTables || _allViews;
 
   @override
-  void initState() {
-    super.initState();
-    _initializeTokenListState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_listPreferencesInitialized) {
+      _listPreferencesInitialized = true;
+      _listPreferences = ClientTokenListPreferences(
+        () => readOptionalPresentationProvider<IAppSettingsStore>(context),
+      );
+      unawaited(_initializeTokenListState());
+    }
   }
 
   Future<void> _initializeTokenListState() async {
@@ -149,10 +149,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     _dialogControllerListenersAttached = false;
   }
 
-  /// Builds a request object from the current dialog state. Returns `null`
-  /// when the payload is invalid JSON — callers treat that as "cannot
-  /// determine diff" and fall back to allowing submission so the user sees a
-  /// validation error instead of a silently disabled button.
   ClientTokenCreateRequest? _tryBuildDraftRequestFromForm() {
     final (:payload, :error) = parseClientTokenPayloadJson(_payloadController.text);
     if (error != null || payload == null) {
@@ -171,8 +167,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     );
   }
 
-  /// Whether the edit dialog has any pending difference compared with the
-  /// snapshot captured when it was opened. Always `true` while creating.
   bool _hasFormChanges() {
     final snapshot = _editingTokenSnapshot;
     if (snapshot == null) {
@@ -185,8 +179,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     return draft.changesAuthorizationPolicyFrom(snapshot) || draft.changesMetadataFrom(snapshot);
   }
 
-  /// Whether the current edit-dialog state would rotate the token if saved.
-  /// Drives the inline hint shown above the rules section.
   bool _hasPolicyChanges() {
     final snapshot = _editingTokenSnapshot;
     if (snapshot == null) {
@@ -199,8 +191,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     return draft.changesAuthorizationPolicyFrom(snapshot);
   }
 
-  // Merges [incoming] into [_rules]: deduplicates within the batch, then
-  // replaces existing rules with the same resource+type or appends new ones.
   void _mergeRules(List<ClientTokenRuleDraft> incoming) {
     final seen = <String>{};
     final deduped = incoming.reversed
@@ -247,7 +237,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     );
     if (!mounted || result == null) return;
 
-    // Edit always returns exactly one draft — replace the edited entry.
     _rules[index] = result.first;
     _notifyCreateTokenDialogChanged();
   }
@@ -425,7 +414,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
         context: context,
         barrierLabel: l10n.ctDialogDismissCreateToken,
         barrierColor: Colors.black.withValues(
-          alpha: _createTokenBarrierOpacity,
+          alpha: createTokenBarrierOpacity,
         ),
         pageBuilder: (_, primaryAnimation, secondaryAnimation) {
           return ValueListenableBuilder<int>(
@@ -437,23 +426,23 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                     0.0,
                     double.infinity,
                   );
-              final availableWidth = mediaQuery.size.width - (_createTokenDialogHorizontalMargin * 2);
+              final availableWidth = mediaQuery.size.width - (createTokenDialogHorizontalMargin * 2);
               final dialogWidth = availableWidth.clamp(
                 420.0,
-                _createTokenDialogMaxWidth,
+                createTokenDialogMaxWidth,
               );
-              final factorHeight = availableHeight * _createTokenDialogHeightFactor;
+              final factorHeight = availableHeight * createTokenDialogHeightFactor;
               final minPreferredOuter = min(
-                _createTokenDialogMinPreferredOuterHeight,
+                createTokenDialogMinPreferredOuterHeight,
                 availableHeight,
               );
               final dialogOuterMaxHeight = max(factorHeight, minPreferredOuter);
-              final isCompact = dialogWidth < _createTokenDialogCompactWidthBreakpoint;
+              final isCompact = dialogWidth < createTokenDialogCompactWidthBreakpoint;
               final theme = FluentTheme.of(dialogContext);
 
               return ChangeNotifierProvider<ClientTokenProvider>.value(
                 value: provider,
-                child: _CreateTokenDialogShell(
+                child: ClientTokenCreateDialogShell(
                   navigatorContext: dialogContext,
                   agentFocusNode: _createTokenDialogAgentFocusNode,
                   dialogWidth: dialogWidth,
@@ -467,7 +456,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: _CreateTokenDialogContent(
+                          child: ClientTokenCreateDialogContent(
                             isCompact: isCompact,
                             isEditingToken: isEditingToken,
                             policyChanged: policyChanged,
@@ -522,7 +511,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                           ),
                         ),
                         const SizedBox(height: AppSpacing.lg),
-                        _CreateTokenDialogFooter(
+                        ClientTokenCreateDialogFooter(
                           isCreating: tokenProvider.isCreating,
                           canSubmit: hasChanges,
                           submitLabel: isEditingToken
@@ -548,7 +537,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
             opacity: curved,
             child: ScaleTransition(
               scale: curved.drive(
-                Tween(begin: _createTokenScaleStart, end: 1),
+                Tween(begin: createTokenScaleStart, end: 1),
               ),
               child: child,
             ),
@@ -1034,44 +1023,21 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 const SizedBox(height: AppSpacing.sm),
               ],
               const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  AppButton(
-                    label: l10n.ctButtonRefreshList,
-                    icon: FluentIcons.refresh,
-                    isPrimary: false,
-                    isLoading: provider.isLoading,
-                    onPressed: isListInteractionLocked ? null : () => provider.loadTokens(query: _buildListQuery()),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  AppButton(
-                    label: _autoRefreshAfterCreate ? l10n.ctButtonAutoRefreshOn : l10n.ctButtonAutoRefreshOff,
-                    icon: _autoRefreshAfterCreate ? FluentIcons.sync : FluentIcons.pause,
-                    isPrimary: false,
-                    onPressed: isListInteractionLocked
-                        ? null
-                        : () {
-                            setState(() {
-                              _autoRefreshAfterCreate = !_autoRefreshAfterCreate;
-                            });
-                            _saveTokenListPreferences();
-                          },
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SettingsSectionTitle(
-                title: l10n.ctSectionRegisteredTokens,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              _TokenListFilters(
+              ClientTokenListPanel(
+                listedTokens: listedTokens,
+                isInitialLoading: isInitialLoading,
+                isListInteractionLocked: isListInteractionLocked,
+                hasLoaded: provider.hasLoaded,
+                isLoading: provider.isLoading,
+                hasLoadError: provider.error.isNotEmpty,
+                hasActiveFilters: _hasActiveFilters(),
                 clientFilterController: _listClientFilterController,
                 tokenStatusFilter: _tokenStatusFilter,
                 tokenSortOption: _tokenSortOption,
-                isEnabled: !isListInteractionLocked,
-                onClientFilterChanged: _handleClientFilterChanged,
+                autoRefreshAfterCreate: _autoRefreshAfterCreate,
                 statusLabelBuilder: _statusFilterLabel,
                 sortLabelBuilder: _sortFilterLabel,
+                onClientFilterChanged: _handleClientFilterChanged,
                 onStatusChanged: (value) {
                   setState(() {
                     _tokenStatusFilter = value;
@@ -1087,55 +1053,33 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   _reloadTokensForCurrentFilters();
                 },
                 onClearFilters: _clearTokenFilters,
+                onRefresh: () => provider.loadTokens(query: _buildListQuery()),
+                onToggleAutoRefresh: () {
+                  setState(() {
+                    _autoRefreshAfterCreate = !_autoRefreshAfterCreate;
+                  });
+                  _saveTokenListPreferences();
+                },
+                onRetryLoad: () => provider.loadTokens(query: _buildListQuery()),
+                scrollController: widget.scrollController,
+                isRevokingToken: provider.isRevokingToken,
+                isDeletingToken: provider.isDeletingToken,
+                isCopyingTokenSecret: provider.isCopyingTokenSecretFor,
+                onViewDetails: (token) => showClientTokenDetailsDialog(
+                  context: context,
+                  token: token,
+                ),
+                onCopyClientToken: (token) {
+                  unawaited(_handleCopyToken(context, provider, token));
+                },
+                onEdit: _openCreateTokenModal,
+                onRevoke: (token) {
+                  _handleRevoke(context, provider, token);
+                },
+                onDelete: (token) {
+                  _handleDelete(context, provider, token);
+                },
               ),
-              const SizedBox(height: AppSpacing.sm),
-              if (isInitialLoading)
-                const SizedBox(
-                  height: 160,
-                  child: Center(
-                    child: ProgressRing(),
-                  ),
-                ),
-              if (!provider.hasLoaded && provider.error.isNotEmpty)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppButton(
-                    label: l10n.btnRetry,
-                    isPrimary: false,
-                    icon: FluentIcons.refresh,
-                    onPressed: () => provider.loadTokens(query: _buildListQuery()),
-                  ),
-                ),
-              if (provider.hasLoaded && listedTokens.isEmpty && !provider.isLoading)
-                Text(
-                  _hasActiveFilters() ? l10n.ctMsgNoTokenMatchFilter : l10n.ctMsgNoTokenFound,
-                ),
-              if (listedTokens.isNotEmpty)
-                SizedBox(
-                  height: 440,
-                  child: _TokenSummaryGrid(
-                    tokens: listedTokens,
-                    scrollController: widget.scrollController,
-                    isRevokingToken: provider.isRevokingToken,
-                    isDeletingToken: provider.isDeletingToken,
-                    isCopyingTokenSecret: provider.isCopyingTokenSecretFor,
-                    onViewDetails: (token) => showClientTokenDetailsDialog(
-                      context: context,
-                      token: token,
-                    ),
-                    actionsEnabled: !isListInteractionLocked,
-                    onCopyClientToken: (token) {
-                      unawaited(_handleCopyToken(context, provider, token));
-                    },
-                    onEdit: _openCreateTokenModal,
-                    onRevoke: (token) {
-                      _handleRevoke(context, provider, token);
-                    },
-                    onDelete: (token) {
-                      _handleDelete(context, provider, token);
-                    },
-                  ),
-                ),
             ],
           ),
         );

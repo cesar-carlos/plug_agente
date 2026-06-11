@@ -515,7 +515,9 @@ void main() {
       final diagnostics = pool.getHealthDiagnostics();
       expect(diagnostics['native_warmup_enabled'], isTrue);
       expect(diagnostics['native_circuit_open'], isFalse);
-      verify(() => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options'))).called(1);
+      verify(
+        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options')),
+      ).called(1);
       verify(() => service.poolGetConnection(51)).called(2);
       verify(() => service.poolReleaseConnection(any())).called(2);
       verifyNever(() => service.connect(any(), options: any(named: 'options')));

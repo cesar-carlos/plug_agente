@@ -35,8 +35,9 @@ void main() {
 
   group('getOrPrepareStatement', () {
     test('prepares on cache miss and reuses on cache hit', () async {
-      when(() => service.prepare(any(), any(), timeoutMs: any(named: 'timeoutMs')))
-          .thenAnswer((_) async => const Success(77));
+      when(
+        () => service.prepare(any(), any(), timeoutMs: any(named: 'timeoutMs')),
+      ).thenAnswer((_) async => const Success(77));
 
       final cache = <String, int>{};
       final first = await executor.getOrPrepareStatement(
@@ -75,7 +76,15 @@ void main() {
       when(() => service.executeAsyncStart('c1', 'SELECT 1')).thenAnswer((_) async => const Success(5));
       when(() => service.asyncPoll(5)).thenAnswer((_) async => const Success(1));
       when(() => service.asyncGetResult(5)).thenAnswer(
-        (_) async => const Success(QueryResult(columns: ['v'], rows: [[1]], rowCount: 1)),
+        (_) async => const Success(
+          QueryResult(
+            columns: ['v'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        ),
       );
       when(() => service.asyncFree(5)).thenAnswer((_) async => const Success(unit));
 
@@ -116,7 +125,15 @@ void main() {
   group('executePreparedStatementWithTimeout', () {
     test('returns the result when no timeout is set', () async {
       when(() => service.executePrepared('c1', 3, null, null)).thenAnswer(
-        (_) async => const Success(QueryResult(columns: ['v'], rows: [[1]], rowCount: 1)),
+        (_) async => const Success(
+          QueryResult(
+            columns: ['v'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        ),
       );
 
       final result = await executor.executePreparedStatementWithTimeout(

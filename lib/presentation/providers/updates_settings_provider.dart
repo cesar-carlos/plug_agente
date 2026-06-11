@@ -68,8 +68,7 @@ class UpdatesSettingsProvider extends ChangeNotifier {
       _orchestrator.lastManualDiagnostics?.releaseNotes ?? _orchestrator.lastAutomaticDiagnostics?.releaseNotes;
 
   String? get releaseNotesUrl =>
-      _orchestrator.lastManualDiagnostics?.releaseNotesUrl ??
-      _orchestrator.lastAutomaticDiagnostics?.releaseNotesUrl;
+      _orchestrator.lastManualDiagnostics?.releaseNotesUrl ?? _orchestrator.lastAutomaticDiagnostics?.releaseNotesUrl;
 
   String lastUpdateCheckLabel(AppLocalizations l10n) => _labelResolver.lastUpdateCheckLabel(
     l10n: l10n,

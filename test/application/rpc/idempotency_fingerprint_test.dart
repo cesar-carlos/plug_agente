@@ -64,6 +64,41 @@ void main() {
       );
     });
 
+    test('resolveIdempotencyFingerprintIfEnabled returns null when disabled', () async {
+      final actual = await resolveIdempotencyFingerprintIfEnabled(
+        enabled: false,
+        idempotencyKey: 'k1',
+        method: 'sql.execute',
+        params: const {'sql': 'SELECT 1'},
+      );
+      expect(actual, isNull);
+    });
+
+    test('resolveIdempotencyFingerprintIfEnabled returns null without key', () async {
+      final actual = await resolveIdempotencyFingerprintIfEnabled(
+        enabled: true,
+        idempotencyKey: null,
+        method: 'sql.execute',
+        params: const {'sql': 'SELECT 1'},
+      );
+      expect(actual, isNull);
+    });
+
+    test('resolveIdempotencyFingerprintIfEnabled computes digest when enabled with key', () async {
+      final params = <String, dynamic>{'sql': 'SELECT 1'};
+      final expected = buildIdempotencyFingerprintForEnvelope({
+        'method': 'sql.execute',
+        'params': params,
+      });
+      final actual = await resolveIdempotencyFingerprintIfEnabled(
+        enabled: true,
+        idempotencyKey: 'k1',
+        method: 'sql.execute',
+        params: params,
+      );
+      expect(actual, equals(expected));
+    });
+
     test('resolveIdempotencyFingerprint forwards runtime ids into envelope', () async {
       final params = <String, dynamic>{'action_id': 'a1', 'idempotency_key': 'k1'};
       final expected = buildIdempotencyFingerprintForEnvelope({

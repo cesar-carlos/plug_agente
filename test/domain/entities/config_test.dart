@@ -10,8 +10,7 @@ void main() {
         id: 'cfg-1',
         driverName: 'SQL Server',
         odbcDriverName: 'ODBC Driver 17 for SQL Server',
-        connectionString:
-            'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost,1433;DATABASE=demo;UID=sa',
+        connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost,1433;DATABASE=demo;UID=sa',
         username: 'sa',
         password: 'secure-secret',
         databaseName: 'demo',
@@ -32,8 +31,7 @@ void main() {
         id: 'cfg-1',
         driverName: 'SQL Server',
         odbcDriverName: 'ODBC Driver 17 for SQL Server',
-        connectionString:
-            'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=embedded',
+        connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=embedded',
         username: 'sa',
         password: 'ignored',
         databaseName: 'demo',

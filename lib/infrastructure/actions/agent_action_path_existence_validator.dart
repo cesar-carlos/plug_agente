@@ -141,9 +141,7 @@ class AgentActionPathExistenceValidator {
     bool? requireLaunchAccess,
     bool enforceWorkingDirectoryAllowlist = true,
   }) async {
-    if (enforceWorkingDirectoryAllowlist &&
-        allowedDirectories.isEmpty &&
-        _allowlistValidator.isProductionProfile()) {
+    if (enforceWorkingDirectoryAllowlist && allowedDirectories.isEmpty && _allowlistValidator.isProductionProfile()) {
       return Failure(
         _allowlistValidator.validateProductionWorkingDirectoryAllowlist(
           actionId: actionId,

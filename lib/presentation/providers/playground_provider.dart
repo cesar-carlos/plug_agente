@@ -462,7 +462,7 @@ class PlaygroundProvider extends ChangeNotifier {
           if (_streamingCapCancelRequested) {
             return;
           }
-          const cap = ConnectionConstants.playgroundStreamingMaxResultRows;
+          final cap = ConnectionConstants.playgroundStreamingMaxResultRows;
           final remaining = cap - _results.length;
           if (remaining <= 0) {
             _requestStreamingStopAtRowCap(cap);

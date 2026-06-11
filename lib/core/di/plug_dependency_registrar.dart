@@ -342,6 +342,7 @@ void registerPlugDependencyGraph(
   _registerAutoUpdate(getIt);
   _registerAuthTokens(getIt);
 }
+
 Duration _autoUpdateBootJitter() {
   const minSeconds = 30;
   const rangeSeconds = 90;

@@ -392,9 +392,7 @@ void main() {
       final ds = ClientTokenLocalDataSource(db, secretStore: NoopTokenSecretStore());
 
       final opaque = await ds.createToken(baseRequest());
-      final row = await db
-          .select(db.clientTokenCacheTable)
-          .getSingle();
+      final row = await db.select(db.clientTokenCacheTable).getSingle();
 
       expect(row.tokenValue, opaque);
       expect(row.tokenValue, isNot('__secure_storage__'));

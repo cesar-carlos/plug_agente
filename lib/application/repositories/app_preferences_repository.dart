@@ -18,12 +18,10 @@ class AppPreferencesRepository implements IAppPreferencesRepository {
   final IUpdatePreferencesRepository _updates;
 
   @override
-  bool get isDarkModeEnabled =>
-      _settingsStore.getBool(AppSettingsKeys.isDarkModeEnabled) ?? true;
+  bool get isDarkModeEnabled => _settingsStore.getBool(AppSettingsKeys.isDarkModeEnabled) ?? true;
 
   @override
-  Future<void> setIsDarkModeEnabled(bool enabled) =>
-      _settingsStore.setBool(AppSettingsKeys.isDarkModeEnabled, enabled);
+  Future<void> setIsDarkModeEnabled(bool enabled) => _settingsStore.setBool(AppSettingsKeys.isDarkModeEnabled, enabled);
 
   @override
   IStartupPreferencesRepository get startup => _startup;

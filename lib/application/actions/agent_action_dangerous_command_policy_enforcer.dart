@@ -34,8 +34,7 @@ class AgentActionDangerousCommandPolicyEnforcer {
     }
 
     final enforceBlockPolicy = _requiresBlockPolicy(request.source);
-    final warnModeEnabled =
-        !enforceBlockPolicy && (_featureFlags?.enableAgentActionDangerousCommandWarnMode ?? false);
+    final warnModeEnabled = !enforceBlockPolicy && (_featureFlags?.enableAgentActionDangerousCommandWarnMode ?? false);
 
     for (final invocation in invocationStrings) {
       final assessment = _commandSafetyAssessor.assessForLocalRun(

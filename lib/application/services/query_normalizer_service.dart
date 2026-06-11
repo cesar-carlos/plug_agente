@@ -51,6 +51,9 @@ class QueryNormalizerService {
           ),
         )
         .toList(growable: false);
+    final resultSetByIndex = {
+      for (final resultSet in normalizedResultSets) resultSet.index: resultSet,
+    };
     final normalizedItems = response.items
         .map((item) {
           if (item.resultSet == null) {
@@ -58,7 +61,7 @@ class QueryNormalizerService {
           }
           return QueryResponseItem.resultSet(
             index: item.index,
-            resultSet: normalizedResultSets[item.resultSet!.index],
+            resultSet: resultSetByIndex[item.resultSet!.index],
           );
         })
         .toList(growable: false);

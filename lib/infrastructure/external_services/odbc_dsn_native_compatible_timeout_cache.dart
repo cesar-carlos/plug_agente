@@ -41,9 +41,7 @@ final class OdbcDsnNativeCompatibleTimeoutCache {
   }) {
     final key = _dsnKey(connectionString);
     final existing = _entries[key];
-    final timeoutsMs = existing == null || existing.isExpired(_ttl)
-        ? <int>{}
-        : Set<int>.from(existing.timeoutsMs);
+    final timeoutsMs = existing == null || existing.isExpired(_ttl) ? <int>{} : Set<int>.from(existing.timeoutsMs);
     timeoutsMs.add(timeout.inMilliseconds);
     while (timeoutsMs.length > _maxEntriesPerDsn) {
       final oldest = timeoutsMs.first;

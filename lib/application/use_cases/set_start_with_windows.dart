@@ -14,9 +14,7 @@ class SetStartWithWindows {
     StartupLaunchConfigurationOutcome? launchConfiguration;
 
     if (_repository.isStartupServiceAvailable) {
-      final toggleResult = value
-          ? await _repository.enableSystemStartup()
-          : await _repository.disableSystemStartup();
+      final toggleResult = value ? await _repository.enableSystemStartup() : await _repository.disableSystemStartup();
 
       final toggled = toggleResult.fold(
         (_) {

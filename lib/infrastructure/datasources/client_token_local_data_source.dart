@@ -71,8 +71,7 @@ class ClientTokenLocalDataSource {
     }
 
     final previousRowsById = {
-      for (final row in await _database.select(_database.clientTokenCacheTable).get())
-        row.id: row,
+      for (final row in await _database.select(_database.clientTokenCacheTable).get()) row.id: row,
     };
 
     await _database.transaction(() async {

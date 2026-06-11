@@ -99,5 +99,4 @@ abstract final class WindowsExecutableLaunchAccessChecker {
       calloc.free(pathPtr);
     }
   }
-
 }

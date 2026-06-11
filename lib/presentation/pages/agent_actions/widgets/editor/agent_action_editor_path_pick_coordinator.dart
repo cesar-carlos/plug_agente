@@ -20,40 +20,40 @@ class AgentActionEditorPathPickCoordinator {
   final void Function(void Function() applyPath) onPathApplied;
 
   Future<void> pickJarPath() => _pickAndApply(
-        dialogTitle: l10n.agentActionsFormBrowseJarPath,
-        allowedExtensions: const ['jar'],
-        apply: (path) => draft.jar.path.text = path,
-      );
+    dialogTitle: l10n.agentActionsFormBrowseJarPath,
+    allowedExtensions: const ['jar'],
+    apply: (path) => draft.jar.path.text = path,
+  );
 
   Future<void> pickJavaExecutablePath() => _pickAndApply(
-        dialogTitle: l10n.agentActionsFormBrowseJavaExecutablePath,
-        allowedExtensions: const ['exe'],
-        apply: (path) => draft.jar.javaExecutablePath.text = path,
-      );
+    dialogTitle: l10n.agentActionsFormBrowseJavaExecutablePath,
+    allowedExtensions: const ['exe'],
+    apply: (path) => draft.jar.javaExecutablePath.text = path,
+  );
 
   Future<void> pickScriptPath() => _pickAndApply(
-        dialogTitle: l10n.agentActionsFormBrowseScriptPath,
-        allowedExtensions: const ['ps1', 'bat', 'cmd', 'py'],
-        apply: (path) => draft.script.path.text = path,
-      );
+    dialogTitle: l10n.agentActionsFormBrowseScriptPath,
+    allowedExtensions: const ['ps1', 'bat', 'cmd', 'py'],
+    apply: (path) => draft.script.path.text = path,
+  );
 
   Future<void> pickPowerShellScriptPath() => _pickAndApply(
-        dialogTitle: l10n.agentActionsFormBrowsePowerShellScriptPath,
-        allowedExtensions: const ['ps1'],
-        apply: (path) => draft.script.path.text = path,
-      );
+    dialogTitle: l10n.agentActionsFormBrowsePowerShellScriptPath,
+    allowedExtensions: const ['ps1'],
+    apply: (path) => draft.script.path.text = path,
+  );
 
   Future<void> pickScriptInterpreterPath() => _pickAndApply(
-        dialogTitle: l10n.agentActionsFormBrowseInterpreterPath,
-        allowedExtensions: const ['exe'],
-        apply: (path) => draft.script.interpreterPath.text = path,
-      );
+    dialogTitle: l10n.agentActionsFormBrowseInterpreterPath,
+    allowedExtensions: const ['exe'],
+    apply: (path) => draft.script.interpreterPath.text = path,
+  );
 
   Future<void> pickExecutableTargetPath() => _pickAndApply(
-        dialogTitle: l10n.agentActionsFormBrowseExecutablePath,
-        allowedExtensions: const ['exe', 'bat', 'cmd'],
-        apply: (path) => draft.executable.targetPath.text = path,
-      );
+    dialogTitle: l10n.agentActionsFormBrowseExecutablePath,
+    allowedExtensions: const ['exe', 'bat', 'cmd'],
+    apply: (path) => draft.executable.targetPath.text = path,
+  );
 
   Future<void> _pickAndApply({
     required String dialogTitle,

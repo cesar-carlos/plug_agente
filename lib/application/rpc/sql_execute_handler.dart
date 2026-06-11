@@ -131,14 +131,16 @@ class SqlExecuteHandler {
     }
 
     final idempotencyKey = paramReader.idempotencyKey;
-    final idempotencyFingerprint = await resolveIdempotencyFingerprint(
-      request.method,
-      params,
+    final idempotencyFingerprint = await resolveIdempotencyFingerprintIfEnabled(
+      enabled: _featureFlags.enableSocketIdempotency,
+      idempotencyKey: idempotencyKey,
+      method: request.method,
+      params: params,
     );
     final idempotentEarly = await _support.consumeIdempotentCacheIfAny(
       request,
       idempotencyKey,
-      idempotencyFingerprint,
+      idempotencyFingerprint ?? '',
     );
     if (idempotentEarly != null) {
       return idempotentEarly;
@@ -187,7 +189,8 @@ class SqlExecuteHandler {
     return _support.runIdempotentExecution(
       request: request,
       idempotencyKey: idempotencyKey,
-      idempotencyFingerprint: idempotencyFingerprint,
+      idempotencyFingerprint: idempotencyFingerprint ?? '',
+      idempotentCachePrefetched: true,
       execute: () async {
         final streamingFromDbResponse = await _dbStreamingExecutor.tryStreamingFromDb(
           request,
@@ -216,37 +219,40 @@ class SqlExecuteHandler {
 
         return result.fold<Future<RpcResponse>>(
           (QueryResponse queryResponse) async {
-            var normalized = await _normalizerService.normalizeAsync(queryResponse);
+            final normalized = await _normalizerService.normalizeAsync(queryResponse);
 
-            var multiResultSetsTruncated = false;
-            if (normalized.resultSets.isNotEmpty) {
-              final beforeMulti = normalized;
-              normalized = _resultMapper.applyMaxRowsToMultiResultSets(normalized, maxRows);
-              multiResultSetsTruncated = _resultMapper.multiResultSetsWereTruncated(
-                beforeMulti,
+            final hasMultiResultSets = normalized.resultSets.isNotEmpty;
+            var truncatedMulti = normalized;
+            if (hasMultiResultSets) {
+              truncatedMulti = _resultMapper.applyMaxRowsToMultiResultSets(
                 normalized,
+                maxRows,
               );
             }
 
-            final limitedRows = normalized.resultSets.isNotEmpty
-                ? normalized.data
+            final limitedRows = hasMultiResultSets
+                ? truncatedMulti.data
                 : truncateSqlResultRows(normalized.data, maxRows);
-            final wasTruncated =
-                multiResultSetsTruncated ||
-                (!normalized.resultSets.isNotEmpty && limitedRows.length != normalized.data.length);
+            final wasTruncated = hasMultiResultSets
+                ? _resultMapper.multiResultSetsWereTruncated(
+                    normalized,
+                    truncatedMulti,
+                  )
+                : limitedRows.length != normalized.data.length;
+            final responseForWire = hasMultiResultSets ? truncatedMulti : normalized;
             final useStreaming =
                 _featureFlags.enableSocketStreamingChunks &&
                 streamEmitter != null &&
                 !request.isNotification &&
                 pagination == null &&
-                !normalized.hasMultiResult &&
+                !responseForWire.hasMultiResult &&
                 limitedRows.length > limits.streamingRowThreshold;
 
             if (useStreaming) {
               return _materializedStreamingExecutor.streamMaterializedResult(
                 request: request,
                 queryRequest: queryRequest,
-                normalized: normalized,
+                normalized: responseForWire,
                 limitedRows: limitedRows,
                 effectiveMaxRows: maxRows,
                 wasTruncated: wasTruncated,
@@ -256,9 +262,9 @@ class SqlExecuteHandler {
             }
 
             final resultData = _resultMapper.buildExecuteResultData(
-              normalized,
+              responseForWire,
               startedAt: queryRequest.timestamp,
-              finishedAt: normalized.timestamp,
+              finishedAt: responseForWire.timestamp,
               limitedRows: limitedRows,
               wasTruncated: wasTruncated,
               sqlHandlingMode: queryRequest.sqlHandlingMode,

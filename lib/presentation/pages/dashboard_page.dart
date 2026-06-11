@@ -2,16 +2,17 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/dashboard/dashboard_metrics_controller.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/presentation/widgets/websocket_log_viewer.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
+import 'package:provider/provider.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -22,20 +23,27 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   late final DashboardMetricsController _metricsController;
+  var _metricsControllerInitialized = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_metricsControllerInitialized) {
+      return;
+    }
+    _metricsControllerInitialized = true;
     _metricsController = DashboardMetricsController(
-      metricsCollector: getIt<IMetricsCollector>(),
+      metricsCollector: context.read<IMetricsCollector>(),
       refreshInterval: AppConstants.dashboardMetricsInterval,
-      settingsStore: getIt.isRegistered<IAppSettingsStore>() ? getIt<IAppSettingsStore>() : null,
+      settingsStore: readOptionalPresentationProvider<IAppSettingsStore>(context),
     )..initialize();
   }
 
   @override
   void dispose() {
-    _metricsController.dispose();
+    if (_metricsControllerInitialized) {
+      _metricsController.dispose();
+    }
     super.dispose();
   }
 

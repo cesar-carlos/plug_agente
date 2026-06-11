@@ -2,9 +2,7 @@ import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
 import 'package:plug_agente/domain/value_objects/hub_auth_secrets.dart';
 import 'package:plug_agente/infrastructure/stores/batch_secret_store_mixin.dart';
 
-class NoopHubAuthSecretStore
-    with BatchHubAuthSecretStoreMixin
-    implements IHubAuthSecretStore {
+class NoopHubAuthSecretStore with BatchHubAuthSecretStoreMixin implements IHubAuthSecretStore {
   @override
   bool get isAvailable => false;
 

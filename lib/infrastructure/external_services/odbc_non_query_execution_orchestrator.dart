@@ -273,9 +273,11 @@ class OdbcNonQueryExecutionOrchestrator {
     try {
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
-        options: _optionsResolver.forTimeout(
-          OdbcExecutionDeadline.remainingFromDeadline(effectiveDeadline) ?? timeout,
-        ).toOdbcConnectionOptions(),
+        options: _optionsResolver
+            .forTimeout(
+              OdbcExecutionDeadline.remainingFromDeadline(effectiveDeadline) ?? timeout,
+            )
+            .toOdbcConnectionOptions(),
       );
       return await connectResult.fold(
         (connection) async {

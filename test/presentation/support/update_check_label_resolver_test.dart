@@ -76,15 +76,16 @@ class _StubOrchestrator implements IAutoUpdateOrchestrator {
     String? noticeTitle,
     String? noticeBody,
     bool triggerAppClose = true,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<Result<void>> applyAvailableUpdate({
     String? noticeTitle,
     String? noticeBody,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<void> dispose() async {}
 }
 
 void main() {

@@ -119,7 +119,10 @@ class AgentActionRpcExecutionOperations {
                 _infrastructure.featureFlags.enableSocketIdempotency &&
                 _infrastructure.idempotencyStore != null) {
               idempotencyKeyForCache = idempotencyKey;
-              idempotencyFingerprint = await _infrastructure.resolveAgentActionRpcIdempotencyFingerprint(request, params);
+              idempotencyFingerprint = await _infrastructure.resolveAgentActionRpcIdempotencyFingerprint(
+                request,
+                params,
+              );
               idempotentEarly = await _infrastructure.support.consumeIdempotentCacheIfAny(
                 request,
                 idempotencyKeyForCache,
@@ -137,6 +140,7 @@ class AgentActionRpcExecutionOperations {
                 request: request,
                 idempotencyKey: idempotencyKeyForCache,
                 idempotencyFingerprint: idempotencyFingerprint,
+                idempotentCachePrefetched: idempotencyKeyForCache != null,
                 execute: () async {
                   final result = await runner(
                     actionId: actionId,
@@ -195,7 +199,10 @@ class AgentActionRpcExecutionOperations {
     ClientTokenPolicy? tokenPolicyForAudit;
     late final RpcResponse response;
     if (runner == null) {
-      response = _infrastructure.support.internalError(request, 'Agent action execution is not configured on this dispatcher.');
+      response = _infrastructure.support.internalError(
+        request,
+        'Agent action execution is not configured on this dispatcher.',
+      );
     } else if (_infrastructure.agentActionRpcGateResponse(request) case final RpcResponse gated) {
       actionId = _infrastructure.trimmedAgentActionRpcStringParam(request, 'action_id') ?? '';
       await _audit.appendAgentActionRemoteAuditReceived(
@@ -256,7 +263,10 @@ class AgentActionRpcExecutionOperations {
                 _infrastructure.featureFlags.enableSocketIdempotency &&
                 _infrastructure.idempotencyStore != null) {
               idempotencyKeyForCache = idempotencyKey;
-              idempotencyFingerprint = await _infrastructure.resolveAgentActionRpcIdempotencyFingerprint(request, params);
+              idempotencyFingerprint = await _infrastructure.resolveAgentActionRpcIdempotencyFingerprint(
+                request,
+                params,
+              );
               idempotentEarly = await _infrastructure.support.consumeIdempotentCacheIfAny(
                 request,
                 idempotencyKeyForCache,
@@ -270,6 +280,7 @@ class AgentActionRpcExecutionOperations {
                 request: request,
                 idempotencyKey: idempotencyKeyForCache,
                 idempotencyFingerprint: idempotencyFingerprint,
+                idempotentCachePrefetched: idempotencyKeyForCache != null,
                 execute: () async {
                   final result = await runner.validateRemoteRun(
                     AgentActionExecutionRequest(
@@ -327,7 +338,10 @@ class AgentActionRpcExecutionOperations {
     ClientTokenPolicy? tokenPolicyForAudit;
     late final RpcResponse response;
     if (cancel == null) {
-      response = _infrastructure.support.internalError(request, 'Agent action cancel is not configured on this dispatcher.');
+      response = _infrastructure.support.internalError(
+        request,
+        'Agent action cancel is not configured on this dispatcher.',
+      );
     } else if (_infrastructure.agentActionRpcGateResponse(request) case final RpcResponse gated) {
       executionId = _infrastructure.trimmedAgentActionRpcStringParam(request, 'execution_id') ?? '';
       await _audit.appendAgentActionRemoteAuditReceived(
@@ -501,7 +515,10 @@ class AgentActionRpcExecutionOperations {
     ClientTokenPolicy? tokenPolicyForAudit;
     late final RpcResponse response;
     if (getExecution == null) {
-      response = _infrastructure.support.internalError(request, 'Agent action execution lookup is not configured on this dispatcher.');
+      response = _infrastructure.support.internalError(
+        request,
+        'Agent action execution lookup is not configured on this dispatcher.',
+      );
     } else if (_infrastructure.agentActionRpcGateResponse(request) case final RpcResponse gated) {
       executionId = _infrastructure.trimmedAgentActionRpcStringParam(request, 'execution_id') ?? '';
       await _audit.appendAgentActionRemoteAuditReceived(

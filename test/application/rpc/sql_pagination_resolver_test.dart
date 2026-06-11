@@ -69,7 +69,9 @@ void main() {
         },
         'SELECT * FROM users ORDER BY id',
         100,
-        {'paginationModes': ['cursor-keyset']},
+        {
+          'paginationModes': ['cursor-keyset'],
+        },
       );
       expect(resolution.hasError, isTrue);
       expect(

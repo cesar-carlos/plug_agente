@@ -50,6 +50,7 @@ import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gat
 import 'package:plug_agente/infrastructure/repositories/agent_action_portable_codec.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_page.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_dependencies.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_help_button.dart';
@@ -272,6 +273,7 @@ class AgentActionsPageHarness {
     IComObjectInvocationDiagnostics? comObjectInvocationDiagnostics,
     bool withActionSecretStore = false,
     bool includeComObjectRunner = false,
+    bool useExecutionQueue = true,
   }) : _developerConnectionGateway = developerConnectionGateway ?? FakeDeveloperData7ConnectionGateway(),
        _remoteAuditStore = remoteAuditStore ?? StubRemoteAuditStore(),
        _runtimeStateGuard = runtimeStateGuard,
@@ -309,58 +311,60 @@ class AgentActionsPageHarness {
     final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);
 
     provider = AgentActionsProvider(
-      ListAgentActionDefinitions(repository),
-      ListAgentActionExecutions(repository),
-      saveDefinition,
-      DeleteAgentActionDefinition(repository),
-      ListAgentActionTriggers(repository),
-      DeleteAgentActionTrigger(repository),
-      SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      ),
-      ListDeveloperData7Connections(_developerConnectionGateway),
-      RunAgentActionLocally(
-        repository,
-        runnerRegistry,
-        const Uuid(),
-        executionQueue: executionQueue,
-        featureFlags: featureFlags,
-      ),
-      TestAgentActionDefinition(repository, validateDefinition),
-      previewDefinition,
-      CancelAgentActionExecution(
-        repository,
-        runnerRegistry,
-        executionQueue: executionQueue,
-      ),
-      GetAgentActionExecution(repository),
-      SliceAgentActionCapturedOutput(repository),
-      ListRecentAgentActionRemoteAudit(_remoteAuditStore),
-      ExportAgentActionsBundle(
-        ListAgentActionDefinitions(repository),
-        ListAgentActionTriggers(repository),
-        backupSanitizer,
-      ),
-      ImportAgentActionsBundle(
-        saveDefinition,
-        SaveAgentActionTrigger(
+      AgentActionsProviderDependencies(
+        listDefinitions: ListAgentActionDefinitions(repository),
+        listExecutions: ListAgentActionExecutions(repository),
+        saveDefinition: saveDefinition,
+        deleteDefinition: DeleteAgentActionDefinition(repository),
+        listTriggers: ListAgentActionTriggers(repository),
+        deleteTrigger: DeleteAgentActionTrigger(repository),
+        saveTrigger: SaveAgentActionTrigger(
           repository,
           const ValidateAgentActionTrigger(),
           featureFlags,
         ),
-        backupSanitizer,
+        listDeveloperData7Connections: ListDeveloperData7Connections(_developerConnectionGateway),
+        runAction: RunAgentActionLocally(
+          repository,
+          runnerRegistry,
+          const Uuid(),
+          executionQueue: executionQueue,
+          featureFlags: featureFlags,
+        ),
+        testDefinition: TestAgentActionDefinition(repository, validateDefinition),
+        previewDefinition: previewDefinition,
+        cancelExecution: CancelAgentActionExecution(
+          repository,
+          runnerRegistry,
+          executionQueue: executionQueue,
+        ),
+        getExecution: GetAgentActionExecution(repository),
+        sliceCapturedOutput: SliceAgentActionCapturedOutput(repository),
+        listRecentRemoteAudit: ListRecentAgentActionRemoteAudit(_remoteAuditStore),
+        exportBundle: ExportAgentActionsBundle(
+          ListAgentActionDefinitions(repository),
+          ListAgentActionTriggers(repository),
+          backupSanitizer,
+        ),
+        importBundle: ImportAgentActionsBundle(
+          saveDefinition,
+          SaveAgentActionTrigger(
+            repository,
+            const ValidateAgentActionTrigger(),
+            featureFlags,
+          ),
+          backupSanitizer,
+        ),
+        featureFlags: featureFlags,
+        uuid: const Uuid(),
+        commandSafetyAssessor: const ActionCommandSafetyValidator(),
+        retentionSettings: retentionSettings,
+        bundleFileGateway: const AgentActionsBundleFileGateway(),
       ),
-      featureFlags,
-      const Uuid(),
-      const ActionCommandSafetyValidator(),
-      retentionSettings,
-      const AgentActionsBundleFileGateway(),
       triggerScheduler: triggerScheduler,
       comObjectInvocationDiagnostics: comObjectInvocationDiagnostics,
       runtimeStateGuard: _runtimeStateGuard,
-      executionQueue: executionQueue,
+      executionQueue: useExecutionQueue ? executionQueue : null,
       secretAvailabilityChecker: _actionSecretStore == null
           ? null
           : AgentActionSecretAvailabilityChecker(secretStore: _actionSecretStore),

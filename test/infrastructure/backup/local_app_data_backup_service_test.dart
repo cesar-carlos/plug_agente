@@ -78,9 +78,7 @@ class _FakeBackupSecureStorageSecretsPort implements IBackupSecureStorageSecrets
   }
 }
 
-class _FakeOdbcCredentialSecretStore
-    with BatchOdbcCredentialSecretStoreMixin
-    implements IOdbcCredentialSecretStore {
+class _FakeOdbcCredentialSecretStore with BatchOdbcCredentialSecretStoreMixin implements IOdbcCredentialSecretStore {
   final Map<String, OdbcCredentialSecrets> _storage = <String, OdbcCredentialSecrets>{};
 
   @override
@@ -505,8 +503,7 @@ void main() {
         await _writeDriftConfigDb(
           sourceDbPath,
           configId: 'cfg-migrated',
-          connectionString:
-              'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa',
+          connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa',
         );
 
         final zipPath = p.join(sourceDir.path, 'backup.zip');
@@ -581,9 +578,9 @@ void main() {
         'legacy-db-secret',
       );
 
-      final row = await (restoredDb.select(restoredDb.configTable)
-            ..where((tbl) => tbl.id.equals('cfg-legacy')))
-          .getSingle();
+      final row = await (restoredDb.select(
+        restoredDb.configTable,
+      )..where((tbl) => tbl.id.equals('cfg-legacy'))).getSingle();
       expect(row.connectionString, isNot(contains('PWD=')));
     });
 
@@ -664,20 +661,19 @@ void main() {
 Map<String, dynamic> _validManifest({
   bool secureStorageSecretsIncluded = false,
   int? secureStorageSecretsEntryCount,
-}) =>
-    <String, dynamic>{
-      'formatVersion': 1,
-      'createdAt': DateTime.now().toUtc().toIso8601String(),
-      'appVersion': 'test',
-      'platform': 'windows',
-      'installationId': 'inst-test',
-      'odbcSecretsIncluded': secureStorageSecretsIncluded,
-      'secureStorageSecretsIncluded': secureStorageSecretsIncluded,
-      if (secureStorageSecretsIncluded) ...<String, dynamic>{
-        'secureStorageSecretsBlobVersion': 1,
-        'secureStorageSecretsEntryCount': secureStorageSecretsEntryCount ?? 1,
-      },
-    };
+}) => <String, dynamic>{
+  'formatVersion': 1,
+  'createdAt': DateTime.now().toUtc().toIso8601String(),
+  'appVersion': 'test',
+  'platform': 'windows',
+  'installationId': 'inst-test',
+  'odbcSecretsIncluded': secureStorageSecretsIncluded,
+  'secureStorageSecretsIncluded': secureStorageSecretsIncluded,
+  if (secureStorageSecretsIncluded) ...<String, dynamic>{
+    'secureStorageSecretsBlobVersion': 1,
+    'secureStorageSecretsEntryCount': secureStorageSecretsEntryCount ?? 1,
+  },
+};
 
 Future<void> _writeZip(
   String zipPath, {

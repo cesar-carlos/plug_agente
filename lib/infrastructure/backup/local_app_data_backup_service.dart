@@ -66,8 +66,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
        _settingsStore = settingsStore,
        _authClient = authClient,
        _connectedAgentsGateway = connectedAgentsGateway,
-       _secureStorageSecretsPort =
-           secureStorageSecretsPort ?? FlutterSecureStorageBackupSecretsPort();
+       _secureStorageSecretsPort = secureStorageSecretsPort ?? FlutterSecureStorageBackupSecretsPort();
 
   final AppDatabase _database;
   final GlobalStorageContext _storageContext;
@@ -785,8 +784,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
       dbBytes: dbBytes,
       settingsBytes: settingsBytes,
       secureStorageSecretsBytes: secureStorageSecretsBytes,
-      secureStorageSecretsFileName:
-          secureStorageSecretsBytes == null ? null : _secureStorageSecretsFileName,
+      secureStorageSecretsFileName: secureStorageSecretsBytes == null ? null : _secureStorageSecretsFileName,
     );
     if (payloadBytes >= _backupExportIsolateMinBytes) {
       developer.log(

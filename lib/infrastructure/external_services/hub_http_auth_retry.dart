@@ -43,8 +43,6 @@ abstract final class HubHttpAuthRetry {
       return true;
     }
     final message = failure.message.toLowerCase();
-    return message.contains('jwt expired') ||
-        message.contains('session expired') ||
-        message.contains('unauthorized');
+    return message.contains('jwt expired') || message.contains('session expired') || message.contains('unauthorized');
   }
 }

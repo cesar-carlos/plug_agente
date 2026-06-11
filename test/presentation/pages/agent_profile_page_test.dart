@@ -10,6 +10,7 @@ import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
 import 'package:plug_agente/application/use_cases/sync_agent_profile_with_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -18,6 +19,7 @@ import 'package:plug_agente/presentation/pages/agent_profile_page.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
+import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -55,6 +57,7 @@ void main() {
 
     setUp(() async {
       await getIt.reset();
+      getIt.registerSingleton<RuntimeCapabilities>(RuntimeCapabilities.full());
       getIt.registerSingleton<AgentRegisterProfileProvider>(
         AgentRegisterProfileProvider(),
       );
@@ -287,6 +290,9 @@ Widget _buildWidget(
     supportedLocales: AppLocalizations.supportedLocales,
     home: MultiProvider(
       providers: [
+        ...buildPresentationInfrastructureProviders(
+          capabilities: getIt<RuntimeCapabilities>(),
+        ),
         ChangeNotifierProvider<ConfigProvider>.value(value: configProvider),
         ChangeNotifierProvider<ConnectionProvider>.value(value: connectionProvider),
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),

@@ -29,8 +29,7 @@ class SilentUpdateCoordinatorOptions {
     Duration? helperWaitDuration,
   }) {
     return SilentUpdateCoordinatorOptions(
-      automaticFailureCooldownThreshold:
-          automaticFailureCooldownThreshold ?? this.automaticFailureCooldownThreshold,
+      automaticFailureCooldownThreshold: automaticFailureCooldownThreshold ?? this.automaticFailureCooldownThreshold,
       automaticFailureCooldown: automaticFailureCooldown ?? this.automaticFailureCooldown,
       helperWaitDuration: helperWaitDuration ?? this.helperWaitDuration,
     );

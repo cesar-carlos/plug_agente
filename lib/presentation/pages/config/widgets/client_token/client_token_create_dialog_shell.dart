@@ -1,15 +1,20 @@
-part of 'client_token_section.dart';
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
+import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/client_token_provider.dart';
+import 'package:provider/provider.dart';
 
-const _createTokenDialogMaxWidth = 1120.0;
-const _createTokenDialogHorizontalMargin = 40.0;
-const _createTokenDialogHeightFactor = 0.84;
-const _createTokenDialogMinPreferredOuterHeight = 400.0;
-const _createTokenDialogCompactWidthBreakpoint = 780.0;
-const _createTokenBarrierOpacity = 0.4;
-const _createTokenScaleStart = 0.95;
+const createTokenDialogMaxWidth = 1120.0;
+const createTokenDialogHorizontalMargin = 40.0;
+const createTokenDialogHeightFactor = 0.84;
+const createTokenDialogMinPreferredOuterHeight = 400.0;
+const createTokenDialogCompactWidthBreakpoint = 780.0;
+const createTokenBarrierOpacity = 0.4;
+const createTokenScaleStart = 0.95;
 
-class _CreateTokenDialogShell extends StatefulWidget {
-  const _CreateTokenDialogShell({
+class ClientTokenCreateDialogShell extends StatefulWidget {
+  const ClientTokenCreateDialogShell({
     required this.navigatorContext,
     required this.agentFocusNode,
     required this.dialogWidth,
@@ -17,6 +22,7 @@ class _CreateTokenDialogShell extends StatefulWidget {
     required this.theme,
     required this.isEditingToken,
     required this.body,
+    super.key,
   });
 
   final BuildContext navigatorContext;
@@ -28,10 +34,10 @@ class _CreateTokenDialogShell extends StatefulWidget {
   final Widget Function(BuildContext context, ClientTokenProvider provider) body;
 
   @override
-  State<_CreateTokenDialogShell> createState() => _CreateTokenDialogShellState();
+  State<ClientTokenCreateDialogShell> createState() => _ClientTokenCreateDialogShellState();
 }
 
-class _CreateTokenDialogShellState extends State<_CreateTokenDialogShell> {
+class _ClientTokenCreateDialogShellState extends State<ClientTokenCreateDialogShell> {
   @override
   void initState() {
     super.initState();

@@ -24,8 +24,7 @@ class UpdatePreferencesRepository implements IUpdatePreferencesRepository {
   final ICircuitBreakerPersistence _automaticFailureCircuitPersistence;
 
   @override
-  bool get updateNotificationsEnabled =>
-      _settingsStore.getBool(AppSettingsKeys.updateNotificationsEnabled) ?? true;
+  bool get updateNotificationsEnabled => _settingsStore.getBool(AppSettingsKeys.updateNotificationsEnabled) ?? true;
 
   @override
   bool get automaticSilentUpdatesEnabled =>
@@ -40,8 +39,7 @@ class UpdatePreferencesRepository implements IUpdatePreferencesRepository {
       _settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, enabled);
 
   @override
-  String? readLastManualDiagnosticsJson() =>
-      _settingsStore.getString(AutoUpdateSettingsKeys.lastManualDiagnostics);
+  String? readLastManualDiagnosticsJson() => _settingsStore.getString(AutoUpdateSettingsKeys.lastManualDiagnostics);
 
   @override
   String? readLastBackgroundDiagnosticsJson() =>
@@ -68,32 +66,27 @@ class UpdatePreferencesRepository implements IUpdatePreferencesRepository {
       _settingsStore.remove(AutoUpdateSettingsKeys.lastAutomaticDiagnostics);
 
   @override
-  String? readPendingSilentUpdateJson() =>
-      _settingsStore.getString(AutoUpdateSettingsKeys.pendingSilentUpdate);
+  String? readPendingSilentUpdateJson() => _settingsStore.getString(AutoUpdateSettingsKeys.pendingSilentUpdate);
 
   @override
   Future<void> writePendingSilentUpdateJson(String json) =>
       _settingsStore.setString(AutoUpdateSettingsKeys.pendingSilentUpdate, json);
 
   @override
-  Future<void> clearPendingSilentUpdateJson() =>
-      _settingsStore.remove(AutoUpdateSettingsKeys.pendingSilentUpdate);
+  Future<void> clearPendingSilentUpdateJson() => _settingsStore.remove(AutoUpdateSettingsKeys.pendingSilentUpdate);
 
   @override
   int? readRolloutBucket() => _settingsStore.getInt(AutoUpdateSettingsKeys.rolloutBucket);
 
   @override
-  Future<void> writeRolloutBucket(int bucket) =>
-      _settingsStore.setInt(AutoUpdateSettingsKeys.rolloutBucket, bucket);
+  Future<void> writeRolloutBucket(int bucket) => _settingsStore.setInt(AutoUpdateSettingsKeys.rolloutBucket, bucket);
 
   @override
   Future<void> flushPendingPersistence() => _settingsStore.flushPendingPersistence();
 
   @override
-  ICircuitBreakerPersistence manualTimeoutCircuitPersistence() =>
-      _manualTimeoutCircuitPersistence;
+  ICircuitBreakerPersistence manualTimeoutCircuitPersistence() => _manualTimeoutCircuitPersistence;
 
   @override
-  ICircuitBreakerPersistence automaticFailureCircuitPersistence() =>
-      _automaticFailureCircuitPersistence;
+  ICircuitBreakerPersistence automaticFailureCircuitPersistence() => _automaticFailureCircuitPersistence;
 }

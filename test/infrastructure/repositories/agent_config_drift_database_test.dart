@@ -227,12 +227,16 @@ void main() {
       expect(triggers.map((row) => row.id), ['trigger-valid']);
       expect(chunks.map((row) => row.executionId), ['exec-valid']);
 
-      final triggerForeignKeys = await db.customSelect(
-        'PRAGMA foreign_key_list(agent_action_trigger_table)',
-      ).get();
-      final chunkForeignKeys = await db.customSelect(
-        'PRAGMA foreign_key_list(agent_action_captured_output_chunk_table)',
-      ).get();
+      final triggerForeignKeys = await db
+          .customSelect(
+            'PRAGMA foreign_key_list(agent_action_trigger_table)',
+          )
+          .get();
+      final chunkForeignKeys = await db
+          .customSelect(
+            'PRAGMA foreign_key_list(agent_action_captured_output_chunk_table)',
+          )
+          .get();
 
       expect(
         triggerForeignKeys.map((row) => row.read<String>('table')),

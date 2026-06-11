@@ -118,7 +118,8 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     int? maxResultBufferBytes,
   }) {
     final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
-    final resolvedMaxResultBufferBytes = maxResultBufferBytes ??
+    final resolvedMaxResultBufferBytes =
+        maxResultBufferBytes ??
         max(
           normalizedChunkSize,
           max(

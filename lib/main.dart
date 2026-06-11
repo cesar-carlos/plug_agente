@@ -40,6 +40,18 @@ void main(List<String> args) async {
       );
     }
 
+    try {
+      await getIt.reset();
+    } on Object catch (resetError, resetStackTrace) {
+      developer.log(
+        'Bootstrap failure dependency reset failed',
+        name: 'main',
+        level: 1000,
+        error: resetError,
+        stackTrace: resetStackTrace,
+      );
+    }
+
     runApp(
       BootstrapFailureApp(
         error: error,

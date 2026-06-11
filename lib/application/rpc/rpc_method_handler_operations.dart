@@ -470,6 +470,7 @@ class DefaultRpcMethodHandlerOperations {
     required String? idempotencyKey,
     required String idempotencyFingerprint,
     required Future<RpcResponse> Function() execute,
+    bool idempotentCachePrefetched = false,
   }) async {
     if (request.isNotification ||
         !_featureFlags.enableSocketIdempotency ||
@@ -483,13 +484,15 @@ class DefaultRpcMethodHandlerOperations {
     final response = await _idempotencyCoordinator.runExclusive(
       namespacedKey: namespacedKey,
       action: () async {
-        final cached = await _consumeIdempotentCacheIfAny(
-          request,
-          idempotencyKey,
-          idempotencyFingerprint,
-        );
-        if (cached != null) {
-          return cached;
+        if (!idempotentCachePrefetched) {
+          final cached = await _consumeIdempotentCacheIfAny(
+            request,
+            idempotencyKey,
+            idempotencyFingerprint,
+          );
+          if (cached != null) {
+            return cached;
+          }
         }
         final executed = await execute();
         final sanitized = RpcWireMap.sanitizeRpcResponse(executed);

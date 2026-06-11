@@ -761,9 +761,13 @@ void main() {
 
       controller.add(
         const Success(
-          QueryResult(columns: ['id'], rows: [
-            [1],
-          ], rowCount: 1),
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
         ),
       );
       await controller.close();
@@ -835,9 +839,13 @@ void main() {
 
       controller.add(
         const Success(
-          QueryResult(columns: ['id'], rows: [
-            [1],
-          ], rowCount: 1),
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
         ),
       );
       await controller.close();
@@ -879,17 +887,25 @@ void main() {
 
       controller.add(
         const Success(
-          QueryResult(columns: ['id'], rows: [
-            [1],
-            [2],
-          ], rowCount: 2),
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+              [2],
+            ],
+            rowCount: 2,
+          ),
         ),
       );
       controller.add(
         const Success(
-          QueryResult(columns: ['id'], rows: [
-            [3],
-          ], rowCount: 1),
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [3],
+            ],
+            rowCount: 1,
+          ),
         ),
       );
       await controller.close();

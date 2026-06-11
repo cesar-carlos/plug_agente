@@ -80,8 +80,7 @@ class SchedulerLockFailureResolver {
       context: await _buildFailureContext(
         lockFilePath: lockFilePath,
         reason: AgentActionTriggerConstants.schedulerInstanceLockedReason,
-        userMessage:
-            'Outro processo do Plug Agente ja esta executando o agendador de acoes nesta pasta de dados.',
+        userMessage: 'Outro processo do Plug Agente ja esta executando o agendador de acoes nesta pasta de dados.',
         cause: cause,
         metadata: metadata,
       ),
@@ -154,9 +153,7 @@ class SchedulerLockFailureResolver {
       }
     }
     context.addAll(
-      metadata == null
-          ? await _metadataReader.readDiagnosticsMap(lockFilePath)
-          : _diagnosticsFromMetadata(metadata),
+      metadata == null ? await _metadataReader.readDiagnosticsMap(lockFilePath) : _diagnosticsFromMetadata(metadata),
     );
     return context;
   }

@@ -6,7 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/di/service_locator.dart' show shutdownApp;
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/backup/local_data_backup.dart';
@@ -14,6 +14,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain_failures;
 import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/backup_failure_localizer.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/shared/widgets/common/actions/app_button.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
@@ -38,11 +39,15 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
     unawaited(_loadPendingRestoreFailure());
   }
 
+  ILocalAppDataBackupService? _backupService(BuildContext context) =>
+      readOptionalPresentationProvider<ILocalAppDataBackupService>(context);
+
   Future<void> _loadPendingRestoreFailure() async {
-    if (!getIt.isRegistered<ILocalAppDataBackupService>()) {
+    final service = _backupService(context);
+    if (service == null) {
       return;
     }
-    final diagnostics = await getIt<ILocalAppDataBackupService>().readPendingRestoreFailureDiagnostics();
+    final diagnostics = await service.readPendingRestoreFailureDiagnostics();
     if (!mounted || diagnostics == null) {
       return;
     }
@@ -51,8 +56,9 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
 
   Future<void> _dismissRestoreFailure() async {
     setState(() => _pendingRestoreFailure = null);
-    if (getIt.isRegistered<ILocalAppDataBackupService>()) {
-      await getIt<ILocalAppDataBackupService>().clearRestoreFailureDiagnostics();
+    final service = _backupService(context);
+    if (service != null) {
+      await service.clearRestoreFailureDiagnostics();
     }
   }
 
@@ -87,7 +93,14 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
       }
 
       await _setBusy(value: true, semanticsLabel: l10n.configBackupExporting);
-      final result = await getIt<ILocalAppDataBackupService>().exportBackupZip(
+      if (!mounted) {
+        return;
+      }
+      final service = _backupService(context);
+      if (service == null) {
+        return;
+      }
+      final result = await service.exportBackupZip(
         path,
         includeSecureStorageSecrets: _includeSecureStorageSecrets,
       );
@@ -127,7 +140,10 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
 
   Future<void> _restore() async {
     final l10n = AppLocalizations.of(context)!;
-    final service = getIt<ILocalAppDataBackupService>();
+    final service = _backupService(context);
+    if (service == null) {
+      return;
+    }
 
     FilePickerResult? picked;
     try {
@@ -171,7 +187,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
     }
 
     final staging = stageResult.getOrThrow();
-    final appSchemaVersion = getIt<ILocalAppDataBackupService>().liveAgentConfigSchemaVersion;
+    final appSchemaVersion = service.liveAgentConfigSchemaVersion;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -189,7 +205,13 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
       return;
     }
 
-    await getIt<IAppSettingsStore>().flushPendingPersistence();
+    if (!mounted) {
+      service.disposeStaging(staging);
+      return;
+    }
+
+    final settingsStore = readOptionalPresentationProvider<IAppSettingsStore>(context);
+    await settingsStore?.flushPendingPersistence();
     await shutdownApp();
 
     final applyResult = await service.applyRestore(staging);
@@ -278,9 +300,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
             Checkbox(
               key: const ValueKey('backup_include_secure_storage_secrets_checkbox'),
               checked: _includeSecureStorageSecrets,
-              onChanged: _busy
-                  ? null
-                  : (bool? value) => setState(() => _includeSecureStorageSecrets = value ?? false),
+              onChanged: _busy ? null : (bool? value) => setState(() => _includeSecureStorageSecrets = value ?? false),
               content: Text(l10n.configBackupIncludeSecureStorageSecretsLabel),
             ),
             if (_includeSecureStorageSecrets) ...[
@@ -401,9 +421,7 @@ class _RestoreConfirmDialogState extends State<_RestoreConfirmDialog> {
                       ? 'restore_secure_storage_secrets_included_notice'
                       : 'restore_odbc_secrets_warning',
                 ),
-                severity: staging.manifestSecureStorageSecretsIncluded
-                    ? InfoBarSeverity.info
-                    : InfoBarSeverity.warning,
+                severity: staging.manifestSecureStorageSecretsIncluded ? InfoBarSeverity.info : InfoBarSeverity.warning,
                 message: staging.manifestSecureStorageSecretsIncluded
                     ? l10n.configBackupRestoreSecretsIncludedNote
                     : l10n.configBackupRestoreOdbcSecretsWarning,

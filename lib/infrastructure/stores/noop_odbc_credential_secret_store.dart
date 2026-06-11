@@ -2,9 +2,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.d
 import 'package:plug_agente/domain/value_objects/odbc_credential_secrets.dart';
 import 'package:plug_agente/infrastructure/stores/batch_secret_store_mixin.dart';
 
-class NoopOdbcCredentialSecretStore
-    with BatchOdbcCredentialSecretStoreMixin
-    implements IOdbcCredentialSecretStore {
+class NoopOdbcCredentialSecretStore with BatchOdbcCredentialSecretStoreMixin implements IOdbcCredentialSecretStore {
   @override
   bool get isAvailable => false;
 

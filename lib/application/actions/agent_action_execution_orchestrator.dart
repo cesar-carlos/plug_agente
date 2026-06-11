@@ -22,10 +22,11 @@ import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-typedef AgentActionAdapterPrepareCheck = Future<Result<AgentActionPreparedExecution>> Function({
-  required AgentActionDefinition definition,
-  required AgentActionExecutionRequest request,
-});
+typedef AgentActionAdapterPrepareCheck =
+    Future<Result<AgentActionPreparedExecution>> Function({
+      required AgentActionDefinition definition,
+      required AgentActionExecutionRequest request,
+    });
 
 /// Post-gate execution orchestration: queue admission, idempotency, persistence,
 /// retry loop, elevated routing, and terminal metrics/audit hooks.

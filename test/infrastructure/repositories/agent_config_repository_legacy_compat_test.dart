@@ -14,9 +14,7 @@ import 'package:plug_agente/infrastructure/stores/batch_secret_store_mixin.dart'
 import 'package:plug_agente/infrastructure/stores/hub_session_store.dart';
 import 'package:plug_agente/infrastructure/stores/odbc_credential_store.dart';
 
-class _FakeHubAuthSecretStore
-    with BatchHubAuthSecretStoreMixin
-    implements IHubAuthSecretStore {
+class _FakeHubAuthSecretStore with BatchHubAuthSecretStoreMixin implements IHubAuthSecretStore {
   final Map<String, HubAuthSecrets> _storage = <String, HubAuthSecrets>{};
 
   @override
@@ -38,9 +36,7 @@ class _FakeHubAuthSecretStore
   }
 }
 
-class _FakeOdbcCredentialSecretStore
-    with BatchOdbcCredentialSecretStoreMixin
-    implements IOdbcCredentialSecretStore {
+class _FakeOdbcCredentialSecretStore with BatchOdbcCredentialSecretStoreMixin implements IOdbcCredentialSecretStore {
   final Map<String, OdbcCredentialSecrets> _storage = <String, OdbcCredentialSecrets>{};
 
   @override
@@ -62,9 +58,7 @@ class _FakeOdbcCredentialSecretStore
   }
 }
 
-class _CountingHubAuthSecretStore
-    with BatchHubAuthSecretStoreMixin
-    implements IHubAuthSecretStore {
+class _CountingHubAuthSecretStore with BatchHubAuthSecretStoreMixin implements IHubAuthSecretStore {
   final Map<String, HubAuthSecrets> _storage = <String, HubAuthSecrets>{};
   int batchReadCount = 0;
 
@@ -374,8 +368,7 @@ void main() {
         agentId: const Value('agent-1'),
         driverName: 'SQL Server',
         odbcDriverName: const Value('ODBC Driver 17 for SQL Server'),
-        connectionString:
-            'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=save-secret',
+        connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=save-secret',
         username: 'sa',
         databaseName: 'demo',
         host: 'localhost',
@@ -398,9 +391,9 @@ void main() {
       final storedOdbcSecrets = await odbcSecretStore.readSecrets('cfg-odbc-save');
       expect(storedOdbcSecrets.password, 'save-secret');
 
-      final driftRow = await (database.select(database.configTable)
-            ..where((tbl) => tbl.id.equals('cfg-odbc-save')))
-          .getSingle();
+      final driftRow = await (database.select(
+        database.configTable,
+      )..where((tbl) => tbl.id.equals('cfg-odbc-save'))).getSingle();
       expect(driftRow.connectionString, isNot(contains('PWD=')));
       expect(driftRow.connectionString, contains('SERVER=localhost'));
     });

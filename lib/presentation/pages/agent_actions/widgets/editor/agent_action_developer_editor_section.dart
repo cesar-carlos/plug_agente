@@ -42,7 +42,8 @@ class AgentActionDeveloperEditorSection extends StatefulWidget {
   final Future<void> Function({
     required AgentActionPathPolicy pathPolicy,
     String? selectedConnectionId,
-  }) onReloadConnections;
+  })
+  onReloadConnections;
   final bool showInlineFeedback;
   final void Function(AgentActionEditorDialogWarning warning)? onDialogWarning;
 
@@ -290,10 +291,10 @@ class AgentActionDeveloperEditorSectionState extends State<AgentActionDeveloperE
     final infoBarKey = warning.key.startsWith('developer_connection_missing:')
         ? AgentActionEditorKeys.developerConnectionMissingInfoBar
         : warning.key.startsWith('developer_connection_unknown:')
-            ? AgentActionEditorKeys.developerConnectionUnknownInfoBar
-            : warning.key.startsWith('developer_connection_changed:')
-                ? AgentActionEditorKeys.developerConnectionChangedInfoBar
-                : null;
+        ? AgentActionEditorKeys.developerConnectionUnknownInfoBar
+        : warning.key.startsWith('developer_connection_changed:')
+        ? AgentActionEditorKeys.developerConnectionChangedInfoBar
+        : null;
 
     return <Widget>[
       const SizedBox(height: AppSpacing.sm),
@@ -397,10 +398,10 @@ class AgentActionDeveloperEditorSectionState extends State<AgentActionDeveloperE
   }
 
   Future<void> _pickDeveloperExecutorPath() => _pickAndApply(
-        dialogTitle: widget.l10n.agentActionsFormBrowseExecutorPath,
-        allowedExtensions: const ['exe'],
-        apply: (path) => _draft.developer.executorPath.text = path,
-      );
+    dialogTitle: widget.l10n.agentActionsFormBrowseExecutorPath,
+    allowedExtensions: const ['exe'],
+    apply: (path) => _draft.developer.executorPath.text = path,
+  );
 
   void _applyDefaultDeveloperExecutorPath() {
     setState(() {
@@ -410,10 +411,10 @@ class AgentActionDeveloperEditorSectionState extends State<AgentActionDeveloperE
   }
 
   Future<void> _pickDeveloperProjectPath() => _pickAndApply(
-        dialogTitle: widget.l10n.agentActionsFormBrowseProjectPath,
-        allowedExtensions: const ['7proj'],
-        apply: (path) => _draft.developer.projectPath.text = path,
-      );
+    dialogTitle: widget.l10n.agentActionsFormBrowseProjectPath,
+    allowedExtensions: const ['7proj'],
+    apply: (path) => _draft.developer.projectPath.text = path,
+  );
 
   Future<void> _pickDeveloperData7ConfigPath() async {
     await _pickAndApply(

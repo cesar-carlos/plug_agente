@@ -7,8 +7,6 @@ import 'package:plug_agente/core/constants/direct_odbc_operation_class.dart';
 import 'package:plug_agente/domain/domain.dart' show IIdempotencyStore;
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart' show IIdempotencyStore;
 import 'package:plug_agente/domain/repositories/repositories.dart' show IIdempotencyStore;
-import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart' show DirectOdbcConnectionLimiter;
-
 /// Constantes para configuração de conexões ODBC e Socket.IO.
 class ConnectionConstants {
   ConnectionConstants._();
@@ -200,7 +198,7 @@ class ConnectionConstants {
         );
   }
 
-  /// Per-kind SQL queue worker cap aligned with [DirectOdbcConnectionLimiter].
+  /// Per-kind SQL queue worker cap aligned with the direct ODBC connection limiter.
   ///
   /// Uses `min(maxWorkers ~/ 2, directOdbcOperationClassCap(...))` so queue
   /// dispatch for batch/streaming workloads cannot exceed the direct ODBC budget.
@@ -270,7 +268,7 @@ class ConnectionConstants {
     return effectivePoolSize ~/ 2;
   }
 
-  /// Per-class ceiling for [DirectOdbcConnectionLimiter] within the global budget.
+  /// Per-class ceiling for the direct ODBC connection limiter within the global budget.
   static int directOdbcOperationClassCap(
     DirectOdbcOperationClass operationClass,
     int globalMaxConcurrent,
@@ -368,8 +366,7 @@ class ConnectionConstants {
   /// Homogeneous `INSERT` command count above which `sql.executeBatch` records a
   /// recommendation to migrate callers to `sql.bulkInsert`.
   static int get batchBulkInsertRecommendationThreshold =>
-      _positiveIntEnv('ODBC_BATCH_BULK_INSERT_RECOMMEND_THRESHOLD') ??
-      defaultBatchBulkInsertRecommendationThreshold;
+      _positiveIntEnv('ODBC_BATCH_BULK_INSERT_RECOMMEND_THRESHOLD') ?? defaultBatchBulkInsertRecommendationThreshold;
 
   /// Homogeneous `INSERT` command count above which the gateway may auto-route
   /// an `sql.executeBatch` workload to the native bulk-insert path.
@@ -423,11 +420,25 @@ class ConnectionConstants {
   static const int maxConnectionPools = 64;
   static const int maxBackpressureChunkQueueSize = 1000;
 
-  /// Max rows kept in Playground UI during ODBC streaming (memory / grid cost).
-  static const int playgroundStreamingMaxResultRows = 100000;
+  /// Default max rows kept in Playground UI during ODBC streaming (memory / grid cost).
+  static const int defaultPlaygroundStreamingMaxResultRows = 10000;
+
+  /// Max rows kept in Playground UI during ODBC streaming (override via
+  /// `PLAYGROUND_STREAMING_MAX_RESULT_ROWS`).
+  static int get playgroundStreamingMaxResultRows =>
+      _positiveIntEnv('PLAYGROUND_STREAMING_MAX_RESULT_ROWS') ?? defaultPlaygroundStreamingMaxResultRows;
+
+  /// Headroom above [rpcSqlExecuteConcurrencySoftLimit] for concurrent non-sql
+  /// RPC handlers on the same socket (health, profile, batch, etc.).
+  static const int defaultMaxConcurrentRpcHandlersHeadroom = 96;
 
   /// Max in-flight `rpc:request` handlers per socket connection (backpressure).
-  static const int maxConcurrentRpcHandlers = 320;
+  ///
+  /// Defaults to SQL queue soft limit plus [defaultMaxConcurrentRpcHandlersHeadroom].
+  /// Override with env `MAX_CONCURRENT_RPC_HANDLERS`.
+  static int get maxConcurrentRpcHandlers =>
+      _positiveIntEnv('MAX_CONCURRENT_RPC_HANDLERS') ??
+      rpcSqlExecuteConcurrencySoftLimit + defaultMaxConcurrentRpcHandlersHeadroom;
 
   /// Max simultaneously registered RPC streaming emitters per socket connection.
   /// Each emitter holds buffered chunks awaiting `rpc:stream.pull` from the hub;

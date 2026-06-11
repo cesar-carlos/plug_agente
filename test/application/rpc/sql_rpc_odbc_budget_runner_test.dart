@@ -15,37 +15,39 @@ import 'package:result_dart/result_dart.dart';
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 SqlRpcMethodHandlerSupport _support({
-  Duration? Function({required DateTime? deadline, required Duration stageBudget})?
-      effectiveStageTimeout,
+  Duration? Function({required DateTime? deadline, required Duration stageBudget})? effectiveStageTimeout,
 }) {
   return SqlRpcMethodHandlerSupport(
     invalidParams: (_, detail, {rpcReason, extraFields = const {}}) => throw UnimplementedError(),
     methodNotFound: (_) => throw UnimplementedError(),
     executionNotFound: (_) => throw UnimplementedError(),
     consumeIdempotentCacheIfAny: (_, key, fingerprint) async => null,
-    storeIdempotentSuccessIfApplicable: ({
-      required request,
-      required idempotencyKey,
-      required idempotencyFingerprint,
-      required response,
-    }) async {},
-    runIdempotentExecution: ({
-      required request,
-      required idempotencyKey,
-      required idempotencyFingerprint,
-      required execute,
-    }) => execute(),
+    storeIdempotentSuccessIfApplicable:
+        ({
+          required request,
+          required idempotencyKey,
+          required idempotencyFingerprint,
+          required response,
+        }) async {},
+    runIdempotentExecution:
+        ({
+          required request,
+          required idempotencyKey,
+          required idempotencyFingerprint,
+          required execute,
+          idempotentCachePrefetched = false,
+        }) => execute(),
     buildMissingClientTokenFailure: () => domain.ConfigurationFailure('missing token'),
-    authorizeWithBudget: ({
-      required token,
-      required sql,
-      required requestDatabase,
-      required requestId,
-      required method,
-      required deadline,
-    }) async => const Success(unit),
-    effectiveStageTimeout:
-        effectiveStageTimeout ?? ({required deadline, required stageBudget}) => stageBudget,
+    authorizeWithBudget:
+        ({
+          required token,
+          required sql,
+          required requestDatabase,
+          required requestId,
+          required method,
+          required deadline,
+        }) async => const Success(unit),
+    effectiveStageTimeout: effectiveStageTimeout ?? ({required deadline, required stageBudget}) => stageBudget,
   );
 }
 

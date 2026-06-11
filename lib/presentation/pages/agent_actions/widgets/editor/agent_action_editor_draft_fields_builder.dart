@@ -48,7 +48,8 @@ class AgentActionEditorDraftFieldsBuilder {
   final Future<void> Function({
     required AgentActionPathPolicy pathPolicy,
     String? selectedConnectionId,
-  }) onReloadConnections;
+  })
+  onReloadConnections;
   final void Function(AgentActionEditorDialogWarning warning)? onDialogWarning;
   final Future<void> Function() onPickExecutableTargetPath;
   final Future<void> Function() onPickJarPath;

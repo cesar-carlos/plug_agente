@@ -8,6 +8,7 @@ import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 
 import 'agent_actions_page_test_harness.dart';
 

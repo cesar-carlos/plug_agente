@@ -168,9 +168,7 @@ void main() {
 
         check(result.isSuccess()).isTrue();
         final elevatedCall = calls.singleWhere(
-          (call) =>
-              call.executable == 'powershell' &&
-              call.arguments.join(' ').contains('-Verb RunAs'),
+          (call) => call.executable == 'powershell' && call.arguments.join(' ').contains('-Verb RunAs'),
         );
         check(elevatedCall.arguments.join(' ')).contains('-EncodedCommand');
         check(elevatedCall.arguments.join(' ')).not((value) => value.contains('reg.exe'));

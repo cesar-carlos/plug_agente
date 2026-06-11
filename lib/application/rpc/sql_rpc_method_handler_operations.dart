@@ -1,4 +1,4 @@
-﻿import 'package:plug_agente/application/rpc/sql_batch_handler.dart';
+import 'package:plug_agente/application/rpc/sql_batch_handler.dart';
 
 import 'package:plug_agente/application/rpc/sql_bulk_insert_handler.dart';
 
@@ -24,6 +24,7 @@ import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart
 
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 
+import 'package:plug_agente/application/services/active_config_metadata_cache.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
@@ -54,12 +55,8 @@ import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dar
 
 import 'package:uuid/uuid.dart';
 
-
-
 class SqlRpcMethodHandlerOperations {
-
   SqlRpcMethodHandlerOperations({
-
     required IDatabaseGateway databaseGateway,
 
     required QueryNormalizerService normalizerService,
@@ -95,21 +92,14 @@ class SqlRpcMethodHandlerOperations {
     SqlStreamingCoordinator? sqlStreamingCoordinator,
 
     IOdbcConnectionSettings? odbcConnectionSettings,
-
   }) : _sqlStreamingCoordinator =
-
            sqlStreamingCoordinator ??
-
            SqlStreamingCoordinator(
-
              gateway: streamingGateway,
 
              metrics: dispatchMetrics,
-
            ) {
-
     final clientTokenGate = SqlRpcClientTokenGate(
-
       featureFlags: featureFlags,
 
       support: support,
@@ -117,25 +107,17 @@ class SqlRpcMethodHandlerOperations {
       authMetrics: authMetrics,
 
       sqlInvestigation: sqlInvestigation,
-
     );
 
     final executeSqlBatch = ExecuteSqlBatch(
-
       databaseGateway,
 
       normalizerService,
 
-      poolSizeProvider: odbcConnectionSettings == null
-
-          ? null
-
-          : () => odbcConnectionSettings.poolSize,
-
+      poolSizeProvider: odbcConnectionSettings == null ? null : () => odbcConnectionSettings.poolSize,
     );
 
     final odbcBudgetRunner = SqlRpcOdbcBudgetRunner(
-
       databaseGateway: databaseGateway,
 
       support: support,
@@ -143,19 +125,22 @@ class SqlRpcMethodHandlerOperations {
       queryStageBudget: queryStageBudget,
 
       batchExecutionStageBudget: batchExecutionStageBudget,
-
     );
 
     final streamTerminalEmitter = SqlRpcStreamTerminalEmitter(
-
       dispatchMetrics: dispatchMetrics,
-
     );
 
     final dbStreamingAutoPolicy = SqlDbStreamingAutoPolicy();
 
-    final dbStreamingExecutor = SqlRpcDbStreamingExecutor(
+    final activeConfigMetadataCache = (activeConfigResolver != null || configRepository != null)
+        ? ActiveConfigMetadataCache(
+            activeConfigResolver: activeConfigResolver,
+            legacyRepository: configRepository,
+          )
+        : null;
 
+    final dbStreamingExecutor = SqlRpcDbStreamingExecutor(
       featureFlags: featureFlags,
 
       support: support,
@@ -172,6 +157,8 @@ class SqlRpcMethodHandlerOperations {
 
       activeConfigResolver: activeConfigResolver,
 
+      activeConfigMetadataCache: activeConfigMetadataCache,
+
       configRepository: configRepository,
 
       streamingGateway: streamingGateway,
@@ -179,21 +166,15 @@ class SqlRpcMethodHandlerOperations {
       dispatchMetrics: dispatchMetrics,
 
       odbcConnectionSettings: odbcConnectionSettings,
-
     );
 
     final materializedStreamingExecutor = SqlRpcMaterializedStreamingExecutor(
-
       terminalEmitter: streamTerminalEmitter,
 
       dispatchMetrics: dispatchMetrics,
-
     );
 
-
-
     _executeHandler = SqlExecuteHandler(
-
       normalizerService: normalizerService,
 
       uuid: uuid,
@@ -215,11 +196,9 @@ class SqlRpcMethodHandlerOperations {
       deprecationMetrics: deprecationMetrics,
 
       dispatchMetrics: dispatchMetrics,
-
     );
 
     _batchHandler = SqlBatchHandler(
-
       featureFlags: featureFlags,
 
       support: support,
@@ -235,11 +214,9 @@ class SqlRpcMethodHandlerOperations {
       batchExecutionStageBudget: batchExecutionStageBudget,
 
       supportsPageOffsetPagination: supportsPageOffsetPagination,
-
     );
 
     _bulkInsertHandler = SqlBulkInsertHandler(
-
       featureFlags: featureFlags,
 
       support: support,
@@ -251,11 +228,9 @@ class SqlRpcMethodHandlerOperations {
       odbcBudgetRunner: odbcBudgetRunner,
 
       sqlBatchTotalBudget: sqlBatchTotalBudget,
-
     );
 
     _cancelHandler = SqlCancelHandler(
-
       featureFlags: featureFlags,
 
       support: support,
@@ -263,12 +238,8 @@ class SqlRpcMethodHandlerOperations {
       sqlStreamingCoordinator: _sqlStreamingCoordinator,
 
       streamingGateway: streamingGateway,
-
     );
-
   }
-
-
 
   final SqlStreamingCoordinator _sqlStreamingCoordinator;
 
@@ -280,11 +251,7 @@ class SqlRpcMethodHandlerOperations {
 
   late final SqlCancelHandler _cancelHandler;
 
-
-
   SqlStreamingCoordinator get sqlStreamingCoordinator => _sqlStreamingCoordinator;
-
-
 
   static const _defaultSqlExecuteTotalBudget = Duration(seconds: 35);
 
@@ -294,10 +261,7 @@ class SqlRpcMethodHandlerOperations {
 
   static const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
 
-
-
   Future<RpcResponse> handleSqlExecute(
-
     RpcRequest request,
 
     String agentId,
@@ -309,9 +273,7 @@ class SqlRpcMethodHandlerOperations {
     required Map<String, dynamic> negotiatedExtensions,
 
     IRpcStreamEmitter? streamEmitter,
-
   }) => _executeHandler.handleSqlExecute(
-
     request,
 
     agentId,
@@ -323,13 +285,9 @@ class SqlRpcMethodHandlerOperations {
     negotiatedExtensions: negotiatedExtensions,
 
     streamEmitter: streamEmitter,
-
   );
 
-
-
   Future<RpcResponse> handleSqlExecuteBatch(
-
     RpcRequest request,
 
     String agentId,
@@ -339,9 +297,7 @@ class SqlRpcMethodHandlerOperations {
     required TransportLimits limits,
 
     required Map<String, dynamic> negotiatedExtensions,
-
   }) => _batchHandler.handleSqlExecuteBatch(
-
     request,
 
     agentId,
@@ -351,30 +307,21 @@ class SqlRpcMethodHandlerOperations {
     limits: limits,
 
     negotiatedExtensions: negotiatedExtensions,
-
   );
 
-
-
   Future<RpcResponse> handleSqlBulkInsert(
-
     RpcRequest request,
 
     String? clientToken, {
 
     required TransportLimits limits,
-
   }) => _bulkInsertHandler.handleSqlBulkInsert(
-
     request,
 
     clientToken,
 
     limits: limits,
-
   );
-
-
 
   Future<RpcResponse> handleSqlCancel(RpcRequest request) => _cancelHandler.handleSqlCancel(request);
 }

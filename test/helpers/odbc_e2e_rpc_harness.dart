@@ -80,9 +80,9 @@ class OdbcE2eRpcHarness {
     String dsn,
     OdbcE2eSqlDialect dialect,
   ) async {
-      final settings = MockOdbcConnectionSettings(
-        poolSize: E2EEnv.odbcPoolSize,
-      );
+    final settings = MockOdbcConnectionSettings(
+      poolSize: E2EEnv.odbcPoolSize,
+    );
     final locator = createAsyncOdbcServiceLocatorForSettings(settings);
     final service = locator.asyncService;
     final init = await service.initialize();

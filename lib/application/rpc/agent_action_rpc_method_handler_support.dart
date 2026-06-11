@@ -35,6 +35,7 @@ typedef AgentActionRpcRunIdempotentExecution =
       required String? idempotencyKey,
       required String idempotencyFingerprint,
       required Future<RpcResponse> Function() execute,
+      bool idempotentCachePrefetched,
     });
 
 class AgentActionRpcMethodHandlerSupport {

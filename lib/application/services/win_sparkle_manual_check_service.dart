@@ -146,17 +146,16 @@ class WinSparkleManualCheckService {
   }
 
   static final Map<UpdateCheckCompletionSource, void Function(IAutoUpdateMetricsCollector)>
-  _manualCompletionMetricRouter =
-      <UpdateCheckCompletionSource, void Function(IAutoUpdateMetricsCollector)>{
-        UpdateCheckCompletionSource.updateAvailable: (m) => m.recordAutoUpdateManualCheckSuccessAvailable(),
-        UpdateCheckCompletionSource.updateNotAvailable: (m) => m.recordAutoUpdateManualCheckSuccessNotAvailable(),
-        UpdateCheckCompletionSource.updaterError: (m) => m.recordAutoUpdateManualCheckUpdaterError(),
-        UpdateCheckCompletionSource.triggerTimeout: (m) => m.recordAutoUpdateManualCheckTriggerTimeout(),
-        UpdateCheckCompletionSource.completionTimeout: (m) => m.recordAutoUpdateManualCheckCompletionTimeout(),
-        UpdateCheckCompletionSource.triggerFailure: (m) => m.recordAutoUpdateManualCheckTriggerFailure(),
-        UpdateCheckCompletionSource.notInitialized: (m) => m.recordAutoUpdateManualCheckNotInitialized(),
-        UpdateCheckCompletionSource.circuitOpen: (m) => m.recordAutoUpdateCircuitOpenRejected(),
-      };
+  _manualCompletionMetricRouter = <UpdateCheckCompletionSource, void Function(IAutoUpdateMetricsCollector)>{
+    UpdateCheckCompletionSource.updateAvailable: (m) => m.recordAutoUpdateManualCheckSuccessAvailable(),
+    UpdateCheckCompletionSource.updateNotAvailable: (m) => m.recordAutoUpdateManualCheckSuccessNotAvailable(),
+    UpdateCheckCompletionSource.updaterError: (m) => m.recordAutoUpdateManualCheckUpdaterError(),
+    UpdateCheckCompletionSource.triggerTimeout: (m) => m.recordAutoUpdateManualCheckTriggerTimeout(),
+    UpdateCheckCompletionSource.completionTimeout: (m) => m.recordAutoUpdateManualCheckCompletionTimeout(),
+    UpdateCheckCompletionSource.triggerFailure: (m) => m.recordAutoUpdateManualCheckTriggerFailure(),
+    UpdateCheckCompletionSource.notInitialized: (m) => m.recordAutoUpdateManualCheckNotInitialized(),
+    UpdateCheckCompletionSource.circuitOpen: (m) => m.recordAutoUpdateCircuitOpenRejected(),
+  };
 
   void _recordCompletionMetric(UpdateCheckCompletionSource source) {
     final metricsCollector = _metricsCollector;

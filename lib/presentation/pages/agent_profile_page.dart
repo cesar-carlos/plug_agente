@@ -7,7 +7,6 @@ import 'package:plug_agente/application/use_cases/lookup_agent_cep.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
 import 'package:plug_agente/application/use_cases/sync_agent_profile_with_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
@@ -49,8 +48,9 @@ class AgentProfilePage extends StatefulWidget {
 
 class _AgentProfilePageState extends State<AgentProfilePage> {
   late final AgentProfileFormController _formController;
-  late final LookupAgentCnpj _lookupAgentCnpj;
-  late final LookupAgentCep _lookupAgentCep;
+  late LookupAgentCnpj _lookupAgentCnpj;
+  late LookupAgentCep _lookupAgentCep;
+  var _lookupDependenciesInitialized = false;
   final ValueNotifier<bool> _isLookingUpCnpj = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _isLookingUpCep = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _isSaving = ValueNotifier<bool>(false);
@@ -66,8 +66,6 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
   void initState() {
     super.initState();
     _formController = AgentProfileFormController();
-    _lookupAgentCnpj = widget.lookupAgentCnpj ?? getIt<LookupAgentCnpj>();
-    _lookupAgentCep = widget.lookupAgentCep ?? getIt<LookupAgentCep>();
     _refreshDerivedState = () {
       final saving = _isSaving.value;
       final cnpjBusy = _isLookingUpCnpj.value;
@@ -319,14 +317,24 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     await _showSaveFeedback(l10n, outcome);
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_lookupDependenciesInitialized) {
+      _lookupDependenciesInitialized = true;
+      _lookupAgentCnpj = widget.lookupAgentCnpj ?? context.read<LookupAgentCnpj>();
+      _lookupAgentCep = widget.lookupAgentCep ?? context.read<LookupAgentCep>();
+    }
+  }
+
   AgentProfileSaveCoordinator _resolveSaveCoordinator() {
     return _saveCoordinator ??= AgentProfileSaveCoordinator(
       configProvider: context.read<ConfigProvider>(),
       authProvider: context.read<AuthProvider>(),
       connectionProvider: context.read<ConnectionProvider>(),
-      syncAgentProfileWithHub: getIt<SyncAgentProfileWithHub>(),
-      fetchAgentHubProfile: getIt<FetchAgentHubProfile>(),
-      registerProfileProvider: getIt<AgentRegisterProfileProvider>(),
+      syncAgentProfileWithHub: context.read<SyncAgentProfileWithHub>(),
+      fetchAgentHubProfile: context.read<FetchAgentHubProfile>(),
+      registerProfileProvider: context.read<AgentRegisterProfileProvider>(),
     );
   }
 

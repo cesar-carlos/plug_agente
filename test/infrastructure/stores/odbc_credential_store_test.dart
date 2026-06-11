@@ -10,9 +10,7 @@ import 'package:plug_agente/infrastructure/stores/batch_secret_store_mixin.dart'
 import 'package:plug_agente/infrastructure/stores/odbc_credential_store.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
-class _FakeOdbcCredentialSecretStore
-    with BatchOdbcCredentialSecretStoreMixin
-    implements IOdbcCredentialSecretStore {
+class _FakeOdbcCredentialSecretStore with BatchOdbcCredentialSecretStoreMixin implements IOdbcCredentialSecretStore {
   final Map<String, OdbcCredentialSecrets> _storage = <String, OdbcCredentialSecrets>{};
 
   @override
@@ -148,8 +146,7 @@ void main() {
       await _insertConfig(
         database: database,
         id: 'cfg-legacy-cs',
-        connectionString:
-            'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=cs-secret',
+        connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=cs-secret',
       );
 
       final result = await store.readCredentials('cfg-legacy-cs');
@@ -157,9 +154,9 @@ void main() {
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow().password, 'cs-secret');
 
-      final row = await (database.select(database.configTable)
-            ..where((tbl) => tbl.id.equals('cfg-legacy-cs')))
-          .getSingle();
+      final row = await (database.select(
+        database.configTable,
+      )..where((tbl) => tbl.id.equals('cfg-legacy-cs'))).getSingle();
       expect(row.connectionString, isNot(contains('PWD=')));
       expect(row.connectionString, contains('SERVER=localhost'));
     });
@@ -206,9 +203,7 @@ void main() {
 
       expect(result.getOrThrow().password, 'legacy-secret');
 
-      final row = await (database.select(database.configTable)
-            ..where((tbl) => tbl.id.equals('cfg-noop')))
-          .getSingle();
+      final row = await (database.select(database.configTable)..where((tbl) => tbl.id.equals('cfg-noop'))).getSingle();
       expect(row.connectionString, contains('PWD=legacy-secret'));
     });
 
@@ -236,9 +231,9 @@ void main() {
       expect(deleteResult.isSuccess(), isTrue);
       expect((await secretStore.readSecrets('cfg-delete')).hasAny, isFalse);
 
-      final row = await (database.select(database.configTable)
-            ..where((tbl) => tbl.id.equals('cfg-delete')))
-          .getSingle();
+      final row = await (database.select(
+        database.configTable,
+      )..where((tbl) => tbl.id.equals('cfg-delete'))).getSingle();
       expect(row.connectionString, isNot(contains('PWD=')));
     });
   });

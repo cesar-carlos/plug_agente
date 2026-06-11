@@ -128,15 +128,17 @@ void main() {
       expectedProfileVersion: 5,
     );
 
-    final body = verify(
-      () => gateway.patchProfile(
-        serverUrl: any(named: 'serverUrl'),
-        agentId: any(named: 'agentId'),
-        accessToken: any(named: 'accessToken'),
-        body: captureAny(named: 'body'),
-        idempotencyKey: any(named: 'idempotencyKey'),
-      ),
-    ).captured.single as Map<String, dynamic>;
+    final body =
+        verify(
+              () => gateway.patchProfile(
+                serverUrl: any(named: 'serverUrl'),
+                agentId: any(named: 'agentId'),
+                accessToken: any(named: 'accessToken'),
+                body: captureAny(named: 'body'),
+                idempotencyKey: any(named: 'idempotencyKey'),
+              ),
+            ).captured.single
+            as Map<String, dynamic>;
 
     check(body['expectedProfileVersion']).equals(5);
   });

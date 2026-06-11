@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/bootstrap/deferred_boot_phase_outcome.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 
 class AppBootstrapData {
@@ -9,5 +10,5 @@ class AppBootstrapData {
 
   final RuntimeCapabilities capabilities;
   final String? initialRoute;
-  final Future<void> Function()? runDeferredBootstrap;
+  final Future<DeferredBootPhaseOutcome> Function()? runDeferredBootstrap;
 }

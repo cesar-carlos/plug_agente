@@ -22,15 +22,22 @@ void main() {
     executor = OdbcResultEncodingExecutor(service);
   });
 
-  const sampleResult = QueryResult(columns: ['v'], rows: [[1]], rowCount: 1);
+  const sampleResult = QueryResult(
+    columns: ['v'],
+    rows: [
+      [1],
+    ],
+    rowCount: 1,
+  );
 
   OdbcPreparedQueryExecution prepared(String sql, [Map<String, dynamic>? params]) =>
       OdbcPreparedQueryExecution(sql: sql, parameters: params);
 
   group('row-major (default) path', () {
     test('uses executeQuery for parameterless SQL', () async {
-      when(() => service.executeQuery('SELECT 1', connectionId: 'c1'))
-          .thenAnswer((_) async => const Success(sampleResult));
+      when(
+        () => service.executeQuery('SELECT 1', connectionId: 'c1'),
+      ).thenAnswer((_) async => const Success(sampleResult));
 
       final result = await executor.execute('c1', prepared('SELECT 1'));
 
@@ -42,8 +49,9 @@ void main() {
     });
 
     test('uses executeQueryNamed for parameterized SQL', () async {
-      when(() => service.executeQueryNamed('c1', 'SELECT :a', {'a': 1}))
-          .thenAnswer((_) async => const Success(sampleResult));
+      when(
+        () => service.executeQueryNamed('c1', 'SELECT :a', {'a': 1}),
+      ).thenAnswer((_) async => const Success(sampleResult));
 
       final result = await executor.execute('c1', prepared('SELECT :a', {'a': 1}));
 
@@ -59,14 +67,24 @@ void main() {
 
     test('uses executeQueryParams with empty positional params for parameterless SQL', () async {
       when(
-        () => service.executeQueryParams('c1', 'SELECT 1', const <Object?>[], resultEncoding: ResultEncoding.columnarCompressed),
+        () => service.executeQueryParams(
+          'c1',
+          'SELECT 1',
+          const <Object?>[],
+          resultEncoding: ResultEncoding.columnarCompressed,
+        ),
       ).thenAnswer((_) async => const Success(sampleResult));
 
       final result = await executor.execute('c1', prepared('SELECT 1'));
 
       expect(result.isSuccess(), isTrue);
       verify(
-        () => service.executeQueryParams('c1', 'SELECT 1', const <Object?>[], resultEncoding: ResultEncoding.columnarCompressed),
+        () => service.executeQueryParams(
+          'c1',
+          'SELECT 1',
+          const <Object?>[],
+          resultEncoding: ResultEncoding.columnarCompressed,
+        ),
       ).called(1);
     });
 

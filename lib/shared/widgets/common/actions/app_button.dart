@@ -135,8 +135,7 @@ class AppButton extends StatelessWidget {
     );
 
     final bg = filledBackgroundColor ?? (isDestructive ? colors.error : null);
-    final fg =
-        filledForegroundColor ?? (isDestructive && filledBackgroundColor == null ? AppColors.onAccent : null);
+    final fg = filledForegroundColor ?? (isDestructive && filledBackgroundColor == null ? AppColors.onAccent : null);
 
     if (bg != null || fg != null) {
       final merged = style.merge(

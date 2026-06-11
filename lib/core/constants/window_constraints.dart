@@ -42,9 +42,7 @@ class WindowConstraints {
 
   static BoxConstraints resolveMessageModalConstraints(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final resolvedMaxWidth = size.width > messageModalResponsiveBreakpoint
-        ? messageModalWidth
-        : size.width * 0.92;
+    final resolvedMaxWidth = size.width > messageModalResponsiveBreakpoint ? messageModalWidth : size.width * 0.92;
     final maxWidth = math.max(
       messageModalMinViewportWidth,
       math.min(messageModalWidth, resolvedMaxWidth),

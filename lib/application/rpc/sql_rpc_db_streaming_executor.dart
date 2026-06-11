@@ -5,11 +5,13 @@ import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
+import 'package:plug_agente/application/services/active_config_metadata_cache.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
+import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -32,6 +34,7 @@ class SqlRpcDbStreamingExecutor {
     required Uuid uuid,
     required Duration sqlExecuteTotalBudget,
     ActiveConfigResolver? activeConfigResolver,
+    ActiveConfigMetadataCache? activeConfigMetadataCache,
     IAgentConfigRepository? configRepository,
     IStreamingDatabaseGateway? streamingGateway,
     IRpcDispatchMetricsCollector? dispatchMetrics,
@@ -44,6 +47,7 @@ class SqlRpcDbStreamingExecutor {
        _uuid = uuid,
        _sqlExecuteTotalBudget = sqlExecuteTotalBudget,
        _activeConfigResolver = activeConfigResolver,
+       _activeConfigMetadataCache = activeConfigMetadataCache,
        _configRepository = configRepository,
        _streamingGateway = streamingGateway,
        _dispatchMetrics = dispatchMetrics,
@@ -57,6 +61,7 @@ class SqlRpcDbStreamingExecutor {
   final Uuid _uuid;
   final Duration _sqlExecuteTotalBudget;
   final ActiveConfigResolver? _activeConfigResolver;
+  final ActiveConfigMetadataCache? _activeConfigMetadataCache;
   final IAgentConfigRepository? _configRepository;
   final IStreamingDatabaseGateway? _streamingGateway;
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
@@ -137,12 +142,10 @@ class SqlRpcDbStreamingExecutor {
       return null;
     }
 
-    final configResult = configResolver != null
-        ? await configResolver.resolveActiveOrFallback(
-            metadataOnly: true,
-          )
-        : await legacyRepository!.getCurrentConfigMetadata();
-    final config = configResult.getOrNull();
+    final config = await _resolveStreamingConfigMetadata(
+      configResolver: configResolver,
+      legacyRepository: legacyRepository,
+    );
     if (config == null || config.resolveConnectionString().trim().isEmpty) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('config_unavailable');
       return null;
@@ -181,13 +184,14 @@ class SqlRpcDbStreamingExecutor {
             columnMetadata = chunk.first.keys.map((k) => <String, dynamic>{'name': k, 'type': 'string'}).toList();
           }
           totalRows += chunk.length;
+          final currentChunkIndex = chunkIndex++;
           final accepted = await streamEmitter.emitChunk(
             RpcStreamChunk(
               streamId: streamId,
               requestId: request.id,
-              chunkIndex: chunkIndex++,
+              chunkIndex: currentChunkIndex,
               rows: chunk,
-              columnMetadata: columnMetadata,
+              columnMetadata: currentChunkIndex == 0 ? columnMetadata : null,
             ),
           );
           if (!accepted) {
@@ -200,8 +204,7 @@ class SqlRpcDbStreamingExecutor {
         },
         fetchSize: limits.streamingChunkSize,
         chunkSizeBytes:
-            (_odbcConnectionSettings?.streamingChunkSizeKb ?? ConnectionConstants.defaultStreamingChunkSizeKb) *
-            1024,
+            (_odbcConnectionSettings?.streamingChunkSizeKb ?? ConnectionConstants.defaultStreamingChunkSizeKb) * 1024,
         executionId: executionId,
         queryTimeout: queryTimeout,
         cancellationToken: activeStreamExecution.cancellationToken,
@@ -301,5 +304,22 @@ class SqlRpcDbStreamingExecutor {
     } finally {
       _sqlStreamingCoordinator.markFinished(activeStreamExecution);
     }
+  }
+
+  Future<Config?> _resolveStreamingConfigMetadata({
+    required ActiveConfigResolver? configResolver,
+    required IAgentConfigRepository? legacyRepository,
+  }) async {
+    final cache = _activeConfigMetadataCache;
+    if (cache != null) {
+      return cache.resolveMetadata();
+    }
+    if (configResolver != null) {
+      return (await configResolver.resolveActiveOrFallback(metadataOnly: true)).getOrNull();
+    }
+    if (legacyRepository != null) {
+      return (await legacyRepository.getCurrentConfigMetadata()).getOrNull();
+    }
+    return null;
   }
 }

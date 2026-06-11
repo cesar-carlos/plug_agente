@@ -56,22 +56,17 @@ class OdbcGatewayRetryCoordinator {
 
       lastResult = result;
       final exception = result.exceptionOrNull();
-      if (exception == null ||
-          !_retryManager.isTransientFailure(exception) ||
-          attempts >= maxAttempts) {
+      if (exception == null || !_retryManager.isTransientFailure(exception) || attempts >= maxAttempts) {
         return result;
       }
 
-      final remainingBeforeDelay =
-          OdbcExecutionDeadline.remainingFromDeadline(deadline);
+      final remainingBeforeDelay = OdbcExecutionDeadline.remainingFromDeadline(deadline);
       if (remainingBeforeDelay == null || remainingBeforeDelay <= Duration.zero) {
         return result;
       }
 
       final requestedDelay = Duration(milliseconds: delayMs);
-      final boundedDelay = requestedDelay < remainingBeforeDelay
-          ? requestedDelay
-          : remainingBeforeDelay;
+      final boundedDelay = requestedDelay < remainingBeforeDelay ? requestedDelay : remainingBeforeDelay;
       await Future<void>.delayed(boundedDelay);
       delayMs = (delayMs * backoffMultiplier).toInt();
     }

@@ -82,14 +82,12 @@ class AgentActionsExecutionsController {
             execution.status == AgentActionExecutionStatus.running);
   }
 
-  int get queuedCount =>
-      executions.where((execution) => execution.status == AgentActionExecutionStatus.queued).length;
+  int get queuedCount => executions.where((execution) => execution.status == AgentActionExecutionStatus.queued).length;
 
   int get runningCount =>
       executions.where((execution) => execution.status == AgentActionExecutionStatus.running).length;
 
-  int get failedCount =>
-      executions.where((execution) => execution.status == AgentActionExecutionStatus.failed).length;
+  int get failedCount => executions.where((execution) => execution.status == AgentActionExecutionStatus.failed).length;
 
   bool hasActiveExecutionForDefinition(String definitionId) {
     return executions.any(

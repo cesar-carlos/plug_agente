@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/gateway/sql_execution_kind_classifier.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
@@ -15,11 +16,14 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
   QueuedDatabaseGateway({
     required IDatabaseGateway delegate,
     required SqlExecutionQueue queue,
+    SqlExecutionKindClassifier? queryClassifier,
   }) : _delegate = delegate,
-       _queue = queue;
+       _queue = queue,
+       _queryClassifier = queryClassifier ?? SqlExecutionKindClassifier();
 
   final IDatabaseGateway _delegate;
   final SqlExecutionQueue _queue;
+  final SqlExecutionKindClassifier _queryClassifier;
 
   /// Inner gateway wrapped by the SQL execution queue.
   IDatabaseGateway get delegate => _delegate;
@@ -74,7 +78,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
         cancellationToken: lifecycleToken,
       ),
       requestId: request.id,
-      kind: _classifyQuery(request, timeout),
+      kind: _queryClassifier.classify(request, timeout),
       cooperativeCancellationToken: lifecycleToken,
     );
   }
@@ -136,26 +140,6 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
       ),
       kind: SqlExecutionKind.batch,
     );
-  }
-
-  static final RegExp _longQueryPattern = RegExp(
-    r'\b(join|union|group\s+by|order\s+by)\b',
-    caseSensitive: false,
-  );
-
-  SqlExecutionKind _classifyQuery(
-    QueryRequest request,
-    Duration? timeout,
-  ) {
-    final normalizedSql = request.query.trim();
-    final timeoutMs = timeout?.inMilliseconds ?? 0;
-    if (request.expectMultipleResults ||
-        normalizedSql.length > 1200 ||
-        timeoutMs > 15000 ||
-        _longQueryPattern.hasMatch(normalizedSql)) {
-      return SqlExecutionKind.longQuery;
-    }
-    return SqlExecutionKind.shortQuery;
   }
 
   /// Disposes the SQL execution queue.

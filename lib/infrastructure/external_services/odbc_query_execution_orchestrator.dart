@@ -262,10 +262,7 @@ class OdbcQueryExecutionOrchestrator {
         cancellationToken: cancellationToken,
       );
 
-      if (outcome.isSuccess &&
-          allowNativeCompatibleAcquire &&
-          timeout != null &&
-          timeout > Duration.zero) {
+      if (outcome.isSuccess && allowNativeCompatibleAcquire && timeout != null && timeout > Duration.zero) {
         _nativeCompatiblePolicy.rememberNativeCompatibleTimeout(
           connectionString: connectionString,
           timeout: timeout,

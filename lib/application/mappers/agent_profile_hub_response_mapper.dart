@@ -50,8 +50,7 @@ Result<AgentProfile> agentProfileFromHubAgentPayload(
 
   return AgentProfile.fromRpcPayload(
     payload,
-    validationMessages:
-        validationMessages ?? AgentProfileValidationMessages.english,
+    validationMessages: validationMessages ?? AgentProfileValidationMessages.english,
   );
 }
 

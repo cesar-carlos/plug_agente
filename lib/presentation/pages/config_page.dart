@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -10,6 +9,7 @@ import 'package:plug_agente/presentation/pages/config/models/updates_config_view
 import 'package:plug_agente/presentation/pages/config/widgets/backup_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/preferences_config_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/updates_about_config_section.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
@@ -26,7 +26,7 @@ class ConfigPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final capabilities = getIt<RuntimeCapabilities>();
+    final capabilities = context.read<RuntimeCapabilities>();
     final supportsTray = capabilities.supportsTray;
     final isDarkThemeEnabled = context.select<ThemeProvider, bool>((provider) => provider.isDarkMode);
     final themeError = context.select<ThemeProvider, SystemSettingsErrorState?>(
@@ -45,7 +45,7 @@ class ConfigPage extends StatelessWidget {
     );
     final themeProvider = context.read<ThemeProvider>();
     final systemSettingsProvider = context.read<SystemSettingsProvider>();
-    final startupSupported = getIt.isRegistered<IStartupService>();
+    final startupSupported = readOptionalPresentationProvider<IStartupService>(context) != null;
 
     return ScaffoldPage(
       header: PageHeader(

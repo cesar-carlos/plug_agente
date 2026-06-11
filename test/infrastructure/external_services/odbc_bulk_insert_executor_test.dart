@@ -216,8 +216,9 @@ void main() {
     });
 
     test('maps a connect failure to a connection failure', () async {
-      when(() => service.connect(any(), options: any(named: 'options')))
-          .thenAnswer((_) async => Failure(Exception('no route to host')));
+      when(
+        () => service.connect(any(), options: any(named: 'options')),
+      ).thenAnswer((_) async => Failure(Exception('no route to host')));
 
       final result = await executor.executeDirect(_validRequest(), 'DSN=x');
 

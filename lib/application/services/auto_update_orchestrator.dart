@@ -172,7 +172,10 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     _changesController.add(null);
   }
 
+  @override
   Future<void> dispose() async {
+    _silentCoordinator.requestCancellation();
+    _silentCoordinator.stop();
     await _updaterEventsSubscription?.cancel();
     _updaterEventsSubscription = null;
     if (!_changesController.isClosed) {

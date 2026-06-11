@@ -25,7 +25,8 @@ void main() {
         updaterGateway: gateway,
         preferences: preferences,
         manualCheckService: manualCheckService,
-        options: options ??
+        options:
+            options ??
             AutoUpdateOrchestratorOptions(
               backgroundRetry: RetryPolicy(
                 attemptLimit: 1,

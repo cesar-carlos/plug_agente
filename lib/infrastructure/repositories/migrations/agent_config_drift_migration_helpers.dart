@@ -11,8 +11,7 @@ mixin _AppDatabaseMigrationHelpers on _$AppDatabase {
     }
 
     final credentialSecretStore =
-        migrationOdbcCredentialSecretStoreFactory?.call() ??
-        FlutterSecureOdbcCredentialSecretStore();
+        migrationOdbcCredentialSecretStoreFactory?.call() ?? FlutterSecureOdbcCredentialSecretStore();
     if (!credentialSecretStore.isAvailable) {
       return;
     }
@@ -172,16 +171,14 @@ mixin _AppDatabaseMigrationHelpers on _$AppDatabase {
     Migrator m,
   ) async {
     final existing = await readAgentActionExecutionTableColumnNames();
-    final failurePhaseColumn =
-        agentActionExecutionTable.failurePhase as GeneratedColumn<Object>;
+    final failurePhaseColumn = agentActionExecutionTable.failurePhase as GeneratedColumn<Object>;
     final sqlName = failurePhaseColumn.name;
     if (!existing.contains(sqlName)) {
       await m.addColumn(agentActionExecutionTable, failurePhaseColumn);
     }
   }
 
-  Future<void>
-  addAgentActionDefinitionLastPreflightSnapshotHashColumnIfMissing(
+  Future<void> addAgentActionDefinitionLastPreflightSnapshotHashColumnIfMissing(
     Migrator m,
   ) async {
     final existing = await readAgentActionDefinitionTableColumnNames();
@@ -303,8 +300,7 @@ mixin _AppDatabaseMigrationHelpers on _$AppDatabase {
     Migrator m,
   ) async {
     final existing = await readAgentActionRemoteAuditTableColumnNames();
-    final column =
-        agentActionRemoteAuditTable.idempotencyKey as GeneratedColumn<Object>;
+    final column = agentActionRemoteAuditTable.idempotencyKey as GeneratedColumn<Object>;
     if (existing.contains(column.name)) {
       return;
     }

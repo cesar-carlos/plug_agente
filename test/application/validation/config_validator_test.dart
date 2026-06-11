@@ -42,8 +42,7 @@ void main() {
     test('validateForPersistence accepts redacted connection string without password', () {
       final result = validator.validate(
         buildConfig(
-          connectionString:
-              'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost,1433;DATABASE=demo;UID=sa',
+          connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost,1433;DATABASE=demo;UID=sa',
         ),
         forPersistence: true,
       );

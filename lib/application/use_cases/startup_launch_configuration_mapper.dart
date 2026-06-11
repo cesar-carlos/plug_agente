@@ -45,10 +45,9 @@ class StartupLaunchConfigurationMapper {
       StartupLaunchConfigurationStatus.needsRepair => const StartupLaunchConfigurationOutcome(
         StartupLaunchConfigurationOutcomeType.repairFailed,
       ),
-      StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry =>
-        const StartupLaunchConfigurationOutcome(
-          StartupLaunchConfigurationOutcomeType.repairedWithLegacyEntry,
-        ),
+      StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry => const StartupLaunchConfigurationOutcome(
+        StartupLaunchConfigurationOutcomeType.repairedWithLegacyEntry,
+      ),
     };
   }
 

@@ -845,8 +845,10 @@ void main() {
         );
 
         await orchestrator.initialize();
-        expect(orchestrator.lastAutomaticDiagnostics?.completionSource,
-            UpdateCheckCompletionSource.automaticDownloadFailure);
+        expect(
+          orchestrator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticDownloadFailure,
+        );
 
         final result = await orchestrator.applyManualOnlyUpdateMode();
 

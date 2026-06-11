@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -11,6 +10,7 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/shared/shared.dart';
 import 'package:provider/provider.dart';
@@ -41,12 +41,15 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     _queryController = TextEditingController();
     _queryController.addListener(_onQueryTextChanged);
     _focusNode = FocusNode();
-    unawaited(
-      _restoreStreamingMode().catchError(
-        (Object e) => AppLogger.warning('Failed to restore streaming mode', e),
-      ),
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        _restoreStreamingMode().catchError(
+          (Object e) => AppLogger.warning('Failed to restore streaming mode', e),
+        ),
+      );
       unawaited(
         _restoreSqlHandlingMode().catchError(
           (Object e) => AppLogger.warning('Failed to restore SQL handling mode', e),
@@ -79,8 +82,14 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     await configProvider.loadConfigById(configId);
   }
 
+  IAppSettingsStore? _settingsStore(BuildContext context) =>
+      readOptionalPresentationProvider<IAppSettingsStore>(context);
+
   Future<void> _restoreStreamingMode() async {
-    final prefs = getIt<IAppSettingsStore>();
+    final prefs = _settingsStore(context);
+    if (prefs == null) {
+      return;
+    }
     final enabled = prefs.getBool(_playgroundStreamingModeKey) ?? false;
     if (!mounted) {
       return;
@@ -89,12 +98,18 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   }
 
   Future<void> _saveStreamingMode(bool enabled) async {
-    final prefs = getIt<IAppSettingsStore>();
+    final prefs = _settingsStore(context);
+    if (prefs == null) {
+      return;
+    }
     await prefs.setBool(_playgroundStreamingModeKey, enabled);
   }
 
   Future<void> _restoreSqlHandlingMode() async {
-    final prefs = getIt<IAppSettingsStore>();
+    final prefs = _settingsStore(context);
+    if (prefs == null) {
+      return;
+    }
     final preserve = prefs.getBool(_playgroundSqlHandlingModeKey) ?? false;
     if (!mounted) return;
     context.read<PlaygroundProvider>().setSqlHandlingMode(
@@ -114,7 +129,10 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   }
 
   Future<void> _saveSqlHandlingMode(bool preserve) async {
-    final prefs = getIt<IAppSettingsStore>();
+    final prefs = _settingsStore(context);
+    if (prefs == null) {
+      return;
+    }
     await prefs.setBool(_playgroundSqlHandlingModeKey, preserve);
   }
 
@@ -445,12 +463,14 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
                       onPageSizeChanged: state.sqlHandlingMode != SqlHandlingMode.preserve
                           ? (value) {
                               unawaited(
-                                playgroundProvider.setPageSize(value).catchError(
-                                  (Object e) => AppLogger.warning(
-                                    'Failed to set page size',
-                                    e,
-                                  ),
-                                ),
+                                playgroundProvider
+                                    .setPageSize(value)
+                                    .catchError(
+                                      (Object e) => AppLogger.warning(
+                                        'Failed to set page size',
+                                        e,
+                                      ),
+                                    ),
                               );
                             }
                           : null,

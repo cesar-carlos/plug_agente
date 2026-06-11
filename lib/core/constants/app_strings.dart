@@ -268,6 +268,14 @@ class AppStrings {
       'Ocorreu uma falha durante a inicializacao do aplicativo. '
       'Feche e abra novamente. Se o problema persistir, execute como '
       'administrador e revise as permissoes do sistema.';
+  static const String bootstrapFailureUnsupportedOsMessage =
+      'Este computador nao atende aos requisitos minimos do Plug Agente. '
+      'Atualize o Windows ou consulte a documentacao de compatibilidade '
+      'antes de tentar novamente.';
+  static const String bootstrapFailureOdbcMessage =
+      'Nao foi possivel inicializar o acesso ODBC. Verifique se o driver '
+      'ODBC correto esta instalado, se o DSN ou a string de conexao esta '
+      'configurada e se o Plug Agente tem permissao para carregar o driver.';
 
   // Database Settings
   static const String dbSectionTitle = 'Configuração do banco de dados';

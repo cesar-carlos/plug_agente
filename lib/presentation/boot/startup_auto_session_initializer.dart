@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:plug_agente/application/bootstrap/deferred_boot_phase_outcome.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
@@ -17,12 +18,14 @@ class StartupAutoSessionInitializer extends StatefulWidget {
   const StartupAutoSessionInitializer({
     required this.hubSessionCoordinator,
     required this.child,
+    this.runDeferredBootstrapBeforeConnect,
     this.defaultServerUrl = 'https://api.example.com',
     super.key,
   });
 
   final HubSessionCoordinator hubSessionCoordinator;
   final Widget child;
+  final Future<DeferredBootPhaseOutcome> Function()? runDeferredBootstrapBeforeConnect;
   final String defaultServerUrl;
 
   @override
@@ -70,7 +73,7 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
     configProvider.addListener(_onConfigStateChanged);
 
     _syncDbIndicatorWithConfig();
-    unawaited(_attemptStartupLoginAndConnect());
+    unawaited(_runStartupFlow());
   }
 
   void _onConfigStateChanged() {
@@ -78,7 +81,46 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
     if (_startupFlowHandled) {
       return;
     }
-    unawaited(_attemptStartupLoginAndConnect());
+    unawaited(_runStartupFlow());
+  }
+
+  Future<void> _runStartupFlow() async {
+    if (!mounted || _startupFlowHandled || _startupFlowRunning) {
+      return;
+    }
+
+    _startupFlowRunning = true;
+    try {
+      final deferredBootstrap = widget.runDeferredBootstrapBeforeConnect;
+      if (deferredBootstrap != null) {
+        try {
+          final outcome = await deferredBootstrap();
+          if (outcome.shouldSkipHubAutoConnect) {
+            AppLogger.warning(
+              'Skipping Hub auto-connect after critical deferred bootstrap failure',
+            );
+            _markStartupFlowHandled();
+            return;
+          }
+        } on Object catch (error, stackTrace) {
+          AppLogger.error(
+            'Deferred bootstrap failed before Hub auto-connect',
+            error,
+            stackTrace,
+          );
+          _markStartupFlowHandled();
+          return;
+        }
+      }
+
+      if (!mounted || _startupFlowHandled) {
+        return;
+      }
+
+      await _attemptStartupLoginAndConnect();
+    } finally {
+      _startupFlowRunning = false;
+    }
   }
 
   void _syncDbIndicatorWithConfig() {
@@ -98,7 +140,7 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
   }
 
   Future<void> _attemptStartupLoginAndConnect() async {
-    if (!mounted || _startupFlowHandled || _startupFlowRunning) {
+    if (!mounted || _startupFlowHandled) {
       return;
     }
 
@@ -132,57 +174,52 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
       return;
     }
 
-    _startupFlowRunning = true;
-    try {
-      final bootstrapResult = await widget.hubSessionCoordinator.bootstrapAutoSession(
-        configId: startupContext.configId,
-        serverUrl: startupContext.serverUrl,
-        agentId: startupContext.agentId,
-      );
+    final bootstrapResult = await widget.hubSessionCoordinator.bootstrapAutoSession(
+      configId: startupContext.configId,
+      serverUrl: startupContext.serverUrl,
+      agentId: startupContext.agentId,
+    );
 
-      var shouldStop = false;
-      AuthToken? startupToken;
-      bootstrapResult.fold(
-        (session) {
-          startupToken = session.token;
-          authProvider.restoreToken(
-            session.token,
+    var shouldStop = false;
+    AuthToken? startupToken;
+    bootstrapResult.fold(
+      (session) {
+        startupToken = session.token;
+        authProvider.restoreToken(
+          session.token,
+          configId: startupContext.configId,
+          silent: true,
+        );
+      },
+      (failure) {
+        if (failure is domain_errors.Failure && failure.isTransient) {
+          connectionProvider.startPersistentHubRecovery(
             configId: startupContext.configId,
-            silent: true,
+            serverUrl: startupContext.serverUrl,
+            agentId: startupContext.agentId,
           );
-        },
-        (failure) {
-          if (failure is domain_errors.Failure && failure.isTransient) {
-            connectionProvider.startPersistentHubRecovery(
-              configId: startupContext.configId,
-              serverUrl: startupContext.serverUrl,
-              agentId: startupContext.agentId,
-            );
-          } else {
-            authProvider.setRecoveryError(failure.toDisplayMessage());
-          }
-          _markStartupFlowHandled();
-          shouldStop = true;
-        },
-      );
-      if (shouldStop || startupToken == null) {
-        return;
-      }
-
-      final connectResult = await connectionProvider.connect(
-        startupContext.serverUrl,
-        startupContext.agentId,
-        configId: startupContext.configId,
-        authToken: startupToken!.token,
-        recoverOnFailure: true,
-      );
-      if (connectResult.isSuccess() ||
-          connectionProvider.status == ConnectionStatus.reconnecting ||
-          connectionProvider.isReconnecting) {
+        } else {
+          authProvider.setRecoveryError(failure.toDisplayMessage());
+        }
         _markStartupFlowHandled();
-      }
-    } finally {
-      _startupFlowRunning = false;
+        shouldStop = true;
+      },
+    );
+    if (shouldStop || startupToken == null) {
+      return;
+    }
+
+    final connectResult = await connectionProvider.connect(
+      startupContext.serverUrl,
+      startupContext.agentId,
+      configId: startupContext.configId,
+      authToken: startupToken!.token,
+      recoverOnFailure: true,
+    );
+    if (connectResult.isSuccess() ||
+        connectionProvider.status == ConnectionStatus.reconnecting ||
+        connectionProvider.isReconnecting) {
+      _markStartupFlowHandled();
     }
   }
 

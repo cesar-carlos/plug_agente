@@ -13,8 +13,7 @@ import 'package:plug_agente/domain/repositories/i_startup_preferences_repository
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
 import 'package:plug_agente/presentation/providers/system_settings_failure_mapper.dart';
 
-export 'package:plug_agente/application/models/startup_preferences_outcomes.dart'
-    show StartupChangeOutcome;
+export 'package:plug_agente/application/models/startup_preferences_outcomes.dart' show StartupChangeOutcome;
 
 class SystemSettingsProvider extends ChangeNotifier {
   SystemSettingsProvider(
@@ -25,8 +24,7 @@ class SystemSettingsProvider extends ChangeNotifier {
   }) : _repository = repository,
        _syncStartupStatus = syncStartupStatus ?? SyncStartupStatus(repository),
        _setStartWithWindows = setStartWithWindows ?? SetStartWithWindows(repository),
-       _setTrayBehaviorPreference =
-           setTrayBehaviorPreference ?? SetTrayBehaviorPreference(repository) {
+       _setTrayBehaviorPreference = setTrayBehaviorPreference ?? SetTrayBehaviorPreference(repository) {
     _startWithWindows = repository.startWithWindows;
     _startMinimized = repository.startMinimized;
     _minimizeToTray = repository.minimizeToTray;

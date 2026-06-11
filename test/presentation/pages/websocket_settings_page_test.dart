@@ -5,6 +5,7 @@ import 'package:plug_agente/application/services/agent_operational_readiness_sna
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -16,6 +17,7 @@ import 'package:plug_agente/presentation/providers/agent_operational_readiness_p
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
+import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -49,6 +51,7 @@ void main() {
 
   testWidgets('silent token restore does not show auth success modal', (tester) async {
     await getIt.reset();
+    getIt.registerSingleton<RuntimeCapabilities>(RuntimeCapabilities.full());
     getIt.registerSingleton<FeatureFlags>(
       FeatureFlags(InMemoryAppSettingsStore()),
     );
@@ -80,6 +83,9 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: MultiProvider(
           providers: [
+            ...buildPresentationInfrastructureProviders(
+              capabilities: getIt<RuntimeCapabilities>(),
+            ),
             ChangeNotifierProvider<ConfigProvider>.value(value: configProvider),
             ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
             ChangeNotifierProvider<ConnectionProvider>.value(value: connectionProvider),

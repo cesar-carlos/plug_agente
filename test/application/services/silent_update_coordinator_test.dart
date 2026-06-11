@@ -675,7 +675,7 @@ void main() {
         final store = InMemoryAppSettingsStore();
         final now = DateTime(2026, 6, 10, 12);
         final startedAt = now.subtract(const Duration(minutes: 5));
-     await store.setString(
+        await store.setString(
           'auto_update.pending_silent_update',
           jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
         );
@@ -711,7 +711,7 @@ void main() {
         final store = InMemoryAppSettingsStore();
         final now = DateTime(2026, 6, 10, 12);
         final startedAt = now.subtract(const Duration(hours: 2));
-     await store.setString(
+        await store.setString(
           'auto_update.pending_silent_update',
           jsonEncode(_downloadedPendingJson(version: '1.8.4+1', startedAt: startedAt)),
         );
@@ -738,7 +738,7 @@ void main() {
         final store = InMemoryAppSettingsStore();
         final now = DateTime(2026, 6, 10, 12);
         final startedAt = now.subtract(const Duration(minutes: 5));
-     await store.setString(
+        await store.setString(
           'auto_update.pending_silent_update',
           jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
         );

@@ -46,6 +46,7 @@ import 'package:plug_agente/infrastructure/actions/action_command_safety_validat
 import 'package:plug_agente/infrastructure/repositories/agent_action_portable_codec.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
+import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_dependencies.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -100,54 +101,56 @@ void main() {
     final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);
 
     provider = AgentActionsProvider(
-      ListAgentActionDefinitions(repository),
-      ListAgentActionExecutions(repository),
-      saveDefinition,
-      DeleteAgentActionDefinition(repository),
-      ListAgentActionTriggers(repository),
-      DeleteAgentActionTrigger(repository),
-      SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      ),
-      ListDeveloperData7Connections(developerData7ConnectionGateway),
-      RunAgentActionLocally(
-        repository,
-        runnerRegistry,
-        const Uuid(),
-        executionQueue: executionQueue,
-        featureFlags: featureFlags,
-      ),
-      TestAgentActionDefinition(repository, validateDefinition),
-      previewDefinition,
-      CancelAgentActionExecution(
-        repository,
-        runnerRegistry,
-        executionQueue: executionQueue,
-      ),
-      GetAgentActionExecution(repository),
-      SliceAgentActionCapturedOutput(repository),
-      ListRecentAgentActionRemoteAudit(_StubRemoteAuditStore()),
-      ExportAgentActionsBundle(
-        ListAgentActionDefinitions(repository),
-        ListAgentActionTriggers(repository),
-        backupSanitizer,
-      ),
-      ImportAgentActionsBundle(
-        saveDefinition,
-        SaveAgentActionTrigger(
+      AgentActionsProviderDependencies(
+        listDefinitions: ListAgentActionDefinitions(repository),
+        listExecutions: ListAgentActionExecutions(repository),
+        saveDefinition: saveDefinition,
+        deleteDefinition: DeleteAgentActionDefinition(repository),
+        listTriggers: ListAgentActionTriggers(repository),
+        deleteTrigger: DeleteAgentActionTrigger(repository),
+        saveTrigger: SaveAgentActionTrigger(
           repository,
           const ValidateAgentActionTrigger(),
           featureFlags,
         ),
-        backupSanitizer,
+        listDeveloperData7Connections: ListDeveloperData7Connections(developerData7ConnectionGateway),
+        runAction: RunAgentActionLocally(
+          repository,
+          runnerRegistry,
+          const Uuid(),
+          executionQueue: executionQueue,
+          featureFlags: featureFlags,
+        ),
+        testDefinition: TestAgentActionDefinition(repository, validateDefinition),
+        previewDefinition: previewDefinition,
+        cancelExecution: CancelAgentActionExecution(
+          repository,
+          runnerRegistry,
+          executionQueue: executionQueue,
+        ),
+        getExecution: GetAgentActionExecution(repository),
+        sliceCapturedOutput: SliceAgentActionCapturedOutput(repository),
+        listRecentRemoteAudit: ListRecentAgentActionRemoteAudit(_StubRemoteAuditStore()),
+        exportBundle: ExportAgentActionsBundle(
+          ListAgentActionDefinitions(repository),
+          ListAgentActionTriggers(repository),
+          backupSanitizer,
+        ),
+        importBundle: ImportAgentActionsBundle(
+          saveDefinition,
+          SaveAgentActionTrigger(
+            repository,
+            const ValidateAgentActionTrigger(),
+            featureFlags,
+          ),
+          backupSanitizer,
+        ),
+        featureFlags: featureFlags,
+        uuid: const Uuid(),
+        commandSafetyAssessor: const ActionCommandSafetyValidator(),
+        retentionSettings: retentionSettings,
+        bundleFileGateway: bundleFileGateway,
       ),
-      featureFlags,
-      const Uuid(),
-      const ActionCommandSafetyValidator(),
-      retentionSettings,
-      bundleFileGateway,
       now: () => DateTime(2026, 5, 15, 12),
       preflightSettings: preflightSettings,
     );
@@ -516,57 +519,59 @@ void main() {
     final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);
 
     final providerWithScheduler = AgentActionsProvider(
-      ListAgentActionDefinitions(repository),
-      ListAgentActionExecutions(repository),
-      saveDefinition,
-      DeleteAgentActionDefinition(repository),
-      ListAgentActionTriggers(repository),
-      DeleteAgentActionTrigger(repository),
-      SaveAgentActionTrigger(
-        repository,
-        const ValidateAgentActionTrigger(),
-        featureFlags,
-      ),
-      ListDeveloperData7Connections(developerData7ConnectionGateway),
-      RunAgentActionLocally(
-        repository,
-        runnerRegistry,
-        const Uuid(),
-        executionQueue: executionQueue,
-        featureFlags: featureFlags,
-      ),
-      TestAgentActionDefinition(repository, validateDefinition),
-      PreviewAgentActionDefinition(
-        repository,
-        AgentActionAdapterRegistry([const _FakeCommandLineActionAdapter()]),
-      ),
-      CancelAgentActionExecution(
-        repository,
-        AgentActionLocalRunnerRegistry([const _FakeAgentActionLocalRunner()]),
-        executionQueue: executionQueue,
-      ),
-      GetAgentActionExecution(repository),
-      SliceAgentActionCapturedOutput(repository),
-      ListRecentAgentActionRemoteAudit(_StubRemoteAuditStore()),
-      ExportAgentActionsBundle(
-        ListAgentActionDefinitions(repository),
-        ListAgentActionTriggers(repository),
-        backupSanitizer,
-      ),
-      ImportAgentActionsBundle(
-        saveDefinition,
-        SaveAgentActionTrigger(
+      AgentActionsProviderDependencies(
+        listDefinitions: ListAgentActionDefinitions(repository),
+        listExecutions: ListAgentActionExecutions(repository),
+        saveDefinition: saveDefinition,
+        deleteDefinition: DeleteAgentActionDefinition(repository),
+        listTriggers: ListAgentActionTriggers(repository),
+        deleteTrigger: DeleteAgentActionTrigger(repository),
+        saveTrigger: SaveAgentActionTrigger(
           repository,
           const ValidateAgentActionTrigger(),
           featureFlags,
         ),
-        backupSanitizer,
+        listDeveloperData7Connections: ListDeveloperData7Connections(developerData7ConnectionGateway),
+        runAction: RunAgentActionLocally(
+          repository,
+          runnerRegistry,
+          const Uuid(),
+          executionQueue: executionQueue,
+          featureFlags: featureFlags,
+        ),
+        testDefinition: TestAgentActionDefinition(repository, validateDefinition),
+        previewDefinition: PreviewAgentActionDefinition(
+          repository,
+          AgentActionAdapterRegistry([const _FakeCommandLineActionAdapter()]),
+        ),
+        cancelExecution: CancelAgentActionExecution(
+          repository,
+          AgentActionLocalRunnerRegistry([const _FakeAgentActionLocalRunner()]),
+          executionQueue: executionQueue,
+        ),
+        getExecution: GetAgentActionExecution(repository),
+        sliceCapturedOutput: SliceAgentActionCapturedOutput(repository),
+        listRecentRemoteAudit: ListRecentAgentActionRemoteAudit(_StubRemoteAuditStore()),
+        exportBundle: ExportAgentActionsBundle(
+          ListAgentActionDefinitions(repository),
+          ListAgentActionTriggers(repository),
+          backupSanitizer,
+        ),
+        importBundle: ImportAgentActionsBundle(
+          saveDefinition,
+          SaveAgentActionTrigger(
+            repository,
+            const ValidateAgentActionTrigger(),
+            featureFlags,
+          ),
+          backupSanitizer,
+        ),
+        featureFlags: featureFlags,
+        uuid: const Uuid(),
+        commandSafetyAssessor: const ActionCommandSafetyValidator(),
+        retentionSettings: retentionSettings,
+        bundleFileGateway: bundleFileGateway,
       ),
-      featureFlags,
-      const Uuid(),
-      const ActionCommandSafetyValidator(),
-      retentionSettings,
-      bundleFileGateway,
       triggerScheduler: scheduler,
       preflightSettings: preflightSettings,
     );
@@ -1345,54 +1350,56 @@ AgentActionsProvider _buildProvider({
   final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);
 
   return AgentActionsProvider(
-    ListAgentActionDefinitions(repository),
-    ListAgentActionExecutions(repository),
-    saveDefinition,
-    DeleteAgentActionDefinition(repository),
-    ListAgentActionTriggers(repository),
-    DeleteAgentActionTrigger(repository),
-    SaveAgentActionTrigger(
-      repository,
-      const ValidateAgentActionTrigger(),
-      featureFlags,
-    ),
-    ListDeveloperData7Connections(developerData7ConnectionGateway),
-    RunAgentActionLocally(
-      repository,
-      runners,
-      const Uuid(),
-      executionQueue: executionQueue,
-      featureFlags: featureFlags,
-    ),
-    TestAgentActionDefinition(repository, validateDefinition),
-    previewDefinition,
-    CancelAgentActionExecution(
-      repository,
-      runners,
-      executionQueue: executionQueue,
-    ),
-    GetAgentActionExecution(repository),
-    SliceAgentActionCapturedOutput(repository),
-    ListRecentAgentActionRemoteAudit(_StubRemoteAuditStore()),
-    ExportAgentActionsBundle(
-      ListAgentActionDefinitions(repository),
-      ListAgentActionTriggers(repository),
-      backupSanitizer,
-    ),
-    ImportAgentActionsBundle(
-      saveDefinition,
-      SaveAgentActionTrigger(
+    AgentActionsProviderDependencies(
+      listDefinitions: ListAgentActionDefinitions(repository),
+      listExecutions: ListAgentActionExecutions(repository),
+      saveDefinition: saveDefinition,
+      deleteDefinition: DeleteAgentActionDefinition(repository),
+      listTriggers: ListAgentActionTriggers(repository),
+      deleteTrigger: DeleteAgentActionTrigger(repository),
+      saveTrigger: SaveAgentActionTrigger(
         repository,
         const ValidateAgentActionTrigger(),
         featureFlags,
       ),
-      backupSanitizer,
+      listDeveloperData7Connections: ListDeveloperData7Connections(developerData7ConnectionGateway),
+      runAction: RunAgentActionLocally(
+        repository,
+        runners,
+        const Uuid(),
+        executionQueue: executionQueue,
+        featureFlags: featureFlags,
+      ),
+      testDefinition: TestAgentActionDefinition(repository, validateDefinition),
+      previewDefinition: previewDefinition,
+      cancelExecution: CancelAgentActionExecution(
+        repository,
+        runners,
+        executionQueue: executionQueue,
+      ),
+      getExecution: GetAgentActionExecution(repository),
+      sliceCapturedOutput: SliceAgentActionCapturedOutput(repository),
+      listRecentRemoteAudit: ListRecentAgentActionRemoteAudit(_StubRemoteAuditStore()),
+      exportBundle: ExportAgentActionsBundle(
+        ListAgentActionDefinitions(repository),
+        ListAgentActionTriggers(repository),
+        backupSanitizer,
+      ),
+      importBundle: ImportAgentActionsBundle(
+        saveDefinition,
+        SaveAgentActionTrigger(
+          repository,
+          const ValidateAgentActionTrigger(),
+          featureFlags,
+        ),
+        backupSanitizer,
+      ),
+      featureFlags: featureFlags,
+      uuid: const Uuid(),
+      commandSafetyAssessor: const ActionCommandSafetyValidator(),
+      retentionSettings: retentionSettings,
+      bundleFileGateway: bundleFileGateway ?? _FakeAgentActionsBundleFileGateway(),
     ),
-    featureFlags,
-    const Uuid(),
-    const ActionCommandSafetyValidator(),
-    retentionSettings,
-    bundleFileGateway ?? _FakeAgentActionsBundleFileGateway(),
     triggerScheduler: triggerScheduler,
     comObjectInvocationDiagnostics: comObjectInvocationDiagnostics,
     now: () => DateTime(2026, 5, 15, 12),

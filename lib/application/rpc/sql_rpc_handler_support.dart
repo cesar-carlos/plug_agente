@@ -31,6 +31,7 @@ typedef SqlRpcRunIdempotentExecution =
       required String? idempotencyKey,
       required String idempotencyFingerprint,
       required Future<RpcResponse> Function() execute,
+      bool idempotentCachePrefetched,
     });
 
 typedef SqlRpcAuthorizeWithBudget =

@@ -161,16 +161,17 @@ void main() {
       final validateResult = await orchestrator.validateRemoteAdmission(
         gatedContext: gatedContext,
         request: request,
-        adapterPrepareCheck: ({
-          required AgentActionDefinition definition,
-          required AgentActionExecutionRequest request,
-        }) {
-          return gateChain.evaluateAdapterPrepare(
-            definition: definition,
-            request: request,
-            adapterRegistry: adapterRegistry,
-          );
-        },
+        adapterPrepareCheck:
+            ({
+              required AgentActionDefinition definition,
+              required AgentActionExecutionRequest request,
+            }) {
+              return gateChain.evaluateAdapterPrepare(
+                definition: definition,
+                request: request,
+                adapterRegistry: adapterRegistry,
+              );
+            },
       );
 
       expect(validateResult.isSuccess(), isTrue);
@@ -295,16 +296,17 @@ void main() {
       await orchestrator.validateRemoteAdmission(
         gatedContext: gatedContext,
         request: request,
-        adapterPrepareCheck: ({
-          required AgentActionDefinition definition,
-          required AgentActionExecutionRequest request,
-        }) {
-          return gateChain.evaluateAdapterPrepare(
-            definition: definition,
-            request: request,
-            adapterRegistry: adapterRegistry,
-          );
-        },
+        adapterPrepareCheck:
+            ({
+              required AgentActionDefinition definition,
+              required AgentActionExecutionRequest request,
+            }) {
+              return gateChain.evaluateAdapterPrepare(
+                definition: definition,
+                request: request,
+                adapterRegistry: adapterRegistry,
+              );
+            },
       );
       expect(adapter.prepareCallCount, 1);
 

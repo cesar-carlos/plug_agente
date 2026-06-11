@@ -18,18 +18,21 @@ SqlRpcMethodHandlerSupport _support({
     methodNotFound: (_) => throw UnimplementedError(),
     executionNotFound: (_) => throw UnimplementedError(),
     consumeIdempotentCacheIfAny: (_, key, fingerprint) async => null,
-    storeIdempotentSuccessIfApplicable: ({
-      required request,
-      required idempotencyKey,
-      required idempotencyFingerprint,
-      required response,
-    }) async {},
-    runIdempotentExecution: ({
-      required request,
-      required idempotencyKey,
-      required idempotencyFingerprint,
-      required execute,
-    }) => execute(),
+    storeIdempotentSuccessIfApplicable:
+        ({
+          required request,
+          required idempotencyKey,
+          required idempotencyFingerprint,
+          required response,
+        }) async {},
+    runIdempotentExecution:
+        ({
+          required request,
+          required idempotencyKey,
+          required idempotencyFingerprint,
+          required execute,
+          idempotentCachePrefetched = false,
+        }) => execute(),
     buildMissingClientTokenFailure: () => domain.ConfigurationFailure.withContext(
       message: 'Client token is required for authorized SQL operations',
       context: {
@@ -65,7 +68,15 @@ void main() {
       final gate = SqlRpcClientTokenGate(
         featureFlags: mockFeatureFlags,
         support: _support(
-          authorizeWithBudget: ({required token, required sql, required requestDatabase, required requestId, required method, required deadline}) async => const Success(unit),
+          authorizeWithBudget:
+              ({
+                required token,
+                required sql,
+                required requestDatabase,
+                required requestId,
+                required method,
+                required deadline,
+              }) async => const Success(unit),
         ),
       );
 
@@ -87,7 +98,15 @@ void main() {
       final gate = SqlRpcClientTokenGate(
         featureFlags: mockFeatureFlags,
         support: _support(
-          authorizeWithBudget: ({required token, required sql, required requestDatabase, required requestId, required method, required deadline}) async => const Success(unit),
+          authorizeWithBudget:
+              ({
+                required token,
+                required sql,
+                required requestDatabase,
+                required requestId,
+                required method,
+                required deadline,
+              }) async => const Success(unit),
         ),
       );
 
@@ -112,10 +131,18 @@ void main() {
       final gate = SqlRpcClientTokenGate(
         featureFlags: mockFeatureFlags,
         support: _support(
-          authorizeWithBudget: ({required token, required sql, required requestDatabase, required requestId, required method, required deadline}) async {
-            authorizeCalls++;
-            return const Success(unit);
-          },
+          authorizeWithBudget:
+              ({
+                required token,
+                required sql,
+                required requestDatabase,
+                required requestId,
+                required method,
+                required deadline,
+              }) async {
+                authorizeCalls++;
+                return const Success(unit);
+              },
         ),
       );
 
@@ -142,17 +169,25 @@ void main() {
       final gate = SqlRpcClientTokenGate(
         featureFlags: mockFeatureFlags,
         support: _support(
-          authorizeWithBudget: ({required token, required sql, required requestDatabase, required requestId, required method, required deadline}) async {
-            return Failure(
-              domain.ConfigurationFailure.withContext(
-                message: 'denied',
-                context: {
-                  'authorization': true,
-                  'reason': 'missing_permission',
-                },
-              ),
-            );
-          },
+          authorizeWithBudget:
+              ({
+                required token,
+                required sql,
+                required requestDatabase,
+                required requestId,
+                required method,
+                required deadline,
+              }) async {
+                return Failure(
+                  domain.ConfigurationFailure.withContext(
+                    message: 'denied',
+                    context: {
+                      'authorization': true,
+                      'reason': 'missing_permission',
+                    },
+                  ),
+                );
+              },
         ),
       );
 

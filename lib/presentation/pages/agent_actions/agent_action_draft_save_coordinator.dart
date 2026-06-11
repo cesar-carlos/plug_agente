@@ -84,10 +84,10 @@ class AgentActionDraftSaveCoordinator {
   }
 
   AgentActionRemotePolicy _remotePolicy() => draft.remotePolicy(
-        remoteAdHocFeatureEnabled: provider.isRemoteAdHocAgentActionsEnabled,
-        localApprover: localRemoteApprover,
-        previousDefinition: previousDefinition,
-      );
+    remoteAdHocFeatureEnabled: provider.isRemoteAdHocAgentActionsEnabled,
+    localApprover: localRemoteApprover,
+    previousDefinition: previousDefinition,
+  );
 
   AgentActionElevatedPolicy _elevatedPolicy() =>
       draft.elevatedPolicy(elevatedFeatureEnabled: provider.isElevatedAgentActionsEnabled);

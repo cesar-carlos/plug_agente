@@ -9,8 +9,7 @@ abstract final class AgentActionPathValidationHelpers {
     return 'sha256:${sha256.convert(utf8.encode(content))}';
   }
 
-  static String normalizePathForComparison(String path) =>
-      WindowsActionPathNormalizer.normalizeForComparison(path);
+  static String normalizePathForComparison(String path) => WindowsActionPathNormalizer.normalizeForComparison(path);
 
   static bool allowsExtension({
     required String? extension,

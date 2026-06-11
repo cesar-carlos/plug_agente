@@ -45,17 +45,23 @@ void main() {
     );
   });
 
-  const sampleResult = QueryResult(columns: ['v'], rows: [[1]], rowCount: 1);
+  const sampleResult = QueryResult(
+    columns: ['v'],
+    rows: [
+      [1],
+    ],
+    rowCount: 1,
+  );
 
   OdbcPreparedQueryExecution prepared(String sql, [Map<String, dynamic>? params]) =>
       OdbcPreparedQueryExecution(sql: sql, parameters: params);
 
   QueryRequest request(String sql) => QueryRequest(
-        id: 'req',
-        agentId: 'agent',
-        query: sql,
-        timestamp: DateTime(2024, 2, 3),
-      );
+    id: 'req',
+    agentId: 'agent',
+    query: sql,
+    timestamp: DateTime(2024, 2, 3),
+  );
 
   group('pure prepared-key helpers', () {
     test('preparedStatementKeyFor is stable regardless of parameter order', () {
@@ -77,8 +83,9 @@ void main() {
 
   group('runWithTimeout', () {
     test('runs a parameterless query through the row-major path without a timeout', () async {
-      when(() => service.executeQuery('SELECT 1', connectionId: 'c1'))
-          .thenAnswer((_) async => const Success(sampleResult));
+      when(
+        () => service.executeQuery('SELECT 1', connectionId: 'c1'),
+      ).thenAnswer((_) async => const Success(sampleResult));
 
       final outcome = await runner.runWithTimeout(
         connId: 'c1',
@@ -117,10 +124,12 @@ void main() {
 
   group('runPrepared', () {
     test('prepares, executes and closes a named-parameter statement', () async {
-      when(() => service.prepareNamed('c1', 'SELECT :a', timeoutMs: any(named: 'timeoutMs')))
-          .thenAnswer((_) async => const Success(10));
-      when(() => service.executePreparedNamed('c1', 10, {'a': 1}, any()))
-          .thenAnswer((_) async => const Success(sampleResult));
+      when(
+        () => service.prepareNamed('c1', 'SELECT :a', timeoutMs: any(named: 'timeoutMs')),
+      ).thenAnswer((_) async => const Success(10));
+      when(
+        () => service.executePreparedNamed('c1', 10, {'a': 1}, any()),
+      ).thenAnswer((_) async => const Success(sampleResult));
       when(() => service.closeStatement('c1', 10)).thenAnswer((_) async => const Success(unit));
 
       final outcome = await runner.runPrepared(

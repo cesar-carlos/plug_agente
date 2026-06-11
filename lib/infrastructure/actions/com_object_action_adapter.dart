@@ -203,7 +203,6 @@ class ComObjectActionAdapter implements AgentActionAdapter {
       ),
     );
   }
-
 }
 
 class _ResolvedComObjectConfig {

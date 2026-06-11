@@ -4,7 +4,6 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/value_objects/hub_recovery_diagnostics_snapshot.dart';
@@ -28,18 +27,25 @@ class DiagnosticsConfigSection extends StatefulWidget {
 }
 
 class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
-  late final FeatureFlags _flags = getIt<FeatureFlags>();
-  late final HubResilienceConfig _hubResilience = getIt<HubResilienceConfig>();
+  late final FeatureFlags _flags;
+  late final HubResilienceConfig _hubResilience;
   late bool _odbcPaginatedSqlLog;
   late bool _enableHardReloginRecovery;
+  var _dependenciesInitialized = false;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _hubMaxTicksController = TextEditingController();
   final TextEditingController _hubIntervalSecondsController = TextEditingController();
   final TextEditingController _hubHardReloginThresholdController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_dependenciesInitialized) {
+      return;
+    }
+    _dependenciesInitialized = true;
+    _flags = context.read<FeatureFlags>();
+    _hubResilience = context.read<HubResilienceConfig>();
     _odbcPaginatedSqlLog = _flags.enableOdbcPaginatedSqlDebugLog;
     _enableHardReloginRecovery = _flags.enableHubHardReloginRecovery;
     _reloadHubReconnectFields();

@@ -20,10 +20,10 @@ class DashboardMetricsController extends ChangeNotifier {
     required Duration refreshInterval,
     IAppSettingsStore? settingsStore,
     DateTime Function() now = DateTime.now,
-  })  : _metricsCollector = metricsCollector,
-        _refreshInterval = refreshInterval,
-        _settingsStore = settingsStore,
-        _now = now;
+  }) : _metricsCollector = metricsCollector,
+       _refreshInterval = refreshInterval,
+       _settingsStore = settingsStore,
+       _now = now;
 
   static const String _periodStorageKey = 'dashboard_metrics_period';
 

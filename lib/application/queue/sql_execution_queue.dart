@@ -75,13 +75,16 @@ class SqlExecutionQueue {
        ),
        _maxQueueSize = maxQueueSize,
        _maxConcurrentWorkers = maxConcurrentWorkers,
-       _maxConcurrentBatchWorkers = maxConcurrentBatchWorkers ??
-           ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(maxConcurrentWorkers),
-       _maxConcurrentLongQueryWorkers = maxConcurrentLongQueryWorkers ??
+       _maxConcurrentBatchWorkers =
+           maxConcurrentBatchWorkers ?? ConnectionConstants.sqlQueueMaxBatchWorkersForWorkers(maxConcurrentWorkers),
+       _maxConcurrentLongQueryWorkers =
+           maxConcurrentLongQueryWorkers ??
            ConnectionConstants.sqlQueueMaxLongQueryWorkersForWorkers(maxConcurrentWorkers),
-       _maxConcurrentStreamingWorkers = maxConcurrentStreamingWorkers ??
+       _maxConcurrentStreamingWorkers =
+           maxConcurrentStreamingWorkers ??
            ConnectionConstants.sqlQueueMaxStreamingWorkersForWorkers(maxConcurrentWorkers),
-       _maxConcurrentNonQueryWorkers = maxConcurrentNonQueryWorkers ??
+       _maxConcurrentNonQueryWorkers =
+           maxConcurrentNonQueryWorkers ??
            ConnectionConstants.sqlQueueMaxNonQueryWorkersForWorkers(maxConcurrentWorkers),
        _metricsCollector = metricsCollector,
        _defaultEnqueueTimeout = defaultEnqueueTimeout,
@@ -689,8 +692,7 @@ class SqlExecutionQueue {
           'queue_size': _queuedCount,
           'active_workers': _activeWorkers,
           'ghost_query_risk': true,
-          'cooperative_cancel_signalled':
-              request.cooperativeCancellationToken?.isCancelled ?? false,
+          'cooperative_cancel_signalled': request.cooperativeCancellationToken?.isCancelled ?? false,
         },
       );
     }

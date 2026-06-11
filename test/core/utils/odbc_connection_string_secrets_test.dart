@@ -51,8 +51,7 @@ void main() {
       });
 
       test('does not duplicate PWD when password is already embedded', () {
-        const connectionString =
-            'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=secret';
+        const connectionString = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=secret';
 
         expect(
           OdbcConnectionStringSecrets.injectPasswordIntoConnectionString(

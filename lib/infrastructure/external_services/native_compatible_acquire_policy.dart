@@ -262,18 +262,12 @@ final class NativeCompatibleAcquirePolicy {
       return _cachedAllowlist = const <String>{};
     }
 
-    return _cachedAllowlist = rawAllowlist
-        .split('|')
-        .map(normalizeSql)
-        .where((value) => value.isNotEmpty)
-        .toSet();
+    return _cachedAllowlist = rawAllowlist.split('|').map(normalizeSql).where((value) => value.isNotEmpty).toSet();
   }
 
   static String normalizeSql(String sql) {
-    return SqlValidator.removeComments(sql)
-        .replaceAll(_whitespaceRun, ' ')
-        .trim()
-        .replaceFirst(_trailingSemicolons, '')
-        .toLowerCase();
+    return SqlValidator.removeComments(
+      sql,
+    ).replaceAll(_whitespaceRun, ' ').trim().replaceFirst(_trailingSemicolons, '').toLowerCase();
   }
 }

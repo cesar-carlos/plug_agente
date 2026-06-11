@@ -60,7 +60,11 @@ void main() {
 
       expect(clearedConnections, 1, reason: 'clear must flush the developer connections cache once');
       expect(dirtyValue, isFalse, reason: 'clear must reset the dirty notifier');
-      expect(lastSetKind, AgentActionDraftKind.commandLine, reason: 'preserves the current draft kind when none is given');
+      expect(
+        lastSetKind,
+        AgentActionDraftKind.commandLine,
+        reason: 'preserves the current draft kind when none is given',
+      );
     });
 
     test('uses the supplied draft kind when present', () {

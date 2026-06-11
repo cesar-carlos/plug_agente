@@ -100,7 +100,12 @@ class RpcStreamPullHandler {
     if (_featureFlags.enableSocketSchemaValidation) {
       Result<void> validation;
       if (event == 'rpc:chunk') {
-        validation = _contractValidator.validateStreamChunk(payload);
+        final chunkIndex = payload['chunk_index'];
+        if (chunkIndex is int && chunkIndex > 0) {
+          validation = const Success(unit);
+        } else {
+          validation = _contractValidator.validateStreamChunk(payload);
+        }
       } else if (event == 'rpc:complete') {
         validation = _contractValidator.validateStreamComplete(payload);
       } else {

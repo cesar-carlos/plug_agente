@@ -14,11 +14,9 @@ class IcaclsGrantOutcome {
     this.stderr,
   });
 
-  const IcaclsGrantOutcome.skippedNonWindows()
-    : this._(kind: IcaclsGrantOutcomeKind.skippedNonWindows);
+  const IcaclsGrantOutcome.skippedNonWindows() : this._(kind: IcaclsGrantOutcomeKind.skippedNonWindows);
 
-  const IcaclsGrantOutcome.success()
-    : this._(kind: IcaclsGrantOutcomeKind.success);
+  const IcaclsGrantOutcome.success() : this._(kind: IcaclsGrantOutcomeKind.success);
 
   const IcaclsGrantOutcome.nonZeroExit({
     required int exitCode,
@@ -29,8 +27,7 @@ class IcaclsGrantOutcome {
          stderr: stderr,
        );
 
-  const IcaclsGrantOutcome.timeout()
-    : this._(kind: IcaclsGrantOutcomeKind.timeout);
+  const IcaclsGrantOutcome.timeout() : this._(kind: IcaclsGrantOutcomeKind.timeout);
 
   const IcaclsGrantOutcome.processFailed({String? stderr})
     : this._(kind: IcaclsGrantOutcomeKind.processFailed, stderr: stderr);
@@ -39,8 +36,7 @@ class IcaclsGrantOutcome {
   final int? exitCode;
   final String? stderr;
 
-  bool get isSuccess =>
-      kind == IcaclsGrantOutcomeKind.success || kind == IcaclsGrantOutcomeKind.skippedNonWindows;
+  bool get isSuccess => kind == IcaclsGrantOutcomeKind.success || kind == IcaclsGrantOutcomeKind.skippedNonWindows;
 
   String get diagnosticName => kind.name;
 

@@ -14,10 +14,15 @@ import 'package:plug_agente/domain/repositories/i_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_schema_validation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 
+part 'metrics_collector_auth_domain.dart';
+part 'metrics_collector_odbc_domain.dart';
+part 'metrics_collector_protocol_domain.dart';
+
 /// Servico para coletar e gerenciar metricas de performance.
 ///
 /// Chaves em [_eventCounters] sao estaveis para exportacao (ex.: OpenTelemetry).
-class MetricsCollector
+final class MetricsCollector extends MetricsCollectorCore
+    with MetricsCollectorAuthDomain, MetricsCollectorOdbcDomain, MetricsCollectorProtocolDomain
     implements
         IMetricsCollector,
         IAutoUpdateMetricsCollector,
@@ -26,198 +31,203 @@ class MetricsCollector
         ActionExecutionQueueMetricsCollector,
         AgentActionExecutionMetricsCollector {
   MetricsCollector();
+}
 
-  static const String _timeoutCancelSuccessCounter = 'timeout_cancel_success';
-  static const String _timeoutCancelFailureCounter = 'timeout_cancel_failure';
-  static const String _transactionRollbackFailureCounter = 'transaction_rollback_failure';
-  static const String _transactionRollbackAttemptCounter = 'transaction_rollback_attempt';
-  static const String _idempotencyFingerprintMismatchCounter = 'idempotency_fingerprint_mismatch';
-  static const String _multiResultPoolVacuousFallbackCounter = 'multi_result_pool_vacuous_fallback';
-  static const String _multiResultDirectStillVacuousCounter = 'multi_result_direct_still_vacuous';
-  static const String _transactionalBatchDirectPathCounter = 'transactional_batch_direct_path';
-  static const String _transactionalBatchNativePoolPathCounter = 'transactional_batch_native_pool_path';
-  static const String _transactionalBatchNativePoolFallbackCounter = 'transactional_batch_native_pool_fallback';
-  static const String _batchBulkInsertRecommendedCounter = 'batch_bulk_insert_recommended';
-  static const String _batchBulkInsertRoutedCounter = 'batch_bulk_insert_routed';
-  static const String _directConnectionFallbackCounter = 'direct_connection_fallback';
-  static const String _odbcNativePoolFallbackCounter = 'odbc_native_pool_fallback';
-  static const String _odbcNativeFallbackTotalCounter = 'odbc_native_fallback_total';
-  static const String _odbcNativePoolOptionsSkipCounter = 'odbc_native_pool_options_skip';
-  static const String _odbcNativeCircuitOpenedCounter = 'odbc_native_circuit_opened_total';
-  static const String _odbcBufferExpansionCounter = 'odbc_buffer_expansion_total';
-  static const String _odbcInvalidConnectionRecycleCounter = 'odbc_invalid_connection_recycle_total';
-  static const String _odbcNativeCompatibleAcquireAttemptCounter = 'odbc_native_compatible_acquire_attempt';
-  static const String _odbcNativeCompatibleAcquireSuccessCounter = 'odbc_native_compatible_acquire_success';
-  static const String _readOnlyBatchParallelCounter = 'read_only_batch_parallel';
-  static const String _readOnlyBatchParallelCappedCounter = 'read_only_batch_parallel_capped';
-  static const String _readOnlyBatchNativePoolPathCounter = 'read_only_batch_native_pool_path';
-  static const String _readOnlyBatchNativePoolFallbackCounter = 'read_only_batch_native_pool_fallback';
-  static const String _directConnectionAcquireTimeoutCounter = 'direct_connection_acquire_timeout';
-  static const String _poolReleaseFailureCounter = 'pool_release_failure';
-  static const String _poolDiscardInflightCounter = 'pool_discard_inflight';
-  static const String _poolDiscardReconciliationStaleCounter = 'pool_discard_reconciliation_stale';
-  static const String _poolDiscardReconciliationRemediatedCounter = 'pool_discard_reconciliation_remediated';
-  static const String _poolDiscardReconciliationForceReleaseCounter = 'pool_discard_reconciliation_force_release';
-  static const String _bulkInsertChunkedCounter = 'bulk_insert_chunked_total';
-  static const String _bulkInsertParallelCounter = 'bulk_insert_parallel_total';
-  static const String _poolRecycleCounter = 'pool_recycle';
-  static const String _poolRecycleFailureCounter = 'pool_recycle_failure';
-  static const String _odbcEventConnectionLostCounter = 'odbc_event_connection_lost';
-  static const String _odbcEventAutoReconnectAttemptedCounter = 'odbc_event_auto_reconnect_attempted';
-  static const String _odbcEventWorkerRecoveredCounter = 'odbc_event_worker_recovered';
-  static const String _odbcEventPoolResizeCounter = 'odbc_event_pool_resize';
-  static const String _odbcEventSlowQueryDetectedCounter = 'odbc_event_slow_query_detected';
-  static const String _transactionalBatchReadOnlyInferenceCounter = 'transactional_batch_readonly_inference';
-  static const String _transactionalBatchDeadlineNearStallCounter = 'transactional_batch_deadline_near_stall';
-  static const String _authDecisionCacheHitCounter = 'auth_decision_cache_hit';
-  static const String _authDecisionCacheMissCounter = 'auth_decision_cache_miss';
-  static const String _authPolicyCacheHitCounter = 'auth_policy_cache_hit';
-  static const String _authPolicyCacheMissCounter = 'auth_policy_cache_miss';
-  static const String _rpcSqlExecuteStreamingChunksResponseCounter = 'rpc_sql_execute_streaming_chunks_response';
-  static const String _rpcSqlExecuteStreamingFromDbResponseCounter = 'rpc_sql_execute_streaming_from_db_response';
-  static const String _rpcSqlExecuteAutoStreamingFromDbResponseCounter =
+/// Shared metrics state and cross-domain recording helpers.
+class MetricsCollectorCore {
+  MetricsCollectorCore();
+
+  static const String timeoutCancelSuccessCounter = 'timeout_cancel_success';
+  static const String timeoutCancelFailureCounter = 'timeout_cancel_failure';
+  static const String transactionRollbackFailureCounter = 'transaction_rollback_failure';
+  static const String transactionRollbackAttemptCounter = 'transaction_rollback_attempt';
+  static const String idempotencyFingerprintMismatchCounter = 'idempotency_fingerprint_mismatch';
+  static const String multiResultPoolVacuousFallbackCounter = 'multi_result_pool_vacuous_fallback';
+  static const String multiResultDirectStillVacuousCounter = 'multi_result_direct_still_vacuous';
+  static const String transactionalBatchDirectPathCounter = 'transactional_batch_direct_path';
+  static const String transactionalBatchNativePoolPathCounter = 'transactional_batch_native_pool_path';
+  static const String transactionalBatchNativePoolFallbackCounter = 'transactional_batch_native_pool_fallback';
+  static const String batchBulkInsertRecommendedCounter = 'batch_bulk_insert_recommended';
+  static const String batchBulkInsertRoutedCounter = 'batch_bulk_insert_routed';
+  static const String directConnectionFallbackCounter = 'direct_connection_fallback';
+  static const String odbcNativePoolFallbackCounter = 'odbc_native_pool_fallback';
+  static const String odbcNativeFallbackTotalCounter = 'odbc_native_fallback_total';
+  static const String odbcNativePoolOptionsSkipCounter = 'odbc_native_pool_options_skip';
+  static const String odbcNativeCircuitOpenedCounter = 'odbc_native_circuit_opened_total';
+  static const String odbcBufferExpansionCounter = 'odbc_buffer_expansion_total';
+  static const String odbcInvalidConnectionRecycleCounter = 'odbc_invalid_connection_recycle_total';
+  static const String odbcNativeCompatibleAcquireAttemptCounter = 'odbc_native_compatible_acquire_attempt';
+  static const String odbcNativeCompatibleAcquireSuccessCounter = 'odbc_native_compatible_acquire_success';
+  static const String readOnlyBatchParallelCounter = 'read_only_batch_parallel';
+  static const String readOnlyBatchParallelCappedCounter = 'read_only_batch_parallel_capped';
+  static const String readOnlyBatchNativePoolPathCounter = 'read_only_batch_native_pool_path';
+  static const String readOnlyBatchNativePoolFallbackCounter = 'read_only_batch_native_pool_fallback';
+  static const String directConnectionAcquireTimeoutCounter = 'direct_connection_acquire_timeout';
+  static const String poolReleaseFailureCounter = 'pool_release_failure';
+  static const String poolDiscardInflightCounter = 'pool_discard_inflight';
+  static const String poolDiscardReconciliationStaleCounter = 'pool_discard_reconciliation_stale';
+  static const String poolDiscardReconciliationRemediatedCounter = 'pool_discard_reconciliation_remediated';
+  static const String poolDiscardReconciliationForceReleaseCounter = 'pool_discard_reconciliation_force_release';
+  static const String bulkInsertChunkedCounter = 'bulk_insert_chunked_total';
+  static const String bulkInsertParallelCounter = 'bulk_insert_parallel_total';
+  static const String poolRecycleCounter = 'pool_recycle';
+  static const String poolRecycleFailureCounter = 'pool_recycle_failure';
+  static const String odbcEventConnectionLostCounter = 'odbc_event_connection_lost';
+  static const String odbcEventAutoReconnectAttemptedCounter = 'odbc_event_auto_reconnect_attempted';
+  static const String odbcEventWorkerRecoveredCounter = 'odbc_event_worker_recovered';
+  static const String odbcEventPoolResizeCounter = 'odbc_event_pool_resize';
+  static const String odbcEventSlowQueryDetectedCounter = 'odbc_event_slow_query_detected';
+  static const String transactionalBatchReadOnlyInferenceCounter = 'transactional_batch_readonly_inference';
+  static const String transactionalBatchDeadlineNearStallCounter = 'transactional_batch_deadline_near_stall';
+  static const String authDecisionCacheHitCounter = 'auth_decision_cache_hit';
+  static const String authDecisionCacheMissCounter = 'auth_decision_cache_miss';
+  static const String authPolicyCacheHitCounter = 'auth_policy_cache_hit';
+  static const String authPolicyCacheMissCounter = 'auth_policy_cache_miss';
+  static const String rpcSqlExecuteStreamingChunksResponseCounter = 'rpc_sql_execute_streaming_chunks_response';
+  static const String rpcSqlExecuteStreamingFromDbResponseCounter = 'rpc_sql_execute_streaming_from_db_response';
+  static const String rpcSqlExecuteAutoStreamingFromDbResponseCounter =
       'rpc_sql_execute_auto_streaming_from_db_response';
-  static const String _rpcSqlExecutePreferDbStreamingResponseCounter = 'rpc_sql_execute_prefer_db_streaming_response';
-  static const String _rpcSqlExecuteAllowlistDbStreamingResponseCounter =
+  static const String rpcSqlExecutePreferDbStreamingResponseCounter = 'rpc_sql_execute_prefer_db_streaming_response';
+  static const String rpcSqlExecuteAllowlistDbStreamingResponseCounter =
       'rpc_sql_execute_allowlist_db_streaming_response';
-  static const String _rpcSqlExecuteDbStreamingSkipCounter = 'rpc_sql_execute_db_streaming_skip';
-  static const String _rpcSqlExecuteMaterializedResponseCounter = 'rpc_sql_execute_materialized_response';
-  static const String _rpcStreamTerminalCompleteEmittedCounter = 'rpc_stream_terminal_complete_emitted';
-  static const String _rpcStreamTerminalCompleteFailedCounter = 'rpc_stream_terminal_complete_failed';
-  static const String _rpcResponseAckRetryCounter = 'rpc_response_ack_retry';
-  static const String _rpcResponseAckDeliveredCounter = 'rpc_response_ack_delivered';
-  static const String _rpcResponseAckAbortedConnectionChangeCounter = 'rpc_response_ack_aborted_connection_change';
-  static const String _rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
-  static const String _rpcResponseAckSkippedSqlExecuteCounter = 'rpc_response_ack_skipped_sql_execute';
-  static const String _rpcResponseAckSkippedSqlExecuteBatchCounter = 'rpc_response_ack_skipped_sql_execute_batch';
-  static const String _rpcClientTokenGetPolicySuccessCounter = 'rpc_client_token_get_policy_success';
-  static const String _rpcClientTokenGetPolicyFailureCounter = 'rpc_client_token_get_policy_failure';
-  static const String _rpcClientTokenGetPolicyFailureValidationCounter =
+  static const String rpcSqlExecuteDbStreamingSkipCounter = 'rpc_sql_execute_db_streaming_skip';
+  static const String rpcSqlExecuteMaterializedResponseCounter = 'rpc_sql_execute_materialized_response';
+  static const String rpcStreamTerminalCompleteEmittedCounter = 'rpc_stream_terminal_complete_emitted';
+  static const String rpcStreamTerminalCompleteFailedCounter = 'rpc_stream_terminal_complete_failed';
+  static const String rpcResponseAckRetryCounter = 'rpc_response_ack_retry';
+  static const String rpcResponseAckDeliveredCounter = 'rpc_response_ack_delivered';
+  static const String rpcResponseAckAbortedConnectionChangeCounter = 'rpc_response_ack_aborted_connection_change';
+  static const String rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
+  static const String rpcResponseAckSkippedSqlExecuteCounter = 'rpc_response_ack_skipped_sql_execute';
+  static const String rpcResponseAckSkippedSqlExecuteBatchCounter = 'rpc_response_ack_skipped_sql_execute_batch';
+  static const String rpcClientTokenGetPolicySuccessCounter = 'rpc_client_token_get_policy_success';
+  static const String rpcClientTokenGetPolicyFailureCounter = 'rpc_client_token_get_policy_failure';
+  static const String rpcClientTokenGetPolicyFailureValidationCounter =
       'rpc_client_token_get_policy_failure_validation';
-  static const String _rpcClientTokenGetPolicyFailureNetworkCounter = 'rpc_client_token_get_policy_failure_network';
-  static const String _rpcClientTokenGetPolicyFailureServerCounter = 'rpc_client_token_get_policy_failure_server';
-  static const String _rpcClientTokenGetPolicyFailureNotFoundCounter = 'rpc_client_token_get_policy_failure_not_found';
-  static const String _rpcClientTokenGetPolicyFailureConnectionCounter =
+  static const String rpcClientTokenGetPolicyFailureNetworkCounter = 'rpc_client_token_get_policy_failure_network';
+  static const String rpcClientTokenGetPolicyFailureServerCounter = 'rpc_client_token_get_policy_failure_server';
+  static const String rpcClientTokenGetPolicyFailureNotFoundCounter = 'rpc_client_token_get_policy_failure_not_found';
+  static const String rpcClientTokenGetPolicyFailureConnectionCounter =
       'rpc_client_token_get_policy_failure_connection';
-  static const String _rpcClientTokenGetPolicyFailureDatabaseCounter = 'rpc_client_token_get_policy_failure_database';
-  static const String _rpcClientTokenGetPolicyFailureConfigurationCounter =
+  static const String rpcClientTokenGetPolicyFailureDatabaseCounter = 'rpc_client_token_get_policy_failure_database';
+  static const String rpcClientTokenGetPolicyFailureConfigurationCounter =
       'rpc_client_token_get_policy_failure_configuration';
-  static const String _rpcClientTokenGetPolicyFailureQueryCounter = 'rpc_client_token_get_policy_failure_query';
-  static const String _rpcClientTokenGetPolicyFailureCompressionCounter =
+  static const String rpcClientTokenGetPolicyFailureQueryCounter = 'rpc_client_token_get_policy_failure_query';
+  static const String rpcClientTokenGetPolicyFailureCompressionCounter =
       'rpc_client_token_get_policy_failure_compression';
-  static const String _rpcClientTokenGetPolicyFailureNotificationCounter =
+  static const String rpcClientTokenGetPolicyFailureNotificationCounter =
       'rpc_client_token_get_policy_failure_notification';
-  static const String _rpcClientTokenGetPolicyFailureOtherCounter = 'rpc_client_token_get_policy_failure_other';
-  static const String _rpcClientTokenGetPolicyRateLimitedCounter = 'rpc_client_token_get_policy_rate_limited';
-  static const String _rpcRemoteAgentActionRunSuccessCounter = 'rpc_remote_agent_action_run_success';
-  static const String _rpcRemoteAgentActionRunErrorCounter = 'rpc_remote_agent_action_run_error';
-  static const String _rpcRemoteAgentActionValidateRunSuccessCounter = 'rpc_remote_agent_action_validate_run_success';
-  static const String _rpcRemoteAgentActionValidateRunErrorCounter = 'rpc_remote_agent_action_validate_run_error';
-  static const String _rpcRemoteAgentActionCancelSuccessCounter = 'rpc_remote_agent_action_cancel_success';
-  static const String _rpcRemoteAgentActionCancelErrorCounter = 'rpc_remote_agent_action_cancel_error';
-  static const String _agentActionQueueConcurrencyRejectCounter = 'agent_action_queue_concurrency_reject';
-  static const String _agentActionQueueConcurrencyIgnoreCounter = 'agent_action_queue_concurrency_ignore';
-  static const String _agentActionQueueDepthFullCounter = 'agent_action_queue_depth_full';
-  static const String _agentActionQueuePendingEnqueuedCounter = 'agent_action_queue_pending_enqueued';
-  static const String _agentActionQueueIdempotentReplayCounter = 'agent_action_queue_idempotent_replay';
-  static const String _agentActionQueueRunStartedCounter = 'agent_action_queue_run_started';
-  static const String _agentActionQueuePendingWaitTimeoutCounter = 'agent_action_queue_pending_wait_timeout';
-  static const String _agentActionQueuePendingCancelledCounter = 'agent_action_queue_pending_cancelled';
-  static const String _agentActionExecutionTerminalSucceededCounter = 'agent_action_execution_terminal_succeeded';
-  static const String _agentActionExecutionTerminalFailedCounter = 'agent_action_execution_terminal_failed';
-  static const String _agentActionExecutionTerminalSkippedCounter = 'agent_action_execution_terminal_skipped';
-  static const String _agentActionExecutionTerminalCancelledCounter = 'agent_action_execution_terminal_cancelled';
-  static const String _agentActionExecutionTerminalKilledCounter = 'agent_action_execution_terminal_killed';
-  static const String _agentActionExecutionTerminalTimedOutCounter = 'agent_action_execution_terminal_timed_out';
-  static const String _agentActionExecutionTerminalInterruptedCounter = 'agent_action_execution_terminal_interrupted';
-  static const String _agentActionExecutionTerminalUnknownCounter = 'agent_action_execution_terminal_unknown';
-  static const String _agentActionRemotePermissionDeniedCounter = 'agent_action_remote_permission_denied';
-  static const String _agentActionLocalAuthorizationDeniedCounter = 'agent_action_local_authorization_denied';
-  static const String _agentActionRemoteRateLimitedCounter = 'agent_action_remote_rate_limited';
-  static const String _agentActionExecutionHistoryPurgeCounter = 'agent_action_execution_history_purge';
-  static const String _agentActionRemoteAuditPurgeCounter = 'agent_action_remote_audit_purge';
-  static const String _agentActionRpcIdempotencyCachePurgeCounter = 'agent_action_rpc_idempotency_cache_purge';
-  static const String _agentActionElevatedBridgeArtifactsPurgeCounter = 'agent_action_elevated_bridge_artifacts_purge';
-  static const String _agentActionRemoteAuditExecutionCorrelatedCounter =
+  static const String rpcClientTokenGetPolicyFailureOtherCounter = 'rpc_client_token_get_policy_failure_other';
+  static const String rpcClientTokenGetPolicyRateLimitedCounter = 'rpc_client_token_get_policy_rate_limited';
+  static const String rpcRemoteAgentActionRunSuccessCounter = 'rpc_remote_agent_action_run_success';
+  static const String rpcRemoteAgentActionRunErrorCounter = 'rpc_remote_agent_action_run_error';
+  static const String rpcRemoteAgentActionValidateRunSuccessCounter = 'rpc_remote_agent_action_validate_run_success';
+  static const String rpcRemoteAgentActionValidateRunErrorCounter = 'rpc_remote_agent_action_validate_run_error';
+  static const String rpcRemoteAgentActionCancelSuccessCounter = 'rpc_remote_agent_action_cancel_success';
+  static const String rpcRemoteAgentActionCancelErrorCounter = 'rpc_remote_agent_action_cancel_error';
+  static const String agentActionQueueConcurrencyRejectCounter = 'agent_action_queue_concurrency_reject';
+  static const String agentActionQueueConcurrencyIgnoreCounter = 'agent_action_queue_concurrency_ignore';
+  static const String agentActionQueueDepthFullCounter = 'agent_action_queue_depth_full';
+  static const String agentActionQueuePendingEnqueuedCounter = 'agent_action_queue_pending_enqueued';
+  static const String agentActionQueueIdempotentReplayCounter = 'agent_action_queue_idempotent_replay';
+  static const String agentActionQueueRunStartedCounter = 'agent_action_queue_run_started';
+  static const String agentActionQueuePendingWaitTimeoutCounter = 'agent_action_queue_pending_wait_timeout';
+  static const String agentActionQueuePendingCancelledCounter = 'agent_action_queue_pending_cancelled';
+  static const String agentActionExecutionTerminalSucceededCounter = 'agent_action_execution_terminal_succeeded';
+  static const String agentActionExecutionTerminalFailedCounter = 'agent_action_execution_terminal_failed';
+  static const String agentActionExecutionTerminalSkippedCounter = 'agent_action_execution_terminal_skipped';
+  static const String agentActionExecutionTerminalCancelledCounter = 'agent_action_execution_terminal_cancelled';
+  static const String agentActionExecutionTerminalKilledCounter = 'agent_action_execution_terminal_killed';
+  static const String agentActionExecutionTerminalTimedOutCounter = 'agent_action_execution_terminal_timed_out';
+  static const String agentActionExecutionTerminalInterruptedCounter = 'agent_action_execution_terminal_interrupted';
+  static const String agentActionExecutionTerminalUnknownCounter = 'agent_action_execution_terminal_unknown';
+  static const String agentActionRemotePermissionDeniedCounter = 'agent_action_remote_permission_denied';
+  static const String agentActionLocalAuthorizationDeniedCounter = 'agent_action_local_authorization_denied';
+  static const String agentActionRemoteRateLimitedCounter = 'agent_action_remote_rate_limited';
+  static const String agentActionExecutionHistoryPurgeCounter = 'agent_action_execution_history_purge';
+  static const String agentActionRemoteAuditPurgeCounter = 'agent_action_remote_audit_purge';
+  static const String agentActionRpcIdempotencyCachePurgeCounter = 'agent_action_rpc_idempotency_cache_purge';
+  static const String agentActionElevatedBridgeArtifactsPurgeCounter = 'agent_action_elevated_bridge_artifacts_purge';
+  static const String agentActionRemoteAuditExecutionCorrelatedCounter =
       'agent_action_remote_audit_execution_correlated';
-  static const String _agentActionCancelKillFailedCounter = 'agent_action_cancel_kill_failed';
-  static const String _agentActionCancelKillPermissionDeniedCounter = 'agent_action_cancel_kill_permission_denied';
-  static const String _agentActionCancelProcessNotActiveCounter = 'agent_action_cancel_process_not_active';
-  static const String _agentActionCancelProcessIdMismatchCounter = 'agent_action_cancel_process_id_mismatch';
-  static const String _agentActionCancelProcessIdentityMismatchCounter =
+  static const String agentActionCancelKillFailedCounter = 'agent_action_cancel_kill_failed';
+  static const String agentActionCancelKillPermissionDeniedCounter = 'agent_action_cancel_kill_permission_denied';
+  static const String agentActionCancelProcessNotActiveCounter = 'agent_action_cancel_process_not_active';
+  static const String agentActionCancelProcessIdMismatchCounter = 'agent_action_cancel_process_id_mismatch';
+  static const String agentActionCancelProcessIdentityMismatchCounter =
       'agent_action_cancel_process_identity_mismatch';
-  static const String _agentActionCancelProcessIdentityUnavailableCounter =
+  static const String agentActionCancelProcessIdentityUnavailableCounter =
       'agent_action_cancel_process_identity_unavailable';
-  static const String _agentActionCapturedStdoutTruncatedCounter = 'agent_action_captured_output_stdout_truncated';
-  static const String _agentActionCapturedStderrTruncatedCounter = 'agent_action_captured_output_stderr_truncated';
-  static const String _agentActionCapturedStdoutBytesCounter = 'agent_action_captured_output_stdout_bytes';
-  static const String _agentActionCapturedStderrBytesCounter = 'agent_action_captured_output_stderr_bytes';
-  static const String _agentActionCapturedOutputClearedCounter = 'agent_action_captured_output_cleared';
-  static const String _agentActionElevatedStatusFileTerminalCounter = 'agent_action_elevated_status_file_terminal';
-  static const String _agentActionElevatedStatusFileWaitTimeoutCounter =
+  static const String agentActionCapturedStdoutTruncatedCounter = 'agent_action_captured_output_stdout_truncated';
+  static const String agentActionCapturedStderrTruncatedCounter = 'agent_action_captured_output_stderr_truncated';
+  static const String agentActionCapturedStdoutBytesCounter = 'agent_action_captured_output_stdout_bytes';
+  static const String agentActionCapturedStderrBytesCounter = 'agent_action_captured_output_stderr_bytes';
+  static const String agentActionCapturedOutputClearedCounter = 'agent_action_captured_output_cleared';
+  static const String agentActionElevatedStatusFileTerminalCounter = 'agent_action_elevated_status_file_terminal';
+  static const String agentActionElevatedStatusFileWaitTimeoutCounter =
       'agent_action_elevated_status_file_wait_timeout';
-  static const String _rpcRemoteAgentActionGetExecutionSuccessCounter = 'rpc_remote_agent_action_get_execution_success';
-  static const String _rpcRemoteAgentActionGetExecutionErrorCounter = 'rpc_remote_agent_action_get_execution_error';
-  static const String _rpcRemoteAgentActionRunNotificationRejectedCounter =
+  static const String rpcRemoteAgentActionGetExecutionSuccessCounter = 'rpc_remote_agent_action_get_execution_success';
+  static const String rpcRemoteAgentActionGetExecutionErrorCounter = 'rpc_remote_agent_action_get_execution_error';
+  static const String rpcRemoteAgentActionRunNotificationRejectedCounter =
       'rpc_remote_agent_action_run_notification_rejected';
-  static const String _rpcRemoteAgentActionValidateRunNotificationRejectedCounter =
+  static const String rpcRemoteAgentActionValidateRunNotificationRejectedCounter =
       'rpc_remote_agent_action_validate_run_notification_rejected';
-  static const String _rpcRemoteAgentActionCancelNotificationRejectedCounter =
+  static const String rpcRemoteAgentActionCancelNotificationRejectedCounter =
       'rpc_remote_agent_action_cancel_notification_rejected';
-  static const String _rpcRemoteAgentActionGetExecutionNotificationRejectedCounter =
+  static const String rpcRemoteAgentActionGetExecutionNotificationRejectedCounter =
       'rpc_remote_agent_action_get_execution_notification_rejected';
-  static const String _rpcRemoteAgentActionBatchReadLimitRejectedCounter =
+  static const String rpcRemoteAgentActionBatchReadLimitRejectedCounter =
       'rpc_remote_agent_action_batch_read_limit_rejected';
-  static const String _rpcMethodConcurrencyLimitedCounter = 'rpc_method_concurrency_limited';
-  static const String _rpcSqlStreamCancelledCounter = 'rpc_sql_stream_cancelled';
-  static const String _rpcSqlStreamCancelFailedCounter = 'rpc_sql_stream_cancel_failed';
-  static const String _schemaValidationSuccessCounter = 'schema_validation_success_total';
-  static const String _schemaValidationFailureCounter = 'schema_validation_failure_total';
-  static const String _schemaValidationSkippedLargePayloadCounter = 'schema_validation_skipped_large_payload_total';
-  static const String _poolAcquireTimeoutCounter = 'pool_acquire_timeout';
-  static const String _connectTimeoutCounter = 'connect_timeout';
-  static const String _queryTimeoutCounter = 'query_timeout';
-  static const String _preparedStatementReuseCounter = 'prepared_statement_reuse';
-  static const String _preparedStatementCacheHitCounter = 'prepared_statement_cache_hit';
-  static const String _preparedStatementCacheMissCounter = 'prepared_statement_cache_miss';
-  static const String _streamCancelRequestCounter = 'stream_cancel_request';
-  static const String _streamCancelBackpressureCounter = 'stream_cancel_backpressure';
-  static const String _streamCancelDisconnectFailureCounter = 'stream_cancel_disconnect_failure';
-  static const String _streamCancelDisconnectTimeoutCounter = 'stream_cancel_disconnect_timeout';
-  static const String _sqlQueueRejectionCounter = 'sql_queue_rejection';
-  static const String _sqlQueueTimeoutCounter = 'sql_queue_timeout';
-  static const String _sqlQueueTimeoutAfterWorkerStartedCounter =
+  static const String rpcMethodConcurrencyLimitedCounter = 'rpc_method_concurrency_limited';
+  static const String rpcSqlStreamCancelledCounter = 'rpc_sql_stream_cancelled';
+  static const String rpcSqlStreamCancelFailedCounter = 'rpc_sql_stream_cancel_failed';
+  static const String schemaValidationSuccessCounter = 'schema_validation_success_total';
+  static const String schemaValidationFailureCounter = 'schema_validation_failure_total';
+  static const String schemaValidationSkippedLargePayloadCounter = 'schema_validation_skipped_large_payload_total';
+  static const String poolAcquireTimeoutCounter = 'pool_acquire_timeout';
+  static const String connectTimeoutCounter = 'connect_timeout';
+  static const String queryTimeoutCounter = 'query_timeout';
+  static const String preparedStatementReuseCounter = 'prepared_statement_reuse';
+  static const String preparedStatementCacheHitCounter = 'prepared_statement_cache_hit';
+  static const String preparedStatementCacheMissCounter = 'prepared_statement_cache_miss';
+  static const String streamCancelRequestCounter = 'stream_cancel_request';
+  static const String streamCancelBackpressureCounter = 'stream_cancel_backpressure';
+  static const String streamCancelDisconnectFailureCounter = 'stream_cancel_disconnect_failure';
+  static const String streamCancelDisconnectTimeoutCounter = 'stream_cancel_disconnect_timeout';
+  static const String sqlQueueRejectionCounter = 'sql_queue_rejection';
+  static const String sqlQueueTimeoutCounter = 'sql_queue_timeout';
+  static const String sqlQueueTimeoutAfterWorkerStartedCounter =
       'sql_queue_timeout_after_worker_started';
-  static const String _sqlQueueSaturation70Counter = 'sql_queue_saturation_70';
-  static const String _sqlQueueSaturation90Counter = 'sql_queue_saturation_90';
-  static const String _sqlQueueWorkersEqualPoolCounter = 'sql_queue_workers_equal_pool';
-  static const String _streamingBatchedPathCounter = 'streaming_batched_path';
-  static const String _streamingSingleChunkPathCounter = 'streaming_single_chunk_path';
-  static const String _autoUpdateManualCheckStartedCounter = 'auto_update_manual_check_started';
-  static const String _autoUpdateManualCheckSuccessAvailableCounter = 'auto_update_manual_check_success_available';
-  static const String _autoUpdateManualCheckSuccessNotAvailableCounter =
+  static const String sqlQueueSaturation70Counter = 'sql_queue_saturation_70';
+  static const String sqlQueueSaturation90Counter = 'sql_queue_saturation_90';
+  static const String sqlQueueWorkersEqualPoolCounter = 'sql_queue_workers_equal_pool';
+  static const String streamingBatchedPathCounter = 'streaming_batched_path';
+  static const String streamingSingleChunkPathCounter = 'streaming_single_chunk_path';
+  static const String autoUpdateManualCheckStartedCounter = 'auto_update_manual_check_started';
+  static const String autoUpdateManualCheckSuccessAvailableCounter = 'auto_update_manual_check_success_available';
+  static const String autoUpdateManualCheckSuccessNotAvailableCounter =
       'auto_update_manual_check_success_not_available';
-  static const String _autoUpdateManualCheckUpdaterErrorCounter = 'auto_update_manual_check_updater_error';
-  static const String _autoUpdateManualCheckTriggerTimeoutCounter = 'auto_update_manual_check_trigger_timeout';
-  static const String _autoUpdateManualCheckCompletionTimeoutCounter = 'auto_update_manual_check_completion_timeout';
-  static const String _autoUpdateManualCheckTriggerFailureCounter = 'auto_update_manual_check_trigger_failure';
-  static const String _autoUpdateManualCheckNotInitializedCounter = 'auto_update_manual_check_not_initialized';
-  static const String _autoUpdateCircuitOpenedCounter = 'auto_update_circuit_opened';
-  static const String _autoUpdateCircuitOpenRejectedCounter = 'auto_update_circuit_open_rejected';
-  static const String _autoUpdateBackgroundCheckTriggerFailureCounter = 'auto_update_background_check_trigger_failure';
-  static const String _autoUpdateBackgroundCheckUpdaterErrorCounter = 'auto_update_background_check_updater_error';
-  static const String _autoUpdateAwaitingUserConsentCounter = 'auto_update_awaiting_user_consent';
-  static const String _autoUpdateUserInitiatedApplySuccessCounter = 'auto_update_user_initiated_apply_success';
-  static const String _autoUpdateUserInitiatedApplyFailureCounter = 'auto_update_user_initiated_apply_failure';
-  static const String _autoUpdateNotificationsPreferenceEnabledCounter =
+  static const String autoUpdateManualCheckUpdaterErrorCounter = 'auto_update_manual_check_updater_error';
+  static const String autoUpdateManualCheckTriggerTimeoutCounter = 'auto_update_manual_check_trigger_timeout';
+  static const String autoUpdateManualCheckCompletionTimeoutCounter = 'auto_update_manual_check_completion_timeout';
+  static const String autoUpdateManualCheckTriggerFailureCounter = 'auto_update_manual_check_trigger_failure';
+  static const String autoUpdateManualCheckNotInitializedCounter = 'auto_update_manual_check_not_initialized';
+  static const String autoUpdateCircuitOpenedCounter = 'auto_update_circuit_opened';
+  static const String autoUpdateCircuitOpenRejectedCounter = 'auto_update_circuit_open_rejected';
+  static const String autoUpdateBackgroundCheckTriggerFailureCounter = 'auto_update_background_check_trigger_failure';
+  static const String autoUpdateBackgroundCheckUpdaterErrorCounter = 'auto_update_background_check_updater_error';
+  static const String autoUpdateAwaitingUserConsentCounter = 'auto_update_awaiting_user_consent';
+  static const String autoUpdateUserInitiatedApplySuccessCounter = 'auto_update_user_initiated_apply_success';
+  static const String autoUpdateUserInitiatedApplyFailureCounter = 'auto_update_user_initiated_apply_failure';
+  static const String autoUpdateNotificationsPreferenceEnabledCounter =
       'auto_update_notifications_preference_enabled';
-  static const String _autoUpdateNotificationsPreferenceDisabledCounter =
+  static const String autoUpdateNotificationsPreferenceDisabledCounter =
       'auto_update_notifications_preference_disabled';
-  static const String _autoUpdateAutomaticSilentPreferenceEnabledCounter =
+  static const String autoUpdateAutomaticSilentPreferenceEnabledCounter =
       'auto_update_automatic_silent_preference_enabled';
-  static const String _autoUpdateAutomaticSilentPreferenceDisabledCounter =
+  static const String autoUpdateAutomaticSilentPreferenceDisabledCounter =
       'auto_update_automatic_silent_preference_disabled';
-  static const String _autoUpdateManualOnlyModeAppliedCounter = 'auto_update_manual_only_mode_applied';
+  static const String autoUpdateManualOnlyModeAppliedCounter = 'auto_update_manual_only_mode_applied';
 
   static const int _maxMetrics = 10000;
 
@@ -261,111 +271,39 @@ class MetricsCollector
   static const int _maxWaitTimeSamples = 1000;
   static const int _maxRecentDiagnosticReasons = 50;
 
-  @override
   Stream<QueryMetrics> get metricsStream => _metricsController.stream;
 
-  @override
   List<QueryMetrics> get metrics => List.unmodifiable(_metrics);
 
   /// Numero de metricas coletadas.
   int get count => _metrics.length;
-  int get timeoutCancelSuccessCount => _eventCounters[_timeoutCancelSuccessCounter] ?? 0;
-  int get timeoutCancelFailureCount => _eventCounters[_timeoutCancelFailureCounter] ?? 0;
-  int get transactionRollbackFailureCount => _eventCounters[_transactionRollbackFailureCounter] ?? 0;
-  int get transactionRollbackAttemptCount => _eventCounters[_transactionRollbackAttemptCounter] ?? 0;
-  int get idempotencyFingerprintMismatchCount => _eventCounters[_idempotencyFingerprintMismatchCounter] ?? 0;
-  int get multiResultPoolVacuousFallbackCount => _eventCounters[_multiResultPoolVacuousFallbackCounter] ?? 0;
-  int get multiResultDirectStillVacuousCount => _eventCounters[_multiResultDirectStillVacuousCounter] ?? 0;
-  int get transactionalBatchDirectPathCount => _eventCounters[_transactionalBatchDirectPathCounter] ?? 0;
-  int get transactionalBatchNativePoolPathCount => _eventCounters[_transactionalBatchNativePoolPathCounter] ?? 0;
-  int get transactionalBatchNativePoolFallbackCount =>
-      _eventCounters[_transactionalBatchNativePoolFallbackCounter] ?? 0;
-  int get batchBulkInsertRecommendedCount => _eventCounters[_batchBulkInsertRecommendedCounter] ?? 0;
-  int get batchBulkInsertRoutedCount => _eventCounters[_batchBulkInsertRoutedCounter] ?? 0;
-  int get directConnectionFallbackCount => _eventCounters[_directConnectionFallbackCounter] ?? 0;
-  int get odbcNativePoolFallbackCount => _eventCounters[_odbcNativePoolFallbackCounter] ?? 0;
-  int get odbcNativePoolOptionsSkipCount => _eventCounters[_odbcNativePoolOptionsSkipCounter] ?? 0;
-  int get odbcNativeCompatibleAcquireAttemptCount => _eventCounters[_odbcNativeCompatibleAcquireAttemptCounter] ?? 0;
-  int get odbcNativeCompatibleAcquireSuccessCount => _eventCounters[_odbcNativeCompatibleAcquireSuccessCounter] ?? 0;
-  int get readOnlyBatchParallelCount => _eventCounters[_readOnlyBatchParallelCounter] ?? 0;
-  int get readOnlyBatchParallelCappedCount => _eventCounters[_readOnlyBatchParallelCappedCounter] ?? 0;
-  int get readOnlyBatchNativePoolPathCount => _eventCounters[_readOnlyBatchNativePoolPathCounter] ?? 0;
-  int get readOnlyBatchNativePoolFallbackCount => _eventCounters[_readOnlyBatchNativePoolFallbackCounter] ?? 0;
-  int get directConnectionAcquireTimeoutCount => _eventCounters[_directConnectionAcquireTimeoutCounter] ?? 0;
-  int get activeDirectConnections => _activeDirectConnections;
-  int get maxActiveDirectConnections => _maxActiveDirectConnections;
-  int get poolReleaseFailureCount => _eventCounters[_poolReleaseFailureCounter] ?? 0;
-  int get poolDiscardInflightCount => _poolDiscardInflight;
-  int get bulkInsertChunkedCount => _eventCounters[_bulkInsertChunkedCounter] ?? 0;
-
-  int get bulkInsertParallelCount => _eventCounters[_bulkInsertParallelCounter] ?? 0;
-  int get poolRecycleCount => _eventCounters[_poolRecycleCounter] ?? 0;
-  int get poolRecycleFailureCount => _eventCounters[_poolRecycleFailureCounter] ?? 0;
-  int get authDecisionCacheHitCount => _eventCounters[_authDecisionCacheHitCounter] ?? 0;
-  int get authDecisionCacheMissCount => _eventCounters[_authDecisionCacheMissCounter] ?? 0;
-  int get authPolicyCacheHitCount => _eventCounters[_authPolicyCacheHitCounter] ?? 0;
-  int get authPolicyCacheMissCount => _eventCounters[_authPolicyCacheMissCounter] ?? 0;
-  int get rpcSqlExecuteStreamingChunksResponseCount =>
-      _eventCounters[_rpcSqlExecuteStreamingChunksResponseCounter] ?? 0;
-  int get rpcSqlExecuteStreamingFromDbResponseCount =>
-      _eventCounters[_rpcSqlExecuteStreamingFromDbResponseCounter] ?? 0;
-  int get rpcSqlExecuteAutoStreamingFromDbResponseCount =>
-      _eventCounters[_rpcSqlExecuteAutoStreamingFromDbResponseCounter] ?? 0;
-  int get rpcSqlExecuteAllowlistDbStreamingResponseCount =>
-      _eventCounters[_rpcSqlExecuteAllowlistDbStreamingResponseCounter] ?? 0;
-  int get rpcSqlExecuteMaterializedResponseCount => _eventCounters[_rpcSqlExecuteMaterializedResponseCounter] ?? 0;
-  int get rpcStreamTerminalCompleteEmittedCount => _eventCounters[_rpcStreamTerminalCompleteEmittedCounter] ?? 0;
-  int get rpcStreamTerminalCompleteFailedCount => _eventCounters[_rpcStreamTerminalCompleteFailedCounter] ?? 0;
-  int get rpcResponseAckRetryCount => _eventCounters[_rpcResponseAckRetryCounter] ?? 0;
-  int get rpcResponseAckDeliveredCount => _eventCounters[_rpcResponseAckDeliveredCounter] ?? 0;
-  int get rpcResponseAckAbortedConnectionChangeCount =>
-      _eventCounters[_rpcResponseAckAbortedConnectionChangeCounter] ?? 0;
-  int get rpcResponseAckFallbackWithoutAckCount => _eventCounters[_rpcResponseAckFallbackWithoutAckCounter] ?? 0;
-  int get rpcResponseAckSkippedSqlExecuteCount => _eventCounters[_rpcResponseAckSkippedSqlExecuteCounter] ?? 0;
-  int get rpcResponseAckSkippedSqlExecuteBatchCount =>
-      _eventCounters[_rpcResponseAckSkippedSqlExecuteBatchCounter] ?? 0;
-  int get rpcClientTokenGetPolicySuccessCount => _eventCounters[_rpcClientTokenGetPolicySuccessCounter] ?? 0;
-  int get rpcClientTokenGetPolicyFailureCount => _eventCounters[_rpcClientTokenGetPolicyFailureCounter] ?? 0;
-  int get rpcClientTokenGetPolicyRateLimitedCount => _eventCounters[_rpcClientTokenGetPolicyRateLimitedCounter] ?? 0;
-  int get poolAcquireTimeoutCount => _eventCounters[_poolAcquireTimeoutCounter] ?? 0;
-  int get connectTimeoutCount => _eventCounters[_connectTimeoutCounter] ?? 0;
-  int get queryTimeoutCount => _eventCounters[_queryTimeoutCounter] ?? 0;
-  int get preparedStatementReuseCount => _eventCounters[_preparedStatementReuseCounter] ?? 0;
-  int get preparedStatementCacheHitCount => _eventCounters[_preparedStatementCacheHitCounter] ?? 0;
-  int get preparedStatementCacheMissCount => _eventCounters[_preparedStatementCacheMissCounter] ?? 0;
-  int get streamCancelRequestCount => _eventCounters[_streamCancelRequestCounter] ?? 0;
-  int get streamCancelBackpressureCount => _eventCounters[_streamCancelBackpressureCounter] ?? 0;
-  int get streamCancelDisconnectFailureCount => _eventCounters[_streamCancelDisconnectFailureCounter] ?? 0;
-  int get streamCancelDisconnectTimeoutCount => _eventCounters[_streamCancelDisconnectTimeoutCounter] ?? 0;
-  int get sqlQueueRejectionCount => _eventCounters[_sqlQueueRejectionCounter] ?? 0;
-  int get sqlQueueTimeoutCount => _eventCounters[_sqlQueueTimeoutCounter] ?? 0;
+  int get sqlQueueRejectionCount => _eventCounters[sqlQueueRejectionCounter] ?? 0;
+  int get sqlQueueTimeoutCount => _eventCounters[sqlQueueTimeoutCounter] ?? 0;
   int get sqlQueueTimeoutAfterWorkerStartedCount =>
-      _eventCounters[_sqlQueueTimeoutAfterWorkerStartedCounter] ?? 0;
-  int get sqlQueueSaturation70Count => _eventCounters[_sqlQueueSaturation70Counter] ?? 0;
-  int get sqlQueueSaturation90Count => _eventCounters[_sqlQueueSaturation90Counter] ?? 0;
-  int get sqlQueueWorkersEqualPoolCount => _eventCounters[_sqlQueueWorkersEqualPoolCounter] ?? 0;
-  int get streamingBatchedPathCount => _eventCounters[_streamingBatchedPathCounter] ?? 0;
-  int get streamingSingleChunkPathCount => _eventCounters[_streamingSingleChunkPathCounter] ?? 0;
-  int get autoUpdateManualCheckStartedCount => _eventCounters[_autoUpdateManualCheckStartedCounter] ?? 0;
+      _eventCounters[sqlQueueTimeoutAfterWorkerStartedCounter] ?? 0;
+  int get sqlQueueSaturation70Count => _eventCounters[sqlQueueSaturation70Counter] ?? 0;
+  int get sqlQueueSaturation90Count => _eventCounters[sqlQueueSaturation90Counter] ?? 0;
+  int get sqlQueueWorkersEqualPoolCount => _eventCounters[sqlQueueWorkersEqualPoolCounter] ?? 0;
+  int get autoUpdateManualCheckStartedCount => _eventCounters[autoUpdateManualCheckStartedCounter] ?? 0;
   int get autoUpdateManualCheckSuccessAvailableCount =>
-      _eventCounters[_autoUpdateManualCheckSuccessAvailableCounter] ?? 0;
+      _eventCounters[autoUpdateManualCheckSuccessAvailableCounter] ?? 0;
   int get autoUpdateManualCheckSuccessNotAvailableCount =>
-      _eventCounters[_autoUpdateManualCheckSuccessNotAvailableCounter] ?? 0;
-  int get autoUpdateManualCheckUpdaterErrorCount => _eventCounters[_autoUpdateManualCheckUpdaterErrorCounter] ?? 0;
-  int get autoUpdateManualCheckTriggerTimeoutCount => _eventCounters[_autoUpdateManualCheckTriggerTimeoutCounter] ?? 0;
+      _eventCounters[autoUpdateManualCheckSuccessNotAvailableCounter] ?? 0;
+  int get autoUpdateManualCheckUpdaterErrorCount => _eventCounters[autoUpdateManualCheckUpdaterErrorCounter] ?? 0;
+  int get autoUpdateManualCheckTriggerTimeoutCount => _eventCounters[autoUpdateManualCheckTriggerTimeoutCounter] ?? 0;
   int get autoUpdateManualCheckCompletionTimeoutCount =>
-      _eventCounters[_autoUpdateManualCheckCompletionTimeoutCounter] ?? 0;
-  int get autoUpdateManualCheckTriggerFailureCount => _eventCounters[_autoUpdateManualCheckTriggerFailureCounter] ?? 0;
-  int get autoUpdateManualCheckNotInitializedCount => _eventCounters[_autoUpdateManualCheckNotInitializedCounter] ?? 0;
-  int get autoUpdateCircuitOpenedCount => _eventCounters[_autoUpdateCircuitOpenedCounter] ?? 0;
-  int get autoUpdateCircuitOpenRejectedCount => _eventCounters[_autoUpdateCircuitOpenRejectedCounter] ?? 0;
+      _eventCounters[autoUpdateManualCheckCompletionTimeoutCounter] ?? 0;
+  int get autoUpdateManualCheckTriggerFailureCount => _eventCounters[autoUpdateManualCheckTriggerFailureCounter] ?? 0;
+  int get autoUpdateManualCheckNotInitializedCount => _eventCounters[autoUpdateManualCheckNotInitializedCounter] ?? 0;
+  int get autoUpdateCircuitOpenedCount => _eventCounters[autoUpdateCircuitOpenedCounter] ?? 0;
+  int get autoUpdateCircuitOpenRejectedCount => _eventCounters[autoUpdateCircuitOpenRejectedCounter] ?? 0;
   int get autoUpdateBackgroundCheckTriggerFailureCount =>
-      _eventCounters[_autoUpdateBackgroundCheckTriggerFailureCounter] ?? 0;
+      _eventCounters[autoUpdateBackgroundCheckTriggerFailureCounter] ?? 0;
   int get autoUpdateBackgroundCheckUpdaterErrorCount =>
-      _eventCounters[_autoUpdateBackgroundCheckUpdaterErrorCounter] ?? 0;
-  int get autoUpdateAwaitingUserConsentCount => _eventCounters[_autoUpdateAwaitingUserConsentCounter] ?? 0;
-  int get autoUpdateUserInitiatedApplySuccessCount => _eventCounters[_autoUpdateUserInitiatedApplySuccessCounter] ?? 0;
-  int get autoUpdateUserInitiatedApplyFailureCount => _eventCounters[_autoUpdateUserInitiatedApplyFailureCounter] ?? 0;
+      _eventCounters[autoUpdateBackgroundCheckUpdaterErrorCounter] ?? 0;
+  int get autoUpdateAwaitingUserConsentCount => _eventCounters[autoUpdateAwaitingUserConsentCounter] ?? 0;
+  int get autoUpdateUserInitiatedApplySuccessCount => _eventCounters[autoUpdateUserInitiatedApplySuccessCounter] ?? 0;
+  int get autoUpdateUserInitiatedApplyFailureCount => _eventCounters[autoUpdateUserInitiatedApplyFailureCounter] ?? 0;
   int get currentQueueSize => _currentQueueSize;
   int get maxQueueSize => _maxQueueSize;
   int get currentActiveWorkers => _currentActiveWorkers;
@@ -430,12 +368,10 @@ class MetricsCollector
 
   // SQL Execution Queue metrics implementation
 
-  @override
   void recordQueueAdded(int currentSize) {
     recordQueueSizeChanged(currentSize);
   }
 
-  @override
   void recordQueueSizeChanged(int currentSize) {
     _currentQueueSize = currentSize;
     if (currentSize > _maxQueueSize) {
@@ -443,26 +379,22 @@ class MetricsCollector
     }
   }
 
-  @override
   void recordQueueRejection() {
-    _incrementEventCounter(_sqlQueueRejectionCounter);
+    _incrementEventCounter(sqlQueueRejectionCounter);
   }
 
-  @override
   void recordQueueTimeout() {
-    _incrementEventCounter(_sqlQueueTimeoutCounter);
+    _incrementEventCounter(sqlQueueTimeoutCounter);
   }
 
-  @override
   void recordQueueTimeoutAfterWorkerStarted() {
-    _incrementEventCounter(_sqlQueueTimeoutAfterWorkerStartedCounter);
+    _incrementEventCounter(sqlQueueTimeoutAfterWorkerStartedCounter);
   }
 
-  @override
   void recordQueueSaturation({required int thresholdPercent, required int currentSize, required int maxSize}) {
     final counter = switch (thresholdPercent) {
-      70 => _sqlQueueSaturation70Counter,
-      90 => _sqlQueueSaturation90Counter,
+      70 => sqlQueueSaturation70Counter,
+      90 => sqlQueueSaturation90Counter,
       _ => 'sql_queue_saturation_$thresholdPercent',
     };
     _incrementEventCounter(counter);
@@ -478,67 +410,56 @@ class MetricsCollector
     );
   }
 
-  @override
   void recordQueueWaitTime(Duration waitTime) {
     _recordDurationSample(_queueWaitTimes, waitTime);
   }
 
-  @override
   void recordConcurrencyReject() {
-    _incrementEventCounter(_agentActionQueueConcurrencyRejectCounter);
+    _incrementEventCounter(agentActionQueueConcurrencyRejectCounter);
   }
 
-  @override
   void recordConcurrencyIgnore() {
-    _incrementEventCounter(_agentActionQueueConcurrencyIgnoreCounter);
+    _incrementEventCounter(agentActionQueueConcurrencyIgnoreCounter);
   }
 
-  @override
   void recordQueueDepthFull() {
-    _incrementEventCounter(_agentActionQueueDepthFullCounter);
+    _incrementEventCounter(agentActionQueueDepthFullCounter);
   }
 
-  @override
   void recordPendingEnqueued() {
-    _incrementEventCounter(_agentActionQueuePendingEnqueuedCounter);
+    _incrementEventCounter(agentActionQueuePendingEnqueuedCounter);
   }
 
-  @override
   void recordIdempotentReplay() {
-    _incrementEventCounter(_agentActionQueueIdempotentReplayCounter);
+    _incrementEventCounter(agentActionQueueIdempotentReplayCounter);
   }
 
-  @override
   void recordRunStarted() {
-    _incrementEventCounter(_agentActionQueueRunStartedCounter);
+    _incrementEventCounter(agentActionQueueRunStartedCounter);
   }
 
-  @override
   void recordPendingWaitTimeout() {
-    _incrementEventCounter(_agentActionQueuePendingWaitTimeoutCounter);
+    _incrementEventCounter(agentActionQueuePendingWaitTimeoutCounter);
   }
 
-  @override
   void recordPendingCancelled() {
-    _incrementEventCounter(_agentActionQueuePendingCancelledCounter);
+    _incrementEventCounter(agentActionQueuePendingCancelledCounter);
   }
 
-  @override
   void recordPendingDequeueWaitTime(Duration wait) {
     _recordDurationSample(_agentActionQueueWaitTimes, wait);
   }
 
-  @override
   void recordTerminalOutcome(AgentActionExecutionStatus status) {
     final counter = switch (status) {
-      AgentActionExecutionStatus.succeeded => _agentActionExecutionTerminalSucceededCounter,
-      AgentActionExecutionStatus.failed => _agentActionExecutionTerminalFailedCounter,
-      AgentActionExecutionStatus.skipped => _agentActionExecutionTerminalSkippedCounter,
-      AgentActionExecutionStatus.cancelled => _agentActionExecutionTerminalCancelledCounter,
-      AgentActionExecutionStatus.killed => _agentActionExecutionTerminalKilledCounter,
-      AgentActionExecutionStatus.timedOut => _agentActionExecutionTerminalTimedOutCounter,
-      AgentActionExecutionStatus.interrupted => _agentActionExecutionTerminalInterruptedCounter,
-      AgentActionExecutionStatus.unknown => _agentActionExecutionTerminalUnknownCounter,
+      AgentActionExecutionStatus.succeeded => agentActionExecutionTerminalSucceededCounter,
+      AgentActionExecutionStatus.failed => agentActionExecutionTerminalFailedCounter,
+      AgentActionExecutionStatus.skipped => agentActionExecutionTerminalSkippedCounter,
+      AgentActionExecutionStatus.cancelled => agentActionExecutionTerminalCancelledCounter,
+      AgentActionExecutionStatus.killed => agentActionExecutionTerminalKilledCounter,
+      AgentActionExecutionStatus.timedOut => agentActionExecutionTerminalTimedOutCounter,
+      AgentActionExecutionStatus.interrupted => agentActionExecutionTerminalInterruptedCounter,
+      AgentActionExecutionStatus.unknown => agentActionExecutionTerminalUnknownCounter,
       AgentActionExecutionStatus.queued || AgentActionExecutionStatus.running => null,
     };
     if (counter != null) {
@@ -546,7 +467,6 @@ class MetricsCollector
     }
   }
 
-  @override
   void recordExecutionDuration(Duration duration) {
     if (duration.isNegative) {
       return;
@@ -554,76 +474,62 @@ class MetricsCollector
     _recordDurationSample(_agentActionExecutionDurations, duration);
   }
 
-  @override
   void recordRemotePermissionDenied() {
-    _incrementEventCounter(_agentActionRemotePermissionDeniedCounter);
+    _incrementEventCounter(agentActionRemotePermissionDeniedCounter);
   }
 
-  @override
   void recordLocalAuthorizationDenied() {
-    _incrementEventCounter(_agentActionLocalAuthorizationDeniedCounter);
+    _incrementEventCounter(agentActionLocalAuthorizationDeniedCounter);
   }
 
   void recordRemoteRateLimited() {
-    _incrementEventCounter(_agentActionRemoteRateLimitedCounter);
+    _incrementEventCounter(agentActionRemoteRateLimitedCounter);
   }
 
-  @override
   void recordExecutionHistoryPurge(int removedCount) {
-    _incrementEventCounterBy(_agentActionExecutionHistoryPurgeCounter, removedCount);
+    _incrementEventCounterBy(agentActionExecutionHistoryPurgeCounter, removedCount);
   }
 
-  @override
   void recordRemoteAuditPurge(int removedCount) {
-    _incrementEventCounterBy(_agentActionRemoteAuditPurgeCounter, removedCount);
+    _incrementEventCounterBy(agentActionRemoteAuditPurgeCounter, removedCount);
   }
 
-  @override
   void recordRpcIdempotencyCachePurge(int removedCount) {
-    _incrementEventCounterBy(_agentActionRpcIdempotencyCachePurgeCounter, removedCount);
+    _incrementEventCounterBy(agentActionRpcIdempotencyCachePurgeCounter, removedCount);
   }
 
-  @override
   void recordElevatedBridgeArtifactsPurge(int removedCount) {
-    _incrementEventCounterBy(_agentActionElevatedBridgeArtifactsPurgeCounter, removedCount);
+    _incrementEventCounterBy(agentActionElevatedBridgeArtifactsPurgeCounter, removedCount);
   }
 
-  @override
   void recordRemoteAuditExecutionCorrelated() {
-    _incrementEventCounter(_agentActionRemoteAuditExecutionCorrelatedCounter);
+    _incrementEventCounter(agentActionRemoteAuditExecutionCorrelatedCounter);
   }
 
-  @override
   void recordCancelKillFailed() {
-    _incrementEventCounter(_agentActionCancelKillFailedCounter);
+    _incrementEventCounter(agentActionCancelKillFailedCounter);
   }
 
-  @override
   void recordCancelKillPermissionDenied() {
-    _incrementEventCounter(_agentActionCancelKillPermissionDeniedCounter);
+    _incrementEventCounter(agentActionCancelKillPermissionDeniedCounter);
   }
 
-  @override
   void recordCancelProcessNotActive() {
-    _incrementEventCounter(_agentActionCancelProcessNotActiveCounter);
+    _incrementEventCounter(agentActionCancelProcessNotActiveCounter);
   }
 
-  @override
   void recordCancelProcessIdMismatch() {
-    _incrementEventCounter(_agentActionCancelProcessIdMismatchCounter);
+    _incrementEventCounter(agentActionCancelProcessIdMismatchCounter);
   }
 
-  @override
   void recordCancelProcessIdentityMismatch() {
-    _incrementEventCounter(_agentActionCancelProcessIdentityMismatchCounter);
+    _incrementEventCounter(agentActionCancelProcessIdentityMismatchCounter);
   }
 
-  @override
   void recordCancelProcessIdentityUnavailable() {
-    _incrementEventCounter(_agentActionCancelProcessIdentityUnavailableCounter);
+    _incrementEventCounter(agentActionCancelProcessIdentityUnavailableCounter);
   }
 
-  @override
   void recordCapturedOutputPersisted({
     required bool stdoutCaptured,
     required bool stderrCaptured,
@@ -633,53 +539,27 @@ class MetricsCollector
     int stderrUtf8Bytes = 0,
   }) {
     if (stdoutCaptured && stdoutTruncated) {
-      _incrementEventCounter(_agentActionCapturedStdoutTruncatedCounter);
+      _incrementEventCounter(agentActionCapturedStdoutTruncatedCounter);
     }
     if (stderrCaptured && stderrTruncated) {
-      _incrementEventCounter(_agentActionCapturedStderrTruncatedCounter);
+      _incrementEventCounter(agentActionCapturedStderrTruncatedCounter);
     }
-    _incrementEventCounterBy(_agentActionCapturedStdoutBytesCounter, stdoutUtf8Bytes);
-    _incrementEventCounterBy(_agentActionCapturedStderrBytesCounter, stderrUtf8Bytes);
+    _incrementEventCounterBy(agentActionCapturedStdoutBytesCounter, stdoutUtf8Bytes);
+    _incrementEventCounterBy(agentActionCapturedStderrBytesCounter, stderrUtf8Bytes);
   }
 
-  @override
   void recordCapturedOutputCleared(int executionCount) {
-    _incrementEventCounterBy(_agentActionCapturedOutputClearedCounter, executionCount);
+    _incrementEventCounterBy(agentActionCapturedOutputClearedCounter, executionCount);
   }
 
-  @override
   void recordElevatedStatusFileTerminalRead() {
-    _incrementEventCounter(_agentActionElevatedStatusFileTerminalCounter);
+    _incrementEventCounter(agentActionElevatedStatusFileTerminalCounter);
   }
 
-  @override
   void recordElevatedStatusFileWaitTimeout() {
-    _incrementEventCounter(_agentActionElevatedStatusFileWaitTimeoutCounter);
+    _incrementEventCounter(agentActionElevatedStatusFileWaitTimeoutCounter);
   }
 
-  void recordPoolWaitTime(Duration waitTime) => _recordDurationSample(_poolWaitTimes, waitTime);
-
-  void recordDirectConnectionWaitTime(Duration waitTime) => _recordDurationSample(_directConnectionWaitTimes, waitTime);
-
-  void recordReadOnlyBatchParallelWaitTime(Duration waitTime) =>
-      _recordDurationSample(_readOnlyBatchParallelWaitTimes, waitTime);
-
-  void recordConnectTime(Duration connectTime) => _recordDurationSample(_connectTimes, connectTime);
-
-  void recordSqlExecutionTime(
-    Duration executionTime, {
-    String mode = 'unknown',
-  }) {
-    _recordDurationSample(_sqlExecutionTimes, executionTime);
-    final samples = _sqlExecutionTimesByMode.putIfAbsent(mode, ListQueue<Duration>.new);
-    _recordDurationSample(samples, executionTime);
-    final timestamps = _sqlExecutionTimestampsByMode.putIfAbsent(mode, ListQueue<DateTime>.new);
-    _recordTimestampSample(timestamps, DateTime.now());
-  }
-
-  void recordPreparedPrepareTime(Duration prepareTime) => _recordDurationSample(_preparedPrepareTimes, prepareTime);
-
-  @override
   void recordWorkerStarted(int activeCount) {
     _currentActiveWorkers = activeCount;
     if (activeCount > _maxActiveWorkers) {
@@ -687,12 +567,10 @@ class MetricsCollector
     }
   }
 
-  @override
   void recordWorkerCompleted(int activeCount) {
     _currentActiveWorkers = activeCount;
   }
 
-  @override
   void recordStreamingWorkerHoldTime(Duration holdTime) {
     if (holdTime.isNegative) {
       return;
@@ -700,377 +578,11 @@ class MetricsCollector
     _recordDurationSample(_streamingWorkerHoldTimes, holdTime);
   }
 
-  /// Records ODBC streams that delivered multiple native chunks (batched-first
-  /// path in odbc_fast). Legacy fallback cannot be distinguished from a small
-  /// single-batch result without package-level diagnostics.
-  void recordStreamingBatchedPath() => _incrementEventCounter(_streamingBatchedPathCounter);
-
-  /// Records ODBC streams that completed with exactly one native chunk. This
-  /// may be a small batched result or a legacy fallback after batched start
-  /// failed before the first emit.
-  void recordStreamingSingleChunkPath() => _incrementEventCounter(_streamingSingleChunkPathCounter);
-
-  void recordTimeoutCancelSuccess() => _incrementEventCounter(_timeoutCancelSuccessCounter);
-
-  void recordTimeoutCancelFailure() => _incrementEventCounter(_timeoutCancelFailureCounter);
-
-  void recordTransactionRollbackAttempt() => _incrementEventCounter(_transactionRollbackAttemptCounter);
-
-  void recordTransactionRollbackFailure() => _incrementEventCounter(_transactionRollbackFailureCounter);
-
-  void recordIdempotencyFingerprintMismatch() => _incrementEventCounter(_idempotencyFingerprintMismatchCounter);
-
-  void recordMultiResultPoolVacuousFallback() => _incrementEventCounter(_multiResultPoolVacuousFallbackCounter);
-
-  void recordMultiResultDirectStillVacuous() => _incrementEventCounter(_multiResultDirectStillVacuousCounter);
-
-  void recordTransactionalBatchDirectPath() => _incrementEventCounter(_transactionalBatchDirectPathCounter);
-
-  void recordTransactionalBatchNativePoolPath() => _incrementEventCounter(_transactionalBatchNativePoolPathCounter);
-
-  void recordTransactionalBatchNativePoolFallback() =>
-      _incrementEventCounter(_transactionalBatchNativePoolFallbackCounter);
-
-  void recordBatchBulkInsertRecommended() {
-    _incrementEventCounter(_batchBulkInsertRecommendedCounter);
-    recordDiagnosticReason(
-      category: 'batch',
-      reason: RpcSqlDiagnosticsConstants.batchBulkInsertRecommendedReason,
-    );
-  }
-
-  void recordBatchBulkInsertRouted() {
-    _incrementEventCounter(_batchBulkInsertRoutedCounter);
-    recordDiagnosticReason(
-      category: 'batch',
-      reason: RpcSqlDiagnosticsConstants.batchBulkInsertRoutedReason,
-    );
-  }
-
-  void recordDirectConnectionFallback() => _incrementEventCounter(_directConnectionFallbackCounter);
-
-  void recordOdbcNativePoolFallback() => _incrementEventCounter(_odbcNativePoolFallbackCounter);
-
-  void recordOdbcNativeFallback(String reason) {
-    final normalizedReason = reason.trim().isEmpty ? 'unknown' : reason.trim();
-    _incrementEventCounter(_odbcNativeFallbackTotalCounter);
-    _odbcNativeFallbackReasons[normalizedReason] = (_odbcNativeFallbackReasons[normalizedReason] ?? 0) + 1;
-    recordDiagnosticReason(
-      category: 'odbc_native_fallback',
-      reason: normalizedReason,
-    );
-  }
-
-  void recordOdbcNativeCircuitOpened() {
-    _incrementEventCounter(_odbcNativeCircuitOpenedCounter);
-    recordDiagnosticReason(
-      category: 'odbc_native',
-      reason: 'native_circuit_open',
-    );
-  }
-
-  void recordOdbcBufferExpansion() => _incrementEventCounter(_odbcBufferExpansionCounter);
-
-  void recordOdbcInvalidConnectionRecycle() => _incrementEventCounter(_odbcInvalidConnectionRecycleCounter);
-
-  void recordOdbcNativePoolOptionsSkip() => _incrementEventCounter(_odbcNativePoolOptionsSkipCounter);
-
-  void recordOdbcNativeCompatibleAcquireAttempt() => _incrementEventCounter(_odbcNativeCompatibleAcquireAttemptCounter);
-
-  void recordOdbcNativeCompatibleAcquireSuccess() => _incrementEventCounter(_odbcNativeCompatibleAcquireSuccessCounter);
-
-  void recordReadOnlyBatchNativePoolPath() => _incrementEventCounter(_readOnlyBatchNativePoolPathCounter);
-
-  void recordReadOnlyBatchNativePoolFallback() => _incrementEventCounter(_readOnlyBatchNativePoolFallbackCounter);
-
-  void recordReadOnlyBatchParallel({
-    int? requestedParallelism,
-    int? effectiveParallelism,
-  }) {
-    _incrementEventCounter(_readOnlyBatchParallelCounter);
-    if (requestedParallelism != null) {
-      _readOnlyBatchParallelLastRequested = requestedParallelism;
-    }
-    if (effectiveParallelism != null) {
-      _readOnlyBatchParallelLastEffective = effectiveParallelism;
-    }
-    if (requestedParallelism != null && effectiveParallelism != null && effectiveParallelism < requestedParallelism) {
-      _incrementEventCounter(_readOnlyBatchParallelCappedCounter);
-      recordDiagnosticReason(
-        category: 'batch',
-        reason: RpcSqlDiagnosticsConstants.readOnlyParallelCappedReason,
-      );
-    }
-  }
-
-  void recordDirectConnectionAcquireTimeout() => _incrementEventCounter(_directConnectionAcquireTimeoutCounter);
-
-  void recordDirectConnectionOpened() {
-    _activeDirectConnections++;
-    if (_activeDirectConnections > _maxActiveDirectConnections) {
-      _maxActiveDirectConnections = _activeDirectConnections;
-    }
-    _incrementEventCounter('direct_connection_opened');
-  }
-
-  void recordDirectConnectionClosed() {
-    if (_activeDirectConnections > 0) {
-      _activeDirectConnections--;
-    }
-    _incrementEventCounter('direct_connection_closed');
-  }
-
-  void recordPoolReleaseFailure() => _incrementEventCounter(_poolReleaseFailureCounter);
-
-  void recordPoolDiscardInflightStarted() {
-    _poolDiscardInflight++;
-    _eventCounters[_poolDiscardInflightCounter] = _poolDiscardInflight;
-  }
-
-  void recordPoolDiscardInflightCompleted() {
-    if (_poolDiscardInflight > 0) {
-      _poolDiscardInflight--;
-    }
-    _eventCounters[_poolDiscardInflightCounter] = _poolDiscardInflight;
-  }
-
-  void recordPoolDiscardReconciliationStale() => _incrementEventCounter(_poolDiscardReconciliationStaleCounter);
-
-  void recordPoolDiscardReconciliationRemediated() =>
-      _incrementEventCounter(_poolDiscardReconciliationRemediatedCounter);
-
-  void recordPoolDiscardReconciliationForceRelease() =>
-      _incrementEventCounter(_poolDiscardReconciliationForceReleaseCounter);
-
-  void recordBulkInsertChunked() => _incrementEventCounter(_bulkInsertChunkedCounter);
-
-  void recordBulkInsertParallel() => _incrementEventCounter(_bulkInsertParallelCounter);
-
-  void recordPoolRecycle() => _incrementEventCounter(_poolRecycleCounter);
-
-  void recordPoolRecycleFailure() => _incrementEventCounter(_poolRecycleFailureCounter);
-
-  /// Counts ODBC runtime events forwarded by `OdbcEventBridge` so dashboards
-  /// have a quantitative view of connection/pool/slow-query lifecycle without
-  /// scraping logs.
-  void recordOdbcEventConnectionLost() => _incrementEventCounter(_odbcEventConnectionLostCounter);
-
-  void recordOdbcEventAutoReconnectAttempted() => _incrementEventCounter(_odbcEventAutoReconnectAttemptedCounter);
-
-  void recordOdbcEventWorkerRecovered() => _incrementEventCounter(_odbcEventWorkerRecoveredCounter);
-
-  void recordOdbcEventPoolResize() => _incrementEventCounter(_odbcEventPoolResizeCounter);
-
-  void recordOdbcEventSlowQueryDetected() => _incrementEventCounter(_odbcEventSlowQueryDetectedCounter);
-
-  /// Counts transactional batches that started with the engine-side read-only
-  /// hint (`TransactionAccessMode.readOnly`). Confirms the inference is firing
-  /// in production and lets dashboards correlate read-only batches with
-  /// fewer engine-side locks.
-  void recordTransactionalBatchReadOnlyInference() =>
-      _incrementEventCounter(_transactionalBatchReadOnlyInferenceCounter);
-
-  /// Counts transactional batches that consumed more than 80% of the active
-  /// deadline before completing. High values suggest the batch is at risk of
-  /// timing out and leaving locks while the rollback cleanup runs.
-  void recordTransactionalBatchDeadlineNearStall() =>
-      _incrementEventCounter(_transactionalBatchDeadlineNearStallCounter);
-
-  void recordAuthDecisionCacheHit() => _incrementEventCounter(_authDecisionCacheHitCounter);
-
-  void recordAuthDecisionCacheMiss() => _incrementEventCounter(_authDecisionCacheMissCounter);
-
-  void recordAuthPolicyCacheHit() => _incrementEventCounter(_authPolicyCacheHitCounter);
-
-  void recordAuthPolicyCacheMiss() => _incrementEventCounter(_authPolicyCacheMissCounter);
-
-  void recordRpcSqlExecuteStreamingChunksResponse() =>
-      _incrementEventCounter(_rpcSqlExecuteStreamingChunksResponseCounter);
-
-  void recordRpcSqlExecuteStreamingFromDbResponse() =>
-      _incrementEventCounter(_rpcSqlExecuteStreamingFromDbResponseCounter);
-
-  void recordRpcSqlExecuteAutoStreamingFromDbResponse() {
-    _incrementEventCounter(_rpcSqlExecuteAutoStreamingFromDbResponseCounter);
-    recordDiagnosticReason(
-      category: 'streaming',
-      reason: RpcSqlDiagnosticsConstants.autoDbStreamingReason,
-    );
-  }
-
-  void recordRpcSqlExecutePreferDbStreamingResponse() {
-    _incrementEventCounter(_rpcSqlExecutePreferDbStreamingResponseCounter);
-    recordDiagnosticReason(
-      category: 'streaming',
-      reason: RpcSqlDiagnosticsConstants.preferDbStreamingReason,
-    );
-  }
-
-  void recordRpcSqlExecuteAllowlistDbStreamingResponse() {
-    _incrementEventCounter(_rpcSqlExecuteAllowlistDbStreamingResponseCounter);
-    recordDiagnosticReason(
-      category: 'streaming',
-      reason: RpcSqlDiagnosticsConstants.allowlistDbStreamingReason,
-    );
-  }
-
-  void recordRpcSqlExecuteDbStreamingSkipped(String reason) {
-    _incrementEventCounter(_rpcSqlExecuteDbStreamingSkipCounter);
-    _streamingSkipReasons[reason] = (_streamingSkipReasons[reason] ?? 0) + 1;
-    recordDiagnosticReason(
-      category: 'streaming_skip',
-      reason: reason,
-    );
-  }
-
-  void recordRpcSqlExecuteMaterializedResponse() => _incrementEventCounter(_rpcSqlExecuteMaterializedResponseCounter);
-
-  void recordRpcStreamTerminalCompleteEmitted() => _incrementEventCounter(_rpcStreamTerminalCompleteEmittedCounter);
-
-  void recordRpcStreamTerminalCompleteFailed() => _incrementEventCounter(_rpcStreamTerminalCompleteFailedCounter);
-
-  void recordRpcResponseAckRetry() => _incrementEventCounter(_rpcResponseAckRetryCounter);
-
-  void recordRpcResponseAckDelivered() => _incrementEventCounter(_rpcResponseAckDeliveredCounter);
-
-  void recordRpcResponseAckAbortedConnectionChange() =>
-      _incrementEventCounter(_rpcResponseAckAbortedConnectionChangeCounter);
-
-  void recordRpcResponseAckFallbackWithoutAck() => _incrementEventCounter(_rpcResponseAckFallbackWithoutAckCounter);
-
-  void recordRpcResponseAckSkippedSqlExecute() => _incrementEventCounter(_rpcResponseAckSkippedSqlExecuteCounter);
-
-  void recordRpcResponseAckSkippedSqlExecuteBatch() =>
-      _incrementEventCounter(_rpcResponseAckSkippedSqlExecuteBatchCounter);
-
-  void recordClientTokenGetPolicySuccess() => _incrementEventCounter(_rpcClientTokenGetPolicySuccessCounter);
-
-  void recordClientTokenGetPolicyFailure(Failure failure) {
-    _incrementEventCounter(_rpcClientTokenGetPolicyFailureCounter);
-    final kind = switch (failure) {
-      ValidationFailure _ => _rpcClientTokenGetPolicyFailureValidationCounter,
-      NetworkFailure _ => _rpcClientTokenGetPolicyFailureNetworkCounter,
-      ServerFailure _ => _rpcClientTokenGetPolicyFailureServerCounter,
-      NotFoundFailure _ => _rpcClientTokenGetPolicyFailureNotFoundCounter,
-      ConnectionFailure _ => _rpcClientTokenGetPolicyFailureConnectionCounter,
-      DatabaseFailure _ => _rpcClientTokenGetPolicyFailureDatabaseCounter,
-      ConfigurationFailure _ => _rpcClientTokenGetPolicyFailureConfigurationCounter,
-      QueryExecutionFailure _ => _rpcClientTokenGetPolicyFailureQueryCounter,
-      CompressionFailure _ => _rpcClientTokenGetPolicyFailureCompressionCounter,
-      NotificationFailure _ => _rpcClientTokenGetPolicyFailureNotificationCounter,
-      Failure _ => _rpcClientTokenGetPolicyFailureOtherCounter,
-    };
-    _incrementEventCounter(kind);
-  }
-
-  void recordClientTokenGetPolicyRateLimited() => _incrementEventCounter(_rpcClientTokenGetPolicyRateLimitedCounter);
-
-  void recordRpcAgentActionRemoteOutcome(String rpcMethod, {required bool success}) {
-    if (!AgentActionRpcConstants.remotePublishedRpcMethodNames.contains(rpcMethod)) {
-      return;
-    }
-    final counter = switch ((rpcMethod, success)) {
-      (AgentActionRpcConstants.agentActionRunRpcMethodName, true) => _rpcRemoteAgentActionRunSuccessCounter,
-      (AgentActionRpcConstants.agentActionRunRpcMethodName, false) => _rpcRemoteAgentActionRunErrorCounter,
-      (AgentActionRpcConstants.agentActionValidateRunRpcMethodName, true) =>
-        _rpcRemoteAgentActionValidateRunSuccessCounter,
-      (AgentActionRpcConstants.agentActionValidateRunRpcMethodName, false) =>
-        _rpcRemoteAgentActionValidateRunErrorCounter,
-      (AgentActionRpcConstants.agentActionCancelRpcMethodName, true) => _rpcRemoteAgentActionCancelSuccessCounter,
-      (AgentActionRpcConstants.agentActionCancelRpcMethodName, false) => _rpcRemoteAgentActionCancelErrorCounter,
-      (AgentActionRpcConstants.agentActionGetExecutionRpcMethodName, true) =>
-        _rpcRemoteAgentActionGetExecutionSuccessCounter,
-      (AgentActionRpcConstants.agentActionGetExecutionRpcMethodName, false) =>
-        _rpcRemoteAgentActionGetExecutionErrorCounter,
-      _ => null,
-    };
-    if (counter != null) {
-      _incrementEventCounter(counter);
-    }
-  }
-
-  void recordRpcAgentActionNotificationRejected(String rpcMethod) {
-    if (!AgentActionRpcConstants.remotePublishedRpcMethodNames.contains(rpcMethod)) {
-      return;
-    }
-    final counter = switch (rpcMethod) {
-      AgentActionRpcConstants.agentActionRunRpcMethodName => _rpcRemoteAgentActionRunNotificationRejectedCounter,
-      AgentActionRpcConstants.agentActionValidateRunRpcMethodName =>
-        _rpcRemoteAgentActionValidateRunNotificationRejectedCounter,
-      AgentActionRpcConstants.agentActionCancelRpcMethodName => _rpcRemoteAgentActionCancelNotificationRejectedCounter,
-      AgentActionRpcConstants.agentActionGetExecutionRpcMethodName =>
-        _rpcRemoteAgentActionGetExecutionNotificationRejectedCounter,
-      _ => null,
-    };
-    if (counter != null) {
-      _incrementEventCounter(counter);
-    }
-  }
-
-  void recordRpcAgentActionBatchReadLimitRejected() {
-    _incrementEventCounter(_rpcRemoteAgentActionBatchReadLimitRejectedCounter);
-  }
-
-  void recordRpcMethodConcurrencyLimited(String rpcMethod) {
-    _incrementEventCounter(_rpcMethodConcurrencyLimitedCounter);
-    recordDiagnosticReason(
-      category: 'rpc_method_concurrency_limit',
-      reason: rpcMethod,
-    );
-  }
-
-  void recordSqlStreamCancelled(String reason) {
-    _incrementEventCounter(_rpcSqlStreamCancelledCounter);
-    recordDiagnosticReason(
-      category: 'sql_stream_cancelled',
-      reason: reason,
-    );
-  }
-
-  void recordSqlStreamCancelFailed(String reason) {
-    _incrementEventCounter(_rpcSqlStreamCancelFailedCounter);
-    recordDiagnosticReason(
-      category: 'sql_stream_cancel_failed',
-      reason: reason,
-    );
-  }
-
-  @override
-  void recordSchemaValidation({
-    required String direction,
-    required String schemaId,
-    required bool success,
-    required Duration elapsed,
-  }) {
-    _incrementEventCounter(success ? _schemaValidationSuccessCounter : _schemaValidationFailureCounter);
-    final key = '${direction.trim()}:${schemaId.trim()}';
-    final elapsedUs = elapsed.inMicroseconds;
-    _schemaValidationDurationUs += elapsedUs;
-    _schemaValidationDurationUsByKey[key] = (_schemaValidationDurationUsByKey[key] ?? 0) + elapsedUs;
-    _schemaValidationCountByKey[key] = (_schemaValidationCountByKey[key] ?? 0) + 1;
-    if (!success) {
-      _schemaValidationFailuresByKey[key] = (_schemaValidationFailuresByKey[key] ?? 0) + 1;
-    }
-  }
-
-  @override
-  void recordSchemaValidationSkippedLargePayload({
-    required String direction,
-  }) {
-    _incrementEventCounter(_schemaValidationSkippedLargePayloadCounter);
-    recordDiagnosticReason(
-      category: 'schema_validation_skip',
-      reason: '${direction.trim()}:large_payload',
-    );
-  }
-
-  void recordPoolAcquireTimeout() => _incrementEventCounter(_poolAcquireTimeoutCounter);
-
   void recordSqlQueueWorkersEqualPool({
     required int workers,
     required int poolSize,
   }) {
-    _incrementEventCounter(_sqlQueueWorkersEqualPoolCounter);
+    _incrementEventCounter(sqlQueueWorkersEqualPoolCounter);
     developer.log(
       'SQL queue workers match ODBC pool size',
       name: 'metrics',
@@ -1081,22 +593,6 @@ class MetricsCollector
       },
     );
   }
-
-  void recordConnectTimeout() => _incrementEventCounter(_connectTimeoutCounter);
-
-  void recordQueryTimeout() => _incrementEventCounter(_queryTimeoutCounter);
-
-  void recordOdbcQueryTimeoutByStage(String stage) {
-    final normalizedStage = stage.trim().isEmpty ? 'unknown' : stage.trim();
-    _odbcQueryTimeoutByStage[normalizedStage] = (_odbcQueryTimeoutByStage[normalizedStage] ?? 0) + 1;
-  }
-
-  void recordPreparedStatementReuse() {
-    _incrementEventCounter(_preparedStatementReuseCounter);
-    _incrementEventCounter(_preparedStatementCacheHitCounter);
-  }
-
-  void recordPreparedStatementCacheMiss() => _incrementEventCounter(_preparedStatementCacheMissCounter);
 
   void recordDiagnosticReason({
     required String category,
@@ -1112,103 +608,73 @@ class MetricsCollector
     }
   }
 
-  void recordStreamCancelRequest() => _incrementEventCounter(_streamCancelRequestCounter);
+  void recordAutoUpdateManualCheckStarted() => _incrementEventCounter(autoUpdateManualCheckStartedCounter);
 
-  void recordStreamCancelBackpressure() => _incrementEventCounter(_streamCancelBackpressureCounter);
-
-  void recordStreamCancelDisconnectFailure() => _incrementEventCounter(_streamCancelDisconnectFailureCounter);
-
-  void recordStreamCancelDisconnectTimeout() => _incrementEventCounter(_streamCancelDisconnectTimeoutCounter);
-
-  @override
-  void recordAutoUpdateManualCheckStarted() => _incrementEventCounter(_autoUpdateManualCheckStartedCounter);
-
-  @override
   void recordAutoUpdateManualCheckSuccessAvailable() =>
-      _incrementEventCounter(_autoUpdateManualCheckSuccessAvailableCounter);
+      _incrementEventCounter(autoUpdateManualCheckSuccessAvailableCounter);
 
-  @override
   void recordAutoUpdateManualCheckSuccessNotAvailable() =>
-      _incrementEventCounter(_autoUpdateManualCheckSuccessNotAvailableCounter);
+      _incrementEventCounter(autoUpdateManualCheckSuccessNotAvailableCounter);
 
-  @override
-  void recordAutoUpdateManualCheckUpdaterError() => _incrementEventCounter(_autoUpdateManualCheckUpdaterErrorCounter);
+  void recordAutoUpdateManualCheckUpdaterError() => _incrementEventCounter(autoUpdateManualCheckUpdaterErrorCounter);
 
-  @override
   void recordAutoUpdateManualCheckTriggerTimeout() =>
-      _incrementEventCounter(_autoUpdateManualCheckTriggerTimeoutCounter);
+      _incrementEventCounter(autoUpdateManualCheckTriggerTimeoutCounter);
 
-  @override
   void recordAutoUpdateManualCheckCompletionTimeout() =>
-      _incrementEventCounter(_autoUpdateManualCheckCompletionTimeoutCounter);
+      _incrementEventCounter(autoUpdateManualCheckCompletionTimeoutCounter);
 
-  @override
   void recordAutoUpdateManualCheckTriggerFailure() =>
-      _incrementEventCounter(_autoUpdateManualCheckTriggerFailureCounter);
+      _incrementEventCounter(autoUpdateManualCheckTriggerFailureCounter);
 
-  @override
   void recordAutoUpdateManualCheckNotInitialized() =>
-      _incrementEventCounter(_autoUpdateManualCheckNotInitializedCounter);
+      _incrementEventCounter(autoUpdateManualCheckNotInitializedCounter);
 
-  @override
-  void recordAutoUpdateCircuitOpened() => _incrementEventCounter(_autoUpdateCircuitOpenedCounter);
+  void recordAutoUpdateCircuitOpened() => _incrementEventCounter(autoUpdateCircuitOpenedCounter);
 
-  @override
-  void recordAutoUpdateCircuitOpenRejected() => _incrementEventCounter(_autoUpdateCircuitOpenRejectedCounter);
+  void recordAutoUpdateCircuitOpenRejected() => _incrementEventCounter(autoUpdateCircuitOpenRejectedCounter);
 
-  @override
   void recordAutoUpdateBackgroundCheckTriggerFailure() =>
-      _incrementEventCounter(_autoUpdateBackgroundCheckTriggerFailureCounter);
+      _incrementEventCounter(autoUpdateBackgroundCheckTriggerFailureCounter);
 
-  @override
   void recordAutoUpdateBackgroundCheckUpdaterError() =>
-      _incrementEventCounter(_autoUpdateBackgroundCheckUpdaterErrorCounter);
+      _incrementEventCounter(autoUpdateBackgroundCheckUpdaterErrorCounter);
 
-  @override
   void recordAutoUpdateNotificationsPreferenceEnabled() =>
-      _incrementEventCounter(_autoUpdateNotificationsPreferenceEnabledCounter);
+      _incrementEventCounter(autoUpdateNotificationsPreferenceEnabledCounter);
 
-  @override
   void recordAutoUpdateNotificationsPreferenceDisabled() =>
-      _incrementEventCounter(_autoUpdateNotificationsPreferenceDisabledCounter);
+      _incrementEventCounter(autoUpdateNotificationsPreferenceDisabledCounter);
 
-  @override
   void recordAutoUpdateAutomaticSilentPreferenceEnabled() =>
-      _incrementEventCounter(_autoUpdateAutomaticSilentPreferenceEnabledCounter);
+      _incrementEventCounter(autoUpdateAutomaticSilentPreferenceEnabledCounter);
 
-  @override
   void recordAutoUpdateAutomaticSilentPreferenceDisabled() =>
-      _incrementEventCounter(_autoUpdateAutomaticSilentPreferenceDisabledCounter);
+      _incrementEventCounter(autoUpdateAutomaticSilentPreferenceDisabledCounter);
 
-  @override
   void recordAutoUpdateManualOnlyModeApplied() =>
-      _incrementEventCounter(_autoUpdateManualOnlyModeAppliedCounter);
+      _incrementEventCounter(autoUpdateManualOnlyModeAppliedCounter);
 
   final ListQueue<Duration> _autoUpdateProbeTimes = ListQueue<Duration>();
   final ListQueue<Duration> _autoUpdateDownloadTimes = ListQueue<Duration>();
 
-  @override
   void recordAutoUpdateProbeDuration(Duration duration) {
     if (duration.isNegative) return;
     _recordDurationSample(_autoUpdateProbeTimes, duration);
   }
 
-  @override
   void recordAutoUpdateDownloadDuration(Duration duration) {
     if (duration.isNegative) return;
     _recordDurationSample(_autoUpdateDownloadTimes, duration);
   }
 
-  @override
-  void recordAutoUpdateAwaitingUserConsent() => _incrementEventCounter(_autoUpdateAwaitingUserConsentCounter);
+  void recordAutoUpdateAwaitingUserConsent() => _incrementEventCounter(autoUpdateAwaitingUserConsentCounter);
 
-  @override
   void recordAutoUpdateUserInitiatedApplySuccess() =>
-      _incrementEventCounter(_autoUpdateUserInitiatedApplySuccessCounter);
+      _incrementEventCounter(autoUpdateUserInitiatedApplySuccessCounter);
 
-  @override
   void recordAutoUpdateUserInitiatedApplyFailure() =>
-      _incrementEventCounter(_autoUpdateUserInitiatedApplyFailureCounter);
+      _incrementEventCounter(autoUpdateUserInitiatedApplyFailureCounter);
 
   /// Registra uma metrica de sucesso.
   void recordSuccess({
@@ -1246,7 +712,6 @@ class MetricsCollector
     _addMetric(metric);
   }
 
-  @override
   MetricsSummary getSummary({int limit = 100}) {
     final List<QueryMetrics> recent;
     if (_metrics.length > limit) {
@@ -1310,7 +775,6 @@ class MetricsCollector
   }
 
   /// Gets a snapshot of current metrics for health/monitoring.
-  @override
   Map<String, Object> getSnapshot() {
     final queryMetrics = _metrics.isNotEmpty ? _metrics : <QueryMetrics>[];
     final totalQueries = queryMetrics.length;
@@ -1338,7 +802,7 @@ class MetricsCollector
       'sql_queue_saturation_70_count': sqlQueueSaturation70Count,
       'sql_queue_saturation_90_count': sqlQueueSaturation90Count,
       'sql_queue_workers_equal_pool_count': sqlQueueWorkersEqualPoolCount,
-      'pool_acquire_timeout_count': poolAcquireTimeoutCount,
+      'pool_acquire_timeout_count': _eventCounters[poolAcquireTimeoutCounter] ?? 0,
       'direct_connection_active_count': _activeDirectConnections,
       'direct_connection_max_active_count': _maxActiveDirectConnections,
       'direct_connection_opened': _eventCounters['direct_connection_opened'] ?? 0,

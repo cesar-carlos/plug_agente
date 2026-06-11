@@ -4,7 +4,6 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
@@ -17,6 +16,7 @@ import 'package:plug_agente/presentation/pages/websocket_settings/widgets/auth_s
 import 'package:plug_agente/presentation/pages/websocket_settings/widgets/config_error_feedback.dart';
 import 'package:plug_agente/presentation/pages/websocket_settings/widgets/connection_status_feedback.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
 import 'package:provider/provider.dart';
@@ -38,19 +38,13 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
   late final WebsocketConfigFormController _formController;
   late final FeatureFlags _featureFlags;
   late final PayloadSigningConfig _payloadSigningConfig;
+  var _configDependenciesInitialized = false;
   final ValueNotifier<bool> _isSavingConfig = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
     _formController = WebsocketConfigFormController();
-    _featureFlags = getIt<FeatureFlags>();
-    _payloadSigningConfig = getIt.isRegistered<PayloadSigningConfig>()
-        ? getIt<PayloadSigningConfig>()
-        : PayloadSigningConfig.empty(
-            secureStorageAvailable: false,
-            warnings: const <String>['payload_signing_config_not_registered'],
-          );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -58,6 +52,22 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
       _configProvider = context.read<ConfigProvider>()..addListener(_onConfigStateChanged);
       unawaited(_initializePage());
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_configDependenciesInitialized) {
+      return;
+    }
+    _configDependenciesInitialized = true;
+    _featureFlags = context.read<FeatureFlags>();
+    _payloadSigningConfig =
+        readOptionalPresentationProvider<PayloadSigningConfig>(context) ??
+        PayloadSigningConfig.empty(
+          secureStorageAvailable: false,
+          warnings: const <String>['payload_signing_config_not_registered'],
+        );
   }
 
   @override

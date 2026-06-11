@@ -14,6 +14,31 @@ String buildIdempotencyFingerprintForEnvelope(Map<String, dynamic> envelope) {
   return sha256.convert(utf8.encode(encoded)).toString();
 }
 
+/// Returns a fingerprint only when socket idempotency is enabled and
+/// [idempotencyKey] is present; otherwise `null` (no canonicalization work).
+Future<String?> resolveIdempotencyFingerprintIfEnabled({
+  required bool enabled,
+  required String? idempotencyKey,
+  required String method,
+  required Map<String, dynamic> params,
+  String? runtimeInstanceId,
+  String? runtimeSessionId,
+}) async {
+  if (!enabled) {
+    return null;
+  }
+  final trimmedKey = idempotencyKey?.trim();
+  if (trimmedKey == null || trimmedKey.isEmpty) {
+    return null;
+  }
+  return resolveIdempotencyFingerprint(
+    method,
+    params,
+    runtimeInstanceId: runtimeInstanceId,
+    runtimeSessionId: runtimeSessionId,
+  );
+}
+
 /// Resolves fingerprint on the main isolate or in a worker when [params] are
 /// large enough that canonicalization + JSON + hash would risk UI jank.
 ///

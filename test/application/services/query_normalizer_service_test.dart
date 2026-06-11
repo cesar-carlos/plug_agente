@@ -42,6 +42,41 @@ void main() {
       expect(normalized.data.first.keys.first, startsWith('col_'));
     });
 
+    test('should map multi-result items by result set index', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      const rs0 = QueryResultSet(
+        index: 10,
+        rows: [
+          {'Col A': 'one'},
+        ],
+        rowCount: 1,
+      );
+      const rs1 = QueryResultSet(
+        index: 20,
+        rows: [
+          {'Col B': 'two'},
+        ],
+        rowCount: 1,
+      );
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: rs0.rows,
+        resultSets: const [rs0, rs1],
+        items: const [
+          QueryResponseItem.resultSet(index: 1, resultSet: rs1),
+          QueryResponseItem.resultSet(index: 0, resultSet: rs0),
+        ],
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(response);
+
+      expect(normalized.items[0].resultSet!.rows.first.containsKey('col_b'), isTrue);
+      expect(normalized.items[1].resultSet!.rows.first.containsKey('col_a'), isTrue);
+    });
+
     test('should not double count primary rows when resultSets mirror data', () {
       final rows = <Map<String, dynamic>>[
         <String, dynamic>{'Col': 'value'},

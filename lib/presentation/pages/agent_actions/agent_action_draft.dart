@@ -181,8 +181,9 @@ class AgentActionDraft {
   AgentActionEnvironmentPolicy environmentPolicy() {
     return AgentActionEnvironmentPolicy(
       allowedProfiles: AgentActionDraftParsers.commaSeparatedTokens(executionPolicy.allowedProfiles.text),
-      allowedVariableNames:
-          AgentActionDraftParsers.commaSeparatedTokens(executionPolicy.allowedEnvironmentVariableNames.text),
+      allowedVariableNames: AgentActionDraftParsers.commaSeparatedTokens(
+        executionPolicy.allowedEnvironmentVariableNames.text,
+      ),
       variables: AgentActionDraftParsers.environmentVariables(executionPolicy.environmentVariables.text),
     );
   }
@@ -224,10 +225,12 @@ class AgentActionDraft {
 
   AgentActionPathPolicy pathPolicy() {
     return AgentActionPathPolicy(
-      allowedWorkingDirectories:
-          AgentActionDraftParsers.commaSeparatedTokens(executionPolicy.allowedWorkingDirectories.text),
-      allowedContextDirectories:
-          AgentActionDraftParsers.commaSeparatedTokens(executionPolicy.allowedContextDirectories.text),
+      allowedWorkingDirectories: AgentActionDraftParsers.commaSeparatedTokens(
+        executionPolicy.allowedWorkingDirectories.text,
+      ),
+      allowedContextDirectories: AgentActionDraftParsers.commaSeparatedTokens(
+        executionPolicy.allowedContextDirectories.text,
+      ),
     );
   }
 

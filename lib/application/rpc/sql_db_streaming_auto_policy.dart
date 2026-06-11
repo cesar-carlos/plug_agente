@@ -88,7 +88,7 @@ class SqlDbStreamingAutoPolicy {
     required int effectiveMaxRows,
     required TransportLimits limits,
   }) {
-    return containsExplicitRowLimit(normalizedSql) || effectiveMaxRows <= limits.streamingRowThreshold;
+    return containsExplicitRowLimit(normalizedSql) || effectiveMaxRows < limits.streamingRowThreshold;
   }
 
   bool isDriverAllowed(String driverName) {

@@ -111,9 +111,7 @@ class DeveloperData7ConfigLocator {
       field: 'data7ConfigPath',
       path: AgentActionPathReference(originalPath: candidatePath),
       allowedExtensions: const {'.config'},
-      allowedDirectories: enforceWorkingDirectoryAllowlist
-          ? pathPolicy.allowedWorkingDirectories
-          : const <String>{},
+      allowedDirectories: enforceWorkingDirectoryAllowlist ? pathPolicy.allowedWorkingDirectories : const <String>{},
       phase: phase,
       enforceWorkingDirectoryAllowlist: enforceWorkingDirectoryAllowlist,
       invalidPathReason: AgentActionDeveloperData7Constants.developerData7ConfigInvalidPathReason,

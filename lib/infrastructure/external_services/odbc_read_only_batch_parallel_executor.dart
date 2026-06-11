@@ -19,11 +19,12 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
-typedef ReadOnlyBatchInfrastructureFailureRecorder = void Function({
-  required String originalSql,
-  required String errorMessage,
-  String? rpcRequestId,
-});
+typedef ReadOnlyBatchInfrastructureFailureRecorder =
+    void Function({
+      required String originalSql,
+      required String errorMessage,
+      String? rpcRequestId,
+    });
 
 /// Executes homogeneous read-only SQL batches with a worker pool that reuses a
 /// fixed set of pooled ODBC connections instead of acquiring per command.

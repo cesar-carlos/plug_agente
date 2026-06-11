@@ -92,35 +92,47 @@ class SqlExecuteResultMapper {
     if (response.resultSets.isEmpty) {
       return response;
     }
+
     final newSets = <QueryResultSet>[];
+    final setsByIndex = <int, QueryResultSet>{};
+    var anyTruncated = false;
+
     for (final rs in response.resultSets) {
       final limited = truncateSqlResultRows(rs.rows, maxRows);
-      newSets.add(
-        QueryResultSet(
-          index: rs.index,
-          rows: limited,
-          rowCount: limited.length,
-          affectedRows: rs.affectedRows,
-          columnMetadata: rs.columnMetadata,
-        ),
+      if (limited.length == rs.rows.length) {
+        newSets.add(rs);
+        setsByIndex[rs.index] = rs;
+        continue;
+      }
+      anyTruncated = true;
+      final truncated = QueryResultSet(
+        index: rs.index,
+        rows: limited,
+        rowCount: limited.length,
+        affectedRows: rs.affectedRows,
+        columnMetadata: rs.columnMetadata,
       );
+      newSets.add(truncated);
+      setsByIndex[rs.index] = truncated;
     }
+
+    if (!anyTruncated) {
+      return response;
+    }
+
     final newItems = response.items
         .map((QueryResponseItem item) {
-          if (item.resultSet != null) {
-            final idx = item.resultSet!.index;
-            final match = newSets.firstWhere(
-              (QueryResultSet s) => s.index == idx,
-            );
-            return QueryResponseItem.resultSet(
-              index: item.index,
-              resultSet: match,
-            );
+          if (item.resultSet == null) {
+            return item;
           }
-          return item;
+          final match = setsByIndex[item.resultSet!.index]!;
+          return QueryResponseItem.resultSet(
+            index: item.index,
+            resultSet: match,
+          );
         })
         .toList(growable: false);
-    final primary = newSets.isNotEmpty ? newSets.first : const QueryResultSet(index: 0, rows: [], rowCount: 0);
+    final primary = newSets.first;
     return QueryResponse(
       id: response.id,
       requestId: response.requestId,

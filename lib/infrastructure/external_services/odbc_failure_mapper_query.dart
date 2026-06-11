@@ -300,7 +300,8 @@ class OdbcFailureMapperQuery {
     // configuration/connection concern, not a query the user can fix by editing
     // SQL — so only treat the object-scoped phrasing as a validation error.
     if (normalized.contains('does not exist')) {
-      final isObjectScope = normalized.contains('relation') ||
+      final isObjectScope =
+          normalized.contains('relation') ||
           normalized.contains('table') ||
           normalized.contains('column') ||
           normalized.contains('function') ||

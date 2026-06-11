@@ -493,8 +493,7 @@ class _FailingCleanupInstaller implements ISilentUpdateInstaller {
   }
 
   @override
-  Future<Result<SilentUpdateInstallResult>> install(SilentUpdateInstallRequest request) =>
-      delegate.install(request);
+  Future<Result<SilentUpdateInstallResult>> install(SilentUpdateInstallRequest request) => delegate.install(request);
 
   @override
   Future<Result<void>> launchPreparedHelper(SilentUpdateLaunchRequest request) =>

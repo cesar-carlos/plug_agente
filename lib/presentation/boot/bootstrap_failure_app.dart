@@ -128,6 +128,16 @@ class BootstrapFailureMessageBuilder {
       return AppStrings.bootstrapFailureStorageMessage;
     }
 
+    if (error is StateError) {
+      final message = error.message.toLowerCase();
+      if (message.contains('cannot run application')) {
+        return AppStrings.bootstrapFailureUnsupportedOsMessage;
+      }
+      if (message.contains('odbc initialization failed')) {
+        return AppStrings.bootstrapFailureOdbcMessage;
+      }
+    }
+
     return AppStrings.bootstrapFailureGenericMessage;
   }
 

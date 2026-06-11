@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
+import 'package:plug_agente/application/bootstrap/agent_actions_boot_phases.dart';
 import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
@@ -12,6 +14,7 @@ import 'package:plug_agente/core/runtime/runtime_mode.dart';
 import 'package:plug_agente/core/runtime/windows_version_info.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/presentation/boot/app_initializer.dart';
 import 'package:result_dart/result_dart.dart';
@@ -246,37 +249,87 @@ void main() {
     final initializerSource = File(
       p.join('lib', 'presentation', 'boot', 'app_initializer.dart'),
     ).readAsStringSync();
+    final agentActionsSource = File(
+      p.join('lib', 'application', 'bootstrap', 'agent_actions_boot_phases.dart'),
+    ).readAsStringSync();
 
     expect(initializerSource.contains('PrepareElevatedActionRunner'), isFalse);
     expect(initializerSource.contains('prepareElevatedActionRunner'), isFalse);
-    expect(initializerSource.contains('_refreshElevatedActionRunnerReadiness'), isTrue);
+    expect(agentActionsSource.contains('_refreshElevatedActionRunnerReadiness'), isTrue);
   });
 
-  test('bootstrap source starts automatic update checks only in deferred phases', () {
-    final initializerSource = File(
-      p.join('lib', 'presentation', 'boot', 'app_initializer.dart'),
+  test('deferred bootstrap source starts automatic update checks after agent actions', () {
+    final deferredSource = File(
+      p.join('lib', 'application', 'bootstrap', 'deferred_boot_phase_runner.dart'),
+    ).readAsStringSync();
+    final desktopSource = File(
+      p.join('lib', 'presentation', 'boot', 'desktop_shell_bootstrap.dart'),
     ).readAsStringSync();
 
-    expect(initializerSource.contains('_startAutomaticUpdateChecks'), isTrue);
+    expect(deferredSource.contains('_startAutomaticUpdateChecks'), isTrue);
     expect(
       RegExp(
-        r'Future<void> _runDeferredBootstrapPhases\(\)[\s\S]*_startAutomaticUpdateChecks',
-      ).hasMatch(initializerSource),
+        r'Future<DeferredBootPhaseOutcome> run\(\)[\s\S]*_startAutomaticUpdateChecks',
+      ).hasMatch(deferredSource),
       isTrue,
     );
-
-    final desktopFeaturesStart = initializerSource.indexOf('Future<void> _initializeDesktopFeatures');
-    final nextMethodAfterDesktop = initializerSource.indexOf(
-      'Future<void> _',
-      desktopFeaturesStart + 'Future<void> _initializeDesktopFeatures'.length,
-    );
-    final desktopFeaturesBody = initializerSource.substring(
-      desktopFeaturesStart,
-      nextMethodAfterDesktop,
-    );
-    expect(desktopFeaturesBody.contains('_startAutomaticUpdateChecks'), isFalse);
-    expect(desktopFeaturesBody.contains('startAutomaticChecks'), isFalse);
+    expect(desktopSource.contains('startAutomaticChecks'), isFalse);
   });
+
+  test('runtime guard stays starting until deferred bootstrap when phases are not overridden', () async {
+    final guard = AgentActionRuntimeStateGuard();
+    getIt.registerSingleton<AgentActionRuntimeStateGuard>(guard);
+
+    final initializer = AppInitializer(
+      runtimeProbe: _FakeWindowsRuntimeProbe(
+        result: const Success(
+          WindowsVersionInfo(
+            majorVersion: 10,
+            minorVersion: 0,
+            buildNumber: 26200,
+            isServer: false,
+            productName: 'Windows 11 Pro',
+          ),
+        ),
+      ),
+      setupDependenciesOverride:
+          ({
+            required RuntimeCapabilities capabilities,
+            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+          }) async {},
+      initializeDesktopFeaturesOverride: (capabilities) async {},
+      agentActionsBootPhases: _RecordingAgentActionsBootPhases(
+        onDeferredScheduler: () {
+          expect(guard.snapshot.status, AgentActionSubsystemStatus.starting);
+        },
+      ),
+    );
+
+    final bootstrapData = await initializer.initialize(const <String>[]);
+    expect(guard.snapshot.status, AgentActionSubsystemStatus.starting);
+    expect(bootstrapData.runDeferredBootstrap, isNotNull);
+
+    await bootstrapData.runDeferredBootstrap!();
+    expect(guard.snapshot.status, AgentActionSubsystemStatus.ready);
+  });
+}
+
+class _RecordingAgentActionsBootPhases implements AgentActionsBootPhasesContract {
+  _RecordingAgentActionsBootPhases({this.onDeferredScheduler});
+
+  final void Function()? onDeferredScheduler;
+
+  @override
+  Future<void> runCritical() async {}
+
+  @override
+  Future<void> runDeferredMaintenance() async {}
+
+  @override
+  Future<bool> startSchedulerAndDispatchAppStart() async {
+    onDeferredScheduler?.call();
+    return true;
+  }
 }
 
 class _FakeWindowsRuntimeProbe implements IWindowsRuntimeProbe {

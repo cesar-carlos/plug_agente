@@ -15,15 +15,15 @@ class RetryPolicy {
     required this.triggerTimeout,
     this.jitterFactor = 0,
     Random? random,
-  })  : assert(attemptLimit > 0, 'attemptLimit must be positive'),
-        assert(jitterFactor >= 0 && jitterFactor <= 1, 'jitterFactor must be in [0, 1]'),
-        // Default to `Random.secure()` so the jitter source matches the
-        // rollout bucket selector and a fleet sharing the same boot
-        // moment cannot accidentally synchronise retries because every
-        // agent seeded the cheap `Random()` from the same `DateTime.now()`.
-        // Tests can still inject a deterministic seeded `Random` via
-        // the [random] parameter.
-        _random = random ?? Random.secure();
+  }) : assert(attemptLimit > 0, 'attemptLimit must be positive'),
+       assert(jitterFactor >= 0 && jitterFactor <= 1, 'jitterFactor must be in [0, 1]'),
+       // Default to `Random.secure()` so the jitter source matches the
+       // rollout bucket selector and a fleet sharing the same boot
+       // moment cannot accidentally synchronise retries because every
+       // agent seeded the cheap `Random()` from the same `DateTime.now()`.
+       // Tests can still inject a deterministic seeded `Random` via
+       // the [random] parameter.
+       _random = random ?? Random.secure();
 
   /// Maximum number of attempts (`attempt` runs from 1..[attemptLimit]).
   final int attemptLimit;

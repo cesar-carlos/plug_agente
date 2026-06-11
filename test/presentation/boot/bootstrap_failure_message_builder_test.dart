@@ -23,6 +23,23 @@ void main() {
       expect(message.toLowerCase(), contains('falha durante a inicializacao'));
     });
 
+    test('should return OS guidance when runtime cannot start', () {
+      final message = BootstrapFailureMessageBuilder.userMessage(
+        StateError('Cannot run application: Windows version unsupported'),
+      );
+
+      expect(message.toLowerCase(), contains('requisitos minimos'));
+    });
+
+    test('should return ODBC guidance when ODBC initialization fails', () {
+      final message = BootstrapFailureMessageBuilder.userMessage(
+        StateError('ODBC initialization failed during startup: driver missing'),
+      );
+
+      expect(message.toLowerCase(), contains('odbc'));
+      expect(message.toLowerCase(), contains('driver'));
+    });
+
     test('should append stack trace when available', () {
       final details = BootstrapFailureMessageBuilder.technicalDetails(
         error: const GlobalStorageBootstrapException(

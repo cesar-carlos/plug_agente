@@ -189,8 +189,9 @@ class AgentActionDraftMapper {
     final environment = definition.policies.environment;
     draft.executionPolicy.allowedProfiles.text = environment.allowedProfiles.join(', ');
     draft.executionPolicy.allowedEnvironmentVariableNames.text = environment.allowedVariableNames.join(', ');
-    draft.executionPolicy.environmentVariables.text =
-        AgentActionDraftParsers.formatEnvironmentVariables(environment.variables);
+    draft.executionPolicy.environmentVariables.text = AgentActionDraftParsers.formatEnvironmentVariables(
+      environment.variables,
+    );
 
     draft.executionPolicy.acceptedExitCodes.text = definition.policies.exitCode.acceptedExitCodes.join(', ');
     draft.onAppExit = definition.policies.lifecycle.onAppExit;
@@ -265,8 +266,8 @@ class AgentActionDraftMapper {
           draft.powerShellMode = PowerShellDraftMode.script;
           draft.powerShellExecutable =
               PowerShellCommandLine.isPowerShell7Executable(config.interpreterPath?.originalPath)
-                  ? PowerShellExecutable.powerShell7
-                  : PowerShellExecutable.windowsPowerShell;
+              ? PowerShellExecutable.powerShell7
+              : PowerShellExecutable.windowsPowerShell;
           hooks.setDraftKind(AgentActionDraftKind.powerShell);
         } else {
           hooks.setDraftKind(AgentActionDraftKind.script);

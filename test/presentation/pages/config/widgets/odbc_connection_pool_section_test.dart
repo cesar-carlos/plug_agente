@@ -1,10 +1,13 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
+import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
+import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
+import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
 import '../../../../helpers/mock_odbc_connection_settings.dart';
@@ -62,14 +65,19 @@ void main() {
         ..registerSingleton<IConnectionPool>(_FakeConnectionPool());
 
       await tester.pumpWidget(
-        FluentApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: OdbcConnectionPoolSection(
-            reloadOdbcDependencies: () async {
-              reloadCount++;
-              return true;
-            },
+        MultiProvider(
+          providers: buildPresentationInfrastructureProviders(
+            capabilities: RuntimeCapabilities.full(),
+          ),
+          child: FluentApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: OdbcConnectionPoolSection(
+              reloadOdbcDependencies: () async {
+                reloadCount++;
+                return true;
+              },
+            ),
           ),
         ),
       );

@@ -29,6 +29,7 @@ void main() {
           final content = entity.readAsStringSync();
           final forbiddenImports = <String>[
             'package:plug_agente/infrastructure',
+            'package:plug_agente/presentation',
             'package:odbc_fast/',
             'package:flutter/',
           ];

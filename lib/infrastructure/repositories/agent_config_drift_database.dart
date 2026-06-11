@@ -47,9 +47,7 @@ abstract class AgentConfigDataSource {
     AgentActionCapturedOutputChunkTable,
   ],
 )
-class AppDatabase extends _$AppDatabase
-    with _AppDatabaseMigrationHelpers
-    implements AgentConfigDataSource {
+class AppDatabase extends _$AppDatabase with _AppDatabaseMigrationHelpers implements AgentConfigDataSource {
   AppDatabase({
     QueryExecutor? executor,
     String? databaseFilePath,
@@ -129,8 +127,7 @@ class AppDatabase extends _$AppDatabase
   }
 
   @override
-  Future<void> deleteConfig(String id) =>
-      (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
+  Future<void> deleteConfig(String id) => (delete(configTable)..where((tbl) => tbl.id.equals(id))).go();
 
   void _startWalMaintenance() {
     _walCheckpointTimer?.cancel();

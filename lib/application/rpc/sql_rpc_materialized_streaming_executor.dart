@@ -35,18 +35,17 @@ class SqlRpcMaterializedStreamingExecutor {
     var overflowed = false;
 
     for (var i = 0; i < rows.length && !overflowed; i += limits.streamingChunkSize) {
-      final chunkEnd = i + limits.streamingChunkSize > rows.length
-          ? rows.length
-          : i + limits.streamingChunkSize;
+      final chunkEnd = i + limits.streamingChunkSize > rows.length ? rows.length : i + limits.streamingChunkSize;
       final chunkRows = rows.sublist(i, chunkEnd);
+      final chunkIndex = i ~/ limits.streamingChunkSize;
       if (!await streamEmitter.emitChunk(
         RpcStreamChunk(
           streamId: streamId,
           requestId: request.id,
-          chunkIndex: i ~/ limits.streamingChunkSize,
+          chunkIndex: chunkIndex,
           rows: chunkRows,
           totalChunks: totalChunks,
-          columnMetadata: normalized.columnMetadata,
+          columnMetadata: chunkIndex == 0 ? normalized.columnMetadata : null,
         ),
       )) {
         overflowed = true;

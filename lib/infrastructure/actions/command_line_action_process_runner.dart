@@ -118,10 +118,8 @@ class CommandLineActionProcessRunner implements AgentActionLocalRunner {
       failureMessages: const AgentActionProcessFailureMessages(
         processStartMessage: 'Failed to start command line action process.',
         processRuntimeMessage: 'Command line action process failed before completion.',
-        processStartUserMessage:
-            'Nao foi possivel iniciar o comando. Verifique o comando e o diretorio de trabalho.',
-        processRuntimeUserMessage:
-            'Falha ao executar o comando. Verifique a configuracao da acao e tente novamente.',
+        processStartUserMessage: 'Nao foi possivel iniciar o comando. Verifique o comando e o diretorio de trabalho.',
+        processRuntimeUserMessage: 'Falha ao executar o comando. Verifique a configuracao da acao e tente novamente.',
       ),
     );
   }

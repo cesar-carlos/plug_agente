@@ -35,5 +35,9 @@ abstract final class AgentActionRuntimeStateConstants {
 
   static const String agentActionsDegradedReason = 'agent_actions_degraded';
 
+  static const String deferredBootstrapSchedulerFailedReason = 'deferred_bootstrap_scheduler_failed';
+
+  static const String deferredBootstrapCriticalFailureReason = 'deferred_bootstrap_critical_failure';
+
   static const String subsystemReadyReason = 'ready';
 }

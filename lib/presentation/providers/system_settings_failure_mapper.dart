@@ -26,9 +26,7 @@ class SystemSettingsFailureMapper {
   }
 
   static SystemSettingsErrorState preferenceFailure(Object failure) {
-    final detail = failure is domain.Failure && failure.cause != null
-        ? failure.cause.toString()
-        : failure.toString();
+    final detail = failure is domain.Failure && failure.cause != null ? failure.cause.toString() : failure.toString();
     return SystemSettingsErrorState(
       code: SystemSettingsErrorCode.settingsPersistenceFailed,
       detail: detail,
@@ -51,16 +49,14 @@ class SystemSettingsFailureMapper {
 
     return SystemSettingsNoticeState(
       code: switch (outcome.type) {
-        StartupLaunchConfigurationOutcomeType.repaired =>
-          SystemSettingsNoticeCode.startupLaunchConfigurationRepaired,
+        StartupLaunchConfigurationOutcomeType.repaired => SystemSettingsNoticeCode.startupLaunchConfigurationRepaired,
         StartupLaunchConfigurationOutcomeType.repairFailed =>
           SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
         StartupLaunchConfigurationOutcomeType.needsRepair =>
           SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
         StartupLaunchConfigurationOutcomeType.repairedWithLegacyEntry =>
           SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry,
-        StartupLaunchConfigurationOutcomeType.none =>
-          SystemSettingsNoticeCode.startupLaunchConfigurationReady,
+        StartupLaunchConfigurationOutcomeType.none => SystemSettingsNoticeCode.startupLaunchConfigurationReady,
       },
       startupFailureCode: outcome.startupFailureCode,
     );

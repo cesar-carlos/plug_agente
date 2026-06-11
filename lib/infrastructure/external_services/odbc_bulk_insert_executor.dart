@@ -138,9 +138,11 @@ final class OdbcBulkInsertExecutor {
     try {
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
-        options: _optionsResolver.forTimeout(
-          OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
-        ).toOdbcConnectionOptions(),
+        options: _optionsResolver
+            .forTimeout(
+              OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+            )
+            .toOdbcConnectionOptions(),
       );
       return await connectResult.fold(
         (connection) async {

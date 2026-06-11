@@ -1,4 +1,3 @@
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
@@ -121,9 +120,13 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 25));
         activeExecutions--;
         return const Success(
-          QueryResult(columns: ['v'], rows: [
-            [1],
-          ], rowCount: 1),
+          QueryResult(
+            columns: ['v'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
         );
       });
 
@@ -169,9 +172,13 @@ void main() {
         ),
       ).thenAnswer(
         (_) async => const Success(
-          QueryResult(columns: ['v'], rows: [
-            [1],
-          ], rowCount: 1),
+          QueryResult(
+            columns: ['v'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
         ),
       );
 
@@ -210,9 +217,13 @@ void main() {
       ).thenAnswer((_) async {
         await Future<void>.delayed(const Duration(milliseconds: 80));
         return const Success(
-          QueryResult(columns: ['v'], rows: [
-            [1],
-          ], rowCount: 1),
+          QueryResult(
+            columns: ['v'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
         );
       });
 
@@ -284,9 +295,13 @@ void main() {
         ),
       ).thenAnswer(
         (_) async => const Success(
-          QueryResult(columns: ['v'], rows: [
-            [1],
-          ], rowCount: 1),
+          QueryResult(
+            columns: ['v'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
         ),
       );
 

@@ -172,6 +172,30 @@ void main() {
       expect(ConnectionConstants.rpcSqlExecuteConcurrencySoftLimit, 24);
     });
 
+    test('should default max concurrent rpc handlers from sql soft limit plus headroom', () {
+      expect(
+        ConnectionConstants.maxConcurrentRpcHandlers,
+        ConnectionConstants.rpcSqlExecuteConcurrencySoftLimit +
+            ConnectionConstants.defaultMaxConcurrentRpcHandlersHeadroom,
+      );
+    });
+
+    test('should default playground streaming row cap to 10000', () {
+      expect(
+        ConnectionConstants.playgroundStreamingMaxResultRows,
+        ConnectionConstants.defaultPlaygroundStreamingMaxResultRows,
+      );
+      expect(ConnectionConstants.defaultPlaygroundStreamingMaxResultRows, 10000);
+    });
+
+    test('should honor PLAYGROUND_STREAMING_MAX_RESULT_ROWS override', () {
+      dotenv.loadFromString(envString: 'PLAYGROUND_STREAMING_MAX_RESULT_ROWS=25000');
+
+      expect(ConnectionConstants.playgroundStreamingMaxResultRows, 25000);
+
+      dotenv.clean();
+    });
+
     test('should use SQL_QUEUE_MAX_BATCH_WORKERS override when valid', () {
       dotenv.loadFromString(envString: 'SQL_QUEUE_MAX_BATCH_WORKERS=3');
 
@@ -221,7 +245,8 @@ void main() {
 
     test('should read bulk insert parallel env overrides', () {
       dotenv.loadFromString(
-        envString: 'ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD=25000\n'
+        envString:
+            'ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD=25000\n'
             'ODBC_BULK_INSERT_PARALLEL_ENABLED=false',
       );
       expect(ConnectionConstants.bulkInsertParallelRowThreshold, 25000);

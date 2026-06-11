@@ -111,7 +111,8 @@ void main() {
         metrics: metrics,
         parallelSemaphore: parallelSemaphore,
         uuid: const Uuid(),
-        recordInfrastructureFailure: ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
+        recordInfrastructureFailure:
+            ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
       );
 
       resolveActiveConfigFn = () async => Failure(Exception('no config'));
@@ -133,14 +134,16 @@ void main() {
         resolveActiveConfig: () => resolveActiveConfigFn(),
         buildDatabaseConfig: _buildDatabaseConfig,
         resolveConnectionString: _resolveConnectionString,
-        recordInfrastructureFailure: ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
-        recordExecutionFailure: ({
-          required QueryRequest request,
-          required OdbcPreparedQueryExecution preparedExecution,
-          required String errorMessage,
-          required bool executedInDb,
-          String method = 'sql.execute',
-        }) {},
+        recordInfrastructureFailure:
+            ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
+        recordExecutionFailure:
+            ({
+              required QueryRequest request,
+              required OdbcPreparedQueryExecution preparedExecution,
+              required String errorMessage,
+              required bool executedInDb,
+              String method = 'sql.execute',
+            }) {},
       );
 
       when(() => mockConnectionPool.discard(any())).thenAnswer((_) async {
@@ -809,7 +812,8 @@ OdbcBatchExecutionOrchestrator _createOrchestratorWithPool({
       metrics: metrics,
       parallelSemaphore: parallelSemaphore,
       uuid: const Uuid(),
-      recordInfrastructureFailure: ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
+      recordInfrastructureFailure:
+          ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
     ),
     readOnlyBatchParallelSemaphore: parallelSemaphore,
     uuid: const Uuid(),
@@ -818,14 +822,16 @@ OdbcBatchExecutionOrchestrator _createOrchestratorWithPool({
     resolveActiveConfig: resolveActiveConfig,
     buildDatabaseConfig: _buildDatabaseConfig,
     resolveConnectionString: _resolveConnectionString,
-    recordInfrastructureFailure: ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
-    recordExecutionFailure: ({
-      required QueryRequest request,
-      required OdbcPreparedQueryExecution preparedExecution,
-      required String errorMessage,
-      required bool executedInDb,
-      String method = 'sql.execute',
-    }) {},
+    recordInfrastructureFailure:
+        ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
+    recordExecutionFailure:
+        ({
+          required QueryRequest request,
+          required OdbcPreparedQueryExecution preparedExecution,
+          required String errorMessage,
+          required bool executedInDb,
+          String method = 'sql.execute',
+        }) {},
   );
 }
 

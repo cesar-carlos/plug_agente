@@ -584,8 +584,7 @@ void main() {
     });
 
     test('should stay healthy when only historical sql queue saturation counters are elevated', () {
-      final metrics = MetricsCollector()
-        ..recordQueueSaturation(thresholdPercent: 90, currentSize: 15, maxSize: 16);
+      final metrics = MetricsCollector()..recordQueueSaturation(thresholdPercent: 90, currentSize: 15, maxSize: 16);
       final queue = SqlExecutionQueue(
         maxQueueSize: 16,
         maxConcurrentWorkers: 8,

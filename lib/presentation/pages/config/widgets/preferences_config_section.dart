@@ -293,10 +293,7 @@ String? _startupFailureHint(AppLocalizations l10n, StartupServiceFailureCode? co
     StartupServiceFailureCode.accessDenied => l10n.gsStartupFailureAccessDenied,
     StartupServiceFailureCode.registryDeleteFailed => l10n.gsStartupFailureRegistryDelete,
     StartupServiceFailureCode.registryWriteFailed => l10n.gsStartupFailureRegistryWrite,
-    StartupServiceFailureCode.unknown ||
-    StartupServiceFailureCode.unsupportedPlatform ||
-    null =>
-      null,
+    StartupServiceFailureCode.unknown || StartupServiceFailureCode.unsupportedPlatform || null => null,
   };
 }
 

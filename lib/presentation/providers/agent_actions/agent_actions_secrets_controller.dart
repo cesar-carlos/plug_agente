@@ -31,22 +31,18 @@ class AgentActionsSecretsController {
   String? deletingActionSecretName;
   String? secretOperationErrorMessage;
 
-  bool get isActionSecretStoreAvailable =>
-      _saveAgentActionSecret != null && _deleteAgentActionSecret != null;
+  bool get isActionSecretStoreAvailable => _saveAgentActionSecret != null && _deleteAgentActionSecret != null;
 
-  Set<String> get selectedSecretPlaceholderNames =>
-      selectedSecretReport?.referencedSecretNames ?? const <String>{};
+  Set<String> get selectedSecretPlaceholderNames => selectedSecretReport?.referencedSecretNames ?? const <String>{};
 
-  Set<String> get selectedMissingSecretNames =>
-      selectedSecretReport?.missingSecretNames ?? const <String>{};
+  Set<String> get selectedMissingSecretNames => selectedSecretReport?.missingSecretNames ?? const <String>{};
 
   bool isActionSecretConfigured(String secretName) {
     final report = selectedSecretReport;
     if (report == null) {
       return false;
     }
-    return report.referencedSecretNames.contains(secretName) &&
-        !report.missingSecretNames.contains(secretName);
+    return report.referencedSecretNames.contains(secretName) && !report.missingSecretNames.contains(secretName);
   }
 
   bool isSavingActionSecret(String secretName) => savingActionSecretName == secretName;

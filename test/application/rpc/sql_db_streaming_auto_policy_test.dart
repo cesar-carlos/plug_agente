@@ -113,6 +113,27 @@ void main() {
       );
     });
 
+    test('shouldMaterializeBoundedDbStreaming is false at streaming threshold boundary', () {
+      const limits = TransportLimits();
+      final normalized = policy.normalizeSqlForDbStreaming('SELECT * FROM users');
+      expect(
+        policy.shouldMaterializeBoundedDbStreaming(
+          normalized,
+          effectiveMaxRows: 500,
+          limits: limits,
+        ),
+        isFalse,
+      );
+      expect(
+        policy.shouldMaterializeBoundedDbStreaming(
+          normalized,
+          effectiveMaxRows: 499,
+          limits: limits,
+        ),
+        isTrue,
+      );
+    });
+
     test('tableAllowlist caches parsed values until env or ttl changes', () {
       var envValue = 'orders';
       policy = SqlDbStreamingAutoPolicy(

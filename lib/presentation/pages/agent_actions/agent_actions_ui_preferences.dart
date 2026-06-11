@@ -6,7 +6,7 @@ import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 ///
 /// Using a named key instead of a raw index prevents a persisted index from
 /// landing on the wrong tab when the tab list changes (e.g. when
-/// [AgentActionsProvider.isRemoteAuditSectionVisible] toggles).
+/// the remote audit section visibility toggles).
 enum AgentActionsTab { actions, history, settings, remoteAudit }
 
 /// Keys for persisting Agent Actions UI filters and tab selection in [IAppSettingsStore].

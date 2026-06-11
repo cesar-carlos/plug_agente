@@ -8,9 +8,7 @@ bool isHubSessionAuthFailure(Failure failure) {
     return true;
   }
   final message = failure.message.toLowerCase();
-  return message.contains('jwt expired') ||
-      message.contains('session expired') ||
-      message.contains('unauthorized');
+  return message.contains('jwt expired') || message.contains('session expired') || message.contains('unauthorized');
 }
 
 String hubAuthFailureDisplayMessage(Failure failure, AppLocalizations l10n) {

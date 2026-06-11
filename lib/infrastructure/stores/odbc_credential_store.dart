@@ -140,8 +140,7 @@ class OdbcCredentialStore implements IOdbcCredentialStore {
 
       for (final row in rows) {
         final legacySecrets = row.odbcLegacySecrets;
-        final storedSecrets =
-            storedSecretsById[row.configId] ?? const OdbcCredentialSecrets();
+        final storedSecrets = storedSecretsById[row.configId] ?? const OdbcCredentialSecrets();
         final mergedSecrets = storedSecrets.mergeMissingFrom(legacySecrets);
         if (_needsSecureMigration(storedSecrets, legacySecrets)) {
           await _credentialSecretStore.saveSecrets(row.configId, mergedSecrets);
@@ -202,8 +201,7 @@ class OdbcCredentialStore implements IOdbcCredentialStore {
       return false;
     }
 
-    final needsPassword =
-        _normalize(legacySecrets.password) != null && _normalize(storedSecrets.password) == null;
+    final needsPassword = _normalize(legacySecrets.password) != null && _normalize(storedSecrets.password) == null;
     return needsPassword;
   }
 

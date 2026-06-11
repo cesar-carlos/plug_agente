@@ -42,7 +42,8 @@ class AppContentDialog extends StatelessWidget {
       );
     }
 
-    final dialogConstraints = constraints ??
+    final dialogConstraints =
+        constraints ??
         (maxWidth == null && maxHeight == null
             ? kDefaultContentDialogConstraints
             : BoxConstraints(

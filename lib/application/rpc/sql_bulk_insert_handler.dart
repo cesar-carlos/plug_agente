@@ -58,14 +58,16 @@ class SqlBulkInsertHandler {
     final deadline = DateTime.now().add(_sqlBatchTotalBudgetDuration);
 
     final idempotencyKey = params['idempotency_key'] as String?;
-    final idempotencyFingerprint = await resolveIdempotencyFingerprint(
-      request.method,
-      params,
+    final idempotencyFingerprint = await resolveIdempotencyFingerprintIfEnabled(
+      enabled: _featureFlags.enableSocketIdempotency,
+      idempotencyKey: idempotencyKey,
+      method: request.method,
+      params: params,
     );
     final idempotentEarly = await _support.consumeIdempotentCacheIfAny(
       request,
       idempotencyKey,
-      idempotencyFingerprint,
+      idempotencyFingerprint ?? '',
     );
     if (idempotentEarly != null) {
       return idempotentEarly;
@@ -88,7 +90,8 @@ class SqlBulkInsertHandler {
     return _support.runIdempotentExecution(
       request: request,
       idempotencyKey: idempotencyKey,
-      idempotencyFingerprint: idempotencyFingerprint,
+      idempotencyFingerprint: idempotencyFingerprint ?? '',
+      idempotentCachePrefetched: true,
       execute: () async {
         final startedAt = DateTime.now().toUtc();
         final result = await _odbcBudgetRunner.executeBulkInsert(

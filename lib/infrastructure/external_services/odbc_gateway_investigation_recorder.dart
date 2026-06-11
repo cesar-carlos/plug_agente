@@ -14,8 +14,7 @@ class OdbcGatewayInvestigationRecorder {
   final FeatureFlags? _featureFlags;
   final ISqlInvestigationCollector? _sqlInvestigation;
 
-  bool get _enabled =>
-      _featureFlags?.enableDashboardSqlInvestigationFeed ?? true;
+  bool get _enabled => _featureFlags?.enableDashboardSqlInvestigationFeed ?? true;
 
   void recordExecutionFailure({
     required QueryRequest request,
@@ -33,8 +32,7 @@ class OdbcGatewayInvestigationRecorder {
     }
     final original = request.query;
     final effective = preparedExecution.sql;
-    final effectiveForUi =
-        original.trim() == effective.trim() ? null : effective;
+    final effectiveForUi = original.trim() == effective.trim() ? null : effective;
     inv.recordExecutionFailure(
       method: method,
       originalSql: original,
