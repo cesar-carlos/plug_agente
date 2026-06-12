@@ -2,37 +2,44 @@ part of 'metrics_collector.dart';
 
 /// RPC, streaming, schema validation, and idempotency metrics.
 base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
-  int get idempotencyFingerprintMismatchCount => _eventCounters[MetricsCollectorCore.idempotencyFingerprintMismatchCounter] ?? 0;
+  int get idempotencyFingerprintMismatchCount =>
+      store.counterValue(MetricsCounterNames.idempotencyFingerprintMismatchCounter);
   int get rpcSqlExecuteStreamingChunksResponseCount =>
-      _eventCounters[MetricsCollectorCore.rpcSqlExecuteStreamingChunksResponseCounter] ?? 0;
+      store.counterValue(MetricsCounterNames.rpcSqlExecuteStreamingChunksResponseCounter);
   int get rpcSqlExecuteStreamingFromDbResponseCount =>
-      _eventCounters[MetricsCollectorCore.rpcSqlExecuteStreamingFromDbResponseCounter] ?? 0;
+      store.counterValue(MetricsCounterNames.rpcSqlExecuteStreamingFromDbResponseCounter);
   int get rpcSqlExecuteAutoStreamingFromDbResponseCount =>
-      _eventCounters[MetricsCollectorCore.rpcSqlExecuteAutoStreamingFromDbResponseCounter] ?? 0;
+      store.counterValue(MetricsCounterNames.rpcSqlExecuteAutoStreamingFromDbResponseCounter);
   int get rpcSqlExecuteAllowlistDbStreamingResponseCount =>
-      _eventCounters[MetricsCollectorCore.rpcSqlExecuteAllowlistDbStreamingResponseCounter] ?? 0;
-  int get rpcSqlExecuteMaterializedResponseCount => _eventCounters[MetricsCollectorCore.rpcSqlExecuteMaterializedResponseCounter] ?? 0;
-  int get rpcStreamTerminalCompleteEmittedCount => _eventCounters[MetricsCollectorCore.rpcStreamTerminalCompleteEmittedCounter] ?? 0;
-  int get rpcStreamTerminalCompleteFailedCount => _eventCounters[MetricsCollectorCore.rpcStreamTerminalCompleteFailedCounter] ?? 0;
-  int get rpcResponseAckRetryCount => _eventCounters[MetricsCollectorCore.rpcResponseAckRetryCounter] ?? 0;
-  int get rpcResponseAckDeliveredCount => _eventCounters[MetricsCollectorCore.rpcResponseAckDeliveredCounter] ?? 0;
+      store.counterValue(MetricsCounterNames.rpcSqlExecuteAllowlistDbStreamingResponseCounter);
+  int get rpcSqlExecuteMaterializedResponseCount =>
+      store.counterValue(MetricsCounterNames.rpcSqlExecuteMaterializedResponseCounter);
+  int get rpcStreamTerminalCompleteEmittedCount =>
+      store.counterValue(MetricsCounterNames.rpcStreamTerminalCompleteEmittedCounter);
+  int get rpcStreamTerminalCompleteFailedCount =>
+      store.counterValue(MetricsCounterNames.rpcStreamTerminalCompleteFailedCounter);
+  int get rpcResponseAckRetryCount => store.counterValue(MetricsCounterNames.rpcResponseAckRetryCounter);
+  int get rpcResponseAckDeliveredCount => store.counterValue(MetricsCounterNames.rpcResponseAckDeliveredCounter);
   int get rpcResponseAckAbortedConnectionChangeCount =>
-      _eventCounters[MetricsCollectorCore.rpcResponseAckAbortedConnectionChangeCounter] ?? 0;
-  int get rpcResponseAckFallbackWithoutAckCount => _eventCounters[MetricsCollectorCore.rpcResponseAckFallbackWithoutAckCounter] ?? 0;
-  int get rpcResponseAckSkippedSqlExecuteCount => _eventCounters[MetricsCollectorCore.rpcResponseAckSkippedSqlExecuteCounter] ?? 0;
+      store.counterValue(MetricsCounterNames.rpcResponseAckAbortedConnectionChangeCounter);
+  int get rpcResponseAckFallbackWithoutAckCount =>
+      store.counterValue(MetricsCounterNames.rpcResponseAckFallbackWithoutAckCounter);
+  int get rpcResponseAckSkippedSqlExecuteCount =>
+      store.counterValue(MetricsCounterNames.rpcResponseAckSkippedSqlExecuteCounter);
   int get rpcResponseAckSkippedSqlExecuteBatchCount =>
-      _eventCounters[MetricsCollectorCore.rpcResponseAckSkippedSqlExecuteBatchCounter] ?? 0;
+      store.counterValue(MetricsCounterNames.rpcResponseAckSkippedSqlExecuteBatchCounter);
 
-  void recordIdempotencyFingerprintMismatch() => _incrementEventCounter(MetricsCollectorCore.idempotencyFingerprintMismatchCounter);
+  void recordIdempotencyFingerprintMismatch() =>
+      _incrementEventCounter(MetricsCounterNames.idempotencyFingerprintMismatchCounter);
 
   void recordRpcSqlExecuteStreamingChunksResponse() =>
-      _incrementEventCounter(MetricsCollectorCore.rpcSqlExecuteStreamingChunksResponseCounter);
+      _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteStreamingChunksResponseCounter);
 
   void recordRpcSqlExecuteStreamingFromDbResponse() =>
-      _incrementEventCounter(MetricsCollectorCore.rpcSqlExecuteStreamingFromDbResponseCounter);
+      _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteStreamingFromDbResponseCounter);
 
   void recordRpcSqlExecuteAutoStreamingFromDbResponse() {
-    _incrementEventCounter(MetricsCollectorCore.rpcSqlExecuteAutoStreamingFromDbResponseCounter);
+    _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteAutoStreamingFromDbResponseCounter);
     recordDiagnosticReason(
       category: 'streaming',
       reason: RpcSqlDiagnosticsConstants.autoDbStreamingReason,
@@ -40,7 +47,7 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
   }
 
   void recordRpcSqlExecutePreferDbStreamingResponse() {
-    _incrementEventCounter(MetricsCollectorCore.rpcSqlExecutePreferDbStreamingResponseCounter);
+    _incrementEventCounter(MetricsCounterNames.rpcSqlExecutePreferDbStreamingResponseCounter);
     recordDiagnosticReason(
       category: 'streaming',
       reason: RpcSqlDiagnosticsConstants.preferDbStreamingReason,
@@ -48,7 +55,7 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
   }
 
   void recordRpcSqlExecuteAllowlistDbStreamingResponse() {
-    _incrementEventCounter(MetricsCollectorCore.rpcSqlExecuteAllowlistDbStreamingResponseCounter);
+    _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteAllowlistDbStreamingResponseCounter);
     recordDiagnosticReason(
       category: 'streaming',
       reason: RpcSqlDiagnosticsConstants.allowlistDbStreamingReason,
@@ -56,51 +63,60 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
   }
 
   void recordRpcSqlExecuteDbStreamingSkipped(String reason) {
-    _incrementEventCounter(MetricsCollectorCore.rpcSqlExecuteDbStreamingSkipCounter);
-    _streamingSkipReasons[reason] = (_streamingSkipReasons[reason] ?? 0) + 1;
+    _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteDbStreamingSkipCounter);
+    store.streamingSkipReasons[reason] = (store.streamingSkipReasons[reason] ?? 0) + 1;
     recordDiagnosticReason(
       category: 'streaming_skip',
       reason: reason,
     );
   }
 
-  void recordRpcSqlExecuteMaterializedResponse() => _incrementEventCounter(MetricsCollectorCore.rpcSqlExecuteMaterializedResponseCounter);
+  void recordRpcSqlExecuteMaterializedResponse() =>
+      _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteMaterializedResponseCounter);
 
-  void recordRpcStreamTerminalCompleteEmitted() => _incrementEventCounter(MetricsCollectorCore.rpcStreamTerminalCompleteEmittedCounter);
+  void recordRpcStreamTerminalCompleteEmitted() =>
+      _incrementEventCounter(MetricsCounterNames.rpcStreamTerminalCompleteEmittedCounter);
 
-  void recordRpcStreamTerminalCompleteFailed() => _incrementEventCounter(MetricsCollectorCore.rpcStreamTerminalCompleteFailedCounter);
+  void recordRpcStreamTerminalCompleteFailed() =>
+      _incrementEventCounter(MetricsCounterNames.rpcStreamTerminalCompleteFailedCounter);
 
-  void recordRpcResponseAckRetry() => _incrementEventCounter(MetricsCollectorCore.rpcResponseAckRetryCounter);
+  void recordRpcResponseAckRetry() => _incrementEventCounter(MetricsCounterNames.rpcResponseAckRetryCounter);
 
-  void recordRpcResponseAckDelivered() => _incrementEventCounter(MetricsCollectorCore.rpcResponseAckDeliveredCounter);
+  void recordRpcResponseAckDelivered() => _incrementEventCounter(MetricsCounterNames.rpcResponseAckDeliveredCounter);
 
   void recordRpcResponseAckAbortedConnectionChange() =>
-      _incrementEventCounter(MetricsCollectorCore.rpcResponseAckAbortedConnectionChangeCounter);
+      _incrementEventCounter(MetricsCounterNames.rpcResponseAckAbortedConnectionChangeCounter);
 
-  void recordRpcResponseAckFallbackWithoutAck() => _incrementEventCounter(MetricsCollectorCore.rpcResponseAckFallbackWithoutAckCounter);
+  void recordRpcResponseAckFallbackWithoutAck() =>
+      _incrementEventCounter(MetricsCounterNames.rpcResponseAckFallbackWithoutAckCounter);
 
-  void recordRpcResponseAckSkippedSqlExecute() => _incrementEventCounter(MetricsCollectorCore.rpcResponseAckSkippedSqlExecuteCounter);
+  void recordRpcResponseAckSkippedSqlExecute() =>
+      _incrementEventCounter(MetricsCounterNames.rpcResponseAckSkippedSqlExecuteCounter);
 
   void recordRpcResponseAckSkippedSqlExecuteBatch() =>
-      _incrementEventCounter(MetricsCollectorCore.rpcResponseAckSkippedSqlExecuteBatchCounter);
+      _incrementEventCounter(MetricsCounterNames.rpcResponseAckSkippedSqlExecuteBatchCounter);
 
   void recordRpcAgentActionRemoteOutcome(String rpcMethod, {required bool success}) {
     if (!AgentActionRpcConstants.remotePublishedRpcMethodNames.contains(rpcMethod)) {
       return;
     }
     final counter = switch ((rpcMethod, success)) {
-      (AgentActionRpcConstants.agentActionRunRpcMethodName, true) => MetricsCollectorCore.rpcRemoteAgentActionRunSuccessCounter,
-      (AgentActionRpcConstants.agentActionRunRpcMethodName, false) => MetricsCollectorCore.rpcRemoteAgentActionRunErrorCounter,
+      (AgentActionRpcConstants.agentActionRunRpcMethodName, true) =>
+        MetricsCounterNames.rpcRemoteAgentActionRunSuccessCounter,
+      (AgentActionRpcConstants.agentActionRunRpcMethodName, false) =>
+        MetricsCounterNames.rpcRemoteAgentActionRunErrorCounter,
       (AgentActionRpcConstants.agentActionValidateRunRpcMethodName, true) =>
-        MetricsCollectorCore.rpcRemoteAgentActionValidateRunSuccessCounter,
+        MetricsCounterNames.rpcRemoteAgentActionValidateRunSuccessCounter,
       (AgentActionRpcConstants.agentActionValidateRunRpcMethodName, false) =>
-        MetricsCollectorCore.rpcRemoteAgentActionValidateRunErrorCounter,
-      (AgentActionRpcConstants.agentActionCancelRpcMethodName, true) => MetricsCollectorCore.rpcRemoteAgentActionCancelSuccessCounter,
-      (AgentActionRpcConstants.agentActionCancelRpcMethodName, false) => MetricsCollectorCore.rpcRemoteAgentActionCancelErrorCounter,
+        MetricsCounterNames.rpcRemoteAgentActionValidateRunErrorCounter,
+      (AgentActionRpcConstants.agentActionCancelRpcMethodName, true) =>
+        MetricsCounterNames.rpcRemoteAgentActionCancelSuccessCounter,
+      (AgentActionRpcConstants.agentActionCancelRpcMethodName, false) =>
+        MetricsCounterNames.rpcRemoteAgentActionCancelErrorCounter,
       (AgentActionRpcConstants.agentActionGetExecutionRpcMethodName, true) =>
-        MetricsCollectorCore.rpcRemoteAgentActionGetExecutionSuccessCounter,
+        MetricsCounterNames.rpcRemoteAgentActionGetExecutionSuccessCounter,
       (AgentActionRpcConstants.agentActionGetExecutionRpcMethodName, false) =>
-        MetricsCollectorCore.rpcRemoteAgentActionGetExecutionErrorCounter,
+        MetricsCounterNames.rpcRemoteAgentActionGetExecutionErrorCounter,
       _ => null,
     };
     if (counter != null) {
@@ -113,12 +129,14 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
       return;
     }
     final counter = switch (rpcMethod) {
-      AgentActionRpcConstants.agentActionRunRpcMethodName => MetricsCollectorCore.rpcRemoteAgentActionRunNotificationRejectedCounter,
+      AgentActionRpcConstants.agentActionRunRpcMethodName =>
+        MetricsCounterNames.rpcRemoteAgentActionRunNotificationRejectedCounter,
       AgentActionRpcConstants.agentActionValidateRunRpcMethodName =>
-        MetricsCollectorCore.rpcRemoteAgentActionValidateRunNotificationRejectedCounter,
-      AgentActionRpcConstants.agentActionCancelRpcMethodName => MetricsCollectorCore.rpcRemoteAgentActionCancelNotificationRejectedCounter,
+        MetricsCounterNames.rpcRemoteAgentActionValidateRunNotificationRejectedCounter,
+      AgentActionRpcConstants.agentActionCancelRpcMethodName =>
+        MetricsCounterNames.rpcRemoteAgentActionCancelNotificationRejectedCounter,
       AgentActionRpcConstants.agentActionGetExecutionRpcMethodName =>
-        MetricsCollectorCore.rpcRemoteAgentActionGetExecutionNotificationRejectedCounter,
+        MetricsCounterNames.rpcRemoteAgentActionGetExecutionNotificationRejectedCounter,
       _ => null,
     };
     if (counter != null) {
@@ -127,11 +145,11 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
   }
 
   void recordRpcAgentActionBatchReadLimitRejected() {
-    _incrementEventCounter(MetricsCollectorCore.rpcRemoteAgentActionBatchReadLimitRejectedCounter);
+    _incrementEventCounter(MetricsCounterNames.rpcRemoteAgentActionBatchReadLimitRejectedCounter);
   }
 
   void recordRpcMethodConcurrencyLimited(String rpcMethod) {
-    _incrementEventCounter(MetricsCollectorCore.rpcMethodConcurrencyLimitedCounter);
+    _incrementEventCounter(MetricsCounterNames.rpcMethodConcurrencyLimitedCounter);
     recordDiagnosticReason(
       category: 'rpc_method_concurrency_limit',
       reason: rpcMethod,
@@ -139,7 +157,7 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
   }
 
   void recordSqlStreamCancelled(String reason) {
-    _incrementEventCounter(MetricsCollectorCore.rpcSqlStreamCancelledCounter);
+    _incrementEventCounter(MetricsCounterNames.rpcSqlStreamCancelledCounter);
     recordDiagnosticReason(
       category: 'sql_stream_cancelled',
       reason: reason,
@@ -147,7 +165,7 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
   }
 
   void recordSqlStreamCancelFailed(String reason) {
-    _incrementEventCounter(MetricsCollectorCore.rpcSqlStreamCancelFailedCounter);
+    _incrementEventCounter(MetricsCounterNames.rpcSqlStreamCancelFailedCounter);
     recordDiagnosticReason(
       category: 'sql_stream_cancel_failed',
       reason: reason,
@@ -160,21 +178,23 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
     required bool success,
     required Duration elapsed,
   }) {
-    _incrementEventCounter(success ? MetricsCollectorCore.schemaValidationSuccessCounter : MetricsCollectorCore.schemaValidationFailureCounter);
+    _incrementEventCounter(
+      success ? MetricsCounterNames.schemaValidationSuccessCounter : MetricsCounterNames.schemaValidationFailureCounter,
+    );
     final key = '${direction.trim()}:${schemaId.trim()}';
     final elapsedUs = elapsed.inMicroseconds;
-    _schemaValidationDurationUs += elapsedUs;
-    _schemaValidationDurationUsByKey[key] = (_schemaValidationDurationUsByKey[key] ?? 0) + elapsedUs;
-    _schemaValidationCountByKey[key] = (_schemaValidationCountByKey[key] ?? 0) + 1;
+    store.schemaValidationDurationUs += elapsedUs;
+    store.schemaValidationDurationUsByKey[key] = (store.schemaValidationDurationUsByKey[key] ?? 0) + elapsedUs;
+    store.schemaValidationCountByKey[key] = (store.schemaValidationCountByKey[key] ?? 0) + 1;
     if (!success) {
-      _schemaValidationFailuresByKey[key] = (_schemaValidationFailuresByKey[key] ?? 0) + 1;
+      store.schemaValidationFailuresByKey[key] = (store.schemaValidationFailuresByKey[key] ?? 0) + 1;
     }
   }
 
   void recordSchemaValidationSkippedLargePayload({
     required String direction,
   }) {
-    _incrementEventCounter(MetricsCollectorCore.schemaValidationSkippedLargePayloadCounter);
+    _incrementEventCounter(MetricsCounterNames.schemaValidationSkippedLargePayloadCounter);
     recordDiagnosticReason(
       category: 'schema_validation_skip',
       reason: '${direction.trim()}:large_payload',

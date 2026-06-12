@@ -7,12 +7,12 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_coordinator.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_form_state.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/iana_timezone_id_field.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
-import 'package:uuid/uuid.dart';
-
 abstract final class _AgentActionTriggerDialogKeys {
   static const ValueKey<String> surface = ValueKey<String>('agent_action_trigger_dialog_surface');
   static const ValueKey<String> scroll = ValueKey<String>('agent_action_trigger_dialog_scroll');
@@ -64,121 +64,30 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
   static const double _dialogChromeHeight = 180;
   static const double _twoColumnBreakpoint = 640;
 
-  late final TextEditingController _nameController;
-  late final TextEditingController _timezoneController;
-  late final TextEditingController _startAtController;
-  late final TextEditingController _endAtController;
-  late final TextEditingController _intervalMinutesController;
-  late final TextEditingController _timeOfDayController;
-  late final TextEditingController _dayOfMonthController;
-
-  late AgentActionTriggerType _type;
-  late bool _isEnabled;
-  late bool _ignoreMissedRuns;
-  late Set<int> _weekdays;
-  String? _parseError;
+  late final AgentActionTriggerSaveFormState _formState;
+  late final AgentActionTriggerSaveCoordinator _saveCoordinator;
 
   @override
   void initState() {
     super.initState();
-    final existing = widget.existing;
-    _nameController = TextEditingController(text: existing?.name ?? '');
-    final initialType = existing?.type;
-    final initialSupportsTimezone =
-        initialType == AgentActionTriggerType.daily ||
-        initialType == AgentActionTriggerType.weekly ||
-        initialType == AgentActionTriggerType.monthly;
-    _timezoneController = TextEditingController(
-      text: initialSupportsTimezone ? (existing?.schedule.timezoneId ?? '') : '',
+    _formState = AgentActionTriggerSaveFormState(existing: widget.existing);
+    _saveCoordinator = AgentActionTriggerSaveCoordinator(
+      formState: _formState,
+      provider: widget.provider,
+      l10n: widget.l10n,
+      actionId: widget.actionId,
+      existing: widget.existing,
     );
-    _startAtController = TextEditingController(text: _formatDateTimeForField(existing?.schedule.startAt));
-    _endAtController = TextEditingController(text: _formatDateTimeForField(existing?.schedule.endAt));
-    _intervalMinutesController = TextEditingController(
-      text: existing?.schedule.interval == null ? '' : '${existing!.schedule.interval!.inMinutes}',
-    );
-    _timeOfDayController = TextEditingController(text: _formatTimeOfDay(existing?.schedule.timeOfDayMinutes));
-    _dayOfMonthController = TextEditingController(
-      text: existing?.schedule.dayOfMonth == null ? '' : '${existing!.schedule.dayOfMonth}',
-    );
-    _type = existing?.type ?? AgentActionTriggerType.manual;
-    _isEnabled = existing?.isEnabled ?? true;
-    _ignoreMissedRuns = existing?.schedule.ignoreMissedRuns ?? true;
-    _weekdays = {...?existing?.schedule.weekdays};
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _timezoneController.dispose();
-    _startAtController.dispose();
-    _endAtController.dispose();
-    _intervalMinutesController.dispose();
-    _timeOfDayController.dispose();
-    _dayOfMonthController.dispose();
+    _formState.dispose();
     super.dispose();
   }
 
-  static String _formatDateTimeForField(DateTime? value) {
-    if (value == null) {
-      return '';
-    }
-
-    final local = value.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
-  }
-
-  static String _formatTimeOfDay(int? minutes) {
-    if (minutes == null || minutes < 0 || minutes >= Duration.minutesPerDay) {
-      return '';
-    }
-
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
-  }
-
-  static DateTime? _tryParseLocalDateTime(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    final normalized = trimmed.contains('T') ? trimmed : trimmed.replaceFirst(RegExp(r'\s+'), 'T');
-    return DateTime.tryParse(normalized);
-  }
-
-  static int? _tryParseTimeOfDayMinutes(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    final parts = trimmed.split(':');
-    if (parts.length != 2) {
-      return null;
-    }
-
-    final h = int.tryParse(parts[0].trim());
-    final m = int.tryParse(parts[1].trim());
-    if (h == null || m == null) {
-      return null;
-    }
-
-    if (h < 0 || h > 23 || m < 0 || m > 59) {
-      return null;
-    }
-
-    return h * Duration.minutesPerHour + m;
-  }
-
-  String? _timezoneOrNull() {
-    final trimmed = _timezoneController.text.trim();
-    return trimmed.isEmpty ? null : trimmed;
-  }
-
   Future<void> _onTriggerTypeChanged(AgentActionTriggerType value) async {
-    final previous = _type;
+    final previous = _formState.type;
     if (value == AgentActionTriggerType.appClose && previous != AgentActionTriggerType.appClose) {
       final confirmed = await confirmAppCloseTrigger(
         context: context,
@@ -189,180 +98,11 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       }
     }
 
-    setState(() {
-      final wasTemporal =
-          previous == AgentActionTriggerType.daily ||
-          previous == AgentActionTriggerType.weekly ||
-          previous == AgentActionTriggerType.monthly;
-      final nowTemporal =
-          value == AgentActionTriggerType.daily ||
-          value == AgentActionTriggerType.weekly ||
-          value == AgentActionTriggerType.monthly;
-      if (wasTemporal && !nowTemporal) {
-        _timezoneController.clear();
-      }
-      _type = value;
-    });
-  }
-
-  bool get _supportsMissedRunPolicy {
-    return switch (_type) {
-      AgentActionTriggerType.once ||
-      AgentActionTriggerType.interval ||
-      AgentActionTriggerType.daily ||
-      AgentActionTriggerType.weekly ||
-      AgentActionTriggerType.monthly => true,
-      AgentActionTriggerType.manual ||
-      AgentActionTriggerType.remote ||
-      AgentActionTriggerType.appStart ||
-      AgentActionTriggerType.appClose => false,
-    };
-  }
-
-  AgentActionTrigger? _tryBuildTrigger() {
-    setState(() {
-      _parseError = null;
-    });
-
-    final l10n = widget.l10n;
-    final existing = widget.existing;
-    final id = existing?.id ?? const Uuid().v4();
-    final nameRaw = _nameController.text.trim();
-    final name = nameRaw.isEmpty ? null : nameRaw;
-
-    AgentActionTriggerSchedule schedule;
-    switch (_type) {
-      case AgentActionTriggerType.manual:
-      case AgentActionTriggerType.remote:
-      case AgentActionTriggerType.appStart:
-      case AgentActionTriggerType.appClose:
-        schedule = const AgentActionTriggerSchedule();
-      case AgentActionTriggerType.once:
-        final startAt = _tryParseLocalDateTime(_startAtController.text);
-        if (startAt == null) {
-          setState(() {
-            _parseError = l10n.agentActionsTriggerValidationInvalidStartAt;
-          });
-          return null;
-        }
-
-        final endAtOnce = _tryParseLocalDateTime(_endAtController.text);
-        schedule = AgentActionTriggerSchedule(
-          startAt: startAt,
-          endAt: endAtOnce,
-          ignoreMissedRuns: _ignoreMissedRuns,
-        );
-      case AgentActionTriggerType.interval:
-        final minutes = int.tryParse(_intervalMinutesController.text.trim());
-        if (minutes == null || minutes <= 0) {
-          setState(() {
-            _parseError = l10n.agentActionsTriggerValidationInvalidIntervalMinutes;
-          });
-          return null;
-        }
-
-        final startAtInterval = _tryParseLocalDateTime(_startAtController.text);
-        final endAtInterval = _tryParseLocalDateTime(_endAtController.text);
-        schedule = AgentActionTriggerSchedule(
-          interval: Duration(minutes: minutes),
-          startAt: startAtInterval,
-          endAt: endAtInterval,
-          ignoreMissedRuns: _ignoreMissedRuns,
-        );
-      case AgentActionTriggerType.daily:
-        final timeMinutes = _tryParseTimeOfDayMinutes(_timeOfDayController.text);
-        if (timeMinutes == null) {
-          setState(() {
-            _parseError = l10n.agentActionsTriggerValidationInvalidTimeOfDay;
-          });
-          return null;
-        }
-
-        final startDaily = _tryParseLocalDateTime(_startAtController.text);
-        final endDaily = _tryParseLocalDateTime(_endAtController.text);
-        schedule = AgentActionTriggerSchedule(
-          timeOfDayMinutes: timeMinutes,
-          startAt: startDaily,
-          endAt: endDaily,
-          timezoneId: _timezoneOrNull(),
-          ignoreMissedRuns: _ignoreMissedRuns,
-        );
-      case AgentActionTriggerType.weekly:
-        final timeWeekly = _tryParseTimeOfDayMinutes(_timeOfDayController.text);
-        if (timeWeekly == null) {
-          setState(() {
-            _parseError = l10n.agentActionsTriggerValidationInvalidTimeOfDay;
-          });
-          return null;
-        }
-
-        if (_weekdays.isEmpty || _weekdays.any((int day) => day < 1 || day > 7)) {
-          setState(() {
-            _parseError = l10n.agentActionsTriggerValidationWeekdaysRequired;
-          });
-          return null;
-        }
-
-        final startWeekly = _tryParseLocalDateTime(_startAtController.text);
-        final endWeekly = _tryParseLocalDateTime(_endAtController.text);
-        schedule = AgentActionTriggerSchedule(
-          timeOfDayMinutes: timeWeekly,
-          weekdays: _weekdays,
-          startAt: startWeekly,
-          endAt: endWeekly,
-          timezoneId: _timezoneOrNull(),
-          ignoreMissedRuns: _ignoreMissedRuns,
-        );
-      case AgentActionTriggerType.monthly:
-        final timeMonthly = _tryParseTimeOfDayMinutes(_timeOfDayController.text);
-        if (timeMonthly == null) {
-          setState(() {
-            _parseError = l10n.agentActionsTriggerValidationInvalidTimeOfDay;
-          });
-          return null;
-        }
-
-        final day = int.tryParse(_dayOfMonthController.text.trim());
-        if (day == null || day < 1 || day > 31) {
-          setState(() {
-            _parseError = l10n.agentActionsTriggerValidationInvalidDayOfMonth;
-          });
-          return null;
-        }
-
-        final startMonthly = _tryParseLocalDateTime(_startAtController.text);
-        final endMonthly = _tryParseLocalDateTime(_endAtController.text);
-        schedule = AgentActionTriggerSchedule(
-          timeOfDayMinutes: timeMonthly,
-          dayOfMonth: day,
-          startAt: startMonthly,
-          endAt: endMonthly,
-          timezoneId: _timezoneOrNull(),
-          ignoreMissedRuns: _ignoreMissedRuns,
-        );
-    }
-
-    return AgentActionTrigger(
-      id: id,
-      actionId: widget.actionId,
-      type: _type,
-      name: name,
-      isEnabled: _isEnabled,
-      schedule: schedule,
-      lastScheduledAt: existing?.lastScheduledAt,
-      lastRunAt: existing?.lastRunAt,
-      nextRunAt: existing?.nextRunAt,
-      createdAt: existing?.createdAt,
-    );
+    setState(() => _formState.applyTriggerTypeChange(value, previous: previous));
   }
 
   Future<void> _handleSave() async {
-    final built = _tryBuildTrigger();
-    if (built == null) {
-      return;
-    }
-
-    final ok = await widget.provider.saveTrigger(built);
+    final ok = await _saveCoordinator.save();
     if (!mounted) {
       return;
     }
@@ -429,11 +169,11 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       children.add(field);
     }
 
-    if (_parseError != null) {
+    if (_formState.parseError != null) {
       addField(
         InfoBar(
           title: Text(l10n.agentActionsTriggerValidationTitle),
-          content: Text(_parseError!),
+          content: Text(_formState.parseError!),
           severity: InfoBarSeverity.warning,
         ),
         spacing: 0,
@@ -452,13 +192,11 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
 
     addField(
       Checkbox(
-        checked: _isEnabled,
+        checked: _formState.isEnabled,
         onChanged: provider.isSavingTrigger
             ? null
             : (bool? value) {
-                setState(() {
-                  _isEnabled = value ?? false;
-                });
+                setState(() => _formState.setEnabled(value ?? false));
               },
         content: Text(l10n.agentActionsTriggerEnabled),
       ),
@@ -467,7 +205,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
 
     addField(
       AppTextField(
-        controller: _nameController,
+        controller: _formState.nameController,
         label: l10n.agentActionsTriggerFieldName,
         enabled: !provider.isSavingTrigger,
       ),
@@ -475,7 +213,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
     addField(
       AppDropdown<AgentActionTriggerType>(
         label: l10n.agentActionsTriggerFieldType,
-        value: _type,
+        value: _formState.type,
         items: AgentActionTriggerType.values
             .map(
               (AgentActionTriggerType value) => ComboBoxItem<AgentActionTriggerType>(
@@ -502,19 +240,17 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       useTwoColumns: useTwoColumns,
     ).forEach(addField);
 
-    if (_supportsMissedRunPolicy) {
+    if (_formState.supportsMissedRunPolicy) {
       addField(
         Checkbox(
-          checked: _ignoreMissedRuns,
+          checked: _formState.ignoreMissedRuns,
           onChanged: provider.isSavingTrigger
               ? null
               : (bool? value) {
                   if (value == null) {
                     return;
                   }
-                  setState(() {
-                    _ignoreMissedRuns = value;
-                  });
+                  setState(() => _formState.setIgnoreMissedRuns(value));
                 },
           content: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -548,7 +284,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
     final enabled = !provider.isSavingTrigger;
     final fields = <Widget>[];
 
-    switch (_type) {
+    switch (_formState.type) {
       case AgentActionTriggerType.manual:
       case AgentActionTriggerType.remote:
       case AgentActionTriggerType.appStart:
@@ -559,13 +295,13 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           _fieldPair(
             useTwoColumns: useTwoColumns,
             first: AppTextField(
-              controller: _startAtController,
+              controller: _formState.startAtController,
               label: l10n.agentActionsTriggerFieldStartAt,
               enabled: enabled,
               hint: l10n.agentActionsTriggerHintDateTime,
             ),
             second: AppTextField(
-              controller: _endAtController,
+              controller: _formState.endAtController,
               label: l10n.agentActionsTriggerFieldEndAtOptional,
               enabled: enabled,
               hint: l10n.agentActionsTriggerHintDateTime,
@@ -578,12 +314,12 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             _fieldPair(
               useTwoColumns: useTwoColumns,
               first: AppTextField(
-                controller: _intervalMinutesController,
+                controller: _formState.intervalMinutesController,
                 label: l10n.agentActionsTriggerFieldIntervalMinutes,
                 enabled: enabled,
               ),
               second: AppTextField(
-                controller: _startAtController,
+                controller: _formState.startAtController,
                 label: l10n.agentActionsTriggerFieldStartAtOptional,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintDateTime,
@@ -592,7 +328,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           )
           ..add(
             AppTextField(
-              controller: _endAtController,
+              controller: _formState.endAtController,
               label: l10n.agentActionsTriggerFieldEndAtOptional,
               enabled: enabled,
               hint: l10n.agentActionsTriggerHintDateTime,
@@ -604,13 +340,13 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             _fieldPair(
               useTwoColumns: useTwoColumns,
               first: AppTextField(
-                controller: _timeOfDayController,
+                controller: _formState.timeOfDayController,
                 label: l10n.agentActionsTriggerFieldTimeOfDay,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintTimeOfDay,
               ),
               second: AppTextField(
-                controller: _startAtController,
+                controller: _formState.startAtController,
                 label: l10n.agentActionsTriggerFieldStartAtOptional,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintDateTime,
@@ -619,7 +355,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           )
           ..add(
             AppTextField(
-              controller: _endAtController,
+              controller: _formState.endAtController,
               label: l10n.agentActionsTriggerFieldEndAtOptional,
               enabled: enabled,
               hint: l10n.agentActionsTriggerHintDateTime,
@@ -627,7 +363,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           )
           ..add(
             IanaTimezoneIdField(
-              controller: _timezoneController,
+              controller: _formState.timezoneController,
               enabled: enabled,
               l10n: l10n,
             ),
@@ -638,13 +374,13 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             _fieldPair(
               useTwoColumns: useTwoColumns,
               first: AppTextField(
-                controller: _timeOfDayController,
+                controller: _formState.timeOfDayController,
                 label: l10n.agentActionsTriggerFieldTimeOfDay,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintTimeOfDay,
               ),
               second: AppTextField(
-                controller: _startAtController,
+                controller: _formState.startAtController,
                 label: l10n.agentActionsTriggerFieldStartAtOptional,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintDateTime,
@@ -654,7 +390,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           ..add(_buildWeekdaySelector(l10n, provider))
           ..add(
             AppTextField(
-              controller: _endAtController,
+              controller: _formState.endAtController,
               label: l10n.agentActionsTriggerFieldEndAtOptional,
               enabled: enabled,
               hint: l10n.agentActionsTriggerHintDateTime,
@@ -662,7 +398,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           )
           ..add(
             IanaTimezoneIdField(
-              controller: _timezoneController,
+              controller: _formState.timezoneController,
               enabled: enabled,
               l10n: l10n,
             ),
@@ -673,13 +409,13 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             _fieldPair(
               useTwoColumns: useTwoColumns,
               first: AppTextField(
-                controller: _timeOfDayController,
+                controller: _formState.timeOfDayController,
                 label: l10n.agentActionsTriggerFieldTimeOfDay,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintTimeOfDay,
               ),
               second: AppTextField(
-                controller: _dayOfMonthController,
+                controller: _formState.dayOfMonthController,
                 label: l10n.agentActionsTriggerFieldDayOfMonth,
                 enabled: enabled,
               ),
@@ -689,13 +425,13 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             _fieldPair(
               useTwoColumns: useTwoColumns,
               first: AppTextField(
-                controller: _startAtController,
+                controller: _formState.startAtController,
                 label: l10n.agentActionsTriggerFieldStartAtOptional,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintDateTime,
               ),
               second: AppTextField(
-                controller: _endAtController,
+                controller: _formState.endAtController,
                 label: l10n.agentActionsTriggerFieldEndAtOptional,
                 enabled: enabled,
                 hint: l10n.agentActionsTriggerHintDateTime,
@@ -704,7 +440,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           )
           ..add(
             IanaTimezoneIdField(
-              controller: _timezoneController,
+              controller: _formState.timezoneController,
               enabled: enabled,
               l10n: l10n,
             ),
@@ -726,17 +462,11 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           children: <Widget>[
             for (final int day in const <int>[1, 2, 3, 4, 5, 6, 7])
               Checkbox(
-                checked: _weekdays.contains(day),
+                checked: _formState.weekdays.contains(day),
                 onChanged: provider.isSavingTrigger
                     ? null
                     : (bool? checked) {
-                        setState(() {
-                          if (checked ?? false) {
-                            _weekdays.add(day);
-                          } else {
-                            _weekdays.remove(day);
-                          }
-                        });
+                        setState(() => _formState.toggleWeekday(day, checked ?? false));
                       },
                 content: Text(_weekdayLabel(day, l10n)),
               ),

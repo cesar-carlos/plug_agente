@@ -6,6 +6,22 @@ void _registerRpc(
   required int Function(String key, int fallback) readNonNegativeIntEnv,
 }) {
   getIt
+    ..registerLazySingleton<SqlRpcMethodHandlerOperationsFactory>(
+      () => const SqlRpcMethodHandlerOperationsFactory(),
+    )
+    ..registerLazySingleton<AgentActionRpcMethodHandlerOperationsFactory>(
+      () => const AgentActionRpcMethodHandlerOperationsFactory(),
+    )
+    ..registerLazySingleton<AgentMetadataRpcMethodHandlerOperationsFactory>(
+      () => const AgentMetadataRpcMethodHandlerOperationsFactory(),
+    )
+    ..registerLazySingleton(
+      () => DefaultRpcMethodHandlerOperationsFactory(
+        sqlFactory: getIt<SqlRpcMethodHandlerOperationsFactory>(),
+        agentActionFactory: getIt<AgentActionRpcMethodHandlerOperationsFactory>(),
+        metadataFactory: getIt<AgentMetadataRpcMethodHandlerOperationsFactory>(),
+      ),
+    )
     ..registerLazySingleton<IRpcDispatchMetricsCollector>(
       () => RpcDispatchMetricsCollector(getIt<MetricsCollector>()),
     )
@@ -116,6 +132,7 @@ void _registerRpc(
         agentActionRetentionSettings: getIt<AgentActionRetentionSettings>(),
         loadOpenRpcDocument: getIt<OpenRpcDocumentLoader>().getDocument,
         odbcConnectionSettings: getIt<IOdbcConnectionSettings>(),
+        operationsFactory: getIt<DefaultRpcMethodHandlerOperationsFactory>(),
       ),
     )
     ..registerLazySingleton<IRpcRequestDispatcher>(

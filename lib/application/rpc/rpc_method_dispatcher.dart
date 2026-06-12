@@ -2,6 +2,7 @@ import 'package:plug_agente/application/actions/agent_action_remote_rate_limiter
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/rpc/agent_action_remote_authorization_service.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
+import 'package:plug_agente/application/rpc/factories/default_rpc_method_handler_operations_factory.dart';
 import 'package:plug_agente/application/rpc/handlers/rpc_method_handlers.dart';
 import 'package:plug_agente/application/rpc/rpc_method_concurrency_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_handler.dart';
@@ -91,6 +92,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     RpcMethodConcurrencyLimiter? methodConcurrencyLimiter,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
     IOdbcConnectionSettings? odbcConnectionSettings,
+    DefaultRpcMethodHandlerOperationsFactory? operationsFactory,
   }) : _defaultLimits = defaultLimits,
        _dispatchMetrics = dispatchMetrics,
        _methodConcurrencyLimiter = methodConcurrencyLimiter ?? RpcMethodConcurrencyLimiter.fromEnvironment(),
@@ -141,6 +143,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
       batchExecutionStageBudget: batchExecutionStageBudget,
       sqlStreamingCoordinator: _sqlStreamingCoordinator,
       odbcConnectionSettings: odbcConnectionSettings,
+      operationsFactory: operationsFactory,
     );
     _handlersByMethod = _buildHandlerRegistry(
       handlers ??

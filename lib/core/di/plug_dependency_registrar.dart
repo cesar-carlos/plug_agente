@@ -40,6 +40,10 @@ import 'package:plug_agente/application/repositories/i_update_preferences_reposi
 import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/application/rpc/agent_action_remote_authorization_service.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
+import 'package:plug_agente/application/rpc/factories/agent_action_rpc_method_handler_operations_factory.dart';
+import 'package:plug_agente/application/rpc/factories/agent_metadata_rpc_method_handler_operations_factory.dart';
+import 'package:plug_agente/application/rpc/factories/default_rpc_method_handler_operations_factory.dart';
+import 'package:plug_agente/application/rpc/factories/sql_rpc_method_handler_operations_factory.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
@@ -171,6 +175,7 @@ import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.da
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_policy_resolver.dart';
+import 'package:plug_agente/domain/repositories/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
@@ -206,6 +211,7 @@ import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dar
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
 import 'package:plug_agente/infrastructure/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gateway.dart';

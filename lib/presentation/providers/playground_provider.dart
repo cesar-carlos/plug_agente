@@ -8,11 +8,11 @@ import 'package:plug_agente/application/validation/query_validation_messages.dar
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
+import 'package:plug_agente/presentation/providers/playground_query_controller.dart';
 import 'package:plug_agente/presentation/providers/playground_query_session.dart';
 import 'package:plug_agente/presentation/providers/playground_streaming_session.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -45,143 +45,35 @@ class PlaygroundProvider extends ChangeNotifier {
        _querySession = PlaygroundQuerySession(uiStrings: uiStrings),
        _streamingSession = PlaygroundStreamingSession(
          executeStreamingQuery: executeStreamingQuery,
-       );
+       ) {
+    _queryController = _buildQueryController();
+  }
 
   final ExecutePlaygroundQuery _executePlaygroundQuery;
-  final PlaygroundStreamingSession _streamingSession;
   IPlaygroundDbConnectionGateway _dbConnectionGateway;
+  final PlaygroundStreamingSession _streamingSession;
   PlaygroundUiStrings _ui;
   final PlaygroundQuerySession _querySession;
+  late PlaygroundQueryController _queryController;
+
+  PlaygroundQueryController _buildQueryController() {
+    return PlaygroundQueryController(
+      executePlaygroundQuery: _executePlaygroundQuery,
+      streamingSession: _streamingSession,
+      ui: _ui,
+      dbConnectionGateway: _dbConnectionGateway,
+    );
+  }
 
   void bindDbConnectionGateway(IPlaygroundDbConnectionGateway gateway) {
     _dbConnectionGateway = gateway;
+    _queryController = _buildQueryController();
   }
 
   void bindUiStrings(PlaygroundUiStrings strings) {
     _ui = strings;
     _querySession.bindUiStrings(strings);
-  }
-
-  String _displayExecuteFailure(Object failure) {
-    if (failure is ValidationFailure) {
-      final m = failure.message;
-      if (m == QueryValidationMessages.queryCannotBeEmpty) {
-        return _ui.queryValidationEmpty;
-      }
-      if (m == QueryValidationMessages.connectionStringCannotBeEmpty) {
-        return _ui.queryValidationConnectionStringEmpty;
-      }
-    }
-    return failure.toDisplayMessage();
-  }
-
-  void _notifyDbConnectionIndicator(bool connected) {
-    _dbConnectionGateway.syncConnectionIndicator(connected);
-  }
-
-  static bool _failureIndicatesDbUnreachable(Object failure) {
-    if (failure is ConnectionFailure || failure is DatabaseFailure) {
-      return true;
-    }
-    if (failure is QueryExecutionFailure && failure.context['connectionFailed'] == true) {
-      return true;
-    }
-    return false;
-  }
-
-  void _logValidationExpected(String message) {
-    if (kDebugMode) {
-      AppLogger.info('Playground query validation: $message');
-    } else {
-      AppLogger.debug('Playground query validation: $message');
-    }
-  }
-
-  void _logExecuteQueryFailure(Object failure) {
-    if (failure is ValidationFailure) {
-      _logValidationExpected(failure.toDisplayMessage());
-      return;
-    }
-    AppLogger.error(
-      'Failed to execute query: ${failure.toDisplayMessage()}',
-      failure.toTechnicalMessage(),
-    );
-  }
-
-  void _logStreamingQueryFailure(Object failure) {
-    if (failure is ValidationFailure) {
-      _logValidationExpected(failure.toDisplayMessage());
-      return;
-    }
-    AppLogger.error(
-      'Streaming query failed: ${failure.toDisplayMessage()}',
-      failure.toTechnicalMessage(),
-    );
-  }
-
-  Failure _failureFromQueryResponseError(String errorMessage) {
-    final normalized = errorMessage.toLowerCase();
-    if (normalized.contains('connection') ||
-        normalized.contains('timeout') ||
-        normalized.contains('network') ||
-        normalized.contains('communication link')) {
-      return ConnectionFailure.withContext(
-        message: errorMessage,
-        context: const {'connectionFailed': true},
-      );
-    }
-    return QueryExecutionFailure.withContext(
-      message: errorMessage,
-      context: const {'operation': 'executeQuery'},
-    );
-  }
-
-  void _setExecuteFailure(Object failure) {
-    _error = _displayExecuteFailure(failure);
-    _canRetry = failure is Failure && failure.isTransient;
-    _logExecuteQueryFailure(failure);
-    if (_failureIndicatesDbUnreachable(failure)) {
-      _notifyDbConnectionIndicator(false);
-    }
-  }
-
-  void _rejectEmptyQuery() {
-    _error = _ui.queryValidationEmpty;
-    _canRetry = false;
-    _isLoading = false;
-    _querySession.markExecuted();
-    _querySession.disablePagination();
-    _results = [];
-    _resultSets = [];
-    _executionDuration = null;
-    _affectedRows = null;
-    _columnMetadata = null;
-    _selectedResultSetIndex = 0;
-    _lastExecutionHint = null;
-    _logValidationExpected(QueryValidationMessages.queryCannotBeEmpty);
-    notifyListeners();
-  }
-
-  void _rejectStreamingValidation(String message) {
-    _error = message;
-    _canRetry = false;
-    _isLoading = false;
-    _isStreaming = false;
-    _streamingSession.resetCapState();
-    _querySession.markExecuted();
-    _querySession.disablePagination();
-    _rowsProcessed = 0;
-    _progress = 0;
-    _results = [];
-    _resultSets = [];
-    _executionDuration = null;
-    _affectedRows = null;
-    _columnMetadata = null;
-    _selectedResultSetIndex = 0;
-    _querySession.resetPageForStreaming();
-    _lastExecutionHint = null;
-    _logValidationExpected(message);
-    notifyListeners();
+    _queryController = _buildQueryController();
   }
 
   String _query = '';
@@ -289,75 +181,40 @@ class PlaygroundProvider extends ChangeNotifier {
     _selectedResultSetIndex = 0;
     notifyListeners();
 
-    final stopwatch = Stopwatch()..start();
+    final outcome = await _queryController.executeMaterializedQuery(
+      query: _query,
+      configId: effectiveConfigId,
+      querySession: _querySession,
+      sqlHandlingMode: _sqlHandlingMode,
+    );
+    _isLoading = false;
+    _executionDuration = outcome.duration;
 
-    try {
-      final result = await _executePlaygroundQuery(
-        _query,
-        configId: effectiveConfigId,
-        pagination: QueryPaginationRequest(
-          page: _querySession.currentPage,
-          pageSize: _querySession.pageSize,
-        ),
+    if (outcome.response != null) {
+      final response = outcome.response!;
+      _canRetry = false;
+      _resultSets = response.resultSets;
+      _selectedResultSetIndex = 0;
+      _results = response.data;
+      _affectedRows = response.affectedRows ?? 0;
+      _columnMetadata = selectedResultSet?.columnMetadata ?? response.columnMetadata;
+      _querySession.syncFromResponse(response.pagination);
+      _lastExecutionHint = _querySession.buildLastExecutionHint(
         sqlHandlingMode: _sqlHandlingMode,
+        pagination: response.pagination,
       );
-      stopwatch.stop();
-      _isLoading = false;
-
-      result.fold(
-        (response) {
-          if (response.error != null) {
-            final failure = _failureFromQueryResponseError(response.error!);
-            _setExecuteFailure(failure);
-            _results = [];
-            _resultSets = [];
-            _columnMetadata = null;
-            _querySession.disablePagination();
-            _lastExecutionHint = null;
-          } else {
-            _canRetry = false;
-            _resultSets = response.resultSets;
-            _selectedResultSetIndex = 0;
-            _results = response.data;
-            _affectedRows = response.affectedRows ?? 0;
-            _columnMetadata = selectedResultSet?.columnMetadata ?? response.columnMetadata;
-            _querySession.syncFromResponse(response.pagination);
-            _lastExecutionHint = _querySession.buildLastExecutionHint(
-              sqlHandlingMode: _sqlHandlingMode,
-              pagination: response.pagination,
-            );
-            _notifyDbConnectionIndicator(true);
-          }
-          _executionDuration = stopwatch.elapsed;
-        },
-        (failure) {
-          _setExecuteFailure(failure);
-          _columnMetadata = null;
-          _resultSets = [];
-          _executionDuration = stopwatch.elapsed;
-          _querySession.disablePagination();
-          _lastExecutionHint = null;
-        },
-      );
-    } on Exception catch (error, stackTrace) {
-      stopwatch.stop();
-      _isLoading = false;
-      final failure = ExceptionToFailureExtension(error).toFailure(
-        message: _ui.queryExecuteUnexpectedError,
-        context: {'operation': 'executeQuery'},
-      );
-      _error = failure.toDisplayMessage();
-      _canRetry = failure.isTransient;
+      _queryController.syncDbConnectionIndicator(true);
+    } else if (outcome.failure != null) {
+      _error = outcome.errorMessage;
+      _canRetry = outcome.canRetry;
       _columnMetadata = null;
       _resultSets = [];
-      _executionDuration = stopwatch.elapsed;
       _querySession.disablePagination();
       _lastExecutionHint = null;
-      AppLogger.error(
-        'Query execution threw: ${failure.toDisplayMessage()}',
-        error,
-        stackTrace,
-      );
+      _queryController.logExecuteQueryFailure(outcome.failure!);
+      if (outcome.dbConnected == false) {
+        _queryController.syncDbConnectionIndicator(false);
+      }
     }
 
     notifyListeners();
@@ -369,7 +226,7 @@ class PlaygroundProvider extends ChangeNotifier {
     _isConnectionStatusSuccess = null;
     notifyListeners();
 
-    final result = await _dbConnectionGateway.testConnection(config.connectionString);
+    final result = await _queryController.testConnection(config.connectionString);
 
     result.fold(
       (_) {
@@ -424,82 +281,47 @@ class PlaygroundProvider extends ChangeNotifier {
     _progress = 0.0;
     notifyListeners();
 
-    final stopwatch = Stopwatch()..start();
-
-    try {
-      final result = await _executeStreamingQueryFromSession(
-        query,
-        connectionString,
-      );
-
-      result.fold(
-        (_) {
-          _isStreaming = false;
-          _progress = 1.0;
-          _canRetry = false;
-          if (!_streamingSession.streamingStoppedByCap) {
-            _lastExecutionHint = _querySession.buildStreamingExecutionHint(
-              sqlHandlingMode: _sqlHandlingMode,
-            );
-          }
-          _notifyDbConnectionIndicator(true);
-        },
-        (failure) {
-          _error = _displayExecuteFailure(failure);
-          _canRetry = failure is Failure && failure.isTransient;
-          _isStreaming = false;
-          if (!_streamingSession.streamingStoppedByCap) {
-            _lastExecutionHint = null;
-          }
-          _logStreamingQueryFailure(failure);
-          if (_failureIndicatesDbUnreachable(failure)) {
-            _notifyDbConnectionIndicator(false);
-          }
-        },
-      );
-    } on Exception catch (error, stackTrace) {
-      _isLoading = false;
-      _isStreaming = false;
-      final failure = ExceptionToFailureExtension(error).toFailure(
-        message: _ui.queryStreamingErrorPrefix,
-        context: {'operation': 'executeQueryWithStreaming'},
-      );
-      _error = failure.toDisplayMessage();
-      _canRetry = failure.isTransient;
-      AppLogger.error(
-        'Streaming exception: ${failure.toDisplayMessage()}',
-        error,
-        stackTrace,
-      );
-    } finally {
-      stopwatch.stop();
-      _executionDuration = stopwatch.elapsed;
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<rd.Result<void>> _executeStreamingQueryFromSession(
-    String query,
-    String connectionString,
-  ) {
-    return _streamingSession.executeStreamingQuery(
+    final outcome = await _queryController.executeStreamingQuery(
       query: query,
       connectionString: connectionString,
-      onChunk: (chunk) => _streamingSession.processChunk(
-        chunk: chunk,
-        results: _results,
-        onProgress: (rowsProcessed, progress) {
-          _rowsProcessed = rowsProcessed;
-          _affectedRows = rowsProcessed;
-          _progress = progress;
-        },
-        notifyProgress: notifyListeners,
-        onRowCapReached: (cap) {
-          _lastExecutionHint = _ui.streamingRowCapHint(cap);
-        },
-      ),
+      results: _results,
+      onProgress: (rowsProcessed, progress) {
+        _rowsProcessed = rowsProcessed;
+        _affectedRows = rowsProcessed;
+        _progress = progress;
+      },
+      notifyProgress: notifyListeners,
+      onRowCapReached: (cap) {
+        _lastExecutionHint = _ui.streamingRowCapHint(cap);
+      },
     );
+
+    _executionDuration = outcome.duration;
+    _isLoading = false;
+    _isStreaming = false;
+
+    if (outcome.completed) {
+      _progress = 1.0;
+      _canRetry = false;
+      if (!_streamingSession.streamingStoppedByCap) {
+        _lastExecutionHint = _querySession.buildStreamingExecutionHint(
+          sqlHandlingMode: _sqlHandlingMode,
+        );
+      }
+      _queryController.syncDbConnectionIndicator(true);
+    } else if (outcome.failure != null) {
+      _error = outcome.errorMessage;
+      _canRetry = outcome.canRetry;
+      if (!_streamingSession.streamingStoppedByCap) {
+        _lastExecutionHint = null;
+      }
+      _queryController.logStreamingQueryFailure(outcome.failure!);
+      if (outcome.dbConnected == false) {
+        _queryController.syncDbConnectionIndicator(false);
+      }
+    }
+
+    notifyListeners();
   }
 
   void clearResults() {
@@ -530,7 +352,7 @@ class PlaygroundProvider extends ChangeNotifier {
       unawaited(
         (() async {
           try {
-            await _streamingSession.cancelActiveStream();
+            await _queryController.cancelActiveStream();
           } on Exception catch (e, s) {
             AppLogger.warning(
               'Failed to cancel active stream',
@@ -585,6 +407,44 @@ class PlaygroundProvider extends ChangeNotifier {
     }
     _selectedResultSetIndex = index;
     _columnMetadata = _resultSets[index].columnMetadata;
+    notifyListeners();
+  }
+
+  void _rejectEmptyQuery() {
+    _error = _ui.queryValidationEmpty;
+    _canRetry = false;
+    _isLoading = false;
+    _querySession.markExecuted();
+    _querySession.disablePagination();
+    _results = [];
+    _resultSets = [];
+    _executionDuration = null;
+    _affectedRows = null;
+    _columnMetadata = null;
+    _selectedResultSetIndex = 0;
+    _lastExecutionHint = null;
+    _queryController.logValidationExpected(QueryValidationMessages.queryCannotBeEmpty);
+    notifyListeners();
+  }
+
+  void _rejectStreamingValidation(String message) {
+    _error = message;
+    _canRetry = false;
+    _isLoading = false;
+    _isStreaming = false;
+    _streamingSession.resetCapState();
+    _querySession.markExecuted();
+    _querySession.disablePagination();
+    _rowsProcessed = 0;
+    _progress = 0;
+    _results = [];
+    _resultSets = [];
+    _executionDuration = null;
+    _affectedRows = null;
+    _columnMetadata = null;
+    _selectedResultSetIndex = 0;
+    _lastExecutionHint = null;
+    _queryController.logValidationExpected(message);
     notifyListeners();
   }
 }

@@ -2,41 +2,46 @@ part of 'metrics_collector.dart';
 
 /// Client-token authorization cache and policy metrics.
 base mixin MetricsCollectorAuthDomain on MetricsCollectorCore {
-  int get authDecisionCacheHitCount => _eventCounters[MetricsCollectorCore.authDecisionCacheHitCounter] ?? 0;
-  int get authDecisionCacheMissCount => _eventCounters[MetricsCollectorCore.authDecisionCacheMissCounter] ?? 0;
-  int get authPolicyCacheHitCount => _eventCounters[MetricsCollectorCore.authPolicyCacheHitCounter] ?? 0;
-  int get authPolicyCacheMissCount => _eventCounters[MetricsCollectorCore.authPolicyCacheMissCounter] ?? 0;
-  int get rpcClientTokenGetPolicySuccessCount => _eventCounters[MetricsCollectorCore.rpcClientTokenGetPolicySuccessCounter] ?? 0;
-  int get rpcClientTokenGetPolicyFailureCount => _eventCounters[MetricsCollectorCore.rpcClientTokenGetPolicyFailureCounter] ?? 0;
-  int get rpcClientTokenGetPolicyRateLimitedCount => _eventCounters[MetricsCollectorCore.rpcClientTokenGetPolicyRateLimitedCounter] ?? 0;
+  int get authDecisionCacheHitCount => store.counterValue(MetricsCounterNames.authDecisionCacheHitCounter);
+  int get authDecisionCacheMissCount => store.counterValue(MetricsCounterNames.authDecisionCacheMissCounter);
+  int get authPolicyCacheHitCount => store.counterValue(MetricsCounterNames.authPolicyCacheHitCounter);
+  int get authPolicyCacheMissCount => store.counterValue(MetricsCounterNames.authPolicyCacheMissCounter);
+  int get rpcClientTokenGetPolicySuccessCount =>
+      store.counterValue(MetricsCounterNames.rpcClientTokenGetPolicySuccessCounter);
+  int get rpcClientTokenGetPolicyFailureCount =>
+      store.counterValue(MetricsCounterNames.rpcClientTokenGetPolicyFailureCounter);
+  int get rpcClientTokenGetPolicyRateLimitedCount =>
+      store.counterValue(MetricsCounterNames.rpcClientTokenGetPolicyRateLimitedCounter);
 
-  void recordAuthDecisionCacheHit() => _incrementEventCounter(MetricsCollectorCore.authDecisionCacheHitCounter);
+  void recordAuthDecisionCacheHit() => _incrementEventCounter(MetricsCounterNames.authDecisionCacheHitCounter);
 
-  void recordAuthDecisionCacheMiss() => _incrementEventCounter(MetricsCollectorCore.authDecisionCacheMissCounter);
+  void recordAuthDecisionCacheMiss() => _incrementEventCounter(MetricsCounterNames.authDecisionCacheMissCounter);
 
-  void recordAuthPolicyCacheHit() => _incrementEventCounter(MetricsCollectorCore.authPolicyCacheHitCounter);
+  void recordAuthPolicyCacheHit() => _incrementEventCounter(MetricsCounterNames.authPolicyCacheHitCounter);
 
-  void recordAuthPolicyCacheMiss() => _incrementEventCounter(MetricsCollectorCore.authPolicyCacheMissCounter);
+  void recordAuthPolicyCacheMiss() => _incrementEventCounter(MetricsCounterNames.authPolicyCacheMissCounter);
 
-  void recordClientTokenGetPolicySuccess() => _incrementEventCounter(MetricsCollectorCore.rpcClientTokenGetPolicySuccessCounter);
+  void recordClientTokenGetPolicySuccess() =>
+      _incrementEventCounter(MetricsCounterNames.rpcClientTokenGetPolicySuccessCounter);
 
   void recordClientTokenGetPolicyFailure(Failure failure) {
-    _incrementEventCounter(MetricsCollectorCore.rpcClientTokenGetPolicyFailureCounter);
+    _incrementEventCounter(MetricsCounterNames.rpcClientTokenGetPolicyFailureCounter);
     final kind = switch (failure) {
-      ValidationFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureValidationCounter,
-      NetworkFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureNetworkCounter,
-      ServerFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureServerCounter,
-      NotFoundFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureNotFoundCounter,
-      ConnectionFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureConnectionCounter,
-      DatabaseFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureDatabaseCounter,
-      ConfigurationFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureConfigurationCounter,
-      QueryExecutionFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureQueryCounter,
-      CompressionFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureCompressionCounter,
-      NotificationFailure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureNotificationCounter,
-      Failure _ => MetricsCollectorCore.rpcClientTokenGetPolicyFailureOtherCounter,
+      ValidationFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureValidationCounter,
+      NetworkFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureNetworkCounter,
+      ServerFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureServerCounter,
+      NotFoundFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureNotFoundCounter,
+      ConnectionFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureConnectionCounter,
+      DatabaseFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureDatabaseCounter,
+      ConfigurationFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureConfigurationCounter,
+      QueryExecutionFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureQueryCounter,
+      CompressionFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureCompressionCounter,
+      NotificationFailure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureNotificationCounter,
+      Failure _ => MetricsCounterNames.rpcClientTokenGetPolicyFailureOtherCounter,
     };
     _incrementEventCounter(kind);
   }
 
-  void recordClientTokenGetPolicyRateLimited() => _incrementEventCounter(MetricsCollectorCore.rpcClientTokenGetPolicyRateLimitedCounter);
+  void recordClientTokenGetPolicyRateLimited() =>
+      _incrementEventCounter(MetricsCounterNames.rpcClientTokenGetPolicyRateLimitedCounter);
 }

@@ -21,6 +21,8 @@ void _registerOdbc(
     ..registerLazySingleton<SqlInvestigationCollector>(SqlInvestigationCollector.new)
     ..registerLazySingleton<ISqlInvestigationCollector>(getIt.get<SqlInvestigationCollector>)
     ..registerLazySingleton(MetricsCollector.new)
+    ..registerLazySingleton<SqlExecutionQueueMetricsCollector>(getIt.get<MetricsCollector>)
+    ..registerLazySingleton<IAutoUpdateMetricsCollector>(getIt.get<MetricsCollector>)
     ..registerLazySingleton(
       () => DirectOdbcConnectionLimiter(
         maxConcurrent: ConnectionConstants.directOdbcConnectionConcurrency(
