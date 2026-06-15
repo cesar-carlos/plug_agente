@@ -1,0 +1,42 @@
+{
+  "$schema": "../schema/summary.schema.json",
+  "schema_version": 1,
+  "run_id": "20260615_150418",
+  "captured_at": "2026-06-15T15:04:21-04:00",
+  "git": {
+    "commit_sha": "ae7c2e314fb27e497f477f9e2a23af4b4d6353da",
+    "branch": "main",
+    "dirty": true
+  },
+  "machine": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python_version": "3.13.14"
+  },
+  "env_flags": {
+    "odbc_test_dsn_configured": true,
+    "odbc_driver_family": "SQL Server",
+    "odbc_pool_size": 20,
+    "odbc_async_worker_count": 32,
+    "odbc_async_max_pending_requests": 128,
+    "run_live_api_tests": true
+  },
+  "suites": [
+    {
+      "id": "odbc_streaming",
+      "kind": "dart_odbc_fast",
+      "status": "pass",
+      "wall_ms": 3258.11,
+      "exit_code": 0,
+      "log_file": "odbc_streaming.log",
+      "metrics": {
+        "wall_ms": 3258.1146999727935
+      }
+    }
+  ],
+  "notes": [
+    "Ephemeral run output; compare against benchmarks/baseline/summary.json.",
+    "Legacy benchmark_logs/ format is not schema-compatible with this summary."
+  ]
+}
