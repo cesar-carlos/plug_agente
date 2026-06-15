@@ -809,10 +809,10 @@ packages:
     dependency: "direct main"
     description:
       name: odbc_fast
-      sha256: "90f0187a512a06f2f978673979ffde117c2f949bc72bfd4dbcdbcc5907ddc27e"
+      sha256: c3d98a951534043f63114af5915364afa2fee83796989e26d9cb6f1959b090e0
       url: "https://pub.dev"
     source: hosted
-    version: "3.10.1"
+    version: "4.3.3"
   opentelemetry:
     dependency: transitive
     description:

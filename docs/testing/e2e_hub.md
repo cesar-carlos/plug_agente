@@ -38,7 +38,7 @@ e exige `agent:capabilities` assinado pelo hub:
 ## Preflight: `validate_live_hub_agent_actions_env.dart`
 
 ```bash
-dart run tool/validate_live_hub_agent_actions_env.dart
+dart run tool/e2e/validate_live_hub_agent_actions_env.dart
 ```
 
 Imprime checklist `[ok]`/`[ ]` sem expor segredos.
@@ -69,7 +69,7 @@ Nao coloque o token em logs.
 Se voce desenvolve o monorepo, alinhe a partir de `../plug_server/.env`:
 
 ```bash
-dart run tool/promote_e2e_signing_from_monorepo_env.dart
+dart run tool/e2e/promote_e2e_signing_from_monorepo_env.dart
 ```
 
 ### Hub sem chaves HMAC (dev local)
@@ -77,8 +77,8 @@ dart run tool/promote_e2e_signing_from_monorepo_env.dart
 Gera um par de teste e replica no `plug_server/.env`:
 
 ```bash
-dart run tool/generate_dev_e2e_signing.dart
-dart run tool/generate_dev_e2e_signing.dart --write
+dart run tool/e2e/generate_dev_e2e_signing.dart
+dart run tool/e2e/generate_dev_e2e_signing.dart --write
 ```
 
 Com `--write`, preenche chaves vazias em `plug_agente/.env` e, se existir
@@ -109,21 +109,21 @@ flutter test test/integration/hub_socket_live_e2e_test.dart \
 Alinhe o agent id do register assinado com o agente do token:
 
 ```bash
-dart run tool/suggest_e2e_hub_from_local_config.dart --apply-agent-id
+dart run tool/e2e/suggest_e2e_hub_from_local_config.dart --apply-agent-id
 ```
 
 Se o smoke falhar com `jwt expired`, renove `E2E_HUB_TOKEN` (login no app
 em **Config** ou token do admin do hub):
 
 ```bash
-dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
+dart run tool/e2e/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
 ```
 
 Alternativa sem abrir o app (credenciais de agente no `.env`):
 
 ```bash
 # E2E_HUB_URL, E2E_HUB_AGENT_ID, E2E_HUB_USERNAME, E2E_HUB_PASSWORD
-dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
+dart run tool/e2e/fetch_e2e_hub_token_from_local_config.dart --apply-token --force
 ```
 
 `sync_e2e_hub_env_from_local.dart` passa `--force` automaticamente para
@@ -135,8 +135,8 @@ quando o preflight detecta `e2e-dev` + Hub remoto.
 Se o Plug Agente ja esta configurado na UI:
 
 ```bash
-dart run tool/suggest_e2e_hub_from_local_config.dart
-dart run tool/suggest_e2e_hub_from_local_config.dart --apply-url
+dart run tool/e2e/suggest_e2e_hub_from_local_config.dart
+dart run tool/e2e/suggest_e2e_hub_from_local_config.dart --apply-url
 ```
 
 Le `agent_config.db` em `PlugAgente` e sugere `E2E_HUB_URL` (com `/agents`
@@ -147,20 +147,20 @@ a linha estiver vazia. Indica se ha `auth_token` ou credenciais salvas, mas
 Para preencher `E2E_HUB_TOKEN` automaticamente:
 
 ```bash
-dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token
+dart run tool/e2e/fetch_e2e_hub_token_from_local_config.dart --apply-token
 ```
 
 Atalho (URL + token + validate):
 
 ```bash
-dart run tool/sync_e2e_hub_env_from_local.dart
+dart run tool/e2e/sync_e2e_hub_env_from_local.dart
 ```
 
 `PAYLOAD_SIGNING_KEY_ID` e `PAYLOAD_SIGNING_KEY` ainda precisam vir do hub
 (ou da seccao de signing na UI), exceto export opt-in:
 
 ```bash
-dart run tool/sync_e2e_hub_env_from_local.dart --export-secure
+dart run tool/e2e/sync_e2e_hub_env_from_local.dart --export-secure
 ```
 
 Requer login e signing configurados no app instalado (`plug_agente.exe`,
@@ -193,13 +193,13 @@ flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags liv
 ### Runners PowerShell
 
 ```powershell
-python tool/run_agent_actions_operational_gate.py
-python tool/preflight_agent_actions_production.py
-python tool/preflight_agent_actions_production.py --run-contract-tests
-python tool/homologate_hub_agent_actions.py --run-contract-tests
-python tool/homologate_hub_agent_actions.py --validate-live-env
-python tool/homologate_hub_agent_actions.py --run-contract-tests --run-live-tests
-python tool/homologate_hub_agent_actions.py --prepare-live-env --validate-live-env --run-contract-tests --run-live-tests
+python tool/agent_actions/run_agent_actions_operational_gate.py
+python tool/agent_actions/preflight_agent_actions_production.py
+python tool/agent_actions/preflight_agent_actions_production.py --run-contract-tests
+python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests
+python tool/agent_actions/homologate_hub_agent_actions.py --validate-live-env
+python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests --run-live-tests
+python tool/agent_actions/homologate_hub_agent_actions.py --prepare-live-env --validate-live-env --run-contract-tests --run-live-tests
 ```
 
 - `preflight_agent_actions_production.py` roda checks estaticos de
@@ -207,8 +207,8 @@ python tool/homologate_hub_agent_actions.py --prepare-live-env --validate-live-e
   `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true`). Use `-StrictCom` antes de
   deploy quando `comObject` nao deve depender do stub.
 - `--run-contract-tests` roda o manifesto de contrato
-  (`tool/agent_actions_contract_test_paths.txt`) e o manifesto UI
-  (`tool/agent_actions_ui_test_paths.txt`) sem hub. Validacao dos
+  (`tool/agent_actions/manifests/agent_actions_contract_test_paths.txt`) e o manifesto UI
+  (`tool/agent_actions/manifests/agent_actions_ui_test_paths.txt`) sem hub. Validacao dos
   manifestos: `agent_action_test_manifest_test.dart` e
   `agent_actions_ci_gate_paths_sync_test.dart`.
 - `run_agent_actions_operational_gate.py` encadeia preflight + homologate
@@ -240,6 +240,6 @@ e
 ### PR security checklist por tipo
 
 ```bash
-dart run tool/agent_action_security_gate_checklist.dart
-dart run tool/agent_action_security_gate_checklist.dart commandLine
+dart run tool/agent_actions/agent_action_security_gate_checklist.dart
+dart run tool/agent_actions/agent_action_security_gate_checklist.dart commandLine
 ```

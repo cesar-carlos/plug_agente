@@ -44,7 +44,7 @@ DRIVER={SQL Anywhere 16};UID=dba;PWD=sql;DBN=VL;HOST=localhost:2650
 
 Use the scripts in `tool/`:
 
-- `tool/test_db_cmd.bat` – connectivity test (dbping)
-- `tool/test_select1_cmd.bat` – run `SELECT 1` (dbisql)
+- `tool/fixtures/test_db_cmd.bat` – connectivity test (dbping)
+- `tool/fixtures/test_select1_cmd.bat` – run `SELECT 1` (dbisql)
 
 Edit the variables at the top of each script to match your environment.

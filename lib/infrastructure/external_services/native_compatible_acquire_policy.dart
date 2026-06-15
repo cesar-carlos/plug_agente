@@ -1,3 +1,4 @@
+import 'package:odbc_fast/odbc_fast.dart' show OdbcUsageProfile;
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
@@ -6,6 +7,7 @@ import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/config/odbc_usage_profile_config.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_dsn_native_compatible_timeout_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 
@@ -72,7 +74,11 @@ final class NativeCompatibleAcquirePolicy {
     if (!_adaptivePoolingEnabled) {
       return false;
     }
-    if (acquireOptions != null || request.expectMultipleResults || _hasNamedParameters(preparedExecution)) {
+    if (acquireOptions != null || request.expectMultipleResults) {
+      return false;
+    }
+    if (_hasNamedParameters(preparedExecution) &&
+        !_isSafeParameterizedNativeSelect(databaseType, preparedExecution)) {
       return false;
     }
     if (timeout != null &&
@@ -89,6 +95,8 @@ final class NativeCompatibleAcquirePolicy {
         isExplicitlyLimitedSelect(preparedExecution.sql) ||
         isBoundedAggregateQuery(preparedExecution.sql) ||
         isExistsQuery(preparedExecution.sql) ||
+        _isBalancedServerBoundedSelect(databaseType, preparedExecution.sql) ||
+        _isHighThroughputSqlServerSelect(databaseType, preparedExecution.sql) ||
         _isAllowlistedSql(preparedExecution.sql);
     if (!isSafeResultShape) {
       return false;
@@ -114,7 +122,12 @@ final class NativeCompatibleAcquirePolicy {
       return false;
     }
     for (final command in commands) {
-      if (command.params != null && command.params!.isNotEmpty) {
+      if (command.params != null &&
+          command.params!.isNotEmpty &&
+          !_isSafeParameterizedNativeSelect(
+            databaseType,
+            OdbcPreparedQueryExecution(sql: command.sql, parameters: command.params),
+          )) {
         return false;
       }
     }
@@ -154,6 +167,36 @@ final class NativeCompatibleAcquirePolicy {
     return preparedExecution.parameters?.isNotEmpty ?? false;
   }
 
+  static bool _isSafeParameterizedNativeSelect(
+    DatabaseType databaseType,
+    OdbcPreparedQueryExecution preparedExecution,
+  ) {
+    if (!_isNativeEligibleDialect(databaseType)) {
+      return false;
+    }
+    final sql = preparedExecution.sql;
+    return isProbeQuery(sql) ||
+        isExplicitlyLimitedSelect(sql) ||
+        isBoundedAggregateQuery(sql) ||
+        isExistsQuery(sql) ||
+        _isBalancedServerBoundedSelect(databaseType, sql);
+  }
+
+  static bool _isBalancedServerBoundedSelect(DatabaseType databaseType, String sql) {
+    if (!_isNativeEligibleDialect(databaseType)) {
+      return false;
+    }
+    final normalized = normalizeSql(sql);
+    if (!normalized.startsWith('select ') && !normalized.startsWith('with ')) {
+      return false;
+    }
+    if (hasWildcardProjection(normalized)) {
+      return false;
+    }
+    final limit = _extractExplicitRowLimit(normalized);
+    return limit != null && limit <= 1000;
+  }
+
   static bool isTransactionalDml(String sql) {
     final normalized = normalizeSql(sql);
     final startsWithSupportedDml =
@@ -167,6 +210,24 @@ final class NativeCompatibleAcquirePolicy {
 
     final padded = ' $normalized ';
     return !padded.contains(' output ') && !padded.contains(' returning ');
+  }
+
+  bool _isHighThroughputSqlServerSelect(DatabaseType databaseType, String sql) {
+    if (databaseType != DatabaseType.sqlServer) {
+      return false;
+    }
+    if (resolveOdbcUsageProfile() != OdbcUsageProfile.highThroughput) {
+      return false;
+    }
+    final normalized = normalizeSql(sql);
+    if (!normalized.startsWith('select ') && !normalized.startsWith('with ')) {
+      return false;
+    }
+    if (hasWildcardProjection(normalized)) {
+      return false;
+    }
+    final limit = _extractExplicitRowLimit(normalized);
+    return limit == null || limit <= 1000;
   }
 
   static bool isProbeQuery(String sql) {

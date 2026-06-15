@@ -209,7 +209,7 @@ Use ao revisar PR que toca os componentes abaixo:
   validacao do installer? schema do `status.json` atualizado?
 - [ ] `lib/core/security/*.dart`: cripto/probe alterado? threat model
   atualizado?
-- [ ] `tool/appcast_manager.py`, `tool/appcast_signing.py`: contrato com
+- [ ] `tool/appcast/appcast_manager.py`, `tool/appcast/appcast_signing.py`: contrato com
   o cliente alterado? Round-trip cross-platform ainda passa?
 - [ ] `.github/workflows/*.yml`: novo secret necessario? Documentado no
   runbook (`docs/install/auto_update_setup.md` ou

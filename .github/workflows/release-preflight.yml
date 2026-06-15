@@ -80,7 +80,7 @@ jobs:
 
       - name: Early release preflight
         run: >
-          python tool/release_preflight.py
+          python tool/release/release_preflight.py
           --early --version "${{ env.VERSION_SHORT }}"
           --allow-existing-tag --require-iscc --check-secrets
 
@@ -135,11 +135,11 @@ jobs:
               raise SystemExit(f"rollout_percentage must be from 0 to 100, got {value}")
 
       - name: Verify version synchronization
-        run: python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --allow-existing-tag
+        run: python tool/release/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --allow-existing-tag
 
       - name: Release quality gate
         if: inputs.run_full_tests
-        run: python tool/release_preflight.py --gate --allow-dirty --allow-existing-tag
+        run: python tool/release/release_preflight.py --gate --allow-dirty --allow-existing-tag
 
       - name: Installer contract test
         run: flutter test test/installer/setup_script_test.dart
@@ -172,7 +172,7 @@ jobs:
         env:
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
         run: |
-          python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
+          python tool/release/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
         shell: bash
 
       - name: Smoke native update helper
@@ -215,7 +215,7 @@ jobs:
           # it against the canonical schema to catch contract drift between
           # the C++ helper and the Dart parser.
           $statusFile = Join-Path $env:RUNNER_TEMP "release-preflight\plug_update_helper_invalid_args_status.json"
-          python tool/validate_launcher_status.py "$statusFile"
+          python tool/appcast/validate_launcher_status.py "$statusFile"
 
       - name: Upload preflight artifacts
         if: always()

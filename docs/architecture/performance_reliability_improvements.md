@@ -105,7 +105,7 @@ A aplicacao fica restrita aos caminhos parametrizados que ja usam
 nativos locais:
 
 ```powershell
-dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
+dart run tool/odbc/check_odbc_fast_runtime.dart --require-columnar-compressed
 ```
 
 ## Validacao
@@ -128,13 +128,13 @@ dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
 Ou pelo wrapper local:
 
 ```powershell
-python tool/odbc_async_benchmark.py
+python tool/benchmarks/odbc_async_benchmark.py
 ```
 
 Para validar streaming batched-first do `odbc_fast 3.8.1`:
 
 ```powershell
-python tool/odbc_streaming_benchmark.py
+python tool/benchmarks/odbc_streaming_benchmark.py
 ```
 
 O wrapper usa a query longa configurada para o driver quando
@@ -142,14 +142,14 @@ O wrapper usa a query longa configurada para o driver quando
 Server e PostgreSQL em uma unica rodada, use:
 
 ```powershell
-python tool/odbc_driver_matrix_benchmark.py
+python tool/benchmarks/odbc_driver_matrix_benchmark.py
 ```
 
 No Windows, o fluxo consolidado de validacao operacional pode ser executado via:
 
 ```powershell
-python tool/run_odbc_operational_validation.py
-python tool/run_odbc_operational_validation.py --all
+python tool/odbc/run_odbc_operational_validation.py
+python tool/odbc/run_odbc_operational_validation.py --all
 ```
 
 Tambem rode `RUN_ODBC_BURST_TESTS=true` com DSN representativo e query longa

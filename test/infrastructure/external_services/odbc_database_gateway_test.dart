@@ -88,7 +88,7 @@ void main() {
         ),
       ).thenAnswer((_) async => const Success(9002));
       when(
-        () => mockService.executePrepared(
+        () => mockService.executePreparedParamValuesFromObjects(
           any(),
           any(),
           any(),
@@ -804,7 +804,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         return const Success(pooledConnectionId);
       });
       when(
-        () => mockService.executeQueryParams(
+        () => mockService.executeQueryParamValues(
           pooledConnectionId,
           any(),
           any(),
@@ -829,7 +829,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
 
       expect(result.isSuccess(), isTrue);
       final captured = verify(
-        () => mockService.executeQueryParams(
+        () => mockService.executeQueryParamValues(
           pooledConnectionId,
           captureAny(),
           captureAny(),
@@ -840,7 +840,16 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         captured[0],
         contains('WHERE id = ? OR parent_id = ? OR label = ? OR alias = ?'),
       );
-      expect(captured[1], [42, 42, 'active', 'active']);
+      final params = captured[1] as List<ParamValue>;
+      expect(params.length, 4);
+      expect(params[0], isA<ParamValueInt32>());
+      expect((params[0] as ParamValueInt32).value, 42);
+      expect(params[1], isA<ParamValueInt32>());
+      expect((params[1] as ParamValueInt32).value, 42);
+      expect(params[2], isA<ParamValueString>());
+      expect((params[2] as ParamValueString).value, 'active');
+      expect(params[3], isA<ParamValueString>());
+      expect((params[3] as ParamValueString).value, 'active');
       verifyNever(
         () => mockService.executeQueryNamed(
           any(),
@@ -1699,36 +1708,36 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         return const Success(pooledConnectionId);
       });
       when(
-        () => mockService.executeQueryMultiFull(
+        () => mockService.streamQueryMulti(
           pooledConnectionId,
           any(),
         ),
-      ).thenAnswer((_) async {
-        return const Success(
-          QueryResultMulti(
-            items: [
-              QueryResultMultiItem.resultSet(
-                QueryResult(
-                  columns: ['first_value'],
-                  rows: [
-                    [1],
-                  ],
-                  rowCount: 1,
-                ),
+      ).thenAnswer((_) {
+        return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
+          Success(
+            QueryResultMultiItem.resultSet(
+              QueryResult(
+                columns: ['first_value'],
+                rows: [
+                  [1],
+                ],
+                rowCount: 1,
               ),
-              QueryResultMultiItem.rowCount(3),
-              QueryResultMultiItem.resultSet(
-                QueryResult(
-                  columns: ['second_value'],
-                  rows: [
-                    [2],
-                  ],
-                  rowCount: 1,
-                ),
-              ),
-            ],
+            ),
           ),
-        );
+          Success(QueryResultMultiItem.rowCount(3)),
+          Success(
+            QueryResultMultiItem.resultSet(
+              QueryResult(
+                columns: ['second_value'],
+                rows: [
+                  [2],
+                ],
+                rowCount: 1,
+              ),
+            ),
+          ),
+        ]);
       });
       when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
         _,
@@ -1748,7 +1757,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         {'name': 'first_value'},
       ]);
       verify(
-        () => mockService.executeQueryMultiFull(
+        () => mockService.streamQueryMulti(
           pooledConnectionId,
           request.query,
         ),
@@ -1783,13 +1792,11 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQueryMultiFull(
+          () => mockService.streamQueryMulti(
             pooledConnectionId,
             any(),
           ),
-        ).thenAnswer((_) async {
-          return const Success(QueryResultMulti(items: []));
-        });
+        ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
         ).thenAnswer((_) async {
@@ -1803,35 +1810,35 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           );
         });
         when(
-          () => mockService.executeQueryMultiFull(
+          () => mockService.streamQueryMulti(
             directConnectionId,
             any(),
           ),
-        ).thenAnswer((_) async {
-          return const Success(
-            QueryResultMulti(
-              items: [
-                QueryResultMultiItem.resultSet(
-                  QueryResult(
-                    columns: ['a'],
-                    rows: [
-                      [1],
-                    ],
-                    rowCount: 1,
-                  ),
+        ).thenAnswer((_) {
+          return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
+            Success(
+              QueryResultMultiItem.resultSet(
+                QueryResult(
+                  columns: ['a'],
+                  rows: [
+                    [1],
+                  ],
+                  rowCount: 1,
                 ),
-                QueryResultMultiItem.resultSet(
-                  QueryResult(
-                    columns: ['b'],
-                    rows: [
-                      [2],
-                    ],
-                    rowCount: 1,
-                  ),
-                ),
-              ],
+              ),
             ),
-          );
+            Success(
+              QueryResultMultiItem.resultSet(
+                QueryResult(
+                  columns: ['b'],
+                  rows: [
+                    [2],
+                  ],
+                  rowCount: 1,
+                ),
+              ),
+            ),
+          ]);
         });
         when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
           _,
@@ -1851,10 +1858,10 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         expect(response.resultSets, hasLength(2));
         expect(response.data.single['a'], 1);
         verify(
-          () => mockService.executeQueryMultiFull(pooledConnectionId, sql),
+          () => mockService.streamQueryMulti(pooledConnectionId, sql),
         ).called(1);
         verify(
-          () => mockService.executeQueryMultiFull(directConnectionId, sql),
+          () => mockService.streamQueryMulti(directConnectionId, sql),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         expect(metrics.multiResultPoolVacuousFallbackCount, 1);
@@ -1890,13 +1897,11 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQueryMultiFull(
+          () => mockService.streamQueryMulti(
             pooledConnectionId,
             any(),
           ),
-        ).thenAnswer((_) async {
-          return const Success(QueryResultMulti(items: []));
-        });
+        ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
         ).thenAnswer((_) async {
@@ -1910,13 +1915,11 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           );
         });
         when(
-          () => mockService.executeQueryMultiFull(
+          () => mockService.streamQueryMulti(
             directConnectionId,
             any(),
           ),
-        ).thenAnswer((_) async {
-          return const Success(QueryResultMulti(items: []));
-        });
+        ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
         when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
           _,
         ) async {
@@ -2729,7 +2732,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           ),
         );
         verifyNever(
-          () => mockService.executePrepared(
+          () => mockService.executePreparedParamValuesFromObjects(
             any(),
             any(),
             any(),

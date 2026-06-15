@@ -40,7 +40,7 @@ jobs:
         run: python3 -m pip install --quiet "cryptography>=42.0.0"
 
       - name: Run appcast tooling unit tests
-        run: python3 -m unittest tool.test_appcast_manager tool.test_validate_release tool.test_appcast_signing -v
+        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.test_appcast_signing -v
 
       - name: Ensure appcast signing tests did not skip
         shell: bash
@@ -59,7 +59,7 @@ jobs:
           MAX_APPCAST_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '10' }}
         run: |
           curl -L -sS "${FEED_URL}" -o published_appcast.xml
-          python3 tool/appcast_manager.py inspect-url \
+          python3 tool/appcast/appcast_manager.py inspect-url \
             --feed-url "${FEED_URL}" \
             --env-file appcast.env \
             --release-body-file release_body.txt \
@@ -71,7 +71,7 @@ jobs:
           MAX_APPCAST_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '10' }}
         run: |
           source appcast.env
-          python3 tool/appcast_manager.py smoke-validate-url \
+          python3 tool/appcast/appcast_manager.py smoke-validate-url \
             --feed-url "${FEED_URL}" \
             --version-short "${VERSION_SHORT}" \
             --full-version "${FULL_VERSION}" \

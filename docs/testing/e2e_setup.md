@@ -35,7 +35,7 @@ pre-requisitos, preflight e como rodar.
 Antes de rodar os testes, valide o `.env`:
 
 ```bash
-dart run tool/check_e2e_env.dart
+dart run tool/e2e/check_e2e_env.dart
 ```
 
 O script exibe quais variaveis estao definidas e quais testes serao
@@ -46,8 +46,8 @@ No Windows, o wrapper consolidado roda preflight e gera worksheet
 operacional:
 
 ```powershell
-python tool/run_odbc_operational_validation.py
-python tool/run_odbc_operational_validation.py --all
+python tool/odbc/run_odbc_operational_validation.py
+python tool/odbc/run_odbc_operational_validation.py --all
 ```
 
 Para preflight especifico do Hub `agent.action.*` live, ver
@@ -56,18 +56,18 @@ Para preflight especifico do Hub `agent.action.*` live, ver
 ### Agent-actions operational gate (local / CI)
 
 Acoes agendadas (`agent.action.*`) tem gate dedicado sem Hub real. No Windows,
-use o atalho `python tool/run_agent_actions_operational_gate.py` ou os wrappers
+use o atalho `python tool/agent_actions/run_agent_actions_operational_gate.py` ou os wrappers
 equivalentes:
 
-- `python tool/preflight_agent_actions_production.py --run-contract-tests` — preflight
+- `python tool/agent_actions/preflight_agent_actions_production.py --run-contract-tests` — preflight
   estatico + testes de contrato listados em `tool/agent_actions_*_test_paths.txt`
-- `python tool/homologate_hub_agent_actions.py --run-contract-tests` — homologacao
+- `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests` — homologacao
   consolidada (contrato local)
 
 Homologacao live contra Hub real e opt-in (`RUN_LIVE_HUB_*`, `E2E_HUB_URL`,
 `E2E_HUB_TOKEN`, assinatura `PAYLOAD_SIGNING_*`); preflight:
-`dart run tool/validate_live_hub_agent_actions_env.dart` com
-`python tool/homologate_hub_agent_actions.py --validate-live-env --run-live-tests`. Detalhes em
+`dart run tool/e2e/validate_live_hub_agent_actions_env.dart` com
+`python tool/agent_actions/homologate_hub_agent_actions.py --validate-live-env --run-live-tests`. Detalhes em
 `.cursor/rules/project_specifics.mdc` e `docs/implemente/plano_acoes_agendadas_execucoes.md`.
 
 ## Executar
@@ -93,7 +93,7 @@ explicativa.
 - `test/helpers/odbc_e2e_coverage_sql.dart` — DDL/DML por dialeto para E2E ODBC
 - `test/helpers/odbc_e2e_row_assertions.dart` — leitura de colunas ODBC case-insensitive nos testes
 - `test/helpers/odbc_e2e_rpc_harness.dart` — gateway real + `RpcMethodDispatcher` para E2E RPC
-- `python tool/run_odbc_operational_validation.py` — wrapper operacional
+- `python tool/odbc/run_odbc_operational_validation.py` — wrapper operacional
 - `.env.example` — template das variaveis E2E/integracao
 
 ## Notas
@@ -102,7 +102,7 @@ explicativa.
   (sobe diretorios ate achar `pubspec.yaml`) e le `.env` via sistema de
   arquivos + `flutter_dotenv.loadFromString` (nao usa assets do
   `pubspec.yaml`).
-- **`check_e2e_env` vs `E2EEnv`:** o script `tool/check_e2e_env.dart` roda
+- **`check_e2e_env` vs `E2EEnv`:** o script `tool/e2e/check_e2e_env.dart` roda
   com `dart run` (sem `dart:ui`) e usa um parser de linhas equivalente ao
   caso comum `chave=valor` (primeiro `=` separa chave e valor). Para
   entradas exoticas, a fonte de verdade nos testes e o `E2EEnv`.

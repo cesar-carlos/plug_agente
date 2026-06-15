@@ -12,12 +12,17 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 class FeatureFlagsEnvSeeder {
   FeatureFlagsEnvSeeder._();
 
+  /// Uppercase env aliases mapped to persisted `feature_*` preference keys.
+  ///
+  /// `ENABLE_SOCKET_BACKPRESSURE` is opt-in (default false) for backward
+  /// compatibility; set to `true` in `.env` to seed backpressure on first boot.
+  static const Map<String, String> _envBoolAliases = <String, String>{
+    'ENABLE_SOCKET_BACKPRESSURE': 'feature_enable_socket_backpressure',
+  };
+
   static Future<void> applyUnsetOverrides(IAppSettingsStore prefs) async {
-    for (final entry in AppEnvironment.snapshot().entries) {
-      final key = entry.key.trim();
-      if (!key.startsWith('feature_')) {
-        continue;
-      }
+    for (final entry in _envBoolEntries()) {
+      final key = entry.key;
       if (prefs.containsKey(key)) {
         continue;
       }
@@ -25,6 +30,22 @@ class FeatureFlagsEnvSeeder {
       final parsed = _parseBool(entry.value);
       if (parsed != null) {
         await prefs.setBool(key, parsed);
+      }
+    }
+  }
+
+  static Iterable<MapEntry<String, String>> _envBoolEntries() sync* {
+    final snapshot = AppEnvironment.snapshot();
+    for (final entry in snapshot.entries) {
+      final key = entry.key.trim();
+      if (key.startsWith('feature_')) {
+        yield MapEntry(key, entry.value);
+      }
+    }
+    for (final alias in _envBoolAliases.entries) {
+      final value = snapshot[alias.key];
+      if (value != null) {
+        yield MapEntry(alias.value, value);
       }
     }
   }

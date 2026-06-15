@@ -3,21 +3,13 @@ import 'dart:developer' as developer;
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/query/prepared_query_execution.dart';
 import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_paginated_sql_builder.dart';
 
-/// SQL and parameters ready for `OdbcService` after optional pagination rewrite.
-class OdbcPreparedQueryExecution {
-  const OdbcPreparedQueryExecution({
-    required this.sql,
-    required this.parameters,
-  });
-
-  final String sql;
-  final Map<String, dynamic>? parameters;
-}
+export 'package:plug_agente/domain/query/prepared_query_execution.dart';
 
 /// Pagination validation and SQL preparation for `OdbcDatabaseGateway`.
 ///

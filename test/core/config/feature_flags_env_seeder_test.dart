@@ -35,6 +35,15 @@ void main() {
       expect(FeatureFlags(store).enableSocketBackpressure, isFalse);
     });
 
+    test('seeds ENABLE_SOCKET_BACKPRESSURE alias when unset', () async {
+      dotenv.loadFromString(envString: 'ENABLE_SOCKET_BACKPRESSURE=true');
+      final store = InMemoryAppSettingsStore();
+
+      await FeatureFlagsEnvSeeder.applyUnsetOverrides(store);
+
+      expect(FeatureFlags(store).enableSocketBackpressure, isTrue);
+    });
+
     test('ignores non-boolean feature flag values', () async {
       dotenv.loadFromString(envString: 'feature_enable_socket_backpressure=maybe');
       final store = InMemoryAppSettingsStore();

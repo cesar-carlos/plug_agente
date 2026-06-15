@@ -22,7 +22,7 @@ handlers de producao, use o stub opt-in (refletido em
 Reinicie o agente apos mudar essas variaveis. O InfoBar da UI desaparece
 quando `com_object_handlers_registered_count > 0`.
 
-`dart run tool/check_e2e_env.dart` reporta se as variaveis do stub estao
+`dart run tool/e2e/check_e2e_env.dart` reporta se as variaveis do stub estao
 completas.
 
 ## Retencao de acoes (purge local)
@@ -54,8 +54,8 @@ ciclo. Valide em maquina Windows com UAC.
 
 | Passo | Comando / configuracao |
 | ----- | ---------------------- |
-| Pre-flight (script) | `python tool/homologate_elevated_runner.py --build` (opcional: `--run-unit-tests` para testes Dart sem UAC) |
-| Build do helper | `python tool/build_elevated_runner.py` -> `build\elevated_runner\plug_agente_elevated_runner.exe` (copia tambem para `build\windows\x64\runner\Release` se existir) |
+| Pre-flight (script) | `python tool/elevated/homologate_elevated_runner.py --build` (opcional: `--run-unit-tests` para testes Dart sem UAC) |
+| Build do helper | `python tool/elevated/build_elevated_runner.py` -> `build\elevated_runner\plug_agente_elevated_runner.exe` (copia tambem para `build\windows\x64\runner\Release` se existir) |
 | Path opcional | `ELEVATED_ACTION_RUNNER_EXE=C:\caminho\plug_agente_elevated_runner.exe` no `.env` quando o exe nao estiver ao lado do `plug_agente.exe` |
 | Habilitar na app | Feature flag **Elevated agent actions** (`FeatureFlags.enableElevatedAgentActions` / preferencias) |
 | Preparar na UI | Pagina **Acoes** -> InfoBar "Preparar executor elevado" (registra tarefa `PlugAgente\ElevatedActionRunner`) |

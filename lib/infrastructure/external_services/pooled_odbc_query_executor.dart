@@ -8,6 +8,7 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
+import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/direct_odbc_query_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
@@ -58,6 +59,7 @@ final class PooledOdbcQueryExecutor {
     bool allowNativeCompatibleAcquire = false,
     DateTime? deadline,
     CancellationToken? cancellationToken,
+    DatabaseType? databaseType,
   }) async {
     final effectiveDeadline = deadline ?? OdbcExecutionDeadline.deadlineFor(timeout);
     final poolAcquireOptions =
@@ -137,6 +139,7 @@ final class PooledOdbcQueryExecutor {
         timeout: OdbcExecutionDeadline.remainingFromDeadline(effectiveDeadline) ?? timeout,
         executionMode: allowNativeCompatibleAcquire ? 'native_compatible' : 'pooled',
         cancellationToken: cancellationToken,
+        databaseType: databaseType,
       );
 
       if (outcome.isSuccess && allowNativeCompatibleAcquire && timeout != null && timeout > Duration.zero) {

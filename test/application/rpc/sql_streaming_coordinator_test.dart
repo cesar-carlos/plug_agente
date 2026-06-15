@@ -3,6 +3,7 @@ import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/domain/streaming/streaming_wire_chunk.dart';
 import 'package:result_dart/result_dart.dart';
 
 class _FakeStreamingGateway implements IStreamingDatabaseGateway {
@@ -33,6 +34,23 @@ class _FakeStreamingGateway implements IStreamingDatabaseGateway {
     Future<void> Function(List<Map<String, dynamic>> chunk) onChunk, {
     int fetchSize = 100,
     int chunkSizeBytes = 65536,
+    String? executionId,
+    Duration? queryTimeout,
+    CancellationToken? cancellationToken,
+    StreamingCancelReason? Function()? cancellationReasonProvider,
+    Future<void> Function(StreamingWireChunk chunk)? onWireChunk,
+    void Function()? onSetupComplete,
+    Map<String, dynamic>? parameters,
+    bool columnarWireOnly = false,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Result<void>> executeMultiResultQueryStream(
+    String query,
+    String connectionString,
+    Future<void> Function(StreamingWireChunk chunk) onWireChunk, {
     String? executionId,
     Duration? queryTimeout,
     CancellationToken? cancellationToken,

@@ -37,6 +37,7 @@ class RpcStreamChunk {
     required this.rows,
     this.totalChunks,
     this.columnMetadata,
+    this.columnar,
   }) : assert(requestId != null, 'RpcStreamChunk.requestId must not be null');
 
   factory RpcStreamChunk.fromJson(Map<String, dynamic> json) => RpcStreamChunk(
@@ -46,6 +47,7 @@ class RpcStreamChunk {
     rows: (json['rows'] as List<dynamic>).map((e) => e as Map<String, dynamic>).toList(),
     totalChunks: json['total_chunks'] as int?,
     columnMetadata: (json['column_metadata'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList(),
+    columnar: json['columnar'] as Map<String, dynamic>?,
   );
 
   final String streamId;
@@ -54,6 +56,7 @@ class RpcStreamChunk {
   final List<Map<String, dynamic>> rows;
   final int? totalChunks;
   final List<Map<String, dynamic>>? columnMetadata;
+  final Map<String, dynamic>? columnar;
 
   Map<String, dynamic> toJson() {
     if (requestId == null) {
@@ -68,6 +71,7 @@ class RpcStreamChunk {
       'rows': rows,
       if (totalChunks != null) 'total_chunks': totalChunks,
       if (columnMetadata != null) 'column_metadata': columnMetadata,
+      if (columnar != null) 'columnar': columnar,
     };
   }
 }

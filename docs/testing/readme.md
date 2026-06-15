@@ -24,8 +24,8 @@ concorrencia. Os testes unitarios e widget tests seguem as regras gerais em
 
 ## Atalhos operacionais (Windows)
 
-- `tool/check_e2e_env.dart` — preflight de `.env`.
-- `tool/validate_live_hub_agent_actions_env.dart` — preflight live hub.
-- `python tool/run_odbc_operational_validation.py` — preflight + worksheet ODBC.
-- `python tool/run_agent_actions_operational_gate.py` — gate local/CI sem hub.
-- `python tool/homologate_hub_agent_actions.py` — homologacao live opt-in.
+- `tool/e2e/check_e2e_env.dart` — preflight de `.env`.
+- `tool/e2e/validate_live_hub_agent_actions_env.dart` — preflight live hub.
+- `python tool/odbc/run_odbc_operational_validation.py` — preflight + worksheet ODBC.
+- `python tool/agent_actions/run_agent_actions_operational_gate.py` — gate local/CI sem hub.
+- `python tool/agent_actions/homologate_hub_agent_actions.py` — homologacao live opt-in.

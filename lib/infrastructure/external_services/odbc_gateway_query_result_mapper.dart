@@ -39,18 +39,38 @@ class OdbcGatewayQueryResultMapper {
   static List<Map<String, dynamic>> convertQueryResultToMaps(
     QueryResult result,
   ) {
-    return result.rows.map((row) {
-      final map = <String, dynamic>{};
-      for (var i = 0; i < result.columns.length; i++) {
-        map[result.columns[i]] = row[i];
-      }
-      return map;
-    }).toList();
+    if (result.isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+    return List<Map<String, dynamic>>.generate(
+      result.rows.length,
+      (rowIndex) {
+        return result.rowAsMap(rowIndex);
+      },
+      growable: false,
+    );
   }
 
-  static List<Map<String, dynamic>> buildColumnMetadata(
+  static List<Map<String, dynamic>> buildColumnMetadataFromNames(
     List<String> columns,
   ) {
     return columns.map((column) => <String, dynamic>{'name': column}).toList(growable: false);
+  }
+
+  static List<Map<String, dynamic>> buildColumnMetadata(
+    QueryResult result,
+  ) {
+    final richMetadata = result.columnsMetadata;
+    if (richMetadata != null && richMetadata.isNotEmpty) {
+      return richMetadata
+          .map(
+            (metadata) => <String, dynamic>{
+              'name': metadata.name,
+              'odbc_type': metadata.odbcType,
+            },
+          )
+          .toList(growable: false);
+    }
+    return buildColumnMetadataFromNames(result.columns);
   }
 }

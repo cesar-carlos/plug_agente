@@ -6,6 +6,7 @@ import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:plug_agente/infrastructure/stores/idempotency_l1_cache.dart';
 
 /// SQLite-backed idempotency cache with TTL and LRU-style eviction.
 class DriftIdempotencyStore implements IIdempotencyStore {
@@ -14,9 +15,11 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     int maxEntries = 8192,
     Duration lruUpdateMinInterval = _defaultLruUpdateMinInterval,
     DateTime Function()? nowProvider,
+    IdempotencyL1Cache? l1Cache,
   }) : _maxEntries = maxEntries,
        _lruUpdateMinInterval = lruUpdateMinInterval,
-       _nowProvider = nowProvider ?? DateTime.now {
+       _nowProvider = nowProvider ?? DateTime.now,
+       _l1Cache = l1Cache ?? IdempotencyL1Cache() {
     if (_maxEntries < 1) {
       throw ArgumentError.value(maxEntries, 'maxEntries', 'must be >= 1');
     }
@@ -41,10 +44,15 @@ class DriftIdempotencyStore implements IIdempotencyStore {
   final int _maxEntries;
   final Duration _lruUpdateMinInterval;
   final DateTime Function() _nowProvider;
+  final IdempotencyL1Cache _l1Cache;
 
   @override
   Future<IdempotencyRecord?> getRecord(String key) async {
     final now = _nowProvider();
+    final l1Record = _l1Cache.get(key);
+    if (l1Record != null) {
+      return l1Record;
+    }
     // No bulk delete here: the per-row TTL check below handles the requested
     // key, and the periodic purge (every 15 min) handles the rest. Running a
     // DELETE on every read adds unnecessary write I/O on the hot path.
@@ -53,11 +61,13 @@ class DriftIdempotencyStore implements IIdempotencyStore {
       _db.rpcIdempotencyCacheTable,
     )..where((t) => t.cacheKey.equals(key))).getSingleOrNull();
     if (row == null) {
+      _l1Cache.invalidate(key);
       return null;
     }
 
     if (row.expiresAt.isBefore(now)) {
       await (_db.delete(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).go();
+      _l1Cache.invalidate(key);
       return null;
     }
 
@@ -76,13 +86,16 @@ class DriftIdempotencyStore implements IIdempotencyStore {
     final parsed = _parseResponse(row.responseJson);
     if (parsed == null) {
       await (_db.delete(_db.rpcIdempotencyCacheTable)..where((t) => t.cacheKey.equals(key))).go();
+      _l1Cache.invalidate(key);
       return null;
     }
 
-    return IdempotencyRecord(
+    final record = IdempotencyRecord(
       response: RpcWireMap.sanitizeRpcResponse(parsed),
       requestFingerprint: row.requestFingerprint,
     );
+    _l1Cache.put(key, record, row.expiresAt);
+    return record;
   }
 
   @override
@@ -128,6 +141,14 @@ class DriftIdempotencyStore implements IIdempotencyStore {
             ),
           );
     });
+    _l1Cache.put(
+      key,
+      IdempotencyRecord(
+        response: response,
+        requestFingerprint: requestFingerprint,
+      ),
+      expiresAt,
+    );
   }
 
   Future<int> _deleteExpired(DateTime now) {

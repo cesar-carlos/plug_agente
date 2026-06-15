@@ -7,6 +7,7 @@ import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -27,14 +28,17 @@ class OdbcConnectionPool
     this._settings, {
     Duration? acquireTimeout,
     MetricsCollector? metricsCollector,
+    OdbcProfileRecommendedOptions? recommendedOptions,
   }) : _semaphore = PoolSemaphore(_settings.poolSize),
        _nativeHandshakeSemaphore = PoolSemaphore(
          ConnectionConstants.leasePoolNativeHandshakeConcurrency(_settings.poolSize),
        ),
        _acquireTimeout = acquireTimeout ?? ConnectionConstants.defaultPoolAcquireTimeout,
-       _metrics = metricsCollector;
+       _metrics = metricsCollector,
+       _recommendedOptions = recommendedOptions;
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
+  final OdbcProfileRecommendedOptions? _recommendedOptions;
   final PoolSemaphore _semaphore;
   final PoolSemaphore _nativeHandshakeSemaphore;
   final Duration _acquireTimeout;
@@ -116,7 +120,10 @@ class OdbcConnectionPool
         try {
           connectResult = await _service.connect(
             connectionString,
-            options: resolvedOptions.toOdbcConnectionOptions(),
+            options: resolvedOptions.toOdbcConnectionOptions(
+              recommendedProfile: _recommendedOptions?.connection,
+              lazyStrings: OdbcRecommendedOptionsMerger.lazyStringsForConnectionString(connectionString),
+            ),
           );
         } finally {
           connectStopwatch.stop();

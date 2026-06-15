@@ -82,7 +82,7 @@ void main() {
         markConnectionForDiscard: connectionManager.markConnectionForDiscard,
       );
       final queryRunner = OdbcQueryRunner(
-        service: mockService,
+        queries: mockService,
         metrics: metrics,
         statementExecutor: statementExecutor,
         resultEncodingExecutor: OdbcResultEncodingExecutor(mockService),
@@ -180,7 +180,7 @@ void main() {
         ),
       ).thenAnswer((_) async => const Success(9002));
       when(
-        () => mockService.executePrepared(
+        () => mockService.executePreparedParamValuesFromObjects(
           any(),
           any(),
           any(),
@@ -774,7 +774,7 @@ OdbcBatchExecutionOrchestrator _createOrchestratorWithPool({
     markConnectionForDiscard: connectionManager.markConnectionForDiscard,
   );
   final queryRunner = OdbcQueryRunner(
-    service: mockService,
+    queries: mockService,
     metrics: metrics,
     statementExecutor: statementExecutor,
     resultEncodingExecutor: OdbcResultEncodingExecutor(mockService),

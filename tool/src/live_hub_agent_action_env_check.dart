@@ -7,6 +7,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'agent_action_test_manifest.dart' show resolvePlugAgenteProjectRoot;
+
 List<String> missingLiveHubAgentActionVariables({
   required bool runLiveHubTests,
   required bool runLiveHubSigningTests,
@@ -169,11 +171,7 @@ List<String> missingFromRepoEnv(Map<String, String> fileEnv) {
   );
 }
 
-String projectRootFromScript() {
-  final scriptPath = Platform.script.toFilePath();
-  final toolDir = File(scriptPath).parent;
-  return toolDir.parent.path;
-}
+String projectRootFromScript() => resolvePlugAgenteProjectRoot();
 
 /// JWT `exp` claim in seconds since epoch, or null when not decodable.
 int? jwtExpiryEpochSeconds(String? token) {
@@ -219,7 +217,7 @@ List<String> liveHubTokenWarnings(String? hubToken) {
   if (exp <= nowSeconds) {
     const expiredMessage =
         'E2E_HUB_TOKEN JWT is expired — Hub connect will fail with jwt expired. '
-        'Refresh: dart run tool/fetch_e2e_hub_token_from_local_config.dart '
+        'Refresh: dart run tool/e2e/fetch_e2e_hub_token_from_local_config.dart '
         '--apply-token --force';
     return <String>[expiredMessage];
   }
@@ -245,7 +243,7 @@ List<String> liveHubTokenBlockingFailures(String? hubToken) {
   }
   const expiredMessage =
       'E2E_HUB_TOKEN JWT is expired - Hub connect will fail with jwt expired. '
-      'Refresh: dart run tool/fetch_e2e_hub_token_from_local_config.dart '
+      'Refresh: dart run tool/e2e/fetch_e2e_hub_token_from_local_config.dart '
       '--apply-token --force';
   return const <String>[expiredMessage];
 }

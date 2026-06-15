@@ -114,7 +114,7 @@ void main() {
       expect(reason, DbStreamingAutoReason.none);
     });
 
-    test('returns none when chunk streaming is enabled', () {
+    test('returns none when chunk streaming is enabled for auto policy only', () {
       when(() => featureFlags.enableSocketStreamingChunks).thenReturn(true);
 
       final reason = policy.resolveAutoReason(
@@ -126,6 +126,35 @@ void main() {
       );
 
       expect(reason, DbStreamingAutoReason.none);
+    });
+
+    test('prefersDbStreamingOverMaterialized when chunk streaming is enabled', () {
+      when(() => featureFlags.enableSocketStreamingChunks).thenReturn(true);
+
+      final prefers = policy.prefersDbStreamingOverMaterialized(
+        featureFlags: featureFlags,
+        queryRequest: queryRequest(),
+        sql: 'SELECT * FROM users',
+        negotiatedExtensions: const {'streamingResults': true},
+        preferDbStreaming: false,
+      );
+
+      expect(prefers, isTrue);
+    });
+
+    test('prefersDbStreamingOverMaterialized is false for bounded small selects', () {
+      when(() => featureFlags.enableSocketStreamingChunks).thenReturn(true);
+
+      final prefers = policy.prefersDbStreamingOverMaterialized(
+        featureFlags: featureFlags,
+        queryRequest: queryRequest(),
+        sql: 'SELECT * FROM users',
+        negotiatedExtensions: const {'streamingResults': true},
+        preferDbStreaming: false,
+        effectiveMaxRows: 100,
+      );
+
+      expect(prefers, isFalse);
     });
 
     test('shouldMaterializeBoundedDbStreaming is true for explicit row limit', () {

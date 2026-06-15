@@ -96,6 +96,7 @@ void main() {
       const AgentActionDefinitionSnapshotter(),
       featureFlags,
       preflightSettings: preflightSettings,
+      now: () => DateTime(2026, 5, 15, 12),
     );
     const portableCodec = AgentActionPortableCodec();
     final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);
@@ -497,6 +498,7 @@ void main() {
       const AgentActionDefinitionSnapshotter(),
       featureFlags,
       preflightSettings: preflightSettings,
+      now: () => DateTime(2026, 5, 15, 12),
     );
     final dispatchTrigger = DispatchAgentActionTrigger(
       repository,
@@ -1345,6 +1347,7 @@ AgentActionsProvider _buildProvider({
     const AgentActionDefinitionSnapshotter(),
     featureFlags,
     preflightSettings: preflightSettings,
+    now: () => DateTime(2026, 5, 15, 12),
   );
   const portableCodec = AgentActionPortableCodec();
   final backupSanitizer = AgentActionBackupSanitizer(codec: portableCodec);

@@ -12,6 +12,25 @@ from typing import Callable, Iterable, Mapping, Sequence
 
 TOOL_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = TOOL_DIR.parent
+AGENT_ACTIONS_MANIFESTS_DIR = TOOL_DIR / "agent_actions" / "manifests"
+BENCHMARKS_MANIFESTS_DIR = TOOL_DIR / "benchmarks" / "manifests"
+
+
+def ensure_utf8_stdio() -> None:
+    """Avoid Windows cp1252 crashes when child tools emit non-ASCII log lines."""
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
+def _emit_subprocess_line(line: str) -> None:
+    try:
+        print(line, end="")
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        print(line.encode(encoding, errors="replace").decode(encoding), end="")
 
 
 class Console:
@@ -91,6 +110,7 @@ def run_streaming(
     env: Mapping[str, str] | None = None,
     log_path: Path | None = None,
 ) -> int:
+    ensure_utf8_stdio()
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
@@ -109,7 +129,7 @@ def run_streaming(
         log_file = log_path.open("a", encoding="utf-8") if log_path else None
         try:
             for line in process.stdout:
-                print(line, end="")
+                _emit_subprocess_line(line)
                 if log_file is not None:
                     log_file.write(line)
         finally:
@@ -165,7 +185,7 @@ def get_git_commit_or_default() -> str:
 
 
 def read_manifest_test_paths(file_name: str) -> list[str]:
-    manifest_path = TOOL_DIR / file_name
+    manifest_path = AGENT_ACTIONS_MANIFESTS_DIR / file_name
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Missing test manifest: {manifest_path}")
 

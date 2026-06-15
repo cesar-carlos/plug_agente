@@ -4,6 +4,17 @@ void _registerOdbc(
   GetIt getIt, {
   required odbc.ServiceLocator odbcWorkerLocator,
 }) {
+  if (!getIt.isRegistered<OdbcProfileRecommendedOptions>()) {
+    getIt.registerSingleton<OdbcProfileRecommendedOptions>(
+      OdbcProfileRecommendedOptions(
+        connection: odbcWorkerLocator.recommendedConnectionOptions,
+        pool: odbcWorkerLocator.recommendedPoolOptions,
+      ),
+    );
+  }
+  getIt.registerLazySingleton<IStreamingNamedParameterPreparer>(
+    () => OdbcStreamingNamedParameterPreparer.instance,
+  );
   getIt
     ..registerLazySingleton<odbc.OdbcService>(
       () => odbcWorkerLocator.asyncService,
@@ -15,6 +26,7 @@ void _registerOdbc(
         getIt<MetricsCollector>(),
         getIt<FeatureFlags>(),
         getIt<ActiveConfigResolver>(),
+        recommendedOptions: getIt<OdbcProfileRecommendedOptions>(),
       ),
     )
     ..registerLazySingleton<IRetryManager>(RetryManager.new)
@@ -124,6 +136,7 @@ void _registerOdbc(
         final baseStreamingGateway = OdbcStreamingGateway(
           getIt<odbc.OdbcService>(),
           getIt<IOdbcConnectionSettings>(),
+          recommendedOptions: getIt<OdbcProfileRecommendedOptions>(),
           batchedQuerySource: OdbcBatchedStreamingQuerySource(
             asyncNative: odbcWorkerLocator.asyncNativeConnection,
             syncNative: odbcWorkerLocator.nativeConnection,

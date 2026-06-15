@@ -1,15 +1,11 @@
 import 'dart:typed_data';
 
-import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/codecs/rpc_chunk_transport_policy.dart';
 
-int jsonEncodeIsolateThresholdBytes(String? metricEventName) {
-  if (metricEventName == 'rpc:chunk' || metricEventName == 'rpc:complete') {
-    return ConnectionConstants.streamingChunkJsonIsolateThresholdBytes;
-  }
-  return jsonPayloadIsolateEncodeThresholdBytes;
-}
+int jsonEncodeIsolateThresholdBytes(String? metricEventName) =>
+    RpcChunkTransportPolicy.jsonEncodeIsolateThresholdBytes(metricEventName);
 
 int outboundRpcChunkRowCount(dynamic data) {
   if (data is! Map) {
@@ -27,8 +23,8 @@ bool shouldEncodeJsonInIsolate(
   String? metricEventName,
   int budgetBytes,
 ) {
-  if (metricEventName == 'rpc:chunk' &&
-      outboundRpcChunkRowCount(data) >= ConnectionConstants.streamingChunkRowIsolateThreshold) {
+  if (RpcChunkTransportPolicy.isRpcChunkEvent(metricEventName) &&
+      outboundRpcChunkRowCount(data) >= RpcChunkTransportPolicy.rowIsolateThreshold(metricEventName)) {
     return true;
   }
   return jsonTreeLikelyExceedsByteBudget(data, budgetBytes);

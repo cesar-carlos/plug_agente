@@ -85,7 +85,7 @@ void main() {
         ),
       ).thenAnswer((_) async => const Success(9001));
       when(
-        () => mockService.executePrepared(
+        () => mockService.executePreparedParamValues(
           any(),
           any(),
           any(),
@@ -179,7 +179,7 @@ void main() {
           ),
         );
         verifyNever(
-          () => mockService.executePrepared(
+          () => mockService.executePreparedParamValues(
             any(),
             any(),
             any(),
@@ -230,7 +230,7 @@ void main() {
           ),
         ).called(1);
         final executePreparedCall = verify(
-          () => mockService.executePrepared(
+          () => mockService.executePreparedParamValues(
             pooledConnectionId,
             9001,
             captureAny(),

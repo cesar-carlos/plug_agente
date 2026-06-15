@@ -1,5 +1,6 @@
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/domain/streaming/streaming_wire_chunk.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Gateway para execução de queries em streaming.
@@ -26,10 +27,26 @@ abstract class IStreamingDatabaseGateway {
     Duration? queryTimeout,
     CancellationToken? cancellationToken,
     StreamingCancelReason? Function()? cancellationReasonProvider,
+    Future<void> Function(StreamingWireChunk chunk)? onWireChunk,
+    Map<String, dynamic>? parameters,
+    bool columnarWireOnly = false,
 
     /// Invoked after ODBC connect and stream registration succeed, before the
     /// first result chunk is consumed. Used by the queued streaming gateway
     /// to release the SQL queue worker while the stream body continues.
+    void Function()? onSetupComplete,
+  });
+
+  /// Streams ODBC multi-result batches one item at a time without materializing
+  /// the full multi-result envelope first.
+  Future<Result<void>> executeMultiResultQueryStream(
+    String query,
+    String connectionString,
+    Future<void> Function(StreamingWireChunk chunk) onWireChunk, {
+    String? executionId,
+    Duration? queryTimeout,
+    CancellationToken? cancellationToken,
+    StreamingCancelReason? Function()? cancellationReasonProvider,
     void Function()? onSetupComplete,
   });
 

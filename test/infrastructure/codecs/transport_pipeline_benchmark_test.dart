@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../tool/benchmark_transport_pipeline.dart' as benchmark;
+import '../../../tool/benchmarks/benchmark_transport_pipeline.dart' as benchmark;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

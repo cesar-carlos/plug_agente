@@ -1,7 +1,10 @@
 import 'dart:developer' as developer;
 
-import 'package:odbc_fast/odbc_fast.dart';
+import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/config/odbc_result_encoding_config.dart';
+import 'package:plug_agente/infrastructure/config/odbc_result_encoding_policy.dart';
+import 'package:plug_agente/infrastructure/config/odbc_usage_profile_config.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -12,17 +15,26 @@ import 'package:result_dart/result_dart.dart';
 /// driven) and the named→positional parameter handling live behind a focused,
 /// testable surface. Holds only a log-throttle flag.
 final class OdbcResultEncodingExecutor {
-  OdbcResultEncodingExecutor(this._service);
+  OdbcResultEncodingExecutor(
+    IQueryService queries, {
+    OdbcUsageProfile? usageProfile,
+  }) : _queries = queries,
+       _usageProfile = usageProfile ?? resolveOdbcUsageProfile();
 
-  final OdbcService _service;
+  final IQueryService _queries;
+  final OdbcUsageProfile _usageProfile;
   ResultEncoding _lastLoggedResultEncoding = ResultEncoding.rowMajor;
 
   /// Runs [preparedExecution] honoring the configured result encoding.
   Future<Result<QueryResult>> execute(
     String connectionId,
-    OdbcPreparedQueryExecution preparedExecution,
-  ) {
-    final resultEncoding = resolveOdbcResultEncoding();
+    OdbcPreparedQueryExecution preparedExecution, {
+    DatabaseType? databaseType,
+  }) {
+    final resultEncoding = resolveEffectiveOdbcResultEncoding(
+      databaseType: databaseType,
+      usageProfile: _usageProfile,
+    );
     if (resultEncoding != ResultEncoding.rowMajor) {
       _logResultEncodingIfNeeded(resultEncoding);
     }
@@ -38,14 +50,14 @@ final class OdbcResultEncodingExecutor {
   ) {
     final parameters = preparedExecution.parameters;
     if (parameters != null && parameters.isNotEmpty) {
-      return _service.executeQueryNamed(
+      return _queries.executeQueryNamed(
         connectionId,
         preparedExecution.sql,
         parameters,
       );
     }
 
-    return _service.executeQuery(
+    return _queries.executeQuery(
       preparedExecution.sql,
       connectionId: connectionId,
     );
@@ -58,7 +70,7 @@ final class OdbcResultEncodingExecutor {
   ) {
     final parameters = preparedExecution.parameters;
     if (parameters == null || parameters.isEmpty) {
-      return _service.executeQueryParams(
+      return _queries.executeQueryParamValuesFromObjects(
         connectionId,
         preparedExecution.sql,
         const <Object?>[],
@@ -71,7 +83,7 @@ final class OdbcResultEncodingExecutor {
       namedParams: Map<String, Object?>.from(parameters),
       paramNames: parsed.paramNames,
     );
-    return _service.executeQueryParams(
+    return _queries.executeQueryParamValuesFromObjects(
       connectionId,
       parsed.cleanedSql,
       positionalParams,
@@ -85,12 +97,13 @@ final class OdbcResultEncodingExecutor {
     }
     _lastLoggedResultEncoding = resultEncoding;
     developer.log(
-      'ODBC result encoding override enabled',
+      'ODBC result encoding enabled',
       name: 'database_gateway',
       level: 800,
       error: <String, Object?>{
         'env': odbcResultEncodingEnvKey,
         'result_encoding': resultEncodingConfigName(resultEncoding),
+        'usage_profile': odbcUsageProfileConfigName(_usageProfile),
       },
     );
   }

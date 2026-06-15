@@ -63,7 +63,7 @@ jobs:
         run: python3 -m pip install --quiet "cryptography>=42.0.0"
 
       - name: Run appcast tooling unit tests
-        run: python3 -m unittest tool.test_appcast_manager tool.test_validate_release tool.test_appcast_signing -v
+        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.test_appcast_signing -v
 
       - name: Ensure appcast signing tests did not skip
         shell: bash
@@ -323,7 +323,7 @@ jobs:
           # gets a plug:edSignature attribute that clients with
           # AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true validate before
           # downloading. Empty secret => unsigned item (backward compat).
-          python3 tool/appcast_manager.py update \
+          python3 tool/appcast/appcast_manager.py update \
             --appcast appcast.xml \
             --version-short "${{ steps.release.outputs.version }}" \
             --full-version "${{ steps.release.outputs.full_version }}" \
@@ -343,7 +343,7 @@ jobs:
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
           VERSION_SHORT: ${{ steps.release.outputs.version }}
         run: |
-          python3 tool/appcast_manager.py validate-file \
+          python3 tool/appcast/appcast_manager.py validate-file \
             --appcast appcast.xml \
             --version-short "${VERSION_SHORT}" \
             --full-version "${FULL_VERSION}" \
@@ -462,7 +462,7 @@ jobs:
           FULL_VERSION: ${{ needs.update-appcast.outputs.full_version }}
           VERSION_SHORT: ${{ needs.update-appcast.outputs.version }}
         run: |
-          python3 tool/appcast_manager.py smoke-validate-url \
+          python3 tool/appcast/appcast_manager.py smoke-validate-url \
             --feed-url "${OFFICIAL_FEED_URL}" \
             --version-short "${VERSION_SHORT}" \
             --full-version "${FULL_VERSION}" \

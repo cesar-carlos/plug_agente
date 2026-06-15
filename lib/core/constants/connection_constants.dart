@@ -562,7 +562,19 @@ class ConnectionConstants {
   /// Inbound `rpc:request` payloads above this UTF-8 size skip JSON Schema
   /// validation to avoid O(payload) cost on already-size-limited messages.
   /// Requests this large already passed the negotiated payload limit check.
-  static const int schemaValidationSkipAboveBytes = 128 * 1024;
+  static const int defaultSchemaValidationSkipAboveBytes = 128 * 1024;
+
+  /// Effective inbound schema-validation skip threshold.
+  ///
+  /// Override with env `INBOUND_SCHEMA_VALIDATION_SKIP_ABOVE_BYTES` (positive
+  /// integer bytes). `0` disables the soft cap (always validate).
+  static int get schemaValidationSkipAboveBytes {
+    final override = _positiveIntEnv('INBOUND_SCHEMA_VALIDATION_SKIP_ABOVE_BYTES');
+    if (override != null) {
+      return override;
+    }
+    return defaultSchemaValidationSkipAboveBytes;
+  }
 
   /// Outgoing `rpc:response` contract validation is skipped above this UTF-8 JSON
   /// size to limit CPU on huge results (0 disables the soft cap).
@@ -576,7 +588,7 @@ class ConnectionConstants {
   /// beat 16 KiB on p95 receive for large gzip payloads while avoiding extra isolate
   /// churn on sub-threshold frames; 64 KiB increased main-isolate gzip cost without
   /// clear win. Tune with `TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES` or
-  /// `tool/benchmark_transport_pipeline.dart --gzip-isolate-threshold-sweep`.
+  /// `tool/benchmarks/benchmark_transport_pipeline.dart --gzip-isolate-threshold-sweep`.
   static const int defaultGzipIsolateThresholdBytes = 32 * 1024;
 
   /// JSON tree size above which `rpc:chunk` / `rpc:complete` encoding uses `compute`.
@@ -589,6 +601,52 @@ class ConnectionConstants {
   /// `compute`, even when the byte-size heuristic is below
   /// [streamingChunkJsonIsolateThresholdBytes].
   static const int streamingChunkRowIsolateThreshold = 50;
+
+  /// Dedicated `rpc:chunk` JSON encode isolate threshold (lower than generic
+  /// responses so frequent small chunks stay off the UI isolate).
+  static const int defaultRpcChunkJsonIsolateThresholdBytes = 16 * 1024;
+
+  static int get rpcChunkJsonIsolateThresholdBytes =>
+      _positiveIntEnv('RPC_CHUNK_JSON_ISOLATE_THRESHOLD_BYTES') ?? defaultRpcChunkJsonIsolateThresholdBytes;
+
+  /// Dedicated `rpc:chunk` gzip isolate threshold.
+  static const int defaultRpcChunkGzipIsolateThresholdBytes = 16 * 1024;
+
+  static int get rpcChunkGzipIsolateThresholdBytes =>
+      _positiveIntEnv('RPC_CHUNK_GZIP_ISOLATE_THRESHOLD_BYTES') ?? defaultRpcChunkGzipIsolateThresholdBytes;
+
+  /// GZIP compression threshold for `rpc:chunk` / `rpc:complete` only.
+  static const int defaultRpcChunkCompressionThresholdBytes = 2048;
+
+  static int get rpcChunkCompressionThresholdBytes =>
+      _positiveIntEnv('RPC_CHUNK_COMPRESSION_THRESHOLD_BYTES') ?? defaultRpcChunkCompressionThresholdBytes;
+
+  /// Row-count isolate threshold dedicated to `rpc:chunk` events.
+  static const int defaultRpcChunkRowIsolateThreshold = 32;
+
+  static int get rpcChunkRowIsolateThreshold =>
+      _positiveIntEnv('RPC_CHUNK_ROW_ISOLATE_THRESHOLD') ?? defaultRpcChunkRowIsolateThreshold;
+
+  /// TTL for in-memory authorization decision cache entries on the SQL hot path.
+  ///
+  /// Override with env `AUTH_DECISION_CACHE_TTL_SECONDS` (15..600). Default 60s.
+  static const int defaultAuthorizationDecisionCacheTtlSeconds = 60;
+
+  static Duration get authorizationDecisionCacheTtl {
+    final parsed = int.tryParse(_optionalEnv('AUTH_DECISION_CACHE_TTL_SECONDS') ?? '');
+    if (parsed != null && parsed > 0) {
+      return Duration(seconds: parsed.clamp(15, 600));
+    }
+    return const Duration(seconds: defaultAuthorizationDecisionCacheTtlSeconds);
+  }
+
+  /// Returns true when SQL queue depth can exceed ODBC async pending slots.
+  static bool isSqlQueueDepthAboveOdbcAsyncPending({
+    required int sqlQueueMaxSize,
+    required int asyncMaxPendingRequests,
+  }) {
+    return sqlQueueMaxSize > asyncMaxPendingRequests;
+  }
 
   /// GZIP payload size above which transport compress/decompress uses `compute`.
   ///

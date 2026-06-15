@@ -25,6 +25,7 @@ import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_br
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/config/odbc_usage_profile_config.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_batch_execution_orchestrator.dart';
@@ -91,7 +92,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
        _readOnlyBatchParallelSemaphore = PoolSemaphore(_safeReadOnlyBatchParallelism(_settings.poolSize)),
        _nativeCompatiblePolicy = NativeCompatibleAcquirePolicy(featureFlags: featureFlags),
        _optionsResolver = OdbcConnectionOptionsResolver(_settings),
-       _resultEncodingExecutor = OdbcResultEncodingExecutor(_service),
+       _resultEncodingExecutor = OdbcResultEncodingExecutor(
+         _service,
+         usageProfile: resolveOdbcUsageProfile(),
+       ),
        _uuid = const Uuid() {
     _txManager = OdbcBatchTransactionManager(
       service: _service,
@@ -104,7 +108,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       markConnectionForDiscard: _connectionManager.markConnectionForDiscard,
     );
     _queryRunner = OdbcQueryRunner(
-      service: _service,
+      queries: _service,
       metrics: _metrics,
       statementExecutor: _statementExecutor,
       resultEncodingExecutor: _resultEncodingExecutor,

@@ -58,18 +58,20 @@ jobs:
 
       # Live ODBC/Hub E2E tests use tags live|slow|perf and are local-only
       # (see docs/testing/e2e_setup.md). CI must not run them on GitHub runners.
+      # Optional pre-release ODBC gate (local / workflow_dispatch):
+      #   python tool/odbc/run_odbc_release_gate.py --offline-only
       - name: Test
         run: flutter test --exclude-tags "live || slow || perf"
 
       - name: Agent actions production preflight
-        run: dart run tool/preflight_agent_actions_production.dart
+        run: dart run tool/agent_actions/preflight_agent_actions_production.dart
 
       - name: Agent actions homologation gate
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t contract_paths < <(grep -v '^\s*#' tool/agent_actions_contract_test_paths.txt | grep -v '^\s*$')
-          mapfile -t ui_paths < <(grep -v '^\s*#' tool/agent_actions_ui_test_paths.txt | grep -v '^\s*$')
+          mapfile -t contract_paths < <(grep -v '^\s*#' tool/agent_actions/manifests/agent_actions_contract_test_paths.txt | grep -v '^\s*$')
+          mapfile -t ui_paths < <(grep -v '^\s*#' tool/agent_actions/manifests/agent_actions_ui_test_paths.txt | grep -v '^\s*$')
           flutter test "${contract_paths[@]}"
           flutter test "${ui_paths[@]}"
 
@@ -88,12 +90,13 @@ jobs:
           python-version: "3.11"
 
       - name: Validate appcast tooling
-        run: python3 -m unittest tool.test_appcast_manager tool.test_validate_release -v
+        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release -v
 
       - name: Validate benchmark tooling
         run: |
           python3 -m unittest \
             tool.tests.test_run_benchmark_suite \
+            tool.tests.test_odbc_benchmark_gate \
             tool.tests.test_compare_benchmark_summary \
             tool.tests.test_benchmark_migrate \
             tool.tests.test_promote_benchmark_baseline \
@@ -168,7 +171,7 @@ jobs:
 
       - name: Build elevated action runner helper
         shell: pwsh
-        run: python tool/build_elevated_runner.py
+        run: python tool/elevated/build_elevated_runner.py
 
       - name: Smoke elevated action runner helper
         shell: pwsh
@@ -217,7 +220,7 @@ jobs:
 
       - name: Run transport benchmark suite
         run: |
-          python tool/run_benchmark_suite.py \
+          python tool/benchmarks/run_benchmark_suite.py \
             --only transport_pipeline \
             --skip-dart-tool
 
@@ -230,7 +233,7 @@ jobs:
             echo "No benchmark summary produced; skipping baseline compare."
             exit 0
           fi
-          python tool/compare_benchmark_summary.py \
+          python tool/benchmarks/compare_benchmark_summary.py \
             --baseline benchmarks/baseline/summary.json \
             --current "$latest" \
             --threshold 0.25

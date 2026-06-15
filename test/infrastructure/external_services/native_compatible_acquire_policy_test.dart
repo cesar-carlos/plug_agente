@@ -13,6 +13,10 @@ import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_
 void main() {
   setUp(() {
     dotenv.clean();
+    // Release gate imports .env into process env; dotenv overrides take precedence.
+    dotenv.loadFromString(
+      envString: 'ODBC_READ_ONLY_BATCH_NATIVE_POOL_ENABLED=false',
+    );
   });
 
   group('NativeCompatibleAcquirePolicy pure classification', () {
@@ -159,6 +163,37 @@ void main() {
             pagination: const QueryPaginationRequest(page: 1, pageSize: 10),
           ),
           preparedExecution: _prepared('SELECT id FROM users'),
+          acquireOptions: null,
+          timeout: null,
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns true for bounded parameterized SELECT on SQL Server', () async {
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseAcquire(
+          databaseType: DatabaseType.sqlServer,
+          request: _request('SELECT id FROM users WHERE id = :id'),
+          preparedExecution: _prepared(
+            'SELECT TOP 10 id FROM users WHERE id = ?',
+            parameters: const {'id': 1},
+          ),
+          acquireOptions: null,
+          timeout: null,
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns true for bounded SELECT without highThroughput profile', () async {
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseAcquire(
+          databaseType: DatabaseType.postgresql,
+          request: _request('SELECT id FROM users LIMIT 100'),
+          preparedExecution: _prepared('SELECT id FROM users LIMIT 100'),
           acquireOptions: null,
           timeout: null,
         ),
@@ -361,6 +396,6 @@ QueryRequest _request(String sql, {QueryPaginationRequest? pagination}) {
   );
 }
 
-OdbcPreparedQueryExecution _prepared(String sql) {
-  return OdbcPreparedQueryExecution(sql: sql, parameters: null);
+OdbcPreparedQueryExecution _prepared(String sql, {Map<String, dynamic>? parameters}) {
+  return OdbcPreparedQueryExecution(sql: sql, parameters: parameters);
 }

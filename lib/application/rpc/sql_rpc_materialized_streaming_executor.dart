@@ -51,7 +51,6 @@ class SqlRpcMaterializedStreamingExecutor {
         overflowed = true;
         break;
       }
-      await Future<void>.delayed(Duration.zero);
     }
 
     if (!overflowed) {

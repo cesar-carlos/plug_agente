@@ -105,7 +105,12 @@ def collect_machine_metadata() -> dict[str, str]:
 
 
 def odbc_dsn_configured() -> bool:
-    for key in ("ODBC_TEST_DSN", "ODBC_DSN"):
+    for key in (
+        "ODBC_TEST_DSN_SQL_SERVER",
+        "ODBC_DSN_SQL_SERVER",
+        "ODBC_TEST_DSN",
+        "ODBC_DSN",
+    ):
         value = os.environ.get(key, "").strip()
         if value:
             return True

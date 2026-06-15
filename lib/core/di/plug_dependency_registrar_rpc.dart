@@ -7,7 +7,9 @@ void _registerRpc(
 }) {
   getIt
     ..registerLazySingleton<SqlRpcMethodHandlerOperationsFactory>(
-      () => const SqlRpcMethodHandlerOperationsFactory(),
+      () => SqlRpcMethodHandlerOperationsFactory(
+        getIt<IStreamingNamedParameterPreparer>(),
+      ),
     )
     ..registerLazySingleton<AgentActionRpcMethodHandlerOperationsFactory>(
       () => const AgentActionRpcMethodHandlerOperationsFactory(),

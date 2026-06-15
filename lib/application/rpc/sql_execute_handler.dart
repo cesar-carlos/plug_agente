@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
+import 'package:plug_agente/application/rpc/sql_db_streaming_auto_policy.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/rpc/sql_execute_result_mapper.dart';
 import 'package:plug_agente/application/rpc/sql_options_resolver.dart';
@@ -35,6 +36,7 @@ class SqlExecuteHandler {
     required SqlRpcDbStreamingExecutor dbStreamingExecutor,
     required SqlRpcMaterializedStreamingExecutor materializedStreamingExecutor,
     required Duration sqlExecuteTotalBudget,
+    SqlDbStreamingAutoPolicy? dbStreamingAutoPolicy,
     IDeprecationMetricsCollector? deprecationMetrics,
     IRpcDispatchMetricsCollector? dispatchMetrics,
   }) : _normalizerService = normalizerService,
@@ -45,6 +47,7 @@ class SqlExecuteHandler {
        _odbcBudgetRunner = odbcBudgetRunner,
        _dbStreamingExecutor = dbStreamingExecutor,
        _materializedStreamingExecutor = materializedStreamingExecutor,
+       _dbStreamingAutoPolicy = dbStreamingAutoPolicy ?? SqlDbStreamingAutoPolicy(),
        _sqlExecuteTotalBudgetDuration = sqlExecuteTotalBudget,
        _deprecationMetrics = deprecationMetrics,
        _dispatchMetrics = dispatchMetrics;
@@ -57,6 +60,7 @@ class SqlExecuteHandler {
   final SqlRpcOdbcBudgetRunner _odbcBudgetRunner;
   final SqlRpcDbStreamingExecutor _dbStreamingExecutor;
   final SqlRpcMaterializedStreamingExecutor _materializedStreamingExecutor;
+  final SqlDbStreamingAutoPolicy _dbStreamingAutoPolicy;
   final Duration _sqlExecuteTotalBudgetDuration;
   final IDeprecationMetricsCollector? _deprecationMetrics;
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
@@ -209,6 +213,19 @@ class SqlExecuteHandler {
           return streamingFromDbResponse;
         }
 
+        final prefersDbStreaming = _dbStreamingAutoPolicy.prefersDbStreamingOverMaterialized(
+          featureFlags: _featureFlags,
+          queryRequest: queryRequest,
+          sql: sql,
+          negotiatedExtensions: negotiatedExtensions,
+          preferDbStreaming: options?['prefer_db_streaming'] == true,
+          effectiveMaxRows: maxRows,
+          limits: limits,
+        );
+        if (prefersDbStreaming) {
+          _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('db_streaming_unavailable_fallback');
+        }
+
         final result = await _odbcBudgetRunner.executeQuery(
           queryRequest,
           database: database,
@@ -219,7 +236,9 @@ class SqlExecuteHandler {
 
         return result.fold<Future<RpcResponse>>(
           (QueryResponse queryResponse) async {
-            final normalized = await _normalizerService.normalizeAsync(queryResponse);
+            final normalized = queryRequest.sqlHandlingMode == SqlHandlingMode.preserve
+                ? queryResponse
+                : await _normalizerService.normalizeAsync(queryResponse);
 
             final hasMultiResultSets = normalized.resultSets.isNotEmpty;
             var truncatedMulti = normalized;
@@ -240,13 +259,27 @@ class SqlExecuteHandler {
                   )
                 : limitedRows.length != normalized.data.length;
             final responseForWire = hasMultiResultSets ? truncatedMulti : normalized;
+            final avoidMaterializedStreaming = _dbStreamingAutoPolicy.prefersDbStreamingOverMaterialized(
+              featureFlags: _featureFlags,
+              queryRequest: queryRequest,
+              sql: sql,
+              negotiatedExtensions: negotiatedExtensions,
+              preferDbStreaming: options?['prefer_db_streaming'] == true,
+              effectiveMaxRows: maxRows,
+              limits: limits,
+            );
             final useStreaming =
                 _featureFlags.enableSocketStreamingChunks &&
                 streamEmitter != null &&
                 !request.isNotification &&
                 pagination == null &&
                 !responseForWire.hasMultiResult &&
-                limitedRows.length > limits.streamingRowThreshold;
+                limitedRows.length > limits.streamingRowThreshold &&
+                !avoidMaterializedStreaming;
+
+            if (!useStreaming && avoidMaterializedStreaming && limitedRows.length > limits.streamingRowThreshold) {
+              _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('materialized_streaming_avoided');
+            }
 
             if (useStreaming) {
               return _materializedStreamingExecutor.streamMaterializedResult(

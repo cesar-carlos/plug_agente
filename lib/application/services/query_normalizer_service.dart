@@ -1,6 +1,7 @@
 import 'dart:isolate';
 
 import 'package:plug_agente/application/validation/query_normalizer.dart';
+import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
 
@@ -10,10 +11,14 @@ class QueryNormalizerService {
 
   static final RegExp _columnWhitespace = RegExp(r'\s+');
   static final RegExp _columnNonAlnum = RegExp('[^a-z0-9_]');
+  static final RegExp _wireSafeColumnKey = RegExp(r'^[a-z][a-z0-9_]*$');
 
   /// Row count above which normalization runs in a background isolate so the
   /// UI isolate stays responsive during hub/playground materialized responses.
   static int normalizeIsolateRowThreshold = TransportLimits.defaultStreamingRowThreshold;
+
+  /// Minimum rows before skipping a full key rewrite when keys are already wire-safe.
+  static int skipRowRewriteRowThreshold = 64;
 
   static int totalRowCount(QueryResponse response) {
     if (response.resultSets.isEmpty) {
@@ -27,15 +32,27 @@ class QueryNormalizerService {
   }
 
   /// Normalizes on the current isolate or offloads when [totalRowCount] is high.
-  Future<QueryResponse> normalizeAsync(QueryResponse response) async {
-    if (totalRowCount(response) < normalizeIsolateRowThreshold) {
-      return normalize(response);
+  Future<QueryResponse> normalizeAsync(
+    QueryResponse response, {
+    SqlHandlingMode sqlHandlingMode = SqlHandlingMode.managed,
+  }) async {
+    if (_shouldSkipNormalization(response, sqlHandlingMode: sqlHandlingMode)) {
+      return response;
     }
-    return Isolate.run(() => normalizeQueryResponseInIsolate(response));
+    if (totalRowCount(response) < normalizeIsolateRowThreshold) {
+      return normalize(response, sqlHandlingMode: sqlHandlingMode);
+    }
+    return Isolate.run(() => normalizeQueryResponseInIsolate(response, sqlHandlingMode: sqlHandlingMode));
   }
 
   /// Normalizes row maps and column names for RPC/hub consumption (sync CPU work).
-  QueryResponse normalize(QueryResponse response) {
+  QueryResponse normalize(
+    QueryResponse response, {
+    SqlHandlingMode sqlHandlingMode = SqlHandlingMode.managed,
+  }) {
+    if (_shouldSkipNormalization(response, sqlHandlingMode: sqlHandlingMode)) {
+      return response;
+    }
     final keyCache = <String, String>{};
     final normalizedData = normalizeRows(
       response.data,
@@ -108,6 +125,62 @@ class QueryNormalizerService {
     return normalizedData;
   }
 
+  bool _shouldSkipNormalization(
+    QueryResponse response, {
+    required SqlHandlingMode sqlHandlingMode,
+  }) {
+    if (sqlHandlingMode == SqlHandlingMode.preserve) {
+      return true;
+    }
+    final rowCount = totalRowCount(response);
+    if (rowCount < skipRowRewriteRowThreshold) {
+      return false;
+    }
+    return _rowsLookWireSafe(response);
+  }
+
+  bool _rowsLookWireSafe(QueryResponse response) {
+    if (response.resultSets.isNotEmpty) {
+      for (final resultSet in response.resultSets) {
+        if (!_rowMapsLookWireSafe(resultSet.rows)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return _rowMapsLookWireSafe(response.data);
+  }
+
+  bool _rowMapsLookWireSafe(List<Map<String, dynamic>> rows) {
+    if (rows.isEmpty) {
+      return false;
+    }
+    for (final row in rows) {
+      for (final entry in row.entries) {
+        if (!_wireSafeColumnKey.hasMatch(entry.key)) {
+          return false;
+        }
+        if (!_valueLooksWireSafe(entry.value)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  bool _valueLooksWireSafe(dynamic value) {
+    if (value == null) {
+      return true;
+    }
+    if (value is String) {
+      return value == value.trim();
+    }
+    if (value is num || value is bool) {
+      return true;
+    }
+    return false;
+  }
+
   String _normalizeColumnName(String columnName) {
     if (columnName.isEmpty) return 'column';
 
@@ -130,6 +203,12 @@ class QueryNormalizerService {
 }
 
 /// Top-level entry for `Isolate.run` when normalizing large result sets off the UI isolate.
-QueryResponse normalizeQueryResponseInIsolate(QueryResponse response) {
-  return QueryNormalizerService(QueryNormalizer()).normalize(response);
+QueryResponse normalizeQueryResponseInIsolate(
+  QueryResponse response, {
+  SqlHandlingMode sqlHandlingMode = SqlHandlingMode.managed,
+}) {
+  return QueryNormalizerService(QueryNormalizer()).normalize(
+    response,
+    sqlHandlingMode: sqlHandlingMode,
+  );
 }

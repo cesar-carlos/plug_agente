@@ -4,7 +4,7 @@ Indice da superficie Fluent **Acoes** e gates de regressao. Plano completo:
 [plano_acoes_agendadas_execucoes.md](../plano_acoes_agendadas_execucoes.md).
 
 **Status (2026-05-21):** pagina operacional e gate UI fechado no manifesto
-`tool/agent_actions_ui_test_paths.txt` (7 arquivos:
+`tool/agent_actions/manifests/agent_actions_ui_test_paths.txt` (7 arquivos:
 `agent_actions_page_test.dart` agora e shim que reexporta
 `agent_actions_actions_tab_test.dart` (~73 cenarios) e
 `agent_actions_settings_tab_test.dart` (~5 cenarios), alem de
@@ -44,7 +44,7 @@ aprovado + Hub com policy/live signing alinhados.
 
 ## Testes de regressao (obrigatorio ao mudar layout/fluxo)
 
-Manifesto: `tool/agent_actions_ui_test_paths.txt`
+Manifesto: `tool/agent_actions/manifests/agent_actions_ui_test_paths.txt`
 
 ```powershell
 flutter test test/presentation/pages/agent_actions_page_test.dart
@@ -54,7 +54,7 @@ flutter test test/presentation/widgets/agent_actions/
 Ou gate completo:
 
 ```powershell
-python tool/run_agent_actions_operational_gate.py
+python tool/agent_actions/run_agent_actions_operational_gate.py
 ```
 
 Cenarios criticos cobertos nos testes (nao exaustivo):

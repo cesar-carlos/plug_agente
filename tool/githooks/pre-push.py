@@ -9,7 +9,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RELEASE_SENSITIVE_PATTERN = re.compile(
-    r"^(pubspec\.yaml|lib/|test/|tool/release_preflight\.py|tool/pre_publish_release\.py)"
+    r"^(pubspec\.yaml|lib/|test/|tool/release/release_preflight.py|tool/release/pre_publish_release.py)"
 )
 
 
@@ -59,7 +59,7 @@ def main() -> int:
     result = subprocess.run(
         [
             sys.executable,
-            "tool/release_preflight.py",
+            "tool/release/release_preflight.py",
             "--gate",
             "--allow-dirty",
             "--allow-existing-tag",

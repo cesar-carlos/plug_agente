@@ -21,7 +21,7 @@ import 'package:plug_agente/infrastructure/actions/script_action_adapter.dart';
 import 'package:plug_agente/infrastructure/actions/script_action_process_runner.dart';
 import 'package:plug_agente/infrastructure/stores/noop_agent_action_secret_store.dart';
 
-import '../../../tool/agent_action_security_gate_checklist.dart';
+import '../../../tool/agent_actions/agent_action_security_gate_checklist.dart';
 import 'agent_action_process_runner_test_support.dart';
 
 /// Mirrors production registration in `plug_dependency_registrar` for MVP 5 types.

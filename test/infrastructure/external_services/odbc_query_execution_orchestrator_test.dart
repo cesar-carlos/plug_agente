@@ -68,7 +68,7 @@ void main() {
         markConnectionForDiscard: connectionManager.markConnectionForDiscard,
       );
       final queryRunner = OdbcQueryRunner(
-        service: mockService,
+        queries: mockService,
         metrics: metrics,
         statementExecutor: statementExecutor,
         resultEncodingExecutor: OdbcResultEncodingExecutor(mockService),
@@ -100,7 +100,7 @@ void main() {
         ),
       ).thenAnswer((_) async => const Success(9001));
       when(
-        () => mockService.executePrepared(
+        () => mockService.executePreparedParamValuesFromObjects(
           any(),
           any(),
           any(),
@@ -409,13 +409,11 @@ void main() {
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.executeQueryMultiFull(
+          () => mockService.streamQueryMulti(
             pooledConnectionId,
             any(),
           ),
-        ).thenAnswer((_) async {
-          return const Success(QueryResultMulti(items: []));
-        });
+        ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
         ).thenAnswer((_) async {
@@ -429,35 +427,35 @@ void main() {
           );
         });
         when(
-          () => mockService.executeQueryMultiFull(
+          () => mockService.streamQueryMulti(
             directConnectionId,
             any(),
           ),
-        ).thenAnswer((_) async {
-          return const Success(
-            QueryResultMulti(
-              items: [
-                QueryResultMultiItem.resultSet(
-                  QueryResult(
-                    columns: ['a'],
-                    rows: [
-                      [1],
-                    ],
-                    rowCount: 1,
-                  ),
+        ).thenAnswer((_) {
+          return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
+            Success(
+              QueryResultMultiItem.resultSet(
+                QueryResult(
+                  columns: ['a'],
+                  rows: [
+                    [1],
+                  ],
+                  rowCount: 1,
                 ),
-                QueryResultMultiItem.resultSet(
-                  QueryResult(
-                    columns: ['b'],
-                    rows: [
-                      [2],
-                    ],
-                    rowCount: 1,
-                  ),
-                ),
-              ],
+              ),
             ),
-          );
+            Success(
+              QueryResultMultiItem.resultSet(
+                QueryResult(
+                  columns: ['b'],
+                  rows: [
+                    [2],
+                  ],
+                  rowCount: 1,
+                ),
+              ),
+            ),
+          ]);
         });
         when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
           return const Success(unit);
@@ -477,10 +475,10 @@ void main() {
         expect(response.resultSets, hasLength(2));
         expect(response.data.single['a'], 1);
         verify(
-          () => mockService.executeQueryMultiFull(pooledConnectionId, sql),
+          () => mockService.streamQueryMulti(pooledConnectionId, sql),
         ).called(1);
         verify(
-          () => mockService.executeQueryMultiFull(directConnectionId, sql),
+          () => mockService.streamQueryMulti(directConnectionId, sql),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         expect(metrics.multiResultPoolVacuousFallbackCount, 1);

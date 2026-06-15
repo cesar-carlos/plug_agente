@@ -14,10 +14,12 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
     required bool Function(String streamId, BackpressureStreamEmitter emitter) onRegister,
     required void Function(String streamId) onUnregister,
     int? maxQueueSize,
+    int? initialSendCredit,
   }) : _emit = emit,
        _onRegister = onRegister,
        _onUnregister = onUnregister,
-       _maxQueueSize = maxQueueSize ?? ConnectionConstants.maxBackpressureChunkQueueSize;
+       _maxQueueSize = maxQueueSize ?? ConnectionConstants.maxBackpressureChunkQueueSize,
+       _sendCredit = initialSendCredit ?? 1;
 
   final Future<bool> Function(String event, Map<String, dynamic> payload) _emit;
   final bool Function(String streamId, BackpressureStreamEmitter emitter) _onRegister;
@@ -33,7 +35,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   // unreliable. Future [emitChunk] calls return `false` so the caller falls
   // back to its overflow handling (typically cancelling the active stream).
   bool _isFaulted = false;
-  int _sendCredit = 1;
+  int _sendCredit;
 
   // Serializes _flush calls so concurrent releaseChunks + emitChunk invocations
   // cannot reorder chunk_index on the wire. Each caller chains onto the
@@ -118,7 +120,6 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
       }
       _registered = true;
     }
-    _scheduleFlush();
     await _flushInFlight;
     if (_isFaulted) {
       return false;

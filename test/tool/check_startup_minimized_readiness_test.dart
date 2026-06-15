@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('startup minimized readiness tool', () {
     test('checks both user and machine startup registry scopes', () {
-      final script = File('tool/check_startup_minimized_readiness.dart').readAsStringSync();
+      final script = File('tool/dev/check_startup_minimized_readiness.dart').readAsStringSync();
       final registryHelper = File('lib/infrastructure/services/startup_registry_entry.dart').readAsStringSync();
 
       expect(script, contains('StartupRegistryScope.values'));
@@ -14,7 +14,7 @@ void main() {
     });
 
     test('supports expected executable path validation', () {
-      final script = File('tool/check_startup_minimized_readiness.dart').readAsStringSync();
+      final script = File('tool/dev/check_startup_minimized_readiness.dart').readAsStringSync();
 
       expect(script, contains('--expected-exe'));
       expect(script, contains('matchesExpectedExecutable'));

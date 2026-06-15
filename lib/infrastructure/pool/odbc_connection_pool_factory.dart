@@ -5,6 +5,7 @@ import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
+import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/adaptive_odbc_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_pool.dart';
@@ -31,8 +32,9 @@ IConnectionPool createOdbcConnectionPool(
   IOdbcConnectionSettings settings,
   MetricsCollector metricsCollector,
   FeatureFlags featureFlags,
-  Object? configContext,
-) {
+  Object? configContext, {
+  OdbcProfileRecommendedOptions? recommendedOptions,
+}) {
   final queryConfigSource = configContext is IQueryConfigSource ? configContext : null;
   final configRepository = configContext is IAgentConfigRepository ? configContext : null;
   if (featureFlags.enableOdbcExperimentalDriverAdaptivePooling) {
@@ -41,11 +43,13 @@ IConnectionPool createOdbcConnectionPool(
         service,
         settings,
         metricsCollector: metricsCollector,
+        recommendedOptions: recommendedOptions,
       ),
       nativePool: OdbcNativeConnectionPool(
         service,
         settings,
         metricsCollector: metricsCollector,
+        recommendedOptions: recommendedOptions,
       ),
       featureFlags: featureFlags,
       metricsCollector: metricsCollector,
@@ -59,5 +63,6 @@ IConnectionPool createOdbcConnectionPool(
     service,
     settings,
     metricsCollector: metricsCollector,
+    recommendedOptions: recommendedOptions,
   );
 }

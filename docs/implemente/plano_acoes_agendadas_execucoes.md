@@ -45,7 +45,7 @@ e [Riscos aceitos (MVP agente)](#riscos-aceitos-mvp-agente).
 
 | Prioridade | ID | Entrega | Dono | Gate / referencia |
 | --- | --- | --- | --- | --- |
-| P0 | RA-05 | Live Hub E2E opt-in | QA + `.env` | `validate_live_hub_agent_actions_env.dart`; `python tool/homologate_hub_agent_actions.py --validate-live-env --run-live-tests`; `docs/testing/e2e_setup.md` |
+| P0 | RA-05 | Live Hub E2E opt-in | QA + `.env` | `validate_live_hub_agent_actions_env.dart`; `python tool/agent_actions/homologate_hub_agent_actions.py --validate-live-env --run-live-tests`; `docs/testing/e2e_setup.md` |
 | P0 | RA-02 | Allowlist fina e rate limit no **Hub** | repositorio Hub | Policy alinhada a `AgentActionRemoteAuthorizationService` no agente |
 | P1 | RA-01 | Handlers **COM** de producao | agente | `com_object_production_registrations.dart`; ou manter stub + RA-01 documentado |
 | P1 | RA-06 | Elevado em campo (UAC, distribuicao assinada) | ops | `homologate_elevated_runner.py`; helper instalado |
@@ -78,7 +78,7 @@ atual nestes tres grupos:
   auditoria, riscos remotos, confirmacoes e export de diagnostico de execucao.
 - Retencao operacional editavel (`AgentActionRetentionSettings` + card na pagina
   **Acoes**, purge/cleanup e TTL de idempotencia RPC alinhados; gate local/CI
-  `python tool/homologate_hub_agent_actions.py --run-contract-tests`).
+  `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests`).
 
 ### Estabilizacao UI/operacao (fechado 2026-05-19)
 
@@ -379,7 +379,7 @@ Contract gate: `test/application/actions/agent_action_execution_orchestrator_tes
    `start()`). Testes: `test/application/actions/action_execution_queue_metrics_test.dart`.
 5. **E2E / homologacao** — cenario minimo Socket.IO quando fizer sentido para o
    time (variaveis em `E2EEnv`). **Feito no agente (2026-05-19):** runner
-   `tool/homologate_hub_agent_actions.py` (`--run-contract-tests`, `--run-live-tests`);
+   `tool/agent_actions/homologate_hub_agent_actions.py` (`--run-contract-tests`, `--run-live-tests`);
    teste opt-in
    `test/integration/hub_agent_action_rpc_live_e2e_test.dart` (tags `live`):
    `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true` exige tambem `RUN_LIVE_HUB_TESTS`,
@@ -402,8 +402,8 @@ Contract gate: `test/application/actions/agent_action_execution_orchestrator_tes
    `agent_actions_summary_card_test.dart` (metricas isoladas do summary);
    `com_object_invocation_bootstrap_test.dart` no gate;
    repetir apos mudancas no gate. **CI (2026-05-20):** listas em
-   `tool/agent_actions_contract_test_paths.txt` e `tool/agent_actions_ui_test_paths.txt`
-   (fonte unica para `python tool/homologate_hub_agent_actions.py --run-contract-tests` e
+   `tool/agent_actions/manifests/agent_actions_contract_test_paths.txt` e `tool/agent_actions/manifests/agent_actions_ui_test_paths.txt`
+   (fonte unica para `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests` e
    `flutter_ci.yml`); preflight estatico antes do bundle de testes.
    **Live (2026-05-19):** `--validate-live-env` valida `.env` antes de `--run-live-tests`;
    Hub opt-in no job `live-hub-e2e` (`workflow_dispatch` + secrets).
@@ -761,8 +761,8 @@ no codigo e o que ainda exige gate operacional.
 **Revisao de PR (checklist curto):**
 
 1. Confirmar linha da tabela acima para o tipo alterado.
-2. Rodar `python tool/run_agent_actions_operational_gate.py` (ou `python tool/homologate_hub_agent_actions.py --run-contract-tests`).
-3. Imprimir checklist por tipo: `dart run tool/agent_action_security_gate_checklist.dart [tipo]`.
+2. Rodar `python tool/agent_actions/run_agent_actions_operational_gate.py` (ou `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests`).
+3. Imprimir checklist por tipo: `dart run tool/agent_actions/agent_action_security_gate_checklist.dart [tipo]`.
 4. Se habilitar remoto/elevado/ad-hoc: atualizar OpenRPC/schemas e validar
    `FeatureFlags` + aprovacao remota na UI.
 5. Registrar risco aceito em "Decisoes Pendentes" ou **Riscos aceitos** se algo ficar
@@ -921,7 +921,7 @@ Regras gerais:
   implementacao, os schemas, OpenRPC, documentacao de comunicacao e testes de
   contrato correspondentes.
   **Parcial (2026-05-19):** gate local (`contract_fixtures_test`, `openrpc_contract_test`,
-  `python tool/homologate_hub_agent_actions.py --run-contract-tests`, job CI); repetir ao alterar
+  `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests`, job CI); repetir ao alterar
   contrato publicado.
 - [x] TODO: Nao comunicar ao operador que o caminho Hub esta **pronto para producao**
   antes de fechar endurecimento: allowlist fina de acoes/scopes no Hub, auditoria
@@ -1127,36 +1127,36 @@ backfill de correlacao, mensagens de notificacao, constantes RPC/gates/queues, e
 
 | Validacao | Comando |
 | --- | --- |
-| Preflight `.env` | `dart run tool/check_e2e_env.dart` |
-| Live Hub `.env` only | `dart run tool/validate_live_hub_agent_actions_env.dart` |
-| Sugestão URL (Windows) | `dart run tool/suggest_e2e_hub_from_local_config.dart` (`--apply-url` grava `E2E_HUB_URL` se vazio) |
-| Token E2E (Windows) | `dart run tool/fetch_e2e_hub_token_from_local_config.dart --apply-token` (`--force`; DB, credenciais salvas ou `E2E_HUB_USERNAME`/`PASSWORD` no `.env`; não imprime token) |
-| Sync completo (Windows) | `dart run tool/sync_e2e_hub_env_from_local.dart --export-secure` (inclui `--apply-agent-id`) |
-| Agent id E2E | `dart run tool/suggest_e2e_hub_from_local_config.dart --apply-agent-id` |
-| Prepare live | `python tool/homologate_hub_agent_actions.py --prepare-live-env` (sync `.env`, signing monorepo/dev, `fetch_e2e_hub_token --apply-token --force`) |
-| Signing do monorepo | `dart run tool/promote_e2e_signing_from_monorepo_env.dart` (`plug_server/.env`) |
-| Signing dev (par novo) | `dart run tool/generate_dev_e2e_signing.dart --write` (agente + `plug_server/.env` no monorepo, se existir) |
+| Preflight `.env` | `dart run tool/e2e/check_e2e_env.dart` |
+| Live Hub `.env` only | `dart run tool/e2e/validate_live_hub_agent_actions_env.dart` |
+| Sugestão URL (Windows) | `dart run tool/e2e/suggest_e2e_hub_from_local_config.dart` (`--apply-url` grava `E2E_HUB_URL` se vazio) |
+| Token E2E (Windows) | `dart run tool/e2e/fetch_e2e_hub_token_from_local_config.dart --apply-token` (`--force`; DB, credenciais salvas ou `E2E_HUB_USERNAME`/`PASSWORD` no `.env`; não imprime token) |
+| Sync completo (Windows) | `dart run tool/e2e/sync_e2e_hub_env_from_local.dart --export-secure` (inclui `--apply-agent-id`) |
+| Agent id E2E | `dart run tool/e2e/suggest_e2e_hub_from_local_config.dart --apply-agent-id` |
+| Prepare live | `python tool/agent_actions/homologate_hub_agent_actions.py --prepare-live-env` (sync `.env`, signing monorepo/dev, `fetch_e2e_hub_token --apply-token --force`) |
+| Signing do monorepo | `dart run tool/e2e/promote_e2e_signing_from_monorepo_env.dart` (`plug_server/.env`) |
+| Signing dev (par novo) | `dart run tool/e2e/generate_dev_e2e_signing.dart --write` (agente + `plug_server/.env` no monorepo, se existir) |
 | Smoke Hub (sem signing) | `flutter test test/integration/hub_socket_live_e2e_test.dart --name "should connect"` |
 | Smoke Hub (HMAC) | `flutter test test/integration/hub_socket_live_e2e_test.dart --name "signed PayloadFrame"` |
-| Preflight producao (estatico) | `python tool/preflight_agent_actions_production.py` ou `dart run tool/preflight_agent_actions_production.dart` (`--strict-com` exige handlers COM ou stub completo) |
-| Manifesto de testes | `tool/agent_actions_contract_test_paths.txt`, `tool/agent_actions_ui_test_paths.txt` |
-| Security gate (PR) | `dart run tool/agent_action_security_gate_checklist.dart` ou `[tipo]` |
-| Gate local/CI (atalho) | `python tool/run_agent_actions_operational_gate.py` (= preflight estatico + homologate contrato/UI) |
-| Gate local/CI | `python tool/homologate_hub_agent_actions.py --run-contract-tests` (preflight + manifesto) |
-| Preflight + contrato | `python tool/preflight_agent_actions_production.py --run-contract-tests` |
-| Live Hub (opt-in) | `python tool/homologate_hub_agent_actions.py --validate-live-env --run-contract-tests --run-live-tests` (connect + capabilities smoke antes de `hub_agent_action_rpc_live_e2e_test.dart`) |
+| Preflight producao (estatico) | `python tool/agent_actions/preflight_agent_actions_production.py` ou `dart run tool/agent_actions/preflight_agent_actions_production.dart` (`--strict-com` exige handlers COM ou stub completo) |
+| Manifesto de testes | `tool/agent_actions/manifests/agent_actions_contract_test_paths.txt`, `tool/agent_actions/manifests/agent_actions_ui_test_paths.txt` |
+| Security gate (PR) | `dart run tool/agent_actions/agent_action_security_gate_checklist.dart` ou `[tipo]` |
+| Gate local/CI (atalho) | `python tool/agent_actions/run_agent_actions_operational_gate.py` (= preflight estatico + homologate contrato/UI) |
+| Gate local/CI | `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests` (preflight + manifesto) |
+| Preflight + contrato | `python tool/agent_actions/preflight_agent_actions_production.py --run-contract-tests` |
+| Live Hub (opt-in) | `python tool/agent_actions/homologate_hub_agent_actions.py --validate-live-env --run-contract-tests --run-live-tests` (connect + capabilities smoke antes de `hub_agent_action_rpc_live_e2e_test.dart`) |
 
 ### Roteiro operacional pos-MVP (agente)
 
 Ordem sugerida antes de tratar o agente como pronto para campo/Hub de producao:
 
-1. `python tool/run_agent_actions_operational_gate.py` — preflight estatico + homologate contrato/UI (passos 1–2).
-2. Alternativa manual: `dart run tool/preflight_agent_actions_production.dart` e
-   `python tool/homologate_hub_agent_actions.py --run-contract-tests`.
-3. Por tipo que ganhar remoto/elevado: `dart run tool/agent_action_security_gate_checklist.dart <tipo>` + sign-off humano (RA-04).
-4. Windows: `python tool/homologate_hub_agent_actions.py --prepare-live-env` quando for rodar live Hub.
-5. `dart run tool/validate_live_hub_agent_actions_env.dart` — validar `.env` (JWT, signing, variaveis).
-6. `python tool/homologate_hub_agent_actions.py --validate-live-env --run-live-tests` — smoke + `hub_agent_action_rpc_live_e2e_test.dart`.
+1. `python tool/agent_actions/run_agent_actions_operational_gate.py` — preflight estatico + homologate contrato/UI (passos 1–2).
+2. Alternativa manual: `dart run tool/agent_actions/preflight_agent_actions_production.dart` e
+   `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests`.
+3. Por tipo que ganhar remoto/elevado: `dart run tool/agent_actions/agent_action_security_gate_checklist.dart <tipo>` + sign-off humano (RA-04).
+4. Windows: `python tool/agent_actions/homologate_hub_agent_actions.py --prepare-live-env` quando for rodar live Hub.
+5. `dart run tool/e2e/validate_live_hub_agent_actions_env.dart` — validar `.env` (JWT, signing, variaveis).
+6. `python tool/agent_actions/homologate_hub_agent_actions.py --validate-live-env --run-live-tests` — smoke + `hub_agent_action_rpc_live_e2e_test.dart`.
 7. Registrar handlers COM em `com_object_production_registrations.dart` ou manter RA-01 documentado.
 8. Hub (outro repo): allowlist/rate limit alinhados ao agente (RA-02).
 
@@ -1572,7 +1572,7 @@ fatias menores que possam ser revisadas e testadas isoladamente:
    seguro, instalacao/reparo e UI de preparacao.
    **Parcial (implementado no repo, 2026-05-19):** pacote
    `tool/plug_agente_elevated_runner/` (`plug_agente_elevated_runner.exe` via
-   `tool/build_elevated_runner.py`), `ElevatedActionRunnerInstaller` + tarefa
+   `tool/elevated/build_elevated_runner.py`), `ElevatedActionRunnerInstaller` + tarefa
    `PlugAgente\ElevatedActionRunner`, bridge request/status/cancel em
    `lib/infrastructure/actions/elevated_action_runner_bridge.dart`,
    `elevated_action_execution_canceller.dart`,
@@ -2568,7 +2568,7 @@ Leitura operacional deste arquivo a partir de **2026-05-18**:
    `draining`. **Agente fechado (2026-05-19);** producao Hub/threat model segue.
 11. [x] TODO: Fazer spike e depois implementar runner elevado.
    **Parcial:** nucleo + testes unitarios; pre-flight
-   `tool/homologate_elevated_runner.py`; homologacao UAC/UI em campo pendente.
+   `tool/elevated/homologate_elevated_runner.py`; homologacao UAC/UI em campo pendente.
 12. [x] TODO: Implementar tipos adicionais um por vez.
    **Parcial (2026-05-19):** MVP 5 com adapter+runner+UI para `executable`, `script`,
    `jar`, `email`, `comObject`; `developer`/Data7 operacional; producao por tipo
@@ -2608,7 +2608,7 @@ MVP, mas estes caminhos indicam o local esperado por responsabilidade:
   requests, responses e erros dos metodos `agent.action.*`.
   Implementado: `test/fixtures/rpc/` + `contract_fixtures_test.dart` (fixtures RPC +
   erros `agent.action.*`); homologacao local agrega mais suites (RPC mapper, health,
-  scheduler, Data7, UI). Gate: `tool/python tool/homologate_hub_agent_actions.py --run-contract-tests`
+  scheduler, Data7, UI). Gate: `tool/python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests`
   (**183** testes de contrato + **32** de UI, 2026-05-19).
 - [x] TODO: `test/domain/agent_actions/`: testes de enums, policies, status e
   validacao. **Nao migrado** para subpasta dedicada; cobertura em
@@ -2673,7 +2673,7 @@ adicionar variante, revalidar o que for especifico do tipo.
    `agent_action_type_registry_contract_test.dart`.
 13. [x] TODO: Seguranca base — redator, failures tipadas, kill guard (runners de processo).
 14. [x] TODO: Threat model do tipo — revisao por PR antes de producao (processo; nao codigo).
-  **Processo:** `dart run tool/agent_action_security_gate_checklist.dart [tipo]` + sign-off humano;
+  **Processo:** `dart run tool/agent_actions/agent_action_security_gate_checklist.dart [tipo]` + sign-off humano;
   baseline em "Threat model baseline por adapter"; gate CI imprime checklist ao final de `--run-contract-tests`.
 15. [x] TODO: Contexto/hash — `AgentActionContextPolicy` + `contextHash` quando aplicavel.
 16. [x] TODO: Segredos do tipo — `${secret:}` + store (email/COM/commandLine e demais via policy).
@@ -2961,7 +2961,7 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
   `script`, `jar`, `developer`); quoting avancado (2026-05-18):
   `WindowsCommandLineQuoter` (regras MSVC) para previews redigidos,
   rejeicao de argumentos com `\\n`/`\\r`/NUL em invocacoes estruturadas;
-  `tool/homologate_hub_agent_actions.py` inclui normalizer + RPC mapper nos
+  `tool/agent_actions/homologate_hub_agent_actions.py` inclui normalizer + RPC mapper nos
   testes de contrato locais.
 - [x] TODO: Implementar `ActionEnvironmentResolver` para variaveis de ambiente
   permitidas e placeholders de segredo. Parcial: `AgentActionEnvironmentPolicy`
@@ -3262,7 +3262,7 @@ existir antes de qualquer gatilho ou adapter adicional executar side effects.
 UI `prepareElevatedRunner`. Itens abaixo marcados conforme o codigo atual.
 
 - [x] TODO: Fazer spike de empacotamento do runner elevado antes da implementacao final.
-  `tool/build_elevated_runner.py` + `ELEVATED_ACTION_RUNNER_EXE` em
+  `tool/elevated/build_elevated_runner.py` + `ELEVATED_ACTION_RUNNER_EXE` em
   `AgentActionElevatedConstants`.
 - [x] TODO: Escolher helper separado como caminho padrao, seguindo o padrao conceitual do
   update helper, mas sem reutiliza-lo.
@@ -4667,11 +4667,11 @@ um gate explicito de seguranca:
   - avisos operacionais: scheduler lock, COM sem handlers, metrica COM no summary;
   - retencao editavel na pagina **Acoes** (`AgentActionRetentionSettings`).
 - **Gate local, CI e live Hub (agente, 2026-05-19):**
-  - preflight: `dart run tool/check_e2e_env.dart` (Hub live + COM stub opcional);
-  - live Hub `.env`: `dart run tool/validate_live_hub_agent_actions_env.dart`
+  - preflight: `dart run tool/e2e/check_e2e_env.dart` (Hub live + COM stub opcional);
+  - live Hub `.env`: `dart run tool/e2e/validate_live_hub_agent_actions_env.dart`
     (checklist por variavel, aviso JWT expirado / `e2e-dev` em Hub remoto, sem imprimir segredos);
   - gate local/CI: manifestos em `tool/agent_actions_*_test_paths.txt` +
-    `python tool/homologate_hub_agent_actions.py --run-contract-tests` (preflight estatico,
+    `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests` (preflight estatico,
     contrato RPC/OpenRPC/fixtures, path validator, retencao, health schema,
     scheduler lock, kill/orfaos/reconcile/app-exit, COM bootstrap/diagnostics,
     provider, `agent_actions_page_test.dart` (**48** cenarios) +
@@ -5215,7 +5215,7 @@ deste plano).
 | RA-02 | **Allowlist fina / rate limit no Hub** | Agente valida scopes + `AgentActionRemoteRateLimiter`; politica fina no consumidor Hub | Deploy Hub com policy alinhada |
 | RA-03 | **Contexto remoto inline** (JSON no RPC) | Rejeitado no schema e em `RunAgentActionLocally` (`remote_context_not_supported`); `supportsContext: false` | Decisao MVP 3 + §3322–3324 quando evoluir contrato |
 | RA-04 | **Threat model por tipo** nao e gate de CI | Tabela baseline + `agent_action_security_gate_checklist.dart`; revisao humana obrigatoria por PR | Cada PR que habilite remoto/elevado/ad-hoc para um tipo |
-| RA-05 | **Live Hub E2E** opt-in | CI/local: preflight estatico + `python tool/homologate_hub_agent_actions.py --run-contract-tests`; live exige `.env` + `--run-live-tests` | Antes de release que dependa do Hub |
+| RA-05 | **Live Hub E2E** opt-in | CI/local: preflight estatico + `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests`; live exige `.env` + `--run-live-tests` | Antes de release que dependa do Hub |
 | RA-06 | **Elevado** sem validacao UAC/distribuicao em todo ambiente | Nucleo no repo + `homologate_elevated_runner.py`; campo manual | Homologacao com helper instalado e assinado |
 | RA-07 | **Multi-instancia** do app sem mutex da feature acoes | Correlacao por `runtimeInstanceId`; Drift por processo; lock so no scheduler | Incidente de Drift compartilhado entre processos |
 | RA-08 | **Ad-hoc remoto** desligado por default | `enableRemoteAdHocAgentActions` default `false`; capability `remoteAdHoc` | Habilitar so com threat model + aprovacao explicita |

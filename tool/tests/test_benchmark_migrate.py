@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tool.migrate_benchmark_logs import discover_legacy_summaries, main as migrate_main
+from tool.benchmarks.migrate_benchmark_logs import discover_legacy_summaries, main as migrate_main
 from tool.py.benchmark_migrate import migrate_legacy_summary
 
 

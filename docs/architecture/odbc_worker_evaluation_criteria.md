@@ -94,19 +94,19 @@ dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
 Ou use o wrapper do repo:
 
 ```powershell
-python tool/odbc_async_benchmark.py
+python tool/benchmarks/odbc_async_benchmark.py
 ```
 
 Para comparar streaming legado e batched streaming:
 
 ```powershell
-python tool/odbc_streaming_benchmark.py
+python tool/benchmarks/odbc_streaming_benchmark.py
 ```
 
 Para comparar SQL Anywhere, SQL Server e PostgreSQL configurados:
 
 ```powershell
-python tool/odbc_driver_matrix_benchmark.py
+python tool/benchmarks/odbc_driver_matrix_benchmark.py
 ```
 
 Tambem rode o burst do app:
@@ -119,8 +119,8 @@ flutter test test/integration/sql_queue_burst_test.dart
 No Windows, para consolidar preflight, testes e worksheet de evidencias:
 
 ```powershell
-python tool/run_odbc_operational_validation.py
-python tool/run_odbc_operational_validation.py --all
+python tool/odbc/run_odbc_operational_validation.py
+python tool/odbc/run_odbc_operational_validation.py --all
 ```
 
 O modo `-All` grava snapshots `health_burst_*_before/after.json` e logs

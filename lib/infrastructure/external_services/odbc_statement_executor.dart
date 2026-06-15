@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -42,13 +43,16 @@ final class OdbcStatementExecutor {
     required Map<String, int> preparedStatements,
     required String statementKey,
     Duration? timeout,
+    OdbcPreparedStatementCachePolicy cachePolicy = OdbcPreparedStatementCachePolicy.leasePool,
   }) async {
-    final existingStmtId = preparedStatements[statementKey];
-    if (existingStmtId != null) {
-      preparedStatements.remove(statementKey);
-      preparedStatements[statementKey] = existingStmtId;
-      _metrics.recordPreparedStatementReuse();
-      return Success(existingStmtId);
+    if (cachePolicy.dartLruEnabled) {
+      final existingStmtId = preparedStatements[statementKey];
+      if (existingStmtId != null) {
+        preparedStatements.remove(statementKey);
+        preparedStatements[statementKey] = existingStmtId;
+        _metrics.recordPreparedStatementReuse();
+        return Success(existingStmtId);
+      }
     }
 
     _metrics.recordPreparedStatementCacheMiss();
@@ -71,14 +75,16 @@ final class OdbcStatementExecutor {
 
     return prepareResult.fold(
       (stmtId) {
-        if (preparedStatements.length >= _maxPreparedStatementsPerConnection) {
-          final oldestKey = preparedStatements.keys.first;
-          final oldestStmtId = preparedStatements.remove(oldestKey);
-          if (oldestStmtId != null) {
-            unawaited(closePreparedStatements(connectionId, <int>[oldestStmtId]));
+        if (cachePolicy.dartLruEnabled) {
+          if (preparedStatements.length >= _maxPreparedStatementsPerConnection) {
+            final oldestKey = preparedStatements.keys.first;
+            final oldestStmtId = preparedStatements.remove(oldestKey);
+            if (oldestStmtId != null) {
+              unawaited(closePreparedStatements(connectionId, <int>[oldestStmtId]));
+            }
           }
+          preparedStatements[statementKey] = stmtId;
         }
-        preparedStatements[statementKey] = stmtId;
         return Success(stmtId);
       },
       Failure.new,
@@ -101,10 +107,10 @@ final class OdbcStatementExecutor {
       );
     }
 
-    return _service.executePrepared(
+    return _service.executePreparedParamValuesFromObjects(
       connectionId,
       stmtId,
-      null,
+      const <Object?>[],
       options,
     );
   }

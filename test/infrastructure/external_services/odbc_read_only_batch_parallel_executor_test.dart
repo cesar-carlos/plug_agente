@@ -67,7 +67,7 @@ void main() {
       markConnectionForDiscard: discarded.add,
     );
     final queryRunner = OdbcQueryRunner(
-      service: service,
+      queries: service,
       metrics: metrics,
       statementExecutor: statementExecutor,
       resultEncodingExecutor: OdbcResultEncodingExecutor(service),
@@ -263,7 +263,7 @@ void main() {
       final nativeExecutor = OdbcReadOnlyBatchParallelExecutor(
         connectionManager: nativeConnectionManager,
         queryRunner: OdbcQueryRunner(
-          service: service,
+          queries: service,
           metrics: metrics,
           statementExecutor: OdbcStatementExecutor(
             service: service,

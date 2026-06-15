@@ -12,10 +12,13 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/streaming/i_streaming_named_parameter_preparer.dart';
 import 'package:uuid/uuid.dart';
 
 class SqlRpcMethodHandlerOperationsFactory {
-  const SqlRpcMethodHandlerOperationsFactory();
+  const SqlRpcMethodHandlerOperationsFactory(this._streamingNamedParameterPreparer);
+
+  final IStreamingNamedParameterPreparer _streamingNamedParameterPreparer;
 
   SqlRpcMethodHandlerOperations create({
     required IDatabaseGateway databaseGateway,
@@ -56,6 +59,7 @@ class SqlRpcMethodHandlerOperationsFactory {
       batchExecutionStageBudget: batchExecutionStageBudget,
       sqlStreamingCoordinator: sqlStreamingCoordinator,
       odbcConnectionSettings: odbcConnectionSettings,
+      streamingNamedParameterPreparer: _streamingNamedParameterPreparer,
     );
   }
 }

@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:odbc_fast/odbc_fast.dart';
+import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
+import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
@@ -37,7 +39,7 @@ void main() {
       markConnectionForDiscard: discarded.add,
     );
     runner = OdbcQueryRunner(
-      service: service,
+      queries: service,
       metrics: metrics,
       statementExecutor: statementExecutor,
       resultEncodingExecutor: OdbcResultEncodingExecutor(service),
@@ -92,6 +94,7 @@ void main() {
         request: request('SELECT 1'),
         preparedExecution: prepared('SELECT 1'),
         connectionString: 'DSN=x',
+        databaseType: DatabaseType.sybaseAnywhere,
       );
 
       expect(outcome.isSuccess, isTrue);
@@ -119,6 +122,32 @@ void main() {
       );
 
       expect(discarded, contains('c1'));
+    });
+
+    test('returns cancellation failure without polling when token is cancelled', () async {
+      when(
+        () => service.executeQuery('SELECT 1', connectionId: 'c1'),
+      ).thenAnswer((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return const Success(sampleResult);
+      });
+
+      final cancellationToken = CancellationToken();
+      final outcomeFuture = runner.runWithTimeout(
+        connId: 'c1',
+        request: request('SELECT 1'),
+        preparedExecution: prepared('SELECT 1'),
+        connectionString: 'DSN=x',
+        cancellationToken: cancellationToken,
+        databaseType: DatabaseType.sybaseAnywhere,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      cancellationToken.cancel();
+
+      final outcome = await outcomeFuture;
+      expect(outcome.isSuccess, isFalse);
+      expect(outcome.error, isA<CancellationException>());
     });
   });
 

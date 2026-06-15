@@ -87,7 +87,7 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS+=(--allow-existing-tag)
           fi
-          python tool/release_preflight.py "${ARGS[@]}"
+          python tool/release/release_preflight.py "${ARGS[@]}"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -132,11 +132,11 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS+=(--allow-existing-tag)
           fi
-          python tool/release_preflight.py "${ARGS[@]}"
+          python tool/release/release_preflight.py "${ARGS[@]}"
 
       - name: Release quality gate
         if: inputs.run_tests
-        run: python tool/release_preflight.py --gate --allow-dirty --allow-existing-tag
+        run: python tool/release/release_preflight.py --gate --allow-dirty --allow-existing-tag
 
       - name: Prepare signing certificate
         id: signing
@@ -191,7 +191,7 @@ jobs:
         env:
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
         run: |
-          python tool/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
+          python tool/release/release_preflight.py --version "${{ env.VERSION_SHORT }}" --allow-dirty --check-installer --allow-existing-tag --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
         shell: bash
 
       - name: Verify Authenticode signatures

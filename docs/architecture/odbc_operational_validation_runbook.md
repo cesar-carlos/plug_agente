@@ -32,8 +32,8 @@ timestampada e versionada por execucao em `artifacts/odbc_validation/`.
 No Windows:
 
 ```powershell
-python tool/run_odbc_operational_validation.py
-python tool/run_odbc_operational_validation.py --all
+python tool/odbc/run_odbc_operational_validation.py
+python tool/odbc/run_odbc_operational_validation.py --all
 ```
 
 Cada execucao gera uma subpasta timestampada em `artifacts/odbc_validation/`
@@ -42,9 +42,9 @@ contendo:
 | Arquivo | Conteudo |
 | --- | --- |
 | `odbc_operational_validation_report.md` | Worksheet em Markdown com ambiente, tuning efetivo e placeholders para preenchimento |
-| `health_snapshot_template.json` | Baseline do shape atual de `agent.getHealth` (gerado por `dart run tool/export_odbc_health_snapshot_template.dart`, alinhado a `HealthService` e `rpc.result.agent-get-health.schema.json`) |
+| `health_snapshot_template.json` | Baseline do shape atual de `agent.getHealth` (gerado por `dart run tool/odbc/export_odbc_health_snapshot_template.dart`, alinhado a `HealthService` e `rpc.result.agent-get-health.schema.json`) |
 | `odbc_runtime.log` | Smoke do runtime `odbc_fast` (sem DSN) |
-| `preflight.log` | Resultado de `tool/check_e2e_env.dart` |
+| `preflight.log` | Resultado de `tool/e2e/check_e2e_env.dart` |
 | `smoke.log` | Smoke ODBC (`odbc_queued_gateway_smoke_live_e2e_test.dart`) |
 | `burst.log` | Burst da fila SQL (`sql_queue_burst_test.dart`, opt-in `RUN_ODBC_BURST_TESTS=true`) |
 | `benchmark.log` | `async_concurrency_benchmark.dart` |
@@ -60,13 +60,13 @@ etapas rodar.
 1. Smoke runtime `odbc_fast` (sem DSN):
 
    ```powershell
-   dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
+   dart run tool/odbc/check_odbc_fast_runtime.dart --require-columnar-compressed
    ```
 
 2. Preflight de variaveis E2E:
 
    ```powershell
-   dart run tool/check_e2e_env.dart
+   dart run tool/e2e/check_e2e_env.dart
    ```
 
 3. Smoke com query simples:
@@ -87,19 +87,19 @@ etapas rodar.
 6. Benchmark async ODBC:
 
    ```powershell
-   python tool/odbc_async_benchmark.py
+   python tool/benchmarks/odbc_async_benchmark.py
    ```
 
 7. Benchmark streaming:
 
    ```powershell
-   python tool/odbc_streaming_benchmark.py
+   python tool/benchmarks/odbc_streaming_benchmark.py
    ```
 
 8. Driver matrix (se houver mais de um DSN configurado):
 
    ```powershell
-   python tool/odbc_driver_matrix_benchmark.py
+   python tool/benchmarks/odbc_driver_matrix_benchmark.py
    ```
 
 ## Como ler o snapshot de health

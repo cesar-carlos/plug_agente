@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tool.benchmark_evolution_report import build_run_report, discover_summaries, main as report_main
+from tool.benchmarks.benchmark_evolution_report import build_run_report, discover_summaries, main as report_main
 from tool.py import benchmark_common
 
 

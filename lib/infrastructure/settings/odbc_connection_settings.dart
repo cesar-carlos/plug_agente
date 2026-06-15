@@ -1,6 +1,7 @@
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/config/odbc_native_pool_test_on_checkout_config.dart';
 
 const _keyPoolSize = 'odbc_pool_size';
 const _keyPoolSizeUserConfigured = 'odbc_pool_size_user_configured';
@@ -73,7 +74,10 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
       _prefs.getInt(_keyStreamingChunkSizeKb) ?? ConnectionConstants.defaultStreamingChunkSizeKb,
     );
     _useNativeOdbcPool = _prefs.getBool(_keyUseNativeOdbcPool) ?? false;
-    _nativePoolTestOnCheckout = _prefs.getBool(_keyNativePoolTestOnCheckout) ?? true;
+    _nativePoolTestOnCheckout =
+        readOdbcNativePoolTestOnCheckoutOverride() ??
+        _prefs.getBool(_keyNativePoolTestOnCheckout) ??
+        true;
   }
 
   Future<int> _loadPoolSize() async {

@@ -7,6 +7,7 @@ import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
+import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
@@ -104,7 +105,9 @@ final class DirectOdbcQueryExecutor {
     try {
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
-        options: effectiveOptions.toOdbcConnectionOptions(),
+        options: effectiveOptions.toOdbcConnectionOptions(
+          lazyStrings: OdbcRecommendedOptionsMerger.lazyStringsForConnectionString(connectionString),
+        ),
       );
       return await connectResult.fold(
         (connection) async {

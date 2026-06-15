@@ -19,6 +19,9 @@ class MockOdbcService extends Mock implements OdbcService {}
 
 class MockBatchedStreamingQuerySource extends Mock implements IOdbcBatchedStreamingQuerySource {}
 
+Success<TypedColumnarResult, Exception> _columnarSuccess(QueryResult result) =>
+    Success<TypedColumnarResult, Exception>(toTypedColumnar(result));
+
 void main() {
   setUpAll(() {
     registerFallbackValue(
@@ -49,7 +52,7 @@ void main() {
     });
 
     test('should split streamed rows by fetchSize', () async {
-      final controller = StreamController<Result<QueryResult>>();
+      final controller = StreamController<Result<TypedColumnarResult>>();
       final receivedChunks = <List<Map<String, dynamic>>>[];
 
       when(
@@ -68,7 +71,7 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQuery('conn-1', any()),
+        () => mockService.streamQueryColumnar('conn-1', any()),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-1'),
@@ -82,8 +85,8 @@ void main() {
       );
 
       controller.add(
-        const Success(
-          QueryResult(
+        _columnarSuccess(
+          const QueryResult(
             columns: ['id'],
             rows: [
               [1],
@@ -105,7 +108,7 @@ void main() {
     });
 
     test('should invoke onSetupComplete after connect before consuming chunks', () async {
-      final controller = StreamController<Result<QueryResult>>();
+      final controller = StreamController<Result<TypedColumnarResult>>();
       var setupCompleteCalled = false;
       var chunkReceived = false;
 
@@ -125,7 +128,7 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQuery('conn-setup', any()),
+        () => mockService.streamQueryColumnar('conn-setup', any()),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-setup'),
@@ -147,8 +150,8 @@ void main() {
       expect(chunkReceived, isFalse);
 
       controller.add(
-        const Success(
-          QueryResult(
+        _columnarSuccess(
+          const QueryResult(
             columns: ['id'],
             rows: [
               [1],
@@ -164,7 +167,7 @@ void main() {
     });
 
     test('should cancel active streaming and stop with failure', () async {
-      final controller = StreamController<Result<QueryResult>>();
+      final controller = StreamController<Result<TypedColumnarResult>>();
       final receivedChunks = <List<Map<String, dynamic>>>[];
 
       when(
@@ -183,7 +186,7 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQuery('conn-cancel', any()),
+        () => mockService.streamQueryColumnar('conn-cancel', any()),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect(any()),
@@ -202,8 +205,8 @@ void main() {
       );
 
       controller.add(
-        const Success(
-          QueryResult(
+        _columnarSuccess(
+          const QueryResult(
             columns: ['id'],
             rows: [
               [1],
@@ -216,8 +219,8 @@ void main() {
 
       // Second event makes the loop check cancellation and abort.
       controller.add(
-        const Success(
-          QueryResult(
+        _columnarSuccess(
+          const QueryResult(
             columns: ['id'],
             rows: [
               [3],
@@ -261,7 +264,7 @@ void main() {
     test(
       'should return success when cancelled for playground row cap',
       () async {
-        final controller = StreamController<Result<QueryResult>>();
+        final controller = StreamController<Result<TypedColumnarResult>>();
 
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
@@ -279,7 +282,7 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQuery('conn-cap', any()),
+          () => mockService.streamQueryColumnar('conn-cap', any()),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect(any()),
@@ -299,8 +302,8 @@ void main() {
         );
 
         controller.add(
-          const Success(
-            QueryResult(
+          _columnarSuccess(
+            const QueryResult(
               columns: ['id'],
               rows: [
                 [1],
@@ -310,8 +313,8 @@ void main() {
           ),
         );
         controller.add(
-          const Success(
-            QueryResult(
+          _columnarSuccess(
+            const QueryResult(
               columns: ['id'],
               rows: [
                 [2],
@@ -332,7 +335,7 @@ void main() {
     test(
       'should return failure when cancelled for socket disconnect',
       () async {
-        final controller = StreamController<Result<QueryResult>>();
+        final controller = StreamController<Result<TypedColumnarResult>>();
 
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
@@ -350,7 +353,7 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQuery('conn-disconnect', any()),
+          () => mockService.streamQueryColumnar('conn-disconnect', any()),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect(any()),
@@ -372,8 +375,8 @@ void main() {
         );
 
         controller.add(
-          const Success(
-            QueryResult(
+          _columnarSuccess(
+            const QueryResult(
               columns: ['id'],
               rows: [
                 [1],
@@ -385,8 +388,8 @@ void main() {
         );
 
         controller.add(
-          const Success(
-            QueryResult(
+          _columnarSuccess(
+            const QueryResult(
               columns: ['id'],
               rows: [
                 [3],
@@ -411,7 +414,7 @@ void main() {
       'cancel disconnect failure keeps direct connection lease reserved '
       'until execution unwinds',
       () async {
-        final controller = StreamController<Result<QueryResult>>();
+        final controller = StreamController<Result<TypedColumnarResult>>();
         mockSettings.poolSize = 1;
         final limiter = DirectOdbcConnectionLimiter(
           maxConcurrent: 1,
@@ -444,14 +447,14 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQuery('conn-1', any()),
+          () => mockService.streamQueryColumnar('conn-1', any()),
         ).thenAnswer((_) => controller.stream);
         when(
-          () => mockService.streamQuery('conn-2', any()),
+          () => mockService.streamQueryColumnar('conn-2', any()),
         ).thenAnswer(
-          (_) => Stream<Result<QueryResult>>.fromIterable([
-            const Success(
-              QueryResult(
+          (_) => Stream<Result<TypedColumnarResult>>.fromIterable([
+            _columnarSuccess(
+              const QueryResult(
                 columns: ['id'],
                 rows: [
                   [2],
@@ -491,8 +494,8 @@ void main() {
         expect(connectionCounter, 1);
 
         controller.add(
-          const Success(
-            QueryResult(
+          _columnarSuccess(
+            const QueryResult(
               columns: ['id'],
               rows: [
                 [1],
@@ -520,7 +523,7 @@ void main() {
       'should return success when cancel disconnect times out '
       '(metrics still record disconnect timeout)',
       () async {
-        final controller = StreamController<Result<QueryResult>>();
+        final controller = StreamController<Result<TypedColumnarResult>>();
 
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
@@ -538,7 +541,7 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQuery('conn-cancel-timeout', any()),
+          () => mockService.streamQueryColumnar('conn-cancel-timeout', any()),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect('conn-cancel-timeout'),
@@ -553,8 +556,8 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         final cancelResult = await gateway.cancelActiveStream();
         controller.add(
-          const Success(
-            QueryResult(
+          _columnarSuccess(
+            const QueryResult(
               columns: ['id'],
               rows: [
                 [1],
@@ -575,7 +578,7 @@ void main() {
     test(
       'cancel disconnect treats invalid connection id as successful cleanup',
       () async {
-        final controller = StreamController<Result<QueryResult>>();
+        final controller = StreamController<Result<TypedColumnarResult>>();
 
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
@@ -593,7 +596,7 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQuery('conn-invalid-id', any()),
+          () => mockService.streamQueryColumnar('conn-invalid-id', any()),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect('conn-invalid-id'),
@@ -612,8 +615,8 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         final cancelResult = await gateway.cancelActiveStream();
         controller.add(
-          const Success(
-            QueryResult(
+          _columnarSuccess(
+            const QueryResult(
               columns: ['id'],
               rows: [
                 [1],
@@ -632,7 +635,7 @@ void main() {
     );
 
     test('should keep structured ODBC error for streaming failures', () async {
-      final controller = StreamController<Result<QueryResult>>();
+      final controller = StreamController<Result<TypedColumnarResult>>();
 
       when(
         () => mockService.connect(any(), options: any(named: 'options')),
@@ -650,7 +653,7 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQuery('conn-error', any()),
+        () => mockService.streamQueryColumnar('conn-error', any()),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect(any()),
@@ -673,7 +676,7 @@ void main() {
     });
 
     test('should reject duplicate executionId before connect', () async {
-      final controller = StreamController<Result<QueryResult>>();
+      final controller = StreamController<Result<TypedColumnarResult>>();
 
       when(
         () => mockService.connect(any(), options: any(named: 'options')),
@@ -691,7 +694,7 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQuery('conn-dup', any()),
+        () => mockService.streamQueryColumnar('conn-dup', any()),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect(any()),
@@ -729,7 +732,7 @@ void main() {
     });
 
     test('should record single-chunk native path metric for one ODBC chunk', () async {
-      final controller = StreamController<Result<QueryResult>>();
+      final controller = StreamController<Result<TypedColumnarResult>>();
 
       when(
         () => mockService.connect(any(), options: any(named: 'options')),
@@ -747,7 +750,7 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQuery('conn-single', any()),
+        () => mockService.streamQueryColumnar('conn-single', any()),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-single'),
@@ -760,8 +763,8 @@ void main() {
       );
 
       controller.add(
-        const Success(
-          QueryResult(
+        _columnarSuccess(
+          const QueryResult(
             columns: ['id'],
             rows: [
               [1],
@@ -788,7 +791,7 @@ void main() {
         cancelDisconnectTimeout: const Duration(milliseconds: 20),
       );
 
-      final controller = StreamController<Result<QueryResult>>();
+      final controller = StreamController<Result<TypedColumnarResult>>();
 
       when(
         () => mockService.connect(any(), options: any(named: 'options')),
@@ -806,7 +809,7 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => batchedSource.streamQuery(
+        () => batchedSource.streamColumnarQuery(
           42,
           any(),
           any(),
@@ -827,7 +830,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final captured = verify(
-        () => batchedSource.streamQuery(
+        () => batchedSource.streamColumnarQuery(
           42,
           captureAny(),
           captureAny(),
@@ -838,8 +841,8 @@ void main() {
       expect(nativeOptions.nativeChunkSizeBytes, 256 * 1024);
 
       controller.add(
-        const Success(
-          QueryResult(
+        _columnarSuccess(
+          const QueryResult(
             columns: ['id'],
             rows: [
               [1],
@@ -851,11 +854,11 @@ void main() {
       await controller.close();
       await execution;
 
-      verifyNever(() => mockService.streamQuery(any(), any()));
+      verifyNever(() => mockService.streamQueryColumnar(any(), any()));
     });
 
     test('should record batched native path metric for multiple ODBC chunks', () async {
-      final controller = StreamController<Result<QueryResult>>();
+      final controller = StreamController<Result<TypedColumnarResult>>();
 
       when(
         () => mockService.connect(any(), options: any(named: 'options')),
@@ -873,7 +876,7 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQuery('conn-multi', any()),
+        () => mockService.streamQueryColumnar('conn-multi', any()),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-multi'),
@@ -886,8 +889,8 @@ void main() {
       );
 
       controller.add(
-        const Success(
-          QueryResult(
+        _columnarSuccess(
+          const QueryResult(
             columns: ['id'],
             rows: [
               [1],
@@ -898,8 +901,8 @@ void main() {
         ),
       );
       controller.add(
-        const Success(
-          QueryResult(
+        _columnarSuccess(
+          const QueryResult(
             columns: ['id'],
             rows: [
               [3],

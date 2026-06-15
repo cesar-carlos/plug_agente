@@ -92,4 +92,47 @@ void main() {
       expect(emitted, isEmpty);
     });
   });
+
+  group('RpcStreamPullHandler backpressure', () {
+    late _MockFeatureFlags featureFlags;
+
+    setUp(() {
+      featureFlags = _MockFeatureFlags();
+    });
+
+    test('uses recommended pull window as initial send credit', () async {
+      when(() => featureFlags.enableSocketBackpressure).thenReturn(true);
+      when(() => featureFlags.enableSocketSchemaValidation).thenReturn(false);
+
+      final handler = RpcStreamPullHandler(
+        featureFlags: featureFlags,
+        frameCodec: _MockPayloadFrameCodec(),
+        contractValidator: const RpcContractValidator(),
+        protocolProvider: () => const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'none',
+        ),
+        emitEventAsync: (_, payload) async {
+          return true;
+        },
+        logMessage: (_, _, _) {},
+      );
+      final emitter = handler.createStreamEmitter();
+
+      for (var i = 0; i < 8; i++) {
+        final accepted = await emitter.emitChunk(
+          RpcStreamChunk(
+            streamId: 's-bp',
+            requestId: 'req-bp',
+            chunkIndex: i,
+            rows: [
+              {'id': i},
+            ],
+          ),
+        );
+        expect(accepted, isTrue, reason: 'chunk $i');
+      }
+    });
+  });
 }

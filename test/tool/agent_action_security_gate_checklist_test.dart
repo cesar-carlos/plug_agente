@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../tool/agent_action_security_gate_checklist.dart';
+import '../../tool/agent_actions/agent_action_security_gate_checklist.dart';
 
 void main() {
   test('should expose threat model summary for every MVP action type', () {

@@ -5,6 +5,7 @@ import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter
 import 'package:plug_agente/application/rpc/factories/agent_action_rpc_method_handler_operations_factory.dart';
 import 'package:plug_agente/application/rpc/factories/agent_metadata_rpc_method_handler_operations_factory.dart';
 import 'package:plug_agente/application/rpc/factories/sql_rpc_method_handler_operations_factory.dart';
+import 'package:plug_agente/application/rpc/pass_through_streaming_named_parameter_preparer.dart';
 import 'package:plug_agente/application/rpc/rpc_idempotency_coordinator.dart';
 import 'package:plug_agente/application/rpc/rpc_method_handler_idempotency_orchestrator.dart';
 import 'package:plug_agente/application/rpc/rpc_method_handler_operations.dart';
@@ -39,7 +40,9 @@ import 'package:uuid/uuid.dart';
 
 class DefaultRpcMethodHandlerOperationsFactory {
   const DefaultRpcMethodHandlerOperationsFactory({
-    SqlRpcMethodHandlerOperationsFactory sqlFactory = const SqlRpcMethodHandlerOperationsFactory(),
+    SqlRpcMethodHandlerOperationsFactory sqlFactory = const SqlRpcMethodHandlerOperationsFactory(
+      PassThroughStreamingNamedParameterPreparer.instance,
+    ),
     AgentActionRpcMethodHandlerOperationsFactory agentActionFactory =
         const AgentActionRpcMethodHandlerOperationsFactory(),
     AgentMetadataRpcMethodHandlerOperationsFactory metadataFactory =

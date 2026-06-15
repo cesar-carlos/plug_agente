@@ -3,6 +3,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
+import 'package:plug_agente/infrastructure/codecs/rpc_chunk_transport_policy.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_helpers.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_isolate.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_metrics.dart';
@@ -49,7 +50,10 @@ mixin TransportPipelineSend {
       final shouldCompress = shouldRunGzipCompression(
         compression,
         originalSize,
-        compressionThreshold,
+        RpcChunkTransportPolicy.compressionThresholdBytes(
+          metricEventName,
+          defaultThreshold: compressionThreshold,
+        ),
       );
 
       Uint8List finalBytes;
@@ -177,7 +181,10 @@ mixin TransportPipelineSend {
       final shouldCompress = shouldRunGzipCompression(
         compression,
         originalSize,
-        compressionThreshold,
+        RpcChunkTransportPolicy.compressionThresholdBytes(
+          metricEventName,
+          defaultThreshold: compressionThreshold,
+        ),
       );
 
       Uint8List finalBytes;
@@ -187,7 +194,11 @@ mixin TransportPipelineSend {
       var usedGzipCompressIsolate = false;
 
       if (shouldCompress) {
-        final useIsolate = originalSize >= gzipIsolateThresholdBytes;
+        final useIsolate = originalSize >=
+            RpcChunkTransportPolicy.gzipIsolateThresholdBytes(
+              metricEventName,
+              defaultThreshold: gzipIsolateThresholdBytes,
+            );
         final Uint8List compressedBytes;
         final compressStopwatch = Stopwatch()..start();
         if (useIsolate) {

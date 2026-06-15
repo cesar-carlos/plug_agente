@@ -31,6 +31,10 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/config/odbc_metadata_cache_config.dart';
+import 'package:plug_agente/infrastructure/config/odbc_performance_preset_config.dart';
+import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
+import 'package:plug_agente/infrastructure/config/odbc_usage_profile_config.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
@@ -259,6 +263,8 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
     final odbcSettings = getIt<IOdbcConnectionSettings>();
     await odbcSettings.load();
 
+    applyOdbcPerformancePresetFromEnvironment();
+
     // Recalculate and replace the OdbcRuntimeTuning singleton so components
     // reading asyncWorkerCount / asyncMaxPendingRequests see the updated values.
     final newTuning = resolveOdbcRuntimeTuning(settings: odbcSettings);
@@ -274,11 +280,22 @@ Future<bool> reloadOdbcRuntimeDependencies() async {
     // pool to reject overflow immediately so the queue (which has fairness,
     // timeouts and observability) is the single point of admission control.
     _odbcLocator.shutdown();
+    final odbcUsageProfile = resolveOdbcUsageProfile();
     _odbcLocator.initialize(
+      profile: odbcUsageProfile,
       useAsync: true,
       asyncWorkerCount: newTuning.asyncWorkerCount,
       asyncMaxPendingRequests: newTuning.asyncMaxPendingRequests,
       asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
+    );
+    if (getIt.isRegistered<OdbcProfileRecommendedOptions>()) {
+      getIt.unregister<OdbcProfileRecommendedOptions>();
+    }
+    getIt.registerSingleton<OdbcProfileRecommendedOptions>(
+      OdbcProfileRecommendedOptions(
+        connection: _odbcLocator.recommendedConnectionOptions,
+        pool: _odbcLocator.recommendedPoolOptions,
+      ),
     );
 
     await _primeReloadedOdbcRuntimeDependencies();
@@ -303,6 +320,7 @@ Future<void> _primeReloadedOdbcRuntimeDependencies() async {
       throw StateError('ODBC initialization failed after reload: $error');
     },
   );
+  await _enableOdbcMetadataCacheIfConfigured(getIt<odbc.OdbcService>());
 
   // Recreate the main ODBC-facing singletons immediately so settings screens
   // fail fast instead of deferring DI/configuration problems to the next query.
@@ -406,6 +424,51 @@ void _logOdbcRuntimeTuningWarnings(OdbcRuntimeTuning tuning) {
       level: 900,
     );
   }
+
+  final sqlQueueMaxSize = ConnectionConstants.sqlQueueMaxSize;
+  if (ConnectionConstants.isSqlQueueDepthAboveOdbcAsyncPending(
+    sqlQueueMaxSize: sqlQueueMaxSize,
+    asyncMaxPendingRequests: tuning.asyncMaxPendingRequests,
+  )) {
+    developer.log(
+      'SQL queue max size exceeds ODBC async pending limit — '
+      'queued requests may be rejected by failFast before workers drain '
+      '(sqlQueueMaxSize: $sqlQueueMaxSize, '
+      'asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests})',
+      name: 'service_locator',
+      level: 900,
+    );
+  }
+}
+
+Future<void> _enableOdbcMetadataCacheIfConfigured(odbc.OdbcService service) async {
+  if (!isOdbcMetadataCacheEnabled()) {
+    return;
+  }
+
+  final result = await service.metadataCacheEnable(
+    maxEntries: odbcMetadataCacheDefaultMaxEntries,
+    ttlSeconds: odbcMetadataCacheDefaultTtlSeconds,
+  );
+  result.fold(
+    (_) {
+      developer.log(
+        'ODBC metadata cache enabled '
+        '(maxEntries: $odbcMetadataCacheDefaultMaxEntries, '
+        'ttlSeconds: $odbcMetadataCacheDefaultTtlSeconds)',
+        name: 'service_locator',
+        level: 800,
+      );
+    },
+    (error) {
+      developer.log(
+        'ODBC metadata cache enable skipped or unavailable',
+        name: 'service_locator',
+        level: 800,
+        error: error,
+      );
+    },
+  );
 }
 
 Never _throwGlobalStorageBootstrapError(
@@ -487,6 +550,8 @@ Future<void> setupDependencies({
   await odbcSettings.load();
   getIt.registerSingleton<IOdbcConnectionSettings>(odbcSettings);
 
+  applyOdbcPerformancePresetFromEnvironment();
+
   final odbcRuntimeTuning = resolveOdbcRuntimeTuning(settings: odbcSettings);
   getIt.registerSingleton<OdbcRuntimeTuning>(odbcRuntimeTuning);
   _logOdbcRuntimeTuningWarnings(odbcRuntimeTuning);
@@ -494,15 +559,24 @@ Future<void> setupDependencies({
   // owns admission control / queueing / fairness. The ODBC async pool
   // rejects overflow immediately so the queue stays the single source of
   // truth for backpressure decisions.
+  final odbcUsageProfile = resolveOdbcUsageProfile();
   _odbcLocator.initialize(
+    profile: odbcUsageProfile,
     useAsync: true,
     asyncWorkerCount: odbcRuntimeTuning.asyncWorkerCount,
     asyncMaxPendingRequests: odbcRuntimeTuning.asyncMaxPendingRequests,
     asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
   );
+  getIt.registerSingleton<OdbcProfileRecommendedOptions>(
+    OdbcProfileRecommendedOptions(
+      connection: _odbcLocator.recommendedConnectionOptions,
+      pool: _odbcLocator.recommendedPoolOptions,
+    ),
+  );
   developer.log(
     'ODBC async worker pool configured '
-    '(poolSize: ${odbcRuntimeTuning.poolSize}, '
+    '(usageProfile: ${odbcUsageProfileConfigName(odbcUsageProfile)}, '
+    'poolSize: ${odbcRuntimeTuning.poolSize}, '
     'workerCount: ${odbcRuntimeTuning.asyncWorkerCount}, '
     'maxPendingRequests: ${odbcRuntimeTuning.asyncMaxPendingRequests}, '
     'backpressureMode: ${odbcRuntimeTuning.asyncBackpressureMode})',
@@ -553,6 +627,7 @@ Future<void> setupDependencies({
       );
     },
   );
+  await _enableOdbcMetadataCacheIfConfigured(getIt<odbc.OdbcService>());
 
   // Force creation of the ODBC event bridge so it starts consuming the
   // runtime event stream from boot, not lazily on first diagnostic access.

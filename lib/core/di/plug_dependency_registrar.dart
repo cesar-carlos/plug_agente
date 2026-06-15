@@ -212,6 +212,7 @@ import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
+import 'package:plug_agente/domain/streaming/i_streaming_named_parameter_preparer.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
 import 'package:plug_agente/infrastructure/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/agent_actions_bundle_file_gateway.dart';
@@ -222,6 +223,7 @@ import 'package:plug_agente/infrastructure/actions/windows_process_lifetime_chec
 import 'package:plug_agente/infrastructure/backup/local_app_data_backup_service.dart';
 import 'package:plug_agente/infrastructure/bootstrap/infrastructure_shutdown_port.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
+import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/agent_hub_profile_rest_client.dart';
@@ -234,6 +236,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_batched_stream
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_driver_checker.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_named_parameter_preparer.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart';
 import 'package:plug_agente/infrastructure/external_services/throttled_auto_update_diagnostics_gateway.dart';
@@ -290,20 +293,20 @@ import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart
 import 'package:plug_agente/l10n/agent_action_notification_messages_factory.dart';
 import 'package:uuid/uuid.dart';
 
-part 'plug_dependency_registrar_foundation.dart';
-part 'plug_dependency_registrar_persistence.dart';
 part 'plug_dependency_registrar_actions_infra.dart';
-part 'plug_dependency_registrar_odbc.dart';
-part 'plug_dependency_registrar_health.dart';
-part 'plug_dependency_registrar_rpc.dart';
-part 'plug_dependency_registrar_transport_hub.dart';
-part 'plug_dependency_registrar_application.dart';
-part 'plug_dependency_registrar_playground.dart';
 part 'plug_dependency_registrar_actions_use_cases.dart';
-part 'plug_dependency_registrar_auto_update.dart';
+part 'plug_dependency_registrar_application.dart';
 part 'plug_dependency_registrar_auth_tokens.dart';
+part 'plug_dependency_registrar_auto_update.dart';
 part 'plug_dependency_registrar_capability.dart';
+part 'plug_dependency_registrar_foundation.dart';
+part 'plug_dependency_registrar_health.dart';
+part 'plug_dependency_registrar_odbc.dart';
+part 'plug_dependency_registrar_persistence.dart';
+part 'plug_dependency_registrar_playground.dart';
+part 'plug_dependency_registrar_rpc.dart';
 part 'plug_dependency_registrar_shutdown.dart';
+part 'plug_dependency_registrar_transport_hub.dart';
 
 /// Registers transport, ODBC, auth, and application use-case graph on [getIt].
 void registerPlugDependencyGraph(

@@ -130,6 +130,7 @@ class OdbcQueryExecutionOrchestrator {
         timeout: timeout,
         acquireOptions: hintedOptions,
         cancellationToken: cancellationToken,
+        databaseType: databaseConfig.databaseType,
       );
     }
 
@@ -149,6 +150,7 @@ class OdbcQueryExecutionOrchestrator {
         connectionString: connectionString,
       ),
       cancellationToken: cancellationToken,
+      databaseType: databaseConfig.databaseType,
     );
   }
 

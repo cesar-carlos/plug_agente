@@ -110,7 +110,7 @@ Geracao de keypair:
 
 ```bash
 pip install cryptography>=42.0.0
-python tool/generate_appcast_signing_key.py
+python tool/appcast/generate_appcast_signing_key.py
 ```
 
 A saida traz `APPCAST_SIGNING_PRIVATE_KEY` (guarde em GitHub Actions
@@ -120,7 +120,7 @@ via `--dart-define` ou `.env`).
 Assinatura durante a publicacao:
 
 ```bash
-python tool/appcast_manager.py update \
+python tool/appcast/appcast_manager.py update \
   --appcast appcast.xml \
   --version-short 1.7.0 \
   --full-version 1.7.0+1 \
@@ -275,12 +275,12 @@ fica distribuida entre:
 
 | Modulo | Responsabilidade |
 | --- | --- |
-| `tool/appcast_manager.py` | Estrutura do feed, validacao, smoke check, comandos `update` / `validate-file` / `smoke-validate-url` / `inspect-url`. |
-| `tool/appcast_signing.py` | Canonical payload Ed25519, sign/verify, `verify_with_any_key` (CSV). Fonte de verdade compartilhada com `lib/core/security/appcast_signature_verifier.dart` — bytes precisam continuar identicos. |
-| `tool/generate_appcast_signing_key.py` | Gera keypair Ed25519 e imprime `APPCAST_SIGNING_PRIVATE_KEY` / `AUTO_UPDATE_FEED_PUBLIC_KEY`. |
-| `tool/validate_release.py` | Cruza GitHub Release + appcast local/remoto (tag, asset, SHA, size, channel, rollout). |
-| `tool/validate_launcher_status.py` | Valida JSON do helper nativo contra `docs/communication/schemas/silent_update_launcher_status.schema.json`. Usado pelo workflow Release Preflight. |
-| `tool/release_preflight.py` | Sincronizacao de versao, tag disponivel, ferramentas no PATH, presenca do instalador, chave publica embutida (`--feed-public-key`) e Pages habilitado (`--check-pages`). |
+| `tool/appcast/appcast_manager.py` | Estrutura do feed, validacao, smoke check, comandos `update` / `validate-file` / `smoke-validate-url` / `inspect-url`. |
+| `tool/appcast/appcast_signing.py` | Canonical payload Ed25519, sign/verify, `verify_with_any_key` (CSV). Fonte de verdade compartilhada com `lib/core/security/appcast_signature_verifier.dart` — bytes precisam continuar identicos. |
+| `tool/appcast/generate_appcast_signing_key.py` | Gera keypair Ed25519 e imprime `APPCAST_SIGNING_PRIVATE_KEY` / `AUTO_UPDATE_FEED_PUBLIC_KEY`. |
+| `tool/appcast/validate_release.py` | Cruza GitHub Release + appcast local/remoto (tag, asset, SHA, size, channel, rollout). |
+| `tool/appcast/validate_launcher_status.py` | Valida JSON do helper nativo contra `docs/communication/schemas/silent_update_launcher_status.schema.json`. Usado pelo workflow Release Preflight. |
+| `tool/release/release_preflight.py` | Sincronizacao de versao, tag disponivel, ferramentas no PATH, presenca do instalador, chave publica embutida (`--feed-public-key`) e Pages habilitado (`--check-pages`). |
 
 Workflows que consomem esse tooling:
 
@@ -296,8 +296,8 @@ Teste local rapido do tooling Python:
 
 ```bash
 python -m unittest \
-  tool.test_appcast_manager \
-  tool.test_validate_release \
+  tool.appcast.test_appcast_manager \
+  tool.appcast.test_validate_release \
   tool.test_appcast_signing \
   tool.test_validate_launcher_status \
   -v
@@ -375,12 +375,12 @@ PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
 Validacao manual recomendada:
 
 ```bash
-python tool/validate_release.py \
+python tool/appcast/validate_release.py \
   --tag v1.2.7 \
   --feed-url https://cesar-carlos.github.io/plug_agente/appcast.xml
 ```
 
-Os comandos `inspect-url` e `smoke-validate-url` de `tool/appcast_manager.py`
+Os comandos `inspect-url` e `smoke-validate-url` de `tool/appcast/appcast_manager.py`
 adicionam `cb=` por padrao. Use `--no-cache-bust` apenas quando precisar
 reproduzir exatamente a URL original.
 
@@ -410,7 +410,7 @@ reproduzir exatamente a URL original.
   `lib/core/constants/app_version.g.dart` divergem.
 - Rode `python installer/update_version.py`, revise o diff e commite antes da
   tag.
-- Rode `python tool/release_preflight.py --version <versao> --require-iscc`
+- Rode `python tool/release/release_preflight.py --version <versao> --require-iscc`
   para checar sincronizacao, tag e ferramentas antes de publicar.
 
 ### Feed publicado nao reflete a release

@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:odbc_fast/odbc_fast.dart';
+import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
+import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_multi_result_stream_collector.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_response_factory.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
@@ -24,18 +27,18 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 /// connection manager.
 final class OdbcQueryRunner {
   OdbcQueryRunner({
-    required OdbcService service,
+    required IQueryService queries,
     required MetricsCollector metrics,
     required OdbcStatementExecutor statementExecutor,
     required OdbcResultEncodingExecutor resultEncodingExecutor,
     required void Function(String connectionId) markConnectionForDiscard,
-  }) : _service = service,
+  }) : _queries = queries,
        _metrics = metrics,
        _statementExecutor = statementExecutor,
        _resultEncodingExecutor = resultEncodingExecutor,
        _markConnectionForDiscard = markConnectionForDiscard;
 
-  final OdbcService _service;
+  final IQueryService _queries;
   final MetricsCollector _metrics;
   final OdbcStatementExecutor _statementExecutor;
   final OdbcResultEncodingExecutor _resultEncodingExecutor;
@@ -79,6 +82,7 @@ final class OdbcQueryRunner {
     bool preferPreparedTimeout = true,
     String executionMode = 'pooled',
     CancellationToken? cancellationToken,
+    DatabaseType? databaseType,
   }) async {
     if (cancellationToken?.isCancelled ?? false) {
       return const QueryExecutionOutcome.failure(
@@ -98,6 +102,7 @@ final class OdbcQueryRunner {
       usesMultiResultExecution: usesMultiResultExecution,
     );
     var timeoutCleanupAlreadyHandled = false;
+    final preparedCachePolicy = OdbcPreparedStatementCachePolicy.forExecutionMode(executionMode);
     try {
       if (usesPreparedTimeout) {
         return await _guardWithCooperativeCancellation(
@@ -106,6 +111,7 @@ final class OdbcQueryRunner {
             request: request,
             preparedExecution: preparedExecution,
             timeout: timeout,
+            cachePolicy: preparedCachePolicy,
           ),
           cancellationToken: cancellationToken,
           timeout: timeout,
@@ -140,7 +146,12 @@ final class OdbcQueryRunner {
       }
 
       return await _guardWithCooperativeCancellation(
-        () => _run(connId, request, preparedExecution),
+        () => _run(
+          connId,
+          request,
+          preparedExecution,
+          databaseType: databaseType,
+        ),
         cancellationToken: cancellationToken,
         timeout: timeout,
       );
@@ -190,6 +201,7 @@ final class OdbcQueryRunner {
     required Map<String, int> preparedStatements,
     required String statementKey,
     Duration? timeout,
+    OdbcPreparedStatementCachePolicy cachePolicy = OdbcPreparedStatementCachePolicy.leasePool,
   }) async {
     final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final stmtId = await _statementExecutor.getOrPrepareStatement(
@@ -198,6 +210,7 @@ final class OdbcQueryRunner {
       preparedStatements: preparedStatements,
       statementKey: statementKey,
       timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+      cachePolicy: cachePolicy,
     );
     if (stmtId.isError()) {
       return QueryExecutionOutcome.failure(
@@ -228,6 +241,7 @@ final class OdbcQueryRunner {
     required QueryRequest request,
     required OdbcPreparedQueryExecution preparedExecution,
     Duration? timeout,
+    OdbcPreparedStatementCachePolicy cachePolicy = OdbcPreparedStatementCachePolicy.leasePool,
   }) async {
     final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final preparedStatements = <String, int>{};
@@ -239,6 +253,7 @@ final class OdbcQueryRunner {
         preparedStatements: preparedStatements,
         statementKey: statementKey,
         timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+        cachePolicy: cachePolicy,
       );
       if (stmtId.isError()) {
         return QueryExecutionOutcome.failure(
@@ -267,25 +282,41 @@ final class OdbcQueryRunner {
     }
   }
 
+  Future<QueryExecutionOutcome> _runStreamingMultiResult({
+    required String connectionId,
+    required QueryRequest request,
+    required String sql,
+    required DateTime startedAt,
+  }) async {
+    final builder = OdbcQueryResponseFactory.multiResultBuilder(request, startedAt: startedAt);
+    final streamed = await forEachStreamQueryMulti(
+      _queries,
+      connectionId,
+      sql,
+      builder.addItem,
+    );
+    if (streamed.isError()) {
+      return QueryExecutionOutcome.failure(streamed.exceptionOrNull());
+    }
+    return QueryExecutionOutcome.success(builder.build());
+  }
+
   Future<QueryExecutionOutcome> _run(
     String connectionId,
     QueryRequest request,
-    OdbcPreparedQueryExecution preparedExecution,
-  ) async {
+    OdbcPreparedQueryExecution preparedExecution, {
+    DatabaseType? databaseType,
+  }) async {
     if (OdbcGatewayQueryPreparation.shouldUseMultiResultExecution(
       request,
       preparedExecution,
     )) {
       final startedAt = DateTime.now();
-      final queryResult = await _service.executeQueryMultiFull(
-        connectionId,
-        preparedExecution.sql,
-      );
-      return queryResult.fold(
-        (success) => QueryExecutionOutcome.success(
-          OdbcQueryResponseFactory.fromMultiResult(request, success, startedAt: startedAt),
-        ),
-        QueryExecutionOutcome.failure,
+      return _runStreamingMultiResult(
+        connectionId: connectionId,
+        request: request,
+        sql: preparedExecution.sql,
+        startedAt: startedAt,
       );
     }
 
@@ -293,6 +324,7 @@ final class OdbcQueryRunner {
     final queryResult = await _resultEncodingExecutor.execute(
       connectionId,
       preparedExecution,
+      databaseType: databaseType,
     );
 
     return queryResult.fold(
@@ -355,9 +387,7 @@ final class OdbcQueryRunner {
   }
 
   Future<T> _waitForCooperativeCancellation<T>(CancellationToken cancellationToken) async {
-    while (!cancellationToken.isCancelled) {
-      await Future<void>.delayed(const Duration(milliseconds: 25));
-    }
+    await cancellationToken.whenCancelled;
     throw const CancellationException('Operation was cancelled');
   }
 }

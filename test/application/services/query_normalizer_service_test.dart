@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
+import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 
 void main() {
@@ -40,6 +41,46 @@ void main() {
 
       expect(normalized.data.length, rows.length);
       expect(normalized.data.first.keys.first, startsWith('col_'));
+    });
+
+    test('should skip normalization in preserve mode', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: <Map<String, dynamic>>[
+          <String, dynamic>{'Col Name': ' value '},
+        ],
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(
+        response,
+        sqlHandlingMode: SqlHandlingMode.preserve,
+      );
+
+      expect(normalized.data.first.containsKey('Col Name'), isTrue);
+      expect(normalized.data.first['Col Name'], ' value ');
+    });
+
+    test('should skip full rewrite when row keys are already wire-safe', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final rows = List<Map<String, dynamic>>.generate(
+        QueryNormalizerService.skipRowRewriteRowThreshold,
+        (int index) => <String, dynamic>{'col_$index': 'value$index'},
+      );
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: rows,
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(response);
+
+      expect(identical(normalized, response), isTrue);
     });
 
     test('should map multi-result items by result set index', () async {

@@ -2110,7 +2110,7 @@ nao seja resolvido por shape de payload ou por `gzip`.
 bytes economizados, uso de isolates e erros por protocolo. Isso e diagnostico
 local; nao altera o contrato no fio.
 - Benchmark reproduzivel do pipeline:
-  `dart run tool/benchmark_transport_pipeline.dart --iterations 20`.
+  `dart run tool/benchmarks/benchmark_transport_pipeline.dart --iterations 20`.
   Use `--json` para exportar os resultados e `--threshold 4096` para comparar
   limiares.
 - Respostas `rpc:response` muito grandes geram evento local

@@ -274,7 +274,7 @@ def main() -> None:
     if elevated_runner_script.exists():
         run([sys.executable, str(elevated_runner_script)])
     else:
-        raise SystemExit("Erro: tool/build_elevated_runner.py nao encontrado")
+        raise SystemExit("Erro: tool/elevated/build_elevated_runner.py nao encontrado")
 
     if not (BUILD_DIR / "plug_agente.exe").exists():
         raise SystemExit("Erro: plug_agente.exe nao encontrado no build")
@@ -283,7 +283,7 @@ def main() -> None:
     if not (BUILD_DIR / "plug_agente_elevated_runner.exe").exists():
         raise SystemExit(
             "Erro: plug_agente_elevated_runner.exe nao encontrado no build. "
-            "Execute python tool/build_elevated_runner.py antes do instalador.",
+            "Execute python tool/elevated/build_elevated_runner.py antes do instalador.",
         )
 
     app_exe = BUILD_DIR / "plug_agente.exe"

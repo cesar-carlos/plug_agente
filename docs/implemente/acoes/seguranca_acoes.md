@@ -41,8 +41,8 @@ Rollback rapido (ordem sugerida no plano §4195 / RA-08):
 ## Checklist de PR (por tipo)
 
 ```powershell
-dart run tool/agent_action_security_gate_checklist.dart
-dart run tool/agent_action_security_gate_checklist.dart commandLine
+dart run tool/agent_actions/agent_action_security_gate_checklist.dart
+dart run tool/agent_actions/agent_action_security_gate_checklist.dart commandLine
 ```
 
 Nao substitui revisao humana da matriz
@@ -65,7 +65,7 @@ no plano mestre.
 ## Live Hub — pre-requisitos (RA-05)
 
 ```powershell
-dart run tool/validate_live_hub_agent_actions_env.dart
+dart run tool/e2e/validate_live_hub_agent_actions_env.dart
 ```
 
 Bloqueios comuns:
@@ -82,7 +82,7 @@ Bloqueios comuns:
 Sugestao URL/agent id sem segredos:
 
 ```powershell
-dart run tool/suggest_e2e_hub_from_local_config.dart --apply-url --apply-agent-id
+dart run tool/e2e/suggest_e2e_hub_from_local_config.dart --apply-url --apply-agent-id
 ```
 
 ## Referencias

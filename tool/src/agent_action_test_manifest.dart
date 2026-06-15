@@ -1,10 +1,14 @@
-/// Reads agent-action homologation test path manifests from `tool/*.txt`.
+/// Reads agent-action homologation test path manifests from `tool/agent_actions/manifests/`.
 library;
 
 import 'dart:io';
 
+const String agentActionsManifestsRelativeDir = 'tool/agent_actions/manifests';
 const String agentActionsContractTestPathsFileName = 'agent_actions_contract_test_paths.txt';
 const String agentActionsUiTestPathsFileName = 'agent_actions_ui_test_paths.txt';
+
+String _manifestPath(String projectRoot, String fileName) =>
+    '$projectRoot${Platform.pathSeparator}${agentActionsManifestsRelativeDir.replaceAll('/', Platform.pathSeparator)}${Platform.pathSeparator}$fileName';
 
 /// Walks up from [startDirectory] until `pubspec.yaml` and the contract manifest exist.
 String resolvePlugAgenteProjectRoot({String? startDirectory}) {
@@ -12,7 +16,7 @@ String resolvePlugAgenteProjectRoot({String? startDirectory}) {
   while (true) {
     final pubspec = File('${directory.path}${Platform.pathSeparator}pubspec.yaml');
     final manifest = File(
-      '${directory.path}${Platform.pathSeparator}tool${Platform.pathSeparator}$agentActionsContractTestPathsFileName',
+      _manifestPath(directory.path, agentActionsContractTestPathsFileName),
     );
     if (pubspec.existsSync() && manifest.existsSync()) {
       return directory.path;
@@ -29,7 +33,7 @@ List<String> readAgentActionTestManifest(
   String projectRoot,
   String fileName,
 ) {
-  final file = File('$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}$fileName');
+  final file = File(_manifestPath(projectRoot, fileName));
   if (!file.existsSync()) {
     throw StateError('Missing test manifest: ${file.path}');
   }

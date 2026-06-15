@@ -43,6 +43,59 @@ class SqlDbStreamingAutoPolicy {
   Set<String> _cachedTableAllowlist = const <String>{};
   DateTime? _cachedTableAllowlistExpiresAt;
 
+  bool prefersDbStreamingOverMaterialized({
+    required FeatureFlags featureFlags,
+    required QueryRequest queryRequest,
+    required String sql,
+    required Map<String, dynamic> negotiatedExtensions,
+    required bool preferDbStreaming,
+    int? effectiveMaxRows,
+    TransportLimits limits = const TransportLimits(),
+  }) {
+    if (!featureFlags.enableSocketStreamingFromDb || !supportsStreamingChunks(negotiatedExtensions)) {
+      return false;
+    }
+    if (queryRequest.pagination != null) {
+      return false;
+    }
+    if (queryRequest.expectMultipleResults && (queryRequest.parameters?.isNotEmpty ?? false)) {
+      return false;
+    }
+
+    final normalized = normalizeSqlForDbStreaming(sql);
+    if (!normalized.startsWith(' select ') && !normalized.startsWith(' with ')) {
+      return false;
+    }
+    if (containsExplicitRowLimit(normalized)) {
+      return false;
+    }
+
+    final boundedMaxRows = effectiveMaxRows ?? limits.maxRows;
+    if (!preferDbStreaming &&
+        shouldMaterializeBoundedDbStreaming(
+          normalized,
+          effectiveMaxRows: boundedMaxRows,
+          limits: limits,
+        )) {
+      return false;
+    }
+
+    if (featureFlags.enableSocketStreamingChunks) {
+      return true;
+    }
+
+    return resolveAutoReason(
+          featureFlags: featureFlags,
+          queryRequest: queryRequest,
+          sql: sql,
+          negotiatedExtensions: negotiatedExtensions,
+          preferDbStreaming: preferDbStreaming,
+          effectiveMaxRows: effectiveMaxRows,
+          limits: limits,
+        ) !=
+        DbStreamingAutoReason.none;
+  }
+
   DbStreamingAutoReason resolveAutoReason({
     required FeatureFlags featureFlags,
     required QueryRequest queryRequest,

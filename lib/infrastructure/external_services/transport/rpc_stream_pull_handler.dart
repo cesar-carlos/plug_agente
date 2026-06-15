@@ -42,6 +42,7 @@ class RpcStreamPullHandler {
       return _PassthroughRpcStreamEmitter(_emitValidatedStreamEvent);
     }
     return BackpressureStreamEmitter(
+      initialSendCredit: ConnectionConstants.recommendedStreamPullWindowSize,
       emit: _emitValidatedStreamEvent,
       onRegister: (streamId, emitter) {
         final accepted = _streamEmitters.tryRegister(streamId, emitter);

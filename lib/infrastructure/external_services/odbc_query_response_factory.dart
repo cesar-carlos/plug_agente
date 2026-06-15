@@ -51,7 +51,7 @@ final class OdbcQueryResponseFactory {
       startedAt: startedAt,
       timestamp: finishedAt,
       columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
-        queryResult.columns,
+        queryResult,
       ),
       pagination: paginationResponse,
     );
@@ -66,60 +66,96 @@ final class OdbcQueryResponseFactory {
     QueryResultMulti queryResult, {
     DateTime? startedAt,
   }) {
-    final resultSets = <QueryResultSet>[];
-    final items = <QueryResponseItem>[];
-    var resultSetIndex = 0;
-    var totalAffectedRows = 0;
+    final builder = multiResultBuilder(request, startedAt: startedAt);
+    queryResult.items.forEach(builder.addItemSync);
+    return builder.build();
+  }
 
-    for (var itemIndex = 0; itemIndex < queryResult.items.length; itemIndex++) {
-      final item = queryResult.items[itemIndex];
-      if (item.resultSet != null) {
-        final resultSet = QueryResultSet(
-          index: resultSetIndex,
-          rows: OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
-            item.resultSet!,
-          ),
-          rowCount: item.resultSet!.rowCount,
-          columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
-            item.resultSet!.columns,
-          ),
-        );
-        resultSets.add(resultSet);
-        items.add(
-          QueryResponseItem.resultSet(
-            index: itemIndex,
-            resultSet: resultSet,
-          ),
-        );
-        resultSetIndex++;
-        continue;
-      }
+  static OdbcMultiResultResponseBuilder multiResultBuilder(
+    QueryRequest request, {
+    DateTime? startedAt,
+  }) {
+    return OdbcMultiResultResponseBuilder(
+      request: request,
+      startedAt: startedAt,
+      uuid: _uuid,
+    );
+  }
+}
 
-      final rowCount = item.rowCount ?? 0;
-      totalAffectedRows += rowCount;
-      items.add(
-        QueryResponseItem.rowCount(
-          index: itemIndex,
-          rowCount: rowCount,
+/// Incrementally assembles a multi-result [QueryResponse] while streaming items.
+final class OdbcMultiResultResponseBuilder {
+  OdbcMultiResultResponseBuilder({
+    required QueryRequest request,
+    required Uuid uuid,
+    DateTime? startedAt,
+  }) : _request = request,
+       _uuid = uuid,
+       _startedAt = startedAt;
+
+  final QueryRequest _request;
+  final Uuid _uuid;
+  final DateTime? _startedAt;
+  final List<QueryResultSet> _resultSets = <QueryResultSet>[];
+  final List<QueryResponseItem> _items = <QueryResponseItem>[];
+  var _resultSetIndex = 0;
+  var _totalAffectedRows = 0;
+  var _itemIndex = 0;
+
+  Future<void> addItem(QueryResultMultiItem item) async {
+    addItemSync(item);
+  }
+
+  void addItemSync(QueryResultMultiItem item) {
+    final currentIndex = _itemIndex++;
+    if (item.resultSet != null) {
+      final resultSet = QueryResultSet(
+        index: _resultSetIndex,
+        rows: OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
+          item.resultSet!,
+        ),
+        rowCount: item.resultSet!.rowCount,
+        columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
+          item.resultSet!,
         ),
       );
+      _resultSets.add(resultSet);
+      _items.add(
+        QueryResponseItem.resultSet(
+          index: currentIndex,
+          resultSet: resultSet,
+        ),
+      );
+      _resultSetIndex++;
+      return;
     }
 
-    final primaryResultSet = resultSets.isNotEmpty
-        ? resultSets.first
+    final rowCount = item.rowCount ?? 0;
+    _totalAffectedRows += rowCount;
+    _items.add(
+      QueryResponseItem.rowCount(
+        index: currentIndex,
+        rowCount: rowCount,
+      ),
+    );
+  }
+
+  QueryResponse build() {
+    final primaryResultSet = _resultSets.isNotEmpty
+        ? _resultSets.first
         : const QueryResultSet(index: 0, rows: [], rowCount: 0);
 
     return QueryResponse(
       id: _uuid.v4(),
-      requestId: request.id,
-      agentId: request.agentId,
+      requestId: _request.id,
+      agentId: _request.agentId,
       data: primaryResultSet.rows,
-      affectedRows: totalAffectedRows > 0 ? totalAffectedRows : primaryResultSet.rowCount,
-      startedAt: startedAt,
+      affectedRows: _totalAffectedRows > 0 ? _totalAffectedRows : primaryResultSet.rowCount,
+      startedAt: _startedAt,
       timestamp: DateTime.now(),
       columnMetadata: primaryResultSet.columnMetadata,
-      resultSets: resultSets,
-      items: items,
+      resultSets: List<QueryResultSet>.from(_resultSets),
+      items: List<QueryResponseItem>.from(_items),
     );
   }
 }

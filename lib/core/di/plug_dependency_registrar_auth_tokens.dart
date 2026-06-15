@@ -59,6 +59,7 @@ void _registerAuthTokens(GetIt getIt) {
         getIt<ClientTokenValidationService>(),
         decisionCache: getIt<IAuthorizationDecisionCache>(),
         cacheMetrics: getIt<IAuthorizationCacheMetrics>(),
+        decisionTtl: ConnectionConstants.authorizationDecisionCacheTtl,
       ),
     );
 }

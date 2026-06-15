@@ -36,7 +36,7 @@ void main() {
 
   test('should require homologate script to load contract paths from manifest', () {
     final script = File(
-      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}homologate_hub_agent_actions.py',
+      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}agent_actions${Platform.pathSeparator}homologate_hub_agent_actions.py',
     ).readAsStringSync();
 
     expect(script, contains('agent_actions_contract_test_paths.txt'));
@@ -46,7 +46,7 @@ void main() {
 
   test('should pass run-contract-tests flag from operational gate script', () {
     final script = File(
-      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}run_agent_actions_operational_gate.py',
+      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}agent_actions${Platform.pathSeparator}run_agent_actions_operational_gate.py',
     ).readAsStringSync();
 
     expect(script, contains('--run-contract-tests'));
@@ -56,7 +56,7 @@ void main() {
 
   test('should pass homologate flags from preflight script', () {
     final script = File(
-      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}preflight_agent_actions_production.py',
+      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}agent_actions${Platform.pathSeparator}preflight_agent_actions_production.py',
     ).readAsStringSync();
 
     expect(script, contains('"--run-contract-tests": args.run_contract_tests'));
@@ -91,7 +91,7 @@ void main() {
 
   test('should run security gate checklist when homologate run-contract-tests is enabled', () {
     final script = File(
-      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}homologate_hub_agent_actions.py',
+      '$projectRoot${Platform.pathSeparator}tool${Platform.pathSeparator}agent_actions${Platform.pathSeparator}homologate_hub_agent_actions.py',
     ).readAsStringSync();
 
     expect(script, contains('agent_action_security_gate_checklist.dart'));

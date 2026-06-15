@@ -73,9 +73,9 @@ Antes de mudar areas sensiveis, consulte tambem:
   e `test/helpers/e2e_env.dart`
 - acoes agendadas / execucoes (plano e gate local):
   `docs/implemente/plano_acoes_agendadas_execucoes.md`;
-  homologacao local/CI: `python tool/run_agent_actions_operational_gate.py` (atalho);
-  ou `python tool/preflight_agent_actions_production.py --run-contract-tests` /
-  `python tool/homologate_hub_agent_actions.py --run-contract-tests`
+  homologacao local/CI: `python tool/agent_actions/run_agent_actions_operational_gate.py` (atalho);
+  ou `python tool/agent_actions/preflight_agent_actions_production.py --run-contract-tests` /
+  `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests`
   (ver `docs/testing/e2e_setup.md`, secao Hub `agent.action.*`)
 
 ## Usage Rules

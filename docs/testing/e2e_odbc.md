@@ -50,7 +50,7 @@ funciona como opt-out operacional.
 ### Smoke do runtime (sem DSN)
 
 ```powershell
-dart run tool/check_odbc_fast_runtime.dart --require-columnar-compressed
+dart run tool/odbc/check_odbc_fast_runtime.dart --require-columnar-compressed
 ```
 
 Inicializa o worker async e verifica exports nativos usados pelo modo
@@ -61,11 +61,11 @@ Inicializa o worker async e verifica exports nativos usados pelo modo
 ```powershell
 # Async concurrency
 dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
-python tool/odbc_async_benchmark.py
+python tool/benchmarks/odbc_async_benchmark.py
 
 # Streaming legado vs batched
 dart run D:\Developer\dart_odbc_fast\example\streaming_performance_benchmark.dart
-python tool/odbc_streaming_benchmark.py
+python tool/benchmarks/odbc_streaming_benchmark.py
 ```
 
 `odbc_streaming_benchmark.py` usa `ODBC_STREAM_BENCH_QUERY` quando
@@ -76,14 +76,14 @@ evita benchmark acidental com `SELECT 1`.
 ### Driver matrix
 
 ```powershell
-python tool/odbc_driver_matrix_benchmark.py
+python tool/benchmarks/odbc_driver_matrix_benchmark.py
 ```
 
 ### Fluxo operacional completo
 
 ```powershell
-python tool/run_odbc_operational_validation.py
-python tool/run_odbc_operational_validation.py --all
+python tool/odbc/run_odbc_operational_validation.py
+python tool/odbc/run_odbc_operational_validation.py --all
 ```
 
 Detalhes em
@@ -257,8 +257,8 @@ flutter test test/integration/connection_recovery_integration_test.dart
 
 Use os scripts em `tool/`:
 
-- `tool/test_db_cmd.bat` — teste de conectividade (`dbping`)
-- `tool/test_select1_cmd.bat` — executa `SELECT 1` (`dbisql`)
+- `tool/fixtures/test_db_cmd.bat` — teste de conectividade (`dbping`)
+- `tool/fixtures/test_select1_cmd.bat` — executa `SELECT 1` (`dbisql`)
 
 Edite as variaveis no inicio de cada script. Consulte
 [`docs/database/sql_anywhere_connection.md`](../database/sql_anywhere_connection.md).

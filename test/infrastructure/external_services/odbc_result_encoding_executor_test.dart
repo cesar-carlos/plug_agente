@@ -1,25 +1,27 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:odbc_fast/odbc_fast.dart';
+import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
 import 'package:result_dart/result_dart.dart';
 
-class _MockOdbcService extends Mock implements OdbcService {}
+class _MockQueryService extends Mock implements IQueryService {}
 
 void main() {
   setUpAll(() {
     registerFallbackValue(ResultEncoding.rowMajor);
+    registerFallbackValue(const <ParamValue>[]);
   });
 
-  late _MockOdbcService service;
+  late _MockQueryService queries;
   late OdbcResultEncodingExecutor executor;
 
   setUp(() {
     dotenv.clean();
-    service = _MockOdbcService();
-    executor = OdbcResultEncodingExecutor(service);
+    queries = _MockQueryService();
+    executor = OdbcResultEncodingExecutor(queries);
   });
 
   const sampleResult = QueryResult(
@@ -34,29 +36,89 @@ void main() {
       OdbcPreparedQueryExecution(sql: sql, parameters: params);
 
   group('row-major (default) path', () {
-    test('uses executeQuery for parameterless SQL', () async {
+    test('uses executeQuery for parameterless SQL on SQL Anywhere default', () async {
       when(
-        () => service.executeQuery('SELECT 1', connectionId: 'c1'),
+        () => queries.executeQuery('SELECT 1', connectionId: 'c1'),
       ).thenAnswer((_) async => const Success(sampleResult));
 
-      final result = await executor.execute('c1', prepared('SELECT 1'));
+      final result = await executor.execute(
+        'c1',
+        prepared('SELECT 1'),
+        databaseType: DatabaseType.sybaseAnywhere,
+      );
 
       expect(result.isSuccess(), isTrue);
-      verify(() => service.executeQuery('SELECT 1', connectionId: 'c1')).called(1);
+      verify(() => queries.executeQuery('SELECT 1', connectionId: 'c1')).called(1);
       verifyNever(
-        () => service.executeQueryParams(any(), any(), any(), resultEncoding: any(named: 'resultEncoding')),
+        () => queries.executeQueryParamValues(
+          any(),
+          any(),
+          any(),
+          resultEncoding: any(named: 'resultEncoding'),
+        ),
       );
     });
 
-    test('uses executeQueryNamed for parameterized SQL', () async {
+    test('uses executeQueryNamed for parameterized SQL on SQL Anywhere', () async {
       when(
-        () => service.executeQueryNamed('c1', 'SELECT :a', {'a': 1}),
+        () => queries.executeQueryNamed('c1', 'SELECT :a', {'a': 42}),
       ).thenAnswer((_) async => const Success(sampleResult));
 
-      final result = await executor.execute('c1', prepared('SELECT :a', {'a': 1}));
+      final result = await executor.execute(
+        'c1',
+        prepared('SELECT :a', {'a': 42}),
+        databaseType: DatabaseType.sybaseAnywhere,
+      );
 
       expect(result.isSuccess(), isTrue);
-      verify(() => service.executeQueryNamed('c1', 'SELECT :a', {'a': 1})).called(1);
+      verify(() => queries.executeQueryNamed('c1', 'SELECT :a', {'a': 42})).called(1);
+    });
+  });
+
+  group('profile columnar default without env override', () {
+    test('uses columnar encoding for SQL Server on highThroughput profile', () async {
+      executor = OdbcResultEncodingExecutor(
+        queries,
+        usageProfile: OdbcUsageProfile.highThroughput,
+      );
+      when(
+        () => queries.executeQueryParamValues(
+          'c1',
+          'SELECT 1',
+          const <ParamValue>[],
+          resultEncoding: ResultEncoding.columnar,
+        ),
+      ).thenAnswer((_) async => const Success(sampleResult));
+
+      final result = await executor.execute(
+        'c1',
+        prepared('SELECT 1'),
+        databaseType: DatabaseType.sqlServer,
+      );
+
+      expect(result.isSuccess(), isTrue);
+      verify(
+        () => queries.executeQueryParamValues(
+          'c1',
+          'SELECT 1',
+          const <ParamValue>[],
+          resultEncoding: ResultEncoding.columnar,
+        ),
+      ).called(1);
+    });
+    test('keeps row-major for SQL Server on balancedServer profile', () async {
+      when(
+        () => queries.executeQuery('SELECT 1', connectionId: 'c1'),
+      ).thenAnswer((_) async => const Success(sampleResult));
+
+      final result = await executor.execute(
+        'c1',
+        prepared('SELECT 1'),
+        databaseType: DatabaseType.sqlServer,
+      );
+
+      expect(result.isSuccess(), isTrue);
+      verify(() => queries.executeQuery('SELECT 1', connectionId: 'c1')).called(1);
     });
   });
 
@@ -65,12 +127,12 @@ void main() {
       dotenv.loadFromString(envString: 'ODBC_RESULT_ENCODING=columnarCompressed');
     });
 
-    test('uses executeQueryParams with empty positional params for parameterless SQL', () async {
+    test('uses executeQueryParamValues for parameterless SQL', () async {
       when(
-        () => service.executeQueryParams(
+        () => queries.executeQueryParamValues(
           'c1',
           'SELECT 1',
-          const <Object?>[],
+          const <ParamValue>[],
           resultEncoding: ResultEncoding.columnarCompressed,
         ),
       ).thenAnswer((_) async => const Success(sampleResult));
@@ -79,10 +141,10 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
       verify(
-        () => service.executeQueryParams(
+        () => queries.executeQueryParamValues(
           'c1',
           'SELECT 1',
-          const <Object?>[],
+          const <ParamValue>[],
           resultEncoding: ResultEncoding.columnarCompressed,
         ),
       ).called(1);
@@ -90,22 +152,27 @@ void main() {
 
     test('translates named params to positional for parameterized SQL', () async {
       when(
-        () => service.executeQueryParams(any(), any(), any(), resultEncoding: any(named: 'resultEncoding')),
+        () => queries.executeQueryParamValues(
+          any(),
+          any(),
+          any(),
+          resultEncoding: any(named: 'resultEncoding'),
+        ),
       ).thenAnswer((_) async => const Success(sampleResult));
 
       final result = await executor.execute('c1', prepared('SELECT :a', {'a': 42}));
 
       expect(result.isSuccess(), isTrue);
       final captured = verify(
-        () => service.executeQueryParams(
+        () => queries.executeQueryParamValues(
           'c1',
           captureAny(),
           captureAny(),
           resultEncoding: ResultEncoding.columnarCompressed,
         ),
       ).captured;
-      // The named parameter value is forwarded as a positional argument.
-      expect((captured.last as List).contains(42), isTrue);
+      final params = captured.last as List<ParamValue>;
+      expect(params.any((param) => param is ParamValueInt32 && param.value == 42), isTrue);
     });
   });
 }

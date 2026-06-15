@@ -31,7 +31,7 @@ Resumo executivo. Detalhes na secao de cada fase mais abaixo.
 | P0 | 1A | CI instala `cryptography` + roda `tool/test_appcast_signing` sem skip | nao | `.github/workflows/*.yml` |
 | P0 | 1B | `AUTO_UPDATE_FEED_PUBLIC_KEY` aceita CSV (multi-key rotacao) | nao | `lib/core/security/appcast_signature_verifier.dart` |
 | P0 | 1C | `signtool verify /pa` gate no `release.yml` para installer e helper | Decisao Authenticode | `.github/workflows/release.yml` |
-| P0 | 1D | `release_preflight.py` valida pubkey embutida no binario | nao | `tool/release_preflight.py` |
+| P0 | 1D | `release_preflight.py` valida pubkey embutida no binario | nao | `tool/release/release_preflight.py` |
 | P0 | 1E.1 | Configurar `APPCAST_SIGNING_PRIVATE_KEY` no GH Secrets + publicar release assinada | Decisao chave | operacional |
 | P0 | 1E.2 | Ativar `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true` apos 2 releases verde | observacao em campo | `.env.example`, build CI |
 | P0 | 2A | `IHelperSignatureProbe` + PowerShell Authenticode gate pre-launch | Decisao Authenticode | `lib/infrastructure/services/http_silent_update_installer.dart` |
@@ -102,7 +102,7 @@ incidentes.
 - [x] Tests no `test/core/security/appcast_signature_verifier_test.dart`
   cobrindo: 1 chave (compat), 2 chaves uma valida, 2 chaves nenhuma
   valida, CSV malformado.
-- [x] `tool/appcast_signing.py` ganha `verify_with_any_key`.
+- [x] `tool/appcast/appcast_signing.py` ganha `verify_with_any_key`.
 
 #### 1C. Authenticode gate no CI
 
@@ -113,7 +113,7 @@ incidentes.
 
 #### 1D. Preflight valida pubkey embutida
 
-- [x] Estender `tool/release_preflight.py`: checar string base64 da pubkey
+- [x] Estender `tool/release/release_preflight.py`: checar string base64 da pubkey
   configurada presente no binario.
 - [x] Falha o preflight se ausente.
 - [x] Documentar como rodar localmente.
@@ -122,14 +122,14 @@ incidentes.
 
 Itens 1E.1 e 1E.2 sao operacionais (configurar GitHub Secrets + observar
 campo). O codigo ja esta pronto: `update-appcast.yml` passa
-`APPCAST_SIGNING_PRIVATE_KEY` para o `tool/appcast_manager.py update`, e
+`APPCAST_SIGNING_PRIVATE_KEY` para o `tool/appcast/appcast_manager.py update`, e
 `release.yml` + `release-preflight.yml` ja injetam `AUTO_UPDATE_FEED_PUBLIC_KEY`
 no build via `--dart-define`.
 
 ##### 1E.1: Onboard signing (runbook)
 
 - [~] Decisao 1 (custodia da chave): GitHub Secrets vs vault. Pendente.
-- [ ] Gerar keypair: `python tool/generate_appcast_signing_key.py` (saida
+- [ ] Gerar keypair: `python tool/appcast/generate_appcast_signing_key.py` (saida
   e o par base64).
 - [ ] Configurar no repositorio `cesar-carlos/plug_agente` em
   `Settings -> Secrets and variables -> Actions`:

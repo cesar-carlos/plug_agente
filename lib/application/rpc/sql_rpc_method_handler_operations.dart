@@ -53,6 +53,8 @@ import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.da
 
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 
+import 'package:plug_agente/domain/streaming/i_streaming_named_parameter_preparer.dart';
+
 import 'package:uuid/uuid.dart';
 
 class SqlRpcMethodHandlerOperations {
@@ -66,6 +68,8 @@ class SqlRpcMethodHandlerOperations {
     required FeatureFlags featureFlags,
 
     required SqlRpcMethodHandlerSupport support,
+
+    required IStreamingNamedParameterPreparer streamingNamedParameterPreparer,
 
     ActiveConfigResolver? activeConfigResolver,
 
@@ -166,6 +170,8 @@ class SqlRpcMethodHandlerOperations {
       dispatchMetrics: dispatchMetrics,
 
       odbcConnectionSettings: odbcConnectionSettings,
+
+      streamingNamedParameterPreparer: streamingNamedParameterPreparer,
     );
 
     final materializedStreamingExecutor = SqlRpcMaterializedStreamingExecutor(
@@ -190,6 +196,8 @@ class SqlRpcMethodHandlerOperations {
       dbStreamingExecutor: dbStreamingExecutor,
 
       materializedStreamingExecutor: materializedStreamingExecutor,
+
+      dbStreamingAutoPolicy: dbStreamingAutoPolicy,
 
       sqlExecuteTotalBudget: sqlExecuteTotalBudget,
 

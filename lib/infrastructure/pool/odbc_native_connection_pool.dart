@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_native_bulk_insert_pool.dart';
+import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -28,12 +29,15 @@ class OdbcNativeConnectionPool
     this._service,
     this._settings, {
     MetricsCollector? metricsCollector,
+    OdbcProfileRecommendedOptions? recommendedOptions,
   }) : _metrics = metricsCollector,
+       _recommendedOptions = recommendedOptions,
        _nativeHandshakeSemaphore = PoolSemaphore(
          ConnectionConstants.leasePoolNativeHandshakeConcurrency(_settings.poolSize),
        );
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
+  final OdbcProfileRecommendedOptions? _recommendedOptions;
   final MetricsCollector? _metrics;
   final PoolSemaphore _nativeHandshakeSemaphore;
 
@@ -55,10 +59,18 @@ class OdbcNativeConnectionPool
   }
 
   PoolOptions get _poolOptions {
-    return const PoolOptions(
+    const plugDefaults = PoolOptions(
       idleTimeout: ConnectionConstants.defaultNativePoolIdleTimeout,
       maxLifetime: ConnectionConstants.defaultNativePoolMaxLifetime,
       connectionTimeout: ConnectionConstants.defaultNativePoolConnectionTimeout,
+    );
+    final recommended = _recommendedOptions?.pool;
+    if (recommended == null) {
+      return plugDefaults;
+    }
+    return OdbcRecommendedOptionsMerger.mergePoolOptions(
+      recommended: recommended,
+      plugOverrides: plugDefaults,
     );
   }
 

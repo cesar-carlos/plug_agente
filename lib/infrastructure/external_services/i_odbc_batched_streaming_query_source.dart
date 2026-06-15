@@ -4,7 +4,7 @@ import 'package:result_dart/result_dart.dart';
 
 /// Streams ODBC query chunks with explicit native `fetchSize` / `chunkSize`.
 abstract class IOdbcBatchedStreamingQuerySource {
-  Stream<Result<QueryResult>> streamQuery(
+  Stream<Result<TypedColumnarResult>> streamColumnarQuery(
     int nativeConnectionId,
     String sql,
     OdbcStreamingNativeOptions options,

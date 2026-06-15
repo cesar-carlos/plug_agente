@@ -19,7 +19,7 @@ Esse comando executa:
    `installer/setup.iss` e `lib/core/constants/app_version.g.dart`)
 2. `flutter build windows --release` (gera `plug_agente.exe` e
    `plug_update_helper.exe` no bundle Release)
-3. `python tool/build_elevated_runner.py` (compila o helper Dart
+3. `python tool/elevated/build_elevated_runner.py` (compila o helper Dart
    `plug_agente_elevated_runner.exe` em `tool/plug_agente_elevated_runner/` e
    copia para o bundle Release/Debug). O script falha cedo se esse helper nao
    estiver no bundle.
@@ -51,7 +51,7 @@ no `.env` antes de rodar o build.
 Antes de publicar manualmente, rode:
 
 ```bash
-python tool/release_preflight.py --version {versao} --allow-dirty --require-iscc --check-pages
+python tool/release/release_preflight.py --version {versao} --allow-dirty --require-iscc --check-pages
 ```
 
 `--allow-dirty` libera o gate de working tree limpo enquanto voce ainda esta
@@ -65,13 +65,13 @@ instalador (evita builds que esqueceram o `--dart-define`), rode apos o
 `build_installer.py`:
 
 ```bash
-python tool/release_preflight.py --version {versao} --allow-dirty --check-installer \
+python tool/release/release_preflight.py --version {versao} --allow-dirty --check-installer \
   --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 ```
 
 Para uma validacao completa no GitHub Actions sem publicar, use o workflow
 manual **Release Preflight**. Ele gera o instalador, valida o helper nativo,
-roda `tool/validate_launcher_status.py` contra o status JSON e salva os
+roda `tool/appcast/validate_launcher_status.py` contra o status JSON e salva os
 artifacts sem criar commit, tag ou release.
 
 Assinatura de codigo e opcional. Se `WINDOWS_CODE_SIGNING_CERT_PATH` apontar

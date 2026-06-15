@@ -199,12 +199,12 @@ Parametros atuais recomendados:
 Benchmark local recomendado antes de alterar esses valores:
 
 ```bash
-dart run tool/benchmark_transport_pipeline.dart --iterations 20 --path sync
+dart run tool/benchmarks/benchmark_transport_pipeline.dart --iterations 20 --path sync
 flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart --tags perf
-dart run tool/benchmark_transport_pipeline.dart --iterations 20 --path async
-dart run tool/benchmark_transport_pipeline.dart --iterations 20 --json
-dart run tool/benchmark_transport_pipeline.dart --path async --gzip-isolate-threshold-sweep 16384,32768,65536
-dart run tool/benchmark_transport_pipeline.dart --help
+dart run tool/benchmarks/benchmark_transport_pipeline.dart --iterations 20 --path async
+dart run tool/benchmarks/benchmark_transport_pipeline.dart --iterations 20 --json
+dart run tool/benchmarks/benchmark_transport_pipeline.dart --path async --gzip-isolate-threshold-sweep 16384,32768,65536
+dart run tool/benchmarks/benchmark_transport_pipeline.dart --help
 ```
 
 O benchmark compara `none`, `auto` e `gzip` com payloads SQL sinteticos e

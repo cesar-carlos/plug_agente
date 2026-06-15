@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
@@ -56,6 +57,33 @@ void main() {
       expect(first.getOrNull(), 77);
       expect(second.getOrNull(), 77);
       verify(() => service.prepare(any(), any(), timeoutMs: any(named: 'timeoutMs'))).called(1);
+    });
+
+    test('skips Dart LRU cache when native pool policy is active', () async {
+      when(
+        () => service.prepare(any(), any(), timeoutMs: any(named: 'timeoutMs')),
+      ).thenAnswer((_) async => const Success(11));
+
+      final cache = <String, int>{};
+      final first = await executor.getOrPrepareStatement(
+        connectionId: 'c1',
+        preparedExecution: prepared('SELECT 1'),
+        preparedStatements: cache,
+        statementKey: 'k',
+        cachePolicy: OdbcPreparedStatementCachePolicy.nativePool,
+      );
+      final second = await executor.getOrPrepareStatement(
+        connectionId: 'c1',
+        preparedExecution: prepared('SELECT 1'),
+        preparedStatements: cache,
+        statementKey: 'k',
+        cachePolicy: OdbcPreparedStatementCachePolicy.nativePool,
+      );
+
+      expect(first.getOrNull(), 11);
+      expect(second.getOrNull(), 11);
+      expect(cache, isEmpty);
+      verify(() => service.prepare(any(), any(), timeoutMs: any(named: 'timeoutMs'))).called(2);
     });
   });
 
@@ -124,7 +152,7 @@ void main() {
 
   group('executePreparedStatementWithTimeout', () {
     test('returns the result when no timeout is set', () async {
-      when(() => service.executePrepared('c1', 3, null, null)).thenAnswer(
+      when(() => service.executePreparedParamValuesFromObjects('c1', 3, const [], null)).thenAnswer(
         (_) async => const Success(
           QueryResult(
             columns: ['v'],
@@ -153,7 +181,7 @@ void main() {
           never.complete(const Success(QueryResult(columns: [], rows: [], rowCount: 0)));
         }
       });
-      when(() => service.executePrepared(any(), any(), any(), any())).thenAnswer((_) => never.future);
+      when(() => service.executePreparedParamValuesFromObjects(any(), any(), any(), any())).thenAnswer((_) => never.future);
       when(() => service.cancelStatement('c1', 4)).thenAnswer((_) async => const Success(unit));
 
       await expectLater(

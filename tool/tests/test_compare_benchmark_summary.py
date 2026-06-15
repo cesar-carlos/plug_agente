@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tool.compare_benchmark_summary import compare_metrics, format_table, main
+from tool.benchmarks.compare_benchmark_summary import compare_metrics, format_table, main
 from tool.py.benchmark_common import flatten_suite_metrics, metric_lower_is_better
 
 

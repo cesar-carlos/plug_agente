@@ -35,6 +35,10 @@
       "maxItems": 1024,
       "items": { "type": "object" },
       "description": "Column metadata (sent on first chunk only)"
+    },
+    "columnar": {
+      "type": "object",
+      "description": "Optional typed columnar payload when ODBC_STREAM_COLUMNAR_WIRE is enabled on the agent"
     }
   },
   "additionalProperties": false

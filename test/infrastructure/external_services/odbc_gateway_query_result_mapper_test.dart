@@ -29,7 +29,7 @@ void main() {
         result,
       );
       final meta = OdbcGatewayQueryResultMapper.buildColumnMetadata(
-        result.columns,
+        result,
       );
 
       expect(maps, [
@@ -39,6 +39,25 @@ void main() {
       expect(meta, [
         {'name': 'id'},
         {'name': 'name'},
+      ]);
+    });
+
+    test('should propagate rich columnsMetadata when present', () {
+      const result = QueryResult(
+        columns: ['id'],
+        rows: [
+          [1],
+        ],
+        rowCount: 1,
+        columnsMetadata: [
+          ColumnMetadata(name: 'id', odbcType: 2),
+        ],
+      );
+
+      final meta = OdbcGatewayQueryResultMapper.buildColumnMetadata(result);
+
+      expect(meta, [
+        {'name': 'id', 'odbc_type': 2},
       ]);
     });
 

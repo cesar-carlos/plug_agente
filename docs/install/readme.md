@@ -52,17 +52,17 @@ installer/dist/PlugAgente-Setup-{versao}.exe
 
 - `python installer/build_installer.py`: fluxo recomendado de build Windows
 - `python installer/update_version.py`: sincroniza versao sem gerar instalador
-- `python tool/release_preflight.py`: valida sincronizacao, tag, ferramentas
+- `python tool/release/release_preflight.py`: valida sincronizacao, tag, ferramentas
   no PATH, presenca do instalador, chave publica embutida (`--feed-public-key`)
   e Pages habilitado (`--check-pages`) antes da publicacao
-- `python tool/validate_release.py`: valida GitHub Release e appcast local ou
+- `python tool/appcast/validate_release.py`: valida GitHub Release e appcast local ou
   remoto
-- `python tool/validate_launcher_status.py`: valida o JSON do
+- `python tool/appcast/validate_launcher_status.py`: valida o JSON do
   `plug_update_helper.exe` contra o schema canonico
-- `python tool/generate_appcast_signing_key.py`: gera keypair Ed25519 para o
+- `python tool/appcast/generate_appcast_signing_key.py`: gera keypair Ed25519 para o
   feed (privada vira `APPCAST_SIGNING_PRIVATE_KEY` em Secrets; publica vira
   `AUTO_UPDATE_FEED_PUBLIC_KEY` nos builds de release)
-- `python tool/appcast_manager.py`: comandos `update` / `validate-file` /
+- `python tool/appcast/appcast_manager.py`: comandos `update` / `validate-file` /
   `smoke-validate-url` / `inspect-url` do feed (chamado pelos workflows)
 - [install_monitor.bat](../../install_monitor.bat): instala PlugPortMon como
   administrador

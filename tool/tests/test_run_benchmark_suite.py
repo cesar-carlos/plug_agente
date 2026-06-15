@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tool.py.benchmark_common import parse_transport_markdown_metrics
-from tool.run_benchmark_suite import build_suite_plans, filter_suite_plans, main
+from tool.benchmarks.run_benchmark_suite import build_suite_plans, filter_suite_plans, main
 
 
 class RunBenchmarkSuiteTests(unittest.TestCase):

@@ -83,7 +83,7 @@ jobs:
 
           NS = {
               "sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle",
-              # Keep this URI in sync with `PLUG_NS` in tool/appcast_manager.py
+              # Keep this URI in sync with `PLUG_NS` in tool/appcast/appcast_manager.py
               # and `_plugNamespace` in lib/application/services/appcast_probe_service.dart.
               # Drift breaks signature verification silently (the script falls
               # back to "no signature" and exits 0 instead of failing the gate).

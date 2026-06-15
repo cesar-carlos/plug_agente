@@ -14,6 +14,8 @@ import 'package:plug_agente/infrastructure/external_services/bulk_insert_paralle
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_native_bcp_policy.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_native_bulk_insert_builder.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
 import 'package:result_dart/result_dart.dart';
@@ -82,12 +84,14 @@ final class OdbcBulkInsertExecutor {
     required BulkInsertRequest request,
     Duration? timeout,
     DateTime? deadline,
+    DatabaseType? databaseType,
   }) {
     return _executeChunkedBulkInsert(
       connectionId: connectionId,
       request: request,
       deadline: deadline ?? OdbcExecutionDeadline.deadlineFor(timeout),
       timeout: timeout,
+      databaseType: databaseType,
     );
   }
 
@@ -152,6 +156,7 @@ final class OdbcBulkInsertExecutor {
               request: request,
               deadline: deadline,
               timeout: timeout,
+              databaseType: databaseType,
             );
             if (inserted.isError()) {
               return Failure(inserted.exceptionOrNull()!);
@@ -310,6 +315,7 @@ final class OdbcBulkInsertExecutor {
     required BulkInsertRequest request,
     required DateTime? deadline,
     required Duration? timeout,
+    DatabaseType? databaseType,
   }) async {
     final chunkSize = ConnectionConstants.bulkInsertChunkRowCount;
     if (request.rows.length <= chunkSize) {
@@ -318,6 +324,7 @@ final class OdbcBulkInsertExecutor {
         request: request,
         deadline: deadline,
         timeout: timeout,
+        databaseType: databaseType,
       );
     }
 
@@ -335,6 +342,7 @@ final class OdbcBulkInsertExecutor {
         request: chunkRequest,
         deadline: deadline,
         timeout: timeout,
+        databaseType: databaseType,
       );
       if (chunkResult.isError()) {
         return Failure(chunkResult.exceptionOrNull()!);
@@ -349,7 +357,15 @@ final class OdbcBulkInsertExecutor {
     required BulkInsertRequest request,
     required DateTime? deadline,
     required Duration? timeout,
+    DatabaseType? databaseType,
   }) async {
+    final pilotEnabled = shouldAttemptNativeBcpBulkInsert(databaseType: databaseType);
+    if (pilotEnabled) {
+      _metrics.recordDiagnosticReason(
+        category: 'bulk_insert',
+        reason: 'native_bcp_pilot',
+      );
+    }
     final builder = _buildNativeBulkInsert(request);
     final operation = _service.bulkInsert(
       connectionId,
@@ -362,65 +378,41 @@ final class OdbcBulkInsertExecutor {
     final result = remaining == null ? await operation : await operation.timeout(remaining);
     return result.fold(
       Success.new,
-      (error) => Failure(
-        OdbcFailureMapper.mapQueryError(
+      (error) {
+        if (pilotEnabled && isNativeBcpUnsupportedError(error)) {
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Native SQL Server BCP is disabled or unavailable',
+              cause: error,
+              context: const {
+                'reason': odbcNativeBcpUnavailableReason,
+                'requires_env': 'ODBC_ENABLE_UNSTABLE_NATIVE_BCP',
+              },
+            ),
+          );
+        }
+        final mapped = OdbcFailureMapper.mapQueryError(
           error,
           operation: 'bulk_insert_direct',
-        ),
-      ),
+        );
+        if (pilotEnabled) {
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: mapped.message,
+              cause: mapped.cause ?? error,
+              context: {
+                ...mapped.context,
+                'reason': odbcNativeBcpFailedReason,
+              },
+            ),
+          );
+        }
+        return Failure(mapped);
+      },
     );
   }
 
   BulkInsertBuilder _buildNativeBulkInsert(BulkInsertRequest request) {
-    final builder = BulkInsertBuilder()..table(request.table);
-    for (final column in request.columns) {
-      builder.addColumn(
-        column.name,
-        _toNativeBulkColumnType(column.type),
-        nullable: column.nullable,
-        maxLen: column.maxLen,
-      );
-    }
-    for (final row in request.rows) {
-      builder.addRow(_coerceBulkInsertRow(row, request.columns));
-    }
-    return builder;
-  }
-
-  BulkColumnType _toNativeBulkColumnType(BulkInsertColumnType type) {
-    return switch (type) {
-      BulkInsertColumnType.i32 => BulkColumnType.i32,
-      BulkInsertColumnType.i64 => BulkColumnType.i64,
-      BulkInsertColumnType.text => BulkColumnType.text,
-      BulkInsertColumnType.decimal => BulkColumnType.decimal,
-      BulkInsertColumnType.binary => BulkColumnType.binary,
-      BulkInsertColumnType.timestamp => BulkColumnType.timestamp,
-    };
-  }
-
-  List<dynamic> _coerceBulkInsertRow(
-    List<dynamic> row,
-    List<BulkInsertColumn> columns,
-  ) {
-    return List<dynamic>.generate(row.length, (index) {
-      final value = row[index];
-      final column = columns[index];
-      if (value == null || column.type != BulkInsertColumnType.timestamp) {
-        return value;
-      }
-      if (value is BulkTimestamp) {
-        return value;
-      }
-      if (value is DateTime) {
-        return BulkTimestamp.fromDateTime(value);
-      }
-      if (value is String) {
-        final parsed = DateTime.tryParse(value);
-        if (parsed != null) {
-          return BulkTimestamp.fromDateTime(parsed);
-        }
-      }
-      return value;
-    });
+    return OdbcNativeBulkInsertBuilder.fromRequest(request);
   }
 }

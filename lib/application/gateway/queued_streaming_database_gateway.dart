@@ -2,6 +2,7 @@ import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
+import 'package:plug_agente/domain/streaming/streaming_wire_chunk.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Wraps a streaming gateway with the shared [SqlExecutionQueue] so ODBC
@@ -33,7 +34,10 @@ class QueuedStreamingDatabaseGateway implements IStreamingDatabaseGateway, IStre
     Duration? queryTimeout,
     CancellationToken? cancellationToken,
     StreamingCancelReason? Function()? cancellationReasonProvider,
+    Future<void> Function(StreamingWireChunk chunk)? onWireChunk,
     void Function()? onSetupComplete,
+    Map<String, dynamic>? parameters,
+    bool columnarWireOnly = false,
   }) async {
     final lifecycleToken = cancellationToken ?? CancellationToken();
     final queued = await _queue.submitWithReleasableWorker<bool>(
@@ -44,6 +48,51 @@ class QueuedStreamingDatabaseGateway implements IStreamingDatabaseGateway, IStre
           onChunk,
           fetchSize: fetchSize,
           chunkSizeBytes: chunkSizeBytes,
+          executionId: executionId,
+          queryTimeout: queryTimeout,
+          cancellationToken: lifecycleToken,
+          cancellationReasonProvider: cancellationReasonProvider,
+          onWireChunk: onWireChunk,
+          onSetupComplete: () {
+            releaseWorker();
+            onSetupComplete?.call();
+          },
+          parameters: parameters,
+          columnarWireOnly: columnarWireOnly,
+        );
+        return streamResult.fold(
+          (_) => const Success(true),
+          Failure.new,
+        );
+      },
+      requestId: executionId,
+      kind: SqlExecutionKind.streaming,
+      cooperativeCancellationToken: lifecycleToken,
+    );
+    return queued.fold(
+      (_) => const Success(unit),
+      Failure.new,
+    );
+  }
+
+  @override
+  Future<Result<void>> executeMultiResultQueryStream(
+    String query,
+    String connectionString,
+    Future<void> Function(StreamingWireChunk chunk) onWireChunk, {
+    String? executionId,
+    Duration? queryTimeout,
+    CancellationToken? cancellationToken,
+    StreamingCancelReason? Function()? cancellationReasonProvider,
+    void Function()? onSetupComplete,
+  }) async {
+    final lifecycleToken = cancellationToken ?? CancellationToken();
+    final queued = await _queue.submitWithReleasableWorker<bool>(
+      (releaseWorker) async {
+        final streamResult = await _delegate.executeMultiResultQueryStream(
+          query,
+          connectionString,
+          onWireChunk,
           executionId: executionId,
           queryTimeout: queryTimeout,
           cancellationToken: lifecycleToken,

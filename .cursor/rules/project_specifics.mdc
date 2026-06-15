@@ -200,17 +200,17 @@ Future<Result<User>> getById(String id) async {
   `API_TEST_BASE_URL` para API; `ODBC_TEST_DSN*` para ODBC
 - Testes E2E devem usar `skip` quando variaveis nao estiverem definidas, com
   mensagem clara
-- Rode `dart run tool/check_e2e_env.dart` para verificar configuracao antes dos
+- Rode `dart run tool/e2e/check_e2e_env.dart` para verificar configuracao antes dos
   testes
 - Consulte `docs/testing/e2e_setup.md` para lista completa de variaveis e comandos
 - Acoes agendadas (`agent.action.*`): gate local/CI sem Hub via
-  `python tool/run_agent_actions_operational_gate.py` ou
-  `python tool/homologate_hub_agent_actions.py --run-contract-tests` (manifestos
-  `tool/agent_actions_*_test_paths.txt`); preflight estatico:
-  `python tool/preflight_agent_actions_production.py`; live Hub opt-in com `RUN_LIVE_HUB_*`,
+  `python tool/agent_actions/run_agent_actions_operational_gate.py` ou
+  `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests` (manifestos
+  `tool/agent_actions/manifests/agent_actions_*_test_paths.txt`); preflight estatico:
+  `python tool/agent_actions/preflight_agent_actions_production.py`; live Hub opt-in com `RUN_LIVE_HUB_*`,
   `E2E_HUB_URL`, `E2E_HUB_TOKEN`,
   assinatura `PAYLOAD_SIGNING_*` e `-ValidateLiveEnv -RunLiveTests`; preflight live:
-  `dart run tool/validate_live_hub_agent_actions_env.dart` (ver
+  `dart run tool/e2e/validate_live_hub_agent_actions_env.dart` (ver
   `docs/implemente/plano_acoes_agendadas_execucoes.md` e secao Hub em
   `e2e_setup.md`)
 

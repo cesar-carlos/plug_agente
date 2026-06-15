@@ -19,13 +19,13 @@ Plug Agente.
 Rode o gate local com paridade ao publish workflow **antes** de disparar o CI:
 
 ```powershell
-python tool/pre_publish_release.py --version 1.8.4
+python tool/release/pre_publish_release.py --version 1.8.4
 ```
 
 Equivalente manual:
 
 ```bash
-python tool/release_preflight.py --version 1.8.4 --gate --check-secrets --print-publish-hints
+python tool/release/release_preflight.py --version 1.8.4 --gate --check-secrets --print-publish-hints
 ```
 
 O gate executa `flutter analyze`, `flutter test --exclude-tags "live || slow || perf"`,
@@ -36,7 +36,7 @@ e os comandos `gh workflow run` sugeridos.
 Hook git opcional (pre-push em `main` quando `pubspec.yaml`, `lib/` ou `test/` mudam):
 
 ```powershell
-python tool/install_git_hooks.py
+python tool/dev/install_git_hooks.py
 # pular uma vez: $env:SKIP_RELEASE_GATE = '1'
 ```
 
@@ -48,7 +48,7 @@ Windows, cria commit/tag/release e anexa o asset correto.
 
 Ordem sugerida:
 
-1. `python tool/pre_publish_release.py --version X.Y.Z` (local).
+1. `python tool/release/pre_publish_release.py --version X.Y.Z` (local).
 2. (Opcional) `Actions` > **Release Preflight** com a mesma versao (build no CI
    sem publicar).
 3. (Opcional) **Publish Windows Release** com `dry_run=true`.
@@ -100,9 +100,9 @@ version: 1.2.7+2
 ### 2. Gerar build Windows e instalador
 
 ```bash
-python tool/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc --check-pages
+python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc --check-pages
 python installer/build_installer.py
-python tool/release_preflight.py --version 1.2.7 --allow-dirty --check-installer \
+python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --check-installer \
   --feed-public-key "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 ```
 
@@ -110,7 +110,7 @@ O `installer/build_installer.py` executa:
 
 1. `installer/update_version.py`
 2. `flutter build windows --release`
-3. `python tool/build_elevated_runner.py` (compila e copia
+3. `python tool/elevated/build_elevated_runner.py` (compila e copia
    `plug_agente_elevated_runner.exe` para o bundle Release/Debug; obrigatorio)
 4. Validacao de presenca de `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe` no bundle Release
@@ -165,7 +165,7 @@ git push origin v1.2.7
 
 Apos publicar, confira o workflow **Update Appcast on Release** em GitHub
 Actions. Ele valida tag, versao, nome do asset, atualiza `appcast.xml` e roda
-o smoke check do feed publicado usando `tool/appcast_manager.py`.
+o smoke check do feed publicado usando `tool/appcast/appcast_manager.py`.
 
 > **IMPORTANTE — Trigger automatico do update-appcast.**
 >
@@ -207,7 +207,7 @@ Validacoes detalhadas do feed e do update ficam em
 Validacao manual da release publicada:
 
 ```bash
-python tool/validate_release.py \
+python tool/appcast/validate_release.py \
   --tag v1.2.7 \
   --appcast appcast.xml
 ```
@@ -215,14 +215,14 @@ python tool/validate_release.py \
 Para validar o feed remoto publicado:
 
 ```bash
-python tool/validate_release.py \
+python tool/appcast/validate_release.py \
   --tag v1.2.7 \
   --feed-url https://cesar-carlos.github.io/plug_agente/appcast.xml
 ```
 
 ## Fonte de Verdade do Appcast
 
-O arquivo `tool/appcast_manager.py` concentra:
+O arquivo `tool/appcast/appcast_manager.py` concentra:
 
 - geracao do item mais recente do `appcast.xml`;
 - validacao estrutural do feed;
@@ -232,7 +232,7 @@ O arquivo `tool/appcast_manager.py` concentra:
 Antes de mexer no workflow de update, atualize primeiro esse script e rode:
 
 ```bash
-python -m unittest tool.test_appcast_manager -v
+python -m unittest tool.appcast.test_appcast_manager -v
 ```
 
 ## Fluxo Manual para Depuracao
@@ -248,7 +248,7 @@ ISCC installer/setup.iss
 Preflight local completo antes de publicar manualmente:
 
 ```bash
-python tool/release_preflight.py --version 1.2.7 --require-iscc --check-pages --analyze --tests
+python tool/release/release_preflight.py --version 1.2.7 --require-iscc --check-pages --analyze --tests
 ```
 
 ## Seguranca Operacional
