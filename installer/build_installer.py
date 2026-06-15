@@ -270,7 +270,7 @@ def main() -> None:
         raise SystemExit(f"Erro: pasta de build nao encontrada: {BUILD_DIR}")
 
     print("\n2.1. Build elevated action runner helper...", flush=True)
-    elevated_runner_script = PROJECT_ROOT / "tool" / "build_elevated_runner.py"
+    elevated_runner_script = PROJECT_ROOT / "tool" / "elevated" / "build_elevated_runner.py"
     if elevated_runner_script.exists():
         run([sys.executable, str(elevated_runner_script)])
     else:
