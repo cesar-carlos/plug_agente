@@ -187,6 +187,7 @@ class RpcInboundHandler {
         responseData,
         methodsById: methodsById,
       ).catchError((Object error, StackTrace stackTrace) {
+        _metricsCollector?.recordRpcResponseEmitFailure();
         AppLogger.error(
           'Failed to emit inbound rpc:response',
           error,
@@ -409,6 +410,8 @@ class RpcInboundHandler {
       }
 
       if (_featureFlags.enableSocketDeliveryGuarantees && !request.isNotification) {
+        // Ack means "accepted for processing", not "dispatch completed".
+        // The hub may receive this before ODBC work finishes; see delivery guarantees doc.
         _scheduleAck(request.id);
       }
       socketAck?.call();
@@ -600,6 +603,16 @@ class RpcInboundHandler {
   Future<bool> _validateSingleRequestJsonSchemasOrEmit(Map<String, dynamic> requestMap) async {
     if (_schemaValidationPipeline.shouldSkipLargePayload(requestMap)) {
       _schemaValidationPipeline.recordSkippedLargePayload();
+      final criticalFailure = _schemaValidationPipeline.validateCriticalFieldsWhenSkipping(requestMap);
+      if (criticalFailure != null) {
+        await _sendSchemaValidationError(
+          requestMap['id'],
+          RpcErrorCode.invalidParams,
+          criticalFailure.message,
+          method: requestMap['method'],
+        );
+        return false;
+      }
       return true;
     }
 

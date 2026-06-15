@@ -220,7 +220,7 @@ class FeatureFlags {
   }
 
   /// Whether to reject tokens in revoked store for session (no reconnect needed).
-  bool get enableSocketRevokedTokenInSession => _prefs.getBool(_keyEnableSocketRevokedTokenInSession) ?? false;
+  bool get enableSocketRevokedTokenInSession => _prefs.getBool(_keyEnableSocketRevokedTokenInSession) ?? true;
 
   Future<void> setEnableSocketRevokedTokenInSession(bool value) async {
     await _prefs.setBool(_keyEnableSocketRevokedTokenInSession, value);
@@ -246,7 +246,10 @@ class FeatureFlags {
   ///
   /// Seeded from `.env` (`feature_enable_socket_backpressure`) on first boot when
   /// unset; persisted app prefs in global `settings.json` always override env.
-  bool get enableSocketBackpressure => _prefs.getBool(_keyEnableSocketBackpressure) ?? false;
+  ///
+  /// Defaulted to `true` alongside streaming defaults so large result sets use
+  /// rpc:stream.pull credits instead of unbounded passthrough buffering.
+  bool get enableSocketBackpressure => _prefs.getBool(_keyEnableSocketBackpressure) ?? true;
 
   Future<void> setEnableSocketBackpressure(bool value) async {
     await _prefs.setBool(_keyEnableSocketBackpressure, value);
@@ -459,9 +462,9 @@ class FeatureFlags {
     await setEnableSocketOutgoingContractValidation(true);
     await setEnableSocketSummarizeLargePayloadLogs(true);
     await setEnableSocketJwksValidation(false);
-    await setEnableSocketRevokedTokenInSession(false);
+    await setEnableSocketRevokedTokenInSession(true);
     await setEnableSocketStreamingChunks(true);
-    await setEnableSocketBackpressure(false);
+    await setEnableSocketBackpressure(true);
     await setEnableSocketStreamingFromDb(true);
     await setEnableTokenAudit(false);
     await setEnablePayloadSigning(false);

@@ -13,6 +13,7 @@ import 'package:plug_agente/core/services/i_app_infrastructure_shutdown_port.dar
 import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_elevated_action_execution_canceller.dart';
 
 /// Runs the post-hub teardown steps for application shutdown.
 final class AppShutdownSequence {
@@ -29,6 +30,7 @@ final class AppShutdownSequence {
   }) async {
     _stopPeriodicPurges();
     _markAgentActionsDraining();
+    await _cancelPendingElevatedExecutions();
     await dispatchAppCloseAgentActions();
     await applyOnAppExitPolicies();
     await runEarlyShutdownCoordinator();
@@ -66,6 +68,23 @@ final class AppShutdownSequence {
     if (_getIt.isRegistered<AgentActionRuntimeStateGuard>()) {
       _getIt<AgentActionRuntimeStateGuard>().markDraining(
         reason: AgentActionRuntimeStateConstants.shutdownReason,
+      );
+    }
+  }
+
+  Future<void> _cancelPendingElevatedExecutions() async {
+    if (!_getIt.isRegistered<IElevatedActionExecutionCanceller>()) {
+      return;
+    }
+    try {
+      await _getIt<IElevatedActionExecutionCanceller>().cancelAllPendingExecutions();
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Failed to cancel pending elevated executions during shutdown',
+        name: 'app_shutdown_sequence',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }

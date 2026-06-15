@@ -334,6 +334,7 @@ final class _DelayedQueryGateway implements IDatabaseGateway {
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   }) {
     return _delegate.executeBatch(
       agentId,
@@ -342,6 +343,7 @@ final class _DelayedQueryGateway implements IDatabaseGateway {
       options: options,
       timeout: timeout,
       sourceRpcRequestId: sourceRpcRequestId,
+      cancellationToken: cancellationToken,
     );
   }
 
@@ -351,12 +353,16 @@ final class _DelayedQueryGateway implements IDatabaseGateway {
     Map<String, dynamic>? parameters, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) {
     return _delegate.executeNonQuery(
       query,
       parameters,
       timeout: timeout,
       database: database,
+      cancellationToken: cancellationToken,
+      sourceRpcRequestId: sourceRpcRequestId,
     );
   }
 
@@ -365,11 +371,15 @@ final class _DelayedQueryGateway implements IDatabaseGateway {
     BulkInsertRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) {
     return _delegate.executeBulkInsert(
       request,
       timeout: timeout,
       database: database,
+      cancellationToken: cancellationToken,
+      sourceRpcRequestId: sourceRpcRequestId,
     );
   }
 }

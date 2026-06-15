@@ -7,12 +7,14 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:plug_agente/core/diagnostics/legacy_database_migration_status.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/core/utils/odbc_connection_string_secrets.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.dart';
 import 'package:plug_agente/domain/value_objects/odbc_credential_secrets.dart';
 import 'package:plug_agente/infrastructure/datasources/agent_config_data_source.dart';
 import 'package:plug_agente/infrastructure/stores/flutter_secure_odbc_credential_secret_store.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 part 'agent_config_drift_database.g.dart';
 part 'migrations/agent_config_drift_migration_helpers.dart';
@@ -196,6 +198,7 @@ Future<void> _migrateLegacyDatabaseIfNeeded(File globalDbFile) async {
       return;
     }
 
+    await _checkpointLegacySqliteIfPossible(legacyDb);
     await legacyDb.copy(globalDbFile.path);
     await _copySidecarFileIfExists(
       source: File('${legacyDb.path}-wal'),
@@ -206,9 +209,12 @@ Future<void> _migrateLegacyDatabaseIfNeeded(File globalDbFile) async {
       destination: File('${globalDbFile.path}-shm'),
     );
   } on Exception catch (e, stackTrace) {
+    final message = 'Legacy database migration failed: $e';
+    LegacyDatabaseMigrationStatus.recordFailure(message);
     developer.log(
-      'Legacy database migration failed (best effort)',
+      message,
       name: 'agent_config_drift_database',
+      level: 1000,
       error: e,
       stackTrace: stackTrace,
     );
@@ -223,4 +229,23 @@ Future<void> _copySidecarFileIfExists({
     return;
   }
   await source.copy(destination.path);
+}
+
+Future<void> _checkpointLegacySqliteIfPossible(File legacyDb) async {
+  try {
+    final database = sqlite.sqlite3.open(legacyDb.path, mode: sqlite.OpenMode.readOnly);
+    try {
+      database.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+    } finally {
+      database.dispose();
+    }
+  } on Object catch (error, stackTrace) {
+    developer.log(
+      'Legacy database WAL checkpoint failed before migration copy; continuing with file copy',
+      name: 'agent_config_drift_database',
+      level: 900,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
 }

@@ -63,6 +63,9 @@ abstract final class MetricsCounterNames {
   static const String rpcResponseAckFallbackWithoutAckCounter = 'rpc_response_ack_fallback_without_ack';
   static const String rpcResponseAckSkippedSqlExecuteCounter = 'rpc_response_ack_skipped_sql_execute';
   static const String rpcResponseAckSkippedSqlExecuteBatchCounter = 'rpc_response_ack_skipped_sql_execute_batch';
+  static const String rpcResponseEmitFailureCounter = 'rpc_response_emit_failure';
+  static const String rpcResponseEmitSkippedDisconnectedCounter = 'rpc_response_emit_skipped_disconnected';
+  static const String rpcStreamPullInvalidCounter = 'rpc_stream_pull_invalid';
   static const String rpcClientTokenGetPolicySuccessCounter = 'rpc_client_token_get_policy_success';
   static const String rpcClientTokenGetPolicyFailureCounter = 'rpc_client_token_get_policy_failure';
   static const String rpcClientTokenGetPolicyFailureValidationCounter =

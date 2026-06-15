@@ -361,7 +361,8 @@ class RpcMethodHandlerIdempotencyOrchestrator {
     if (request.isNotification ||
         !_featureFlags.enableSocketIdempotency ||
         idempotencyKey == null ||
-        idempotencyKey.isEmpty) {
+        idempotencyKey.isEmpty ||
+        !response.isSuccess) {
       return;
     }
     final store = _idempotencyStore;

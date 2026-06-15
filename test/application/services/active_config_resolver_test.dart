@@ -82,6 +82,7 @@ void main() {
 
     test('resolveActiveForDatabaseAccess falls back to current config with credentials', () async {
       when(() => repository.getCurrentConfig()).thenAnswer((_) async => Success(fullConfig));
+      when(() => repository.getById('cfg-1')).thenAnswer((_) async => Success(fullConfig));
 
       final result = await resolver.resolveActiveForDatabaseAccess();
 
@@ -96,6 +97,7 @@ void main() {
       when(() => repository.getById('missing')).thenAnswer(
         (_) async => Failure(domain.NotFoundFailure('Config not found')),
       );
+      when(() => repository.getById('cfg-1')).thenAnswer((_) async => Success(fullConfig));
       when(() => repository.getCurrentConfig()).thenAnswer((_) async => Success(fullConfig));
 
       final result = await resolver.resolveActiveForDatabaseAccess();

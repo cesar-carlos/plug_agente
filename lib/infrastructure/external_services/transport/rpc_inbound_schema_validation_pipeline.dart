@@ -91,6 +91,36 @@ class RpcInboundSchemaValidationPipeline {
     return null;
   }
 
+  domain.Failure? validateCriticalFieldsWhenSkipping(Map<String, dynamic> requestMap) {
+    final jsonrpc = requestMap['jsonrpc'];
+    if (jsonrpc != '2.0') {
+      return domain.ValidationFailure('jsonrpc must be "2.0"');
+    }
+
+    final method = requestMap['method'];
+    if (method is! String || method.trim().isEmpty) {
+      return domain.ValidationFailure('method must be a non-empty string');
+    }
+
+    final params = requestMap['params'];
+    if (params != null && params is! Map<String, dynamic>) {
+      return domain.ValidationFailure('params must be an object when present');
+    }
+
+    if (params is Map<String, dynamic> && method.startsWith('sql.')) {
+      final sql = params['sql'];
+      if (sql != null && sql is! String) {
+        return domain.ValidationFailure('params.sql must be a string');
+      }
+      final idempotencyKey = params['idempotency_key'];
+      if (idempotencyKey != null && (idempotencyKey is! String || idempotencyKey.trim().isEmpty)) {
+        return domain.ValidationFailure('params.idempotency_key must be a non-empty string');
+      }
+    }
+
+    return null;
+  }
+
   void recordSkippedLargePayload() {
     _jsonSchemaValidator?.recordSkippedLargePayload(direction: 'inbound');
   }

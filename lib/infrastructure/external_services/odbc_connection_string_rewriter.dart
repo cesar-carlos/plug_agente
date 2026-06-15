@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/odbc_connection_string_database_override.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
@@ -9,12 +10,6 @@ import 'package:plug_agente/infrastructure/config/database_config.dart';
 /// unit-testable. All methods are pure.
 final class OdbcConnectionStringRewriter {
   OdbcConnectionStringRewriter._();
-
-  static final List<RegExp> _databaseKeyPatterns = [
-    RegExp(r'(database)\s*=\s*[^;]*', caseSensitive: false),
-    RegExp(r'(dbn)\s*=\s*[^;]*', caseSensitive: false),
-    RegExp(r'(initial\s+catalog)\s*=\s*[^;]*', caseSensitive: false),
-  ];
 
   /// Resolves the effective connection string for [config], optionally
   /// overriding the target database with [databaseOverride].
@@ -54,23 +49,6 @@ final class OdbcConnectionStringRewriter {
     String connectionString,
     String database,
   ) {
-    var updated = connectionString;
-
-    var replaced = false;
-    for (final pattern in _databaseKeyPatterns) {
-      if (pattern.hasMatch(updated)) {
-        updated = updated.replaceAllMapped(pattern, (match) {
-          replaced = true;
-          return '${match.group(1)}=$database';
-        });
-      }
-    }
-
-    if (replaced) {
-      return updated;
-    }
-
-    final suffix = updated.endsWith(';') ? '' : ';';
-    return '$updated${suffix}DATABASE=$database';
+    return OdbcConnectionStringDatabaseOverride.override(connectionString, database);
   }
 }

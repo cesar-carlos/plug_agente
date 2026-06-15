@@ -6,4 +6,7 @@ abstract interface class IElevatedActionExecutionCanceller {
   Future<Result<AgentActionCancellationResult>> cancel({
     required String executionId,
   });
+
+  /// Best-effort cancellation for all pending elevated bridge requests on shutdown.
+  Future<void> cancelAllPendingExecutions();
 }

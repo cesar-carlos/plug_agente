@@ -196,6 +196,7 @@ final class TransportRpcPipelineAssembler {
       protocolProvider: deps.currentProtocol,
       emitEventAsync: deps.emitEventAsync,
       logMessage: deps.logMessage,
+      metricsCollector: deps.metricsCollector,
     );
     final requestGuard = RpcRequestGuard();
     const schemaValidator = RpcRequestSchemaValidator();

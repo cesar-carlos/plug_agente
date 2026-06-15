@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart' as res;
+
+class _MockInFlightAbortPort extends Mock implements ISqlInFlightExecutionAbortPort {}
 
 class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
   int queueAddedCount = 0;
@@ -80,6 +84,10 @@ class _MockMetricsCollector implements SqlExecutionQueueMetricsCollector {
 }
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue('');
+  });
+
   group('SqlExecutionQueue', () {
     test('should execute task immediately when queue is empty and workers available', () async {
       final queue = SqlExecutionQueue(
@@ -493,6 +501,25 @@ void main() {
       expect(metrics.queueTimeoutAfterWorkerStartedCount, 0);
 
       blocker.complete();
+    });
+
+    test('should request native abort port when queue wait times out after worker started', () async {
+      final abortPort = _MockInFlightAbortPort();
+      when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const res.Success(res.unit));
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 4,
+        maxConcurrentWorkers: 1,
+        inFlightAbortPort: abortPort,
+      );
+
+      final failure = queue.recordQueueWaitTimeoutForTesting(
+        workerStarted: true,
+        requestId: 'ghost-race',
+      );
+
+      expect(failure.context['ghost_query_risk'], isTrue);
+      await Future<void>.delayed(Duration.zero);
+      verify(() => abortPort.abortInFlightExecution('ghost-race')).called(1);
     });
 
     test('should record after-worker-started timeout metric and cooperative cancel', () {

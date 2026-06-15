@@ -3,6 +3,7 @@ import 'package:plug_agente/application/ports/i_playground_db_connection_gateway
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/validation/query_validation_messages.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
@@ -109,6 +110,7 @@ class PlaygroundQueryController {
     required String? configId,
     required PlaygroundQuerySession querySession,
     required SqlHandlingMode sqlHandlingMode,
+    CancellationToken? cancellationToken,
   }) async {
     final stopwatch = Stopwatch()..start();
     try {
@@ -120,6 +122,7 @@ class PlaygroundQueryController {
           pageSize: querySession.pageSize,
         ),
         sqlHandlingMode: sqlHandlingMode,
+        cancellationToken: cancellationToken,
       );
       stopwatch.stop();
 

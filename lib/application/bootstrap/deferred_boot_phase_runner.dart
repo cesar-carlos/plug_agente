@@ -84,13 +84,12 @@ class DeferredBootPhaseRunner {
     }
 
     try {
-      final configResult = await configResolver.resolveActiveOrFallback(
-        metadataOnly: true,
-      );
+      final configResult = await configResolver.resolveActiveForDatabaseAccess();
 
       await configResult.fold(
         (agentConfig) async {
-          if (agentConfig.connectionString.isEmpty) {
+          final connectionString = agentConfig.resolveConnectionString();
+          if (connectionString.isEmpty) {
             developer.log(
               'Skipping pool warm-up: no connection string configured',
               name: 'deferred_boot_phase_runner',
@@ -101,7 +100,7 @@ class DeferredBootPhaseRunner {
 
           if (pool is IConnectionPoolWarmUp) {
             final warmUpPool = pool as IConnectionPoolWarmUp;
-            final warmUpResult = await warmUpPool.warmUp(agentConfig.connectionString);
+            final warmUpResult = await warmUpPool.warmUp(connectionString);
             warmUpResult.fold(
               (_) {},
               (Object failure) {

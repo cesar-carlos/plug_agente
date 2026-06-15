@@ -44,6 +44,15 @@ void main() {
       expect(FeatureFlags(store).enableSocketBackpressure, isTrue);
     });
 
+    test('seeds ENABLE_SOCKET_IDEMPOTENCY alias when unset', () async {
+      dotenv.loadFromString(envString: 'ENABLE_SOCKET_IDEMPOTENCY=true');
+      final store = InMemoryAppSettingsStore();
+
+      await FeatureFlagsEnvSeeder.applyUnsetOverrides(store);
+
+      expect(FeatureFlags(store).enableSocketIdempotency, isTrue);
+    });
+
     test('ignores non-boolean feature flag values', () async {
       dotenv.loadFromString(envString: 'feature_enable_socket_backpressure=maybe');
       final store = InMemoryAppSettingsStore();
@@ -51,7 +60,7 @@ void main() {
       await FeatureFlagsEnvSeeder.applyUnsetOverrides(store);
 
       expect(store.containsKey('feature_enable_socket_backpressure'), isFalse);
-      expect(FeatureFlags(store).enableSocketBackpressure, isFalse);
+      expect(FeatureFlags(store).enableSocketBackpressure, isTrue);
     });
   });
 }

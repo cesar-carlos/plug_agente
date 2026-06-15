@@ -129,6 +129,7 @@ class MockDatabaseGateway implements IDatabaseGateway {
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   }) async {
     final results = <SqlCommandResult>[];
 
@@ -204,6 +205,8 @@ class MockDatabaseGateway implements IDatabaseGateway {
     Map<String, dynamic>? parameters, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) async {
     // Simulate non-query execution
     if (query.toLowerCase().contains('error')) {
@@ -230,6 +233,8 @@ class MockDatabaseGateway implements IDatabaseGateway {
     BulkInsertRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) async {
     if (request.table.toLowerCase().contains('error')) {
       return Failure(

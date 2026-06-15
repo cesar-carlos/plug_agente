@@ -249,6 +249,48 @@ void main() {
     });
 
     test(
+      'should map ODBC authentication ConfigurationFailure to authenticationFailed',
+      () {
+        final failure = ConfigurationFailure.withContext(
+          message: 'Database authentication failed',
+          context: {
+            'authentication': true,
+            'reason': OdbcContextConstants.authenticationFailedReason,
+            'user_message': 'Check username, password, and permissions.',
+          },
+        );
+
+        final rpcError = FailureToRpcErrorMapper.map(failure);
+        final data = rpcError.data as Map<String, dynamic>;
+
+        expect(rpcError.code, equals(RpcErrorCode.authenticationFailed));
+        expect(data['retryable'], isFalse);
+        expect(data['reason'], equals('authentication_failed'));
+        expect(data.containsKey('odbc_reason'), isFalse);
+      },
+    );
+
+    test(
+      'should map circuit breaker open ConnectionFailure as non-retryable',
+      () {
+        final failure = ConnectionFailure.withContext(
+          message: 'Circuit breaker open for database connection',
+          context: {
+            'reason': OdbcContextConstants.circuitBreakerOpenReason,
+            'retryable': false,
+          },
+        );
+
+        final rpcError = FailureToRpcErrorMapper.map(failure);
+        final data = rpcError.data as Map<String, dynamic>;
+
+        expect(rpcError.code, equals(RpcErrorCode.databaseConnectionFailed));
+        expect(data['retryable'], isFalse);
+        expect(data['odbc_reason'], equals(OdbcContextConstants.circuitBreakerOpenReason));
+      },
+    );
+
+    test(
       'should map ConnectionFailure with poolExhausted to connectionPoolExhausted',
       () {
         final failure = ConnectionFailure.withContext(

@@ -14,6 +14,10 @@ abstract final class RpcBatchConstants {
   static const String exceedsLimitTechnicalMessagePrefix = 'Batch exceeds limit: ';
 
   /// Maximum concurrent JSON-RPC batch item dispatches in Phase 1 parallel MVP.
+  ///
+  /// Each inbound `rpc:request` (including batches) still consumes a single
+  /// [`ConnectionConstants.maxConcurrentRpcHandlers`] slot; parallel dispatch
+  /// must stay within that global budget to avoid underestimating backpressure.
   static const int maxParallelJsonRpcBatchDispatchConcurrency = 4;
 
   /// Read-only RPC methods eligible for homogeneous parallel JSON-RPC batch dispatch.

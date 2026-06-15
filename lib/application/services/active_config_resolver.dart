@@ -3,17 +3,26 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_circuit_breaker_reset.dart';
 import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:result_dart/result_dart.dart';
 
 class ActiveConfigResolver implements IQueryConfigSource {
   ActiveConfigResolver(
     this._repository,
-    this._settingsStore,
-  );
+    this._settingsStore, {
+    IOdbcCircuitBreakerReset? circuitBreakerReset,
+    IOdbcCircuitBreakerReset? Function()? circuitBreakerResetProvider,
+  }) : _circuitBreakerReset = circuitBreakerReset,
+       _circuitBreakerResetProvider = circuitBreakerResetProvider;
 
   final IAgentConfigRepository _repository;
   final IAppSettingsStore _settingsStore;
+  final IOdbcCircuitBreakerReset? _circuitBreakerReset;
+  final IOdbcCircuitBreakerReset? Function()? _circuitBreakerResetProvider;
+
+  IOdbcCircuitBreakerReset? get _resolvedCircuitBreakerReset =>
+      _circuitBreakerReset ?? _circuitBreakerResetProvider?.call();
 
   @override
   Future<Result<Config>> resolveConfigForQuery(String? configId) {
@@ -49,6 +58,10 @@ class ActiveConfigResolver implements IQueryConfigSource {
       AppConstants.activeConfigIdSettingsKey,
       normalized,
     );
+    final configResult = await _repository.getById(normalized);
+    if (configResult.isSuccess()) {
+      _resolvedCircuitBreakerReset?.resetForConfig(configResult.getOrThrow());
+    }
   }
 
   Future<void> clearActiveConfigId() async {

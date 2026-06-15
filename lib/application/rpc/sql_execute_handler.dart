@@ -208,6 +208,7 @@ class SqlExecuteHandler {
           preferDbStreaming: options?['prefer_db_streaming'] == true,
           effectiveMaxRows: maxRows,
           clientToken: clientToken,
+          database: database,
         );
         if (streamingFromDbResponse != null) {
           return streamingFromDbResponse;

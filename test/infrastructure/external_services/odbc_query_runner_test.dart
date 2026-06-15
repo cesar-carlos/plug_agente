@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
@@ -27,12 +28,14 @@ void main() {
   late MetricsCollector metrics;
   late List<String> discarded;
   late OdbcQueryRunner runner;
+  late OdbcInFlightExecutionRegistry inFlightRegistry;
 
   setUp(() {
     dotenv.clean();
     service = _MockOdbcService();
     metrics = MetricsCollector()..clear();
     discarded = <String>[];
+    inFlightRegistry = OdbcInFlightExecutionRegistry();
     final statementExecutor = OdbcStatementExecutor(
       service: service,
       metrics: metrics,
@@ -44,6 +47,7 @@ void main() {
       statementExecutor: statementExecutor,
       resultEncodingExecutor: OdbcResultEncodingExecutor(service),
       markConnectionForDiscard: discarded.add,
+      inFlightRegistry: inFlightRegistry,
     );
   });
 
@@ -148,6 +152,38 @@ void main() {
       final outcome = await outcomeFuture;
       expect(outcome.isSuccess, isFalse);
       expect(outcome.error, isA<CancellationException>());
+    });
+
+    test('cancels prepared statement on cooperative cancel when handle is registered', () async {
+      when(
+        () => service.prepareNamed('c1', 'SELECT :a', timeoutMs: any(named: 'timeoutMs')),
+      ).thenAnswer((_) async => const Success(10));
+      when(
+        () => service.executePreparedNamed('c1', 10, {'a': 1}, any()),
+      ).thenAnswer((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return const Success(sampleResult);
+      });
+      when(() => service.cancelStatement('c1', 10)).thenAnswer((_) async => const Success(unit));
+      when(() => service.closeStatement('c1', 10)).thenAnswer((_) async => const Success(unit));
+
+      final cancellationToken = CancellationToken();
+      final outcomeFuture = runner.runWithTimeout(
+        connId: 'c1',
+        request: request('SELECT :a'),
+        preparedExecution: prepared('SELECT :a', {'a': 1}),
+        connectionString: 'DSN=x',
+        timeout: const Duration(seconds: 5),
+        cancellationToken: cancellationToken,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      cancellationToken.cancel();
+
+      final outcome = await outcomeFuture;
+      expect(outcome.isSuccess, isFalse);
+      expect(outcome.error, isA<CancellationException>());
+      verify(() => service.cancelStatement('c1', 10)).called(1);
     });
   });
 

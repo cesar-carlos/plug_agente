@@ -13,6 +13,7 @@ import 'package:plug_agente/domain/value_objects/hub_stored_credentials_state.da
 import 'package:plug_agente/domain/value_objects/hub_stored_session.dart';
 import 'package:plug_agente/domain/value_objects/odbc_credential_secrets.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:plug_agente/infrastructure/stores/secure_storage_guard.dart';
 import 'package:result_dart/result_dart.dart';
 
 class AgentConfigRepository implements IAgentConfigRepository {
@@ -388,12 +389,18 @@ class AgentConfigRepository implements IAgentConfigRepository {
     Config config,
   ) async {
     if (!_odbcCredentialSecretStore.isAvailable) {
-      return (
-        connectionString: OdbcConnectionStringSecrets.injectPasswordIntoConnectionString(
-          config.connectionString,
-          config.password ?? '',
-        ),
-      );
+      final incomingPassword =
+          _normalize(config.password) ??
+          OdbcConnectionStringSecrets.extractPasswordFromConnectionString(
+            config.connectionString,
+          );
+      if (incomingPassword != null) {
+        throw SecureStorageGuard.unavailableFailure(
+          operation: 'persistOdbcCredentials',
+          store: 'odbc',
+        );
+      }
+      return (connectionString: config.connectionString);
     }
 
     try {
@@ -434,7 +441,13 @@ class AgentConfigRepository implements IAgentConfigRepository {
     HubAuthSecrets secrets,
   ) async {
     if (!_authSecretStore.isAvailable) {
-      return secrets;
+      if (secrets.hasAny) {
+        throw SecureStorageGuard.unavailableFailure(
+          operation: 'persistHubAuthSecrets',
+          store: 'hub_auth',
+        );
+      }
+      return const HubAuthSecrets();
     }
 
     try {

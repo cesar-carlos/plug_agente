@@ -85,6 +85,7 @@ final class RpcResponseDeliveryCoordinator {
 
     final deliverySocket = _activeSocket();
     if (deliverySocket == null) {
+      _metricsCollector?.recordRpcResponseEmitSkippedDisconnected();
       AppLogger.warning('Skipping rpc:response emit because socket is disconnected');
       return;
     }
@@ -93,6 +94,7 @@ final class RpcResponseDeliveryCoordinator {
       try {
         deliverySocket.emit('rpc:response', outgoingPayload);
       } on Object catch (error, stackTrace) {
+        _metricsCollector?.recordRpcResponseEmitFailure();
         AppLogger.error(
           'Socket emit failed for rpc:response',
           error,

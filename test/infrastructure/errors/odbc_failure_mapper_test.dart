@@ -11,7 +11,7 @@ import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 void main() {
   group('OdbcFailureMapper', () {
     test(
-      'maps authentication errors from SQLSTATE to clear connection failure',
+      'maps authentication errors from SQLSTATE to configuration failure',
       () {
         final failure = OdbcFailureMapper.mapConnectionError(
           const ConnectionError(
@@ -22,7 +22,8 @@ void main() {
           operation: 'connect',
         );
 
-        expect(failure, isA<ConnectionFailure>());
+        expect(failure, isA<ConfigurationFailure>());
+        expect(failure.context['authentication'], isTrue);
         expect(failure.context['reason'], OdbcContextConstants.authenticationFailedReason);
         expect(failure.context['odbc_sql_state'], '28000');
         expect(failure.context['odbc_native_code'], 18456);
@@ -45,7 +46,8 @@ void main() {
           operation: 'connect_streaming',
         );
 
-        expect(failure, isA<ConnectionFailure>());
+        expect(failure, isA<ConfigurationFailure>());
+        expect(failure.context['authentication'], isTrue);
         expect(failure.context['reason'], OdbcContextConstants.authenticationFailedReason);
         expect(failure.context['timeout'], isNull);
         expect(
@@ -66,10 +68,23 @@ void main() {
           operation: 'connect_streaming',
         );
 
-        expect(failure, isA<ConnectionFailure>());
+        expect(failure, isA<ConfigurationFailure>());
+        expect(failure.context['authentication'], isTrue);
         expect(failure.context['reason'], OdbcContextConstants.authenticationFailedReason);
       },
     );
+
+    test('maps ODBC authentication failures as non-transient', () {
+      final failure = OdbcFailureMapper.mapConnectionError(
+        const ConnectionError(
+          message: 'Login failed for user sa',
+          sqlState: '28000',
+        ),
+        operation: 'connect',
+      );
+
+      expect(failure.isTransient, isFalse);
+    });
 
     test('maps missing driver from SQLSTATE to configuration failure', () {
       final failure = OdbcFailureMapper.mapConnectionError(

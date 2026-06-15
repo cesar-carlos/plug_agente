@@ -3,10 +3,11 @@ import 'package:plug_agente/core/constants/odbc_drivers.dart';
 import 'package:plug_agente/core/constants/sql_anywhere_connection_string.dart';
 import 'package:plug_agente/core/utils/odbc_connection_string_secrets.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
 import 'package:result_dart/result_dart.dart';
 
-class ConfigService {
+class ConfigService implements IConfigConnectionStringSource {
   ConfigService(this._validator);
   final ConfigValidator _validator;
 
@@ -18,6 +19,7 @@ class ConfigService {
   }
 
   /// Builds a runtime ODBC connection string, including [Config.password] when set.
+  @override
   String generateConnectionString(Config config) {
     final driver = DatabaseDriver.fromString(config.driverName);
 
@@ -30,6 +32,7 @@ class ConfigService {
   }
 
   /// Builds the connection string persisted in Drift (never embeds `PWD`).
+  @override
   String generateConnectionStringForPersistence(Config config) {
     return OdbcConnectionStringSecrets.stripPasswordFromConnectionString(
       generateConnectionString(config),

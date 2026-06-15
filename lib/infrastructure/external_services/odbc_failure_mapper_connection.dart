@@ -52,12 +52,12 @@ class OdbcFailureMapperConnection {
       detail,
       nativeCode: error is OdbcError ? error.nativeCode : null,
     )) {
-      return ConnectionFailure.withContext(
+      return ConfigurationFailure.withContext(
         message: 'Database authentication failed',
         cause: error,
         context: {
           ...baseContext,
-          'connectionFailed': true,
+          'authentication': true,
           'reason': OdbcContextConstants.authenticationFailedReason,
           'user_message':
               'Could not authenticate to the database. '

@@ -4,6 +4,7 @@ import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 
 /// Handles `sql.cancel` RPC requests.
@@ -13,24 +14,22 @@ class SqlCancelHandler {
     required SqlRpcMethodHandlerSupport support,
     required SqlStreamingCoordinator sqlStreamingCoordinator,
     required IStreamingDatabaseGateway? streamingGateway,
+    ISqlInFlightExecutionAbortPort? inFlightAbortPort,
   }) : _featureFlags = featureFlags,
        _support = support,
        _sqlStreamingCoordinator = sqlStreamingCoordinator,
-       _streamingGateway = streamingGateway;
+       _streamingGateway = streamingGateway,
+       _inFlightAbortPort = inFlightAbortPort;
 
   final FeatureFlags _featureFlags;
   final SqlRpcMethodHandlerSupport _support;
   final SqlStreamingCoordinator _sqlStreamingCoordinator;
   final IStreamingDatabaseGateway? _streamingGateway;
+  final ISqlInFlightExecutionAbortPort? _inFlightAbortPort;
 
   Future<RpcResponse> handleSqlCancel(RpcRequest request) async {
     if (!_featureFlags.enableSocketCancelMethod) {
       return _support.methodNotFound(request);
-    }
-
-    final gateway = _streamingGateway;
-    if (gateway == null) {
-      return _support.executionNotFound(request);
     }
 
     if (request.params != null && request.params is! Map<String, dynamic>) {
@@ -52,56 +51,113 @@ class SqlCancelHandler {
       executionId: executionId,
       requestId: requestId,
     );
-    if (activeExecution == null) {
-      return _support.executionNotFound(request);
-    }
+    if (activeExecution != null) {
+      final gateway = _streamingGateway;
+      if (gateway == null) {
+        return _support.executionNotFound(request);
+      }
 
-    // Ownership check: if the stream was started by a specific clientToken,
-    // require the cancel request to carry the same token. This prevents a
-    // hub peer from cancelling streams it did not initiate.
-    if (_featureFlags.enableClientTokenAuthorization) {
-      final cancelToken =
-          (params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?)?.trim();
-      final ownerToken = activeExecution.ownerClientToken;
-      if (ownerToken != null && ownerToken.isNotEmpty) {
-        if (cancelToken == null || cancelToken.isEmpty || cancelToken != ownerToken) {
+      if (_featureFlags.enableClientTokenAuthorization) {
+        final cancelToken =
+            (params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?)
+                ?.trim();
+        final ownerToken = activeExecution.ownerClientToken;
+        if (ownerToken != null && ownerToken.isNotEmpty) {
+          if (cancelToken == null || cancelToken.isEmpty || cancelToken != ownerToken) {
+            final rpcError = FailureToRpcErrorMapper.map(
+              domain.ValidationFailure.withContext(
+                message: 'sql.cancel: clientToken does not match the token that started the stream.',
+                context: {
+                  'reason': 'cancel_token_mismatch',
+                  'execution_id': executionId,
+                },
+              ),
+              instance: request.id?.toString(),
+              useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+            );
+            return RpcResponse.error(id: request.id, error: rpcError);
+          }
+        }
+      }
+
+      final cancelResult = await _sqlStreamingCoordinator.cancel(
+        execution: activeExecution,
+      );
+
+      return cancelResult.fold(
+        (_) => _cancelSuccessResponse(
+          request: request,
+          executionId: executionId,
+          requestId: requestId,
+        ),
+        (failure) {
           final rpcError = FailureToRpcErrorMapper.map(
-            domain.ValidationFailure.withContext(
-              message: 'sql.cancel: clientToken does not match the token that started the stream.',
-              context: {
-                'reason': 'cancel_token_mismatch',
-                'execution_id': executionId,
-              },
-            ),
+            failure as domain.Failure,
             instance: request.id?.toString(),
             useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
           );
           return RpcResponse.error(id: request.id, error: rpcError);
-        }
+        },
+      );
+    }
+
+    final abortTargetId = _resolveInFlightAbortTargetId(
+      executionId: executionId,
+      requestId: requestId,
+    );
+    if (abortTargetId != null) {
+      final abortPort = _inFlightAbortPort;
+      if (abortPort != null) {
+        final abortResult = await abortPort.abortInFlightExecution(abortTargetId);
+        return abortResult.fold(
+          (_) => _cancelSuccessResponse(
+            request: request,
+            executionId: executionId,
+            requestId: requestId,
+            viaInFlightAbort: true,
+          ),
+          (failure) {
+            final rpcError = FailureToRpcErrorMapper.map(
+              failure as domain.Failure,
+              instance: request.id?.toString(),
+              useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+            );
+            return RpcResponse.error(id: request.id, error: rpcError);
+          },
+        );
       }
     }
 
-    final cancelResult = await _sqlStreamingCoordinator.cancel(
-      execution: activeExecution,
-    );
+    return _support.executionNotFound(request);
+  }
 
-    return cancelResult.fold(
-      (_) {
-        final resultData = <String, dynamic>{
-          'cancelled': true,
-          ...?(executionId != null ? {'execution_id': executionId} : null),
-          ...?(requestId != null ? {'request_id': requestId} : null),
-        };
-        return RpcResponse.success(id: request.id, result: resultData);
-      },
-      (failure) {
-        final rpcError = FailureToRpcErrorMapper.map(
-          failure as domain.Failure,
-          instance: request.id?.toString(),
-          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-        );
-        return RpcResponse.error(id: request.id, error: rpcError);
-      },
-    );
+  String? _resolveInFlightAbortTargetId({
+    required String? executionId,
+    required String? requestId,
+  }) {
+    final normalizedRequestId = requestId?.trim();
+    if (normalizedRequestId != null && normalizedRequestId.isNotEmpty) {
+      return normalizedRequestId;
+    }
+    final normalizedExecutionId = executionId?.trim();
+    if (normalizedExecutionId != null && normalizedExecutionId.isNotEmpty) {
+      return normalizedExecutionId;
+    }
+    return null;
+  }
+
+  RpcResponse _cancelSuccessResponse({
+    required RpcRequest request,
+    required String? executionId,
+    required String? requestId,
+    bool viaInFlightAbort = false,
+  }) {
+    final resultData = <String, dynamic>{
+      'cancelled': true,
+      if (viaInFlightAbort) 'via_in_flight_abort': true,
+      ...?(executionId != null ? {'execution_id': executionId} : null),
+      ...?(requestId != null ? {'request_id': requestId} : null),
+    };
+    return RpcResponse.success(id: request.id, result: resultData);
   }
 }

@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/i_streaming_named_parameter_preparer.dart';
@@ -39,6 +40,7 @@ class SqlRpcMethodHandlerOperationsFactory {
     Duration batchExecutionStageBudget = const Duration(seconds: 35),
     SqlStreamingCoordinator? sqlStreamingCoordinator,
     IOdbcConnectionSettings? odbcConnectionSettings,
+    ISqlInFlightExecutionAbortPort? inFlightAbortPort,
   }) {
     return SqlRpcMethodHandlerOperations(
       databaseGateway: databaseGateway,
@@ -59,6 +61,7 @@ class SqlRpcMethodHandlerOperationsFactory {
       batchExecutionStageBudget: batchExecutionStageBudget,
       sqlStreamingCoordinator: sqlStreamingCoordinator,
       odbcConnectionSettings: odbcConnectionSettings,
+      inFlightAbortPort: inFlightAbortPort,
       streamingNamedParameterPreparer: _streamingNamedParameterPreparer,
     );
   }

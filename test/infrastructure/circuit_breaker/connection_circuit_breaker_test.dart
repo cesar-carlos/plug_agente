@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -28,6 +30,104 @@ void main() {
       expect(result.isError(), isTrue);
       expect(breaker.state, CircuitState.closed);
       expect(breaker.consecutiveFailures, 0);
+    });
+
+    test('should not open circuit for authentication failures', () async {
+      final breaker = ConnectionCircuitBreaker(
+        failureThreshold: 1,
+        resetTimeout: const Duration(seconds: 30),
+      );
+
+      final result = await breaker.execute<int>(
+        'DSN=test',
+        () async => Failure(
+          domain.ConnectionFailure.withContext(
+            message: 'Database authentication failed',
+            context: {
+              'connectionFailed': true,
+              'reason': OdbcContextConstants.authenticationFailedReason,
+            },
+          ),
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(breaker.state, CircuitState.closed);
+      expect(breaker.consecutiveFailures, 0);
+    });
+
+    test('should mark circuit breaker open failures as non-retryable', () async {
+      final breaker = ConnectionCircuitBreaker(
+        failureThreshold: 1,
+        resetTimeout: const Duration(seconds: 30),
+      );
+
+      await breaker.execute<int>(
+        'DSN=test',
+        () async => Failure(
+          domain.ConnectionFailure.withContext(
+            message: 'Server unreachable',
+            context: {'connectionFailed': true, 'reason': 'server_unreachable'},
+          ),
+        ),
+      );
+
+      final openResult = await breaker.execute<int>('DSN=test', () async => const Success(1));
+      final failure = openResult.exceptionOrNull()! as domain.ConnectionFailure;
+
+      expect(failure.context['reason'], OdbcContextConstants.circuitBreakerOpenReason);
+      expect(failure.context['retryable'], isFalse);
+      expect(failure.isTransient, isFalse);
+    });
+
+    test('rejects concurrent callers while half-open probe is in progress', () async {
+      final breaker = ConnectionCircuitBreaker(
+        failureThreshold: 1,
+        resetTimeout: const Duration(milliseconds: 50),
+      );
+
+      await breaker.execute<int>(
+        'DSN=test',
+        () async => Failure(
+          domain.ConnectionFailure.withContext(
+            message: 'Server unreachable',
+            context: {
+              'connectionFailed': true,
+              'reason': 'server_unreachable',
+            },
+          ),
+        ),
+      );
+      expect(breaker.state, CircuitState.open);
+
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final probeGate = Completer<void>();
+      final probeFuture = breaker.execute<int>(
+        'DSN=test',
+        () async {
+          await probeGate.future;
+          return const Success(1);
+        },
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(breaker.state, CircuitState.halfOpen);
+
+      final concurrentResult = await breaker.execute<int>(
+        'DSN=test',
+        () async => const Success(99),
+      );
+
+      expect(concurrentResult.isError(), isTrue);
+      final failure = concurrentResult.exceptionOrNull()! as domain.ConnectionFailure;
+      expect(failure.context['reason'], OdbcContextConstants.circuitBreakerOpenReason);
+      expect(failure.message, contains('half-open probe already in progress'));
+
+      probeGate.complete();
+      final probeResult = await probeFuture;
+      expect(probeResult.isSuccess(), isTrue);
+      expect(breaker.state, CircuitState.closed);
     });
 
     test('should open circuit for real connection failures', () async {

@@ -20,16 +20,21 @@ abstract class IDatabaseGateway {
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   });
   Future<Result<int>> executeNonQuery(
     String query,
     Map<String, dynamic>? parameters, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   });
   Future<Result<int>> executeBulkInsert(
     BulkInsertRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   });
 }

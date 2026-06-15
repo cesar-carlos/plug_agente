@@ -6,6 +6,10 @@ void _registerActionsUseCases(GetIt getIt) {
       () => SaveAgentConfig(
         getIt<IAgentConfigRepository>(),
         getIt<ConfigService>(),
+        circuitBreakerResetProvider: () =>
+            getIt.isRegistered<IOdbcCircuitBreakerReset>()
+                ? getIt<IOdbcCircuitBreakerReset>()
+                : null,
       ),
     )
     ..registerLazySingleton(

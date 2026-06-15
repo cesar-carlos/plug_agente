@@ -120,6 +120,7 @@ class ConnectionCircuitBreaker {
             message: 'Circuit breaker open for database connection (${elapsed.inSeconds}s/${_resetTimeout.inSeconds}s)',
             context: {
               'reason': OdbcContextConstants.circuitBreakerOpenReason,
+              'retryable': false,
               'consecutive_failures': _consecutiveFailures,
               'time_since_open_seconds': elapsed.inSeconds,
               'reset_timeout_seconds': _resetTimeout.inSeconds,
@@ -150,6 +151,7 @@ class ConnectionCircuitBreaker {
             message: 'Circuit breaker half-open probe already in progress',
             context: {
               'reason': OdbcContextConstants.circuitBreakerOpenReason,
+              'retryable': false,
               'consecutive_failures': _consecutiveFailures,
             },
           ),
@@ -179,7 +181,7 @@ class ConnectionCircuitBreaker {
 
   bool _shouldRecordFailure(domain.Failure failure) {
     if (failure is domain.ConnectionFailure) {
-      return !_isLocalPressureFailure(failure);
+      return !_isLocalPressureFailure(failure) && !_isAuthenticationFailure(failure);
     }
 
     if (failure is domain.QueryExecutionFailure) {
@@ -194,6 +196,11 @@ class ConnectionCircuitBreaker {
     return failure.context['connectionFailed'] == true &&
         (reason == OdbcContextConstants.connectionLostDuringQueryReason ||
             reason == OdbcContextConstants.odbcWorkerCrashedReason);
+  }
+
+  bool _isAuthenticationFailure(domain.ConnectionFailure failure) {
+    return failure.context['reason']?.toString() ==
+        OdbcContextConstants.authenticationFailedReason;
   }
 
   bool _isLocalPressureFailure(domain.ConnectionFailure failure) {

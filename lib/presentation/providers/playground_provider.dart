@@ -172,6 +172,7 @@ class PlaygroundProvider extends ChangeNotifier {
     }
 
     _isLoading = true;
+    _cancellationToken.reset();
     _querySession.markExecuted();
     _results = [];
     _resultSets = [];
@@ -186,6 +187,7 @@ class PlaygroundProvider extends ChangeNotifier {
       configId: effectiveConfigId,
       querySession: _querySession,
       sqlHandlingMode: _sqlHandlingMode,
+      cancellationToken: _cancellationToken,
     );
     _isLoading = false;
     _executionDuration = outcome.duration;

@@ -6,6 +6,7 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/stream_emitter_registry.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
 import 'package:result_dart/result_dart.dart';
@@ -19,11 +20,13 @@ class RpcStreamPullHandler {
     required ProtocolConfig Function() protocolProvider,
     required Future<bool> Function(String event, dynamic logicalPayload) emitEventAsync,
     required void Function(String direction, String event, dynamic data) logMessage,
+    MetricsCollector? metricsCollector,
   }) : _featureFlags = featureFlags,
        _frameCodec = frameCodec,
        _contractValidator = contractValidator,
        _emitEventAsync = emitEventAsync,
        _logMessage = logMessage,
+       _metricsCollector = metricsCollector,
        _streamEmitters = StreamEmitterRegistry(
          hardCeiling: ConnectionConstants.maxConcurrentRpcStreams,
          idleTtl: ConnectionConstants.rpcStreamEmitterMaxIdle,
@@ -35,6 +38,7 @@ class RpcStreamPullHandler {
   final RpcContractValidator _contractValidator;
   final Future<bool> Function(String event, dynamic logicalPayload) _emitEventAsync;
   final void Function(String direction, String event, dynamic data) _logMessage;
+  final MetricsCollector? _metricsCollector;
   final StreamEmitterRegistry _streamEmitters;
 
   IRpcStreamEmitter createStreamEmitter() {
@@ -69,6 +73,8 @@ class RpcStreamPullHandler {
           )
           .getOrThrow();
       if (payload is! Map<String, dynamic>) {
+        _metricsCollector?.recordRpcStreamPullInvalid();
+        AppLogger.warning('Ignoring rpc:stream.pull with non-object payload');
         return;
       }
       final pull = RpcStreamPull.fromJson(payload);

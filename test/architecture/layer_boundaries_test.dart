@@ -44,6 +44,21 @@ void main() {
       expect(offenders, isEmpty);
     });
 
+    test('presentation does not import infrastructure repositories directly', () {
+      final offenders = <String>[];
+      for (final entity in Directory('lib/presentation').listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) {
+          continue;
+        }
+        final content = entity.readAsStringSync();
+        if (content.contains('package:plug_agente/infrastructure/repositories/')) {
+          offenders.add(entity.path);
+        }
+      }
+
+      expect(offenders, isEmpty);
+    });
+
     test('RPC dispatcher public facade stays free of method logic and infrastructure imports', () {
       final file = File('lib/application/rpc/rpc_method_dispatcher.dart');
       final content = file.readAsStringSync();

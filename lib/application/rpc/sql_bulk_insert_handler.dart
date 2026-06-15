@@ -197,12 +197,23 @@ class SqlBulkInsertHandler {
         return Failure(domain.ValidationFailure('Field "params.database" must be a string'));
       }
       return Success(bulkRequest);
-    } on Object catch (error) {
+    } on FormatException catch (error) {
       return Failure(
         domain.ValidationFailure.withContext(
           message: 'Invalid sql.bulkInsert params',
           cause: error,
           context: {'request_id': ?request.id?.toString()},
+        ),
+      );
+    } on Object catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Unexpected error parsing sql.bulkInsert params',
+          cause: error,
+          context: {
+            'request_id': ?request.id?.toString(),
+            'method': request.method,
+          },
         ),
       );
     }

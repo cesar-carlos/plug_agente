@@ -91,8 +91,10 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   }) {
-    // Route through queue with source RPC id for tracking when available.
+    final lifecycleToken = cancellationToken ?? CancellationToken();
+    final slotWeight = _batchSlotWeightFor(commands.length);
     return _queue.submit(
       () => _delegate.executeBatch(
         agentId,
@@ -101,9 +103,12 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
         options: options,
         timeout: timeout,
         sourceRpcRequestId: sourceRpcRequestId,
+        cancellationToken: lifecycleToken,
       ),
       requestId: sourceRpcRequestId,
       kind: SqlExecutionKind.batch,
+      cooperativeCancellationToken: lifecycleToken,
+      slotWeight: slotWeight,
     );
   }
 
@@ -113,16 +118,22 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     Map<String, dynamic>? parameters, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) {
-    // Route through queue (non-query SQL still needs queueing)
+    final lifecycleToken = cancellationToken ?? CancellationToken();
     return _queue.submit(
       () => _delegate.executeNonQuery(
         query,
         parameters,
         timeout: timeout,
         database: database,
+        cancellationToken: lifecycleToken,
+        sourceRpcRequestId: sourceRpcRequestId,
       ),
+      requestId: sourceRpcRequestId,
       kind: SqlExecutionKind.nonQuery,
+      cooperativeCancellationToken: lifecycleToken,
     );
   }
 
@@ -131,15 +142,31 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     BulkInsertRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) {
+    final lifecycleToken = cancellationToken ?? CancellationToken();
+    final slotWeight = _batchSlotWeightFor(request.rowCount);
     return _queue.submit(
       () => _delegate.executeBulkInsert(
         request,
         timeout: timeout,
         database: database,
+        cancellationToken: lifecycleToken,
+        sourceRpcRequestId: sourceRpcRequestId,
       ),
+      requestId: sourceRpcRequestId,
       kind: SqlExecutionKind.batch,
+      cooperativeCancellationToken: lifecycleToken,
+      slotWeight: slotWeight,
     );
+  }
+
+  int _batchSlotWeightFor(int commandOrRowCount) {
+    if (commandOrRowCount <= 1) {
+      return 1;
+    }
+    return commandOrRowCount.clamp(2, maxBatchWorkers);
   }
 
   /// Disposes the SQL execution queue.

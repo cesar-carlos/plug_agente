@@ -62,6 +62,24 @@ void _registerOdbc(
       ),
     )
     ..registerLazySingleton<IMetricsCollector>(getIt.get<MetricsCollector>)
+    ..registerLazySingleton<OdbcInFlightExecutionRegistry>(OdbcInFlightExecutionRegistry.new)
+    ..registerLazySingleton<OdbcDatabaseGateway>(
+      () => OdbcDatabaseGateway(
+        getIt<ActiveConfigResolver>(),
+        getIt<odbc.OdbcService>(),
+        getIt<IConnectionPool>(),
+        getIt<IRetryManager>(),
+        getIt<MetricsCollector>(),
+        getIt<IOdbcConnectionSettings>(),
+        featureFlags: getIt<FeatureFlags>(),
+        directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
+        sqlInvestigation: getIt<ISqlInvestigationCollector>(),
+        inFlightExecutionRegistry: getIt<OdbcInFlightExecutionRegistry>(),
+      ),
+    )
+    ..registerLazySingleton<ISqlInFlightExecutionAbortPort>(
+      () => getIt<OdbcDatabaseGateway>().inFlightAbortPort,
+    )
     ..registerLazySingleton<SqlExecutionQueue>(
       () {
         final persistedPoolSize = getIt<IOdbcConnectionSettings>().poolSize;
@@ -95,6 +113,7 @@ void _registerOdbc(
           ),
           metricsCollector: getIt<MetricsCollector>(),
           defaultEnqueueTimeout: ConnectionConstants.sqlQueueEnqueueTimeout,
+          inFlightAbortPort: getIt<ISqlInFlightExecutionAbortPort>(),
         );
 
         developer.log(
@@ -111,46 +130,39 @@ void _registerOdbc(
         return sqlQueue;
       },
     )
+    ..registerLazySingleton<OdbcStreamingGateway>(
+      () => OdbcStreamingGateway(
+        getIt<odbc.OdbcService>(),
+        getIt<IOdbcConnectionSettings>(),
+        recommendedOptions: getIt<OdbcProfileRecommendedOptions>(),
+        batchedQuerySource: OdbcBatchedStreamingQuerySource(
+          asyncNative: odbcWorkerLocator.asyncNativeConnection,
+          syncNative: odbcWorkerLocator.nativeConnection,
+          isAsync: odbcWorkerLocator.isAsyncMode,
+        ),
+        directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
+        metricsCollector: getIt<MetricsCollector>(),
+        inFlightExecutionRegistry: getIt<OdbcInFlightExecutionRegistry>(),
+      ),
+    )
     ..registerLazySingleton<IDatabaseGateway>(
-      () {
-        final baseGateway = OdbcDatabaseGateway(
-          getIt<ActiveConfigResolver>(),
-          getIt<odbc.OdbcService>(),
-          getIt<IConnectionPool>(),
-          getIt<IRetryManager>(),
-          getIt<MetricsCollector>(),
-          getIt<IOdbcConnectionSettings>(),
-          featureFlags: getIt<FeatureFlags>(),
-          directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
-          sqlInvestigation: getIt<ISqlInvestigationCollector>(),
-        );
-
-        return QueuedDatabaseGateway(
-          delegate: baseGateway,
-          queue: getIt<SqlExecutionQueue>(),
-        );
-      },
+      () => QueuedDatabaseGateway(
+        delegate: getIt<OdbcDatabaseGateway>(),
+        queue: getIt<SqlExecutionQueue>(),
+      ),
     )
     ..registerLazySingleton<IStreamingDatabaseGateway>(
-      () {
-        final baseStreamingGateway = OdbcStreamingGateway(
-          getIt<odbc.OdbcService>(),
-          getIt<IOdbcConnectionSettings>(),
-          recommendedOptions: getIt<OdbcProfileRecommendedOptions>(),
-          batchedQuerySource: OdbcBatchedStreamingQuerySource(
-            asyncNative: odbcWorkerLocator.asyncNativeConnection,
-            syncNative: odbcWorkerLocator.nativeConnection,
-            isAsync: odbcWorkerLocator.isAsyncMode,
-          ),
-          directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
-          metricsCollector: getIt<MetricsCollector>(),
-        );
-
-        return QueuedStreamingDatabaseGateway(
-          delegate: baseStreamingGateway,
-          queue: getIt<SqlExecutionQueue>(),
-        );
-      },
+      () => QueuedStreamingDatabaseGateway(
+        delegate: getIt<OdbcStreamingGateway>(),
+        queue: getIt<SqlExecutionQueue>(),
+      ),
+    )
+    ..registerLazySingleton<IOdbcCircuitBreakerReset>(
+      () => OdbcCircuitBreakerResetService(
+        getIt<ConfigService>(),
+        getIt<OdbcDatabaseGateway>(),
+        getIt<OdbcStreamingGateway>(),
+      ),
     )
     ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new);
 }

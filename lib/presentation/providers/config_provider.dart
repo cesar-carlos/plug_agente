@@ -6,6 +6,7 @@ import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/use_cases/load_agent_config.dart';
 import 'package:plug_agente/application/use_cases/save_agent_config.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -21,8 +22,9 @@ class ConfigProvider extends ChangeNotifier {
     this._loadConfigUseCase,
     this._activeConfigResolver,
     this._configService,
-    this._uuid,
-  ) {
+    this._uuid, {
+    ConfigValidator? configValidator,
+  }) : _configValidator = configValidator ?? ConfigValidator() {
     _loadCurrentConfig();
   }
   final SaveAgentConfig _saveConfigUseCase;
@@ -30,6 +32,7 @@ class ConfigProvider extends ChangeNotifier {
   final ActiveConfigResolver _activeConfigResolver;
   final ConfigService _configService;
   final Uuid _uuid;
+  final ConfigValidator _configValidator;
 
   Config? _currentConfig;
   bool _isLoading = false;
@@ -230,6 +233,7 @@ class ConfigProvider extends ChangeNotifier {
 
   void updateDriverName(String driverName) {
     _updateCurrentConfig((config) => config.copyWith(driverName: driverName));
+    _validateIncrementalField('driver', _currentConfig);
   }
 
   void updateOdbcDriverName(String odbcDriverName) {
@@ -266,10 +270,12 @@ class ConfigProvider extends ChangeNotifier {
 
   void updateHost(String host) {
     _updateCurrentConfig((config) => config.copyWith(host: host));
+    _validateIncrementalField('host', _currentConfig);
   }
 
   void updatePort(int port) {
     _updateCurrentConfig((config) => config.copyWith(port: port));
+    _validateIncrementalField('port', _currentConfig);
   }
 
   void updateNome(String nome) {
@@ -380,6 +386,29 @@ class ConfigProvider extends ChangeNotifier {
   void clearError() {
     _error = '';
     notifyListeners();
+  }
+
+  void _validateIncrementalField(String field, Config? config) {
+    if (config == null) {
+      return;
+    }
+    final validation = _configValidator.validate(config);
+    validation.fold(
+      (_) {
+        if (_error.isNotEmpty) {
+          _error = '';
+          _notifyStateChanged();
+        }
+      },
+      (failure) {
+        final message = failure is domain_errors.Failure ? failure.message : failure.toString();
+        if (!message.toLowerCase().contains(field.toLowerCase())) {
+          return;
+        }
+        _error = message;
+        _notifyStateChanged();
+      },
+    );
   }
 
   String getConnectionString() {

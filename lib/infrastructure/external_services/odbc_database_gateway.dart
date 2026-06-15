@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
-import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:odbc_fast/odbc_fast.dart' as odbc show DatabaseType;
+import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
@@ -16,10 +17,12 @@ import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_connection_circuit_breaker.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
@@ -36,6 +39,8 @@ import 'package:plug_agente/infrastructure/external_services/odbc_connection_str
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_investigation_recorder.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_retry_coordinator.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_abort_service.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_non_query_execution_orchestrator.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_execution_orchestrator.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
@@ -58,7 +63,7 @@ import 'package:uuid/uuid.dart';
 /// - Built-in error handling with Result types
 /// - Connection pooling for reduced overhead
 /// - Performance metrics collection
-class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagnostics {
+class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagnostics, IOdbcConnectionCircuitBreaker {
   OdbcDatabaseGateway(
     this._configSource,
     this._service,
@@ -69,7 +74,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     FeatureFlags? featureFlags,
     DirectOdbcConnectionLimiter? directConnectionLimiter,
     ISqlInvestigationCollector? sqlInvestigation,
-  }) : _retryCoordinator = OdbcGatewayRetryCoordinator(retryManager),
+    OdbcInFlightExecutionRegistry? inFlightExecutionRegistry,
+  }) : _inFlightRegistry = inFlightExecutionRegistry ?? OdbcInFlightExecutionRegistry(),
+       _retryCoordinator = OdbcGatewayRetryCoordinator(retryManager),
        _investigationRecorder = OdbcGatewayInvestigationRecorder(
          featureFlags: featureFlags,
          sqlInvestigation: sqlInvestigation,
@@ -113,6 +120,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       statementExecutor: _statementExecutor,
       resultEncodingExecutor: _resultEncodingExecutor,
       markConnectionForDiscard: _connectionManager.markConnectionForDiscard,
+      inFlightRegistry: _inFlightRegistry,
+    );
+    _inFlightAbortService = OdbcInFlightExecutionAbortService(
+      registry: _inFlightRegistry,
+      statementExecutor: _statementExecutor,
+      markConnectionForDiscard: _connectionManager.markConnectionForDiscard,
     );
     _queryExecutionOrchestrator = OdbcQueryExecutionOrchestrator(
       connectionManager: _connectionManager,
@@ -130,6 +143,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       metrics: _metrics,
       settings: _settings,
       parallelPool: connectionPool is AdaptiveOdbcConnectionPool ? connectionPool.nativeBulkInsertPool : null,
+      inFlightRegistry: _inFlightRegistry,
     );
     _readOnlyBatchParallelExecutor = OdbcReadOnlyBatchParallelExecutor(
       connectionManager: _connectionManager,
@@ -166,11 +180,18 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       statementExecutor: _statementExecutor,
       optionsResolver: _optionsResolver,
       metrics: _metrics,
+      inFlightRegistry: _inFlightRegistry,
     );
   }
 
   @override
   int get poolDiscardInflightCount => _connectionManager.poolDiscardInflightCount;
+
+  /// Port for aborting registered in-flight ODBC executions (ghost-query path).
+  ISqlInFlightExecutionAbortPort get inFlightAbortPort => _inFlightAbortService;
+
+  final OdbcInFlightExecutionRegistry _inFlightRegistry;
+  late final OdbcInFlightExecutionAbortService _inFlightAbortService;
 
   @override
   Future<void> reconcilePoolDiscardInflight() => _connectionManager.reconcilePoolDiscardInflight();
@@ -210,6 +231,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
 
   ConnectionCircuitBreaker _getCircuitBreaker(String connectionString) {
     return _circuitBreakers.getOrCreate(connectionString);
+  }
+
+  /// Resets the circuit breaker for a specific connection string.
+  ///
+  /// Useful after configuration changes or manual recovery.
+  @override
+  void resetCircuitBreaker(String connectionString) {
+    _circuitBreakers.reset(connectionString);
   }
 
   Future<Result<void>> _ensureInitialized() {
@@ -274,38 +303,44 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
         );
       }
 
-      final connResult = await _service.connect(
+      final breaker = _getCircuitBreaker(connectionString);
+      return breaker.execute(
         connectionString,
-        options: _optionsResolver.defaultOptions.toOdbcConnectionOptions(),
-      );
+        () async {
+          final connResult = await _service.connect(
+            connectionString,
+            options: _optionsResolver.defaultOptions.toOdbcConnectionOptions(),
+          );
 
-      return connResult.fold(
-        (connection) async {
-          final disconnectResult = await _service.disconnect(
-            connection.id,
-          );
-          return disconnectResult.fold(
-            (_) => const Success(true),
-            (error) => Failure(
-              OdbcFailureMapper.mapConnectionError(
-                error,
-                operation: 'disconnect_test_connection',
-              ),
-            ),
-          );
-        },
-        (error) {
-          developer.log(
-            'Connection test failed',
-            name: 'database_gateway',
-            level: 900,
-            error: error,
-          );
-          return Failure(
-            OdbcFailureMapper.mapConnectionError(
-              error,
-              operation: 'connect_test_connection',
-            ),
+          return connResult.fold(
+            (connection) async {
+              final disconnectResult = await _service.disconnect(
+                connection.id,
+              );
+              return disconnectResult.fold(
+                (_) => const Success(true),
+                (error) => Failure(
+                  OdbcFailureMapper.mapConnectionError(
+                    error,
+                    operation: 'disconnect_test_connection',
+                  ),
+                ),
+              );
+            },
+            (error) {
+              developer.log(
+                'Connection test failed',
+                name: 'database_gateway',
+                level: 900,
+                error: error,
+              );
+              return Failure(
+                OdbcFailureMapper.mapConnectionError(
+                  error,
+                  operation: 'connect_test_connection',
+                ),
+              );
+            },
           );
         },
       );
@@ -383,6 +418,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     SqlExecutionOptions options = const SqlExecutionOptions(),
     Duration? timeout,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   }) {
     return _batchExecutionOrchestrator.execute(
       agentId: agentId,
@@ -391,6 +427,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       options: options,
       timeout: timeout,
       sourceRpcRequestId: sourceRpcRequestId,
+      cancellationToken: cancellationToken,
     );
   }
 
@@ -400,6 +437,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     Map<String, dynamic>? parameters, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) async {
     final initResult = await _ensureInitialized();
 
@@ -422,6 +461,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
                 parameters,
                 connectionString,
                 timeout: remainingTimeout,
+                cancellationToken: cancellationToken,
+                sourceRpcRequestId: sourceRpcRequestId,
               ),
               timeout: timeout,
             );
@@ -442,6 +483,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     BulkInsertRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) async {
     final validationFailure = OdbcBulkInsertExecutor.validate(request);
     if (validationFailure != null) {
@@ -465,6 +508,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
               connectionString,
               timeout: timeout,
               databaseType: localConfig.databaseType,
+              cancellationToken: cancellationToken,
+              sourceRpcRequestId: sourceRpcRequestId,
             );
           },
           (domainFailure) => Failure(

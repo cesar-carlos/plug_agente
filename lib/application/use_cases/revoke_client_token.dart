@@ -1,11 +1,13 @@
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/services/client_token_auth_cache_invalidation.dart';
+import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_policy_cache.dart';
 import 'package:plug_agente/domain/repositories/i_client_token_repository.dart';
+import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -15,14 +17,20 @@ class RevokeClientToken {
     ITokenAuditStore? auditStore,
     IAuthorizationDecisionCache? decisionCache,
     IClientTokenPolicyCache? policyCache,
+    IRevokedTokenStore? revokedTokenStore,
+    FeatureFlags? featureFlags,
   }) : _auditStore = auditStore,
        _decisionCache = decisionCache,
-       _policyCache = policyCache;
+       _policyCache = policyCache,
+       _revokedTokenStore = revokedTokenStore,
+       _featureFlags = featureFlags;
 
   final IClientTokenRepository _repository;
   final ITokenAuditStore? _auditStore;
   final IAuthorizationDecisionCache? _decisionCache;
   final IClientTokenPolicyCache? _policyCache;
+  final IRevokedTokenStore? _revokedTokenStore;
+  final FeatureFlags? _featureFlags;
 
   Future<Result<void>> call(String tokenId) async {
     if (tokenId.trim().isEmpty) {
@@ -41,9 +49,25 @@ class RevokeClientToken {
         decisionCache: _decisionCache,
         policyCache: _policyCache,
       );
+      _recordRevokedTokenInSession(tokenValue);
       await _recordRevokeAuditEvent(tokenId);
     }
     return result;
+  }
+
+  void _recordRevokedTokenInSession(String? tokenValue) {
+    final trimmed = tokenValue?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return;
+    }
+    final featureFlags = _featureFlags;
+    final revokedTokenStore = _revokedTokenStore;
+    if (featureFlags == null ||
+        revokedTokenStore == null ||
+        !featureFlags.enableSocketRevokedTokenInSession) {
+      return;
+    }
+    revokedTokenStore.add(trimmed);
   }
 
   Future<void> _recordRevokeAuditEvent(String tokenId) async {

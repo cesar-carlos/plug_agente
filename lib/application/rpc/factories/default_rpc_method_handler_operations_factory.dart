@@ -34,6 +34,7 @@ import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:uuid/uuid.dart';
@@ -97,6 +98,7 @@ class DefaultRpcMethodHandlerOperationsFactory {
     SqlStreamingCoordinator? sqlStreamingCoordinator,
     RpcIdempotencyCoordinator? idempotencyCoordinator,
     IOdbcConnectionSettings? odbcConnectionSettings,
+    ISqlInFlightExecutionAbortPort? inFlightAbortPort,
   }) {
     final orchestrator = RpcMethodHandlerIdempotencyOrchestrator(
       authorizeSqlOperation: authorizeSqlOperation,
@@ -128,6 +130,7 @@ class DefaultRpcMethodHandlerOperationsFactory {
         batchExecutionStageBudget: batchExecutionStageBudget,
         sqlStreamingCoordinator: sqlStreamingCoordinator,
         odbcConnectionSettings: odbcConnectionSettings,
+        inFlightAbortPort: inFlightAbortPort,
       ),
       agentActionOperations: _agentActionFactory.create(
         uuid: uuid,

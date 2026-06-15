@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
@@ -118,6 +120,19 @@ class OdbcE2eRpcHarness {
       metrics,
       settings,
     );
+
+    final preflight = await gateway.testConnection(dsn.trim());
+    if (preflight.isError()) {
+      developer.log(
+        'E2E ODBC preflight failed; skipping harness to avoid circuit-breaker cascade',
+        name: 'odbc_e2e',
+        level: 1000,
+        error: preflight.exceptionOrNull(),
+      );
+      await pool.closeAll();
+      locator.shutdown();
+      return null;
+    }
 
     final normalizer = QueryNormalizerService(QueryNormalizer());
     final authorize = MockAuthorizeSqlOperation();

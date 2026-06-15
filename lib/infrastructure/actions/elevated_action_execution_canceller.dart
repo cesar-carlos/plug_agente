@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/constants/agent_action_elevated_constants.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -69,6 +70,27 @@ class ElevatedActionExecutionCanceller implements IElevatedActionExecutionCancel
         message: 'Elevated execution cancel requested.',
       ),
     );
+  }
+
+  @override
+  Future<void> cancelAllPendingExecutions() async {
+    final requestsDir = Directory(
+      AgentActionElevatedConstants.requestsDirectoryPath(_storageContext.appDirectoryPath),
+    );
+    if (!requestsDir.existsSync()) {
+      return;
+    }
+
+    await for (final entity in requestsDir.list()) {
+      if (entity is! File) {
+        continue;
+      }
+      final executionId = p.basenameWithoutExtension(entity.path);
+      if (executionId.isEmpty) {
+        continue;
+      }
+      await cancel(executionId: executionId);
+    }
   }
 
   Future<Result<void>> _writeCancelMarker(String executionId) async {

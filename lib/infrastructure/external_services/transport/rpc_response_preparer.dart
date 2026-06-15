@@ -336,7 +336,8 @@ class RpcResponsePreparer {
   /// payloads are accepted but signed payloads still must be verifiable.
   bool verifyIncomingSignature(Map<String, dynamic> payload) {
     final sigJson = payload['signature'] as Map<String, dynamic>?;
-    final signatureRequired = _featureFlags.requireIncomingPayloadSignatures;
+    final signatureRequired =
+        _protocolProvider().signatureRequired || _featureFlags.requireIncomingPayloadSignatures;
     if (_payloadSigner == null) {
       return sigJson == null && !signatureRequired;
     }

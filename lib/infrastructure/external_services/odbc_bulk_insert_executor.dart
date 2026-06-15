@@ -4,6 +4,7 @@ import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_native_bulk_insert_pool.dart';
@@ -14,6 +15,7 @@ import 'package:plug_agente/infrastructure/external_services/bulk_insert_paralle
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_native_bcp_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_native_bulk_insert_builder.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -33,12 +35,14 @@ final class OdbcBulkInsertExecutor {
     required MetricsCollector metrics,
     required IOdbcConnectionSettings settings,
     IOdbcNativeBulkInsertPool? parallelPool,
+    OdbcInFlightExecutionRegistry? inFlightRegistry,
   }) : _connectionManager = connectionManager,
        _optionsResolver = optionsResolver,
        _service = service,
        _metrics = metrics,
        _settings = settings,
-       _parallelPool = parallelPool;
+       _parallelPool = parallelPool,
+       _inFlightRegistry = inFlightRegistry;
 
   final OdbcGatewayConnectionManager _connectionManager;
   final OdbcConnectionOptionsResolver _optionsResolver;
@@ -46,6 +50,7 @@ final class OdbcBulkInsertExecutor {
   final MetricsCollector _metrics;
   final IOdbcConnectionSettings _settings;
   final IOdbcNativeBulkInsertPool? _parallelPool;
+  final OdbcInFlightExecutionRegistry? _inFlightRegistry;
 
   /// Validates the shape of [request], returning a typed failure or null.
   static domain.Failure? validate(BulkInsertRequest request) {
@@ -105,7 +110,18 @@ final class OdbcBulkInsertExecutor {
     String connectionString, {
     Duration? timeout,
     DatabaseType? databaseType,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'Bulk insert execution cancelled',
+          context: const {'cooperative_cancel': true},
+        ),
+      );
+    }
+
     if (databaseType != null &&
         BulkInsertParallelPolicy.shouldUseParallel(
           databaseType: databaseType,
@@ -150,7 +166,9 @@ final class OdbcBulkInsertExecutor {
       );
       return await connectResult.fold(
         (connection) async {
+          final inFlightRequestId = _inFlightTrackingKey(sourceRpcRequestId);
           try {
+            _registerInFlightExecution(inFlightRequestId, connection.id);
             final inserted = await _executeChunkedBulkInsert(
               connectionId: connection.id,
               request: request,
@@ -177,6 +195,7 @@ final class OdbcBulkInsertExecutor {
               ),
             );
           } finally {
+            _unregisterInFlightExecution(inFlightRequestId);
             await _connectionManager.disconnectOwnedConnectionAndReleaseLease(
               connectionId: connection.id,
               directLease: directLease,
@@ -414,5 +433,30 @@ final class OdbcBulkInsertExecutor {
 
   BulkInsertBuilder _buildNativeBulkInsert(BulkInsertRequest request) {
     return OdbcNativeBulkInsertBuilder.fromRequest(request);
+  }
+
+  String? _inFlightTrackingKey(String? sourceRpcRequestId) {
+    final normalized = sourceRpcRequestId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  void _registerInFlightExecution(String? requestId, String connectionId) {
+    if (requestId == null || requestId.isEmpty) {
+      return;
+    }
+    _inFlightRegistry?.register(
+      requestId,
+      OdbcInFlightExecutionHandle(connectionId: connectionId),
+    );
+  }
+
+  void _unregisterInFlightExecution(String? requestId) {
+    if (requestId == null || requestId.isEmpty) {
+      return;
+    }
+    _inFlightRegistry?.unregister(requestId);
   }
 }

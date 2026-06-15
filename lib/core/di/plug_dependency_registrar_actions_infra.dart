@@ -6,6 +6,10 @@ void _registerActionsInfrastructure(GetIt getIt) {
       () => ActiveConfigResolver(
         getIt<IAgentConfigRepository>(),
         getIt<IAppSettingsStore>(),
+        circuitBreakerResetProvider: () =>
+            getIt.isRegistered<IOdbcCircuitBreakerReset>()
+                ? getIt<IOdbcCircuitBreakerReset>()
+                : null,
       ),
     )
     ..registerLazySingleton(ProtocolNegotiator.new)

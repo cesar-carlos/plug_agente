@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/validation/query_validation_messages.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -26,6 +27,7 @@ class ExecutePlaygroundQuery {
     String? configId,
     QueryPaginationRequest? pagination,
     SqlHandlingMode sqlHandlingMode = SqlHandlingMode.managed,
+    CancellationToken? cancellationToken,
   }) async {
     final trimmedQuery = query.trim();
 
@@ -65,6 +67,7 @@ class ExecutePlaygroundQuery {
             return _databaseGateway.executeQuery(
               request,
               timeout: ConnectionConstants.defaultQueryTimeout,
+              cancellationToken: cancellationToken,
             );
           },
           (failure) {

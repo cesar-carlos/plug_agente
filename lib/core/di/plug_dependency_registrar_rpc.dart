@@ -134,6 +134,7 @@ void _registerRpc(
         agentActionRetentionSettings: getIt<AgentActionRetentionSettings>(),
         loadOpenRpcDocument: getIt<OpenRpcDocumentLoader>().getDocument,
         odbcConnectionSettings: getIt<IOdbcConnectionSettings>(),
+        inFlightAbortPort: getIt<ISqlInFlightExecutionAbortPort>(),
         operationsFactory: getIt<DefaultRpcMethodHandlerOperationsFactory>(),
       ),
     )

@@ -24,7 +24,6 @@ import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart
 
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 
-import 'package:plug_agente/application/services/active_config_metadata_cache.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
@@ -48,6 +47,8 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 
@@ -96,6 +97,8 @@ class SqlRpcMethodHandlerOperations {
     SqlStreamingCoordinator? sqlStreamingCoordinator,
 
     IOdbcConnectionSettings? odbcConnectionSettings,
+
+    ISqlInFlightExecutionAbortPort? inFlightAbortPort,
   }) : _sqlStreamingCoordinator =
            sqlStreamingCoordinator ??
            SqlStreamingCoordinator(
@@ -137,13 +140,6 @@ class SqlRpcMethodHandlerOperations {
 
     final dbStreamingAutoPolicy = SqlDbStreamingAutoPolicy();
 
-    final activeConfigMetadataCache = (activeConfigResolver != null || configRepository != null)
-        ? ActiveConfigMetadataCache(
-            activeConfigResolver: activeConfigResolver,
-            legacyRepository: configRepository,
-          )
-        : null;
-
     final dbStreamingExecutor = SqlRpcDbStreamingExecutor(
       featureFlags: featureFlags,
 
@@ -160,8 +156,6 @@ class SqlRpcMethodHandlerOperations {
       sqlExecuteTotalBudget: sqlExecuteTotalBudget,
 
       activeConfigResolver: activeConfigResolver,
-
-      activeConfigMetadataCache: activeConfigMetadataCache,
 
       configRepository: configRepository,
 
@@ -246,6 +240,8 @@ class SqlRpcMethodHandlerOperations {
       sqlStreamingCoordinator: _sqlStreamingCoordinator,
 
       streamingGateway: streamingGateway,
+
+      inFlightAbortPort: inFlightAbortPort,
     );
   }
 

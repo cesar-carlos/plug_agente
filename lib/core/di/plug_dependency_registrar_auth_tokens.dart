@@ -43,6 +43,8 @@ void _registerAuthTokens(GetIt getIt) {
         auditStore: getIt<ITokenAuditStore>(),
         decisionCache: getIt<IAuthorizationDecisionCache>(),
         policyCache: getIt<IClientTokenPolicyCache>(),
+        revokedTokenStore: getIt<IRevokedTokenStore>(),
+        featureFlags: getIt<FeatureFlags>(),
       ),
     )
     ..registerLazySingleton(

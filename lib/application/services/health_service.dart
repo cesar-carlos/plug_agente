@@ -11,10 +11,12 @@ import 'package:plug_agente/application/services/health/pool_health_resolver.dar
 import 'package:plug_agente/application/services/health/pool_health_section_builder.dart';
 import 'package:plug_agente/application/services/health/query_metrics_health_section_builder.dart';
 import 'package:plug_agente/application/services/health/secure_storage_health_section_builder.dart';
+import 'package:plug_agente/application/services/health/secure_storage_runtime_probe.dart';
 import 'package:plug_agente/application/services/health/sql_queue_health_section_builder.dart';
 import 'package:plug_agente/application/services/health/streaming_health_section_builder.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/diagnostics/legacy_database_migration_status.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/app_uptime.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
@@ -63,6 +65,7 @@ class HealthService {
     IOdbcCredentialSecretStore? odbcCredentialSecretStore,
     IHubAuthSecretStore? hubAuthSecretStore,
     ITokenSecretStore? tokenSecretStore,
+    SecureStorageRuntimeProbe? secureStorageRuntimeProbe,
     Duration poolSnapshotTtl = const Duration(seconds: 2),
   }) : _metrics = metricsCollector,
        _gateway = gateway,
@@ -89,6 +92,7 @@ class HealthService {
          odbcCredentialSecretStore: odbcCredentialSecretStore,
          hubAuthSecretStore: hubAuthSecretStore,
          tokenSecretStore: tokenSecretStore,
+         runtimeProbe: secureStorageRuntimeProbe,
        ),
        _agentActionsSectionBuilder = AgentActionsHealthSectionBuilder(
          featureFlags: featureFlags,
@@ -133,11 +137,13 @@ class HealthService {
     final poolSnapshot = await _poolResolver.resolvePoolSnapshot();
     final poolDiagnostics = poolSnapshot.diagnostics;
     final driverType = await _poolResolver.resolveDriverType(poolDiagnostics: poolDiagnostics);
+    final secureStorage = await _secureStorageSectionBuilder.buildFresh();
 
     return _buildHealthStatus(
       poolActiveCount: _poolResolver.connectionPool == null ? null : poolSnapshot.activeCount,
       poolDiagnostics: poolDiagnostics,
       driverType: driverType,
+      secureStorage: secureStorage,
     );
   }
 
@@ -145,15 +151,16 @@ class HealthService {
     int? poolActiveCount,
     Map<String, Object?> poolDiagnostics = const <String, Object?>{},
     String? driverType,
+    Map<String, Object?>? secureStorage,
   }) {
     final metrics = _metrics.getSnapshot();
     final queuedGateway = _gateway is QueuedDatabaseGateway ? _gateway : null;
     final identity = _agentRuntimeIdentity;
-    final secureStorage = _secureStorageSectionBuilder.build();
+    final resolvedSecureStorage = secureStorage ?? _secureStorageSectionBuilder.build();
     final status = deriveHealthOverallStatus(
       poolDiagnostics: poolDiagnostics,
       queuedGateway: queuedGateway,
-      secureStorage: secureStorage,
+      secureStorage: resolvedSecureStorage,
       sqlQueueTimeoutAfterWorkerStartedCount:
           (metrics['sql_queue_timeout_after_worker_started_count'] as num?)?.toInt() ?? 0,
     );
@@ -190,7 +197,11 @@ class HealthService {
         'agent_actions': agentActions,
       if (_globalStorageSectionBuilder.build() case final Map<String, Object?> globalStorage)
         'global_storage': globalStorage,
-      if (secureStorage case final Map<String, Object?> storage) 'secure_storage': storage,
+      if (LegacyDatabaseMigrationStatus.lastFailureMessage case final String migrationFailure)
+        'legacy_database_migration': <String, Object?>{
+          'last_failure': migrationFailure,
+        },
+      if (resolvedSecureStorage case final Map<String, Object?> storage) 'secure_storage': storage,
       'uptime_seconds': AppUptime.uptimeSeconds,
     };
   }

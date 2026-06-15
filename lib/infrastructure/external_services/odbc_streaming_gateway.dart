@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_connection_circuit_breaker.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
@@ -26,6 +27,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_columnar_strea
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_string_driver_hint.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_chunk_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_native_options.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -52,7 +54,8 @@ class _ActiveStreamingConnection {
 ///
 /// Implementa streaming incremental usando streamQuery da odbc_fast,
 /// processando resultados em chunks sem carregar tudo em memória.
-class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatewayDiagnostics {
+class OdbcStreamingGateway
+    implements IStreamingDatabaseGateway, IStreamingGatewayDiagnostics, IOdbcConnectionCircuitBreaker {
   OdbcStreamingGateway(
     this._service,
     this._settings, {
@@ -61,8 +64,10 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     MetricsCollector? metricsCollector,
     OdbcProfileRecommendedOptions? recommendedOptions,
     Duration cancelDisconnectTimeout = _defaultCancelDisconnectTimeout,
+    OdbcInFlightExecutionRegistry? inFlightExecutionRegistry,
   }) : _batchedQuerySource = batchedQuerySource,
        _recommendedOptions = recommendedOptions,
+       _inFlightRegistry = inFlightExecutionRegistry,
        _directConnectionLimiter =
            directConnectionLimiter ??
            DirectOdbcConnectionLimiter(
@@ -81,6 +86,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
   final MetricsCollector? _metrics;
   final Duration _cancelDisconnectTimeout;
+  final OdbcInFlightExecutionRegistry? _inFlightRegistry;
   final Map<String, _ActiveStreamingConnection> _activeStreams = <String, _ActiveStreamingConnection>{};
   final ConnectionCircuitBreakerCache _circuitBreakers = ConnectionCircuitBreakerCache(
     factory: () => ConnectionCircuitBreaker(
@@ -361,6 +367,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       lease: directLease,
     );
     _activeStreams[streamExecutionId] = activeStream;
+    _registerInFlightExecution(streamExecutionId, connection.id);
     onSetupComplete?.call();
     var nativeChunkCount = 0;
     final prefersRowMajorStreaming = connectionStringPrefersRowMajorStreaming(connectionString);
@@ -472,6 +479,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       _recordNativeStreamingPathMetrics(nativeChunkCount);
       await _disconnectActiveStream(activeStream);
       activeStream.lease.release();
+      _unregisterInFlightExecution(streamExecutionId);
       _activeStreams.remove(streamExecutionId);
     }
   }
@@ -565,6 +573,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       lease: directLease,
     );
     _activeStreams[streamExecutionId] = activeStream;
+    _registerInFlightExecution(streamExecutionId, connection.id);
     onSetupComplete?.call();
 
     try {
@@ -630,6 +639,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     } finally {
       await _disconnectActiveStream(activeStream);
       activeStream.lease.release();
+      _unregisterInFlightExecution(streamExecutionId);
       _activeStreams.remove(streamExecutionId);
     }
   }
@@ -637,6 +647,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   /// Resets the circuit breaker for a specific connection string.
   ///
   /// Useful after configuration changes or manual recovery.
+  @override
   void resetCircuitBreaker(String connectionString) {
     _circuitBreakers.reset(connectionString);
   }
@@ -777,9 +788,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     Map<String, dynamic>? parameters,
   }) {
     if (parameters != null && parameters.isNotEmpty) {
-      return _service
-          .streamQueryNamed(connectionId, query, parameters)
-          .map((result) => result.map(toTypedColumnar));
+      return _service.streamQueryNamed(connectionId, query, parameters).map((result) => result.map(toTypedColumnar));
     }
 
     final batchedSource = _batchedQuerySource;
@@ -877,5 +886,22 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
         cancelledByUser: true,
       ),
     );
+  }
+
+  void _registerInFlightExecution(String requestId, String connectionId) {
+    if (requestId.isEmpty) {
+      return;
+    }
+    _inFlightRegistry?.register(
+      requestId,
+      OdbcInFlightExecutionHandle(connectionId: connectionId),
+    );
+  }
+
+  void _unregisterInFlightExecution(String requestId) {
+    if (requestId.isEmpty) {
+      return;
+    }
+    _inFlightRegistry?.unregister(requestId);
   }
 }

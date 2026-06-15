@@ -4,8 +4,8 @@ import 'package:plug_agente/application/rpc/sql_execute_result_mapper.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart';
+import 'package:plug_agente/application/rpc/sql_streaming_connection_string_resolver.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
-import 'package:plug_agente/application/services/active_config_metadata_cache.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/odbc_stream_columnar_wire_config.dart';
@@ -41,7 +41,6 @@ class SqlRpcDbStreamingExecutor {
     required Duration sqlExecuteTotalBudget,
     required IStreamingNamedParameterPreparer streamingNamedParameterPreparer,
     ActiveConfigResolver? activeConfigResolver,
-    ActiveConfigMetadataCache? activeConfigMetadataCache,
     IAgentConfigRepository? configRepository,
     IStreamingDatabaseGateway? streamingGateway,
     IRpcDispatchMetricsCollector? dispatchMetrics,
@@ -54,7 +53,6 @@ class SqlRpcDbStreamingExecutor {
        _uuid = uuid,
        _sqlExecuteTotalBudget = sqlExecuteTotalBudget,
        _activeConfigResolver = activeConfigResolver,
-       _activeConfigMetadataCache = activeConfigMetadataCache,
        _configRepository = configRepository,
        _streamingGateway = streamingGateway,
        _dispatchMetrics = dispatchMetrics,
@@ -69,7 +67,6 @@ class SqlRpcDbStreamingExecutor {
   final Uuid _uuid;
   final Duration _sqlExecuteTotalBudget;
   final ActiveConfigResolver? _activeConfigResolver;
-  final ActiveConfigMetadataCache? _activeConfigMetadataCache;
   final IAgentConfigRepository? _configRepository;
   final IStreamingDatabaseGateway? _streamingGateway;
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
@@ -89,6 +86,7 @@ class SqlRpcDbStreamingExecutor {
     required bool preferDbStreaming,
     required int effectiveMaxRows,
     String? clientToken,
+    String? database,
   }) async {
     final normalizedSql = _autoPolicy.normalizeSqlForDbStreaming(sql);
     final autoStreamingReason = _autoPolicy.resolveAutoReason(
@@ -135,6 +133,7 @@ class SqlRpcDbStreamingExecutor {
         negotiatedExtensions: negotiatedExtensions,
         effectiveMaxRows: effectiveMaxRows,
         clientToken: clientToken,
+        database: database,
       );
     }
     if (!preferDbStreaming &&
@@ -182,11 +181,14 @@ class SqlRpcDbStreamingExecutor {
       return null;
     }
 
-    final config = await _resolveStreamingConfigMetadata(
+    final config = await _resolveStreamingConfig(
       configResolver: configResolver,
       legacyRepository: legacyRepository,
     );
-    if (config == null || config.resolveConnectionString().trim().isEmpty) {
+    final connectionString = config == null
+        ? ''
+        : resolveSqlStreamingConnectionString(config, databaseOverride: database);
+    if (config == null || connectionString.trim().isEmpty) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('config_unavailable');
       return null;
     }
@@ -260,7 +262,7 @@ class SqlRpcDbStreamingExecutor {
 
       final streamResult = await gateway.executeQueryStream(
         streamingSql.trim(),
-        config.resolveConnectionString(),
+        connectionString,
         emitRows,
         onWireChunk: useColumnarWire ? emitWireChunk : null,
         parameters: streamingParameters,
@@ -382,6 +384,7 @@ class SqlRpcDbStreamingExecutor {
     required Map<String, dynamic> negotiatedExtensions,
     required int effectiveMaxRows,
     String? clientToken,
+    String? database,
   }) async {
     if (!supportsStreamingChunks(negotiatedExtensions) ||
         !_featureFlags.enableSocketStreamingFromDb ||
@@ -395,11 +398,14 @@ class SqlRpcDbStreamingExecutor {
       return null;
     }
 
-    final config = await _resolveStreamingConfigMetadata(
+    final config = await _resolveStreamingConfig(
       configResolver: _activeConfigResolver,
       legacyRepository: _configRepository,
     );
-    if (config == null || config.resolveConnectionString().trim().isEmpty) {
+    final connectionString = config == null
+        ? ''
+        : resolveSqlStreamingConnectionString(config, databaseOverride: database);
+    if (config == null || connectionString.trim().isEmpty) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('multi_result_config_unavailable');
       return null;
     }
@@ -425,7 +431,7 @@ class SqlRpcDbStreamingExecutor {
       );
       final streamResult = await gateway.executeMultiResultQueryStream(
         sql.trim(),
-        config.resolveConnectionString(),
+        connectionString,
         (wireChunk) async {
           if (wireChunk.rowCountOnly != null) {
             return;
@@ -505,19 +511,15 @@ class SqlRpcDbStreamingExecutor {
     }
   }
 
-  Future<Config?> _resolveStreamingConfigMetadata({
+  Future<Config?> _resolveStreamingConfig({
     required ActiveConfigResolver? configResolver,
     required IAgentConfigRepository? legacyRepository,
   }) async {
-    final cache = _activeConfigMetadataCache;
-    if (cache != null) {
-      return cache.resolveMetadata();
-    }
     if (configResolver != null) {
-      return (await configResolver.resolveActiveOrFallback(metadataOnly: true)).getOrNull();
+      return (await configResolver.resolveActiveForDatabaseAccess()).getOrNull();
     }
     if (legacyRepository != null) {
-      return (await legacyRepository.getCurrentConfigMetadata()).getOrNull();
+      return (await legacyRepository.getCurrentConfig()).getOrNull();
     }
     return null;
   }

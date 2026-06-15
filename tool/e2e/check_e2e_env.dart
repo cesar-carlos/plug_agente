@@ -332,6 +332,18 @@ void main(List<String> args) {
   print('  -> homologacao elevada: python tool/elevated/homologate_elevated_runner.py --build [--run-unit-tests]');
   print('     manual UI/UAC: docs/testing/e2e_setup.md');
 
+  _printOdbcLoadAndCircuitBreakerWarnings(
+    runBurst: runBurst,
+    dmlPerf: dmlPerf,
+    dmlBulk: dmlBulk,
+    dmlStress: get('ODBC_E2E_DML_STRESS_TESTS') == 'true',
+    runLockContention: runLockContention,
+    runLiveHub: runLiveHub,
+    runLiveHubAgentActions: runLiveHubAgentActions,
+    odbcE2eRpc: odbcE2eRpc,
+    odbcDsn: odbcDsn,
+  );
+
   print('');
   print(
     'Para rodar: flutter test test/integration/ test/infrastructure/external_services/api_test.dart',
@@ -368,6 +380,79 @@ void main(List<String> args) {
   if (shouldFail) {
     exit(1);
   }
+}
+
+void _printOdbcLoadAndCircuitBreakerWarnings({
+  required bool runBurst,
+  required bool dmlPerf,
+  required bool dmlBulk,
+  required bool dmlStress,
+  required bool runLockContention,
+  required bool runLiveHub,
+  required bool runLiveHubAgentActions,
+  required String? odbcE2eRpc,
+  required String? odbcDsn,
+}) {
+  final aggressive = <String>[
+    if (runBurst) 'RUN_ODBC_BURST_TESTS',
+    if (dmlPerf) 'ODBC_E2E_DML_PERF_TESTS',
+    if (dmlBulk) 'ODBC_E2E_DML_BULK_TESTS',
+    if (dmlStress) 'ODBC_E2E_DML_STRESS_TESTS',
+    if (runLockContention) 'ODBC_RUN_LOCK_CONTENTION_TESTS',
+    if (runLiveHub) 'RUN_LIVE_HUB_TESTS',
+    if (runLiveHubAgentActions) 'RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS',
+  ];
+
+  print('');
+  print('=== Carga ODBC / circuit breaker ===');
+  if (aggressive.isEmpty) {
+    print('Nenhum opt-in agressivo de ODBC/Hub detectado.');
+    return;
+  }
+
+  print(
+    'Opt-ins agressivos ativos (${aggressive.length}): ${aggressive.join(', ')}',
+  );
+  print(
+    '  -> Para smoke diario, mantenha apenas ODBC_TEST_DSN e desative burst/bulk/stress/lock.',
+  );
+  print(
+    '  -> Erro -32106 com odbc_reason=circuit_breaker_open e efeito cascata: apos '
+    '5 falhas reais de conexao ODBC, pedidos seguintes falham rapido por ~30s '
+    '(CIRCUIT_BREAKER_RESET_SEC).',
+  );
+  print(
+    '  -> Se o agente desktop estiver conectado ao Hub, reinicie-o apos abrir o '
+    'circuit breaker ou aguarde o reset; testes E2E in-process nao compartilham '
+    'o breaker do agente em execucao.',
+  );
+
+  final dsnHint = _odbcDsnTargetHint(odbcE2eRpc ?? odbcDsn);
+  if (dsnHint != null) {
+    print('  -> DSN E2E efetivo (sem credenciais): $dsnHint');
+    print(
+      '  -> Se o agente usa outro DBN/HOST:porta (ex. CasaDoMel:2660 vs VL:2650), '
+      'alinhe ODBC_E2E_RPC_DSN ao agente ou corrija payload.database do Hub.',
+    );
+  }
+}
+
+String? _odbcDsnTargetHint(String? dsn) {
+  if (dsn == null || dsn.trim().isEmpty) {
+    return null;
+  }
+  final normalized = dsn.trim();
+  final dbn = RegExp('DBN=([^;]+)', caseSensitive: false).firstMatch(normalized)?.group(1);
+  final host = RegExp('HOST=([^;]+)', caseSensitive: false).firstMatch(normalized)?.group(1);
+  final database = RegExp('Database=([^;]+)', caseSensitive: false).firstMatch(normalized)?.group(1);
+  final server = RegExp('Server=([^;]+)', caseSensitive: false).firstMatch(normalized)?.group(1);
+  final parts = <String>[
+    if (dbn != null) 'DBN=$dbn',
+    if (host != null) 'HOST=$host',
+    if (database != null) 'Database=$database',
+    if (server != null) 'Server=$server',
+  ];
+  return parts.isEmpty ? '(DSN definido)' : parts.join('; ');
 }
 
 Map<String, String> _loadEnv(File file) {

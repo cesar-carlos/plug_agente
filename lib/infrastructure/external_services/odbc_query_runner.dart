@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_multi_result_stream_collector.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_response_factory.dart';
@@ -32,17 +33,20 @@ final class OdbcQueryRunner {
     required OdbcStatementExecutor statementExecutor,
     required OdbcResultEncodingExecutor resultEncodingExecutor,
     required void Function(String connectionId) markConnectionForDiscard,
+    OdbcInFlightExecutionRegistry? inFlightRegistry,
   }) : _queries = queries,
        _metrics = metrics,
        _statementExecutor = statementExecutor,
        _resultEncodingExecutor = resultEncodingExecutor,
-       _markConnectionForDiscard = markConnectionForDiscard;
+       _markConnectionForDiscard = markConnectionForDiscard,
+       _inFlightRegistry = inFlightRegistry;
 
   final IQueryService _queries;
   final MetricsCollector _metrics;
   final OdbcStatementExecutor _statementExecutor;
   final OdbcResultEncodingExecutor _resultEncodingExecutor;
   final void Function(String connectionId) _markConnectionForDiscard;
+  final OdbcInFlightExecutionRegistry? _inFlightRegistry;
 
   /// Stable cache key for a prepared statement (sql + sorted parameter names).
   static String preparedStatementKeyFor(
@@ -103,6 +107,8 @@ final class OdbcQueryRunner {
     );
     var timeoutCleanupAlreadyHandled = false;
     final preparedCachePolicy = OdbcPreparedStatementCachePolicy.forExecutionMode(executionMode);
+    final inFlightRequestId = _inFlightTrackingKey(request);
+    _registerInFlightExecution(inFlightRequestId, connId);
     try {
       if (usesPreparedTimeout) {
         return await _guardWithCooperativeCancellation(
@@ -112,6 +118,7 @@ final class OdbcQueryRunner {
             preparedExecution: preparedExecution,
             timeout: timeout,
             cachePolicy: preparedCachePolicy,
+            inFlightRequestId: inFlightRequestId,
           ),
           cancellationToken: cancellationToken,
           timeout: timeout,
@@ -126,6 +133,8 @@ final class OdbcQueryRunner {
               connectionId: connId,
               query: preparedExecution.sql,
               timeout: timeout,
+              inFlightRegistry: _inFlightRegistry,
+              inFlightRequestId: inFlightRequestId,
             ),
             cancellationToken: cancellationToken,
           );
@@ -173,9 +182,11 @@ final class OdbcQueryRunner {
       );
       rethrow;
     } on CancellationException catch (error) {
-      if (!usesPreparedTimeout) {
-        await _cancelConnectionForTimeout(connId);
-      }
+      await _abortInFlightExecution(
+        inFlightRequestId,
+        connId,
+        usesPreparedTimeout: usesPreparedTimeout,
+      );
       developer.log(
         'SQL query cancelled cooperatively before completion',
         name: 'database_gateway',
@@ -184,6 +195,7 @@ final class OdbcQueryRunner {
       );
       return QueryExecutionOutcome.failure(error);
     } finally {
+      _unregisterInFlightExecution(inFlightRequestId);
       stopwatch.stop();
       _metrics.recordSqlExecutionTime(
         stopwatch.elapsed,
@@ -203,35 +215,43 @@ final class OdbcQueryRunner {
     Duration? timeout,
     OdbcPreparedStatementCachePolicy cachePolicy = OdbcPreparedStatementCachePolicy.leasePool,
   }) async {
-    final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
-    final stmtId = await _statementExecutor.getOrPrepareStatement(
-      connectionId: connectionId,
-      preparedExecution: preparedExecution,
-      preparedStatements: preparedStatements,
-      statementKey: statementKey,
-      timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
-      cachePolicy: cachePolicy,
-    );
-    if (stmtId.isError()) {
-      return QueryExecutionOutcome.failure(
-        stmtId.exceptionOrNull() ?? StateError('prepare_statement_failed'),
+    final trackingId = _inFlightTrackingKey(request);
+    _registerInFlightExecution(trackingId, connectionId);
+    try {
+      final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
+      final stmtId = await _statementExecutor.getOrPrepareStatement(
+        connectionId: connectionId,
+        preparedExecution: preparedExecution,
+        preparedStatements: preparedStatements,
+        statementKey: statementKey,
+        timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+        cachePolicy: cachePolicy,
       );
-    }
+      if (stmtId.isError()) {
+        return QueryExecutionOutcome.failure(
+          stmtId.exceptionOrNull() ?? StateError('prepare_statement_failed'),
+        );
+      }
 
-    final preparedStatementId = stmtId.getOrThrow();
-    final startedAt = DateTime.now();
-    final result = await _statementExecutor.executePreparedStatementWithTimeout(
-      connectionId: connectionId,
-      preparedExecution: preparedExecution,
-      statementId: preparedStatementId,
-      timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
-    );
-    return result.fold(
-      (queryResult) => QueryExecutionOutcome.success(
-        OdbcQueryResponseFactory.fromSingleResult(request, queryResult, startedAt: startedAt),
-      ),
-      QueryExecutionOutcome.failure,
-    );
+      final preparedStatementId = stmtId.getOrThrow();
+      final startedAt = DateTime.now();
+      final result = await _statementExecutor.executePreparedStatementWithTimeout(
+        connectionId: connectionId,
+        preparedExecution: preparedExecution,
+        statementId: preparedStatementId,
+        timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+        inFlightRegistry: _inFlightRegistry,
+        inFlightRequestId: trackingId,
+      );
+      return result.fold(
+        (queryResult) => QueryExecutionOutcome.success(
+          OdbcQueryResponseFactory.fromSingleResult(request, queryResult, startedAt: startedAt),
+        ),
+        QueryExecutionOutcome.failure,
+      );
+    } finally {
+      _unregisterInFlightExecution(trackingId);
+    }
   }
 
   /// Runs a query through a one-shot prepared statement that is closed after
@@ -242,7 +262,10 @@ final class OdbcQueryRunner {
     required OdbcPreparedQueryExecution preparedExecution,
     Duration? timeout,
     OdbcPreparedStatementCachePolicy cachePolicy = OdbcPreparedStatementCachePolicy.leasePool,
+    String? inFlightRequestId,
   }) async {
+    final trackingId = inFlightRequestId ?? _inFlightTrackingKey(request);
+    _registerInFlightExecution(trackingId, connectionId);
     final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final preparedStatements = <String, int>{};
     final statementKey = preparedStatementKeyFor(preparedExecution);
@@ -267,6 +290,8 @@ final class OdbcQueryRunner {
         preparedExecution: preparedExecution,
         statementId: stmtId.getOrThrow(),
         timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+        inFlightRegistry: _inFlightRegistry,
+        inFlightRequestId: trackingId,
       );
       return result.fold(
         (queryResult) => QueryExecutionOutcome.success(
@@ -275,6 +300,7 @@ final class OdbcQueryRunner {
         QueryExecutionOutcome.failure,
       );
     } finally {
+      _unregisterInFlightExecution(trackingId);
       await _statementExecutor.closePreparedStatements(
         connectionId,
         preparedStatements.values,
@@ -359,6 +385,40 @@ final class OdbcQueryRunner {
       name: 'database_gateway',
       level: 900,
     );
+  }
+
+  String _inFlightTrackingKey(QueryRequest request) {
+    return odbcInFlightRegistryKey(
+      requestId: request.id,
+      sourceRpcRequestId: request.sourceRpcRequestId,
+    );
+  }
+
+  void _registerInFlightExecution(String requestId, String connectionId) {
+    _inFlightRegistry?.register(
+      requestId,
+      OdbcInFlightExecutionHandle(connectionId: connectionId),
+    );
+  }
+
+  void _unregisterInFlightExecution(String requestId) {
+    _inFlightRegistry?.unregister(requestId);
+  }
+
+  Future<void> _abortInFlightExecution(
+    String requestId,
+    String connectionId, {
+    required bool usesPreparedTimeout,
+  }) async {
+    final handle = _inFlightRegistry?.peek(requestId);
+    if (handle != null && handle.hasNativeCancelTarget) {
+      await _statementExecutor.abortInFlightHandle(handle);
+      return;
+    }
+
+    if (!usesPreparedTimeout) {
+      await _cancelConnectionForTimeout(connectionId);
+    }
   }
 
   Future<T> _guardWithCooperativeCancellation<T>(

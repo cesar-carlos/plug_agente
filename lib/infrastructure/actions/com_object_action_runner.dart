@@ -12,6 +12,10 @@ import 'package:plug_agente/infrastructure/actions/com_object_invocation_handler
 import 'package:plug_agente/infrastructure/actions/com_object_invocation_registry.dart';
 import 'package:result_dart/result_dart.dart';
 
+/// Runs COM object actions on the main Dart isolate.
+///
+/// Windows COM objects may require a dedicated STA thread (`CoInitializeEx`);
+/// handlers registered for production ProgIDs should be validated on Windows CI.
 class ComObjectActionRunner implements AgentActionLocalRunner {
   ComObjectActionRunner({
     required ComObjectInvocationRegistry invocationRegistry,

@@ -489,12 +489,16 @@ class RpcBatchInboundHandler {
     final negotiatedMax =
         _negotiatedParallelBatchDispatch()?.maxConcurrency ??
         RpcBatchConstants.maxParallelJsonRpcBatchDispatchConcurrency;
+    final inboundBudget = ConnectionConstants.maxConcurrentRpcHandlers;
+    int concurrency;
     if (requests.any((request) => request.method == RpcBatchConstants.parallelJsonRpcBatchSqlExecuteMethod)) {
-      return RpcBatchConstants.parallelJsonRpcBatchSqlExecuteConcurrencyForPoolSize(
+      concurrency = RpcBatchConstants.parallelJsonRpcBatchSqlExecuteConcurrencyForPoolSize(
         _poolSizeProvider(),
       ).clamp(1, negotiatedMax);
+    } else {
+      concurrency = negotiatedMax;
     }
-    return negotiatedMax;
+    return concurrency.clamp(1, inboundBudget);
   }
 
   Future<void> _dispatchBatchItemsSequentially(

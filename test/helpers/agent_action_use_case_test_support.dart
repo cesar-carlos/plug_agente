@@ -439,6 +439,9 @@ class FakeElevatedActionExecutionCanceller implements IElevatedActionExecutionCa
     lastExecutionId = executionId;
     return cancelResult;
   }
+
+  @override
+  Future<void> cancelAllPendingExecutions() async {}
 }
 
 class FakeAgentActionLocalRunner implements AgentActionLocalRunner {

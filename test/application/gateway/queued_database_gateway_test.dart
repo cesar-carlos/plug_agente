@@ -101,6 +101,8 @@ void main() {
           database: any(named: 'database'),
           options: any(named: 'options'),
           timeout: any(named: 'timeout'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+          cancellationToken: any(named: 'cancellationToken'),
         ),
       ).thenAnswer((_) async => res.Success(mockResults));
 
@@ -112,6 +114,7 @@ void main() {
         () => delegate.executeBatch(
           'agent-1',
           commands,
+          cancellationToken: any(named: 'cancellationToken'),
         ),
       ).called(1);
     });
@@ -274,6 +277,7 @@ void main() {
           options: any(named: 'options'),
           timeout: any(named: 'timeout'),
           sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+          cancellationToken: any(named: 'cancellationToken'),
         ),
       ).thenAnswer((_) async {
         await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -424,5 +428,91 @@ void main() {
         firstBlocker.complete();
       },
     );
+    test('should signal cooperative cancel for batch when enqueue times out', () async {
+      final delegate = _MockDatabaseGateway();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 4,
+        maxConcurrentWorkers: 1,
+        defaultEnqueueTimeout: const Duration(milliseconds: 30),
+      );
+      final gateway = QueuedDatabaseGateway(
+        delegate: delegate,
+        queue: queue,
+      );
+      final firstBlocker = Completer<void>();
+
+      when(
+        () => delegate.executeBatch(
+          any(),
+          any(),
+          database: any(named: 'database'),
+          options: any(named: 'options'),
+          timeout: any(named: 'timeout'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+          cancellationToken: any(named: 'cancellationToken'),
+        ),
+      ).thenAnswer((_) async {
+        await firstBlocker.future;
+        return const res.Success(<SqlCommandResult>[]);
+      });
+
+      unawaited(
+        gateway.executeBatch(
+          'agent-1',
+          [const SqlCommand(sql: 'SELECT 1')],
+          sourceRpcRequestId: 'batch-blocker',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final result = await gateway.executeBatch(
+        'agent-1',
+        [const SqlCommand(sql: 'SELECT 2')],
+        sourceRpcRequestId: 'batch-timeout',
+      );
+
+      expect(result.isError(), isTrue);
+      firstBlocker.complete();
+    });
+    test('propagates cancellation token to delegate for executeNonQuery', () async {
+      final delegate = _MockDatabaseGateway();
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 10,
+        maxConcurrentWorkers: 2,
+      );
+      final gateway = QueuedDatabaseGateway(
+        delegate: delegate,
+        queue: queue,
+      );
+      final token = CancellationToken();
+
+      when(
+        () => delegate.executeNonQuery(
+          any(),
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+          cancellationToken: any(named: 'cancellationToken'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
+        ),
+      ).thenAnswer((_) async => const res.Success(1));
+
+      final result = await gateway.executeNonQuery(
+        'UPDATE t SET v = 1',
+        null,
+        cancellationToken: token,
+        sourceRpcRequestId: 'non-query-1',
+      );
+
+      expect(result.isSuccess(), isTrue);
+      verify(
+        () => delegate.executeNonQuery(
+          'UPDATE t SET v = 1',
+          null,
+          cancellationToken: token,
+          sourceRpcRequestId: 'non-query-1',
+        ),
+      ).called(1);
+    });
   });
 }

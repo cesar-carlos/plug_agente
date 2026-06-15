@@ -256,7 +256,7 @@ class FailureToRpcErrorMapper {
       technicalMessage: clientDetail,
       correlationId: correlationId,
       timestamp: failure.timestamp,
-      retryable: failure.isTransient || RpcErrorCode.isTransient(code),
+      retryable: _resolveRetryable(failure, code),
       category: _categoryForFailure(failure),
       extra: extra,
     );
@@ -395,10 +395,6 @@ class FailureToRpcErrorMapper {
     };
   }
 
-  /// Per-failure-type reason overrides that win over the canonical reason
-  /// derived from the RPC code. Use this for cases where the same RPC code
-  /// (e.g. `internalError`) needs different `reason` strings depending on the
-  /// originating failure type so automation pipelines can distinguish them.
   static String? _getCustomReasonOverride(Failure failure, int code) {
     if (failure is ConfigurationFailure && code == RpcErrorCode.authenticationFailed) {
       final reason = failure.context['reason']?.toString();
@@ -474,6 +470,16 @@ class FailureToRpcErrorMapper {
       }
     }
     return null;
+  }
+
+  /// Honors an explicit `retryable` flag from failure context when present.
+  /// Otherwise falls back to failure type and RPC code heuristics.
+  static bool _resolveRetryable(Failure failure, int code) {
+    final explicit = failure.context['retryable'];
+    if (explicit is bool) {
+      return explicit;
+    }
+    return failure.isTransient || RpcErrorCode.isTransient(code);
   }
 
   static bool _isSensitiveKey(String key) => SensitiveMapRedactor.isSensitiveKey(key);

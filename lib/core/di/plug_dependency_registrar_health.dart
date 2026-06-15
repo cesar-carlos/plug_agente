@@ -2,6 +2,7 @@ part of 'plug_dependency_registrar.dart';
 
 void _registerHealth(GetIt getIt) {
   getIt
+    ..registerLazySingleton(SecureStorageRuntimeProbe.new)
     ..registerLazySingleton<AgentActionRetentionSettings>(
       () => AgentActionRetentionSettings(getIt<IAppSettingsStore>()),
     )
@@ -39,6 +40,7 @@ void _registerHealth(GetIt getIt) {
         odbcCredentialSecretStore: getIt<IOdbcCredentialSecretStore>(),
         hubAuthSecretStore: getIt<IHubAuthSecretStore>(),
         tokenSecretStore: getIt<ITokenSecretStore>(),
+        secureStorageRuntimeProbe: getIt<SecureStorageRuntimeProbe>(),
       ),
     );
 }

@@ -34,6 +34,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:uuid/uuid.dart';
@@ -81,6 +82,7 @@ class DefaultRpcMethodHandlerOperations {
     SqlStreamingCoordinator? sqlStreamingCoordinator,
     RpcIdempotencyCoordinator? idempotencyCoordinator,
     IOdbcConnectionSettings? odbcConnectionSettings,
+    ISqlInFlightExecutionAbortPort? inFlightAbortPort,
     DefaultRpcMethodHandlerOperationsFactory? operationsFactory,
   }) {
     final factory = operationsFactory ?? const DefaultRpcMethodHandlerOperationsFactory();
@@ -126,6 +128,7 @@ class DefaultRpcMethodHandlerOperations {
       sqlStreamingCoordinator: sqlStreamingCoordinator,
       idempotencyCoordinator: idempotencyCoordinator,
       odbcConnectionSettings: odbcConnectionSettings,
+      inFlightAbortPort: inFlightAbortPort,
     );
   }
 

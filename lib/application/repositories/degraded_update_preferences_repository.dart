@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/repositories/file_circuit_breaker_persistence.dart';
 import 'package:plug_agente/application/repositories/i_circuit_breaker_persistence.dart';
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
 
@@ -7,11 +8,22 @@ import 'package:plug_agente/application/repositories/i_update_preferences_reposi
 /// toggles from the UI still fail at the orchestrator boundary; this repository
 /// only satisfies internal auto-update services.
 class DegradedUpdatePreferencesRepository implements IUpdatePreferencesRepository {
+  DegradedUpdatePreferencesRepository({
+    String? circuitBreakerBasePath,
+  }) : _manualTimeoutCircuit = FileCircuitBreakerPersistence(
+         fileName: 'manual_timeout_cb.json',
+         basePath: circuitBreakerBasePath,
+       ),
+       _automaticFailureCircuit = FileCircuitBreakerPersistence(
+         fileName: 'automatic_failure_cb.json',
+         basePath: circuitBreakerBasePath,
+       );
+
   bool _updateNotificationsEnabled = true;
   bool _automaticSilentUpdatesEnabled = true;
 
-  final InMemoryCircuitBreakerPersistence _manualTimeoutCircuit = InMemoryCircuitBreakerPersistence();
-  final InMemoryCircuitBreakerPersistence _automaticFailureCircuit = InMemoryCircuitBreakerPersistence();
+  final ICircuitBreakerPersistence _manualTimeoutCircuit;
+  final ICircuitBreakerPersistence _automaticFailureCircuit;
 
   @override
   bool get updateNotificationsEnabled => _updateNotificationsEnabled;

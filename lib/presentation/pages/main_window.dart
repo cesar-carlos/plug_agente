@@ -5,6 +5,7 @@ import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/navigation/nav_destination.dart';
 import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
+import 'package:plug_agente/presentation/widgets/legacy_database_migration_banner.dart';
 import 'package:provider/provider.dart';
 
 class MainWindow extends StatefulWidget {
@@ -59,6 +60,7 @@ class _MainWindowState extends State<MainWindow> {
       paneBodyBuilder: (item, body) {
         return Column(
           children: [
+            const LegacyDatabaseMigrationBanner(),
             if (runtimeMode.isDegraded) _DegradedModeBanner(reasons: runtimeMode.degradationReasons),
             Expanded(
               child: AppLayout.centeredContent(

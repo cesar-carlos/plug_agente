@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
@@ -123,7 +124,13 @@ final class OdbcStatementExecutor {
     required OdbcPreparedQueryExecution preparedExecution,
     required int statementId,
     Duration? timeout,
+    OdbcInFlightExecutionRegistry? inFlightRegistry,
+    String? inFlightRequestId,
   }) async {
+    if (inFlightRegistry != null && inFlightRequestId != null && inFlightRequestId.isNotEmpty) {
+      inFlightRegistry.bindStatement(inFlightRequestId, statementId);
+    }
+
     final statementOptions = timeout == null ? null : StatementOptions(timeout: timeout);
     final execution = _executePreparedStatement(
       connectionId: connectionId,
@@ -175,6 +182,8 @@ final class OdbcStatementExecutor {
     required String connectionId,
     required String query,
     required Duration timeout,
+    OdbcInFlightExecutionRegistry? inFlightRegistry,
+    String? inFlightRequestId,
   }) async {
     final startResult = await _service.executeAsyncStart(
       connectionId,
@@ -185,6 +194,9 @@ final class OdbcStatementExecutor {
     }
 
     final requestId = startResult.getOrThrow();
+    if (inFlightRegistry != null && inFlightRequestId != null && inFlightRequestId.isNotEmpty) {
+      inFlightRegistry.bindAsyncRequest(inFlightRequestId, requestId);
+    }
     final deadline = DateTime.now().add(timeout);
 
     try {
@@ -233,7 +245,7 @@ final class OdbcStatementExecutor {
     }
   }
 
-  Future<void> _cancelPreparedStatementForTimeout({
+  Future<void> abortPreparedStatement({
     required String connectionId,
     required int statementId,
   }) async {
@@ -249,7 +261,7 @@ final class OdbcStatementExecutor {
         _markConnectionForDiscard(connectionId);
         _metrics.recordTimeoutCancelFailure();
         developer.log(
-          'Failed to cancel prepared statement after timeout',
+          'Failed to cancel prepared statement after abort',
           name: 'database_gateway',
           level: 900,
           error: error,
@@ -258,7 +270,7 @@ final class OdbcStatementExecutor {
     );
   }
 
-  Future<void> _cancelAsyncRequestForTimeout({
+  Future<void> abortAsyncRequest({
     required String connectionId,
     required int requestId,
   }) async {
@@ -271,7 +283,7 @@ final class OdbcStatementExecutor {
       (error) {
         _metrics.recordTimeoutCancelFailure();
         developer.log(
-          'Failed to cancel async SQL request after timeout',
+          'Failed to cancel async SQL request after abort',
           name: 'database_gateway',
           level: 900,
           error: error,
@@ -279,6 +291,34 @@ final class OdbcStatementExecutor {
       },
     );
   }
+
+  Future<void> abortInFlightHandle(OdbcInFlightExecutionHandle handle) async {
+    final statementId = handle.statementId;
+    if (statementId != null) {
+      await abortPreparedStatement(
+        connectionId: handle.connectionId,
+        statementId: statementId,
+      );
+    }
+
+    final asyncRequestId = handle.asyncRequestId;
+    if (asyncRequestId != null) {
+      await abortAsyncRequest(
+        connectionId: handle.connectionId,
+        requestId: asyncRequestId,
+      );
+    }
+  }
+
+  Future<void> _cancelPreparedStatementForTimeout({
+    required String connectionId,
+    required int statementId,
+  }) => abortPreparedStatement(connectionId: connectionId, statementId: statementId);
+
+  Future<void> _cancelAsyncRequestForTimeout({
+    required String connectionId,
+    required int requestId,
+  }) => abortAsyncRequest(connectionId: connectionId, requestId: requestId);
 
   Future<void> _freeAsyncRequestSafely(int requestId) async {
     final freeResult = await _service.asyncFree(requestId);

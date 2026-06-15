@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
@@ -10,6 +11,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_connection_opt
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -24,29 +26,47 @@ class OdbcNonQueryExecutionOrchestrator {
     required OdbcStatementExecutor statementExecutor,
     required OdbcConnectionOptionsResolver optionsResolver,
     required MetricsCollector metrics,
+    OdbcInFlightExecutionRegistry? inFlightRegistry,
   }) : _connectionManager = connectionManager,
        _service = service,
        _statementExecutor = statementExecutor,
        _optionsResolver = optionsResolver,
-       _metrics = metrics;
+       _metrics = metrics,
+       _inFlightRegistry = inFlightRegistry;
 
   final OdbcGatewayConnectionManager _connectionManager;
   final OdbcService _service;
   final OdbcStatementExecutor _statementExecutor;
   final OdbcConnectionOptionsResolver _optionsResolver;
   final MetricsCollector _metrics;
+  final OdbcInFlightExecutionRegistry? _inFlightRegistry;
 
   Future<Result<int>> execute(
     String query,
     Map<String, dynamic>? parameters,
     String connectionString, {
     Duration? timeout,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Future<Result<int>>.value(
+        Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'Non-query execution cancelled',
+            context: const {'cooperative_cancel': true},
+          ),
+        ),
+      );
+    }
+
     return _executeNonQueryInternal(
       query,
       parameters,
       connectionString,
       timeout: timeout,
+      cancellationToken: cancellationToken,
+      sourceRpcRequestId: sourceRpcRequestId,
     );
   }
 
@@ -55,6 +75,8 @@ class OdbcNonQueryExecutionOrchestrator {
     Map<String, dynamic>? parameters,
     String connectionString, {
     Duration? timeout,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) async {
     final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final poolResult = await _connectionManager.acquirePooledConnection(
@@ -77,13 +99,17 @@ class OdbcNonQueryExecutionOrchestrator {
 
     final connId = poolResult.getOrNull()!;
     var releasedConnectionEarly = false;
+    final inFlightRequestId = _inFlightTrackingKey(sourceRpcRequestId);
 
     try {
+      _registerInFlightExecution(inFlightRequestId, connId);
       final result = await _runNonQueryWithTimeout(
         connectionId: connId,
         query: query,
         parameters: parameters,
         timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+        inFlightRequestId: inFlightRequestId,
+        cancellationToken: cancellationToken,
       );
 
       if (result.isError()) {
@@ -112,6 +138,8 @@ class OdbcNonQueryExecutionOrchestrator {
             connectionString,
             timeout: timeout,
             deadline: deadline,
+            cancellationToken: cancellationToken,
+            sourceRpcRequestId: sourceRpcRequestId,
           );
         }
       }
@@ -140,6 +168,7 @@ class OdbcNonQueryExecutionOrchestrator {
         ),
       );
     } finally {
+      _unregisterInFlightExecution(inFlightRequestId);
       if (!releasedConnectionEarly) {
         await _connectionManager.releaseConnectionSafely(connId);
       }
@@ -152,6 +181,8 @@ class OdbcNonQueryExecutionOrchestrator {
     Map<String, dynamic>? parameters,
     Duration? timeout,
     String executionMode = 'non_query',
+    String? inFlightRequestId,
+    CancellationToken? cancellationToken,
   }) async {
     final stopwatch = Stopwatch()..start();
     try {
@@ -174,6 +205,8 @@ class OdbcNonQueryExecutionOrchestrator {
           connectionId: connectionId,
           query: query,
           timeout: timeout,
+          inFlightRegistry: _inFlightRegistry,
+          inFlightRequestId: inFlightRequestId,
         );
         if (asyncResult.isSuccess()) {
           return asyncResult;
@@ -215,6 +248,8 @@ class OdbcNonQueryExecutionOrchestrator {
           preparedExecution: preparedExecution,
           statementId: stmtId.getOrThrow(),
           timeout: timeout,
+          inFlightRegistry: _inFlightRegistry,
+          inFlightRequestId: inFlightRequestId,
         );
       } finally {
         await _statementExecutor.closePreparedStatements(
@@ -251,6 +286,8 @@ class OdbcNonQueryExecutionOrchestrator {
     String connectionString, {
     Duration? timeout,
     DateTime? deadline,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) async {
     final effectiveDeadline = deadline ?? OdbcExecutionDeadline.deadlineFor(timeout);
     final leaseResult = await _connectionManager.acquireDirectLease(
@@ -281,13 +318,17 @@ class OdbcNonQueryExecutionOrchestrator {
       );
       return await connectResult.fold(
         (connection) async {
+          final inFlightRequestId = _inFlightTrackingKey(sourceRpcRequestId);
           try {
+            _registerInFlightExecution(inFlightRequestId, connection.id);
             final result = await _runNonQueryWithTimeout(
               connectionId: connection.id,
               query: query,
               parameters: parameters,
               timeout: OdbcExecutionDeadline.remainingFromDeadline(effectiveDeadline) ?? timeout,
               executionMode: 'direct_non_query',
+              inFlightRequestId: inFlightRequestId,
+              cancellationToken: cancellationToken,
             );
 
             return result.fold(
@@ -314,6 +355,7 @@ class OdbcNonQueryExecutionOrchestrator {
               ),
             );
           } finally {
+            _unregisterInFlightExecution(inFlightRequestId);
             await _connectionManager.disconnectOwnedConnectionAndReleaseLease(
               connectionId: connection.id,
               directLease: directLease,
@@ -353,5 +395,30 @@ class OdbcNonQueryExecutionOrchestrator {
       return Exception(fallbackMessage);
     }
     return Exception(error.toString());
+  }
+
+  String? _inFlightTrackingKey(String? sourceRpcRequestId) {
+    final normalized = sourceRpcRequestId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  void _registerInFlightExecution(String? requestId, String connectionId) {
+    if (requestId == null || requestId.isEmpty) {
+      return;
+    }
+    _inFlightRegistry?.register(
+      requestId,
+      OdbcInFlightExecutionHandle(connectionId: connectionId),
+    );
+  }
+
+  void _unregisterInFlightExecution(String? requestId) {
+    if (requestId == null || requestId.isEmpty) {
+      return;
+    }
+    _inFlightRegistry?.unregister(requestId);
   }
 }

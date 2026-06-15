@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:meta/meta.dart';
-
 import 'package:plug_agente/application/queue/sql_execution_kind.dart';
 import 'package:plug_agente/application/queue/sql_queue_lane_scheduler.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
@@ -11,6 +10,7 @@ import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -56,6 +56,7 @@ class SqlExecutionQueue {
     SqlExecutionQueueMetricsCollector? metricsCollector,
     Duration defaultEnqueueTimeout = const Duration(seconds: 5),
     int fullRejectionLogStride = _defaultFullRejectionLogStride,
+    ISqlInFlightExecutionAbortPort? inFlightAbortPort,
   }) : assert(maxQueueSize > 0, 'maxQueueSize must be > 0'),
        assert(maxConcurrentWorkers > 0, 'maxConcurrentWorkers must be > 0'),
        assert(
@@ -93,7 +94,8 @@ class SqlExecutionQueue {
            ConnectionConstants.sqlQueueMaxNonQueryWorkersForWorkers(maxConcurrentWorkers),
        _metricsCollector = metricsCollector,
        _defaultEnqueueTimeout = defaultEnqueueTimeout,
-       _fullRejectionLogStride = fullRejectionLogStride;
+       _fullRejectionLogStride = fullRejectionLogStride,
+       _inFlightAbortPort = inFlightAbortPort;
 
   /// Default stride for `queue full` rejection logs.
   ///
@@ -111,6 +113,7 @@ class SqlExecutionQueue {
   final SqlExecutionQueueMetricsCollector? _metricsCollector;
   final Duration _defaultEnqueueTimeout;
   final int _fullRejectionLogStride;
+  final ISqlInFlightExecutionAbortPort? _inFlightAbortPort;
 
   final Map<SqlExecutionKind, Queue<_QueuedRequest>> _queues = {
     for (final kind in SqlExecutionKind.values) kind: Queue<_QueuedRequest>(),
@@ -183,6 +186,7 @@ class SqlExecutionQueue {
     String? requestId,
     SqlExecutionKind kind = SqlExecutionKind.query,
     CancellationToken? cooperativeCancellationToken,
+    int slotWeight = 1,
   }) async {
     if (_disposed) {
       developer.log(
@@ -237,6 +241,7 @@ class SqlExecutionQueue {
       kind: kind,
       sequence: _nextSequence++,
       cooperativeCancellationToken: cooperativeCancellationToken,
+      slotWeight: slotWeight,
     );
 
     _enqueue(request);
@@ -280,6 +285,7 @@ class SqlExecutionQueue {
     String? requestId,
     SqlExecutionKind kind = SqlExecutionKind.query,
     CancellationToken? cooperativeCancellationToken,
+    int slotWeight = 1,
   }) async {
     if (_disposed) {
       developer.log(
@@ -334,6 +340,7 @@ class SqlExecutionQueue {
       kind: kind,
       sequence: _nextSequence++,
       cooperativeCancellationToken: cooperativeCancellationToken,
+      slotWeight: slotWeight,
     );
 
     _enqueue(request);
@@ -383,7 +390,7 @@ class SqlExecutionQueue {
       }
       _activeWorkers++;
       if (request.kind == SqlExecutionKind.batch) {
-        _activeBatchWorkers++;
+        _activeBatchWorkers += request.slotWeight;
       }
       if (request.kind == SqlExecutionKind.longQuery) {
         _activeLongQueryWorkers++;
@@ -458,7 +465,7 @@ class SqlExecutionQueue {
     }
     _activeWorkers--;
     if (request.kind == SqlExecutionKind.batch && _activeBatchWorkers > 0) {
-      _activeBatchWorkers--;
+      _activeBatchWorkers = (_activeBatchWorkers - request.slotWeight).clamp(0, _maxConcurrentBatchWorkers);
     }
     if (request.kind == SqlExecutionKind.longQuery && _activeLongQueryWorkers > 0) {
       _activeLongQueryWorkers--;
@@ -498,7 +505,7 @@ class SqlExecutionQueue {
 
   bool _canStartRequest(_QueuedRequest request) {
     return switch (request.kind) {
-      SqlExecutionKind.batch => _activeBatchWorkers < _maxConcurrentBatchWorkers,
+      SqlExecutionKind.batch => _activeBatchWorkers + request.slotWeight <= _maxConcurrentBatchWorkers,
       SqlExecutionKind.longQuery => _activeLongQueryWorkers < _maxConcurrentLongQueryWorkers,
       SqlExecutionKind.streaming => _activeStreamingWorkers < _maxConcurrentStreamingWorkers,
       SqlExecutionKind.nonQuery => _activeNonQueryWorkers < _maxConcurrentNonQueryWorkers,
@@ -668,8 +675,11 @@ class SqlExecutionQueue {
       _recordQueueSaturationIfNeeded();
     } else {
       _metricsCollector?.recordQueueTimeoutAfterWorkerStarted();
+      if (requestId != null && requestId.isNotEmpty) {
+        unawaited(_inFlightAbortPort?.abortInFlightExecution(requestId));
+      }
       developer.log(
-        'SQL request queue wait timed out after worker started; in-flight ODBC may continue until task completion or cooperative cancellation',
+        'SQL request queue wait timed out after worker started; native ODBC abort requested when in-flight handle is registered',
         name: 'sql_execution_queue',
         level: 900,
         error: {
@@ -679,6 +689,7 @@ class SqlExecutionQueue {
           'active_workers': _activeWorkers,
           'ghost_query_risk': true,
           'cooperative_cancel_signalled': request.cooperativeCancellationToken?.isCancelled ?? false,
+          'native_abort_requested': requestId != null && requestId.isNotEmpty,
         },
       );
     }
@@ -762,6 +773,7 @@ class _QueuedRequest<T extends Object> {
     required this.sequence,
     this.requestId,
     this.cooperativeCancellationToken,
+    this.slotWeight = 1,
   }) : releasableTask = null;
 
   _QueuedRequest.releasable({
@@ -771,6 +783,7 @@ class _QueuedRequest<T extends Object> {
     required this.sequence,
     this.requestId,
     this.cooperativeCancellationToken,
+    this.slotWeight = 1,
   }) : task = null,
        releasableTask = task;
 
@@ -780,6 +793,7 @@ class _QueuedRequest<T extends Object> {
   final DateTime enqueuedAt;
   final SqlExecutionKind kind;
   final int sequence;
+  final int slotWeight;
   final String? requestId;
   bool hasStarted = false;
   bool isCancelled = false;

@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/value_objects/hub_stored_credentials.dart';
 import 'package:plug_agente/domain/value_objects/hub_stored_credentials_state.dart';
 import 'package:plug_agente/domain/value_objects/hub_stored_session.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
+import 'package:plug_agente/infrastructure/stores/secure_storage_guard.dart';
 import 'package:result_dart/result_dart.dart';
 
 class HubSessionStore implements IHubSessionStore {
@@ -77,12 +78,12 @@ class HubSessionStore implements IHubSessionStore {
       }
 
       if (!_authSecretStore.isAvailable) {
-        await _updateLegacySecrets(
-          configId,
-          authToken: token.token,
-          refreshToken: token.refreshToken,
+        return Failure(
+          SecureStorageGuard.unavailableFailure(
+            operation: 'writeSessionTokens',
+            store: 'hub_auth',
+          ),
         );
-        return const Success(unit);
       }
 
       final secretsResult = await _loadMergedSecrets(configData);
