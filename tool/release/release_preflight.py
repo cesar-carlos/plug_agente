@@ -241,18 +241,18 @@ def ensure_github_pages_workflow_ready(repo: str) -> None:
 
 def ensure_appcast_signing_tests_not_skipped() -> None:
     result = run(
-        ["python", "-m", "unittest", "tool.test_appcast_signing", "-v"],
+        ["python", "-m", "unittest", "tool.appcast.test_appcast_signing", "-v"],
         check=False,
     )
     combined = f"{result.stdout}\n{result.stderr}"
     if result.returncode != 0:
         raise RuntimeError(
-            "tool.test_appcast_signing failed. Install cryptography and re-run preflight."
+            "tool.appcast.test_appcast_signing failed. Install cryptography and re-run preflight."
             + (f"\n{combined.strip()}" if combined.strip() else "")
         )
     if "skipped=" in combined:
         raise RuntimeError(
-            "tool.test_appcast_signing reported skipped tests "
+            "tool.appcast.test_appcast_signing reported skipped tests "
             "(cryptography missing or suite disabled)."
         )
 
@@ -290,7 +290,7 @@ def run_optional_checks(args: argparse.Namespace) -> None:
                 "unittest",
                 "tool.appcast.test_appcast_manager",
                 "tool.appcast.test_validate_release",
-                "tool.test_appcast_signing",
+                "tool.appcast.test_appcast_signing",
                 "-v",
             ]
         )
