@@ -107,6 +107,66 @@ void main() {
       expect(receivedChunks[1].length, 1);
     });
 
+    test('should stream SQL Anywhere through row-major path with string dates', () async {
+      final controller = StreamController<Result<QueryResult>>();
+      final receivedChunks = <List<Map<String, dynamic>>>[];
+      const sqlAnywhereConnectionString = 'Driver={SQL Anywhere 17};dbf=C:/data.db;';
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-sa',
+            connectionString: sqlAnywhereConnectionString,
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQuery('conn-sa', any()),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect('conn-sa'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final execution = gateway.executeQueryStream(
+        'SELECT * FROM Produto',
+        sqlAnywhereConnectionString,
+        (c) async => receivedChunks.add(c),
+      );
+
+      controller.add(
+        const Success<QueryResult, Exception>(
+          QueryResult(
+            columns: ['id', 'data_cadastro'],
+            rows: [
+              [1, '2024-06-15 12:00:00'],
+            ],
+            rowCount: 1,
+          ),
+        ),
+      );
+      await controller.close();
+
+      final result = await execution;
+
+      expect(result.isSuccess(), isTrue);
+      expect(receivedChunks, [
+        [
+          {
+            'id': 1,
+            'data_cadastro': '2024-06-15 12:00:00',
+          },
+        ],
+      ]);
+      verifyNever(() => mockService.streamQueryColumnar(any(), any()));
+    });
+
     test('should invoke onSetupComplete after connect before consuming chunks', () async {
       final controller = StreamController<Result<TypedColumnarResult>>();
       var setupCompleteCalled = false;

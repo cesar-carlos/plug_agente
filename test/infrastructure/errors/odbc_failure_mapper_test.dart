@@ -33,6 +33,44 @@ void main() {
       },
     );
 
+    test(
+      'maps SQL Anywhere invalid user or password to authentication failure',
+      () {
+        final failure = OdbcFailureMapper.mapConnectionError(
+          const ConnectionError(
+            message: '[Sybase][ODBC Driver][SQL Anywhere]Invalid user ID or password',
+            sqlState: '28000',
+            nativeCode: -103,
+          ),
+          operation: 'connect_streaming',
+        );
+
+        expect(failure, isA<ConnectionFailure>());
+        expect(failure.context['reason'], OdbcContextConstants.authenticationFailedReason);
+        expect(failure.context['timeout'], isNull);
+        expect(
+          failure.context['user_message'],
+          contains('Check username, password, and permissions'),
+        );
+      },
+    );
+
+    test(
+      'maps SQL Anywhere invalid user message without SQLSTATE to authentication failure',
+      () {
+        final failure = OdbcFailureMapper.mapConnectionError(
+          const ConnectionError(
+            message: 'Invalid user ID or password',
+            nativeCode: -103,
+          ),
+          operation: 'connect_streaming',
+        );
+
+        expect(failure, isA<ConnectionFailure>());
+        expect(failure.context['reason'], OdbcContextConstants.authenticationFailedReason);
+      },
+    );
+
     test('maps missing driver from SQLSTATE to configuration failure', () {
       final failure = OdbcFailureMapper.mapConnectionError(
         const ConnectionError(

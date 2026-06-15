@@ -14,6 +14,20 @@ final class OdbcColumnarStreamChunkMapperInput {
   final int fetchSize;
 }
 
+/// Normalizes object-column cells for Hub row-map streaming.
+///
+/// SQL Anywhere may surface TIMESTAMP/DATE as text while the column is still
+/// tagged as [TypedColumnKind.dateTime]; pass text through like row-major SELECT.
+Object? normalizeTypedColumnarObjectCell(TypedColumnKind kind, Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (kind == TypedColumnKind.dateTime && value is! DateTime) {
+    return value;
+  }
+  return value;
+}
+
 /// Reads one cell from a typed columnar column without materializing row-major
 /// [QueryResult] first.
 Object? readTypedColumnarCell(TypedColumn column, int row) {
@@ -24,7 +38,10 @@ Object? readTypedColumnarCell(TypedColumn column, int row) {
     TypedColumnInt32(:final values) => values[row],
     TypedColumnInt64(:final values) => values[row],
     TypedColumnFloat64(:final values) => values[row],
-    TypedColumnObject(:final values) => values[row],
+    TypedColumnObject(:final kind, :final values) => normalizeTypedColumnarObjectCell(
+      kind,
+      values[row],
+    ),
   };
 }
 

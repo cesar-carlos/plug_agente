@@ -74,9 +74,19 @@ void main() {
         listenerCalls++;
       });
 
+      final config = _buildConfig().copyWith(
+        connectionString:
+            'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=demo;UID=sa',
+        password: 'secure-secret',
+      );
+
       when(
         () => mockExecuteStreamingQuery(any(), any(), any()),
       ).thenAnswer((invocation) async {
+        expect(
+          invocation.positionalArguments[1],
+          contains('PWD=secure-secret'),
+        );
         final onChunk = invocation.positionalArguments[2] as Future<void> Function(List<Map<String, dynamic>>);
         await onChunk([
           {'id': 1},
@@ -92,7 +102,7 @@ void main() {
 
       await provider.executeQueryWithStreaming(
         'SELECT * FROM users',
-        'DSN=Test',
+        config,
       );
 
       expect(provider.results.length, 3);

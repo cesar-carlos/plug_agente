@@ -47,7 +47,11 @@ class OdbcFailureMapperConnection {
       );
     }
 
-    if (_isAuthenticationFailure(sqlState, detail)) {
+    if (_isAuthenticationFailure(
+      sqlState,
+      detail,
+      nativeCode: error is OdbcError ? error.nativeCode : null,
+    )) {
       return ConnectionFailure.withContext(
         message: 'Database authentication failed',
         cause: error,
@@ -130,8 +134,12 @@ class OdbcFailureMapperConnection {
     return sqlState != null && sqlState.startsWith('08');
   }
 
-  static bool _isAuthenticationFailure(String? sqlState, String detail) {
-    if (sqlState == '28000') {
+  static bool _isAuthenticationFailure(
+    String? sqlState,
+    String detail, {
+    int? nativeCode,
+  }) {
+    if (sqlState == '28000' || nativeCode == -103) {
       return true;
     }
 
@@ -139,6 +147,8 @@ class OdbcFailureMapperConnection {
     return normalized.contains('login failed') ||
         normalized.contains('authentication failed') ||
         normalized.contains('invalid authorization') ||
+        normalized.contains('invalid user id or password') ||
+        normalized.contains('invalid userid or password') ||
         normalized.contains('access denied');
   }
 

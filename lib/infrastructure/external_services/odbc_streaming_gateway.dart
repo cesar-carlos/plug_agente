@@ -26,6 +26,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_columnar_strea
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_string_driver_hint.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_chunk_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_native_options.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
@@ -362,78 +363,77 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     _activeStreams[streamExecutionId] = activeStream;
     onSetupComplete?.call();
     var nativeChunkCount = 0;
+    final prefersRowMajorStreaming = connectionStringPrefersRowMajorStreaming(connectionString);
     try {
-      final queryStream = _openStreamingQueryStream(
-        connectionId: connection.id,
-        query: query,
-        nativeStreamingOptions: nativeStreamingOptions,
-        parameters: parameters,
-      );
-      await for (final chunkResult in queryStream) {
-        nativeChunkCount++;
-        if ((cancellationToken?.isCancelled ?? false) && !activeStream.isCancelRequested) {
-          activeStream.isCancelRequested = true;
-          activeStream.cancelReason = cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect;
-        }
-        if (activeStream.isCancelRequested) {
-          if (activeStream.cancelReason == StreamingCancelReason.playgroundRowCap) {
-            return const Success(unit);
+      if (prefersRowMajorStreaming) {
+        final queryStream = _openRowMajorStreamingQueryStream(
+          connectionId: connection.id,
+          query: query,
+          parameters: parameters,
+        );
+        await for (final chunkResult in queryStream) {
+          nativeChunkCount++;
+          final shouldStop = await _handleStreamingChunkCancellation(
+            activeStream: activeStream,
+            connectionId: connection.id,
+            cancellationToken: cancellationToken,
+            cancellationReasonProvider: cancellationReasonProvider,
+          );
+          if (shouldStop != null) {
+            return shouldStop;
           }
-          if (activeStream.cancelReason == StreamingCancelReason.backpressureOverflow) {
-            _metrics?.recordStreamCancelBackpressure();
-            return Failure(
-              OdbcFailureMapper.mapStreamingError(
-                StateError('stream_cancelled_backpressure_overflow'),
-                operation: 'executeQueryStream',
-                context: {
-                  'connectionId': connection.id,
-                  'rpc_error_code': RpcErrorCode.resultTooLarge,
-                  'reason': RpcStreamingConstants.backpressureOverflowReason,
-                },
-              ),
-            );
-          }
-          if (activeStream.cancelReason == StreamingCancelReason.socketDisconnect) {
-            app_log.AppLogger.info(
-              'resilience: stream_cancelled_on_disconnect connection_id=${connection.id}',
-            );
-            return Failure(
-              OdbcFailureMapper.mapStreamingError(
-                StateError('stream_cancelled_on_disconnect'),
-                operation: 'executeQueryStream',
-                context: {
-                  'connectionId': connection.id,
-                  'reason': OdbcContextConstants.socketDisconnectReason,
-                },
-              ),
-            );
-          }
-          return Failure(
-            OdbcFailureMapper.mapStreamingError(
-              StateError('stream_cancelled'),
-              operation: 'executeQueryStream',
-              context: {'connectionId': connection.id},
-              cancelledByUser: true,
-            ),
+
+          await chunkResult.fold(
+            (queryResult) async {
+              await emitMappedRowMajorChunks(
+                columns: queryResult.columns,
+                rows: queryResult.rows,
+                fetchSize: nativeStreamingOptions.fetchSize,
+                onChunk: onChunk,
+                isCancelRequested: () => activeStream.isCancelRequested,
+              );
+            },
+            (error) {
+              throw error;
+            },
           );
         }
-
-        await chunkResult.fold(
-          (columnarResult) async {
-            await OdbcColumnarStreamChunkEmitter.emit(
-              result: columnarResult,
-              fetchSize: nativeStreamingOptions.fetchSize,
-              onChunk: onChunk,
-              onWireChunk: emitColumnarWire ? onWireChunk : null,
-              includeColumnarWire: emitColumnarWire,
-              wireOnly: skipRowMaterialization,
-              isCancelRequested: () => activeStream.isCancelRequested,
-            );
-          },
-          (error) {
-            throw error;
-          },
+      } else {
+        final queryStream = _openColumnarStreamingQueryStream(
+          connectionId: connection.id,
+          query: query,
+          nativeStreamingOptions: nativeStreamingOptions,
+          parameters: parameters,
         );
+        await for (final chunkResult in queryStream) {
+          nativeChunkCount++;
+          final shouldStop = await _handleStreamingChunkCancellation(
+            activeStream: activeStream,
+            connectionId: connection.id,
+            cancellationToken: cancellationToken,
+            cancellationReasonProvider: cancellationReasonProvider,
+          );
+          if (shouldStop != null) {
+            return shouldStop;
+          }
+
+          await chunkResult.fold(
+            (columnarResult) async {
+              await OdbcColumnarStreamChunkEmitter.emit(
+                result: columnarResult,
+                fetchSize: nativeStreamingOptions.fetchSize,
+                onChunk: onChunk,
+                onWireChunk: emitColumnarWire ? onWireChunk : null,
+                includeColumnarWire: emitColumnarWire,
+                wireOnly: skipRowMaterialization,
+                isCancelRequested: () => activeStream.isCancelRequested,
+              );
+            },
+            (error) {
+              throw error;
+            },
+          );
+        }
       }
 
       return const Success(unit);
@@ -767,7 +767,7 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     _metrics?.recordStreamingSingleChunkPath();
   }
 
-  Stream<Result<TypedColumnarResult>> _openStreamingQueryStream({
+  Stream<Result<TypedColumnarResult>> _openColumnarStreamingQueryStream({
     required String connectionId,
     required String query,
     required OdbcStreamingNativeOptions nativeStreamingOptions,
@@ -793,6 +793,72 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
       nativeConnectionId,
       query,
       nativeStreamingOptions,
+    );
+  }
+
+  Stream<Result<QueryResult>> _openRowMajorStreamingQueryStream({
+    required String connectionId,
+    required String query,
+    Map<String, dynamic>? parameters,
+  }) {
+    if (parameters != null && parameters.isNotEmpty) {
+      return _service.streamQueryNamed(connectionId, query, parameters);
+    }
+    return _service.streamQuery(connectionId, query);
+  }
+
+  Future<Result<void>?> _handleStreamingChunkCancellation({
+    required _ActiveStreamingConnection activeStream,
+    required String connectionId,
+    CancellationToken? cancellationToken,
+    StreamingCancelReason? Function()? cancellationReasonProvider,
+  }) async {
+    if ((cancellationToken?.isCancelled ?? false) && !activeStream.isCancelRequested) {
+      activeStream.isCancelRequested = true;
+      activeStream.cancelReason = cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect;
+    }
+    if (!activeStream.isCancelRequested) {
+      return null;
+    }
+    if (activeStream.cancelReason == StreamingCancelReason.playgroundRowCap) {
+      return const Success(unit);
+    }
+    if (activeStream.cancelReason == StreamingCancelReason.backpressureOverflow) {
+      _metrics?.recordStreamCancelBackpressure();
+      return Failure(
+        OdbcFailureMapper.mapStreamingError(
+          StateError('stream_cancelled_backpressure_overflow'),
+          operation: 'executeQueryStream',
+          context: {
+            'connectionId': connectionId,
+            'rpc_error_code': RpcErrorCode.resultTooLarge,
+            'reason': RpcStreamingConstants.backpressureOverflowReason,
+          },
+        ),
+      );
+    }
+    if (activeStream.cancelReason == StreamingCancelReason.socketDisconnect) {
+      app_log.AppLogger.info(
+        'resilience: stream_cancelled_on_disconnect connection_id=$connectionId',
+      );
+      return Failure(
+        OdbcFailureMapper.mapStreamingError(
+          StateError('stream_cancelled_on_disconnect'),
+          operation: 'executeQueryStream',
+          context: {
+            'connectionId': connectionId,
+            'reason': OdbcContextConstants.socketDisconnectReason,
+          },
+        ),
+      );
+    }
+    return Failure(
+      OdbcFailureMapper.mapStreamingError(
+        StateError('stream_cancelled'),
+        operation: 'executeQueryStream',
+        context: {'connectionId': connectionId},
+        cancelledByUser: true,
+      ),
     );
   }
 }

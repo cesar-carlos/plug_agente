@@ -168,7 +168,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
     if (_streamingModeEnabled && config != null) {
       await provider.executeQueryWithStreaming(
         _queryController.text,
-        config.connectionString,
+        config,
       );
     } else {
       await provider.executeQuery(

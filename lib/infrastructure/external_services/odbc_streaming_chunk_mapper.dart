@@ -33,6 +33,33 @@ Map<String, dynamic> mapOdbcRowToStreamingMap(
   return mappedRow;
 }
 
+/// Emits row-major ODBC chunks through the shared streaming row-map mapper.
+Future<void> emitMappedRowMajorChunks({
+  required List<String> columns,
+  required List<List<dynamic>> rows,
+  required int fetchSize,
+  required Future<void> Function(List<Map<String, dynamic>> chunk) onChunk,
+  bool Function()? isCancelRequested,
+}) async {
+  final chunks = mapQueryRowsToChunks(
+    OdbcStreamingChunkMapperInput(
+      columns: columns,
+      rows: rows,
+      fetchSize: fetchSize,
+    ),
+  );
+
+  for (final chunk in chunks) {
+    await onChunk(chunk);
+    if (chunks.length > 1) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    if (isCancelRequested?.call() ?? false) {
+      return;
+    }
+  }
+}
+
 /// Maps ODBC row vectors into fetch-sized chunks for the Hub wire format.
 List<List<Map<String, dynamic>>> mapQueryRowsToChunks(
   OdbcStreamingChunkMapperInput input,

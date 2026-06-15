@@ -226,7 +226,9 @@ class PlaygroundProvider extends ChangeNotifier {
     _isConnectionStatusSuccess = null;
     notifyListeners();
 
-    final result = await _queryController.testConnection(config.connectionString);
+    final result = await _queryController.testConnection(
+      config.resolveConnectionString(),
+    );
 
     result.fold(
       (_) {
@@ -249,7 +251,7 @@ class PlaygroundProvider extends ChangeNotifier {
 
   Future<void> executeQueryWithStreaming(
     String query,
-    String connectionString,
+    Config config,
   ) async {
     _clearError();
     _lastExecutionHint = null;
@@ -260,6 +262,7 @@ class PlaygroundProvider extends ChangeNotifier {
       _rejectStreamingValidation(_ui.queryValidationEmpty);
       return;
     }
+    final connectionString = config.resolveConnectionString();
     if (connectionString.trim().isEmpty) {
       _rejectStreamingValidation(
         _ui.queryValidationConnectionStringEmpty,

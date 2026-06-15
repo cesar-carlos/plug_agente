@@ -30,3 +30,9 @@ bool connectionStringBenefitsFromLazyStrings(String connectionString) {
       connectionStringLooksLikeSqlServer(connectionString) ||
       connectionStringLooksLikePostgreSQL(connectionString);
 }
+
+/// Drivers whose columnar wire timestamps are surfaced as text and must not
+/// use the columnar streaming decode path (matches hub SELECT row-major policy).
+bool connectionStringPrefersRowMajorStreaming(String connectionString) {
+  return connectionStringLooksLikeSqlAnywhere(connectionString);
+}

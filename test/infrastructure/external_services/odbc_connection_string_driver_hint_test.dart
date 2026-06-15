@@ -24,6 +24,22 @@ void main() {
     });
   });
 
+  group('connectionStringPrefersRowMajorStreaming', () {
+    test('returns true for SQL Anywhere connection strings', () {
+      expect(
+        connectionStringPrefersRowMajorStreaming('Driver={SQL Anywhere 17};dbf=C:/data.db;'),
+        isTrue,
+      );
+    });
+
+    test('returns false for SQL Server connection strings', () {
+      expect(
+        connectionStringPrefersRowMajorStreaming('Driver={ODBC Driver 17 for SQL Server};Server=localhost;'),
+        isFalse,
+      );
+    });
+  });
+
   group('OdbcRecommendedOptionsMerger.lazyStringsForConnectionString', () {
     test('delegates to connection string hints', () {
       expect(
