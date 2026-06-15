@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = _ROOT
 PUBSPEC = PROJECT_ROOT / "pubspec.yaml"
 SETUP_ISS = PROJECT_ROOT / "installer" / "setup.iss"
 APP_VERSION_DART = PROJECT_ROOT / "lib" / "core" / "constants" / "app_version.g.dart"
