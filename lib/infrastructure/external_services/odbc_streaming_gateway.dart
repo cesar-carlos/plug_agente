@@ -366,10 +366,13 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
     final prefersRowMajorStreaming = connectionStringPrefersRowMajorStreaming(connectionString);
     try {
       if (prefersRowMajorStreaming) {
+        final lazyStrings = connectionStringBenefitsFromLazyStrings(connectionString);
         final queryStream = _openRowMajorStreamingQueryStream(
           connectionId: connection.id,
           query: query,
+          nativeStreamingOptions: nativeStreamingOptions,
           parameters: parameters,
+          lazyStrings: lazyStrings,
         );
         await for (final chunkResult in queryStream) {
           nativeChunkCount++;
@@ -799,11 +802,25 @@ class OdbcStreamingGateway implements IStreamingDatabaseGateway, IStreamingGatew
   Stream<Result<QueryResult>> _openRowMajorStreamingQueryStream({
     required String connectionId,
     required String query,
+    required OdbcStreamingNativeOptions nativeStreamingOptions,
     Map<String, dynamic>? parameters,
+    bool lazyStrings = false,
   }) {
     if (parameters != null && parameters.isNotEmpty) {
       return _service.streamQueryNamed(connectionId, query, parameters);
     }
+
+    final batchedSource = _batchedQuerySource;
+    final nativeConnectionId = int.tryParse(connectionId);
+    if (batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0) {
+      return batchedSource.streamRowMajorQuery(
+        nativeConnectionId,
+        query,
+        nativeStreamingOptions,
+        lazyStrings: lazyStrings,
+      );
+    }
+
     return _service.streamQuery(connectionId, query);
   }
 

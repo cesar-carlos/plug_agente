@@ -107,6 +107,90 @@ void main() {
       expect(receivedChunks[1].length, 1);
     });
 
+    test('should stream SQL Anywhere through forced row-major batched source', () async {
+      final batchedSource = MockBatchedStreamingQuerySource();
+      gateway = OdbcStreamingGateway(
+        mockService,
+        mockSettings,
+        batchedQuerySource: batchedSource,
+        metricsCollector: metrics,
+        cancelDisconnectTimeout: const Duration(milliseconds: 20),
+      );
+
+      final controller = StreamController<Result<QueryResult>>();
+      final receivedChunks = <List<Map<String, dynamic>>>[];
+      const sqlAnywhereConnectionString = 'Driver={SQL Anywhere 17};dbf=C:/data.db;';
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: '42',
+            connectionString: sqlAnywhereConnectionString,
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => batchedSource.streamRowMajorQuery(
+          42,
+          any(),
+          any(),
+          lazyStrings: any(named: 'lazyStrings'),
+        ),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockService.disconnect('42'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final execution = gateway.executeQueryStream(
+        'SELECT * FROM Cliente',
+        sqlAnywhereConnectionString,
+        (c) async => receivedChunks.add(c),
+      );
+
+      controller.add(
+        const Success<QueryResult, Exception>(
+          QueryResult(
+            columns: ['CodCliente', 'Nome', 'DataCadastro'],
+            rows: [
+              [1, 'ACME', '2024-06-15 12:00:00'],
+            ],
+            rowCount: 1,
+          ),
+        ),
+      );
+      await controller.close();
+
+      final result = await execution;
+
+      expect(result.isSuccess(), isTrue);
+      expect(receivedChunks, [
+        [
+          {
+            'CodCliente': 1,
+            'Nome': 'ACME',
+            'DataCadastro': '2024-06-15 12:00:00',
+          },
+        ],
+      ]);
+      verifyNever(() => mockService.streamQuery(any(), any()));
+      verifyNever(() => mockService.streamQueryColumnar(any(), any()));
+      verify(
+        () => batchedSource.streamRowMajorQuery(
+          42,
+          'SELECT * FROM Cliente',
+          any(),
+          lazyStrings: true,
+        ),
+      ).called(1);
+    });
+
     test('should stream SQL Anywhere through row-major path with string dates', () async {
       final controller = StreamController<Result<QueryResult>>();
       final receivedChunks = <List<Map<String, dynamic>>>[];

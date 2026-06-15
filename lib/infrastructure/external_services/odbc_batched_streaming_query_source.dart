@@ -22,6 +22,33 @@ class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySourc
   final bool _isAsync;
 
   @override
+  Stream<Result<QueryResult>> streamRowMajorQuery(
+    int nativeConnectionId,
+    String sql,
+    OdbcStreamingNativeOptions options, {
+    bool lazyStrings = false,
+  }) async* {
+    try {
+      await for (final buffer in _streamRowMajorBatched(
+        nativeConnectionId,
+        sql,
+        options,
+        lazyStrings: lazyStrings,
+      )) {
+        yield Success(
+          QueryResult(
+            columns: buffer.columnNames,
+            rows: buffer.rows,
+            rowCount: buffer.rowCount,
+          ),
+        );
+      }
+    } on Exception catch (error) {
+      yield Failure(error);
+    }
+  }
+
+  @override
   Stream<Result<TypedColumnarResult>> streamColumnarQuery(
     int nativeConnectionId,
     String sql,
@@ -38,6 +65,33 @@ class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySourc
     } on Exception catch (error) {
       yield Failure(error);
     }
+  }
+
+  Stream<ParsedRowBuffer> _streamRowMajorBatched(
+    int nativeConnectionId,
+    String sql,
+    OdbcStreamingNativeOptions options, {
+    required bool lazyStrings,
+  }) {
+    if (_isAsync) {
+      return _asyncNative.streamQueryBatched(
+        nativeConnectionId,
+        sql,
+        fetchSize: options.fetchSize,
+        chunkSize: options.nativeChunkSizeBytes,
+        maxBufferBytes: options.maxResultBufferBytes,
+        resultEncodingWire: ResultEncoding.rowMajor.wireCode,
+        lazyStrings: lazyStrings,
+      );
+    }
+
+    return _syncNative.streamQueryBatched(
+      nativeConnectionId,
+      sql,
+      fetchSize: options.fetchSize,
+      chunkSize: options.nativeChunkSizeBytes,
+      lazyStrings: lazyStrings,
+    );
   }
 
   Stream<TypedColumnarResult> _streamColumnarBatched(

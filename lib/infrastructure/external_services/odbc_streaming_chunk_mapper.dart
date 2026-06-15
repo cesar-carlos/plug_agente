@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:odbc_fast/odbc_fast.dart';
+
 /// Input for [mapQueryRowsToChunks].
 class OdbcStreamingChunkMapperInput {
   const OdbcStreamingChunkMapperInput({
@@ -21,6 +26,29 @@ bool shouldSkipRechunk(int rowCount, int fetchSize) {
   return rowCount > 0 && rowCount <= effectiveStreamingFetchSize(fetchSize);
 }
 
+/// Normalizes one ODBC cell for Hub/playground row-map streaming.
+///
+/// SQL Anywhere may return text timestamps, lazy strings, and binary payloads
+/// that must be materialized before UI or JSON consumers read them.
+Object? normalizeOdbcStreamingCell(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is LazyString) {
+    return value.value;
+  }
+  if (value is DateTime) {
+    return value.toIso8601String();
+  }
+  if (value is Uint8List) {
+    return base64Encode(value);
+  }
+  if (value is List<int>) {
+    return base64Encode(value);
+  }
+  return value;
+}
+
 /// Maps one ODBC row vector into the row-map shape emitted by streaming RPC.
 Map<String, dynamic> mapOdbcRowToStreamingMap(
   List<String> columns,
@@ -28,7 +56,7 @@ Map<String, dynamic> mapOdbcRowToStreamingMap(
 ) {
   final mappedRow = <String, dynamic>{};
   for (var i = 0; i < columns.length; i++) {
-    mappedRow[columns[i]] = row[i];
+    mappedRow[columns[i]] = normalizeOdbcStreamingCell(row[i]);
   }
   return mappedRow;
 }

@@ -27,6 +27,8 @@ abstract final class OdbcContextConstants {
 
   static const String odbcMalformedPayloadReason = 'odbc_malformed_payload';
 
+  static const String streamingCellDecodeFailedReason = 'streaming_cell_decode_failed';
+
   static const String odbcResourceLimitReason = 'odbc_resource_limit';
 
   static const String odbcWorkerBusyConnectReason = 'odbc_worker_busy_connect';

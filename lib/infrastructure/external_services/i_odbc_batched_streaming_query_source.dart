@@ -9,4 +9,15 @@ abstract class IOdbcBatchedStreamingQuerySource {
     String sql,
     OdbcStreamingNativeOptions options,
   );
+
+  /// Row-major batched streaming with an explicit wire encoding override.
+  ///
+  /// SQL Anywhere must use this path so global service columnar defaults do not
+  /// leak into `OdbcService.streamQuery`.
+  Stream<Result<QueryResult>> streamRowMajorQuery(
+    int nativeConnectionId,
+    String sql,
+    OdbcStreamingNativeOptions options, {
+    bool lazyStrings = false,
+  });
 }

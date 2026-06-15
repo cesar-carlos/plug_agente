@@ -274,6 +274,21 @@ void main() {
       expect(failure.context['odbc_error_category'], ErrorCategory.validation.name);
     });
 
+    test('maps TypeError to streaming cell decode failure with actionable message', () {
+      final failure = OdbcFailureMapper.mapStreamingError(
+        TypeError(),
+        operation: 'executeQueryStream',
+        context: const {'streaming': true},
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], OdbcContextConstants.streamingCellDecodeFailedReason);
+      expect(
+        failure.context['user_message'] as String,
+        contains('could not decode one or more values while streaming'),
+      );
+    });
+
     test(
       'maps SQLSTATE 08xxx during execute to connectionFailed query failure',
       () {

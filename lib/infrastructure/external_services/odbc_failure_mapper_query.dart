@@ -61,6 +61,21 @@ class OdbcFailureMapperQuery {
       );
     }
 
+    if (error is TypeError) {
+      return QueryExecutionFailure.withContext(
+        message: detail,
+        cause: error,
+        context: {
+          ...baseContext,
+          'reason': OdbcContextConstants.streamingCellDecodeFailedReason,
+          'user_message':
+              'The agent could not decode one or more values while streaming the query result. '
+              'This often happens when a SQL Anywhere column type is incompatible with the active '
+              'streaming encoding. Retry without streaming or contact support with the technical log.',
+        },
+      );
+    }
+
     if (error is RollbackFailedError) {
       return QueryExecutionFailure.withContext(
         message: 'Failed to roll back transaction',
