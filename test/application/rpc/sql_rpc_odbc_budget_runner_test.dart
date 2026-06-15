@@ -260,6 +260,7 @@ void main() {
           any(),
           database: any(named: 'database'),
           timeout: any(named: 'timeout'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
         ),
       ).thenAnswer((invocation) async {
         const sym = Symbol('timeout');
@@ -293,6 +294,7 @@ void main() {
           any(),
           database: any(named: 'database'),
           timeout: any(named: 'timeout'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
         ),
       ).thenThrow(TimeoutException('odbc timeout'));
 

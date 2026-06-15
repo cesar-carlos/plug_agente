@@ -4,6 +4,7 @@ import 'package:plug_agente/application/ports/i_playground_db_connection_gateway
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -21,6 +22,21 @@ class MockExecuteStreamingQuery extends Mock implements ExecuteStreamingQuery {}
 
 class MockPlaygroundDbConnectionGateway extends Mock implements IPlaygroundDbConnectionGateway {}
 
+void _stubExecutePlaygroundQuery(
+  MockExecutePlaygroundQuery mock, {
+  required Future<rd.Result<QueryResponse>> Function(Invocation invocation) answer,
+}) {
+  when(
+    () => mock(
+      any(),
+      configId: any(named: 'configId'),
+      pagination: any(named: 'pagination'),
+      sqlHandlingMode: any(named: 'sqlHandlingMode'),
+      cancellationToken: any(named: 'cancellationToken'),
+    ),
+  ).thenAnswer(answer);
+}
+
 void main() {
   group('PlaygroundProvider', () {
     late MockExecutePlaygroundQuery mockExecutePlaygroundQuery;
@@ -34,6 +50,7 @@ void main() {
         const QueryPaginationRequest(page: 1, pageSize: 50),
       );
       registerFallbackValue(SqlHandlingMode.managed);
+      registerFallbackValue(CancellationToken());
     });
 
     setUp(() {
@@ -59,8 +76,10 @@ void main() {
         verifyNever(
           () => mockExecutePlaygroundQuery(
             any(),
+            configId: any(named: 'configId'),
             pagination: any(named: 'pagination'),
             sqlHandlingMode: any(named: 'sqlHandlingMode'),
+            cancellationToken: any(named: 'cancellationToken'),
           ),
         );
         expect(provider.error, PlaygroundUiStrings.english.queryValidationEmpty);
@@ -132,12 +151,9 @@ void main() {
       () async {
         provider.setQuery('SELECT * FROM users');
 
-        when(
-          () => mockExecutePlaygroundQuery(
-            any(),
-            pagination: any(named: 'pagination'),
-          ),
-        ).thenAnswer((_) async {
+        _stubExecutePlaygroundQuery(
+          mockExecutePlaygroundQuery,
+          answer: (_) async {
           return rd.Success(
             QueryResponse(
               id: 'resp-1',
@@ -158,7 +174,8 @@ void main() {
               ),
             ),
           );
-        });
+        },
+        );
 
         await provider.executeQuery(resetPagination: true);
 
@@ -173,12 +190,9 @@ void main() {
     test('should move to next page using current pagination state', () async {
       provider.setQuery('SELECT * FROM users');
 
-      when(
-        () => mockExecutePlaygroundQuery(
-          any(),
-          pagination: any(named: 'pagination'),
-        ),
-      ).thenAnswer((invocation) async {
+      _stubExecutePlaygroundQuery(
+        mockExecutePlaygroundQuery,
+        answer: (invocation) async {
         final pagination = invocation.namedArguments[#pagination] as QueryPaginationRequest;
         return rd.Success(
           QueryResponse(
@@ -199,7 +213,8 @@ void main() {
             ),
           ),
         );
-      });
+      },
+      );
 
       await provider.executeQuery(resetPagination: true);
       await provider.goToNextPage();
@@ -212,12 +227,9 @@ void main() {
     test('should expose and switch between multiple result sets', () async {
       provider.setQuery('SELECT 1; SELECT 2;');
 
-      when(
-        () => mockExecutePlaygroundQuery(
-          any(),
-          pagination: any(named: 'pagination'),
-        ),
-      ).thenAnswer((_) async {
+      _stubExecutePlaygroundQuery(
+        mockExecutePlaygroundQuery,
+        answer: (_) async {
         return rd.Success(
           QueryResponse(
             id: 'resp-1',
@@ -252,7 +264,8 @@ void main() {
             ],
           ),
         );
-      });
+      },
+      );
 
       await provider.executeQuery(resetPagination: true);
 
@@ -283,13 +296,9 @@ void main() {
       );
       p.setQuery('SELECT 1');
 
-      when(
-        () => mockExecutePlaygroundQuery(
-          any(),
-          pagination: any(named: 'pagination'),
-        ),
-      ).thenAnswer(
-        (_) async => rd.Success(
+      _stubExecutePlaygroundQuery(
+        mockExecutePlaygroundQuery,
+        answer: (_) async => rd.Success(
           QueryResponse(
             id: 'resp-1',
             requestId: 'req-1',
@@ -326,13 +335,9 @@ void main() {
         );
         p.setQuery('SELECT 1');
 
-        when(
-          () => mockExecutePlaygroundQuery(
-            any(),
-            pagination: any(named: 'pagination'),
-          ),
-        ).thenAnswer(
-          (_) async => rd.Failure(
+        _stubExecutePlaygroundQuery(
+          mockExecutePlaygroundQuery,
+          answer: (_) async => rd.Failure(
             ConnectionFailure.withContext(
               message: 'ODBC unreachable',
               context: const {'operation': 'test'},
@@ -349,13 +354,9 @@ void main() {
     test('should expose canRetry true for transient execute failures', () async {
       provider.setQuery('SELECT 1');
 
-      when(
-        () => mockExecutePlaygroundQuery(
-          any(),
-          pagination: any(named: 'pagination'),
-        ),
-      ).thenAnswer(
-        (_) async => rd.Failure(
+      _stubExecutePlaygroundQuery(
+        mockExecutePlaygroundQuery,
+        answer: (_) async => rd.Failure(
           ConnectionFailure.withContext(
             message: 'Database unreachable',
             context: const {'connectionFailed': true},
@@ -372,13 +373,9 @@ void main() {
     test('should expose canRetry false for validation failures', () async {
       provider.setQuery('SELECT 1');
 
-      when(
-        () => mockExecutePlaygroundQuery(
-          any(),
-          pagination: any(named: 'pagination'),
-        ),
-      ).thenAnswer(
-        (_) async => rd.Failure(
+      _stubExecutePlaygroundQuery(
+        mockExecutePlaygroundQuery,
+        answer: (_) async => rd.Failure(
           ValidationFailure('Syntax error near FROM'),
         ),
       );
@@ -394,13 +391,9 @@ void main() {
       () async {
         provider.setQuery('SELECT 1');
 
-        when(
-          () => mockExecutePlaygroundQuery(
-            any(),
-            pagination: any(named: 'pagination'),
-          ),
-        ).thenAnswer(
-          (_) async => rd.Success(
+        _stubExecutePlaygroundQuery(
+          mockExecutePlaygroundQuery,
+          answer: (_) async => rd.Success(
             QueryResponse(
               id: 'resp-err',
               requestId: 'req-err',

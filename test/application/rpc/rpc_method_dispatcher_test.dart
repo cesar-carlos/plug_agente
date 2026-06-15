@@ -51,6 +51,14 @@ class MockStreamingDatabaseGateway extends Mock implements IStreamingDatabaseGat
 
 class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
 
+void _stubAgentConfigRepository(
+  MockAgentConfigRepository repository,
+  Config config,
+) {
+  when(() => repository.getCurrentConfig()).thenAnswer((_) async => Success(config));
+  when(() => repository.getCurrentConfigMetadata()).thenAnswer((_) async => Success(config));
+}
+
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
 class MockOdbcNativeMetricsService extends Mock implements OdbcNativeMetricsService {}
@@ -256,6 +264,7 @@ void main() {
           any(),
           database: any(named: 'database'),
           timeout: any(named: 'timeout'),
+          sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
         ),
       ).thenAnswer((invocation) async {
         final request = invocation.positionalArguments[0] as BulkInsertRequest;
@@ -430,7 +439,7 @@ void main() {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
-      when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
+      _stubAgentConfigRepository(mockConfigRepo, config);
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
@@ -724,9 +733,7 @@ void main() {
         createdAt: DateTime.utc(2026, 4, 8, 9),
         updatedAt: configUpdatedAt,
       );
-      when(
-        mockConfigRepo.getCurrentConfigMetadata,
-      ).thenAnswer((_) async => Success(config));
+      _stubAgentConfigRepository(mockConfigRepo, config);
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
@@ -809,9 +816,7 @@ void main() {
         createdAt: DateTime.utc(2026, 4, 8, 9),
         updatedAt: DateTime.utc(2026, 4, 8, 12),
       );
-      when(
-        mockConfigRepo.getCurrentConfigMetadata,
-      ).thenAnswer((_) async => Success(config));
+      _stubAgentConfigRepository(mockConfigRepo, config);
 
       dispatcher = RpcMethodDispatcher(
         databaseGateway: mockGateway,
@@ -1809,9 +1814,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(
-          mockConfigRepo.getCurrentConfigMetadata,
-        ).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
 
         when(
           () => mockStreamingGateway.executeQueryStream(
@@ -1909,9 +1912,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(
-          mockConfigRepo.getCurrentConfigMetadata,
-        ).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
         when(
           () => mockGateway.executeQuery(
             any(),
@@ -2017,9 +2018,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(
-          mockConfigRepo.getCurrentConfigMetadata,
-        ).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
 
         Duration? capturedTimeout;
         when(
@@ -2098,7 +2097,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
         when(
           () => mockStreamingGateway.executeQueryStream(
             any(),
@@ -2296,7 +2295,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
         final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
@@ -2376,7 +2375,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
         final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
@@ -2611,9 +2610,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(
-          mockConfigRepo.getCurrentConfigMetadata,
-        ).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
 
         when(
           () => mockStreamingGateway.executeQueryStream(
@@ -2699,9 +2696,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(
-          mockConfigRepo.getCurrentConfigMetadata,
-        ).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
 
         dispatcher = RpcMethodDispatcher(
           databaseGateway: mockGateway,
@@ -2927,6 +2922,7 @@ void main() {
                   captureAny(),
                   database: any(named: 'database'),
                   timeout: any(named: 'timeout'),
+                  sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
                 ),
               ).captured.single
               as BulkInsertRequest;
@@ -3792,7 +3788,7 @@ void main() {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        when(mockConfigRepo.getCurrentConfigMetadata).thenAnswer((_) async => Success(config));
+        _stubAgentConfigRepository(mockConfigRepo, config);
         when(
           () => mockStreamingGateway.executeQueryStream(
             any(),
@@ -4176,6 +4172,7 @@ void main() {
             any(),
             database: any(named: 'database'),
             timeout: any(named: 'timeout'),
+            sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
           ),
         ).called(1);
       },
@@ -4240,6 +4237,7 @@ void main() {
             any(),
             database: any(named: 'database'),
             timeout: any(named: 'timeout'),
+            sourceRpcRequestId: any(named: 'sourceRpcRequestId'),
           ),
         );
       },
@@ -4441,9 +4439,7 @@ void main() {
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );
-          when(
-            mockConfigRepo.getCurrentConfigMetadata,
-          ).thenAnswer((_) async => Success(config));
+          _stubAgentConfigRepository(mockConfigRepo, config);
 
           final completer = Completer<Result<void>>();
           when(
@@ -4540,9 +4536,7 @@ void main() {
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );
-          when(
-            mockConfigRepo.getCurrentConfigMetadata,
-          ).thenAnswer((_) async => Success(config));
+          _stubAgentConfigRepository(mockConfigRepo, config);
 
           final completer = Completer<Result<void>>();
           when(
@@ -4646,9 +4640,7 @@ void main() {
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );
-          when(
-            mockConfigRepo.getCurrentConfigMetadata,
-          ).thenAnswer((_) async => Success(config));
+          _stubAgentConfigRepository(mockConfigRepo, config);
 
           final completer = Completer<Result<void>>();
           when(
