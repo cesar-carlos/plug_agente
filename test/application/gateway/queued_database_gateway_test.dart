@@ -2,22 +2,72 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/gateway/odbc_connection_test_limiter.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
+import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
 import 'package:result_dart/result_dart.dart' as res;
 
 class _MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
+class _MockInFlightAbortPort extends Mock implements ISqlInFlightExecutionAbortPort {}
+
 class _FakeQueryRequest extends Fake implements QueryRequest {}
 
 class _FakeSqlCommand extends Fake implements SqlCommand {}
+
+class _RecordingQueueMetrics implements SqlExecutionQueueMetricsCollector {
+  int queueTimeoutCount = 0;
+  int queueTimeoutAfterWorkerStartedCount = 0;
+
+  @override
+  void recordQueueAdded(int currentSize) {}
+
+  @override
+  void recordQueueRejection() {}
+
+  @override
+  void recordQueueSaturation({
+    required int thresholdPercent,
+    required int currentSize,
+    required int maxSize,
+  }) {}
+
+  @override
+  void recordQueueSizeChanged(int currentSize) {}
+
+  @override
+  void recordQueueTimeout() {
+    queueTimeoutCount++;
+  }
+
+  @override
+  void recordQueueTimeoutAfterWorkerStarted() {
+    queueTimeoutAfterWorkerStartedCount++;
+  }
+
+  @override
+  void recordQueueWaitTime(Duration waitTime) {}
+
+  @override
+  void recordStreamingWorkerHoldTime(Duration holdTime) {}
+
+  @override
+  void recordWorkerCompleted(int activeCount) {}
+
+  @override
+  void recordWorkerStarted(int activeCount) {}
+}
 
 void main() {
   setUpAll(() {
@@ -119,7 +169,7 @@ void main() {
       ).called(1);
     });
 
-    test('should bypass queue for testConnection', () async {
+    test('should delegate testConnection without using the SQL queue', () async {
       final delegate = _MockDatabaseGateway();
       final queue = SqlExecutionQueue(
         maxQueueSize: 10,
@@ -137,6 +187,39 @@ void main() {
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow(), isTrue);
       verify(() => delegate.testConnection('DSN=test')).called(1);
+    });
+
+    test('should rate-limit concurrent testConnection calls', () async {
+      final delegate = _MockDatabaseGateway();
+      final blocker = Completer<void>();
+      when(() => delegate.testConnection(any())).thenAnswer((_) async {
+        await blocker.future;
+        return const res.Success(true);
+      });
+
+      final gateway = QueuedDatabaseGateway(
+        delegate: delegate,
+        queue: SqlExecutionQueue(maxQueueSize: 4, maxConcurrentWorkers: 1),
+        connectionTestLimiter: OdbcConnectionTestLimiter(
+          maxConcurrent: 1,
+          acquireTimeout: const Duration(milliseconds: 30),
+          semaphore: PoolSemaphore(1),
+        ),
+      );
+
+      unawaited(gateway.testConnection('DSN=first'));
+      await Future<void>.delayed(Duration.zero);
+
+      final result = await gateway.testConnection('DSN=second');
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull();
+      expect(failure, isA<ConfigurationFailure>());
+      if (failure is ConfigurationFailure) {
+        expect(failure.context['reason'], OdbcContextConstants.connectionTestRateLimitedReason);
+      }
+
+      blocker.complete();
     });
 
     test('should expose queue metrics and limits', () {
@@ -428,6 +511,75 @@ void main() {
         firstBlocker.complete();
       },
     );
+
+    test(
+      'should record queue timeout metrics when slow delegate blocks enqueue',
+      () async {
+        final delegate = _MockDatabaseGateway();
+        final abortPort = _MockInFlightAbortPort();
+        final metrics = _RecordingQueueMetrics();
+        final queue = SqlExecutionQueue(
+          maxQueueSize: 4,
+          maxConcurrentWorkers: 1,
+          defaultEnqueueTimeout: const Duration(milliseconds: 40),
+          inFlightAbortPort: abortPort,
+          metricsCollector: metrics,
+        );
+        final gateway = QueuedDatabaseGateway(
+          delegate: delegate,
+          queue: queue,
+        );
+        final firstBlocker = Completer<void>();
+
+        when(
+          () => delegate.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+            database: any(named: 'database'),
+            cancellationToken: any(named: 'cancellationToken'),
+          ),
+        ).thenAnswer((_) async {
+          await firstBlocker.future;
+          return res.Success(
+            QueryResponse(
+              id: 'response-1',
+              requestId: 'blocker',
+              agentId: 'agent-1',
+              data: [],
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+
+        unawaited(
+          gateway.executeQuery(
+            QueryRequest(
+              id: 'blocker',
+              agentId: 'agent-1',
+              query: 'SELECT 1',
+              timestamp: DateTime.now(),
+            ),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+
+        final result = await gateway.executeQuery(
+          QueryRequest(
+            id: 'ghost-race',
+            agentId: 'agent-1',
+            query: 'SELECT 2',
+            timestamp: DateTime.now(),
+          ),
+        );
+
+        expect(result.isError(), isTrue);
+        expect(metrics.queueTimeoutCount, greaterThanOrEqualTo(1));
+        verifyNever(() => abortPort.abortInFlightExecution(any()));
+
+        firstBlocker.complete();
+      },
+    );
+
     test('should signal cooperative cancel for batch when enqueue times out', () async {
       final delegate = _MockDatabaseGateway();
       final queue = SqlExecutionQueue(

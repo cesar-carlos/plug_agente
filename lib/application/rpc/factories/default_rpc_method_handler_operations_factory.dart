@@ -9,6 +9,7 @@ import 'package:plug_agente/application/rpc/pass_through_streaming_named_paramet
 import 'package:plug_agente/application/rpc/rpc_idempotency_coordinator.dart';
 import 'package:plug_agente/application/rpc/rpc_method_handler_idempotency_orchestrator.dart';
 import 'package:plug_agente/application/rpc/rpc_method_handler_operations.dart';
+import 'package:plug_agente/application/rpc/sql_streaming_connection_string_cache.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/health_service.dart';
@@ -25,6 +26,7 @@ import 'package:plug_agente/application/use_cases/slice_agent_action_captured_ou
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
+import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
@@ -67,6 +69,8 @@ class DefaultRpcMethodHandlerOperationsFactory {
     required FeatureFlags featureFlags,
     ActiveConfigResolver? activeConfigResolver,
     IAgentConfigRepository? configRepository,
+    IActiveConfigQueryCache? configQueryCache,
+    SqlStreamingConnectionStringCache? streamingConnectionStringCache,
     IIdempotencyStore? idempotencyStore,
     IAuthorizationMetricsCollector? authMetrics,
     IDeprecationMetricsCollector? deprecationMetrics,
@@ -119,6 +123,8 @@ class DefaultRpcMethodHandlerOperationsFactory {
         support: orchestrator.buildSqlSupport(),
         activeConfigResolver: activeConfigResolver,
         configRepository: configRepository,
+        configQueryCache: configQueryCache,
+        streamingConnectionStringCache: streamingConnectionStringCache,
         authMetrics: authMetrics,
         deprecationMetrics: deprecationMetrics,
         dispatchMetrics: dispatchMetrics,

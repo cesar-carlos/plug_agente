@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/rpc/sql_execute_materialized_result_policy.dart';
 import 'package:plug_agente/application/validation/query_validation_messages.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
@@ -16,11 +17,13 @@ class ExecutePlaygroundQuery {
   ExecutePlaygroundQuery(
     this._databaseGateway,
     this._queryConfigSource,
-    this._uuid,
-  );
+    this._uuid, {
+    SqlExecuteMaterializedResultPolicy materializedPolicy = const SqlExecuteMaterializedResultPolicy(),
+  }) : _materializedPolicy = materializedPolicy;
   final IDatabaseGateway _databaseGateway;
   final IQueryConfigSource _queryConfigSource;
   final Uuid _uuid;
+  final SqlExecuteMaterializedResultPolicy _materializedPolicy;
 
   Future<Result<QueryResponse>> call(
     String query, {
@@ -53,6 +56,15 @@ class ExecutePlaygroundQuery {
 
         return configResult.fold(
           (config) async {
+            final materializedGuard = _materializedPolicy.rejectIfPlaygroundMaterializedUnsafe(
+              trimmedQuery: trimmedQuery,
+              expectMultipleResults: expectMultipleResults,
+              pageSize: resolvedPagination?.pageSize,
+            );
+            if (materializedGuard.isError()) {
+              return Failure(materializedGuard.exceptionOrNull()!);
+            }
+
             final request = QueryRequest(
               id: _uuid.v4(),
               agentId: config.agentId,

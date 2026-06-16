@@ -3,6 +3,15 @@ part of 'plug_dependency_registrar.dart';
 void _registerActionsInfrastructure(GetIt getIt) {
   getIt
     ..registerLazySingleton(
+      () => ActiveConfigMetadataCache(
+        activeConfigResolverProvider: () => getIt<ActiveConfigResolver>(),
+      ),
+    )
+    ..registerLazySingleton<IActiveConfigQueryCache>(
+      getIt.get<ActiveConfigMetadataCache>,
+    )
+    ..registerLazySingleton(SqlStreamingConnectionStringCache.new)
+    ..registerLazySingleton(
       () => ActiveConfigResolver(
         getIt<IAgentConfigRepository>(),
         getIt<IAppSettingsStore>(),
@@ -10,6 +19,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
             getIt.isRegistered<IOdbcCircuitBreakerReset>()
                 ? getIt<IOdbcCircuitBreakerReset>()
                 : null,
+        metadataCache: getIt<ActiveConfigMetadataCache>(),
       ),
     )
     ..registerLazySingleton(ProtocolNegotiator.new)

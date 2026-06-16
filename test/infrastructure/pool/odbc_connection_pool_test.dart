@@ -669,5 +669,14 @@ void main() {
       final activeAfter = await pool.getActiveCount();
       expect(activeAfter.getOrNull(), 0);
     });
+
+    test('getHealthDiagnostics exposes strategy and circuit fields', () {
+      final diagnostics = pool.getHealthDiagnostics();
+
+      expect(diagnostics['strategy'], 'lease');
+      expect(diagnostics['effective_strategy'], 'lease');
+      expect(diagnostics['native_circuit_open'], isFalse);
+      expect(diagnostics['native_skip_reason'], isNull);
+    });
   });
 }

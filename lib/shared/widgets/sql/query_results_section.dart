@@ -114,6 +114,7 @@ class QueryResultsSection extends StatelessWidget {
               child: QueryResultDataGrid(
                 data: results,
                 columnMetadata: columnMetadata,
+                dataRevision: rowsProcessed,
               ),
             ),
           ),

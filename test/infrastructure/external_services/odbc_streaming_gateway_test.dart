@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/infrastructure/external_services/i_odbc_batched_streaming_query_source.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_native_options.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_session_cache.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
@@ -1061,6 +1062,144 @@ void main() {
 
       expect(metrics.streamingBatchedPathCount, 1);
       expect(metrics.streamingSingleChunkPathCount, 0);
+    });
+
+    test('should reuse cached streaming connection on back-to-back SQL Server streams', () async {
+      final sessionCache = OdbcStreamingSessionCache(
+        ttl: const Duration(seconds: 30),
+      );
+      gateway = OdbcStreamingGateway(
+        mockService,
+        mockSettings,
+        metricsCollector: metrics,
+        cancelDisconnectTimeout: const Duration(milliseconds: 20),
+        streamingSessionCache: sessionCache,
+      );
+
+      const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;';
+      var connectCount = 0;
+      var disconnectCount = 0;
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async {
+          connectCount++;
+          return Success(
+            Connection(
+              id: 'conn-reuse',
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        },
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQueryColumnar('conn-reuse', any()),
+      ).thenAnswer((_) async* {
+        yield _columnarSuccess(
+          const QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(
+        () => mockService.disconnect('conn-reuse'),
+      ).thenAnswer((_) async {
+        disconnectCount++;
+        return const Success(unit);
+      });
+
+      final first = await gateway.executeQueryStream(
+        'SELECT 1',
+        connectionString,
+        (_) async {},
+      );
+      final second = await gateway.executeQueryStream(
+        'SELECT 2',
+        connectionString,
+        (_) async {},
+      );
+
+      expect(first.isSuccess(), isTrue);
+      expect(second.isSuccess(), isTrue);
+      expect(connectCount, 1);
+      expect(disconnectCount, 0);
+      expect(sessionCache.entryCount, 1);
+    });
+
+    test('invalidateAfterWorkerRecovery drains cached streaming sessions without leaking handles', () async {
+      var disconnectCount = 0;
+      final sessionCache = OdbcStreamingSessionCache(
+        ttl: const Duration(seconds: 30),
+        disconnectConnection: (connectionId) async {
+          disconnectCount++;
+          return mockService.disconnect(connectionId);
+        },
+      );
+      gateway = OdbcStreamingGateway(
+        mockService,
+        mockSettings,
+        metricsCollector: metrics,
+        cancelDisconnectTimeout: const Duration(milliseconds: 20),
+        streamingSessionCache: sessionCache,
+      );
+
+      const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;';
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-shutdown',
+            connectionString: connectionString,
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQueryColumnar('conn-shutdown', any()),
+      ).thenAnswer((_) async* {
+        yield _columnarSuccess(
+          const QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(
+        () => mockService.disconnect('conn-shutdown'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final streamResult = await gateway.executeQueryStream(
+        'SELECT 1',
+        connectionString,
+        (_) async {},
+      );
+
+      expect(streamResult.isSuccess(), isTrue);
+      expect(sessionCache.entryCount, 1);
+
+      await gateway.invalidateAfterWorkerRecovery();
+
+      expect(sessionCache.entryCount, 0);
+      expect(disconnectCount, 1);
     });
   });
 }

@@ -42,6 +42,10 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   // previous in-flight future; only one flush body runs at a time.
   Future<void> _flushInFlight = Future<void>.value();
 
+  // Serializes queue admission (overflow check + enqueue) without waiting for
+  // the full wire flush, so producers can pipeline chunk submission.
+  Future<void> _admissionChain = Future<void>.value();
+
   /// Whether the emitter has stopped trying to deliver chunks because a
   /// previous emit threw. Exposed for diagnostics and tests.
   bool get isFaulted => _isFaulted;
@@ -120,15 +124,25 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
       }
       _registered = true;
     }
-    await _flushInFlight;
-    if (_isFaulted) {
-      return false;
+
+    final previousAdmission = _admissionChain;
+    final admissionGate = Completer<void>();
+    _admissionChain = admissionGate.future;
+    await previousAdmission;
+
+    try {
+      if (_isFaulted) {
+        return false;
+      }
+      if (_chunkQueue.length >= _maxQueueSize && _sendCredit == 0) {
+        return false;
+      }
+      _chunkQueue.add(chunk);
+      _scheduleFlush();
+    } finally {
+      admissionGate.complete();
     }
-    if (_chunkQueue.length >= _maxQueueSize && _sendCredit == 0) {
-      return false;
-    }
-    _chunkQueue.add(chunk);
-    _scheduleFlush();
+
     await _flushInFlight;
     return !_isFaulted;
   }

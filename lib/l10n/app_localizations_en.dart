@@ -4042,6 +4042,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String get odbcHintPoolSize => '8';
 
   @override
+  String get odbcTextPoolSizeLimiterHelp =>
+      'This value also caps concurrent direct ODBC connections (streaming and batch fallback via DirectOdbcConnectionLimiter).';
+
+  @override
+  String get odbcTextPoolRuntimeDiagnosticsTitle => 'Runtime pool diagnostics (read-only):';
+
+  @override
+  String odbcTextPoolEffectiveStrategy(String strategy) {
+    return 'Effective strategy: $strategy';
+  }
+
+  @override
+  String get odbcTextPoolAdaptiveModeEnabled => 'Adaptive experimental pooling: enabled';
+
+  @override
+  String get odbcTextPoolAdaptiveModeDisabled => 'Adaptive experimental pooling: disabled';
+
+  @override
+  String get odbcTextPoolNativeEligibleYes => 'Native pool eligible for current driver: yes';
+
+  @override
+  String get odbcTextPoolNativeEligibleNo => 'Native pool eligible for current driver: no';
+
+  @override
+  String get odbcTextPoolNativeCircuitOpen => 'Native circuit breaker is open; lease fallback is active.';
+
+  @override
+  String odbcTextPoolNativeSkipReason(String reason) {
+    return 'Native skip reason: $reason';
+  }
+
+  @override
   String get odbcBlockTimeouts => 'Timeouts';
 
   @override

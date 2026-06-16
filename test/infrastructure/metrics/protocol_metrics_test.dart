@@ -126,6 +126,27 @@ void main() {
       expect(smallCollector.metrics.last.originalSize, equals(4));
     });
 
+    test('samples rpc:chunk metrics at configured rate', () {
+      final sampledCollector = ProtocolMetricsCollector(rpcChunkSampleRate: 3);
+      for (var i = 0; i < 6; i++) {
+        sampledCollector.record(
+          ProtocolMetrics(
+            timestamp: DateTime.now(),
+            protocol: 'jsonrpc-v2',
+            encoding: 'json',
+            compression: 'none',
+            originalSize: i,
+            compressedSize: i,
+            direction: 'send',
+            eventName: 'rpc:chunk',
+          ),
+        );
+      }
+
+      expect(sampledCollector.metrics.length, equals(2));
+      expect(sampledCollector.metrics.map((metric) => metric.originalSize), equals(<int>[2, 5]));
+    });
+
     test('should return summary grouped by event', () {
       collector.record(
         ProtocolMetrics(

@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
-import 'package:odbc_fast/odbc_fast.dart' as odbc show DatabaseType;
-import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
@@ -15,6 +13,7 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_circuit_breaker.dart';
@@ -24,10 +23,11 @@ import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
+import 'package:plug_agente/infrastructure/cache/odbc_connection_string_ttl_cache.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
-import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/config/odbc_driver_database_type_mapper.dart';
 import 'package:plug_agente/infrastructure/config/odbc_usage_profile_config.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
@@ -46,6 +46,7 @@ import 'package:plug_agente/infrastructure/external_services/odbc_query_executio
 import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_read_only_batch_parallel_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_runtime_lifecycle.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/adaptive_odbc_connection_pool.dart';
@@ -75,7 +76,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     DirectOdbcConnectionLimiter? directConnectionLimiter,
     ISqlInvestigationCollector? sqlInvestigation,
     OdbcInFlightExecutionRegistry? inFlightExecutionRegistry,
+    OdbcRuntimeLifecycle? runtimeLifecycle,
+    IActiveConfigQueryCache? configQueryCache,
+    OdbcConnectionStringTtlCache? connectionStringCache,
   }) : _inFlightRegistry = inFlightExecutionRegistry ?? OdbcInFlightExecutionRegistry(),
+       _runtimeLifecycle = runtimeLifecycle ?? OdbcRuntimeLifecycle(_service),
+       _configQueryCache = configQueryCache,
+       _connectionStringCache = connectionStringCache ?? OdbcConnectionStringTtlCache(),
        _retryCoordinator = OdbcGatewayRetryCoordinator(retryManager),
        _investigationRecorder = OdbcGatewayInvestigationRecorder(
          featureFlags: featureFlags,
@@ -170,7 +177,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       ensureInitialized: _ensureInitialized,
       resolveActiveConfig: _resolveActiveConfig,
       buildDatabaseConfig: _buildDatabaseConfig,
-      resolveConnectionString: _resolveConnectionString,
+      resolveConnectionString: _resolveCachedConnectionString,
       recordInfrastructureFailure: _investigationRecorder.recordBatchInfrastructureFailure,
       recordExecutionFailure: _investigationRecorder.recordExecutionFailure,
     );
@@ -216,8 +223,9 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
   late final OdbcNonQueryExecutionOrchestrator _nonQueryExecutionOrchestrator;
   final Uuid _uuid;
   final PoolSemaphore _readOnlyBatchParallelSemaphore;
-  bool _initialized = false;
-  Future<Result<void>>? _initialization;
+  final OdbcRuntimeLifecycle _runtimeLifecycle;
+  final IActiveConfigQueryCache? _configQueryCache;
+  final OdbcConnectionStringTtlCache _connectionStringCache;
   final ConnectionCircuitBreakerCache _circuitBreakers = ConnectionCircuitBreakerCache(
     factory: () => ConnectionCircuitBreaker(
       failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
@@ -241,54 +249,37 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     _circuitBreakers.reset(connectionString);
   }
 
-  Future<Result<void>> _ensureInitialized() {
-    if (_initialized) {
-      return Future<Result<void>>.value(const Success(unit));
-    }
-    return _initialization ??= _initializeOnce();
+  @override
+  void clearAllCircuitBreakers() {
+    _circuitBreakers.clear();
   }
 
-  Future<Result<void>> _initializeOnce() async {
-    developer.log('Initializing ODBC environment', name: 'database_gateway');
-
-    final initResult = await _service.initialize();
-    return initResult.fold(
-      (_) {
-        _initialized = true;
-        developer.log(
-          'ODBC initialized successfully',
-          name: 'database_gateway',
-          level: 500,
-        );
-        return const Success(unit);
-      },
-      (error) {
-        _initialization = null;
-        developer.log(
-          'ODBC initialization failed',
-          name: 'database_gateway',
-          level: 1000,
-          error: error,
-        );
-        return Failure(
-          OdbcFailureMapper.mapConnectionError(
-            error,
-            operation: 'initialize_odbc',
-            context: {
-              'reason': OdbcContextConstants.odbcInitializationFailedReason,
-              'user_message': 'Não foi possível inicializar o ambiente ODBC neste computador.',
-            },
-          ),
-        );
-      },
+  Future<Result<void>> _ensureInitialized() {
+    return _runtimeLifecycle.ensureInitialized(
+      operation: 'initialize_odbc',
+      userMessage: 'Não foi possível inicializar o ambiente ODBC neste computador.',
     );
   }
 
-  Future<Result<Config>> _resolveConfigForQuery(String? configId) {
+  Future<Result<Config>> _resolveConfigForQuery(String? configId) async {
+    final cache = _configQueryCache;
+    if (cache != null) {
+      final cached = await cache.resolveForDatabaseAccess(configId: configId);
+      if (cached != null) {
+        return Success(cached);
+      }
+    }
     return _configSource.resolveConfigForQuery(configId);
   }
 
-  Future<Result<Config>> _resolveActiveConfig() {
+  Future<Result<Config>> _resolveActiveConfig() async {
+    final cache = _configQueryCache;
+    if (cache != null) {
+      final cached = await cache.resolveForDatabaseAccess();
+      if (cached != null) {
+        return Success(cached);
+      }
+    }
     return _configSource.resolveActiveConfig();
   }
 
@@ -363,7 +354,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
         return configResult.fold(
           (config) async {
             final localConfig = _buildDatabaseConfig(config);
-            final connectionString = _resolveConnectionString(
+            final connectionString = _resolveCachedConnectionString(
               config,
               localConfig,
               databaseOverride: database,
@@ -449,7 +440,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
         return configResult.fold(
           (config) async {
             final localConfig = _buildDatabaseConfig(config);
-            final connectionString = _resolveConnectionString(
+            final connectionString = _resolveCachedConnectionString(
               config,
               localConfig,
               databaseOverride: database,
@@ -498,7 +489,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
         return configResult.fold(
           (config) async {
             final localConfig = _buildDatabaseConfig(config);
-            final connectionString = _resolveConnectionString(
+            final connectionString = _resolveCachedConnectionString(
               config,
               localConfig,
               databaseOverride: database,
@@ -536,7 +527,25 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       database: config.databaseName,
       server: config.host,
       port: config.port,
-      databaseType: _mapDriverNameToDatabaseType(config.driverName),
+      databaseType: mapOdbcDriverNameToDatabaseType(config.driverName),
+    );
+  }
+
+  String _resolveCachedConnectionString(
+    Config config,
+    DatabaseConfig databaseConfig, {
+    String? databaseOverride,
+  }) {
+    final override = databaseOverride?.trim() ?? '';
+    final cacheKey =
+        '${config.id}:${config.updatedAt.millisecondsSinceEpoch}:$override';
+    return _connectionStringCache.resolve(
+      cacheKey: cacheKey,
+      compute: () => _resolveConnectionString(
+        config,
+        databaseConfig,
+        databaseOverride: databaseOverride,
+      ),
     );
   }
 
@@ -552,58 +561,4 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     );
   }
 
-  /// Maps a driver name string from the persisted [Config] to the local
-  /// [DatabaseType] used by SQL builders (paging, boolean literals, etc.).
-  ///
-  /// Falls back to the richer `odbc_fast` `DatabaseType.fromDriverName`
-  /// heuristic to recognise variants the previous exact-match switch missed
-  /// (`Microsoft SQL Server`, `Adaptive Server Anywhere`, `PostgreSQL Unicode`,
-  /// etc.). When the underlying driver maps to an engine outside the three
-  /// dialects the local SQL builders support, the call still returns
-  /// [DatabaseType.sqlServer] for backwards compatibility, but emits a
-  /// structured warning so the misconfiguration is observable instead of
-  /// silently producing broken SQL.
-  /// Test-only entry point for [_mapDriverNameToDatabaseType] so the
-  /// heuristic and fallback warning can be exercised without standing up
-  /// the full gateway harness.
-  @visibleForTesting
-  DatabaseType mapDriverNameToDatabaseTypeForTesting(String driverName) {
-    return _mapDriverNameToDatabaseType(driverName);
-  }
-
-  DatabaseType _mapDriverNameToDatabaseType(String driverName) {
-    final exact = switch (driverName) {
-      'SQL Server' => DatabaseType.sqlServer,
-      'PostgreSQL' => DatabaseType.postgresql,
-      'SQL Anywhere' => DatabaseType.sybaseAnywhere,
-      _ => null,
-    };
-    if (exact != null) {
-      return exact;
-    }
-
-    final detected = odbc.DatabaseType.fromDriverName(driverName);
-    final mapped = switch (detected) {
-      odbc.DatabaseType.sqlServer => DatabaseType.sqlServer,
-      odbc.DatabaseType.postgresql => DatabaseType.postgresql,
-      odbc.DatabaseType.sybaseAsa => DatabaseType.sybaseAnywhere,
-      _ => null,
-    };
-    if (mapped != null) {
-      return mapped;
-    }
-
-    developer.log(
-      'Unsupported ODBC driver detected; falling back to sqlServer dialect. '
-      'SQL generation may produce incorrect statements for this engine.',
-      name: 'database_gateway',
-      level: 1000,
-      error: <String, Object?>{
-        'driver_name': driverName,
-        'detected_engine': detected.name,
-        'supported_dialects': <String>['sqlServer', 'postgresql', 'sybaseAnywhere'],
-      },
-    );
-    return DatabaseType.sqlServer;
-  }
 }

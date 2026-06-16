@@ -7,8 +7,6 @@ import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.d
 import 'package:plug_agente/application/bootstrap/app_shutdown_coordinator.dart';
 import 'package:plug_agente/application/bootstrap/app_shutdown_sequence.dart';
 import 'package:plug_agente/application/bootstrap/hub_connection_shutdown_registry.dart';
-import 'package:plug_agente/application/queue/sql_execution_queue.dart';
-import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
 import 'package:plug_agente/application/use_cases/apply_agent_action_on_app_exit_policies.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/feature_flags_env_seeder.dart';
@@ -25,11 +23,8 @@ import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/core/timezone/iana_timezone_data.dart';
-import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
-import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
-import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
-import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_runtime_reloader.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/config/odbc_metadata_cache_config.dart';
 import 'package:plug_agente/infrastructure/config/odbc_performance_preset_config.dart';
@@ -37,8 +32,6 @@ import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merge
 import 'package:plug_agente/infrastructure/config/odbc_usage_profile_config.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
-import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.dart';
-import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/security/payload_signing_key_resolver.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
@@ -231,104 +224,10 @@ Future<void> _dispatchAppCloseAgentActions() async {
 }
 
 Future<bool> reloadOdbcRuntimeDependencies() async {
-  try {
-    if (getIt.isRegistered<ITransportClient>()) {
-      await getIt<ITransportClient>().disconnect();
-    }
-
-    if (getIt.isRegistered<ISqlInvestigationCollector>()) {
-      getIt<ISqlInvestigationCollector>().clear();
-    }
-
-    if (getIt.isRegistered<IConnectionPool>()) {
-      await getIt<IConnectionPool>().closeAll();
-    }
-
-    if (getIt.isRegistered<OdbcEventBridge>()) {
-      await getIt<OdbcEventBridge>().dispose();
-    }
-
-    await _resetLazySingletonIfRegistered<ITransportClient>();
-    await _resetLazySingletonIfRegistered<RpcMethodDispatcher>();
-    await _resetLazySingletonIfRegistered<OdbcNativeMetricsService>();
-    await _resetLazySingletonIfRegistered<OdbcEventBridge>();
-    await _resetLazySingletonIfRegistered<IStreamingDatabaseGateway>();
-    await _resetLazySingletonIfRegistered<IDatabaseGateway>();
-    await _resetLazySingletonIfRegistered<SqlExecutionQueue>();
-    await _resetLazySingletonIfRegistered<DirectOdbcConnectionLimiter>();
-    await _resetLazySingletonIfRegistered<IConnectionPool>();
-
-    // Reload persisted ODBC settings so the new pool size / tuning take effect
-    // before priming the singletons that depend on them.
-    final odbcSettings = getIt<IOdbcConnectionSettings>();
-    await odbcSettings.load();
-
-    applyOdbcPerformancePresetFromEnvironment();
-
-    // Recalculate and replace the OdbcRuntimeTuning singleton so components
-    // reading asyncWorkerCount / asyncMaxPendingRequests see the updated values.
-    final newTuning = resolveOdbcRuntimeTuning(settings: odbcSettings);
-    if (getIt.isRegistered<OdbcRuntimeTuning>()) {
-      getIt.unregister<OdbcRuntimeTuning>();
-    }
-    getIt.registerSingleton<OdbcRuntimeTuning>(newTuning);
-    _logOdbcRuntimeTuningWarnings(newTuning);
-
-    // Re-initialize the ODBC worker pool with the updated tuning.
-    // failFast is intentional here: SqlExecutionQueue at the application
-    // layer already owns backpressure / queueing. We want the ODBC async
-    // pool to reject overflow immediately so the queue (which has fairness,
-    // timeouts and observability) is the single point of admission control.
-    _odbcLocator.shutdown();
-    final odbcUsageProfile = resolveOdbcUsageProfile();
-    _odbcLocator.initialize(
-      profile: odbcUsageProfile,
-      useAsync: true,
-      asyncWorkerCount: newTuning.asyncWorkerCount,
-      asyncMaxPendingRequests: newTuning.asyncMaxPendingRequests,
-      asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
-    );
-    if (getIt.isRegistered<OdbcProfileRecommendedOptions>()) {
-      getIt.unregister<OdbcProfileRecommendedOptions>();
-    }
-    getIt.registerSingleton<OdbcProfileRecommendedOptions>(
-      OdbcProfileRecommendedOptions(
-        connection: _odbcLocator.recommendedConnectionOptions,
-        pool: _odbcLocator.recommendedPoolOptions,
-      ),
-    );
-
-    await _primeReloadedOdbcRuntimeDependencies();
-    return true;
-  } on Object catch (error, stackTrace) {
-    developer.log(
-      'Failed to reload ODBC runtime dependencies',
-      name: 'service_locator',
-      level: 900,
-      error: error,
-      stackTrace: stackTrace,
-    );
+  if (!getIt.isRegistered<IOdbcRuntimeReloader>()) {
     return false;
   }
-}
-
-Future<void> _primeReloadedOdbcRuntimeDependencies() async {
-  final odbcInitResult = await getIt<odbc.OdbcService>().initialize();
-  odbcInitResult.fold(
-    (_) {},
-    (error) {
-      throw StateError('ODBC initialization failed after reload: $error');
-    },
-  );
-  await _enableOdbcMetadataCacheIfConfigured(getIt<odbc.OdbcService>());
-
-  // Recreate the main ODBC-facing singletons immediately so settings screens
-  // fail fast instead of deferring DI/configuration problems to the next query.
-  getIt<DirectOdbcConnectionLimiter>();
-  getIt<IConnectionPool>();
-  getIt<IStreamingDatabaseGateway>();
-  getIt<IDatabaseGateway>();
-  getIt<OdbcEventBridge>();
+  return getIt<IOdbcRuntimeReloader>().reload();
 }
 
 PayloadSigningKeyStore _createPayloadSigningKeyStore() {
@@ -344,13 +243,6 @@ PayloadSigningKeyStore _createPayloadSigningKeyStore() {
     );
     return const NoopPayloadSigningKeyStore();
   }
-}
-
-Future<void> _resetLazySingletonIfRegistered<T extends Object>() async {
-  if (!getIt.isRegistered<T>()) {
-    return;
-  }
-  await getIt.resetLazySingleton<T>();
 }
 
 Future<void> _migrateLegacyUserPreferences(

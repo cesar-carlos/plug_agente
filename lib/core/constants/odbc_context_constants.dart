@@ -11,6 +11,8 @@ abstract final class OdbcContextConstants {
 
   static const String configurationLoadFailedReason = 'configuration_load_failed';
 
+  static const String connectionTestRateLimitedReason = 'connection_test_rate_limited';
+
   static const String connectionTimeoutReason = 'connection_timeout';
 
   static const String databaseConnectionFailedReason = 'database_connection_failed';
@@ -62,6 +64,14 @@ abstract final class OdbcContextConstants {
   static const String transactionRollbackFailedReason = 'transaction_rollback_failed';
 
   static const String transientQueryFailureReason = 'transient_query_failure';
+
+  static const String odbcWorkerRecoveryInvalidationReason = 'odbc_worker_recovery_invalidation';
+
+  static const String materializedResultUseDbStreamingRecommendation =
+      'Enable DB streaming (prefer_db_streaming) or reduce max_rows for large result sets.';
+
+  static const String playgroundMaterializedUseStreamingRecommendation =
+      'Enable ODBC streaming mode in Playground or add server-side pagination for large result sets.';
 
   static String stageBudgetExhaustedReason(String stage) => '${stage}_budget_exhausted';
 

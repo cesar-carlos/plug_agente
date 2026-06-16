@@ -1,61 +1,34 @@
 import 'package:plug_agente/application/rpc/sql_batch_handler.dart';
-
 import 'package:plug_agente/application/rpc/sql_bulk_insert_handler.dart';
-
 import 'package:plug_agente/application/rpc/sql_cancel_handler.dart';
-
 import 'package:plug_agente/application/rpc/sql_db_streaming_auto_policy.dart';
-
 import 'package:plug_agente/application/rpc/sql_execute_handler.dart';
-
 import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
-
 import 'package:plug_agente/application/rpc/sql_rpc_db_streaming_executor.dart';
-
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
-
 import 'package:plug_agente/application/rpc/sql_rpc_materialized_streaming_executor.dart';
-
 import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart';
-
 import 'package:plug_agente/application/rpc/sql_rpc_odbc_budget_runner.dart';
-
 import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart';
-
+import 'package:plug_agente/application/rpc/sql_streaming_connection_string_cache.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
-
 import 'package:plug_agente/application/services/active_config_resolver.dart';
-
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
-
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
-
 import 'package:plug_agente/core/config/feature_flags.dart';
-
 import 'package:plug_agente/domain/protocol/protocol.dart';
-
+import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
-
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
-
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
-
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
-
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
-
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
-
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
-
 import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
-
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
-
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
-
 import 'package:plug_agente/domain/streaming/i_streaming_named_parameter_preparer.dart';
-
 import 'package:uuid/uuid.dart';
 
 class SqlRpcMethodHandlerOperations {
@@ -75,6 +48,10 @@ class SqlRpcMethodHandlerOperations {
     ActiveConfigResolver? activeConfigResolver,
 
     IAgentConfigRepository? configRepository,
+
+    IActiveConfigQueryCache? configQueryCache,
+
+    SqlStreamingConnectionStringCache? streamingConnectionStringCache,
 
     IAuthorizationMetricsCollector? authMetrics,
 
@@ -158,6 +135,10 @@ class SqlRpcMethodHandlerOperations {
       activeConfigResolver: activeConfigResolver,
 
       configRepository: configRepository,
+
+      configQueryCache: configQueryCache,
+
+      streamingConnectionStringCache: streamingConnectionStringCache,
 
       streamingGateway: streamingGateway,
 

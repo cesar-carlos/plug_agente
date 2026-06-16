@@ -2235,7 +2235,10 @@ void main() {
           id: 'req-prefer-saturated',
           params: {
             'sql': 'SELECT * FROM users',
-            'options': {'prefer_db_streaming': true},
+            'options': {
+              'prefer_db_streaming': true,
+              'max_rows': 100,
+            },
           },
         );
 
@@ -2485,7 +2488,10 @@ void main() {
           jsonrpc: '2.0',
           method: 'sql.execute',
           id: 'req-join-allowlist',
-          params: {'sql': 'SELECT users.id FROM users JOIN orders ON orders.user_id = users.id'},
+          params: {
+            'sql': 'SELECT users.id FROM users JOIN orders ON orders.user_id = users.id',
+            'options': {'max_rows': 100},
+          },
         );
 
         final response = await dispatcher.dispatch(

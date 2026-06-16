@@ -13,4 +13,8 @@ abstract final class RpcSqlBudgetConstants {
   static const String batchBudgetExhaustedReason = 'batch_budget_exhausted';
 
   static const String bulkInsertBudgetExhaustedReason = 'bulk_insert_budget_exhausted';
+
+  static const String materializedResultTooLargeReason = 'materialized_result_too_large';
+
+  static const String playgroundMaterializedUnpaginatedReason = 'playground_materialized_unpaginated';
 }

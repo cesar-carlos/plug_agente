@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/protocol_metrics_summary.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics_summary_builder.dart';
@@ -107,7 +108,10 @@ class ProtocolMetrics {
 class ProtocolMetricsCollector implements IProtocolMetricsCollector {
   ProtocolMetricsCollector({
     int maxEntries = 1000,
-  }) : _maxEntries = maxEntries < 1 ? 1 : maxEntries;
+    int? rpcChunkSampleRate,
+  }) : _maxEntries = maxEntries < 1 ? 1 : maxEntries,
+       _rpcChunkSampleRate =
+           rpcChunkSampleRate ?? ConnectionConstants.protocolMetricsRpcChunkSampleRate;
 
   // ListQueue keeps `record` O(1) at the ring-buffer cap. Using a plain List
   // forced `removeRange(0, 1)` on every record at cap, an O(n) shift on the
@@ -116,6 +120,8 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
   final StreamController<ProtocolMetrics> _metricsController = StreamController<ProtocolMetrics>.broadcast();
   final StreamController<void> _updates = StreamController<void>.broadcast(sync: true);
   final int _maxEntries;
+  final int _rpcChunkSampleRate;
+  int _rpcChunkEventCounter = 0;
 
   Stream<ProtocolMetrics> get metricsStream => _metricsController.stream;
 
@@ -125,6 +131,10 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
   List<ProtocolMetrics> get metrics => List.unmodifiable(_metrics);
 
   void record(ProtocolMetrics metrics) {
+    if (!_shouldSample(metrics)) {
+      return;
+    }
+
     _metrics.addLast(metrics);
 
     while (_metrics.length > _maxEntries) {
@@ -141,6 +151,18 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
 
   void clear() {
     _metrics.clear();
+    _rpcChunkEventCounter = 0;
+  }
+
+  bool _shouldSample(ProtocolMetrics metrics) {
+    if (metrics.eventName != 'rpc:chunk') {
+      return true;
+    }
+    if (_rpcChunkSampleRate <= 1) {
+      return true;
+    }
+    _rpcChunkEventCounter++;
+    return _rpcChunkEventCounter % _rpcChunkSampleRate == 0;
   }
 
   void dispose() {

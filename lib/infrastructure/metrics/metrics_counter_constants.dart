@@ -38,6 +38,7 @@ abstract final class MetricsCounterNames {
   static const String odbcEventConnectionLostCounter = 'odbc_event_connection_lost';
   static const String odbcEventAutoReconnectAttemptedCounter = 'odbc_event_auto_reconnect_attempted';
   static const String odbcEventWorkerRecoveredCounter = 'odbc_event_worker_recovered';
+  static const String odbcWorkerRecoveryInvalidationCounter = 'odbc_worker_recovery_invalidation';
   static const String odbcEventPoolResizeCounter = 'odbc_event_pool_resize';
   static const String odbcEventSlowQueryDetectedCounter = 'odbc_event_slow_query_detected';
   static const String transactionalBatchReadOnlyInferenceCounter = 'transactional_batch_readonly_inference';

@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/services/active_config_metadata_cache.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -13,13 +14,16 @@ class ActiveConfigResolver implements IQueryConfigSource {
     this._settingsStore, {
     IOdbcCircuitBreakerReset? circuitBreakerReset,
     IOdbcCircuitBreakerReset? Function()? circuitBreakerResetProvider,
+    ActiveConfigMetadataCache? metadataCache,
   }) : _circuitBreakerReset = circuitBreakerReset,
-       _circuitBreakerResetProvider = circuitBreakerResetProvider;
+       _circuitBreakerResetProvider = circuitBreakerResetProvider,
+       _metadataCache = metadataCache;
 
   final IAgentConfigRepository _repository;
   final IAppSettingsStore _settingsStore;
   final IOdbcCircuitBreakerReset? _circuitBreakerReset;
   final IOdbcCircuitBreakerReset? Function()? _circuitBreakerResetProvider;
+  final ActiveConfigMetadataCache? _metadataCache;
 
   IOdbcCircuitBreakerReset? get _resolvedCircuitBreakerReset =>
       _circuitBreakerReset ?? _circuitBreakerResetProvider?.call();
@@ -58,6 +62,7 @@ class ActiveConfigResolver implements IQueryConfigSource {
       AppConstants.activeConfigIdSettingsKey,
       normalized,
     );
+    _metadataCache?.invalidate();
     final configResult = await _repository.getById(normalized);
     if (configResult.isSuccess()) {
       _resolvedCircuitBreakerReset?.resetForConfig(configResult.getOrThrow());
@@ -66,6 +71,7 @@ class ActiveConfigResolver implements IQueryConfigSource {
 
   Future<void> clearActiveConfigId() async {
     await _settingsStore.remove(AppConstants.activeConfigIdSettingsKey);
+    _metadataCache?.invalidate();
   }
 
   Future<Result<Config>> resolveExplicit(

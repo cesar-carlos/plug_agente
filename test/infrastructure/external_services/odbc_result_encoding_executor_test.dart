@@ -106,6 +106,57 @@ void main() {
         ),
       ).called(1);
     });
+    test('uses columnar encoding for PostgreSQL on highThroughput profile', () async {
+      executor = OdbcResultEncodingExecutor(
+        queries,
+        usageProfile: OdbcUsageProfile.highThroughput,
+      );
+      when(
+        () => queries.executeQueryParamValues(
+          'c1',
+          'SELECT 1',
+          const <ParamValue>[],
+          resultEncoding: ResultEncoding.columnar,
+        ),
+      ).thenAnswer((_) async => const Success(sampleResult));
+
+      final result = await executor.execute(
+        'c1',
+        prepared('SELECT 1'),
+        databaseType: DatabaseType.postgresql,
+      );
+
+      expect(result.isSuccess(), isTrue);
+      verify(
+        () => queries.executeQueryParamValues(
+          'c1',
+          'SELECT 1',
+          const <ParamValue>[],
+          resultEncoding: ResultEncoding.columnar,
+        ),
+      ).called(1);
+    });
+
+    test('uses columnar when ODBC_RESULT_ENCODING=columnar for SQL Server', () async {
+      dotenv.loadFromString(envString: 'ODBC_RESULT_ENCODING=columnar');
+      executor = OdbcResultEncodingExecutor(queries);
+      when(
+        () => queries.executeQueryParamValues(
+          'c1',
+          'SELECT 1',
+          const <ParamValue>[],
+          resultEncoding: ResultEncoding.columnar,
+        ),
+      ).thenAnswer((_) async => const Success(sampleResult));
+
+      final result = await executor.execute(
+        'c1',
+        prepared('SELECT 1'),
+        databaseType: DatabaseType.sqlServer,
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
     test('keeps row-major for SQL Server on balancedServer profile', () async {
       when(
         () => queries.executeQuery('SELECT 1', connectionId: 'c1'),

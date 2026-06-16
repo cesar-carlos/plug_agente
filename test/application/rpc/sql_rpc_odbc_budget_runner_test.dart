@@ -4,11 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_odbc_budget_runner.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -95,6 +97,31 @@ void main() {
   });
 
   group('SqlRpcOdbcBudgetRunner.executeQuery', () {
+    test('rejects materialized execute when negotiated streaming and max rows exceed threshold', () async {
+      final runner = SqlRpcOdbcBudgetRunner(
+        databaseGateway: mockGateway,
+        support: _support(),
+        queryStageBudget: const Duration(seconds: 30),
+        batchExecutionStageBudget: const Duration(seconds: 35),
+      );
+
+      final result = await runner.executeQuery(
+        _queryRequest(),
+        database: null,
+        requestId: 'req-large',
+        deadline: DateTime.now().toUtc().add(const Duration(seconds: 30)),
+        timeoutMs: 0,
+        effectiveMaxRows: ConnectionConstants.sqlExecuteMaterializedMaxRows,
+        transportLimits: const TransportLimits(),
+        negotiatedExtensions: const {'streamingResults': true},
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as domain.QueryExecutionFailure;
+      expect(failure.context['reason'], RpcSqlBudgetConstants.materializedResultTooLargeReason);
+      verifyNever(() => mockGateway.executeQuery(any()));
+    });
+
     test('returns budget exhausted failure when stage timeout is zero', () async {
       final runner = SqlRpcOdbcBudgetRunner(
         databaseGateway: mockGateway,

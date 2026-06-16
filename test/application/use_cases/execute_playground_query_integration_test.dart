@@ -20,6 +20,9 @@ class MockQueryConfigSource extends Mock implements IQueryConfigSource {}
 
 class MockUuid extends Mock implements Uuid {}
 
+const _materializedPlaygroundQuery = 'SELECT * FROM users ORDER BY id';
+const _materializedPlaygroundPagination = QueryPaginationRequest(page: 1, pageSize: 50);
+
 void main() {
   // Register fallback values for mocktail
   setUpAll(() {
@@ -88,7 +91,7 @@ void main() {
     });
 
     test('should resolve explicit config id via query config source', () async {
-      const validQuery = 'SELECT * FROM users';
+      const validQuery = _materializedPlaygroundQuery;
       const explicitConfigId = 'config-explicit';
       final config = Config(
         id: explicitConfigId,
@@ -124,7 +127,11 @@ void main() {
         ),
       );
 
-      final result = await useCase.call(validQuery, configId: explicitConfigId);
+      final result = await useCase.call(
+        validQuery,
+        configId: explicitConfigId,
+        pagination: _materializedPlaygroundPagination,
+      );
 
       expect(result.isSuccess(), isTrue);
       verify(
@@ -134,13 +141,16 @@ void main() {
 
     test('should fail when config is not found', () async {
       // Arrange
-      const validQuery = 'SELECT * FROM users';
+      const validQuery = _materializedPlaygroundQuery;
       when(() => mockQueryConfigSource.resolveConfigForQuery(any())).thenAnswer(
         (_) async => Failure(domain.NotFoundFailure('Config not found')),
       );
 
       // Act
-      final result = await useCase.call(validQuery);
+      final result = await useCase.call(
+        validQuery,
+        pagination: _materializedPlaygroundPagination,
+      );
 
       // Assert
       expect(result.isError(), isTrue);
@@ -155,7 +165,7 @@ void main() {
 
     test('should successfully execute valid query with config', () async {
       // Arrange
-      const validQuery = 'SELECT * FROM users';
+      const validQuery = _materializedPlaygroundQuery;
       final config = Config(
         id: 'config-1',
         agentId: 'agent-123',
@@ -191,7 +201,10 @@ void main() {
       ).thenAnswer((_) async => Success(expectedResponse));
 
       // Act
-      final result = await useCase.call(validQuery);
+      final result = await useCase.call(
+        validQuery,
+        pagination: _materializedPlaygroundPagination,
+      );
 
       // Assert
       expect(result.isSuccess(), isTrue);
@@ -209,7 +222,7 @@ void main() {
 
     test('should propagate database gateway failure', () async {
       // Arrange
-      const validQuery = 'SELECT * FROM users';
+      const validQuery = _materializedPlaygroundQuery;
       final config = Config(
         id: 'config-1',
         agentId: 'agent-123',
@@ -235,7 +248,10 @@ void main() {
       ).thenAnswer((_) async => Failure(domain.QueryExecutionFailure('SQL error')));
 
       // Act
-      final result = await useCase.call(validQuery);
+      final result = await useCase.call(
+        validQuery,
+        pagination: _materializedPlaygroundPagination,
+      );
 
       // Assert
       expect(result.isError(), isTrue);
@@ -250,7 +266,8 @@ void main() {
 
     test('should accept valid WITH (CTE) query', () async {
       // Arrange
-      const validQuery = 'WITH cte AS (SELECT 1) SELECT * FROM cte';
+      const validQuery =
+          'WITH cte AS (SELECT 1 AS id) SELECT id FROM cte ORDER BY id';
       final config = Config(
         id: 'config-1',
         agentId: 'agent-123',
@@ -284,7 +301,10 @@ void main() {
       ).thenAnswer((_) async => Success(expectedResponse));
 
       // Act
-      final result = await useCase.call(validQuery);
+      final result = await useCase.call(
+        validQuery,
+        pagination: _materializedPlaygroundPagination,
+      );
 
       // Assert
       expect(result.isSuccess(), isTrue);
@@ -308,7 +328,7 @@ void main() {
 
     test('should create QueryRequest with UUID from Uuid service', () async {
       // Arrange
-      const validQuery = 'SELECT * FROM users';
+      const validQuery = _materializedPlaygroundQuery;
       const expectedUuid = 'generated-uuid-456';
       final config = Config(
         id: 'config-1',
@@ -345,7 +365,10 @@ void main() {
       ).thenAnswer((_) async => Success(expectedResponse));
 
       // Act
-      await useCase.call(validQuery);
+      await useCase.call(
+        validQuery,
+        pagination: _materializedPlaygroundPagination,
+      );
 
       // Assert - verificar que a query foi criada com o UUID correto
       final captured = verify(
@@ -363,7 +386,7 @@ void main() {
 
     test('should handle mixed case SELECT query', () async {
       // Arrange
-      const validQuery = 'select * from users';
+      const validQuery = 'select * from users order by id';
       final config = Config(
         id: 'config-1',
         agentId: 'agent-123',
@@ -397,7 +420,10 @@ void main() {
       ).thenAnswer((_) async => Success(expectedResponse));
 
       // Act
-      final result = await useCase.call(validQuery);
+      final result = await useCase.call(
+        validQuery,
+        pagination: _materializedPlaygroundPagination,
+      );
 
       // Assert
       expect(result.isSuccess(), isTrue);
@@ -461,7 +487,7 @@ void main() {
     );
 
     test(
-      'should disable pagination when query has no explicit ORDER BY',
+      'should execute materialized playground query without ORDER BY when within materialized cap',
       () async {
         const validQuery = 'SELECT * FROM users';
         final config = Config(
@@ -482,7 +508,9 @@ void main() {
           id: 'response-1',
           requestId: 'test-uuid-123',
           agentId: 'agent-123',
-          data: const [],
+          data: const [
+            {'id': 1, 'name': 'John'},
+          ],
           timestamp: DateTime.now(),
         );
 
@@ -496,21 +524,18 @@ void main() {
           ),
         ).thenAnswer((_) async => Success(expectedResponse));
 
-        await useCase.call(
+        final result = await useCase.call(
           validQuery,
           pagination: const QueryPaginationRequest(page: 1, pageSize: 50),
         );
 
-        final captured =
-            verify(
-                  () => mockDatabaseGateway.executeQuery(
-                    captureAny(),
-                    timeout: ConnectionConstants.defaultQueryTimeout,
-                  ),
-                ).captured.single
-                as QueryRequest;
-
-        expect(captured.pagination, isNull);
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => mockDatabaseGateway.executeQuery(
+            any(),
+            timeout: ConnectionConstants.defaultQueryTimeout,
+          ),
+        ).called(1);
       },
     );
 

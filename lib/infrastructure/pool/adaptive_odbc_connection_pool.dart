@@ -70,6 +70,9 @@ final class AdaptiveOdbcConnectionPool
   final bool _nativeWarmUpEnabled;
   final Map<String, _AdaptivePoolOwner> _connectionOwners = <String, _AdaptivePoolOwner>{};
   final Map<String, String> _connectionCircuitKeys = <String, String>{};
+  final Map<String, String> _connectionAcquireStrings = <String, String>{};
+  final Set<String> _pendingRecycleConnectionStrings = <String>{};
+  bool _recyclePoolsWhenOwnersDrain = false;
   final Map<String, _NativeCircuitState> _nativeCircuits = <String, _NativeCircuitState>{};
   Future<_AdaptiveDriverInfo?>? _driverInfoFuture;
   _AdaptiveDriverInfo? _driverInfo;
@@ -77,7 +80,6 @@ final class AdaptiveOdbcConnectionPool
   String? _lastEffectiveStrategy;
   String? _lastCircuitKey;
   String? _lastNativeSkipReason;
-  int _nativeOptionsSkipCount = 0;
   int _nativeExecutionFallbackCount = 0;
   int _leaseActiveCount = 0;
   int _nativeActiveCount = 0;
@@ -138,9 +140,11 @@ final class AdaptiveOdbcConnectionPool
       driverInfo: driverInfo,
     );
     _lastCircuitKey = circuitKey;
+    final canTryNativeWithoutOptions =
+        allowNativeWithoutOptions || options == null;
     if (_shouldUseNativePool(databaseType) &&
         !_isNativeCircuitOpen(circuitKey) &&
-        (allowNativeWithoutOptions || !_shouldSkipNativeForOptions(options))) {
+        canTryNativeWithoutOptions) {
       final nativeAcquire = await _nativePool.acquireWithin(
         connectionString,
         acquireTimeout: acquireTimeout,
@@ -149,6 +153,7 @@ final class AdaptiveOdbcConnectionPool
         final connectionId = nativeAcquire.getOrThrow();
         _connectionOwners[connectionId] = _AdaptivePoolOwner.native;
         _connectionCircuitKeys[connectionId] = circuitKey;
+        _connectionAcquireStrings[connectionId] = connectionString;
         _nativeActiveCount++;
         _lastEffectiveStrategy = allowNativeWithoutOptions ? 'native_compatible' : 'native';
         _recordNativeSuccess(circuitKey);
@@ -167,8 +172,12 @@ final class AdaptiveOdbcConnectionPool
       _recordNativeFallback(circuitKey);
     }
 
-    if (allowNativeWithoutOptions && _shouldUseNativePool(databaseType)) {
-      _lastNativeSkipReason ??= _isNativeCircuitOpen(circuitKey) ? 'native_circuit_open' : 'native_fallback_to_lease';
+    if (_shouldUseNativePool(databaseType)) {
+      if (!canTryNativeWithoutOptions) {
+        _lastNativeSkipReason = OdbcContextConstants.nativePoolCustomOptionsUnsupportedReason;
+      } else if (allowNativeWithoutOptions) {
+        _lastNativeSkipReason ??= _isNativeCircuitOpen(circuitKey) ? 'native_circuit_open' : 'native_fallback_to_lease';
+      }
     }
 
     final leaseAcquire = await _leasePool.acquireWithin(
@@ -180,6 +189,7 @@ final class AdaptiveOdbcConnectionPool
       final connectionId = leaseAcquire.getOrThrow();
       _connectionOwners[connectionId] = _AdaptivePoolOwner.lease;
       _connectionCircuitKeys.remove(connectionId);
+      _connectionAcquireStrings[connectionId] = connectionString;
       _leaseActiveCount++;
       _lastEffectiveStrategy = 'lease';
       return Success(connectionId);
@@ -260,7 +270,28 @@ final class AdaptiveOdbcConnectionPool
   Future<Result<void>> release(String connectionId) async {
     final owner = _connectionOwners.remove(connectionId);
     _connectionCircuitKeys.remove(connectionId);
+    _connectionAcquireStrings.remove(connectionId);
     _decrementOwnerActiveCount(owner);
+    final result = await _releaseToOwnerPool(connectionId, owner);
+    await _maybeCompleteConfigDrain();
+    return result;
+  }
+
+  @override
+  Future<Result<void>> discard(String connectionId) async {
+    final owner = _connectionOwners.remove(connectionId);
+    _connectionCircuitKeys.remove(connectionId);
+    _connectionAcquireStrings.remove(connectionId);
+    _decrementOwnerActiveCount(owner);
+    final result = await _discardFromOwnerPool(connectionId, owner);
+    await _maybeCompleteConfigDrain();
+    return result;
+  }
+
+  Future<Result<void>> _releaseToOwnerPool(
+    String connectionId,
+    _AdaptivePoolOwner? owner,
+  ) async {
     if (owner == null) {
       // Unknown owner: the ID may belong to the native pool if owner tracking
       // was lost (e.g. double-release). Routing blindly to the lease pool would
@@ -281,11 +312,10 @@ final class AdaptiveOdbcConnectionPool
     };
   }
 
-  @override
-  Future<Result<void>> discard(String connectionId) async {
-    final owner = _connectionOwners.remove(connectionId);
-    _connectionCircuitKeys.remove(connectionId);
-    _decrementOwnerActiveCount(owner);
+  Future<Result<void>> _discardFromOwnerPool(
+    String connectionId,
+    _AdaptivePoolOwner? owner,
+  ) async {
     if (owner == null) {
       developer.log(
         'discard called for connection with no tracked owner: $connectionId',
@@ -315,6 +345,9 @@ final class AdaptiveOdbcConnectionPool
 
     _connectionOwners.clear();
     _connectionCircuitKeys.clear();
+    _connectionAcquireStrings.clear();
+    _pendingRecycleConnectionStrings.clear();
+    _recyclePoolsWhenOwnersDrain = false;
     _leaseActiveCount = 0;
     _nativeActiveCount = 0;
     if (errors.isNotEmpty) {
@@ -402,8 +435,22 @@ final class AdaptiveOdbcConnectionPool
     return Success(nativeResult.getOrThrow() + leaseResult.getOrThrow());
   }
 
+  Future<void> _reconcileActiveCounts() async {
+    final nativeResult = await _nativePool.getActiveCount();
+    if (nativeResult.isSuccess()) {
+      _nativeActiveCount = nativeResult.getOrThrow();
+    }
+
+    final leaseResult = await _leasePool.getActiveCount();
+    if (leaseResult.isSuccess()) {
+      _leaseActiveCount = leaseResult.getOrThrow();
+    }
+  }
+
   @override
   Future<Result<void>> healthCheckAll() async {
+    await _reconcileActiveCounts();
+
     final errors = <Object>[];
     final nativeResult = await _nativePool.healthCheckAll();
     if (nativeResult.isError()) {
@@ -430,23 +477,6 @@ final class AdaptiveOdbcConnectionPool
     return _isNativeEligible(databaseType);
   }
 
-  bool _shouldSkipNativeForOptions(ConnectionAcquireOptions? options) {
-    if (options == null) {
-      _lastNativeSkipReason = null;
-      return false;
-    }
-
-    _lastNativeSkipReason = 'connection_options_unsupported';
-    _nativeOptionsSkipCount++;
-    _metrics.recordOdbcNativePoolOptionsSkip();
-    _metrics.recordDiagnosticReason(
-      category: 'pool',
-      reason: _lastNativeSkipReason!,
-    );
-    _lastEffectiveStrategy = 'lease';
-    return true;
-  }
-
   bool _isNativeEligible(app_db.DatabaseType databaseType) {
     return switch (databaseType) {
       app_db.DatabaseType.sqlServer => true,
@@ -465,7 +495,6 @@ final class AdaptiveOdbcConnectionPool
           OdbcErrorInspector.message(error),
         ) ||
         OdbcErrorInspector.isTimeout(error) ||
-        _hasFailureReason(error, 'native_pool_custom_options_unsupported') ||
         _hasFailureReason(error, 'buffer_too_small') ||
         _hasFailureReason(error, OdbcContextConstants.odbcWorkerBusyConnectReason) ||
         _looksLikePoolHealthFailure(error);
@@ -584,11 +613,12 @@ final class AdaptiveOdbcConnectionPool
       }
       if (current != null && current.cacheKey != resolved.cacheKey) {
         _nativeCircuits.clear();
-        _connectionCircuitKeys.clear();
-        // Also clear owner map so stale IDs don't keep incorrect native/lease
-        // routing after a config/driver switch.
-        _connectionOwners.clear();
-        _lastCircuitKey = null;
+        if (_connectionOwners.isNotEmpty) {
+          _markConfigDrainPending();
+        } else {
+          _connectionCircuitKeys.clear();
+          _lastCircuitKey = null;
+        }
       }
       _driverInfo = resolved;
       _driverInfoLoadedAt = DateTime.now();
@@ -669,7 +699,6 @@ final class AdaptiveOdbcConnectionPool
       'native_circuit_open': circuitDisabledUntil != null && DateTime.now().isBefore(circuitDisabledUntil),
       'native_circuit_failures': circuitState?.failures ?? 0,
       'native_circuit_disabled_until': circuitDisabledUntil?.toIso8601String(),
-      'native_options_skip_total': _nativeOptionsSkipCount,
       'native_execution_fallback_total': _nativeExecutionFallbackCount,
       'native_compatible_acquire_attempt_total': _metrics.odbcNativeCompatibleAcquireAttemptCount,
       'native_compatible_acquire_success_total': _metrics.odbcNativeCompatibleAcquireSuccessCount,
@@ -678,7 +707,52 @@ final class AdaptiveOdbcConnectionPool
       'driver_type': resolvedDriverInfo?.driverType,
       'lease_active_count': _leaseActiveCount,
       'native_active_count': _nativeActiveCount,
+      'config_drain_pending': _recyclePoolsWhenOwnersDrain,
+      'tracked_owner_count': _connectionOwners.length,
     };
+  }
+
+  void _markConfigDrainPending() {
+    _recyclePoolsWhenOwnersDrain = true;
+    for (final connectionId in _connectionOwners.keys) {
+      final connectionString = _connectionAcquireStrings[connectionId];
+      if (connectionString != null) {
+        _pendingRecycleConnectionStrings.add(connectionString);
+      }
+    }
+  }
+
+  Future<void> _maybeCompleteConfigDrain() async {
+    if (!_recyclePoolsWhenOwnersDrain || _connectionOwners.isNotEmpty) {
+      return;
+    }
+
+    _recyclePoolsWhenOwnersDrain = false;
+    _connectionCircuitKeys.clear();
+    _lastCircuitKey = null;
+
+    final connectionStrings = _pendingRecycleConnectionStrings.toList(growable: false);
+    _pendingRecycleConnectionStrings.clear();
+    if (connectionStrings.isEmpty) {
+      return;
+    }
+
+    final errors = <Object>[];
+    for (final connectionString in connectionStrings) {
+      final recycleResult = await recycle(connectionString);
+      if (recycleResult.isError()) {
+        errors.add(recycleResult.exceptionOrNull()!);
+      }
+    }
+
+    if (errors.isNotEmpty) {
+      developer.log(
+        'Adaptive pool config drain recycle completed with errors',
+        name: 'adaptive_odbc_connection_pool',
+        level: 900,
+        error: errors,
+      );
+    }
   }
 }
 

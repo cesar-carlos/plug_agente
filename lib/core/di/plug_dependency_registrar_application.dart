@@ -20,6 +20,9 @@ void _registerApplicationServices(GetIt getIt) {
       () => CheckOdbcDriver(getIt<IOdbcDriverChecker>()),
     )
     ..registerLazySingleton(
+      () => ReloadOdbcRuntimeDependencies(getIt<IOdbcRuntimeReloader>()),
+    )
+    ..registerLazySingleton(
       () => CheckHubAvailability(getIt<IHubAvailabilityProbe>()),
     );
 }

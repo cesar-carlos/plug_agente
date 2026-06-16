@@ -240,6 +240,14 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
 
   void recordOdbcEventWorkerRecovered() => _incrementEventCounter(MetricsCounterNames.odbcEventWorkerRecoveredCounter);
 
+  void recordOdbcWorkerRecoveryInvalidation() {
+    _incrementEventCounter(MetricsCounterNames.odbcWorkerRecoveryInvalidationCounter);
+    recordDiagnosticReason(
+      category: 'odbc_runtime',
+      reason: OdbcContextConstants.odbcWorkerRecoveryInvalidationReason,
+    );
+  }
+
   void recordOdbcEventPoolResize() => _incrementEventCounter(MetricsCounterNames.odbcEventPoolResizeCounter);
 
   void recordOdbcEventSlowQueryDetected() => _incrementEventCounter(MetricsCounterNames.odbcEventSlowQueryDetectedCounter);

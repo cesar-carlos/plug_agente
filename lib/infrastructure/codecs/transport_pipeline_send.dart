@@ -47,13 +47,15 @@ mixin TransportPipelineSend {
       encodeStopwatch.stop();
       final originalSize = encodedBytes.length;
 
-      final shouldCompress = shouldRunGzipCompression(
-        compression,
-        originalSize,
-        RpcChunkTransportPolicy.compressionThresholdBytes(
+      final shouldCompress = RpcChunkTransportPolicy.shouldCompressPayload(
+        compressionMode: compression,
+        originalSize: originalSize,
+        compressionThreshold: RpcChunkTransportPolicy.compressionThresholdBytes(
           metricEventName,
           defaultThreshold: compressionThreshold,
         ),
+        metricEventName: metricEventName,
+        payload: data,
       );
 
       Uint8List finalBytes;
@@ -178,13 +180,15 @@ mixin TransportPipelineSend {
       }
       encodeStopwatch.stop();
       final originalSize = encodedBytes.length;
-      final shouldCompress = shouldRunGzipCompression(
-        compression,
-        originalSize,
-        RpcChunkTransportPolicy.compressionThresholdBytes(
+      final shouldCompress = RpcChunkTransportPolicy.shouldCompressPayload(
+        compressionMode: compression,
+        originalSize: originalSize,
+        compressionThreshold: RpcChunkTransportPolicy.compressionThresholdBytes(
           metricEventName,
           defaultThreshold: compressionThreshold,
         ),
+        metricEventName: metricEventName,
+        payload: data,
       );
 
       Uint8List finalBytes;

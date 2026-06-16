@@ -119,6 +119,7 @@ class SqlExecutionQueue {
     for (final kind in SqlExecutionKind.values) kind: Queue<_QueuedRequest>(),
   };
   static const SqlQueueLaneScheduler<_QueuedRequest> _laneScheduler = SqlQueueLaneScheduler<_QueuedRequest>();
+  final SqlQueueLaneSchedulerState _laneSchedulerState = SqlQueueLaneSchedulerState();
   int _queuedCount = 0;
   int _nextSequence = 0;
   int _activeWorkers = 0;
@@ -495,6 +496,7 @@ class SqlExecutionQueue {
     final request = _laneScheduler.takeNextEligibleRequest(
       queues: _queues,
       canStartRequest: _canStartRequest,
+      roundRobinState: _laneSchedulerState,
     );
     if (request == null) {
       return null;
@@ -652,7 +654,10 @@ class SqlExecutionQueue {
   }
 
   _QueuedRequest? _takeNextQueuedRequest() {
-    final request = _laneScheduler.takeNextQueuedRequest(queues: _queues);
+    final request = _laneScheduler.takeNextQueuedRequest(
+      queues: _queues,
+      roundRobinState: _laneSchedulerState,
+    );
     if (request == null) {
       return null;
     }
@@ -675,8 +680,9 @@ class SqlExecutionQueue {
       _recordQueueSaturationIfNeeded();
     } else {
       _metricsCollector?.recordQueueTimeoutAfterWorkerStarted();
-      if (requestId != null && requestId.isNotEmpty) {
-        unawaited(_inFlightAbortPort?.abortInFlightExecution(requestId));
+      final abortTargetId = _resolveAbortTargetId(requestId: requestId, request: request);
+      if (abortTargetId != null) {
+        unawaited(_inFlightAbortPort?.abortInFlightExecution(abortTargetId));
       }
       developer.log(
         'SQL request queue wait timed out after worker started; native ODBC abort requested when in-flight handle is registered',
@@ -689,7 +695,7 @@ class SqlExecutionQueue {
           'active_workers': _activeWorkers,
           'ghost_query_risk': true,
           'cooperative_cancel_signalled': request.cooperativeCancellationToken?.isCancelled ?? false,
-          'native_abort_requested': requestId != null && requestId.isNotEmpty,
+          'native_abort_requested': abortTargetId != null,
         },
       );
     }
@@ -724,6 +730,21 @@ class SqlExecutionQueue {
         if (request.hasStarted) 'ghost_query_risk': true,
       },
     );
+  }
+
+  String? _resolveAbortTargetId<T extends Object>({
+    required String? requestId,
+    required _QueuedRequest<T> request,
+  }) {
+    final normalizedRequestId = requestId?.trim();
+    if (normalizedRequestId != null && normalizedRequestId.isNotEmpty) {
+      return normalizedRequestId;
+    }
+    final queuedRequestId = request.requestId?.trim();
+    if (queuedRequestId != null && queuedRequestId.isNotEmpty) {
+      return queuedRequestId;
+    }
+    return null;
   }
 
   /// Test hook for queue-wait timeout after worker start (ghost-query path).

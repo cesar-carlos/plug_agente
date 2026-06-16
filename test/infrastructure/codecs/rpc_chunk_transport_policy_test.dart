@@ -17,5 +17,32 @@ void main() {
       );
       expect(chunkCompression, lessThan(4096));
     });
+
+    test('skips gzip for columnar rpc:chunk payloads by default', () {
+      final payload = <String, dynamic>{
+        'columnar': <String, dynamic>{'row_count': 1, 'columns': <dynamic>[]},
+      };
+
+      expect(
+        RpcChunkTransportPolicy.shouldCompressPayload(
+          compressionMode: 'auto',
+          originalSize: 4096,
+          compressionThreshold: 1024,
+          metricEventName: 'rpc:chunk',
+          payload: payload,
+        ),
+        isFalse,
+      );
+      expect(
+        RpcChunkTransportPolicy.shouldCompressPayload(
+          compressionMode: 'auto',
+          originalSize: 4096,
+          compressionThreshold: 1024,
+          metricEventName: 'rpc:response',
+          payload: payload,
+        ),
+        isTrue,
+      );
+    });
   });
 }

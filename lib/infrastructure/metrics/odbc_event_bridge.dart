@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_worker_runtime_recovery_port.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 
 /// Maximum number of recent events kept in the ring buffer exposed by
@@ -21,13 +22,16 @@ final class OdbcEventBridge {
   OdbcEventBridge({
     required IAdminService adminService,
     MetricsCollector? metrics,
+    IOdbcWorkerRuntimeRecoveryPort? workerRecoveryPort,
     int maxRecentEvents = kOdbcEventBridgeMaxRecentEvents,
   }) : _metrics = metrics,
+       _workerRecoveryPort = workerRecoveryPort,
        _maxRecentEvents = maxRecentEvents > 0 ? maxRecentEvents : kOdbcEventBridgeMaxRecentEvents {
     _subscription = adminService.events.listen(_handleEvent);
   }
 
   final MetricsCollector? _metrics;
+  final IOdbcWorkerRuntimeRecoveryPort? _workerRecoveryPort;
   final int _maxRecentEvents;
   final ListQueue<OdbcEvent> _recentEvents = ListQueue<OdbcEvent>();
   late final StreamSubscription<OdbcEvent> _subscription;
@@ -75,6 +79,20 @@ final class OdbcEventBridge {
         );
       case WorkerRecovered(:final timestamp):
         _metrics?.recordOdbcEventWorkerRecovered();
+        unawaited(() async {
+        try {
+          await _workerRecoveryPort?.recoverAfterNativeWorkerCrash();
+        } on Object catch (error, stackTrace) {
+          developer.log(
+            'ODBC worker recovery failed after native worker crash',
+            name: _logName,
+            level: 1000,
+            time: timestamp,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }());
         developer.log(
           'ODBC async worker recovered after crash',
           name: _logName,

@@ -9,30 +9,43 @@ final class RpcStreamColumnarChunkCodec {
   RpcStreamColumnarChunkCodec._();
 
   static Map<String, dynamic> encodeTypedColumnarResult(TypedColumnarResult result) {
-    final columns = result.columns.map(_encodeColumn).toList(growable: false);
+    final columns = result.columns;
+    final encodedColumns = List<Map<String, dynamic>>.filled(
+      columns.length,
+      const <String, dynamic>{},
+    );
+    for (var index = 0; index < columns.length; index++) {
+      encodedColumns[index] = _encodeColumn(columns[index]);
+    }
     return <String, dynamic>{
       'row_count': result.rowCount,
-      'columns': columns,
+      'columns': encodedColumns,
     };
   }
 
   static Map<String, dynamic> _encodeColumn(TypedColumn column) {
-    final payload = <String, dynamic>{'name': column.name};
-    switch (column) {
-      case TypedColumnInt32(:final values):
-        payload['type'] = 'int32';
-        payload['values'] = values;
-      case TypedColumnInt64(:final values):
-        payload['type'] = 'int64';
-        payload['values'] = values;
-      case TypedColumnFloat64(:final values):
-        payload['type'] = 'float64';
-        payload['values'] = values;
-      case TypedColumnObject(:final values):
-        payload['type'] = 'object';
-        payload['values'] = values;
-    }
-    return payload;
+    return switch (column) {
+      TypedColumnInt32(:final name, :final values) => <String, dynamic>{
+        'name': name,
+        'type': 'int32',
+        'values': values,
+      },
+      TypedColumnInt64(:final name, :final values) => <String, dynamic>{
+        'name': name,
+        'type': 'int64',
+        'values': values,
+      },
+      TypedColumnFloat64(:final name, :final values) => <String, dynamic>{
+        'name': name,
+        'type': 'float64',
+        'values': values,
+      },
+      TypedColumnObject(:final name, :final values) => <String, dynamic>{
+        'name': name,
+        'type': 'object',
+        'values': values,
+      },
+    };
   }
 
   static List<Map<String, dynamic>> encodeRowMapsFromColumnar(

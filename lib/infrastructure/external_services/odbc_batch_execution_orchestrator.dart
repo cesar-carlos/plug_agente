@@ -31,7 +31,7 @@ export 'odbc_batch_execution_types.dart';
 
 /// Routes and executes ODBC SQL batches (transactional, bulk-insert, parallel).
 final class OdbcBatchExecutionOrchestrator {
-  OdbcBatchExecutionOrchestrator({
+  factory OdbcBatchExecutionOrchestrator({
     required OdbcGatewayConnectionManager connectionManager,
     required OdbcBatchTransactionManager txManager,
     required OdbcBulkInsertExecutor bulkInsertExecutor,
@@ -50,66 +50,77 @@ final class OdbcBatchExecutionOrchestrator {
     required BatchResolveConnectionString resolveConnectionString,
     required BatchInfrastructureFailureRecorder recordInfrastructureFailure,
     required BatchSqlExecutionFailureRecorder recordExecutionFailure,
+  }) {
+    final failureMapper = OdbcBatchFailureMapper(
+      connectionManager: connectionManager,
+      metrics: metrics,
+    );
+    final transactionSupport = OdbcBatchTransactionSupport(metrics: metrics);
+    final connectionPhase = OdbcBatchConnectionPhase(
+      connectionManager: connectionManager,
+      optionsResolver: optionsResolver,
+      nativeCompatiblePolicy: nativeCompatiblePolicy,
+      ensureInitialized: ensureInitialized,
+      resolveActiveConfig: resolveActiveConfig,
+      buildDatabaseConfig: buildDatabaseConfig,
+      resolveConnectionString: resolveConnectionString,
+      recordInfrastructureFailure: recordInfrastructureFailure,
+    );
+
+    return OdbcBatchExecutionOrchestrator._(
+      connectionManager: connectionManager,
+      txManager: txManager,
+      metrics: metrics,
+      failureMapper: failureMapper,
+      transactionSupport: transactionSupport,
+      connectionPhase: connectionPhase,
+      commandPhase: OdbcBatchCommandPhase(
+        txManager: txManager,
+        queryRunner: queryRunner,
+        statementExecutor: statementExecutor,
+        optionsResolver: optionsResolver,
+        connectionManager: connectionManager,
+        failureMapper: failureMapper,
+        uuid: uuid,
+        recordExecutionFailure: recordExecutionFailure,
+      ),
+      routingPhases: OdbcBatchRoutingPhases(
+        connectionManager: connectionManager,
+        txManager: txManager,
+        bulkInsertExecutor: bulkInsertExecutor,
+        readOnlyBatchParallelExecutor: readOnlyBatchParallelExecutor,
+        readOnlyBatchParallelSemaphore: readOnlyBatchParallelSemaphore,
+        nativeCompatiblePolicy: nativeCompatiblePolicy,
+        connectionPhase: connectionPhase,
+        failureMapper: failureMapper,
+        transactionSupport: transactionSupport,
+        metrics: metrics,
+        ensureInitialized: ensureInitialized,
+        resolveActiveConfig: resolveActiveConfig,
+        buildDatabaseConfig: buildDatabaseConfig,
+        resolveConnectionString: resolveConnectionString,
+        poolSize: poolSize,
+      ),
+    );
+  }
+
+  OdbcBatchExecutionOrchestrator._({
+    required OdbcGatewayConnectionManager connectionManager,
+    required OdbcBatchTransactionManager txManager,
+    required MetricsCollector metrics,
+    required OdbcBatchFailureMapper failureMapper,
+    required OdbcBatchTransactionSupport transactionSupport,
+    required OdbcBatchConnectionPhase connectionPhase,
+    required OdbcBatchCommandPhase commandPhase,
+    required OdbcBatchRoutingPhases routingPhases,
   }) : _connectionManager = connectionManager,
        _txManager = txManager,
        _metrics = metrics,
-       _failureMapper = OdbcBatchFailureMapper(
-         connectionManager: connectionManager,
-         metrics: metrics,
-       ),
-       _transactionSupport = OdbcBatchTransactionSupport(metrics: metrics),
-       _connectionPhase = OdbcBatchConnectionPhase(
-         connectionManager: connectionManager,
-         optionsResolver: optionsResolver,
-         nativeCompatiblePolicy: nativeCompatiblePolicy,
-         ensureInitialized: ensureInitialized,
-         resolveActiveConfig: resolveActiveConfig,
-         buildDatabaseConfig: buildDatabaseConfig,
-         resolveConnectionString: resolveConnectionString,
-         recordInfrastructureFailure: recordInfrastructureFailure,
-       ),
-       _commandPhase = OdbcBatchCommandPhase(
-         txManager: txManager,
-         queryRunner: queryRunner,
-         statementExecutor: statementExecutor,
-         optionsResolver: optionsResolver,
-         connectionManager: connectionManager,
-         failureMapper: OdbcBatchFailureMapper(
-           connectionManager: connectionManager,
-           metrics: metrics,
-         ),
-         uuid: uuid,
-         recordExecutionFailure: recordExecutionFailure,
-       ),
-       _routingPhases = OdbcBatchRoutingPhases(
-         connectionManager: connectionManager,
-         txManager: txManager,
-         bulkInsertExecutor: bulkInsertExecutor,
-         readOnlyBatchParallelExecutor: readOnlyBatchParallelExecutor,
-         readOnlyBatchParallelSemaphore: readOnlyBatchParallelSemaphore,
-         nativeCompatiblePolicy: nativeCompatiblePolicy,
-         connectionPhase: OdbcBatchConnectionPhase(
-           connectionManager: connectionManager,
-           optionsResolver: optionsResolver,
-           nativeCompatiblePolicy: nativeCompatiblePolicy,
-           ensureInitialized: ensureInitialized,
-           resolveActiveConfig: resolveActiveConfig,
-           buildDatabaseConfig: buildDatabaseConfig,
-           resolveConnectionString: resolveConnectionString,
-           recordInfrastructureFailure: recordInfrastructureFailure,
-         ),
-         failureMapper: OdbcBatchFailureMapper(
-           connectionManager: connectionManager,
-           metrics: metrics,
-         ),
-         transactionSupport: OdbcBatchTransactionSupport(metrics: metrics),
-         metrics: metrics,
-         ensureInitialized: ensureInitialized,
-         resolveActiveConfig: resolveActiveConfig,
-         buildDatabaseConfig: buildDatabaseConfig,
-         resolveConnectionString: resolveConnectionString,
-         poolSize: poolSize,
-       );
+       _failureMapper = failureMapper,
+       _transactionSupport = transactionSupport,
+       _connectionPhase = connectionPhase,
+       _commandPhase = commandPhase,
+       _routingPhases = routingPhases;
 
   final OdbcGatewayConnectionManager _connectionManager;
   final OdbcBatchTransactionManager _txManager;

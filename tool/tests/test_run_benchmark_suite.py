@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tool.py.benchmark_common import parse_transport_markdown_metrics
+from tool.py.benchmark_common import parse_plug_agente_stack_metrics, parse_transport_markdown_metrics
 from tool.benchmarks.run_benchmark_suite import build_suite_plans, filter_suite_plans, main
 
 
@@ -19,6 +19,7 @@ class RunBenchmarkSuiteTests(unittest.TestCase):
         plans = build_suite_plans()
         ids = [plan["id"] for plan in plans]
         self.assertIn("transport_pipeline", ids)
+        self.assertIn("plug_agente_stack", ids)
         self.assertIn("odbc_async", ids)
 
     def test_filter_suite_plans_only_and_skip_dart_tool(self) -> None:
@@ -37,6 +38,17 @@ class RunBenchmarkSuiteTests(unittest.TestCase):
         key = "small_sql_repetitive.async.auto.signed_True.send_p50_us"
         self.assertIn(key, metrics)
         self.assertAlmostEqual(metrics[key], 1200.0)
+
+    def test_parse_plug_agente_stack_metrics(self) -> None:
+        sample = """
+| scenario | variant | iterations | median_us | p95_us | speedup | rows_per_sec | notes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| columnar_stream_emitter | wire_only | 8 | 1200 | 1500 | 4.5 | 4166666.67 | rows=5000 |
+"""
+        metrics = parse_plug_agente_stack_metrics(sample)
+        self.assertIn("columnar_stream_emitter.wire_only.median_us", metrics)
+        self.assertEqual(metrics["columnar_stream_emitter.wire_only.median_us"], 1200.0)
+        self.assertAlmostEqual(metrics["columnar_stream_emitter.wire_only.speedup"], 4.5)
 
 
 if __name__ == "__main__":

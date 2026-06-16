@@ -2,8 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
-import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
@@ -169,17 +167,6 @@ void main() {
       expect(capturedOptions.idleTimeout, ConnectionConstants.defaultNativePoolIdleTimeout);
       expect(capturedOptions.maxLifetime, ConnectionConstants.defaultNativePoolMaxLifetime);
       expect(capturedOptions.connectionTimeout, ConnectionConstants.defaultNativePoolConnectionTimeout);
-    });
-
-    test('should reject custom connection options explicitly', () async {
-      final result = await pool.acquire(
-        'DSN=Options',
-        options: const ConnectionAcquireOptions(queryTimeout: Duration(seconds: 5)),
-      );
-
-      expect(result.isError(), isTrue);
-      expect(result.exceptionOrNull(), isA<domain.ConfigurationFailure>());
-      verifyNever(() => mockService.poolCreate(any(), any(), options: any(named: 'options')));
     });
 
     test('should close created pools and clear internal state', () async {
@@ -532,6 +519,9 @@ void main() {
           ConnectionError(message: 'Pool is unhealthy'),
         ),
       );
+      when(() => mockService.poolGetState(31)).thenAnswer(
+        (_) async => const Success(PoolState(size: 1, idle: 0)),
+      );
 
       await pool.acquire('DSN=Health');
       final health = await pool.healthCheckAll();
@@ -566,11 +556,93 @@ void main() {
           ConnectionError(message: 'hc_failed'),
         ),
       );
+      when(() => mockService.poolGetState(41)).thenAnswer(
+        (_) async => const Success(PoolState(size: 1, idle: 0)),
+      );
 
       await pool.acquire('DSN=HealthErr');
       final health = await pool.healthCheckAll();
 
       expect(health.isError(), isTrue);
+    });
+
+    test('warmUp acquires connections in bounded parallel batches', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => const Success(61));
+      var counter = 0;
+      when(() => mockService.poolGetConnection(61)).thenAnswer((_) async {
+        counter++;
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        return Success(
+          Connection(
+            id: 'warm-$counter',
+            connectionString: 'DSN=Warm',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(() => mockService.poolReleaseConnection(any())).thenAnswer(
+        (_) async => const Success(unit),
+      );
+
+      final result = await pool.warmUp('DSN=Warm', warmUpCount: 4);
+
+      expect(result.isSuccess(), isTrue);
+      verify(() => mockService.poolGetConnection(61)).called(4);
+      verify(() => mockService.poolReleaseConnection(any())).called(4);
+    });
+
+    test('healthCheckAll reconciles tracked active count with pool state', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => const Success(71));
+      when(
+        () => mockService.poolGetConnection(71),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'c71',
+            connectionString: 'DSN=Reconcile',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.poolGetState(71)).thenAnswer(
+        (_) async => const Success(PoolState(size: 8, idle: 3)),
+      );
+      when(() => mockService.poolHealthCheck(71)).thenAnswer(
+        (_) async => const Success(true),
+      );
+
+      await pool.acquire('DSN=Reconcile');
+      final health = await pool.healthCheckAll();
+
+      expect(health.isSuccess(), isTrue);
+      final diagnostics = pool.getHealthDiagnostics();
+      expect(diagnostics['effective_strategy'], 'native');
+      expect(diagnostics['native_circuit_open'], isFalse);
+      expect(diagnostics['native_skip_reason'], isNull);
+      expect(diagnostics['native_active_count'], 5);
+    });
+
+    test('getHealthDiagnostics exposes strategy and circuit fields', () {
+      final diagnostics = pool.getHealthDiagnostics();
+
+      expect(diagnostics['strategy'], 'native');
+      expect(diagnostics['effective_strategy'], 'native');
+      expect(diagnostics['native_circuit_open'], isFalse);
+      expect(diagnostics['native_skip_reason'], isNull);
     });
   });
 }

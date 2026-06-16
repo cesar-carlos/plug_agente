@@ -1,15 +1,12 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
-import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart' as app_log;
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
-import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_circuit_breaker.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
@@ -19,7 +16,6 @@ import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_br
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 import 'package:plug_agente/infrastructure/config/odbc_stream_columnar_wire_config.dart';
-import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/i_odbc_batched_streaming_query_source.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_adaptive_buffer_cache.dart';
@@ -28,27 +24,19 @@ import 'package:plug_agente/infrastructure/external_services/odbc_connection_str
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_buffer_expansion.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_result_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_runtime_lifecycle.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_active_connection.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_cancel_coordinator.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_chunk_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_connect_phase.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_connection_options_builder.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_native_options.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_query_stream_opener.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_session_cache.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
-
-class _ActiveStreamingConnection {
-  _ActiveStreamingConnection({
-    required this.executionId,
-    required this.connectionId,
-    required this.lease,
-  });
-
-  final String executionId;
-  final String connectionId;
-  final DirectOdbcConnectionLease lease;
-  bool isCancelRequested = false;
-  bool isDisconnectStarted = false;
-  StreamingCancelReason cancelReason = StreamingCancelReason.user;
-}
 
 /// Gateway com suporte a streaming real para grandes datasets.
 ///
@@ -65,9 +53,13 @@ class OdbcStreamingGateway
     OdbcProfileRecommendedOptions? recommendedOptions,
     Duration cancelDisconnectTimeout = _defaultCancelDisconnectTimeout,
     OdbcInFlightExecutionRegistry? inFlightExecutionRegistry,
-  }) : _batchedQuerySource = batchedQuerySource,
-       _recommendedOptions = recommendedOptions,
-       _inFlightRegistry = inFlightExecutionRegistry,
+    OdbcStreamingConnectionOptionsBuilder? connectionOptionsBuilder,
+    OdbcStreamingCancelCoordinator? cancelCoordinator,
+    OdbcStreamingConnectPhase? connectPhase,
+    OdbcStreamingQueryStreamOpener? queryStreamOpener,
+    OdbcRuntimeLifecycle? runtimeLifecycle,
+    OdbcStreamingSessionCache? streamingSessionCache,
+  }) : _inFlightRegistry = inFlightExecutionRegistry,
        _directConnectionLimiter =
            directConnectionLimiter ??
            DirectOdbcConnectionLimiter(
@@ -78,29 +70,77 @@ class OdbcStreamingGateway
              metricsCollector: metricsCollector,
            ),
        _metrics = metricsCollector,
-       _cancelDisconnectTimeout = cancelDisconnectTimeout;
+       _connectionOptionsBuilder =
+           connectionOptionsBuilder ??
+           OdbcStreamingConnectionOptionsBuilder(
+             settings: _settings,
+             recommendedOptions: recommendedOptions,
+           ),
+       _cancelCoordinator =
+           cancelCoordinator ??
+           OdbcStreamingCancelCoordinator(
+             service: _service,
+             metricsCollector: metricsCollector,
+             cancelDisconnectTimeout: cancelDisconnectTimeout,
+           ),
+       _connectPhase =
+           connectPhase ??
+           OdbcStreamingConnectPhase(
+             service: _service,
+             circuitBreakers: _sharedCircuitBreakerCache,
+             directConnectionLimiter:
+                 directConnectionLimiter ??
+                 DirectOdbcConnectionLimiter(
+                   maxConcurrent: ConnectionConstants.directOdbcConnectionConcurrency(
+                     _settings.poolSize,
+                   ),
+                   acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
+                   metricsCollector: metricsCollector,
+                 ),
+             sessionCache: streamingSessionCache,
+           ),
+       _queryStreamOpener = queryStreamOpener ??
+           OdbcStreamingQueryStreamOpener(
+             service: _service,
+             batchedQuerySource: batchedQuerySource,
+           ),
+       _runtimeLifecycle = runtimeLifecycle ?? OdbcRuntimeLifecycle(_service);
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
-  final OdbcProfileRecommendedOptions? _recommendedOptions;
-  final IOdbcBatchedStreamingQuerySource? _batchedQuerySource;
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
   final MetricsCollector? _metrics;
-  final Duration _cancelDisconnectTimeout;
   final OdbcInFlightExecutionRegistry? _inFlightRegistry;
-  final Map<String, _ActiveStreamingConnection> _activeStreams = <String, _ActiveStreamingConnection>{};
-  final ConnectionCircuitBreakerCache _circuitBreakers = ConnectionCircuitBreakerCache(
+  final OdbcStreamingConnectionOptionsBuilder _connectionOptionsBuilder;
+  final OdbcStreamingCancelCoordinator _cancelCoordinator;
+  final OdbcStreamingConnectPhase _connectPhase;
+  final OdbcStreamingQueryStreamOpener _queryStreamOpener;
+  final OdbcRuntimeLifecycle _runtimeLifecycle;
+  final Map<String, OdbcStreamingActiveConnection> _activeStreams = <String, OdbcStreamingActiveConnection>{};
+  static final ConnectionCircuitBreakerCache _sharedCircuitBreakerCache = ConnectionCircuitBreakerCache(
     factory: () => ConnectionCircuitBreaker(
       failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
       resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
     ),
   );
-  bool _initialized = false;
-  Future<Result<void>>? _initialization;
+  final ConnectionCircuitBreakerCache _circuitBreakers = _sharedCircuitBreakerCache;
   static const Duration _defaultCancelDisconnectTimeout = Duration(seconds: 8);
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
 
-  ConnectionCircuitBreaker _getCircuitBreaker(String connectionString) {
-    return _circuitBreakers.getOrCreate(connectionString);
+  Future<Result<void>> _ensureInitialized() {
+    return _runtimeLifecycle.ensureInitialized(
+      operation: 'initialize_streaming_odbc',
+      userMessage: 'Não foi possível inicializar o ambiente ODBC para streaming.',
+    );
+  }
+
+  Future<void> invalidateAfterWorkerRecovery() async {
+    if (_activeStreams.isNotEmpty) {
+      final streams = _activeStreams.values.toList(growable: false);
+      await _cancelCoordinator.cancelActiveStreams(streams: streams);
+      _activeStreams.clear();
+    }
+    await _connectPhase.sessionCache.drainCachedSessions();
+    _runtimeLifecycle.invalidateAfterWorkerRecovery();
   }
 
   @override
@@ -118,95 +158,9 @@ class OdbcStreamingGateway
       'direct_limiter_max_concurrent': _directConnectionLimiter.maxConcurrent,
       'direct_limiter_saturated': _directConnectionLimiter.isSaturated,
       'direct_limiter_by_operation_class': _directConnectionLimiter.getOperationClassDiagnostics(),
-      // odbc_fast 4.x uses columnar batched streaming on the native path;
-      // plug_agente infers batched usage when multiple native chunks are observed.
       'native_batched_path_observable': false,
       'native_path_inference': 'multi_chunk_implies_batched_columnar',
     };
-  }
-
-  bool _messageIndicatesInvalidConnectionId(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
-
-  ConnectionOptions _buildStreamingConnectionOptions(
-    int chunkSizeBytes, {
-    int? hintedBufferBytes,
-    Duration? queryTimeout,
-    int? maxResultBufferBytes,
-    bool lazyStrings = false,
-  }) {
-    final normalizedChunkSize = max(chunkSizeBytes, 64 * 1024);
-    final resolvedMaxResultBufferBytes =
-        maxResultBufferBytes ??
-        max(
-          normalizedChunkSize,
-          max(
-            hintedBufferBytes ?? 0,
-            OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024,
-          ),
-        );
-    final initialResultBufferBytes = min(
-      ConnectionConstants.defaultInitialResultBufferBytes,
-      resolvedMaxResultBufferBytes,
-    );
-
-    final plugAcquireOptions = ConnectionAcquireOptions(
-      loginTimeout: Duration(seconds: _settings.loginTimeoutSeconds),
-      queryTimeout: queryTimeout ?? ConnectionConstants.defaultStreamingQueryTimeout,
-      maxResultBufferBytes: resolvedMaxResultBufferBytes,
-      initialResultBufferBytes: initialResultBufferBytes,
-      autoReconnectOnConnectionLost: true,
-      maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
-      reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
-    );
-    final recommended = _recommendedOptions?.connection;
-    if (recommended != null) {
-      return OdbcRecommendedOptionsMerger.mergeConnectionOptions(
-        plugOptions: plugAcquireOptions,
-        recommended: recommended,
-        lazyStrings: lazyStrings,
-      );
-    }
-
-    return ConnectionOptions(
-      loginTimeout: plugAcquireOptions.loginTimeout,
-      queryTimeout: plugAcquireOptions.queryTimeout,
-      maxResultBufferBytes: plugAcquireOptions.maxResultBufferBytes,
-      initialResultBufferBytes: plugAcquireOptions.initialResultBufferBytes,
-      autoReconnectOnConnectionLost: plugAcquireOptions.autoReconnectOnConnectionLost ?? true,
-      maxReconnectAttempts: plugAcquireOptions.maxReconnectAttempts,
-      reconnectBackoff: plugAcquireOptions.reconnectBackoff,
-      lazyStrings: lazyStrings,
-    );
-  }
-
-  Future<Result<void>> _ensureInitialized() {
-    if (_initialized) {
-      return Future<Result<void>>.value(const Success(unit));
-    }
-    return _initialization ??= _initializeOnce();
-  }
-
-  Future<Result<void>> _initializeOnce() async {
-    final initResult = await _service.initialize();
-    return initResult.fold(
-      (_) {
-        _initialized = true;
-        return const Success(unit);
-      },
-      (error) {
-        _initialization = null;
-        return Failure(
-          OdbcFailureMapper.mapConnectionError(
-            error,
-            operation: 'initialize_streaming_odbc',
-            context: {
-              'reason': OdbcContextConstants.odbcInitializationFailedReason,
-              'user_message': 'Não foi possível inicializar o ambiente ODBC para streaming.',
-            },
-          ),
-        );
-      },
-    );
   }
 
   @override
@@ -238,30 +192,18 @@ class OdbcStreamingGateway
       );
     }
 
-    // Fail fast when the caller-provided executionId is already in use. The
-    // late check below (after connect) still covers the case where the id is
-    // derived from connection.id, but this short-circuit avoids spending a
-    // lease + connect on a duplicate retry.
     if (executionId != null && _activeStreams.containsKey(executionId)) {
       app_log.AppLogger.warning(
         'executeQueryStream: duplicate executionId rejected before connect ($executionId)',
       );
       return Failure(
-        OdbcFailureMapper.mapStreamingError(
-          StateError('stream_duplicate_execution_id'),
+        _connectPhase.duplicateExecutionIdFailure(
+          executionId: executionId,
           operation: 'executeQueryStream',
-          context: {
-            'executionId': executionId,
-            'reason': OdbcContextConstants.streamDuplicateExecutionIdReason,
-            'user_message':
-                'Já existe uma consulta de streaming em andamento com este identificador. '
-                'Aguarde a finalização ou use um identificador diferente.',
-          },
         ),
       );
     }
 
-    // Conectar com opções otimizadas para streaming
     final hintedBufferBytes = _adaptiveBufferCache.lookup(
       connectionString: connectionString,
       sql: query,
@@ -270,9 +212,7 @@ class OdbcStreamingGateway
     if (_directConnectionLimiter.maxConcurrent != desiredDirectConcurrency) {
       _directConnectionLimiter.reconfigureMaxConcurrent(desiredDirectConcurrency);
     }
-    final leaseResult = await _directConnectionLimiter.acquire(
-      operation: 'streaming_query',
-    );
+    final leaseResult = await _connectPhase.acquireLease(operation: 'streaming_query');
     if (leaseResult.isError()) {
       return Failure(leaseResult.exceptionOrNull()!);
     }
@@ -280,7 +220,7 @@ class OdbcStreamingGateway
     if (cancellationToken?.isCancelled ?? false) {
       directLease.release();
       return Failure(
-        _streamCancelledFailure(
+        _cancelCoordinator.streamCancelledFailure(
           executionId: executionId,
           connectionId: null,
           reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
@@ -295,7 +235,7 @@ class OdbcStreamingGateway
       ),
       hintedBufferBytes: hintedBufferBytes,
     );
-    final streamingOptions = _buildStreamingConnectionOptions(
+    final streamingOptions = _connectionOptionsBuilder.build(
       nativeStreamingOptions.nativeChunkSizeBytes,
       hintedBufferBytes: hintedBufferBytes,
       queryTimeout: queryTimeout,
@@ -303,21 +243,10 @@ class OdbcStreamingGateway
       lazyStrings: connectionStringBenefitsFromLazyStrings(connectionString),
     );
 
-    final circuitBreaker = _getCircuitBreaker(connectionString);
-    final connResult = await circuitBreaker.execute<Connection>(
-      connectionString,
-      () async {
-        final raw = await _service.connect(connectionString, options: streamingOptions);
-        if (raw.isSuccess()) {
-          return Success(raw.getOrThrow());
-        }
-        return Failure(
-          OdbcFailureMapper.mapConnectionError(
-            raw.exceptionOrNull()!,
-            operation: 'connect_streaming',
-          ),
-        );
-      },
+    final connResult = await _connectPhase.connectStreaming(
+      connectionString: connectionString,
+      options: streamingOptions,
+      operation: 'connect_streaming',
     );
     if (connResult.isError()) {
       directLease.release();
@@ -327,10 +256,10 @@ class OdbcStreamingGateway
 
     final streamExecutionId = executionId ?? connection.id;
     if (cancellationToken?.isCancelled ?? false) {
-      await _safeDisconnect(connection.id);
+      await _cancelCoordinator.safeDisconnect(connection.id);
       directLease.release();
       return Failure(
-        _streamCancelledFailure(
+        _cancelCoordinator.streamCancelledFailure(
           executionId: streamExecutionId,
           connectionId: connection.id,
           reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
@@ -338,30 +267,17 @@ class OdbcStreamingGateway
       );
     }
     if (_activeStreams.containsKey(streamExecutionId)) {
-      // Two concurrent streams sharing an executionId would let the first one
-      // overwrite the second's tracking entry, breaking cancel routing and
-      // causing the first to drop the second's lease on its finally block.
-      // Reject the duplicate; callers must use unique IDs per execution.
-      await _safeDisconnect(connection.id);
+      await _cancelCoordinator.safeDisconnect(connection.id);
       directLease.release();
-      app_log.AppLogger.warning(
-        'executeQueryStream: duplicate executionId rejected ($streamExecutionId)',
-      );
       return Failure(
-        OdbcFailureMapper.mapStreamingError(
-          StateError('stream_duplicate_execution_id'),
+        _connectPhase.duplicateExecutionIdFailure(
+          executionId: streamExecutionId,
           operation: 'executeQueryStream',
-          context: {
-            'executionId': streamExecutionId,
-            'reason': OdbcContextConstants.streamDuplicateExecutionIdReason,
-            'user_message':
-                'Já existe uma consulta de streaming em andamento com este identificador. '
-                'Aguarde a finalização ou use um identificador diferente.',
-          },
+          logWarning: true,
         ),
       );
     }
-    final activeStream = _ActiveStreamingConnection(
+    final activeStream = OdbcStreamingActiveConnection(
       executionId: streamExecutionId,
       connectionId: connection.id,
       lease: directLease,
@@ -370,11 +286,12 @@ class OdbcStreamingGateway
     _registerInFlightExecution(streamExecutionId, connection.id);
     onSetupComplete?.call();
     var nativeChunkCount = 0;
+    var streamCompletedSuccessfully = false;
     final prefersRowMajorStreaming = connectionStringPrefersRowMajorStreaming(connectionString);
     try {
       if (prefersRowMajorStreaming) {
         final lazyStrings = connectionStringBenefitsFromLazyStrings(connectionString);
-        final queryStream = _openRowMajorStreamingQueryStream(
+        final queryStream = _queryStreamOpener.openRowMajor(
           connectionId: connection.id,
           query: query,
           nativeStreamingOptions: nativeStreamingOptions,
@@ -383,7 +300,7 @@ class OdbcStreamingGateway
         );
         await for (final chunkResult in queryStream) {
           nativeChunkCount++;
-          final shouldStop = await _handleStreamingChunkCancellation(
+          final shouldStop = await _cancelCoordinator.handleStreamingChunkCancellation(
             activeStream: activeStream,
             connectionId: connection.id,
             cancellationToken: cancellationToken,
@@ -409,7 +326,7 @@ class OdbcStreamingGateway
           );
         }
       } else {
-        final queryStream = _openColumnarStreamingQueryStream(
+        final queryStream = _queryStreamOpener.openColumnar(
           connectionId: connection.id,
           query: query,
           nativeStreamingOptions: nativeStreamingOptions,
@@ -417,7 +334,7 @@ class OdbcStreamingGateway
         );
         await for (final chunkResult in queryStream) {
           nativeChunkCount++;
-          final shouldStop = await _handleStreamingChunkCancellation(
+          final shouldStop = await _cancelCoordinator.handleStreamingChunkCancellation(
             activeStream: activeStream,
             connectionId: connection.id,
             cancellationToken: cancellationToken,
@@ -446,6 +363,7 @@ class OdbcStreamingGateway
         }
       }
 
+      streamCompletedSuccessfully = true;
       return const Success(unit);
     } on Object catch (e) {
       if (OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
@@ -477,7 +395,11 @@ class OdbcStreamingGateway
       );
     } finally {
       _recordNativeStreamingPathMetrics(nativeChunkCount);
-      await _disconnectActiveStream(activeStream);
+      await _releaseStreamingConnection(
+        activeStream: activeStream,
+        connectionString: connectionString,
+        reuseEligible: streamCompletedSuccessfully,
+      );
       activeStream.lease.release();
       _unregisterInFlightExecution(streamExecutionId);
       _activeStreams.remove(streamExecutionId);
@@ -508,13 +430,9 @@ class OdbcStreamingGateway
 
     if (executionId != null && _activeStreams.containsKey(executionId)) {
       return Failure(
-        OdbcFailureMapper.mapStreamingError(
-          StateError('stream_duplicate_execution_id'),
+        _connectPhase.duplicateExecutionIdFailure(
+          executionId: executionId,
           operation: 'executeMultiResultQueryStream',
-          context: {
-            'executionId': executionId,
-            'reason': OdbcContextConstants.streamDuplicateExecutionIdReason,
-          },
         ),
       );
     }
@@ -523,9 +441,7 @@ class OdbcStreamingGateway
     if (_directConnectionLimiter.maxConcurrent != desiredDirectConcurrency) {
       _directConnectionLimiter.reconfigureMaxConcurrent(desiredDirectConcurrency);
     }
-    final leaseResult = await _directConnectionLimiter.acquire(
-      operation: 'streaming_multi_result',
-    );
+    final leaseResult = await _connectPhase.acquireLease(operation: 'streaming_multi_result');
     if (leaseResult.isError()) {
       return Failure(leaseResult.exceptionOrNull()!);
     }
@@ -533,7 +449,7 @@ class OdbcStreamingGateway
     if (cancellationToken?.isCancelled ?? false) {
       directLease.release();
       return Failure(
-        _streamCancelledFailure(
+        _cancelCoordinator.streamCancelledFailure(
           executionId: executionId,
           connectionId: null,
           reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
@@ -541,25 +457,14 @@ class OdbcStreamingGateway
       );
     }
 
-    final streamingOptions = _buildStreamingConnectionOptions(
+    final streamingOptions = _connectionOptionsBuilder.build(
       ConnectionConstants.defaultStreamingChunkSizeKb * 1024,
       queryTimeout: queryTimeout,
     );
-    final circuitBreaker = _getCircuitBreaker(connectionString);
-    final connResult = await circuitBreaker.execute<Connection>(
-      connectionString,
-      () async {
-        final raw = await _service.connect(connectionString, options: streamingOptions);
-        if (raw.isSuccess()) {
-          return Success(raw.getOrThrow());
-        }
-        return Failure(
-          OdbcFailureMapper.mapConnectionError(
-            raw.exceptionOrNull()!,
-            operation: 'connect_streaming_multi_result',
-          ),
-        );
-      },
+    final connResult = await _connectPhase.connectStreaming(
+      connectionString: connectionString,
+      options: streamingOptions,
+      operation: 'connect_streaming_multi_result',
     );
     if (connResult.isError()) {
       directLease.release();
@@ -567,7 +472,7 @@ class OdbcStreamingGateway
     }
     final connection = connResult.getOrThrow();
     final streamExecutionId = executionId ?? connection.id;
-    final activeStream = _ActiveStreamingConnection(
+    final activeStream = OdbcStreamingActiveConnection(
       executionId: streamExecutionId,
       connectionId: connection.id,
       lease: directLease,
@@ -576,6 +481,7 @@ class OdbcStreamingGateway
     _registerInFlightExecution(streamExecutionId, connection.id);
     onSetupComplete?.call();
 
+    var streamCompletedSuccessfully = false;
     try {
       var resultSetIndex = 0;
       var itemIndex = 0;
@@ -586,7 +492,7 @@ class OdbcStreamingGateway
         }
         if (activeStream.isCancelRequested) {
           return Failure(
-            _streamCancelledFailure(
+            _cancelCoordinator.streamCancelledFailure(
               executionId: streamExecutionId,
               connectionId: connection.id,
               reason: activeStream.cancelReason,
@@ -624,6 +530,7 @@ class OdbcStreamingGateway
         );
       }
 
+      streamCompletedSuccessfully = true;
       return const Success(unit);
     } on Object catch (e) {
       return Failure(
@@ -637,54 +544,25 @@ class OdbcStreamingGateway
         ),
       );
     } finally {
-      await _disconnectActiveStream(activeStream);
+      await _releaseStreamingConnection(
+        activeStream: activeStream,
+        connectionString: connectionString,
+        reuseEligible: streamCompletedSuccessfully,
+      );
       activeStream.lease.release();
       _unregisterInFlightExecution(streamExecutionId);
       _activeStreams.remove(streamExecutionId);
     }
   }
 
-  /// Resets the circuit breaker for a specific connection string.
-  ///
-  /// Useful after configuration changes or manual recovery.
   @override
   void resetCircuitBreaker(String connectionString) {
     _circuitBreakers.reset(connectionString);
   }
 
-  /// Best-effort disconnect with a bounded timeout. Used on cleanup paths
-  /// (early cancellation, duplicate executionId rejection) where we cannot
-  /// afford to block forever waiting for the driver.
-  Future<void> _safeDisconnect(String connectionId) async {
-    try {
-      await _service.disconnect(connectionId).timeout(_cancelDisconnectTimeout);
-    } on TimeoutException {
-      _metrics?.recordStreamCancelDisconnectTimeout();
-    } on Object {
-      // Swallow: caller has already decided to abort the stream; logging
-      // happens in the disconnect path when the gateway is asked to cancel
-      // an active stream via cancelActiveStream.
-    }
-  }
-
-  domain.Failure _streamCancelledFailure({
-    required String? executionId,
-    required String? connectionId,
-    required StreamingCancelReason reason,
-  }) {
-    final context = <String, dynamic>{
-      ...?(connectionId == null ? null : <String, dynamic>{'connectionId': connectionId}),
-      ...?(executionId == null ? null : <String, dynamic>{'executionId': executionId}),
-      'reason': reason == StreamingCancelReason.socketDisconnect
-          ? OdbcContextConstants.socketDisconnectReason
-          : OdbcContextConstants.executionCancelledReason,
-    };
-    return OdbcFailureMapper.mapStreamingError(
-      StateError('stream_cancelled_${reason.name}'),
-      operation: 'executeQueryStream',
-      context: context,
-      cancelledByUser: reason != StreamingCancelReason.socketDisconnect,
-    );
+  @override
+  void clearAllCircuitBreakers() {
+    _circuitBreakers.clear();
   }
 
   @override
@@ -694,80 +572,8 @@ class OdbcStreamingGateway
   }) async {
     final streams = executionId == null
         ? _activeStreams.values.toList(growable: false)
-        : <_ActiveStreamingConnection>[?_activeStreams[executionId]];
-    if (streams.isEmpty) {
-      return const Success(unit);
-    }
-
-    for (final stream in streams) {
-      _metrics?.recordStreamCancelRequest();
-      if (reason == StreamingCancelReason.backpressureOverflow) {
-        _metrics?.recordStreamCancelBackpressure();
-      }
-      stream.cancelReason = reason;
-      stream.isCancelRequested = true;
-      final result = await _disconnectActiveStream(stream);
-      if (result.isError()) {
-        app_log.AppLogger.warning(
-          'cancelActiveStream: disconnect after cancel request completed with error '
-          '(cancellation was still applied; execution will stop): '
-          '${result.exceptionOrNull()}',
-        );
-      }
-    }
-
-    return const Success(unit);
-  }
-
-  Future<Result<void>> _disconnectActiveStream(
-    _ActiveStreamingConnection stream,
-  ) async {
-    if (stream.isDisconnectStarted) {
-      return const Success(unit);
-    }
-
-    stream.isDisconnectStarted = true;
-    try {
-      final result = await _service.disconnect(stream.connectionId).timeout(_cancelDisconnectTimeout);
-      return result.fold(
-        (_) => const Success(unit),
-        (error) {
-          if (_messageIndicatesInvalidConnectionId(error)) {
-            return const Success(unit);
-          }
-          _metrics?.recordStreamCancelDisconnectFailure();
-          return Failure(
-            OdbcFailureMapper.mapConnectionError(
-              error,
-              operation: 'cancel_streaming_disconnect',
-              context: {
-                'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
-                'executionId': stream.executionId,
-                'user_message':
-                    'A consulta foi marcada para cancelamento, mas a desconexão '
-                    'do streaming não foi confirmada imediatamente.',
-              },
-            ),
-          );
-        },
-      );
-    } on TimeoutException catch (error) {
-      _metrics?.recordStreamCancelDisconnectTimeout();
-      return Failure(
-        OdbcFailureMapper.mapConnectionError(
-          error,
-          operation: 'cancel_streaming_disconnect',
-          context: {
-            'reason': OdbcContextConstants.streamCancelDisconnectTimeoutReason,
-            'executionId': stream.executionId,
-            'timeout_ms': _cancelDisconnectTimeout.inMilliseconds,
-            'user_message':
-                'A consulta foi marcada para cancelamento, mas a desconexão '
-                'do streaming não foi confirmada dentro do tempo esperado.',
-          },
-        ),
-      );
-    }
+        : <OdbcStreamingActiveConnection>[?_activeStreams[executionId]];
+    return _cancelCoordinator.cancelActiveStreams(streams: streams, reason: reason);
   }
 
   void _recordNativeStreamingPathMetrics(int nativeChunkCount) {
@@ -779,113 +585,6 @@ class OdbcStreamingGateway
       return;
     }
     _metrics?.recordStreamingSingleChunkPath();
-  }
-
-  Stream<Result<TypedColumnarResult>> _openColumnarStreamingQueryStream({
-    required String connectionId,
-    required String query,
-    required OdbcStreamingNativeOptions nativeStreamingOptions,
-    Map<String, dynamic>? parameters,
-  }) {
-    if (parameters != null && parameters.isNotEmpty) {
-      return _service.streamQueryNamed(connectionId, query, parameters).map((result) => result.map(toTypedColumnar));
-    }
-
-    final batchedSource = _batchedQuerySource;
-    if (batchedSource == null) {
-      return _service.streamQueryColumnar(connectionId, query);
-    }
-
-    final nativeConnectionId = int.tryParse(connectionId);
-    if (nativeConnectionId == null || nativeConnectionId <= 0) {
-      return _service.streamQueryColumnar(connectionId, query);
-    }
-
-    return batchedSource.streamColumnarQuery(
-      nativeConnectionId,
-      query,
-      nativeStreamingOptions,
-    );
-  }
-
-  Stream<Result<QueryResult>> _openRowMajorStreamingQueryStream({
-    required String connectionId,
-    required String query,
-    required OdbcStreamingNativeOptions nativeStreamingOptions,
-    Map<String, dynamic>? parameters,
-    bool lazyStrings = false,
-  }) {
-    if (parameters != null && parameters.isNotEmpty) {
-      return _service.streamQueryNamed(connectionId, query, parameters);
-    }
-
-    final batchedSource = _batchedQuerySource;
-    final nativeConnectionId = int.tryParse(connectionId);
-    if (batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0) {
-      return batchedSource.streamRowMajorQuery(
-        nativeConnectionId,
-        query,
-        nativeStreamingOptions,
-        lazyStrings: lazyStrings,
-      );
-    }
-
-    return _service.streamQuery(connectionId, query);
-  }
-
-  Future<Result<void>?> _handleStreamingChunkCancellation({
-    required _ActiveStreamingConnection activeStream,
-    required String connectionId,
-    CancellationToken? cancellationToken,
-    StreamingCancelReason? Function()? cancellationReasonProvider,
-  }) async {
-    if ((cancellationToken?.isCancelled ?? false) && !activeStream.isCancelRequested) {
-      activeStream.isCancelRequested = true;
-      activeStream.cancelReason = cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect;
-    }
-    if (!activeStream.isCancelRequested) {
-      return null;
-    }
-    if (activeStream.cancelReason == StreamingCancelReason.playgroundRowCap) {
-      return const Success(unit);
-    }
-    if (activeStream.cancelReason == StreamingCancelReason.backpressureOverflow) {
-      _metrics?.recordStreamCancelBackpressure();
-      return Failure(
-        OdbcFailureMapper.mapStreamingError(
-          StateError('stream_cancelled_backpressure_overflow'),
-          operation: 'executeQueryStream',
-          context: {
-            'connectionId': connectionId,
-            'rpc_error_code': RpcErrorCode.resultTooLarge,
-            'reason': RpcStreamingConstants.backpressureOverflowReason,
-          },
-        ),
-      );
-    }
-    if (activeStream.cancelReason == StreamingCancelReason.socketDisconnect) {
-      app_log.AppLogger.info(
-        'resilience: stream_cancelled_on_disconnect connection_id=$connectionId',
-      );
-      return Failure(
-        OdbcFailureMapper.mapStreamingError(
-          StateError('stream_cancelled_on_disconnect'),
-          operation: 'executeQueryStream',
-          context: {
-            'connectionId': connectionId,
-            'reason': OdbcContextConstants.socketDisconnectReason,
-          },
-        ),
-      );
-    }
-    return Failure(
-      OdbcFailureMapper.mapStreamingError(
-        StateError('stream_cancelled'),
-        operation: 'executeQueryStream',
-        context: {'connectionId': connectionId},
-        cancelledByUser: true,
-      ),
-    );
   }
 
   void _registerInFlightExecution(String requestId, String connectionId) {
@@ -903,5 +602,20 @@ class OdbcStreamingGateway
       return;
     }
     _inFlightRegistry?.unregister(requestId);
+  }
+
+  Future<void> _releaseStreamingConnection({
+    required OdbcStreamingActiveConnection activeStream,
+    required String connectionString,
+    required bool reuseEligible,
+  }) async {
+    if (reuseEligible &&
+        _connectPhase.offerSessionForReuse(
+          connectionString: connectionString,
+          connectionId: activeStream.connectionId,
+        )) {
+      return;
+    }
+    await _cancelCoordinator.disconnectActiveStream(activeStream);
   }
 }

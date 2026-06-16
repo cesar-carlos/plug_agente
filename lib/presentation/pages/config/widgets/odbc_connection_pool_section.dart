@@ -1,6 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/application/use_cases/reload_odbc_runtime_dependencies.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart' show reloadOdbcRuntimeDependencies;
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
@@ -18,10 +18,10 @@ import 'package:provider/provider.dart';
 class OdbcConnectionPoolSection extends StatefulWidget {
   const OdbcConnectionPoolSection({
     super.key,
-    this.reloadOdbcDependencies = reloadOdbcRuntimeDependencies,
-  });
+    ReloadOdbcRuntimeDependencies? reloadOdbcRuntime,
+  }) : _reloadOdbcRuntime = reloadOdbcRuntime;
 
-  final Future<bool> Function() reloadOdbcDependencies;
+  final ReloadOdbcRuntimeDependencies? _reloadOdbcRuntime;
 
   @override
   State<OdbcConnectionPoolSection> createState() => _OdbcConnectionPoolSectionState();
@@ -35,6 +35,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _loadError;
+  Map<String, Object?>? _poolDiagnostics;
 
   @override
   void initState() {
@@ -76,13 +77,20 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _streamingChunkSizeController.text = settings.streamingChunkSizeKb.toString();
       _isLoading = false;
     });
-    final healthResult = await context.read<IConnectionPool>().healthCheckAll();
+    final pool = context.read<IConnectionPool>();
+    final healthResult = await pool.healthCheckAll();
     healthResult.fold(
       (_) => AppLogger.info('Connection pool health check passed'),
       (failure) => AppLogger.warning(
         'Connection pool health check: $failure',
       ),
     );
+    final diagnostics = switch (pool) {
+      final IConnectionPoolDiagnostics diagnosticsPool => diagnosticsPool.getHealthDiagnostics(),
+      _ => null,
+    };
+    if (!mounted) return;
+    setState(() => _poolDiagnostics = diagnostics);
   }
 
   Future<void> _saveSettings() async {
@@ -115,12 +123,13 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     setState(() => _isSaving = true);
     try {
       final settings = context.read<IOdbcConnectionSettings>();
+      final reloadOdbcRuntime =
+          widget._reloadOdbcRuntime ?? context.read<ReloadOdbcRuntimeDependencies>();
       await settings.setPoolSize(poolSize);
       await settings.setLoginTimeoutSeconds(loginTimeout);
       await settings.setMaxResultBufferMb(maxResultBuffer);
       await settings.setStreamingChunkSizeKb(streamingChunkSize);
-
-      final settingsAppliedNow = await widget.reloadOdbcDependencies();
+      final settingsAppliedNow = await reloadOdbcRuntime();
 
       if (!mounted) return;
       _showSuccess(settingsAppliedNow);
@@ -157,6 +166,54 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       title: l10n.modalTitleError,
       message: message,
     );
+  }
+
+  List<String> _poolDiagnosticsLines(AppLocalizations l10n) {
+    final diagnostics = _poolDiagnostics;
+    if (diagnostics == null) {
+      return const [];
+    }
+
+    final lines = <String>[
+      l10n.odbcTextPoolEffectiveStrategy(
+        _formatEffectiveStrategy(diagnostics['effective_strategy']),
+      ),
+    ];
+
+    final experimentalEnabled = diagnostics['experimental_enabled'];
+    if (experimentalEnabled is bool) {
+      lines.add(
+        experimentalEnabled ? l10n.odbcTextPoolAdaptiveModeEnabled : l10n.odbcTextPoolAdaptiveModeDisabled,
+      );
+    }
+
+    final nativeEligible = diagnostics['native_eligible'];
+    if (nativeEligible is bool) {
+      lines.add(
+        nativeEligible ? l10n.odbcTextPoolNativeEligibleYes : l10n.odbcTextPoolNativeEligibleNo,
+      );
+    }
+
+    if (diagnostics['native_circuit_open'] == true) {
+      lines.add(l10n.odbcTextPoolNativeCircuitOpen);
+    }
+
+    final skipReason = diagnostics['native_skip_reason'];
+    if (skipReason is String && skipReason.isNotEmpty) {
+      lines.add(l10n.odbcTextPoolNativeSkipReason(skipReason));
+    }
+
+    return lines;
+  }
+
+  String _formatEffectiveStrategy(Object? strategy) {
+    return switch (strategy) {
+      'native' => 'native',
+      'native_compatible' => 'native_compatible',
+      'lease' => 'lease',
+      final String value => value,
+      _ => 'lease',
+    };
   }
 
   void _showSuccess(bool settingsAppliedNow) {
@@ -238,6 +295,27 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
                         minValue: 1,
                         maxValue: 20,
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.odbcTextPoolSizeLimiterHelp,
+                        style: context.captionText,
+                      ),
+                      if (_poolDiagnostics != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          l10n.odbcTextPoolRuntimeDiagnosticsTitle,
+                          style: context.captionStrong,
+                        ),
+                        const SizedBox(height: 4),
+                        for (final line in _poolDiagnosticsLines(l10n))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              line,
+                              style: context.captionText,
+                            ),
+                          ),
+                      ],
                       const SizedBox(height: 24),
                       Text(
                         l10n.odbcBlockTimeouts,

@@ -23,6 +23,7 @@ final class PlaygroundStreamingSession {
 
   bool _streamingCapCancelRequested = false;
   bool _streamingStoppedByCap = false;
+  int _totalRowsFetched = 0;
   DateTime _lastNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool get streamingCapCancelRequested => _streamingCapCancelRequested;
@@ -31,6 +32,7 @@ final class PlaygroundStreamingSession {
   void resetCapState() {
     _streamingCapCancelRequested = false;
     _streamingStoppedByCap = false;
+    _totalRowsFetched = 0;
     _lastNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
   }
 
@@ -49,21 +51,19 @@ final class PlaygroundStreamingSession {
       return;
     }
     final cap = ConnectionConstants.playgroundStreamingMaxResultRows;
-    final remaining = cap - results.length;
+    final remaining = cap - _totalRowsFetched;
     if (remaining <= 0) {
       onRowCapReached(cap);
       _requestStopAtRowCap(cap);
       return;
     }
-    if (chunk.length > remaining) {
-      results.addAll(chunk.sublist(0, remaining));
-    } else {
-      results.addAll(chunk);
-    }
-    final rowsProcessed = results.length;
-    onProgress(rowsProcessed, progressForRowCount(rowsProcessed));
+    final accepted = chunk.length > remaining ? chunk.sublist(0, remaining) : chunk;
+    results.addAll(accepted);
+    _totalRowsFetched += accepted.length;
+    _trimResultsToUiWindow(results);
+    onProgress(_totalRowsFetched, progressForRowCount(_totalRowsFetched));
     _notifyProgressIfNeeded(notifyProgress);
-    if (results.length >= cap) {
+    if (_totalRowsFetched >= cap) {
       onRowCapReached(cap);
       _requestStopAtRowCap(cap);
     }
@@ -101,5 +101,14 @@ final class PlaygroundStreamingSession {
     }
     _lastNotifyAt = now;
     notifyProgress();
+  }
+
+  void _trimResultsToUiWindow(List<Map<String, dynamic>> results) {
+    final window = ConnectionConstants.playgroundStreamingUiWindowRows;
+    if (window < 1 || results.length <= window) {
+      return;
+    }
+    final overflow = results.length - window;
+    results.removeRange(0, overflow);
   }
 }

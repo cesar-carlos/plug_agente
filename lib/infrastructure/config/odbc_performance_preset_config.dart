@@ -23,6 +23,8 @@ void applyOdbcPerformancePresetFromEnvironment() {
   _setEnvIfUnset(odbcStreamColumnarWireEnvKey, '1');
   _setEnvIfUnset(odbcStreamWireOnlyEnvKey, '1');
   _setEnvIfUnset(odbcResultEncodingEnvKey, 'columnarCompressed');
+  _setEnvIfUnset('AGENT_STREAM_PULL_WINDOW_RECOMMENDED', '16');
+  _setEnvIfUnset('ODBC_STREAMING_CONNECT_REUSE_ENABLED', '1');
 }
 
 void _setEnvIfUnset(String key, String value) {

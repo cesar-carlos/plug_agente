@@ -12,6 +12,9 @@ class _RecordingCircuitBreaker implements IOdbcConnectionCircuitBreaker {
   void resetCircuitBreaker(String connectionString) {
     resetCalls.add(connectionString);
   }
+
+  @override
+  void clearAllCircuitBreakers() {}
 }
 
 void main() {

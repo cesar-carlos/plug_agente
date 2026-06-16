@@ -1597,6 +1597,29 @@
   "odbcBlockPoolDescription": "Múltiplas conexões são reutilizadas automaticamente. Melhora performance em cenários de alta concorrência.",
   "odbcFieldPoolSize": "Tamanho máximo do pool",
   "odbcHintPoolSize": "8",
+  "odbcTextPoolSizeLimiterHelp": "Este valor também limita conexões ODBC diretas simultâneas (streaming e fallback de batch via DirectOdbcConnectionLimiter).",
+  "odbcTextPoolRuntimeDiagnosticsTitle": "Diagnóstico do pool em runtime (somente leitura):",
+  "odbcTextPoolEffectiveStrategy": "Estratégia efetiva: {strategy}",
+  "@odbcTextPoolEffectiveStrategy": {
+    "placeholders": {
+      "strategy": {
+        "type": "String"
+      }
+    }
+  },
+  "odbcTextPoolAdaptiveModeEnabled": "Pool adaptativo experimental: habilitado",
+  "odbcTextPoolAdaptiveModeDisabled": "Pool adaptativo experimental: desabilitado",
+  "odbcTextPoolNativeEligibleYes": "Pool nativo elegível para o driver atual: sim",
+  "odbcTextPoolNativeEligibleNo": "Pool nativo elegível para o driver atual: não",
+  "odbcTextPoolNativeCircuitOpen": "Circuit breaker nativo aberto; fallback para lease ativo.",
+  "odbcTextPoolNativeSkipReason": "Motivo de skip nativo: {reason}",
+  "@odbcTextPoolNativeSkipReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "odbcBlockTimeouts": "Timeouts",
   "odbcFieldLoginTimeout": "Login timeout (segundos)",
   "odbcHintLoginTimeout": "30",

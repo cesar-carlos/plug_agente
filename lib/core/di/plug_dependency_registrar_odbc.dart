@@ -16,6 +16,13 @@ void _registerOdbc(
     () => OdbcStreamingNamedParameterPreparer.instance,
   );
   getIt
+    ..registerLazySingleton(OdbcConnectionStringTtlCache.new)
+    ..registerLazySingleton<OdbcStreamingSessionCache>(
+      () => OdbcStreamingSessionCache(
+        odbcService: getIt<odbc.OdbcService>(),
+      ),
+    )
+    ..registerLazySingleton<IOdbcStreamingSessionCache>(() => getIt<OdbcStreamingSessionCache>())
     ..registerLazySingleton<odbc.OdbcService>(
       () => odbcWorkerLocator.asyncService,
     )
@@ -44,25 +51,11 @@ void _registerOdbc(
         metricsCollector: getIt<MetricsCollector>(),
       ),
     )
-    ..registerLazySingleton(
-      () => OdbcEventBridge(
-        adminService: getIt<odbc.OdbcService>(),
-        metrics: getIt<MetricsCollector>(),
-      ),
-    )
-    ..registerLazySingleton(
-      () => OdbcNativeMetricsService(
-        getIt<odbc.OdbcService>(),
-        queryConfigSource: getIt<ActiveConfigResolver>(),
-        connectionPool: getIt<IConnectionPool>(),
-        settings: getIt<IOdbcConnectionSettings>(),
-        runtimeTuning: getIt<OdbcRuntimeTuning>(),
-        metricsCollector: getIt<MetricsCollector>(),
-        eventBridge: getIt<OdbcEventBridge>(),
-      ),
-    )
     ..registerLazySingleton<IMetricsCollector>(getIt.get<MetricsCollector>)
     ..registerLazySingleton<OdbcInFlightExecutionRegistry>(OdbcInFlightExecutionRegistry.new)
+    ..registerLazySingleton<OdbcRuntimeLifecycle>(
+      () => OdbcRuntimeLifecycle(getIt<odbc.OdbcService>()),
+    )
     ..registerLazySingleton<OdbcDatabaseGateway>(
       () => OdbcDatabaseGateway(
         getIt<ActiveConfigResolver>(),
@@ -75,6 +68,9 @@ void _registerOdbc(
         directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
         sqlInvestigation: getIt<ISqlInvestigationCollector>(),
         inFlightExecutionRegistry: getIt<OdbcInFlightExecutionRegistry>(),
+        runtimeLifecycle: getIt<OdbcRuntimeLifecycle>(),
+        configQueryCache: getIt<IActiveConfigQueryCache>(),
+        connectionStringCache: getIt<OdbcConnectionStringTtlCache>(),
       ),
     )
     ..registerLazySingleton<ISqlInFlightExecutionAbortPort>(
@@ -143,6 +139,37 @@ void _registerOdbc(
         directConnectionLimiter: getIt<DirectOdbcConnectionLimiter>(),
         metricsCollector: getIt<MetricsCollector>(),
         inFlightExecutionRegistry: getIt<OdbcInFlightExecutionRegistry>(),
+        runtimeLifecycle: getIt<OdbcRuntimeLifecycle>(),
+        streamingSessionCache: getIt<OdbcStreamingSessionCache>(),
+      ),
+    )
+    ..registerLazySingleton<IOdbcWorkerRuntimeRecoveryPort>(
+      () => OdbcWorkerRuntimeRecoveryService(
+        connectionPool: getIt<IConnectionPool>(),
+        databaseGateway: getIt<OdbcDatabaseGateway>(),
+        streamingGateway: getIt<OdbcStreamingGateway>(),
+        runtimeLifecycle: getIt<OdbcRuntimeLifecycle>(),
+        inFlightExecutionRegistry: getIt<OdbcInFlightExecutionRegistry>(),
+        streamingGatewayConcrete: getIt<OdbcStreamingGateway>(),
+        metrics: getIt<MetricsCollector>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => OdbcEventBridge(
+        adminService: getIt<odbc.OdbcService>(),
+        metrics: getIt<MetricsCollector>(),
+        workerRecoveryPort: getIt<IOdbcWorkerRuntimeRecoveryPort>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => OdbcNativeMetricsService(
+        getIt<odbc.OdbcService>(),
+        queryConfigSource: getIt<ActiveConfigResolver>(),
+        connectionPool: getIt<IConnectionPool>(),
+        settings: getIt<IOdbcConnectionSettings>(),
+        runtimeTuning: getIt<OdbcRuntimeTuning>(),
+        metricsCollector: getIt<MetricsCollector>(),
+        eventBridge: getIt<OdbcEventBridge>(),
       ),
     )
     ..registerLazySingleton<IDatabaseGateway>(
@@ -164,5 +191,15 @@ void _registerOdbc(
         getIt<OdbcStreamingGateway>(),
       ),
     )
-    ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new);
+    ..registerLazySingleton<IOdbcDriverChecker>(OdbcDriverChecker.new)
+    ..registerLazySingleton<IOdbcApplicationRuntimeResetPort>(
+      () => OdbcApplicationRuntimeResetService(getIt: getIt),
+    )
+    ..registerLazySingleton<IOdbcRuntimeReloader>(
+      () => OdbcRuntimeReloader(
+        getIt: getIt,
+        odbcWorkerLocator: odbcWorkerLocator,
+        applicationRuntimeResetPort: getIt<IOdbcApplicationRuntimeResetPort>(),
+      ),
+    );
 }

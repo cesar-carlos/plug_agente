@@ -18,7 +18,7 @@ final class OdbcColumnarStreamChunkEmitter {
   }) async {
     final columnarPayload = includeColumnarWire ? RpcStreamColumnarChunkCodec.encodeTypedColumnarResult(result) : null;
 
-    if (onWireChunk != null && columnarPayload != null && wireOnly) {
+    if (onWireChunk != null && columnarPayload != null) {
       await onWireChunk(
         StreamingWireChunk(
           rows: const <Map<String, dynamic>>[],
@@ -35,19 +35,8 @@ final class OdbcColumnarStreamChunkEmitter {
       ),
     );
 
-    var wireChunkIndex = 0;
     for (final chunk in chunks) {
-      if (onWireChunk != null) {
-        await onWireChunk(
-          StreamingWireChunk(
-            rows: chunk,
-            columnar: includeColumnarWire && wireChunkIndex == 0 ? columnarPayload : null,
-          ),
-        );
-        wireChunkIndex++;
-      } else {
-        await onChunk(chunk);
-      }
+      await onChunk(chunk);
       if (chunks.length > 1) {
         await Future<void>.delayed(Duration.zero);
       }

@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/gateway/odbc_connection_test_limiter.dart';
 import 'package:plug_agente/application/gateway/sql_execution_kind_classifier.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
@@ -17,13 +18,16 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
     required IDatabaseGateway delegate,
     required SqlExecutionQueue queue,
     SqlExecutionKindClassifier? queryClassifier,
+    OdbcConnectionTestLimiter? connectionTestLimiter,
   }) : _delegate = delegate,
        _queue = queue,
-       _queryClassifier = queryClassifier ?? SqlExecutionKindClassifier();
+       _queryClassifier = queryClassifier ?? SqlExecutionKindClassifier(),
+       _connectionTestLimiter = connectionTestLimiter ?? OdbcConnectionTestLimiter();
 
   final IDatabaseGateway _delegate;
   final SqlExecutionQueue _queue;
   final SqlExecutionKindClassifier _queryClassifier;
+  final OdbcConnectionTestLimiter _connectionTestLimiter;
 
   /// Inner gateway wrapped by the SQL execution queue.
   IDatabaseGateway get delegate => _delegate;
@@ -58,8 +62,7 @@ class QueuedDatabaseGateway implements IDatabaseGateway {
 
   @override
   Future<Result<bool>> testConnection(String connectionString) {
-    // Bypass queue for connection tests
-    return _delegate.testConnection(connectionString);
+    return _connectionTestLimiter.run(() => _delegate.testConnection(connectionString));
   }
 
   @override

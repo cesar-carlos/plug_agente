@@ -13,6 +13,7 @@ import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/config/odbc_driver_database_type_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_database_gateway.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_query_config_source.dart';
@@ -4005,22 +4006,22 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
 
     group('mapDriverNameToDatabaseType', () {
       test('should resolve exact matches for the three supported dialects', () {
-        expect(gateway.mapDriverNameToDatabaseTypeForTesting('SQL Server'), DatabaseType.sqlServer);
-        expect(gateway.mapDriverNameToDatabaseTypeForTesting('PostgreSQL'), DatabaseType.postgresql);
-        expect(gateway.mapDriverNameToDatabaseTypeForTesting('SQL Anywhere'), DatabaseType.sybaseAnywhere);
+        expect(mapOdbcDriverNameToDatabaseType('SQL Server'), DatabaseType.sqlServer);
+        expect(mapOdbcDriverNameToDatabaseType('PostgreSQL'), DatabaseType.postgresql);
+        expect(mapOdbcDriverNameToDatabaseType('SQL Anywhere'), DatabaseType.sybaseAnywhere);
       });
 
       test('should resolve heuristic variants via odbc_fast.DatabaseType.fromDriverName', () {
         expect(
-          gateway.mapDriverNameToDatabaseTypeForTesting('Microsoft SQL Server'),
+          mapOdbcDriverNameToDatabaseType('Microsoft SQL Server'),
           DatabaseType.sqlServer,
         );
         expect(
-          gateway.mapDriverNameToDatabaseTypeForTesting('PostgreSQL Unicode'),
+          mapOdbcDriverNameToDatabaseType('PostgreSQL Unicode'),
           DatabaseType.postgresql,
         );
         expect(
-          gateway.mapDriverNameToDatabaseTypeForTesting('Adaptive Server Anywhere'),
+          mapOdbcDriverNameToDatabaseType('Adaptive Server Anywhere'),
           DatabaseType.sybaseAnywhere,
         );
       });
@@ -4031,26 +4032,26 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         // The fallback must stay deterministic so SQL generation does not
         // diverge silently between dialects we cannot handle yet.
         expect(
-          gateway.mapDriverNameToDatabaseTypeForTesting('MariaDB ODBC 3.1 Driver'),
+          mapOdbcDriverNameToDatabaseType('MariaDB ODBC 3.1 Driver'),
           DatabaseType.sqlServer,
         );
         expect(
-          gateway.mapDriverNameToDatabaseTypeForTesting('Oracle in OraClient19Home1'),
+          mapOdbcDriverNameToDatabaseType('Oracle in OraClient19Home1'),
           DatabaseType.sqlServer,
         );
         expect(
-          gateway.mapDriverNameToDatabaseTypeForTesting('IBM DB2 ODBC DRIVER'),
+          mapOdbcDriverNameToDatabaseType('IBM DB2 ODBC DRIVER'),
           DatabaseType.sqlServer,
         );
       });
 
       test('should fall back to sqlServer for unknown driver names', () {
         expect(
-          gateway.mapDriverNameToDatabaseTypeForTesting('Some Unknown Driver'),
+          mapOdbcDriverNameToDatabaseType('Some Unknown Driver'),
           DatabaseType.sqlServer,
         );
         expect(
-          gateway.mapDriverNameToDatabaseTypeForTesting(''),
+          mapOdbcDriverNameToDatabaseType(''),
           DatabaseType.sqlServer,
         );
       });

@@ -35,7 +35,7 @@ void main() {
       expect(wireChunks.first.columnar!['row_count'], 2);
     });
 
-    test('hybrid columnar wire still materializes row maps', () async {
+    test('columnar wire skips row-map materialization', () async {
       final result = toTypedColumnar(
         const QueryResult(
           columns: ['id'],
@@ -46,20 +46,22 @@ void main() {
           rowCount: 2,
         ),
       );
+      final rowChunks = <List<Map<String, dynamic>>>[];
       final wireChunks = <StreamingWireChunk>[];
 
       await OdbcColumnarStreamChunkEmitter.emit(
         result: result,
         fetchSize: 1,
-        onChunk: (_) async {},
+        onChunk: (chunk) async => rowChunks.add(chunk),
         onWireChunk: (chunk) async => wireChunks.add(chunk),
         includeColumnarWire: true,
       );
 
-      expect(wireChunks, hasLength(2));
-      expect(wireChunks.first.rows, isNotEmpty);
+      expect(rowChunks, isEmpty);
+      expect(wireChunks, hasLength(1));
+      expect(wireChunks.first.rows, isEmpty);
       expect(wireChunks.first.columnar, isNotNull);
-      expect(wireChunks.last.columnar, isNull);
+      expect(wireChunks.first.columnar!['row_count'], 2);
     });
   });
 }

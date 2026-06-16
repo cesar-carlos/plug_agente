@@ -22,6 +22,8 @@ void main() {
       resolveEffectiveOdbcResultEncoding(usageProfile: OdbcUsageProfile.highThroughput),
       ResultEncoding.columnarCompressed,
     );
+    expect(dotenv.env['AGENT_STREAM_PULL_WINDOW_RECOMMENDED'], '16');
+    expect(dotenv.env['ODBC_STREAMING_CONNECT_REUSE_ENABLED'], '1');
   });
 
   test('aggressive preset does not override explicit env values', () {

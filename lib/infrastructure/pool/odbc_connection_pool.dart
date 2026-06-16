@@ -490,7 +490,10 @@ class OdbcConnectionPool
   Map<String, Object?> getHealthDiagnostics() {
     return {
       'strategy': 'lease',
+      'effective_strategy': 'lease',
       'native_pool_exposed': false,
+      'native_circuit_open': false,
+      'native_skip_reason': null,
       'lease_active_count': _leasedIds.length,
       'native_active_count': 0,
     };

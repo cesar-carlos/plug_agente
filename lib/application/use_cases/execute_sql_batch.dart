@@ -6,10 +6,11 @@ import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
-/// Executes a batch of SQL commands.
+/// Executes a batch of SQL commands via the database gateway.
 ///
-/// Each command is executed independently and results are returned per command.
-/// Optionally supports transactional execution (all-or-nothing).
+/// Non-transactional batches return per-command results with row normalization.
+/// Transactional batches (`options.transaction`) delegate all-or-nothing
+/// execution to the gateway.
 class ExecuteSqlBatch {
   ExecuteSqlBatch(
     this._databaseGateway,

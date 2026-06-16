@@ -7550,6 +7550,60 @@ abstract class AppLocalizations {
   /// **'8'**
   String get odbcHintPoolSize;
 
+  /// No description provided for @odbcTextPoolSizeLimiterHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'This value also caps concurrent direct ODBC connections (streaming and batch fallback via DirectOdbcConnectionLimiter).'**
+  String get odbcTextPoolSizeLimiterHelp;
+
+  /// No description provided for @odbcTextPoolRuntimeDiagnosticsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime pool diagnostics (read-only):'**
+  String get odbcTextPoolRuntimeDiagnosticsTitle;
+
+  /// No description provided for @odbcTextPoolEffectiveStrategy.
+  ///
+  /// In en, this message translates to:
+  /// **'Effective strategy: {strategy}'**
+  String odbcTextPoolEffectiveStrategy(String strategy);
+
+  /// No description provided for @odbcTextPoolAdaptiveModeEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Adaptive experimental pooling: enabled'**
+  String get odbcTextPoolAdaptiveModeEnabled;
+
+  /// No description provided for @odbcTextPoolAdaptiveModeDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Adaptive experimental pooling: disabled'**
+  String get odbcTextPoolAdaptiveModeDisabled;
+
+  /// No description provided for @odbcTextPoolNativeEligibleYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Native pool eligible for current driver: yes'**
+  String get odbcTextPoolNativeEligibleYes;
+
+  /// No description provided for @odbcTextPoolNativeEligibleNo.
+  ///
+  /// In en, this message translates to:
+  /// **'Native pool eligible for current driver: no'**
+  String get odbcTextPoolNativeEligibleNo;
+
+  /// No description provided for @odbcTextPoolNativeCircuitOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Native circuit breaker is open; lease fallback is active.'**
+  String get odbcTextPoolNativeCircuitOpen;
+
+  /// No description provided for @odbcTextPoolNativeSkipReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Native skip reason: {reason}'**
+  String odbcTextPoolNativeSkipReason(String reason);
+
   /// No description provided for @odbcBlockTimeouts.
   ///
   /// In en, this message translates to:

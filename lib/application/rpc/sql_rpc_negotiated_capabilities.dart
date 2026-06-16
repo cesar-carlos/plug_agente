@@ -29,3 +29,8 @@ bool supportsStreamingChunks(Map<String, dynamic> negotiatedExtensions) {
   }
   return true;
 }
+
+/// Whether the transport handshake explicitly negotiated streaming result chunks.
+bool isStreamingResultsNegotiated(Map<String, dynamic> negotiatedExtensions) {
+  return negotiatedExtensions['streamingResults'] == true;
+}

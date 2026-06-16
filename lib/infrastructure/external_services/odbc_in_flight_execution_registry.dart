@@ -68,6 +68,8 @@ final class OdbcInFlightExecutionRegistry {
     }
     _active.remove(requestId);
   }
+
+  void clearAll() => _active.clear();
 }
 
 String odbcInFlightRegistryKey({

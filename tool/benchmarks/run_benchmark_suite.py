@@ -70,6 +70,8 @@ from tool.py.benchmark_common import (
     collect_machine_metadata,
     ensure_on_path,
     odbc_dsn_configured,
+    parse_gateway_encoding_metrics,
+    parse_plug_agente_stack_metrics,
     parse_transport_json_metrics,
     parse_transport_markdown_metrics,
     resolve_dart_odbc_fast_root,
@@ -80,6 +82,8 @@ from tool.py.odbc_benchmark_runner import run_odbc_async_benchmark, run_odbc_str
 from tool.py.script_utils import PROJECT_ROOT, resolve_env_path, run_streaming
 
 TRANSPORT_TEST = "test/infrastructure/codecs/transport_pipeline_benchmark_test.dart"
+PLUG_AGENTE_STACK_TEST = "test/tool/plug_agente_stack_benchmark_test.dart"
+GATEWAY_ENCODING_TEST = "test/tool/odbc_gateway_encoding_benchmark_test.dart"
 TRANSPORT_DART_TOOL = "tool/benchmarks/benchmark_transport_pipeline.dart"
 GATEWAY_ENCODING_TOOL = "tool/benchmarks/benchmark_odbc_gateway_encoding.dart"
 
@@ -111,6 +115,19 @@ def build_suite_plans() -> list[dict[str, Any]]:
                 "flutter",
                 "test",
                 TRANSPORT_TEST,
+                "--tags",
+                "perf",
+            ],
+            "cwd": PROJECT_ROOT,
+        },
+        {
+            "id": "plug_agente_stack",
+            "kind": "flutter_test",
+            "enabled": True,
+            "command": [
+                "flutter",
+                "test",
+                PLUG_AGENTE_STACK_TEST,
                 "--tags",
                 "perf",
             ],
@@ -174,13 +191,14 @@ def build_suite_plans() -> list[dict[str, Any]]:
             plans.append(
                 {
                     "id": "odbc_gateway_encoding",
-                    "kind": "dart_tool",
+                    "kind": "flutter_test",
                     "enabled": True,
                     "command": [
-                        "dart",
-                        "run",
-                        GATEWAY_ENCODING_TOOL,
-                        "--json",
+                        "flutter",
+                        "test",
+                        GATEWAY_ENCODING_TEST,
+                        "--tags",
+                        "perf",
                     ],
                     "cwd": PROJECT_ROOT,
                 }
@@ -221,6 +239,55 @@ def print_dry_run(plans: list[dict[str, Any]]) -> None:
             print(f"    package_root: {plan['package_root']}")
         if not plan.get("enabled"):
             print(f"    reason: {plan.get('skip_reason', 'disabled')}")
+
+
+def run_gateway_encoding_flutter_test(log_path: Path) -> dict[str, Any]:
+    started = time.perf_counter()
+    exit_code = run_streaming(
+        ["flutter", "test", GATEWAY_ENCODING_TEST, "--tags", "perf"],
+        cwd=PROJECT_ROOT,
+        log_path=log_path,
+    )
+    wall_ms = (time.perf_counter() - started) * 1000.0
+    output = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
+    metrics = parse_gateway_encoding_metrics(output)
+    status = "pass" if exit_code == 0 else "fail"
+    if exit_code == 0 and not metrics and "Skipping:" not in output:
+        status = "error"
+    if exit_code == 0 and not metrics and "Skipping:" in output:
+        status = "skipped"
+    return {
+        "id": "odbc_gateway_encoding",
+        "kind": "flutter_test",
+        "status": status,
+        "wall_ms": round(wall_ms, 2),
+        "exit_code": exit_code,
+        "log_file": log_path.name,
+        "metrics": metrics,
+        **({"reason": "ODBC DSN not configured in test env"} if status == "skipped" else {}),
+    }
+
+
+def run_plug_agente_stack_flutter_test(log_path: Path) -> dict[str, Any]:
+    started = time.perf_counter()
+    exit_code = run_streaming(
+        ["flutter", "test", PLUG_AGENTE_STACK_TEST, "--tags", "perf"],
+        cwd=PROJECT_ROOT,
+        log_path=log_path,
+    )
+    wall_ms = (time.perf_counter() - started) * 1000.0
+    output = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
+    metrics = parse_plug_agente_stack_metrics(output)
+    status = "pass" if exit_code == 0 else "fail"
+    return {
+        "id": "plug_agente_stack",
+        "kind": "flutter_test",
+        "status": status,
+        "wall_ms": round(wall_ms, 2),
+        "exit_code": exit_code,
+        "log_file": log_path.name,
+        "metrics": metrics,
+    }
 
 
 def run_gateway_encoding_tool(log_path: Path) -> dict[str, Any]:
@@ -468,10 +535,12 @@ def main(argv: list[str] | None = None) -> int:
         log_path = output_dir / f"{suite_id}.log"
         if suite_id == "transport_pipeline":
             suite = run_transport_flutter_test(log_path)
+        elif suite_id == "plug_agente_stack":
+            suite = run_plug_agente_stack_flutter_test(log_path)
         elif suite_id == "transport_pipeline_json":
             suite = run_transport_json_tool(log_path)
         elif suite_id == "odbc_gateway_encoding":
-            suite = run_gateway_encoding_tool(log_path)
+            suite = run_gateway_encoding_flutter_test(log_path)
         elif plan["kind"] == "dart_odbc_fast":
             suite = run_odbc_suite(suite_id, Path(plan["package_root"]), log_path)
         else:

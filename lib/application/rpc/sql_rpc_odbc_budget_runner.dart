@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:plug_agente/application/rpc/sql_execute_materialized_result_policy.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
@@ -7,6 +8,7 @@ import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -16,15 +18,18 @@ class SqlRpcOdbcBudgetRunner {
     required SqlRpcMethodHandlerSupport support,
     required Duration queryStageBudget,
     required Duration batchExecutionStageBudget,
+    SqlExecuteMaterializedResultPolicy materializedPolicy = const SqlExecuteMaterializedResultPolicy(),
   }) : _databaseGateway = databaseGateway,
        _support = support,
        _queryStageBudget = queryStageBudget,
-       _batchExecutionStageBudget = batchExecutionStageBudget;
+       _batchExecutionStageBudget = batchExecutionStageBudget,
+       _materializedPolicy = materializedPolicy;
 
   final IDatabaseGateway _databaseGateway;
   final SqlRpcMethodHandlerSupport _support;
   final Duration _queryStageBudget;
   final Duration _batchExecutionStageBudget;
+  final SqlExecuteMaterializedResultPolicy _materializedPolicy;
 
   Future<Result<QueryResponse>> executeQuery(
     QueryRequest queryRequest, {
@@ -32,7 +37,22 @@ class SqlRpcOdbcBudgetRunner {
     required String? requestId,
     required DateTime? deadline,
     required int timeoutMs,
+    int? effectiveMaxRows,
+    TransportLimits? transportLimits,
+    Map<String, dynamic>? negotiatedExtensions,
   }) async {
+    if (effectiveMaxRows != null && transportLimits != null && negotiatedExtensions != null) {
+      final guard = _materializedPolicy.rejectIfMaterializedPathUnsafe(
+        effectiveMaxRows: effectiveMaxRows,
+        limits: transportLimits,
+        negotiatedExtensions: negotiatedExtensions,
+        requestId: requestId,
+      );
+      if (guard.isError()) {
+        return Failure(guard.exceptionOrNull()!);
+      }
+    }
+
     final timeout = mergeOdbcTimeout(
       stageTimeout: _support.effectiveStageTimeout(
         deadline: deadline,

@@ -14,6 +14,7 @@ import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_elevated_action_execution_canceller.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_streaming_session_cache.dart';
 
 /// Runs the post-hub teardown steps for application shutdown.
 final class AppShutdownSequence {
@@ -35,6 +36,7 @@ final class AppShutdownSequence {
     await applyOnAppExitPolicies();
     await runEarlyShutdownCoordinator();
     await _disposeSqlExecutionQueue();
+    await _drainStreamingSessionCache();
     await _closeConnectionPool();
     await _disposeInfrastructureResources();
     await _disposeTrayService();
@@ -108,6 +110,27 @@ final class AppShutdownSequence {
       ),
       (failure) => developer.log(
         'SQL execution queue dispose timed out; proceeding to pool close',
+        name: 'app_shutdown_sequence',
+        level: 900,
+        error: failure,
+      ),
+    );
+  }
+
+  Future<void> _drainStreamingSessionCache() async {
+    if (!_getIt.isRegistered<IOdbcStreamingSessionCache>()) {
+      return;
+    }
+
+    final drainResult = await _getIt<IOdbcStreamingSessionCache>().drainCachedSessions();
+    drainResult.fold(
+      (_) => developer.log(
+        'Streaming session cache drained',
+        name: 'app_shutdown_sequence',
+        level: 800,
+      ),
+      (failure) => developer.log(
+        'Streaming session cache drain completed with errors; proceeding to pool close',
         name: 'app_shutdown_sequence',
         level: 900,
         error: failure,

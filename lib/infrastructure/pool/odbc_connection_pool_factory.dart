@@ -20,9 +20,11 @@ import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart
 /// - SQL Anywhere → [AdaptiveOdbcConnectionPool] falls back to the lease pool
 ///   because some SQL Anywhere ODBC drivers return invalid handles under the
 ///   native pool and cause worker timeouts under concurrent load.
-/// - Queries that supply [ConnectionAcquireOptions] (e.g. buffer hints) always
-///   route to the lease pool regardless of driver; the native pool does not
-///   accept per-connection options.
+/// - Queries that supply [ConnectionAcquireOptions] (buffer, timeouts) use the
+///   lease pool because published `odbc_fast` 4.3.3 cannot apply per-checkout
+///   options on `poolGetConnection`. The native pool is used for optionless
+///   acquires and via [INativeCompatibleConnectionPoolAcquire] (native first,
+///   lease fallback with full options).
 ///
 /// When the feature flag is disabled, [OdbcConnectionPool] (lease-based) is
 /// always used: every query calls `connect`/`disconnect`, paying the full

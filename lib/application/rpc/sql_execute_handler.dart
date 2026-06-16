@@ -1,6 +1,7 @@
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_db_streaming_auto_policy.dart';
+import 'package:plug_agente/application/rpc/sql_execute_materialized_result_policy.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/rpc/sql_execute_result_mapper.dart';
 import 'package:plug_agente/application/rpc/sql_options_resolver.dart';
@@ -9,9 +10,11 @@ import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_db_streaming_executor.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_materialized_streaming_executor.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_odbc_budget_runner.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -37,6 +40,7 @@ class SqlExecuteHandler {
     required SqlRpcMaterializedStreamingExecutor materializedStreamingExecutor,
     required Duration sqlExecuteTotalBudget,
     SqlDbStreamingAutoPolicy? dbStreamingAutoPolicy,
+    SqlExecuteMaterializedResultPolicy? materializedResultPolicy,
     IDeprecationMetricsCollector? deprecationMetrics,
     IRpcDispatchMetricsCollector? dispatchMetrics,
   }) : _normalizerService = normalizerService,
@@ -48,6 +52,7 @@ class SqlExecuteHandler {
        _dbStreamingExecutor = dbStreamingExecutor,
        _materializedStreamingExecutor = materializedStreamingExecutor,
        _dbStreamingAutoPolicy = dbStreamingAutoPolicy ?? SqlDbStreamingAutoPolicy(),
+       _materializedResultPolicy = materializedResultPolicy ?? const SqlExecuteMaterializedResultPolicy(),
        _sqlExecuteTotalBudgetDuration = sqlExecuteTotalBudget,
        _deprecationMetrics = deprecationMetrics,
        _dispatchMetrics = dispatchMetrics;
@@ -61,6 +66,7 @@ class SqlExecuteHandler {
   final SqlRpcDbStreamingExecutor _dbStreamingExecutor;
   final SqlRpcMaterializedStreamingExecutor _materializedStreamingExecutor;
   final SqlDbStreamingAutoPolicy _dbStreamingAutoPolicy;
+  final SqlExecuteMaterializedResultPolicy _materializedResultPolicy;
   final Duration _sqlExecuteTotalBudgetDuration;
   final IDeprecationMetricsCollector? _deprecationMetrics;
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
@@ -196,7 +202,17 @@ class SqlExecuteHandler {
       idempotencyFingerprint: idempotencyFingerprint ?? '',
       idempotentCachePrefetched: true,
       execute: () async {
-        final streamingFromDbResponse = await _dbStreamingExecutor.tryStreamingFromDb(
+        final prefersDbStreaming = _dbStreamingAutoPolicy.prefersDbStreamingOverMaterialized(
+          featureFlags: _featureFlags,
+          queryRequest: queryRequest,
+          sql: sql,
+          negotiatedExtensions: negotiatedExtensions,
+          preferDbStreaming: options?['prefer_db_streaming'] == true,
+          effectiveMaxRows: maxRows,
+          limits: limits,
+        );
+
+        var streamingFromDbResponse = await _dbStreamingExecutor.tryStreamingFromDb(
           request,
           queryRequest,
           sql,
@@ -210,19 +226,48 @@ class SqlExecuteHandler {
           clientToken: clientToken,
           database: database,
         );
+        if (streamingFromDbResponse == null &&
+            prefersDbStreaming &&
+            options?['prefer_db_streaming'] != true) {
+          streamingFromDbResponse = await _dbStreamingExecutor.tryStreamingFromDb(
+            request,
+            queryRequest,
+            sql,
+            request.isNotification ? null : streamEmitter,
+            limits: limits,
+            deadline: deadline,
+            timeoutMs: requestedTimeoutMs,
+            negotiatedExtensions: negotiatedExtensions,
+            preferDbStreaming: options?['prefer_db_streaming'] == true,
+            effectiveMaxRows: maxRows,
+            clientToken: clientToken,
+            database: database,
+          );
+        }
         if (streamingFromDbResponse != null) {
           return streamingFromDbResponse;
         }
 
-        final prefersDbStreaming = _dbStreamingAutoPolicy.prefersDbStreamingOverMaterialized(
-          featureFlags: _featureFlags,
-          queryRequest: queryRequest,
-          sql: sql,
-          negotiatedExtensions: negotiatedExtensions,
-          preferDbStreaming: options?['prefer_db_streaming'] == true,
-          effectiveMaxRows: maxRows,
-          limits: limits,
-        );
+        if (supportsStreamingChunks(negotiatedExtensions)) {
+          final materializedFallbackGuard = _materializedResultPolicy.rejectIfMaterializedOdbcFallbackUnsafe(
+            effectiveMaxRows: maxRows,
+            limits: limits,
+            negotiatedExtensions: negotiatedExtensions,
+            prefersDbStreaming: prefersDbStreaming,
+            requestId: request.id?.toString(),
+          );
+          if (materializedFallbackGuard.isError()) {
+            _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('materialized_odbc_fallback_rejected');
+            final domainFailure = materializedFallbackGuard.exceptionOrNull()! as domain.Failure;
+            final rpcError = FailureToRpcErrorMapper.map(
+              domainFailure,
+              instance: request.id?.toString(),
+              useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+            );
+            return RpcResponse.error(id: request.id, error: rpcError);
+          }
+        }
+
         if (prefersDbStreaming) {
           _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('db_streaming_unavailable_fallback');
         }
@@ -233,6 +278,9 @@ class SqlExecuteHandler {
           requestId: request.id?.toString(),
           deadline: deadline,
           timeoutMs: requestedTimeoutMs,
+          effectiveMaxRows: maxRows,
+          transportLimits: limits,
+          negotiatedExtensions: negotiatedExtensions,
         );
 
         return result.fold<Future<RpcResponse>>(
@@ -283,6 +331,23 @@ class SqlExecuteHandler {
             }
 
             if (useStreaming) {
+              final streamingFallbackGuard = _materializedResultPolicy.rejectIfMaterializedStreamingFallbackUnsafe(
+                rowCount: limitedRows.length,
+                limits: limits,
+                negotiatedExtensions: negotiatedExtensions,
+                requestId: request.id?.toString(),
+              );
+              if (streamingFallbackGuard.isError()) {
+                _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('materialized_streaming_fallback_rejected');
+                final domainFailure = streamingFallbackGuard.exceptionOrNull()! as domain.Failure;
+                final rpcError = FailureToRpcErrorMapper.map(
+                  domainFailure,
+                  instance: request.id?.toString(),
+                  useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+                );
+                return RpcResponse.error(id: request.id, error: rpcError);
+              }
+
               return _materializedStreamingExecutor.streamMaterializedResult(
                 request: request,
                 queryRequest: queryRequest,
@@ -314,8 +379,12 @@ class SqlExecuteHandler {
             return rpcResponse;
           },
           (Exception failure) async {
+            final domainFailure = failure as domain.Failure;
+            if (domainFailure.context['reason'] == RpcSqlBudgetConstants.materializedResultTooLargeReason) {
+              _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('materialized_result_too_large');
+            }
             final rpcError = FailureToRpcErrorMapper.map(
-              failure as domain.Failure,
+              domainFailure,
               instance: request.id?.toString(),
               useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
             );

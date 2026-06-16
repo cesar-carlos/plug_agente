@@ -1,9 +1,11 @@
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_method_handler_operations.dart';
+import 'package:plug_agente/application/rpc/sql_streaming_connection_string_cache.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
@@ -29,6 +31,8 @@ class SqlRpcMethodHandlerOperationsFactory {
     required SqlRpcMethodHandlerSupport support,
     ActiveConfigResolver? activeConfigResolver,
     IAgentConfigRepository? configRepository,
+    IActiveConfigQueryCache? configQueryCache,
+    SqlStreamingConnectionStringCache? streamingConnectionStringCache,
     IAuthorizationMetricsCollector? authMetrics,
     IDeprecationMetricsCollector? deprecationMetrics,
     IRpcDispatchMetricsCollector? dispatchMetrics,
@@ -50,6 +54,8 @@ class SqlRpcMethodHandlerOperationsFactory {
       support: support,
       activeConfigResolver: activeConfigResolver,
       configRepository: configRepository,
+      configQueryCache: configQueryCache,
+      streamingConnectionStringCache: streamingConnectionStringCache,
       authMetrics: authMetrics,
       deprecationMetrics: deprecationMetrics,
       dispatchMetrics: dispatchMetrics,

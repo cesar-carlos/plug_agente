@@ -2,6 +2,7 @@ import 'package:plug_agente/application/services/agent_register_profile_provider
 import 'package:plug_agente/application/use_cases/fetch_agent_hub_profile.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cep.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
+import 'package:plug_agente/application/use_cases/reload_odbc_runtime_dependencies.dart';
 import 'package:plug_agente/application/use_cases/sync_agent_profile_with_hub.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
@@ -54,6 +55,8 @@ List<SingleChildWidget> buildPresentationInfrastructureProviders({
       Provider<SyncAgentProfileWithHub>(create: (_) => getIt<SyncAgentProfileWithHub>()),
     if (getIt.isRegistered<FetchAgentHubProfile>())
       Provider<FetchAgentHubProfile>(create: (_) => getIt<FetchAgentHubProfile>()),
+    if (getIt.isRegistered<ReloadOdbcRuntimeDependencies>())
+      Provider<ReloadOdbcRuntimeDependencies>(create: (_) => getIt<ReloadOdbcRuntimeDependencies>()),
     if (getIt.isRegistered<AgentRegisterProfileProvider>())
       Provider<AgentRegisterProfileProvider>(create: (_) => getIt<AgentRegisterProfileProvider>()),
   ];

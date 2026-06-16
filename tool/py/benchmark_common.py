@@ -222,6 +222,117 @@ def parse_transport_json_metrics(payload: Mapping[str, Any]) -> dict[str, float]
     return metrics
 
 
+def extract_json_object_from_output(output: str) -> dict[str, Any] | None:
+    for line in reversed(output.splitlines()):
+        candidate = line.strip()
+        if candidate.startswith("Shell:"):
+            candidate = candidate[len("Shell:") :].strip()
+        if not candidate.startswith("{"):
+            continue
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def parse_plug_agente_stack_metrics(output: str) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+
+    for line in output.splitlines():
+        candidate = line.strip()
+        if candidate.startswith("Shell:"):
+            candidate = candidate[len("Shell:") :].strip()
+        if candidate.startswith('{"benchmark":"plug_agente_stack"'):
+            try:
+                payload = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            for row in payload.get("rows", []):
+                if not isinstance(row, dict):
+                    continue
+                scenario = row.get("scenario")
+                variant = row.get("variant")
+                if not isinstance(scenario, str) or not isinstance(variant, str):
+                    continue
+                prefix = f"{scenario}.{variant}"
+                median = row.get("median_us")
+                if isinstance(median, (int, float)):
+                    metrics[f"{prefix}.median_us"] = float(median)
+                p95 = row.get("p95_us")
+                if isinstance(p95, (int, float)):
+                    metrics[f"{prefix}.p95_us"] = float(p95)
+                speedup = row.get("speedup")
+                if isinstance(speedup, (int, float)):
+                    metrics[f"{prefix}.speedup"] = float(speedup)
+                rows_per_sec = row.get("rows_per_sec")
+                if isinstance(rows_per_sec, (int, float)):
+                    metrics[f"{prefix}.rows_per_sec"] = float(rows_per_sec)
+            continue
+
+        if not candidate.startswith("|") or candidate.startswith("| ---"):
+            continue
+        if "scenario |" in candidate.lower():
+            continue
+
+        parts = [part.strip() for part in candidate.strip("|").split("|")]
+        if len(parts) < 4:
+            continue
+
+        scenario = parts[0]
+        variant = parts[1]
+        prefix = f"{scenario}.{variant}"
+
+        median = _parse_metric_cell(parts[3])
+        if median is not None:
+            metrics[f"{prefix}.median_us"] = median
+
+        if len(parts) > 4:
+            p95 = _parse_metric_cell(parts[4])
+            if p95 is not None:
+                metrics[f"{prefix}.p95_us"] = p95
+
+        if len(parts) > 5:
+            speedup = _parse_metric_cell(parts[5])
+            if speedup is not None:
+                metrics[f"{prefix}.speedup"] = speedup
+
+        if len(parts) > 6:
+            rows_per_sec = _parse_metric_cell(parts[6])
+            if rows_per_sec is not None:
+                metrics[f"{prefix}.rows_per_sec"] = rows_per_sec
+
+    return metrics
+
+
+def parse_gateway_encoding_metrics(output: str) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    payload = extract_json_object_from_output(output)
+    if payload is None:
+        return metrics
+
+    for scenario in payload.get("scenarios", []):
+        if not isinstance(scenario, dict):
+            continue
+        name = scenario.get("scenario")
+        median = scenario.get("median_us")
+        if isinstance(name, str) and isinstance(median, (int, float)):
+            metrics[f"median_us_{name}"] = float(median)
+    return metrics
+
+
+def _parse_metric_cell(value: str) -> float | None:
+    text = value.strip()
+    if not text or text == "-":
+        return None
+    try:
+        return float(text.replace(",", ""))
+    except ValueError:
+        return None
+
+
 def parse_odbc_benchmark_metrics(output: str) -> dict[str, float]:
     metrics: dict[str, float] = {}
     patterns = {

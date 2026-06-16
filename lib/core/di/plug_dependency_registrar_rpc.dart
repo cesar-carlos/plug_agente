@@ -109,6 +109,8 @@ void _registerRpc(
         getPolicyRateLimiter: getIt<ClientTokenGetPolicyRateLimiter>(),
         featureFlags: getIt<FeatureFlags>(),
         activeConfigResolver: getIt<ActiveConfigResolver>(),
+        configQueryCache: getIt<IActiveConfigQueryCache>(),
+        streamingConnectionStringCache: getIt<SqlStreamingConnectionStringCache>(),
         idempotencyStore: getIt<IIdempotencyStore>(),
         authMetrics: getIt<IAuthorizationMetricsCollector>(),
         deprecationMetrics: getIt<IDeprecationMetricsCollector>(),

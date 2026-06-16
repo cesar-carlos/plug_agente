@@ -1,9 +1,11 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/use_cases/reload_odbc_runtime_dependencies.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_runtime_reloader.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/odbc_connection_pool_section.dart';
 import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
@@ -12,7 +14,7 @@ import 'package:result_dart/result_dart.dart';
 
 import '../../../../helpers/mock_odbc_connection_settings.dart';
 
-class _FakeConnectionPool implements IConnectionPool {
+class _FakeConnectionPool implements IConnectionPool, IConnectionPoolDiagnostics {
   @override
   Future<Result<String>> acquire(
     String connectionString, {
@@ -38,6 +40,27 @@ class _FakeConnectionPool implements IConnectionPool {
 
   @override
   Future<Result<void>> release(String connectionId) async => const Success(unit);
+
+  @override
+  Map<String, Object?> getHealthDiagnostics() {
+    return {
+      'strategy': 'adaptive_experimental',
+      'effective_strategy': 'native',
+      'experimental_enabled': true,
+      'native_eligible': true,
+      'native_circuit_open': false,
+      'native_skip_reason': null,
+    };
+  }
+}
+
+class _RecordingOdbcRuntimeReloader implements IOdbcRuntimeReloader {
+  _RecordingOdbcRuntimeReloader(this._reload);
+
+  final Future<bool> Function() _reload;
+
+  @override
+  Future<bool> reload() => _reload();
 }
 
 void main() {
@@ -60,24 +83,26 @@ void main() {
         useNativeOdbcPool: true,
         nativePoolTestOnCheckout: false,
       );
+      final reloadOdbcRuntime = ReloadOdbcRuntimeDependencies(
+        _RecordingOdbcRuntimeReloader(() async {
+          reloadCount++;
+          return true;
+        }),
+      );
       getIt
         ..registerSingleton<IOdbcConnectionSettings>(settings)
-        ..registerSingleton<IConnectionPool>(_FakeConnectionPool());
+        ..registerSingleton<IConnectionPool>(_FakeConnectionPool())
+        ..registerSingleton<ReloadOdbcRuntimeDependencies>(reloadOdbcRuntime);
 
       await tester.pumpWidget(
         MultiProvider(
           providers: buildPresentationInfrastructureProviders(
             capabilities: RuntimeCapabilities.full(),
           ),
-          child: FluentApp(
+          child: const FluentApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: OdbcConnectionPoolSection(
-              reloadOdbcDependencies: () async {
-                reloadCount++;
-                return true;
-              },
-            ),
+            home: OdbcConnectionPoolSection(),
           ),
         ),
       );
@@ -85,6 +110,9 @@ void main() {
 
       expect(find.text('Native ODBC pool (experimental)'), findsNothing);
       expect(find.text('Validate connection when checking out from native pool'), findsNothing);
+      expect(find.textContaining('DirectOdbcConnectionLimiter'), findsOneWidget);
+      expect(find.textContaining('Effective strategy: native'), findsOneWidget);
+      expect(find.textContaining('Adaptive experimental pooling: enabled'), findsOneWidget);
 
       final fields = find.byType(TextBox);
       expect(fields, findsNWidgets(4));

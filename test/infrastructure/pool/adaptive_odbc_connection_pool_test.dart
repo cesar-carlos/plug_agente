@@ -90,12 +90,12 @@ void main() {
       verify(
         () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options')),
       ).called(1);
-      verifyNever(() => service.connect(any(), options: any(named: 'options')));
+      verifyNever(() => service.connect(any()));
       verify(() => service.poolReleaseConnection('native-1')).called(1);
       verify(() => configRepository.getCurrentConfigMetadata()).called(1);
     });
 
-    test('routes to lease pool when custom connection options are required', () async {
+    test('routes eligible SQL Server driver to lease pool when custom options are required', () async {
       when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
@@ -107,14 +107,14 @@ void main() {
       ).thenAnswer(
         (_) async => Success(
           Connection(
-            id: 'lease-options',
+            id: 'lease-custom-options',
             connectionString: 'DSN=Prod',
             createdAt: DateTime.now(),
             isActive: true,
           ),
         ),
       );
-      when(() => service.disconnect('lease-options')).thenAnswer(
+      when(() => service.disconnect('lease-custom-options')).thenAnswer(
         (_) async => const Success(unit),
       );
 
@@ -126,23 +126,29 @@ void main() {
         configRepository: configRepository,
       );
 
+      const customOptions = ConnectionAcquireOptions(
+        queryTimeout: Duration(seconds: 5),
+        maxResultBufferBytes: 8 * 1024 * 1024,
+      );
       final acquired = await pool.acquire(
         'DSN=Prod',
-        options: const ConnectionAcquireOptions(
-          queryTimeout: Duration(seconds: 5),
-          maxResultBufferBytes: 8 * 1024 * 1024,
-        ),
+        options: customOptions,
       );
-      expect(acquired.getOrNull(), 'lease-options');
-      await pool.release('lease-options');
+      expect(acquired.getOrNull(), 'lease-custom-options');
+      await pool.release('lease-custom-options');
 
       final diagnostics = pool.getHealthDiagnostics();
       expect(diagnostics['effective_strategy'], 'lease');
-      expect(diagnostics['native_skip_reason'], 'connection_options_unsupported');
-      expect(diagnostics['native_options_skip_total'], 1);
-      expect(metrics.odbcNativePoolOptionsSkipCount, 1);
+      expect(
+        diagnostics['native_skip_reason'],
+        'native_pool_custom_options_unsupported',
+      );
       verifyNever(() => service.poolCreate(any(), any(), options: any(named: 'options')));
-      verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(1);
+      final captured =
+          verify(() => service.connect('DSN=Prod', options: captureAny(named: 'options'))).captured.single
+              as ConnectionOptions;
+      expect(captured.queryTimeout, customOptions.queryTimeout);
+      expect(captured.maxResultBufferBytes, customOptions.maxResultBufferBytes);
     });
 
     test('uses native-compatible acquire and preserves lease options on native fallback', () async {
@@ -520,7 +526,7 @@ void main() {
       ).called(1);
       verify(() => service.poolGetConnection(51)).called(2);
       verify(() => service.poolReleaseConnection(any())).called(2);
-      verifyNever(() => service.connect(any(), options: any(named: 'options')));
+      verifyNever(() => service.connect(any()));
     });
 
     test('falls back to lease warm-up when native warm-up is disabled', () async {
@@ -613,7 +619,7 @@ void main() {
       ).called(1);
       verify(() => service.poolGetConnection(51)).called(2);
       verify(() => service.poolReleaseConnection(any())).called(2);
-      verifyNever(() => service.connect(any(), options: any(named: 'options')));
+      verifyNever(() => service.connect(any()));
     });
 
     test('keeps SQL Anywhere on lease pool and marks native as ineligible', () async {
@@ -728,6 +734,89 @@ void main() {
       verify(() => service.connect('DSN=SQLAnywhere', options: any(named: 'options'))).called(1);
     });
 
+    test('keeps owner routing for in-flight connections when configuration changes', () async {
+      var config = _sqlServerConfig();
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
+        (_) async => Success(config),
+      );
+      when(
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((_) async => const Success(41));
+      when(() => service.poolGetConnection(41)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'native-before-config-change',
+            connectionString: 'DSN=Prod',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => service.poolReleaseConnection('native-before-config-change')).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(() => service.poolClose(41)).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => service.connect(
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'lease-after-config-change',
+            connectionString: 'DSN=SQLAnywhere',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => service.disconnect('lease-after-config-change')).thenAnswer(
+        (_) async => const Success(unit),
+      );
+
+      final pool = _buildPool(
+        service: service,
+        settings: settings,
+        flags: flags,
+        metrics: metrics,
+        configRepository: configRepository,
+        driverInfoCacheTtl: Duration.zero,
+      );
+
+      final nativeAcquire = await pool.acquire('DSN=Prod');
+      expect(nativeAcquire.getOrNull(), 'native-before-config-change');
+
+      config = _sqlAnywhereConfig().copyWith(
+        updatedAt: DateTime(2024, 1, 2),
+      );
+      final leaseAcquire = await pool.acquire('DSN=SQLAnywhere');
+      expect(leaseAcquire.getOrNull(), 'lease-after-config-change');
+
+      final diagnosticsDuringDrain = pool.getHealthDiagnostics();
+      expect(diagnosticsDuringDrain['config_drain_pending'], isTrue);
+      expect(diagnosticsDuringDrain['tracked_owner_count'], 2);
+
+      final nativeRelease = await pool.release('native-before-config-change');
+      expect(nativeRelease.isSuccess(), isTrue);
+      verify(() => service.poolReleaseConnection('native-before-config-change')).called(1);
+
+      final leaseRelease = await pool.release('lease-after-config-change');
+      expect(leaseRelease.isSuccess(), isTrue);
+      verify(() => service.disconnect('lease-after-config-change')).called(1);
+      verify(() => service.poolClose(41)).called(1);
+
+      final diagnosticsAfterDrain = pool.getHealthDiagnostics();
+      expect(diagnosticsAfterDrain['config_drain_pending'], isFalse);
+      expect(diagnosticsAfterDrain['tracked_owner_count'], 0);
+    });
+
     test('healthCheckAll preserves typed child failure instead of a raw Exception', () async {
       when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
@@ -748,6 +837,9 @@ void main() {
       when(() => service.poolReleaseConnection('native-health')).thenAnswer(
         (_) async => const Success(unit),
       );
+      when(() => service.poolGetState(41)).thenAnswer(
+        (_) async => const Success(PoolState(size: 4, idle: 3)),
+      );
       when(() => service.poolHealthCheck(41)).thenAnswer(
         (_) async => const Failure(
           ConnectionError(message: 'native health failed'),
@@ -767,6 +859,67 @@ void main() {
 
       expect(health.isError(), isTrue);
       expect(health.exceptionOrNull(), isA<domain.Failure>());
+    });
+
+    test('healthCheckAll reconciles lease and native active counters with getActiveCount', () async {
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
+        (_) async => Success(_sqlServerConfig()),
+      );
+      when(
+        () => service.poolCreate(any(), any(), options: any(named: 'options')),
+      ).thenAnswer((_) async => const Success(41));
+      when(() => service.poolGetConnection(41)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'native-reconcile',
+            connectionString: 'DSN=Prod',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => service.poolGetState(41)).thenAnswer(
+        (_) async => const Success(PoolState(size: 4, idle: 1)),
+      );
+      when(() => service.poolHealthCheck(41)).thenAnswer(
+        (_) async => const Success(true),
+      );
+      when(
+        () => service.connect(
+          any(),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'lease-reconcile',
+            connectionString: 'DSN=Prod',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+
+      final pool = _buildPool(
+        service: service,
+        settings: settings,
+        flags: flags,
+        metrics: metrics,
+        configRepository: configRepository,
+      );
+
+      await pool.acquire('DSN=Prod');
+      final diagnosticsBefore = pool.getHealthDiagnostics();
+      expect(diagnosticsBefore['native_active_count'], 1);
+
+      final health = await pool.healthCheckAll();
+      expect(health.isSuccess(), isTrue);
+
+      final diagnostics = pool.getHealthDiagnostics();
+      expect(diagnostics['native_active_count'], 3);
+      expect(diagnostics['lease_active_count'], 0);
+      expect(diagnostics['effective_strategy'], 'native');
+      expect(diagnostics['native_circuit_open'], isFalse);
     });
 
     test('closeAll preserves typed child failure instead of a raw Exception', () async {

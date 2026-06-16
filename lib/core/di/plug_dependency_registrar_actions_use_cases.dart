@@ -10,6 +10,8 @@ void _registerActionsUseCases(GetIt getIt) {
             getIt.isRegistered<IOdbcCircuitBreakerReset>()
                 ? getIt<IOdbcCircuitBreakerReset>()
                 : null,
+        metadataCache: getIt<ActiveConfigMetadataCache>(),
+        streamingConnectionStringCache: getIt<SqlStreamingConnectionStringCache>(),
       ),
     )
     ..registerLazySingleton(

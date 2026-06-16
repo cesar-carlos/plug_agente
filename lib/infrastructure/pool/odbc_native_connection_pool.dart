@@ -5,7 +5,6 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_native_bulk_insert_pool.dart';
@@ -15,9 +14,10 @@ import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
-/// Pool ODBC usando pool nativo do `odbc_fast` (conexões do pool não recebem
-/// `ConnectionOptions` no repositório e podem cair em buffer ~512 KiB no
-/// worker). Mantido para testes; o app usa lease em `odbc_connection_pool.dart`.
+/// ODBC pool backed by `odbc_fast` native pooling with app-level
+/// [PoolOptions] on `poolCreate`. Per-checkout [ConnectionOptions] require
+/// `odbc_fast` newer than 4.3.3 (`connectionOptions` / `poolGetConnection`
+/// `options`); published 4.3.3 uses pool defaults only at checkout.
 class OdbcNativeConnectionPool
     implements
         IConnectionPool,
@@ -224,18 +224,6 @@ class OdbcNativeConnectionPool
     ConnectionAcquireOptions? options,
     Duration? acquireTimeout,
   }) async {
-    if (options != null) {
-      return Failure(
-        domain.ConfigurationFailure.withContext(
-          message: 'Native ODBC pool does not support custom connection options.',
-          context: <String, dynamic>{
-            'operation': 'pool_acquire',
-            'reason': OdbcContextConstants.nativePoolCustomOptionsUnsupportedReason,
-          },
-        ),
-      );
-    }
-
     final poolResult = await _getOrCreatePool(connectionString);
 
     return poolResult.fold(
@@ -501,20 +489,58 @@ class OdbcNativeConnectionPool
     final connectionIds = <String>[];
     final errors = <String>[];
 
+    developer.log(
+      'Warming up native pool with $count connections',
+      name: 'connection_pool',
+      level: 800,
+    );
+
     try {
-      for (var i = 0; i < count; i++) {
-        final result = await acquire(connectionString);
-        result.fold(
-          connectionIds.add,
-          (error) => errors.add('warmup_acquire_${i + 1}: $error'),
+      final handshakeBatchSize = _nativeHandshakeSemaphore.maxConcurrent;
+      for (var offset = 0; offset < count; offset += handshakeBatchSize) {
+        final batchEnd = offset + handshakeBatchSize < count ? offset + handshakeBatchSize : count;
+        final batchResults = await Future.wait(
+          List.generate(
+            batchEnd - offset,
+            (_) => acquire(connectionString),
+          ),
         );
+        for (var batchIndex = 0; batchIndex < batchResults.length; batchIndex++) {
+          final globalIndex = offset + batchIndex + 1;
+          batchResults[batchIndex].fold(
+            connectionIds.add,
+            (error) {
+              developer.log(
+                'Native warm-up connection $globalIndex/$count failed',
+                name: 'connection_pool',
+                level: 900,
+                error: error,
+              );
+              errors.add('warmup_acquire_$globalIndex: $error');
+            },
+          );
+        }
       }
+
+      developer.log(
+        'Native pool warm-up completed: ${connectionIds.length}/$count connections',
+        name: 'connection_pool',
+        level: 800,
+      );
     } finally {
       for (final id in connectionIds) {
         final cleanup = await release(id);
         cleanup.fold(
           (_) {},
-          (error) => errors.add('warmup_release_$id: $error'),
+          (error) {
+            developer.log(
+              'Native warm-up cleanup failed for $id',
+              name: 'connection_pool',
+              level: 900,
+              error: error,
+            );
+            errors.add('warmup_release_$id: $error');
+          },
         );
       }
     }
@@ -559,8 +585,17 @@ class OdbcNativeConnectionPool
     return Success(totalActive);
   }
 
+  Future<void> _reconcileActiveCount() async {
+    final activeResult = await getActiveCount();
+    if (activeResult.isSuccess()) {
+      _activeAcquireCount = activeResult.getOrThrow();
+    }
+  }
+
   @override
   Future<Result<void>> healthCheckAll() async {
+    await _reconcileActiveCount();
+
     final errors = <String>[];
 
     for (final poolId in _pools.values) {
@@ -589,7 +624,10 @@ class OdbcNativeConnectionPool
   Map<String, Object?> getHealthDiagnostics() {
     return {
       'strategy': 'native',
+      'effective_strategy': 'native',
       'native_pool_exposed': true,
+      'native_circuit_open': false,
+      'native_skip_reason': null,
       'lease_active_count': 0,
       'native_active_count': _activeAcquireCount,
     };

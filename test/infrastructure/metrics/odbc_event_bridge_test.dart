@@ -4,10 +4,13 @@ import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_worker_runtime_recovery_port.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/metrics/odbc_event_bridge.dart';
 
 class _MockAdminService extends Mock implements IAdminService {}
+
+class _MockWorkerRecoveryPort extends Mock implements IOdbcWorkerRuntimeRecoveryPort {}
 
 void main() {
   group('OdbcEventBridge', () {
@@ -150,6 +153,38 @@ void main() {
       check(snapshot['odbc_event_pool_resize']).equals(1);
       check(snapshot['odbc_event_auto_reconnect_attempted']).equals(1);
       check(snapshot['odbc_event_slow_query_detected']).equals(1);
+    });
+
+    test('should invoke worker recovery port on WorkerRecovered', () async {
+      final recoveryPort = _MockWorkerRecoveryPort();
+      when(recoveryPort.recoverAfterNativeWorkerCrash).thenAnswer((_) async {});
+      final bridge = OdbcEventBridge(
+        adminService: adminService,
+        workerRecoveryPort: recoveryPort,
+      );
+      final timestamp = DateTime.utc(2026, 5, 27, 12);
+
+      controller.add(WorkerRecovered(timestamp: timestamp));
+      await Future<void>.delayed(Duration.zero);
+      await bridge.dispose();
+
+      verify(recoveryPort.recoverAfterNativeWorkerCrash).called(1);
+    });
+
+    test('should log worker recovery failures without throwing', () async {
+      final recoveryPort = _MockWorkerRecoveryPort();
+      when(recoveryPort.recoverAfterNativeWorkerCrash).thenThrow(StateError('recovery failed'));
+      final bridge = OdbcEventBridge(
+        adminService: adminService,
+        workerRecoveryPort: recoveryPort,
+      );
+      final timestamp = DateTime.utc(2026, 5, 27, 12);
+
+      controller.add(WorkerRecovered(timestamp: timestamp));
+      await Future<void>.delayed(Duration.zero);
+      await bridge.dispose();
+
+      verify(recoveryPort.recoverAfterNativeWorkerCrash).called(1);
     });
 
     test('should expose newest events first via recentEvents (bounded ring)', () async {

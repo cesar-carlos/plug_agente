@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_pipeline_helpers.dart';
 
 /// Transport tuning dedicated to `rpc:chunk` / `rpc:complete` hot paths.
 ///
@@ -11,6 +12,14 @@ final class RpcChunkTransportPolicy {
 
   static bool isRpcChunkEvent(String? metricEventName) =>
       metricEventName == 'rpc:chunk' || metricEventName == 'rpc:complete';
+
+  static bool outboundRpcChunkHasColumnar(dynamic data) {
+    if (data is! Map) {
+      return false;
+    }
+    final columnar = data['columnar'];
+    return columnar is Map && columnar.isNotEmpty;
+  }
 
   static int jsonEncodeIsolateThresholdBytes(String? metricEventName) {
     if (!isRpcChunkEvent(metricEventName)) {
@@ -44,5 +53,25 @@ final class RpcChunkTransportPolicy {
       return ConnectionConstants.streamingChunkRowIsolateThreshold;
     }
     return ConnectionConstants.rpcChunkRowIsolateThreshold;
+  }
+
+  /// Columnar `rpc:chunk` payloads are typically low compressibility; gzip is
+  /// skipped unless [ConnectionConstants.rpcChunkColumnarGzipEnabled] is true.
+  static bool shouldCompressPayload({
+    required String compressionMode,
+    required int originalSize,
+    required int compressionThreshold,
+    String? metricEventName,
+    dynamic payload,
+  }) {
+    if (!shouldRunGzipCompression(compressionMode, originalSize, compressionThreshold)) {
+      return false;
+    }
+    if (isRpcChunkEvent(metricEventName) &&
+        outboundRpcChunkHasColumnar(payload) &&
+        !ConnectionConstants.rpcChunkColumnarGzipEnabled) {
+      return false;
+    }
+    return true;
   }
 }

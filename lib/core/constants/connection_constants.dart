@@ -24,8 +24,14 @@ class ConnectionConstants {
   static const Duration defaultTransactionalBatchTimeout = Duration(seconds: 60);
   static const Duration defaultStreamingQueryTimeout = Duration(minutes: 5);
   static const int defaultMaxResultBufferBytes = 64 * 1024 * 1024;
+  static const int defaultSqlExecuteMaterializedMaxRows = 5000;
+  static const int defaultSqlExecuteMaterializedMaxEstimatedBytes = 16 * 1024 * 1024;
+  static const int defaultSqlExecuteMaterializedEstimatedBytesPerRow = 512;
   static const int defaultInitialResultBufferBytes = 256 * 1024;
   static const int defaultStreamingChunkSizeKb = 1024;
+  static const Duration defaultStreamingConnectReuseTtl = Duration(seconds: 30);
+  static const int defaultStreamingConnectReuseMaxEntries = 8;
+  static const bool defaultStreamingConnectReuseEnabled = true;
 
   /// App-level burst reconnect attempts (ConnectionProvider) after
   /// [socketReconnectionAttempts] is exhausted. Distinct from
@@ -54,6 +60,11 @@ class ConnectionConstants {
   static const int defaultPoolSize = 8;
   static const int defaultSqlQueueMaxSize = 16;
   static const Duration defaultPoolAcquireTimeout = Duration(seconds: 30);
+
+  /// Max concurrent ODBC connection tests (UI/RPC probes bypass the SQL queue).
+  static const int defaultMaxConcurrentConnectionTests = 2;
+
+  static const Duration connectionTestAcquireTimeout = Duration(seconds: 10);
   static const Duration defaultNativePoolIdleTimeout = Duration(minutes: 5);
   static const Duration defaultNativePoolMaxLifetime = Duration(hours: 1);
   static const Duration defaultNativePoolConnectionTimeout = defaultPoolAcquireTimeout;
@@ -215,6 +226,22 @@ class ConnectionConstants {
   }
 
   static int? get directOdbcConnectionMaxConcurrentOverride => _positiveIntEnv('ODBC_DIRECT_CONNECTION_MAX_CONCURRENT');
+
+  /// Hub `sql.execute` row cap above which materialized responses are rejected when
+  /// streaming chunks are negotiated. Override with `SQL_EXECUTE_MATERIALIZED_MAX_ROWS`.
+  static int get sqlExecuteMaterializedMaxRows =>
+      _positiveIntEnv('SQL_EXECUTE_MATERIALIZED_MAX_ROWS') ?? defaultSqlExecuteMaterializedMaxRows;
+
+  /// Estimated byte budget for materialized `sql.execute` before forcing DB streaming
+  /// or rejecting. Override with `SQL_EXECUTE_MATERIALIZED_MAX_BYTES`.
+  static int get sqlExecuteMaterializedMaxEstimatedBytes =>
+      _positiveIntEnv('SQL_EXECUTE_MATERIALIZED_MAX_BYTES') ?? defaultSqlExecuteMaterializedMaxEstimatedBytes;
+
+  /// Rough bytes-per-row estimate used with [sqlExecuteMaterializedMaxEstimatedBytes].
+  /// Override with `SQL_EXECUTE_MATERIALIZED_BYTES_PER_ROW`.
+  static int get sqlExecuteMaterializedEstimatedBytesPerRow =>
+      _positiveIntEnv('SQL_EXECUTE_MATERIALIZED_BYTES_PER_ROW') ??
+      defaultSqlExecuteMaterializedEstimatedBytesPerRow;
 
   /// SQL execution queue **wait** timeout (configurable via `SQL_QUEUE_TIMEOUT_SEC`).
   ///
@@ -427,6 +454,22 @@ class ConnectionConstants {
   static int get playgroundStreamingMaxResultRows =>
       _positiveIntEnv('PLAYGROUND_STREAMING_MAX_RESULT_ROWS') ?? defaultPlaygroundStreamingMaxResultRows;
 
+  /// Max rows materialized in the Playground grid during streaming. Rows beyond
+  /// this window are dropped from the front (sliding window) while
+  /// [playgroundStreamingMaxResultRows] still bounds total fetched rows.
+  ///
+  /// Override with env `PLAYGROUND_STREAMING_UI_WINDOW_ROWS` (positive integer).
+  static const int defaultPlaygroundStreamingUiWindowRows = 2000;
+
+  static int get playgroundStreamingUiWindowRows {
+    final configured = _positiveIntEnv('PLAYGROUND_STREAMING_UI_WINDOW_ROWS');
+    if (configured == null) {
+      return defaultPlaygroundStreamingUiWindowRows;
+    }
+    final cap = playgroundStreamingMaxResultRows;
+    return configured > cap ? cap : configured;
+  }
+
   /// Headroom above [rpcSqlExecuteConcurrencySoftLimit] for concurrent non-sql
   /// RPC handlers on the same socket (health, profile, batch, etc.).
   static const int defaultMaxConcurrentRpcHandlersHeadroom = 96;
@@ -627,6 +670,38 @@ class ConnectionConstants {
   static int get rpcChunkRowIsolateThreshold =>
       _positiveIntEnv('RPC_CHUNK_ROW_ISOLATE_THRESHOLD') ?? defaultRpcChunkRowIsolateThreshold;
 
+  /// When false (default), columnar `rpc:chunk` payloads skip gzip because they
+  /// are typically low compressibility. Override with
+  /// `RPC_CHUNK_COLUMNAR_GZIP_ENABLED` (`true`/`false`).
+  static const bool defaultRpcChunkColumnarGzipEnabled = false;
+
+  static bool get rpcChunkColumnarGzipEnabled {
+    final raw = _optionalEnv('RPC_CHUNK_COLUMNAR_GZIP_ENABLED');
+    if (raw == null || raw.isEmpty) {
+      return defaultRpcChunkColumnarGzipEnabled;
+    }
+    final normalized = raw.toLowerCase();
+    if (normalized == 'true' || normalized == '1') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0') {
+      return false;
+    }
+    return defaultRpcChunkColumnarGzipEnabled;
+  }
+
+  /// Sample rate for `rpc:chunk` protocol metrics (record 1 in N events).
+  /// Override with `PROTOCOL_METRICS_RPC_CHUNK_SAMPLE_RATE` (integer >= 1).
+  static const int defaultProtocolMetricsRpcChunkSampleRate = 10;
+
+  static int get protocolMetricsRpcChunkSampleRate {
+    final parsed = _positiveIntEnv('PROTOCOL_METRICS_RPC_CHUNK_SAMPLE_RATE');
+    if (parsed == null || parsed < 1) {
+      return defaultProtocolMetricsRpcChunkSampleRate;
+    }
+    return parsed;
+  }
+
   /// TTL for in-memory authorization decision cache entries on the SQL hot path.
   ///
   /// Override with env `AUTH_DECISION_CACHE_TTL_SECONDS` (15..600). Default 60s.
@@ -668,12 +743,11 @@ class ConnectionConstants {
   /// Default credit advertised in
   /// `agent:capabilities.extensions.recommendedStreamPullWindowSize`.
   ///
-  /// Raised from `1` to `8` so the hub starts with enough in-flight credits to
-  /// keep streaming chunks moving without paying a round-trip per pull. The
-  /// hub clamps this to its own ceiling and to `maxStreamPullWindowSize` (the
-  /// agent advertises [maxBackpressureChunkQueueSize] as that ceiling). See
-  /// `plug_server/docs/plug_agente/03_performance_roadmap.md` item 6.
-  static const int defaultRecommendedStreamPullWindowSize = 8;
+  /// Raised from `1` to `12` so the hub starts with enough in-flight credits to
+  /// keep streaming chunks moving without paying a round-trip per pull on LAN.
+  /// The hub clamps this to its own ceiling and to `maxStreamPullWindowSize`
+  /// (the agent advertises [maxBackpressureChunkQueueSize] as that ceiling).
+  static const int defaultRecommendedStreamPullWindowSize = 12;
 
   /// Effective recommended pull window. Override with env
   /// `AGENT_STREAM_PULL_WINDOW_RECOMMENDED` (positive integer); clamped to
@@ -694,4 +768,39 @@ class ConnectionConstants {
   /// Mirrors the hub's `HUB_MAX_BATCH_SIZE` cap so the agent never produces a
   /// batch the hub cannot ingest in one frame.
   static const int rpcAckCoalesceMaxBatch = 32;
+
+  /// When true, idle streaming ODBC connections may be cached briefly for the
+  /// same connection string (SQL Server / PostgreSQL only).
+  static bool get streamingConnectReuseEnabled {
+    final raw = _optionalEnv('ODBC_STREAMING_CONNECT_REUSE_ENABLED');
+    if (raw == null || raw.isEmpty) {
+      return defaultStreamingConnectReuseEnabled;
+    }
+    final normalized = raw.toLowerCase();
+    if (normalized == 'true' || normalized == '1') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0') {
+      return false;
+    }
+    return defaultStreamingConnectReuseEnabled;
+  }
+
+  /// TTL for cached idle streaming connections. Override with
+  /// `ODBC_STREAMING_CONNECT_REUSE_TTL_SEC` (positive integer seconds).
+  static Duration get streamingConnectReuseTtl {
+    final parsed = int.tryParse(_optionalEnv('ODBC_STREAMING_CONNECT_REUSE_TTL_SEC') ?? '');
+    final seconds = (parsed == null || parsed <= 0) ? defaultStreamingConnectReuseTtl.inSeconds : parsed;
+    return Duration(seconds: seconds.clamp(5, 300));
+  }
+
+  /// Max distinct connection strings with a cached idle streaming connection.
+  /// Override with `ODBC_STREAMING_CONNECT_REUSE_MAX_ENTRIES` (positive integer).
+  static int get streamingConnectReuseMaxEntries {
+    final parsed = _positiveIntEnv('ODBC_STREAMING_CONNECT_REUSE_MAX_ENTRIES');
+    if (parsed == null) {
+      return defaultStreamingConnectReuseMaxEntries;
+    }
+    return parsed.clamp(1, 64);
+  }
 }
