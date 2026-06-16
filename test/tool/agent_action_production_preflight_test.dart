@@ -89,5 +89,29 @@ return const <RegisteredComObjectInvocation>[
       expect(result.isSuccess, isFalse);
       expect(result.failures.any((String s) => s.contains('e2e-dev')), isTrue);
     });
+
+    test('should warn but not fail static preflight when live RPC enabled and JWT is expired', () {
+      final past = DateTime.now().toUtc().subtract(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000;
+      final payload = base64Url.encode(utf8.encode('{"exp":$past}'));
+      final token = 'h.$payload.s';
+
+      final result = evaluateAgentActionProductionPreflight(
+        comRegistrationsSource: 'return const <RegisteredComObjectInvocation>[];',
+        fileEnv: <String, String>{
+          'RUN_LIVE_HUB_TESTS': 'true',
+          'RUN_LIVE_HUB_SIGNING_TESTS': 'true',
+          'RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS': 'true',
+          'E2E_HUB_URL': 'http://127.0.0.1:3000/agents',
+          'E2E_HUB_TOKEN': token,
+          'PAYLOAD_SIGNING_KEY_ID': 'v1',
+          'PAYLOAD_SIGNING_KEY': 'secret',
+        },
+        projectRoot: '.',
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.failures, isEmpty);
+      expect(result.warnings.any((String w) => w.contains('JWT is expired')), isTrue);
+    });
   });
 }

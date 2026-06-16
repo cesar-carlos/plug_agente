@@ -79,6 +79,41 @@ void main() {
         'Negotiated protocol does not allow page-offset pagination',
       );
     });
+
+    test('rejects page_size when SQL declares SELECT TOP', () {
+      final resolution = resolvePagination(
+        {
+          'options': {'page': 1, 'page_size': 25},
+        },
+        'SELECT TOP 10 Nome FROM Cliente ORDER BY CodCliente',
+        100,
+        negotiatedExtensions,
+      );
+      expect(resolution.hasError, isTrue);
+      expect(
+        resolution.errorMessage,
+        'Paginated requests cannot include TOP/LIMIT/OFFSET/FETCH in SQL; '
+        'use options.page/page_size or options.cursor',
+      );
+    });
+
+    test('rejects page_size when WITH query declares SELECT TOP', () {
+      final resolution = resolvePagination(
+        {
+          'options': {'page': 1, 'page_size': 25},
+        },
+        'WITH cte AS (SELECT CodCliente FROM Cliente) '
+        'SELECT TOP 1 Nome FROM cte ORDER BY CodCliente',
+        100,
+        negotiatedExtensions,
+      );
+      expect(resolution.hasError, isTrue);
+      expect(
+        resolution.errorMessage,
+        'Paginated requests cannot include TOP/LIMIT/OFFSET/FETCH in SQL; '
+        'use options.page/page_size or options.cursor',
+      );
+    });
   });
 
   group('buildPaginationResult', () {

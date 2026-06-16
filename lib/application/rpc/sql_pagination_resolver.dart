@@ -32,6 +32,14 @@ ResolvedPagination resolvePagination(
     return const ResolvedPagination();
   }
 
+  if (SqlValidator.queryDeclaresServerSideRowLimit(sql)) {
+    return const ResolvedPagination(
+      errorMessage:
+          'Paginated requests cannot include TOP/LIMIT/OFFSET/FETCH in SQL; '
+          'use options.page/page_size or options.cursor',
+    );
+  }
+
   final paginationPlanResult = SqlValidator.validatePaginationQuery(sql);
   SqlPaginationPlan? plan;
   if (paginationPlanResult.isSuccess()) {

@@ -200,7 +200,7 @@ void main() {
         timestamp: now,
       );
 
-      final response = await executor.tryStreamingFromDb(
+      final tryResult = await executor.tryStreamingFromDb(
         request,
         queryRequest,
         'SELECT * FROM users',
@@ -214,8 +214,9 @@ void main() {
         database: 'hub_target_db',
       );
 
-      expect(response, isNotNull);
-      expect(response!.isSuccess, isTrue);
+      expect(tryResult.succeeded, isTrue);
+      expect(tryResult.response, isNotNull);
+      expect(tryResult.response!.isSuccess, isTrue);
       expect(gateway.lastConnectionString, isNotNull);
       expect(gateway.lastConnectionString, contains('PWD=db-secret'));
       expect(gateway.lastConnectionString, contains('DATABASE=hub_target_db'));

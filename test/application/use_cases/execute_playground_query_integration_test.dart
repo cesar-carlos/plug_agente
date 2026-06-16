@@ -540,6 +540,124 @@ void main() {
     );
 
     test(
+      'should skip managed pagination when query declares SELECT TOP row limit',
+      () async {
+        const topQuery = 'SELECT TOP 1 Nome FROM Cliente ORDER BY CodCliente';
+        final config = Config(
+          id: 'config-1',
+          agentId: 'agent-123',
+          driverName: 'SQL Anywhere',
+          odbcDriverName: 'SQL Anywhere',
+          connectionString: 'DSN=Test',
+          username: 'dba',
+          databaseName: 'testdb',
+          host: 'localhost',
+          port: 2638,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final expectedResponse = QueryResponse(
+          id: 'response-1',
+          requestId: 'test-uuid-123',
+          agentId: 'agent-123',
+          data: const [
+            {'Nome': 'Acme'},
+          ],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockQueryConfigSource.resolveConfigForQuery(any()),
+        ).thenAnswer((_) async => Success(config));
+        when(
+          () => mockDatabaseGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((_) async => Success(expectedResponse));
+
+        final result = await useCase.call(
+          topQuery,
+          pagination: const QueryPaginationRequest(page: 1, pageSize: 50),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        final captured =
+            verify(
+                  () => mockDatabaseGateway.executeQuery(
+                    captureAny(),
+                    timeout: ConnectionConstants.defaultQueryTimeout,
+                  ),
+                ).captured.single
+                as QueryRequest;
+
+        expect(captured.pagination, isNull);
+        expect(captured.query, topQuery);
+      },
+    );
+
+    test(
+      'should skip managed pagination when WITH query declares SELECT TOP row limit',
+      () async {
+        const topQuery =
+            'WITH cte AS (SELECT CodCliente FROM Cliente) '
+            'SELECT TOP 1 Nome FROM cte ORDER BY CodCliente';
+        final config = Config(
+          id: 'config-1',
+          agentId: 'agent-123',
+          driverName: 'SQL Anywhere',
+          odbcDriverName: 'SQL Anywhere',
+          connectionString: 'DSN=Test',
+          username: 'dba',
+          databaseName: 'testdb',
+          host: 'localhost',
+          port: 2638,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final expectedResponse = QueryResponse(
+          id: 'response-1',
+          requestId: 'test-uuid-123',
+          agentId: 'agent-123',
+          data: const [
+            {'Nome': 'Acme'},
+          ],
+          timestamp: DateTime.now(),
+        );
+
+        when(
+          () => mockQueryConfigSource.resolveConfigForQuery(any()),
+        ).thenAnswer((_) async => Success(config));
+        when(
+          () => mockDatabaseGateway.executeQuery(
+            any(),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((_) async => Success(expectedResponse));
+
+        final result = await useCase.call(
+          topQuery,
+          pagination: const QueryPaginationRequest(page: 1, pageSize: 50),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        final captured =
+            verify(
+                  () => mockDatabaseGateway.executeQuery(
+                    captureAny(),
+                    timeout: ConnectionConstants.defaultQueryTimeout,
+                  ),
+                ).captured.single
+                as QueryRequest;
+
+        expect(captured.pagination, isNull);
+        expect(captured.query, topQuery);
+      },
+    );
+
+    test(
       'should disable pagination when query expects multiple result sets',
       () async {
         const validQuery = 'SELECT 1; SELECT 2;';

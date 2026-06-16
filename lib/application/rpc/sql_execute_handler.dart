@@ -14,6 +14,7 @@ import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart
 import 'package:plug_agente/application/rpc/sql_rpc_odbc_budget_runner.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
@@ -212,7 +213,13 @@ class SqlExecuteHandler {
           limits: limits,
         );
 
-        var streamingFromDbResponse = await _dbStreamingExecutor.tryStreamingFromDb(
+        final explicitPreferDbStreaming = options?['prefer_db_streaming'] == true;
+        final autoPreferDbStreaming =
+            isStreamingResultsNegotiated(negotiatedExtensions) &&
+            maxRows > ConnectionConstants.sqlExecuteMaterializedMaxRows;
+        final preferDbStreamingForAttempt = explicitPreferDbStreaming || autoPreferDbStreaming;
+
+        var streamingTry = await _dbStreamingExecutor.tryStreamingFromDb(
           request,
           queryRequest,
           sql,
@@ -221,15 +228,15 @@ class SqlExecuteHandler {
           deadline: deadline,
           timeoutMs: requestedTimeoutMs,
           negotiatedExtensions: negotiatedExtensions,
-          preferDbStreaming: options?['prefer_db_streaming'] == true,
+          preferDbStreaming: preferDbStreamingForAttempt,
           effectiveMaxRows: maxRows,
           clientToken: clientToken,
           database: database,
         );
-        if (streamingFromDbResponse == null &&
-            prefersDbStreaming &&
-            options?['prefer_db_streaming'] != true) {
-          streamingFromDbResponse = await _dbStreamingExecutor.tryStreamingFromDb(
+        if (!streamingTry.succeeded &&
+            !explicitPreferDbStreaming &&
+            (prefersDbStreaming || autoPreferDbStreaming)) {
+          streamingTry = await _dbStreamingExecutor.tryStreamingFromDb(
             request,
             queryRequest,
             sql,
@@ -238,12 +245,13 @@ class SqlExecuteHandler {
             deadline: deadline,
             timeoutMs: requestedTimeoutMs,
             negotiatedExtensions: negotiatedExtensions,
-            preferDbStreaming: options?['prefer_db_streaming'] == true,
+            preferDbStreaming: true,
             effectiveMaxRows: maxRows,
             clientToken: clientToken,
             database: database,
           );
         }
+        final streamingFromDbResponse = streamingTry.response;
         if (streamingFromDbResponse != null) {
           return streamingFromDbResponse;
         }
@@ -255,6 +263,7 @@ class SqlExecuteHandler {
             negotiatedExtensions: negotiatedExtensions,
             prefersDbStreaming: prefersDbStreaming,
             requestId: request.id?.toString(),
+            dbStreamingSkipReason: streamingTry.skipReason,
           );
           if (materializedFallbackGuard.isError()) {
             _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('materialized_odbc_fallback_rejected');

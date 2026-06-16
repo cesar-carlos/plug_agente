@@ -1466,7 +1466,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         if (failure case final domain.ValidationFailure validationFailure) {
           expect(
             validationFailure.message,
-            contains('cannot include LIMIT/OFFSET/FETCH'),
+            contains('TOP/LIMIT/OFFSET/FETCH'),
           );
         } else {
           fail('Expected ValidationFailure');

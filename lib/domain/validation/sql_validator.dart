@@ -51,6 +51,10 @@ class SqlValidator {
     r'^(?<expr>(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))*)(?:\s+(?<dir>asc|desc))?$',
     caseSensitive: false,
   );
+  static final RegExp _selectClauseTop = RegExp(
+    r'^\s+(?:distinct\s+)?top\s*\(?\s*\d+\s*\)?\b',
+    caseSensitive: false,
+  );
 
   /// Validates SQL for execution in RPC/legacy flows.
   /// Allows SELECT, WITH, UPDATE, INSERT, MERGE, DELETE and DDL v1.
@@ -198,6 +202,65 @@ class SqlValidator {
     return _containsTopLevelKeyword(normalizedQuery, 'limit') ||
         _containsTopLevelKeyword(normalizedQuery, 'offset') ||
         _containsTopLevelKeyword(normalizedQuery, 'fetch');
+  }
+
+  static bool containsTopLevelSelectTop(String query) {
+    final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');
+    if (normalizedQuery.isEmpty) {
+      return false;
+    }
+
+    final lower = normalizedQuery.toLowerCase();
+    var depth = 0;
+    var inSingleQuote = false;
+    var inDoubleQuote = false;
+    var inBracketQuote = false;
+
+    for (var i = 0; i <= lower.length - 6; i++) {
+      final current = lower[i];
+      if (!inDoubleQuote && !inBracketQuote && current == "'") {
+        inSingleQuote = !inSingleQuote;
+        continue;
+      }
+      if (!inSingleQuote && !inBracketQuote && current == '"') {
+        inDoubleQuote = !inDoubleQuote;
+        continue;
+      }
+      if (!inSingleQuote && !inDoubleQuote && current == '[') {
+        inBracketQuote = true;
+        continue;
+      }
+      if (inBracketQuote && current == ']') {
+        inBracketQuote = false;
+        continue;
+      }
+      if (inSingleQuote || inDoubleQuote || inBracketQuote) {
+        continue;
+      }
+      if (current == '(') {
+        depth++;
+        continue;
+      }
+      if (current == ')') {
+        depth--;
+        continue;
+      }
+      if (depth == 0 &&
+          lower.startsWith('select', i) &&
+          _isWordBoundary(lower, i - 1) &&
+          _isWordBoundary(lower, i + 6)) {
+        final remainder = normalizedQuery.substring(i + 6);
+        if (_selectClauseTop.hasMatch(remainder)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool queryDeclaresServerSideRowLimit(String query) {
+    return containsTopLevelPaginationClause(query) || containsTopLevelSelectTop(query);
   }
 
   static String stripTopLevelOrderBy(String query) {

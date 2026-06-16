@@ -32,9 +32,9 @@ class OdbcGatewayQueryPreparation {
       return null;
     }
 
-    if (SqlValidator.containsTopLevelPaginationClause(request.query)) {
+    if (SqlValidator.queryDeclaresServerSideRowLimit(request.query)) {
       return domain.ValidationFailure(
-        'Paginated requests cannot include LIMIT/OFFSET/FETCH in SQL; '
+        'Paginated requests cannot include TOP/LIMIT/OFFSET/FETCH in SQL; '
         'use options.page/page_size or options.cursor',
       );
     }

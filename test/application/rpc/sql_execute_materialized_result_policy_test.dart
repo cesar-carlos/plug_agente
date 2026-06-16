@@ -12,7 +12,7 @@ void main() {
 
     test('rejects materialized path when max rows exceed threshold and streaming is negotiated', () {
       final result = policy.rejectIfMaterializedPathUnsafe(
-        effectiveMaxRows: ConnectionConstants.sqlExecuteMaterializedMaxRows,
+        effectiveMaxRows: ConnectionConstants.sqlExecuteMaterializedMaxRows + 1,
         limits: limits,
         negotiatedExtensions: const {'streamingResults': true},
       );
@@ -22,6 +22,16 @@ void main() {
       expect(failure.context['reason'], RpcSqlBudgetConstants.materializedResultTooLargeReason);
       expect(failure.context['rpc_error_code'], RpcErrorCode.resultTooLarge);
       expect(failure.context['user_message'], isNotEmpty);
+    });
+
+    test('allows materialized path at exact row threshold when streaming is negotiated', () {
+      final result = policy.rejectIfMaterializedPathUnsafe(
+        effectiveMaxRows: ConnectionConstants.sqlExecuteMaterializedMaxRows,
+        limits: limits,
+        negotiatedExtensions: const {'streamingResults': true},
+      );
+
+      expect(result.isSuccess(), isTrue);
     });
 
     test('allows materialized path when streaming chunks are not negotiated', () {
@@ -67,13 +77,16 @@ void main() {
 
     test('rejects materialized ODBC fallback when streaming negotiated and max rows exceed threshold', () {
       final result = policy.rejectIfMaterializedOdbcFallbackUnsafe(
-        effectiveMaxRows: ConnectionConstants.sqlExecuteMaterializedMaxRows,
+        effectiveMaxRows: ConnectionConstants.sqlExecuteMaterializedMaxRows + 1,
         limits: limits,
         negotiatedExtensions: const {'streamingResults': true},
         prefersDbStreaming: true,
+        dbStreamingSkipReason: 'gateway_unavailable',
       );
 
       expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as domain.QueryExecutionFailure;
+      expect(failure.context['db_streaming_skip_reason'], 'gateway_unavailable');
     });
 
     test('rejects materialized streaming chunks when streaming negotiated and row count exceeds threshold', () {

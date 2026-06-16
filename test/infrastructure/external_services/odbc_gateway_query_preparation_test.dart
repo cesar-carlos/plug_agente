@@ -64,6 +64,56 @@ void main() {
       });
 
       test(
+        'should reject managed pagination when SQL declares SELECT TOP',
+        () {
+          const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
+          final failure = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+            _baseRequest(
+              query: 'SELECT TOP 1 Nome FROM Cliente ORDER BY CodCliente',
+              pagination: pagination,
+            ),
+            DatabaseType.sybaseAnywhere,
+          );
+          expect(failure, isNotNull);
+          expect(failure!.message, contains('TOP/LIMIT/OFFSET/FETCH'));
+        },
+      );
+
+      test(
+        'should reject managed pagination when SQL declares LIMIT',
+        () {
+          const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
+          final failure = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+            _baseRequest(
+              query: 'SELECT * FROM users ORDER BY id LIMIT 10',
+              pagination: pagination,
+            ),
+            DatabaseType.postgresql,
+          );
+          expect(failure, isNotNull);
+          expect(failure!.message, contains('TOP/LIMIT/OFFSET/FETCH'));
+        },
+      );
+
+      test(
+        'should reject managed pagination when SQL declares OFFSET/FETCH',
+        () {
+          const pagination = QueryPaginationRequest(page: 1, pageSize: 10);
+          final failure = OdbcGatewayQueryPreparation.validatePaginationForDatabase(
+            _baseRequest(
+              query:
+                  'SELECT * FROM Cliente ORDER BY CodCliente '
+                  'OFFSET 0 ROWS FETCH NEXT 1 ROW ONLY',
+              pagination: pagination,
+            ),
+            DatabaseType.sqlServer,
+          );
+          expect(failure, isNotNull);
+          expect(failure!.message, contains('TOP/LIMIT/OFFSET/FETCH'));
+        },
+      );
+
+      test(
         'should require ORDER BY for SQL Server when pagination is present',
         () {
           const pagination = QueryPaginationRequest(page: 1, pageSize: 10);

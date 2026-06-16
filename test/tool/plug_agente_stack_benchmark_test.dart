@@ -263,7 +263,7 @@ Future<String> _buildSqlRpcStreamingBenchmarkReport({required int iterations}) a
     final samples = <int>[];
     for (var i = 0; i < iterations; i++) {
       final stopwatch = Stopwatch()..start();
-      final response = await executor.tryStreamingFromDb(
+      final tryResult = await executor.tryStreamingFromDb(
         request,
         queryRequest,
         'SELECT * FROM users',
@@ -277,7 +277,7 @@ Future<String> _buildSqlRpcStreamingBenchmarkReport({required int iterations}) a
         database: 'hub_target_db',
       );
       stopwatch.stop();
-      expect(response, isNotNull);
+      expect(tryResult.succeeded, isTrue);
       samples.add(stopwatch.elapsedMicroseconds);
     }
     samples.sort();

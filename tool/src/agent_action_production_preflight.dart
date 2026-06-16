@@ -91,8 +91,21 @@ AgentActionProductionPreflightResult evaluateAgentActionProductionPreflight({
     } else {
       ok.add('Live Hub .env variables complete for agent.action.* tests.');
       final readiness = LiveHubEnvReadiness.fromRepoEnv(fileEnv);
-      failures.addAll(readiness.blocking);
+      var jwtExpiryWarned = false;
+      for (final blocking in readiness.blocking) {
+        if (isLiveHubJwtExpiredMessage(blocking)) {
+          jwtExpiryWarned = true;
+          if (!warnings.contains(blocking)) {
+            warnings.add(blocking);
+          }
+          continue;
+        }
+        failures.add(blocking);
+      }
       for (final w in readiness.warnings) {
+        if (jwtExpiryWarned && isLiveHubJwtExpiredMessage(w)) {
+          continue;
+        }
         if (!warnings.contains(w)) {
           warnings.add(w);
         }

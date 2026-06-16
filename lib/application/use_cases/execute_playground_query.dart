@@ -111,6 +111,10 @@ class ExecutePlaygroundQuery {
       return null;
     }
 
+    if (SqlValidator.queryDeclaresServerSideRowLimit(query)) {
+      return null;
+    }
+
     final paginationPlan = SqlValidator.validatePaginationQuery(query);
     if (paginationPlan.isError()) {
       return null;

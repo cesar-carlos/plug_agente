@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
 import 'package:plug_agente/application/rpc/sql_db_streaming_auto_policy.dart';
+import 'package:plug_agente/application/rpc/sql_db_streaming_try_result.dart';
 import 'package:plug_agente/application/rpc/sql_execute_result_mapper.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart';
@@ -81,8 +82,8 @@ class SqlRpcDbStreamingExecutor {
   final IOdbcConnectionSettings? _odbcConnectionSettings;
   final IStreamingNamedParameterPreparer _streamingNamedParameterPreparer;
 
-  /// Tries to stream directly from DB when enabled. Returns null to fall back.
-  Future<RpcResponse?> tryStreamingFromDb(
+  /// Tries to stream directly from DB when enabled. Returns skip reason when falling back.
+  Future<SqlDbStreamingTryResult> tryStreamingFromDb(
     RpcRequest request,
     QueryRequest queryRequest,
     String sql,
@@ -109,28 +110,28 @@ class SqlRpcDbStreamingExecutor {
     final autoStreaming = autoStreamingReason != DbStreamingAutoReason.none;
     if (!supportsStreamingChunks(negotiatedExtensions)) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('streaming_chunks_not_negotiated');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'streaming_chunks_not_negotiated');
     }
     if (request.isNotification) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('notification_request');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'notification_request');
     }
     if (!_featureFlags.enableSocketStreamingFromDb ||
         (!_featureFlags.enableSocketStreamingChunks && !autoStreaming) ||
         streamEmitter == null) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('feature_or_emitter_unavailable');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'feature_or_emitter_unavailable');
     }
     if (queryRequest.pagination != null) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('paginated_request');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'paginated_request');
     }
     if (queryRequest.expectMultipleResults) {
       if (queryRequest.parameters?.isNotEmpty ?? false) {
         _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('multi_result_named_parameters');
-        return null;
+        return const SqlDbStreamingTryResult(skipReason: 'multi_result_named_parameters');
       }
-      return _tryMultiResultStreamingFromDb(
+      final multiResult = await _tryMultiResultStreamingFromDb(
         request: request,
         queryRequest: queryRequest,
         sql: sql,
@@ -143,6 +144,10 @@ class SqlRpcDbStreamingExecutor {
         clientToken: clientToken,
         database: database,
       );
+      if (multiResult != null) {
+        return SqlDbStreamingTryResult(response: multiResult);
+      }
+      return const SqlDbStreamingTryResult(skipReason: 'multi_result_skipped');
     }
     if (!preferDbStreaming &&
         _autoPolicy.shouldMaterializeBoundedDbStreaming(
@@ -151,14 +156,14 @@ class SqlRpcDbStreamingExecutor {
           limits: limits,
         )) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('bounded_request');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'bounded_request');
     }
     final configResolver = _activeConfigResolver;
     final legacyRepository = _configRepository;
     final gateway = _streamingGateway;
     if ((configResolver == null && legacyRepository == null) || gateway == null) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('gateway_unavailable');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'gateway_unavailable');
     }
     final streamingDiagnostics = gateway is IStreamingGatewayDiagnostics
         ? gateway as IStreamingGatewayDiagnostics
@@ -167,7 +172,7 @@ class SqlRpcDbStreamingExecutor {
         autoStreamingReason == DbStreamingAutoReason.prefer &&
         streamingDiagnostics?.getStreamingDiagnostics()['direct_limiter_saturated'] == true) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('direct_limiter_saturated_prefer_fallback');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'direct_limiter_saturated_prefer_fallback');
     }
     var preparedExecution = OdbcPreparedQueryExecution(
       sql: sql,
@@ -180,13 +185,13 @@ class SqlRpcDbStreamingExecutor {
       );
       if (prepared.isError()) {
         _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('bound_parameters_invalid');
-        return null;
+        return const SqlDbStreamingTryResult(skipReason: 'bound_parameters_invalid');
       }
       preparedExecution = prepared.getOrThrow();
     }
     if (SqlValidator.validateSelectQuery(sql).isError()) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('non_select_sql');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'non_select_sql');
     }
 
     final config = await _resolveStreamingConfig(
@@ -202,11 +207,11 @@ class SqlRpcDbStreamingExecutor {
           );
     if (config == null || connectionString.trim().isEmpty) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('config_unavailable');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'config_unavailable');
     }
     if (!_autoPolicy.isDriverAllowed(config.driverName)) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('driver_not_allowed');
-      return null;
+      return const SqlDbStreamingTryResult(skipReason: 'driver_not_allowed');
     }
 
     final streamId = 'stream-${queryRequest.id}';
@@ -303,7 +308,7 @@ class SqlRpcDbStreamingExecutor {
           instance: request.id?.toString(),
           useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
         );
-        return RpcResponse.error(id: request.id, error: rpcError);
+        return SqlDbStreamingTryResult(response: RpcResponse.error(id: request.id, error: rpcError));
       }
 
       if (overflowed) {
@@ -314,18 +319,20 @@ class SqlRpcDbStreamingExecutor {
           totalRows: totalRows,
           status: StreamTerminalStatus.aborted,
         );
-        return RpcResponse.error(
-          id: request.id,
-          error: RpcError(
-            code: RpcErrorCode.resultTooLarge,
-            message: RpcErrorCode.getMessage(RpcErrorCode.resultTooLarge),
-            data: RpcErrorCode.buildErrorData(
+        return SqlDbStreamingTryResult(
+          response: RpcResponse.error(
+            id: request.id,
+            error: RpcError(
               code: RpcErrorCode.resultTooLarge,
-              technicalMessage:
-                  'Streaming buffer overflowed: hub not consuming fast enough; '
-                  'stream cancelled to avoid data loss.',
-              correlationId: request.id?.toString(),
-              subreason: RpcStreamingConstants.backpressureOverflowReason,
+              message: RpcErrorCode.getMessage(RpcErrorCode.resultTooLarge),
+              data: RpcErrorCode.buildErrorData(
+                code: RpcErrorCode.resultTooLarge,
+                technicalMessage:
+                    'Streaming buffer overflowed: hub not consuming fast enough; '
+                    'stream cancelled to avoid data loss.',
+                correlationId: request.id?.toString(),
+                subreason: RpcStreamingConstants.backpressureOverflowReason,
+              ),
             ),
           ),
         );
@@ -379,7 +386,7 @@ class SqlRpcDbStreamingExecutor {
         }
       }
       _dispatchMetrics?.recordSqlExecuteStreamingFromDbResponse();
-      return dbStreamResponse;
+      return SqlDbStreamingTryResult(response: dbStreamResponse);
     } finally {
       _sqlStreamingCoordinator.markFinished(activeStreamExecution);
     }

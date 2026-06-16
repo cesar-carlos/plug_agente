@@ -63,11 +63,14 @@ final class SqlExecuteMaterializedResultPolicy {
     final byteThreshold = ConnectionConstants.sqlExecuteMaterializedMaxEstimatedBytes;
     final estimatedBytesPerRow = ConnectionConstants.sqlExecuteMaterializedEstimatedBytesPerRow;
 
-    final exceedsRows = effectiveMaxRows >= rowThreshold;
-    final exceedsBytes = effectiveMaxRows * estimatedBytesPerRow >= byteThreshold;
+    final exceedsRows = effectiveMaxRows > rowThreshold;
+    final exceedsBytes = effectiveMaxRows * estimatedBytesPerRow > byteThreshold;
+    // When the hub negotiates a high transport max_rows (e.g. 50_000), reject only if the
+    // effective request budget exceeds agent materialized caps — not because transport max
+    // itself is large.
     final exceedsTransportMaxRows = transportMaxRows != null &&
-        effectiveMaxRows >= transportMaxRows &&
-        transportMaxRows >= rowThreshold;
+        effectiveMaxRows > rowThreshold &&
+        effectiveMaxRows > transportMaxRows;
 
     return exceedsRows || exceedsBytes || exceedsTransportMaxRows;
   }
@@ -128,23 +131,7 @@ final class SqlExecuteMaterializedResultPolicy {
   }
 
   bool _queryDeclaresServerSideRowLimit(String query) {
-    if (SqlValidator.containsTopLevelPaginationClause(query)) {
-      return true;
-    }
-
-    return _containsTopLevelSelectTop(query);
-  }
-
-  bool _containsTopLevelSelectTop(String query) {
-    final normalized = query.trim().replaceFirst(RegExp(r';+\s*$'), '');
-    if (normalized.isEmpty) {
-      return false;
-    }
-
-    return RegExp(
-      r'^\s*select\s+top\s+\d+\b',
-      caseSensitive: false,
-    ).hasMatch(normalized);
+    return SqlValidator.queryDeclaresServerSideRowLimit(query);
   }
 
   domain.QueryExecutionFailure buildPlaygroundRejectionFailure({
@@ -179,6 +166,7 @@ final class SqlExecuteMaterializedResultPolicy {
   domain.QueryExecutionFailure buildRejectionFailure({
     required int effectiveMaxRows,
     String? requestId,
+    String? dbStreamingSkipReason,
   }) {
     final context = <String, dynamic>{
       'reason': RpcSqlBudgetConstants.materializedResultTooLargeReason,
@@ -191,6 +179,9 @@ final class SqlExecuteMaterializedResultPolicy {
           'Use database streaming (prefer_db_streaming) or reduce max_rows.',
       'recommendation': OdbcContextConstants.materializedResultUseDbStreamingRecommendation,
     };
+    if (dbStreamingSkipReason != null) {
+      context['db_streaming_skip_reason'] = dbStreamingSkipReason;
+    }
     if (requestId != null) {
       context['request_id'] = requestId;
     }
@@ -229,6 +220,7 @@ final class SqlExecuteMaterializedResultPolicy {
     required Map<String, dynamic> negotiatedExtensions,
     required bool prefersDbStreaming,
     String? requestId,
+    String? dbStreamingSkipReason,
   }) {
     if (!shouldRejectMaterializedOdbcFallback(
       effectiveMaxRows: effectiveMaxRows,
@@ -243,6 +235,7 @@ final class SqlExecuteMaterializedResultPolicy {
       buildRejectionFailure(
         effectiveMaxRows: effectiveMaxRows,
         requestId: requestId,
+        dbStreamingSkipReason: dbStreamingSkipReason,
       ),
     );
   }

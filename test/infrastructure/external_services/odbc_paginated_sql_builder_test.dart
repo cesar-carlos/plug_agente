@@ -25,6 +25,25 @@ void main() {
       expect(sql, contains('TOP 6 START AT 1'));
     });
 
+    test(
+      'buildOffsetPaginatedSql sybaseAnywhere nests inner SELECT TOP when present',
+      () {
+        final sql = OdbcPaginatedSqlBuilder.buildOffsetPaginatedSql(
+          'SELECT TOP 1 Nome FROM Cliente ORDER BY CodCliente',
+          DatabaseType.sybaseAnywhere,
+          const QueryPaginationRequest(
+            page: 1,
+            pageSize: 50,
+            orderBy: [
+              QueryPaginationOrderTerm(expression: 'CodCliente', lookupKey: 'CodCliente'),
+            ],
+          ),
+        );
+        expect(sql, contains('SELECT TOP 1 Nome FROM Cliente'));
+        expect(sql, contains('TOP 51 START AT 1'));
+      },
+    );
+
     test('buildNextCursorToken falls back to offset cursor when order value is null', () {
       const pagination = QueryPaginationRequest(
         page: 2,

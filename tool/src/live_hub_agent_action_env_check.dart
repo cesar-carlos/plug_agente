@@ -248,7 +248,10 @@ List<String> liveHubTokenBlockingFailures(String? hubToken) {
   return const <String>[expiredMessage];
 }
 
-/// Non-fatal hints when `.env` is syntactically complete but likely wrong for a remote Hub.
+/// Static CI/local preflight treats an expired Hub JWT as a warning so the
+/// contract gate can pass without a running Hub. Live validation still blocks.
+bool isLiveHubJwtExpiredMessage(String message) => message.contains('JWT is expired');
+
 List<String> liveHubEnvWarnings({
   required String? hubUrl,
   required String? payloadSigningKeyId,

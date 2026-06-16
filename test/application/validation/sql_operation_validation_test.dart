@@ -197,6 +197,112 @@ void main() {
     });
   });
 
+  group('SqlValidator.containsTopLevelSelectTop', () {
+    test('should detect top-level SELECT TOP clause', () {
+      expect(
+        SqlValidator.containsTopLevelSelectTop(
+          'SELECT TOP 1 Nome FROM Cliente ORDER BY CodCliente',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should ignore nested SELECT TOP clause', () {
+      expect(
+        SqlValidator.containsTopLevelSelectTop(
+          'SELECT * FROM (SELECT TOP 10 * FROM Cliente) q ORDER BY q.id',
+        ),
+        isFalse,
+      );
+    });
+
+    test('should detect SELECT DISTINCT TOP clause', () {
+      expect(
+        SqlValidator.containsTopLevelSelectTop(
+          'SELECT DISTINCT TOP 5 Nome FROM Cliente ORDER BY CodCliente',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should detect parenthesized SELECT TOP (n) clause', () {
+      expect(
+        SqlValidator.containsTopLevelSelectTop(
+          'SELECT TOP (10) Nome FROM Cliente ORDER BY CodCliente',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should detect top-level SELECT TOP after WITH CTE', () {
+      expect(
+        SqlValidator.containsTopLevelSelectTop(
+          'WITH cte AS (SELECT CodCliente FROM Cliente) '
+          'SELECT TOP 1 Nome FROM cte ORDER BY CodCliente',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should ignore nested SELECT TOP inside WITH CTE', () {
+      expect(
+        SqlValidator.containsTopLevelSelectTop(
+          'WITH cte AS (SELECT TOP 10 CodCliente FROM Cliente) '
+          'SELECT Nome FROM cte ORDER BY CodCliente',
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('SqlValidator.queryDeclaresServerSideRowLimit', () {
+    test('should treat SELECT TOP as server-side row limit', () {
+      expect(
+        SqlValidator.queryDeclaresServerSideRowLimit(
+          'SELECT TOP 1 Nome FROM Cliente ORDER BY CodCliente',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should treat OFFSET/FETCH as server-side row limit', () {
+      expect(
+        SqlValidator.queryDeclaresServerSideRowLimit(
+          'SELECT * FROM Cliente ORDER BY CodCliente OFFSET 0 ROWS FETCH NEXT 1 ROW ONLY',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should treat WITH ... SELECT TOP as server-side row limit', () {
+      expect(
+        SqlValidator.queryDeclaresServerSideRowLimit(
+          'WITH cte AS (SELECT CodCliente FROM Cliente) '
+          'SELECT TOP 1 Nome FROM cte ORDER BY CodCliente',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should treat SELECT DISTINCT TOP as server-side row limit', () {
+      expect(
+        SqlValidator.queryDeclaresServerSideRowLimit(
+          'SELECT DISTINCT TOP 5 Nome FROM Cliente ORDER BY CodCliente',
+        ),
+        isTrue,
+      );
+    });
+
+    test('should ignore nested SELECT TOP when only subquery declares row limit', () {
+      expect(
+        SqlValidator.queryDeclaresServerSideRowLimit(
+          'SELECT * FROM (SELECT TOP 10 * FROM Cliente) q ORDER BY q.id',
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('SqlOperationClassifier', () {
     late SqlOperationClassifier classifier;
 
