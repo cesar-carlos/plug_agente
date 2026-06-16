@@ -21,13 +21,23 @@ void main() {
       );
     });
 
-    test('clampedMaxResultBufferMb caps at 128', () {
+    test('clampedMaxResultBufferMb caps at configured maximum', () {
+      final settings = _MockSettings();
+      when(() => settings.maxResultBufferMb).thenReturn(512);
+
+      expect(
+        OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(settings),
+        ConnectionConstants.maxMaxResultBufferMb,
+      );
+    });
+
+    test('clampedMaxResultBufferMb accepts values up to configured maximum', () {
       final settings = _MockSettings();
       when(() => settings.maxResultBufferMb).thenReturn(256);
 
       expect(
         OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(settings),
-        128,
+        256,
       );
     });
 

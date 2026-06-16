@@ -1,3 +1,5 @@
+import 'package:plug_agente/core/constants/connection_constants.dart';
+
 /// Helpers for expanding ODBC max result buffer after driver "buffer too small" errors.
 ///
 /// Extracted from `OdbcDatabaseGateway` for unit testing and readability.
@@ -5,7 +7,8 @@ class OdbcGatewayBufferExpansion {
   OdbcGatewayBufferExpansion._();
 
   static const int bufferRetryMarginBytes = 1024 * 1024;
-  static const int maxAutoExpandedBufferBytes = 256 * 1024 * 1024;
+  static const int maxAutoExpandedBufferBytes =
+      ConnectionConstants.maxAutoExpandedResultBufferBytes;
 
   static final RegExp _needBytesPattern = RegExp(
     r'need\s+(\d+)\s+bytes',

@@ -301,7 +301,7 @@ class AppStrings {
   // ODBC Advanced Settings
   static const String odbcErrorPoolRange = 'Tamanho do pool deve ser entre 1 e 20';
   static const String odbcErrorLoginTimeoutRange = 'Login timeout deve ser entre 1 e 120 segundos';
-  static const String odbcErrorBufferRange = 'Buffer de resultados deve ser entre 8 e 128 MB';
+  static const String odbcErrorBufferRange = 'Buffer de resultados deve ser entre 8 e 256 MB';
   static const String odbcErrorChunkRange = 'Chunk do streaming deve ser entre 64 e 8192 KB';
   static const String odbcErrorSaveFailed = 'Falha ao salvar configurações avançadas. Tente novamente.';
   static const String odbcSuccessAppliedNow =

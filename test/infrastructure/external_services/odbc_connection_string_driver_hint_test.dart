@@ -32,10 +32,16 @@ void main() {
       );
     });
 
-    test('returns false for SQL Server connection strings', () {
+    test('returns true for SQL Server connection strings', () {
       expect(
         connectionStringPrefersRowMajorStreaming('Driver={ODBC Driver 17 for SQL Server};Server=localhost;'),
-        isFalse,
+        isTrue,
+      );
+      expect(
+        connectionStringPrefersRowMajorStreaming(
+          'Driver={SQL Server Native Client 11.0};Server=localhost;Database=Estacao;',
+        ),
+        isTrue,
       );
     });
   });

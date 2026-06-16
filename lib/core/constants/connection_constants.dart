@@ -24,6 +24,9 @@ class ConnectionConstants {
   static const Duration defaultTransactionalBatchTimeout = Duration(seconds: 60);
   static const Duration defaultStreamingQueryTimeout = Duration(minutes: 5);
   static const int defaultMaxResultBufferBytes = 64 * 1024 * 1024;
+  static const int minMaxResultBufferMb = 8;
+  static const int maxMaxResultBufferMb = 256;
+  static const int maxAutoExpandedResultBufferBytes = maxMaxResultBufferMb * 1024 * 1024;
   static const int defaultSqlExecuteMaterializedMaxRows = 10000;
   static const int defaultSqlExecuteMaterializedMaxEstimatedBytes = 32 * 1024 * 1024;
   static const int defaultSqlExecuteMaterializedEstimatedBytesPerRow = 512;

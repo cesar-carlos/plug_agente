@@ -24,8 +24,8 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   static const int _maxPoolSize = 20;
   static const int _minLoginTimeoutSeconds = 1;
   static const int _maxLoginTimeoutSeconds = 120;
-  static const int _minMaxResultBufferMb = 8;
-  static const int _maxMaxResultBufferMb = 128;
+  static int get _minMaxResultBufferMb => ConnectionConstants.minMaxResultBufferMb;
+  static int get _maxMaxResultBufferMb => ConnectionConstants.maxMaxResultBufferMb;
   static const int _minStreamingChunkSizeKb = 64;
   static const int _maxStreamingChunkSizeKb = 32 * 1024;
 

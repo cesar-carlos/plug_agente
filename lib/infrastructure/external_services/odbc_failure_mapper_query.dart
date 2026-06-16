@@ -70,8 +70,9 @@ class OdbcFailureMapperQuery {
           'reason': OdbcContextConstants.streamingCellDecodeFailedReason,
           'user_message':
               'The agent could not decode one or more values while streaming the query result. '
-              'This often happens when a SQL Anywhere column type is incompatible with the active '
-              'streaming encoding. Retry without streaming or contact support with the technical log.',
+              'This often happens when a column type is incompatible with the active streaming '
+              'encoding. Retry without streaming, paginate the query, or contact support with '
+              'the technical log.',
         },
       );
     }

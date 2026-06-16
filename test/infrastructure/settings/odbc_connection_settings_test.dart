@@ -57,5 +57,17 @@ void main() {
       expect(settings.poolSize, OdbcConnectionSettings.legacyFactoryDefaultPoolSize);
       expect(store.getBool('odbc_pool_size_user_configured'), isTrue);
     });
+
+    test('clamps max result buffer to configured maximum on load and save', () async {
+      final store = InMemoryAppSettingsStore({'odbc_max_result_buffer_mb': 512});
+      final settings = OdbcConnectionSettings(store);
+
+      await settings.load();
+      expect(settings.maxResultBufferMb, ConnectionConstants.maxMaxResultBufferMb);
+
+      await settings.setMaxResultBufferMb(256);
+      expect(settings.maxResultBufferMb, 256);
+      expect(store.getInt('odbc_max_result_buffer_mb'), 256);
+    });
   });
 }

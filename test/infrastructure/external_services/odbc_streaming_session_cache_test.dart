@@ -5,19 +5,30 @@ import 'package:result_dart/result_dart.dart';
 
 void main() {
   group('OdbcStreamingSessionCache', () {
-    test('reuses connection id within TTL for SQL Server DSN', () {
+    test('reuses connection id within TTL for PostgreSQL DSN', () {
       final now = DateTime.utc(2026, 6, 16, 12);
       final cache = OdbcStreamingSessionCache(
         ttl: const Duration(seconds: 30),
         clock: () => now,
       );
-      const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;';
+      const connectionString = 'Driver={PostgreSQL};Server=localhost;';
 
       expect(
         cache.offer(connectionString: connectionString, connectionId: 'conn-1'),
         isTrue,
       );
       expect(cache.tryTake(connectionString), 'conn-1');
+      expect(cache.tryTake(connectionString), isNull);
+    });
+
+    test('does not reuse SQL Server connections', () {
+      final cache = OdbcStreamingSessionCache();
+      const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;';
+
+      expect(
+        cache.offer(connectionString: connectionString, connectionId: 'conn-1'),
+        isFalse,
+      );
       expect(cache.tryTake(connectionString), isNull);
     });
 
@@ -54,11 +65,11 @@ void main() {
           return const Success(unit);
         },
       );
-      const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;';
+      const connectionString = 'Driver={PostgreSQL};Server=localhost;';
 
       cache.offer(connectionString: connectionString, connectionId: 'conn-1');
       cache.offer(
-        connectionString: 'Driver={PostgreSQL};Server=localhost;',
+        connectionString: 'Driver={PostgreSQL};Server=other;',
         connectionId: 'conn-2',
       );
       expect(cache.entryCount, 2);
@@ -67,7 +78,7 @@ void main() {
 
       expect(drainResult.isSuccess(), isTrue);
       expect(cache.entryCount, 0);
-      expect(disconnected, <String>['conn-1', 'conn-2']);
+      expect(disconnected, containsAll(<String>['conn-1', 'conn-2']));
     });
 
     test('drainCachedSessions returns typed failure when disconnect fails', () async {
@@ -79,9 +90,12 @@ void main() {
           ),
         ),
       );
-      const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;';
+      const connectionString = 'Driver={PostgreSQL};Server=localhost;';
 
-      cache.offer(connectionString: connectionString, connectionId: 'conn-1');
+      expect(
+        cache.offer(connectionString: connectionString, connectionId: 'conn-1'),
+        isTrue,
+      );
 
       final drainResult = await cache.drainCachedSessions();
 

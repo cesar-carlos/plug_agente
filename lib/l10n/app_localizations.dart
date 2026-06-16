@@ -7481,7 +7481,7 @@ abstract class AppLocalizations {
   /// No description provided for @odbcErrorBufferRange.
   ///
   /// In en, this message translates to:
-  /// **'Result buffer must be between 8 and 128 MB'**
+  /// **'Result buffer must be between 8 and 256 MB'**
   String get odbcErrorBufferRange;
 
   /// No description provided for @odbcErrorChunkRange.

@@ -1585,7 +1585,7 @@
   "dbTabAdvanced": "Advanced",
   "odbcErrorPoolRange": "Pool size must be between 1 and 20",
   "odbcErrorLoginTimeoutRange": "Login timeout must be between 1 and 120 seconds",
-  "odbcErrorBufferRange": "Result buffer must be between 8 and 128 MB",
+  "odbcErrorBufferRange": "Result buffer must be between 8 and 256 MB",
   "odbcErrorChunkRange": "Streaming chunk must be between 64 and 8192 KB",
   "odbcErrorSaveFailed": "Failed to save advanced settings. Try again.",
   "odbcErrorLoadFailed": "Failed to load advanced settings.",

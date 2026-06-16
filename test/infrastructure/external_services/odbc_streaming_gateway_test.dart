@@ -1064,7 +1064,7 @@ void main() {
       expect(metrics.streamingSingleChunkPathCount, 0);
     });
 
-    test('should reuse cached streaming connection on back-to-back SQL Server streams', () async {
+    test('should reuse cached streaming connection on back-to-back PostgreSQL streams', () async {
       final sessionCache = OdbcStreamingSessionCache(
         ttl: const Duration(seconds: 30),
       );
@@ -1076,7 +1076,7 @@ void main() {
         streamingSessionCache: sessionCache,
       );
 
-      const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;';
+      const connectionString = 'Driver={PostgreSQL};Server=localhost;';
       var connectCount = 0;
       var disconnectCount = 0;
 
@@ -1153,7 +1153,7 @@ void main() {
         streamingSessionCache: sessionCache,
       );
 
-      const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;';
+      const connectionString = 'Driver={PostgreSQL};Server=localhost;';
 
       when(
         () => mockService.connect(any(), options: any(named: 'options')),

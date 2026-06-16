@@ -111,7 +111,9 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _showError(l10n.odbcErrorLoginTimeoutRange);
       return;
     }
-    if (maxResultBuffer == null || maxResultBuffer < 8 || maxResultBuffer > 128) {
+    if (maxResultBuffer == null ||
+        maxResultBuffer < ConnectionConstants.minMaxResultBufferMb ||
+        maxResultBuffer > ConnectionConstants.maxMaxResultBufferMb) {
       _showError(l10n.odbcErrorBufferRange);
       return;
     }
@@ -334,8 +336,8 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
                         label: l10n.odbcFieldResultBuffer,
                         controller: _maxResultBufferController,
                         hint: l10n.odbcHintResultBuffer,
-                        minValue: 8,
-                        maxValue: 128,
+                        minValue: ConnectionConstants.minMaxResultBufferMb,
+                        maxValue: ConnectionConstants.maxMaxResultBufferMb,
                       ),
                       const SizedBox(height: 8),
                       Text(

@@ -4016,7 +4016,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get odbcErrorLoginTimeoutRange => 'Login timeout deve ser entre 1 e 120 segundos';
 
   @override
-  String get odbcErrorBufferRange => 'Buffer de resultados deve ser entre 8 e 128 MB';
+  String get odbcErrorBufferRange => 'Buffer de resultados deve ser entre 8 e 256 MB';
 
   @override
   String get odbcErrorChunkRange => 'Chunk do streaming deve ser entre 64 e 8192 KB';
