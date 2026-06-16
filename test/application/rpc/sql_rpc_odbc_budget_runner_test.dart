@@ -111,7 +111,7 @@ void main() {
         requestId: 'req-large',
         deadline: DateTime.now().toUtc().add(const Duration(seconds: 30)),
         timeoutMs: 0,
-        effectiveMaxRows: ConnectionConstants.sqlExecuteMaterializedMaxRows,
+        effectiveMaxRows: ConnectionConstants.sqlExecuteMaterializedMaxRows + 1,
         transportLimits: const TransportLimits(),
         negotiatedExtensions: const {'streamingResults': true},
       );

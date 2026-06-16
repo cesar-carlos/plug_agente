@@ -2319,7 +2319,14 @@ void main() {
           jsonrpc: '2.0',
           method: 'sql.execute',
           id: 'req-allowlist-db-stream',
-          params: {'sql': 'SELECT * FROM public.users'},
+          params: {
+            'sql': 'SELECT * FROM public.users',
+            'options': {
+              // Above streaming row threshold but below materialized cap so allowlist
+              // auto-policy applies instead of auto-prefer DB streaming.
+              'max_rows': 1000,
+            },
+          },
         );
 
         final response = await dispatcher.dispatch(
@@ -2399,7 +2406,10 @@ void main() {
           jsonrpc: '2.0',
           method: 'sql.execute',
           id: 'req-allowlist-cache-1',
-          params: {'sql': 'SELECT * FROM orders'},
+          params: {
+            'sql': 'SELECT * FROM orders',
+            'options': {'max_rows': 1000},
+          },
         );
         final firstResponse = await dispatcher.dispatch(
           firstRequest,
@@ -2413,7 +2423,10 @@ void main() {
           jsonrpc: '2.0',
           method: 'sql.execute',
           id: 'req-allowlist-cache-2',
-          params: {'sql': 'SELECT * FROM invoices'},
+          params: {
+            'sql': 'SELECT * FROM invoices',
+            'options': {'max_rows': 1000},
+          },
         );
         final secondResponse = await dispatcher.dispatch(
           secondRequest,
