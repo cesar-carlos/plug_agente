@@ -18,6 +18,36 @@ class ConfigService implements IConfigConnectionStringSource {
     return _validator.validate(config, forPersistence: forPersistence);
   }
 
+  /// Resolves the runtime ODBC connection string for [config].
+  @override
+  String resolveConnectionString(Config config) {
+    final persisted = config.connectionString.trim();
+    if (persisted.isNotEmpty) {
+      final embeddedPassword = OdbcConnectionStringSecrets.extractPasswordFromConnectionString(
+        persisted,
+      );
+      if (embeddedPassword == null) {
+        final storedPassword = config.password?.trim();
+        if (storedPassword != null && storedPassword.isNotEmpty) {
+          return OdbcConnectionStringSecrets.injectPasswordIntoConnectionString(
+            persisted,
+            storedPassword,
+          );
+        }
+      }
+      return persisted;
+    }
+
+    final built = generateConnectionString(config);
+    if (built.isNotEmpty) {
+      return built;
+    }
+
+    final passwordSegment = config.password != null ? ';PWD=${config.password}' : '';
+    return 'DRIVER={${config.odbcDriverName.isNotEmpty ? config.odbcDriverName : config.driverName}};'
+        'SERVER=${config.host};PORT=${config.port};DATABASE=${config.databaseName};UID=${config.username}$passwordSegment';
+  }
+
   /// Builds a runtime ODBC connection string, including [Config.password] when set.
   @override
   String generateConnectionString(Config config) {

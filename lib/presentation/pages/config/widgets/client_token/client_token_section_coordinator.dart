@@ -220,7 +220,7 @@ class ClientTokenSectionCoordinator {
 
     final previousOffset = currentScrollOffset();
     final currentEditingTokenId = controller.editingTokenId;
-    final isSuccess = currentEditingTokenId == null
+    final submitResult = currentEditingTokenId == null
         ? await provider.createToken(
             request,
             refreshTokens: false,
@@ -232,7 +232,7 @@ class ClientTokenSectionCoordinator {
             expectedVersion: controller.editingTokenVersion,
           );
 
-    if (isSuccess && context.mounted) {
+    if (submitResult.isSuccess() && context.mounted) {
       if (controller.autoRefreshAfterCreate) {
         await refreshTokensPreservingPosition(context, provider, previousOffset);
       }
@@ -333,7 +333,7 @@ class ClientTokenSectionCoordinator {
       silent: true,
       query: controller.buildListQuery(),
     );
-    if (!refreshed || previousOffset == null || !context.mounted) {
+    if (!refreshed.isSuccess() || previousOffset == null || !context.mounted) {
       return;
     }
 

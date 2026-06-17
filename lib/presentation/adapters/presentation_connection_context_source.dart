@@ -1,17 +1,11 @@
 import 'package:plug_agente/application/ports/i_connection_context_source.dart';
+import 'package:plug_agente/application/state/hub_connection_tracking_state.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/value_objects/hub_connection_context.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 
-/// Mutable hub connection tracking state shared between presentation surfaces.
-class HubConnectionTrackingState {
-  String? lastConfigId;
-  String? lastServerUrl;
-  String? lastAgentId;
-  String? lastAuthToken;
-  bool sessionAuthInvalid = false;
-}
+export 'package:plug_agente/application/state/hub_connection_tracking_state.dart';
 
 /// Resolves hub connection context from tracked state and live providers.
 class PresentationConnectionContextSource implements IConnectionContextSource {

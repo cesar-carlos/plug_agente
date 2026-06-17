@@ -1,5 +1,5 @@
 // Single source of truth: constants/autostart_arg.txt
-// Must match installer setup.iss and lib/core/constants/app_strings.dart
+// Must match installer setup.iss and lib/core/constants/launch_args_constants.dart
 #ifndef RUNNER_LAUNCH_ARGS_CONSTANTS_H_
 #define RUNNER_LAUNCH_ARGS_CONSTANTS_H_
 

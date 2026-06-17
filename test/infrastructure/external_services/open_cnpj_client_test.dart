@@ -1,8 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/agent_profile_lookup_error_messages.dart';
 import 'package:plug_agente/infrastructure/external_services/open_cnpj_client.dart';
+
+const _testErrorMessages = OpenCnpjLookupErrorMessages(
+  emptyResponse: 'empty response',
+  invalidPayload: 'invalid payload',
+  notFound: 'not found',
+  rateLimit: 'rate limit',
+  networkError: 'network error',
+  unexpectedError: 'unexpected error',
+);
 
 void main() {
   group('OpenCnpjClient', () {
@@ -47,6 +56,7 @@ void main() {
       final client = OpenCnpjClient(dio);
       final result = await client.lookupCnpj(
         '11222333000181',
+        errorMessages: _testErrorMessages,
       );
 
       expect(result.isSuccess(), isTrue);
@@ -77,14 +87,17 @@ void main() {
       );
 
       final client = OpenCnpjClient(dio);
-      final result = await client.lookupCnpj('11222333000181');
+      final result = await client.lookupCnpj(
+        '11222333000181',
+        errorMessages: _testErrorMessages,
+      );
 
       expect(result.isError(), isTrue);
       final err = result.exceptionOrNull();
       expect(err, isA<domain.ValidationFailure>());
       expect(
         (err! as domain.Failure).message,
-        AppStrings.msgOpenCnpjNotFound,
+        _testErrorMessages.notFound,
       );
     });
 
@@ -108,14 +121,17 @@ void main() {
       );
 
       final client = OpenCnpjClient(dio);
-      final result = await client.lookupCnpj('11222333000181');
+      final result = await client.lookupCnpj(
+        '11222333000181',
+        errorMessages: _testErrorMessages,
+      );
 
       expect(result.isError(), isTrue);
       final err = result.exceptionOrNull();
       expect(err, isA<domain.ServerFailure>());
       expect(
         (err! as domain.Failure).message,
-        AppStrings.msgOpenCnpjRateLimit,
+        _testErrorMessages.rateLimit,
       );
     });
 
@@ -138,14 +154,17 @@ void main() {
       );
 
       final client = OpenCnpjClient(dio);
-      final result = await client.lookupCnpj('11222333000181');
+      final result = await client.lookupCnpj(
+        '11222333000181',
+        errorMessages: _testErrorMessages,
+      );
 
       expect(result.isError(), isTrue);
       final err = result.exceptionOrNull();
       expect(err, isA<domain.ServerFailure>());
       expect(
         (err! as domain.Failure).message,
-        AppStrings.msgOpenCnpjInvalidPayload,
+        _testErrorMessages.invalidPayload,
       );
     });
   });

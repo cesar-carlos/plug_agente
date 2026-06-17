@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
@@ -12,7 +13,6 @@ import 'package:plug_agente/presentation/providers/presentation_provider_read.da
 import 'package:plug_agente/presentation/widgets/connection_status_widget.dart';
 import 'package:plug_agente/presentation/widgets/websocket_log_viewer.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
-import 'package:provider/provider.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -33,9 +33,9 @@ class _DashboardPageState extends State<DashboardPage> {
     }
     _metricsControllerInitialized = true;
     _metricsController = DashboardMetricsController(
-      metricsCollector: context.read<IMetricsCollector>(),
+      metricsCollector: getIt<IMetricsCollector>(),
       refreshInterval: AppConstants.dashboardMetricsInterval,
-      settingsStore: readOptionalPresentationProvider<IAppSettingsStore>(context),
+      settingsStore: readOptionalGetItService<IAppSettingsStore>(),
     )..initialize();
   }
 

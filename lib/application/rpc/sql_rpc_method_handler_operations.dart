@@ -20,6 +20,7 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
@@ -52,6 +53,8 @@ class SqlRpcMethodHandlerOperations {
     IActiveConfigQueryCache? configQueryCache,
 
     SqlStreamingConnectionStringCache? streamingConnectionStringCache,
+
+    IConfigConnectionStringSource? connectionStringSource,
 
     IAuthorizationMetricsCollector? authMetrics,
 
@@ -139,6 +142,8 @@ class SqlRpcMethodHandlerOperations {
       configQueryCache: configQueryCache,
 
       streamingConnectionStringCache: streamingConnectionStringCache,
+
+      connectionStringSource: connectionStringSource,
 
       streamingGateway: streamingGateway,
 

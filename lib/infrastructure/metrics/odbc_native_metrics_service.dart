@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_diagnostics_snapshot_collector.dart';
@@ -19,6 +20,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
     this._service, {
     IQueryConfigSource? queryConfigSource,
     IAgentConfigRepository? configRepository,
+    IConfigConnectionStringSource? connectionStringSource,
     IConnectionPool? connectionPool,
     IOdbcConnectionSettings? settings,
     OdbcRuntimeTuning? runtimeTuning,
@@ -26,6 +28,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
     OdbcEventBridge? eventBridge,
   }) : _queryConfigSource = queryConfigSource,
        _configRepository = configRepository,
+       _connectionStringSource = connectionStringSource,
        _connectionPool = connectionPool,
        _settings = settings,
        _runtimeTuning = runtimeTuning,
@@ -35,6 +38,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
   final OdbcService _service;
   final IQueryConfigSource? _queryConfigSource;
   final IAgentConfigRepository? _configRepository;
+  final IConfigConnectionStringSource? _connectionStringSource;
   final IConnectionPool? _connectionPool;
   final IOdbcConnectionSettings? _settings;
   final OdbcRuntimeTuning? _runtimeTuning;
@@ -173,7 +177,11 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
         : await _configRepository!.getCurrentConfigMetadata();
     return configResult.fold(
       (config) {
-        final resolved = config.resolveConnectionString().trim();
+        final connectionStringSource = _connectionStringSource;
+        if (connectionStringSource == null) {
+          return null;
+        }
+        final resolved = connectionStringSource.resolveConnectionString(config).trim();
         return resolved.isEmpty ? null : resolved;
       },
       (_) => null,

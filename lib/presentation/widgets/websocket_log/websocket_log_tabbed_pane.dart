@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/domain/entities/authorization_metrics_summary.dart';
 import 'package:plug_agente/domain/entities/protocol_metrics_summary.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
@@ -50,11 +51,11 @@ class _WebSocketLogTabbedPaneState extends State<WebSocketLogTabbedPane> {
   }
 
   void _snapMetrics() {
-    final authMetrics = readOptionalPresentationProvider<IAuthorizationMetricsCollector>(context);
+    final authMetrics = readOptionalGetItService<IAuthorizationMetricsCollector>();
     _authSummary = authMetrics?.getSummary();
-    final deprecationMetrics = readOptionalPresentationProvider<IDeprecationMetricsCollector>(context);
+    final deprecationMetrics = readOptionalGetItService<IDeprecationMetricsCollector>();
     _deprecationCount = deprecationMetrics?.preserveSqlUsageCount;
-    final protocolMetrics = _readProtocolMetricsCollector(context);
+    final protocolMetrics = _readProtocolMetricsCollector();
     _protocolSummary = protocolMetrics?.getSummary(period: const Duration(minutes: 15));
   }
 
@@ -66,7 +67,7 @@ class _WebSocketLogTabbedPaneState extends State<WebSocketLogTabbedPane> {
     }
     _metricsSubscriptionsInitialized = true;
     _snapMetrics();
-    final authMetrics = readOptionalPresentationProvider<IAuthorizationMetricsCollector>(context);
+    final authMetrics = readOptionalGetItService<IAuthorizationMetricsCollector>();
     if (authMetrics != null) {
       _authMetricsSub = authMetrics.updates.listen((_) {
         if (mounted) {
@@ -74,7 +75,7 @@ class _WebSocketLogTabbedPaneState extends State<WebSocketLogTabbedPane> {
         }
       });
     }
-    final deprecationMetrics = readOptionalPresentationProvider<IDeprecationMetricsCollector>(context);
+    final deprecationMetrics = readOptionalGetItService<IDeprecationMetricsCollector>();
     if (deprecationMetrics != null) {
       _deprecationMetricsSub = deprecationMetrics.updates.listen((_) {
         if (mounted) {
@@ -82,7 +83,7 @@ class _WebSocketLogTabbedPaneState extends State<WebSocketLogTabbedPane> {
         }
       });
     }
-    final protocolMetrics = _readProtocolMetricsCollector(context);
+    final protocolMetrics = _readProtocolMetricsCollector();
     if (protocolMetrics != null) {
       _protocolMetricsSub = protocolMetrics.updates.listen((_) {
         if (mounted) {
@@ -92,12 +93,8 @@ class _WebSocketLogTabbedPaneState extends State<WebSocketLogTabbedPane> {
     }
   }
 
-  IProtocolMetricsCollector? _readProtocolMetricsCollector(BuildContext context) {
-    try {
-      return context.read<IProtocolMetricsCollector>();
-    } on ProviderNotFoundException {
-      return null;
-    }
+  IProtocolMetricsCollector? _readProtocolMetricsCollector() {
+    return readOptionalGetItService<IProtocolMetricsCollector>();
   }
 
   @override
@@ -111,7 +108,7 @@ class _WebSocketLogTabbedPaneState extends State<WebSocketLogTabbedPane> {
 
   @override
   Widget build(BuildContext context) {
-    final showSqlTab = context.read<FeatureFlags>().enableDashboardSqlInvestigationFeed;
+    final showSqlTab = getIt<FeatureFlags>().enableDashboardSqlInvestigationFeed;
     if (!showSqlTab && _tabIndex > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {

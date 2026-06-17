@@ -14,7 +14,6 @@ import 'package:plug_agente/presentation/pages/main_window.dart';
 import 'package:plug_agente/presentation/pages/playground_page.dart';
 import 'package:plug_agente/presentation/pages/websocket_settings_page.dart';
 import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
-import 'package:provider/provider.dart';
 
 /// Route guard instance.
 ///
@@ -131,8 +130,8 @@ GoRouter createAppRouter({
             builder: (context, state) {
               return AgentActionsPage(
                 runtimeCapabilities: capabilities,
-                runtimeDiagnostics: readOptionalPresentationProvider<RuntimeDetectionDiagnostics>(context),
-                appSettingsStore: context.read<IAppSettingsStore>(),
+                runtimeDiagnostics: readOptionalGetItService<RuntimeDetectionDiagnostics>(),
+                appSettingsStore: readGetItService<IAppSettingsStore>(),
               );
             },
           ),

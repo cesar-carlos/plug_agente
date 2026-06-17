@@ -7,6 +7,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_parsers.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_validation.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:result_dart/result_dart.dart';
 
 /// Outcome of attempting to persist the current editor draft.
 ///
@@ -14,8 +15,8 @@ import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 /// preserving the existing two-phase behavior: editor-side validation
 /// produces a [AgentActionDraftSaveRejected] (shown as a validation
 /// message), otherwise the draft is forwarded to the provider and
-/// [AgentActionDraftSaveForwarded.persisted] mirrors the provider's own
-/// save result (which may still reject, e.g. activating an unvalidated
+/// [AgentActionDraftSaveForwarded.result] mirrors the provider save
+/// [Result] (which may still reject, e.g. activating an unvalidated
 /// action).
 sealed class AgentActionDraftSaveOutcome {
   const AgentActionDraftSaveOutcome();
@@ -28,9 +29,9 @@ final class AgentActionDraftSaveRejected extends AgentActionDraftSaveOutcome {
 }
 
 final class AgentActionDraftSaveForwarded extends AgentActionDraftSaveOutcome {
-  const AgentActionDraftSaveForwarded({required this.persisted});
+  const AgentActionDraftSaveForwarded({required this.result});
 
-  final bool persisted;
+  final Result<void> result;
 }
 
 /// Translates an [AgentActionDraft] into the matching
@@ -105,7 +106,7 @@ class AgentActionDraftSaveCoordinator {
       return AgentActionDraftSaveRejected(policyMessage);
     }
 
-    final persisted = await provider.saveCommandLineAction(
+    final result = await provider.saveCommandLineAction(
       actionId: draft.editingActionId,
       name: draft.identity.name.text.trim(),
       description: draft.identity.description.text,
@@ -128,7 +129,7 @@ class AgentActionDraftSaveCoordinator {
       queuePolicy: draft.queuePolicy(),
       pathPolicy: draft.pathPolicy(),
     );
-    return AgentActionDraftSaveForwarded(persisted: persisted);
+    return AgentActionDraftSaveForwarded(result: result);
   }
 
   Future<AgentActionDraftSaveOutcome> _saveExecutable(Set<int> acceptedExitCodes) async {
@@ -142,7 +143,7 @@ class AgentActionDraftSaveCoordinator {
       return AgentActionDraftSaveRejected(policyMessage);
     }
 
-    final persisted = await provider.saveExecutableAction(
+    final result = await provider.saveExecutableAction(
       actionId: draft.editingActionId,
       name: draft.identity.name.text.trim(),
       description: draft.identity.description.text,
@@ -166,7 +167,7 @@ class AgentActionDraftSaveCoordinator {
       queuePolicy: draft.queuePolicy(),
       pathPolicy: draft.pathPolicy(),
     );
-    return AgentActionDraftSaveForwarded(persisted: persisted);
+    return AgentActionDraftSaveForwarded(result: result);
   }
 
   Future<AgentActionDraftSaveOutcome> _saveScript(Set<int> acceptedExitCodes) async {
@@ -180,7 +181,7 @@ class AgentActionDraftSaveCoordinator {
       return AgentActionDraftSaveRejected(policyMessage);
     }
 
-    final persisted = await provider.saveScriptAction(
+    final result = await provider.saveScriptAction(
       actionId: draft.editingActionId,
       name: draft.identity.name.text.trim(),
       description: draft.identity.description.text,
@@ -205,7 +206,7 @@ class AgentActionDraftSaveCoordinator {
       queuePolicy: draft.queuePolicy(),
       pathPolicy: draft.pathPolicy(),
     );
-    return AgentActionDraftSaveForwarded(persisted: persisted);
+    return AgentActionDraftSaveForwarded(result: result);
   }
 
   Future<AgentActionDraftSaveOutcome> _saveJar(Set<int> acceptedExitCodes) async {
@@ -219,7 +220,7 @@ class AgentActionDraftSaveCoordinator {
       return AgentActionDraftSaveRejected(policyMessage);
     }
 
-    final persisted = await provider.saveJarAction(
+    final result = await provider.saveJarAction(
       actionId: draft.editingActionId,
       name: draft.identity.name.text.trim(),
       description: draft.identity.description.text,
@@ -244,7 +245,7 @@ class AgentActionDraftSaveCoordinator {
       queuePolicy: draft.queuePolicy(),
       pathPolicy: draft.pathPolicy(),
     );
-    return AgentActionDraftSaveForwarded(persisted: persisted);
+    return AgentActionDraftSaveForwarded(result: result);
   }
 
   Future<AgentActionDraftSaveOutcome> _saveEmail(Set<int> acceptedExitCodes) async {
@@ -287,7 +288,7 @@ class AgentActionDraftSaveCoordinator {
         )
         .toList(growable: false);
 
-    final persisted = await provider.saveEmailAction(
+    final result = await provider.saveEmailAction(
       actionId: draft.editingActionId,
       name: draft.identity.name.text.trim(),
       description: draft.identity.description.text,
@@ -314,7 +315,7 @@ class AgentActionDraftSaveCoordinator {
       queuePolicy: draft.queuePolicy(),
       pathPolicy: draft.pathPolicy(),
     );
-    return AgentActionDraftSaveForwarded(persisted: persisted);
+    return AgentActionDraftSaveForwarded(result: result);
   }
 
   Future<AgentActionDraftSaveOutcome> _saveComObject(Set<int> acceptedExitCodes) async {
@@ -338,7 +339,7 @@ class AgentActionDraftSaveCoordinator {
       return AgentActionDraftSaveRejected(policyMessage);
     }
 
-    final persisted = await provider.saveComObjectAction(
+    final result = await provider.saveComObjectAction(
       actionId: draft.editingActionId,
       name: draft.identity.name.text.trim(),
       description: draft.identity.description.text,
@@ -360,7 +361,7 @@ class AgentActionDraftSaveCoordinator {
       queuePolicy: draft.queuePolicy(),
       pathPolicy: draft.pathPolicy(),
     );
-    return AgentActionDraftSaveForwarded(persisted: persisted);
+    return AgentActionDraftSaveForwarded(result: result);
   }
 
   Future<AgentActionDraftSaveOutcome> _saveDeveloper(Set<int> acceptedExitCodes) async {
@@ -384,7 +385,7 @@ class AgentActionDraftSaveCoordinator {
       return AgentActionDraftSaveRejected(policyMessage);
     }
 
-    final persisted = await provider.saveDeveloperData7Action(
+    final result = await provider.saveDeveloperData7Action(
       actionId: draft.editingActionId,
       name: draft.identity.name.text.trim(),
       description: draft.identity.description.text,
@@ -410,7 +411,7 @@ class AgentActionDraftSaveCoordinator {
       queuePolicy: draft.queuePolicy(),
       pathPolicy: draft.pathPolicy(),
     );
-    return AgentActionDraftSaveForwarded(persisted: persisted);
+    return AgentActionDraftSaveForwarded(result: result);
   }
 
   bool _isPowerShellModeUnavailable(PowerShellDraftMode mode) {
@@ -437,7 +438,7 @@ class AgentActionDraftSaveCoordinator {
           return AgentActionDraftSaveRejected(policyMessage);
         }
 
-        final persisted = await provider.saveCommandLineAction(
+        final result = await provider.saveCommandLineAction(
           actionId: draft.editingActionId,
           name: draft.identity.name.text.trim(),
           description: draft.identity.description.text,
@@ -463,7 +464,7 @@ class AgentActionDraftSaveCoordinator {
           queuePolicy: draft.queuePolicy(),
           pathPolicy: draft.pathPolicy(),
         );
-        return AgentActionDraftSaveForwarded(persisted: persisted);
+        return AgentActionDraftSaveForwarded(result: result);
       case PowerShellDraftMode.script:
         final scriptPath = draft.script.path.text.trim();
         if (scriptPath.isEmpty) {
@@ -478,7 +479,7 @@ class AgentActionDraftSaveCoordinator {
           return AgentActionDraftSaveRejected(policyMessage);
         }
 
-        final persisted = await provider.saveScriptAction(
+        final result = await provider.saveScriptAction(
           actionId: draft.editingActionId,
           name: draft.identity.name.text.trim(),
           description: draft.identity.description.text,
@@ -505,7 +506,7 @@ class AgentActionDraftSaveCoordinator {
           queuePolicy: draft.queuePolicy(),
           pathPolicy: draft.pathPolicy(),
         );
-        return AgentActionDraftSaveForwarded(persisted: persisted);
+        return AgentActionDraftSaveForwarded(result: result);
     }
   }
 }

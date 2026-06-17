@@ -22,7 +22,6 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/repositories/startup_preferences_repository.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config_page.dart';
-import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
 import 'package:plug_agente/presentation/providers/theme_provider.dart';
 import 'package:plug_agente/presentation/providers/updates_settings_provider.dart';
@@ -217,9 +216,6 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ...buildPresentationInfrastructureProviders(
-            capabilities: getIt<RuntimeCapabilities>(),
-          ),
           ChangeNotifierProvider<ThemeProvider>(
             create: (_) => ThemeProvider(
               AppPreferencesRepository(

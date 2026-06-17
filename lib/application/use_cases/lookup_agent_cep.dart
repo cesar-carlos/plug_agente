@@ -15,6 +15,7 @@ class LookupAgentCep {
   Future<Result<ViaCepAddress>> call({
     required String rawPostalCode,
     required String invalidLengthMessage,
+    required ViaCepLookupErrorMessages errorMessages,
   }) {
     final digits = rawPostalCode.replaceAll(_nonDigits, '');
     if (digits.length != _expectedCepLength) {
@@ -23,6 +24,6 @@ class LookupAgentCep {
       );
     }
 
-    return _gateway.lookupCep(digits);
+    return _gateway.lookupCep(digits, errorMessages: errorMessages);
   }
 }

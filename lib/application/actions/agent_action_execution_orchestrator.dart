@@ -17,6 +17,7 @@ import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_failures;
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:result_dart/result_dart.dart';
@@ -551,18 +552,53 @@ class AgentActionExecutionOrchestrator {
       return failure;
     }
     if (failure is domain_failures.Failure) {
-      return ActionRuntimeFailure.withContext(
-        message: failure.message,
+      return _actionFailureFromDomainFailure(failure);
+    }
+
+    return _actionFailureFromDomainFailure(
+      domain_failures.ServerFailure.withContext(
+        message: 'An unexpected error occurred.',
+        cause: failure,
+        context: {
+          'operation': 'agent_action_execution',
+          'technical_message': failure.toString(),
+        },
+      ),
+    );
+  }
+
+  ActionFailure _actionFailureFromDomainFailure(domain_failures.Failure failure) {
+    final message = failure.toUserMessage();
+    final context = {
+      ...failure.context,
+      if (!failure.context.containsKey('technical_message'))
+        'technical_message': _technicalDetailFor(failure),
+    };
+
+    return switch (failure) {
+      domain_failures.ValidationFailure() => ActionValidationFailure.withContext(
+        message: message,
         code: failure.code,
         cause: failure.cause,
         timestamp: failure.timestamp,
-        context: failure.context,
-      );
+        context: context,
+      ),
+      _ => ActionRuntimeFailure.withContext(
+        message: message,
+        code: failure.code,
+        cause: failure.cause,
+        timestamp: failure.timestamp,
+        context: context,
+      ),
+    };
+  }
+
+  String _technicalDetailFor(domain_failures.Failure failure) {
+    final cause = failure.cause;
+    if (cause != null) {
+      return cause.toString();
     }
-    return ActionRuntimeFailure.withContext(
-      message: failure.toString(),
-      cause: failure,
-    );
+    return failure.message;
   }
 
   AgentActionExecution _executionFromOutput(

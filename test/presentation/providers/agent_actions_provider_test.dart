@@ -1171,7 +1171,7 @@ void main() {
       state: AgentActionState.active,
     );
 
-    expect(saved, isFalse);
+    expect(saved.isError(), isTrue);
     expect(provider.errorMessage, isNotNull);
     expect(repository.definitions, isEmpty);
   });
@@ -1195,7 +1195,7 @@ void main() {
       state: AgentActionState.active,
     );
 
-    expect(saved, isTrue);
+    expect(saved.isSuccess(), isTrue);
     expect(repository.definitions['action-1']?.state, AgentActionState.active);
     expect(repository.definitions['action-1']?.lastPreflightSnapshotHash, isNotNull);
     expect(repository.definitions['action-1']?.lastPreflightValidatedAt, isNotNull);
@@ -1234,7 +1234,7 @@ void main() {
       state: AgentActionState.active,
     );
 
-    expect(saved, isFalse);
+    expect(saved.isError(), isTrue);
     expect(repository.definitions['action-1']?.state, isNot(AgentActionState.active));
   });
 
@@ -1257,7 +1257,7 @@ void main() {
       state: AgentActionState.active,
     );
 
-    expect(savedWithChange, isFalse);
+    expect(savedWithChange.isError(), isTrue);
     expect(repository.definitions['action-1']?.config, isA<CommandLineActionConfig>());
     expect(
       (repository.definitions['action-1']!.config as CommandLineActionConfig).command,

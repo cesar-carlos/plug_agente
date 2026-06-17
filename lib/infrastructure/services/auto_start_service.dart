@@ -1,7 +1,7 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
@@ -279,7 +279,7 @@ class AutoStartService implements IStartupService {
       final queryResults = await _queryStartupRegistry();
       final buffer = StringBuffer('Plug Agente startup diagnostic\n')
         ..writeln('Expected executable: $expectedExecutable')
-        ..writeln('Expected autostart arg: ${AppStrings.singleInstanceArgAutostart}')
+        ..writeln('Expected autostart arg: ${LaunchArgsConstants.autostartArg}')
         ..writeln();
 
       for (final result in queryResults) {
@@ -439,7 +439,7 @@ class AutoStartService implements IStartupService {
   Future<Result<Unit>> _writeStartupEntry(StartupRegistryScope scope) async {
     final valueData =
         '"${_executablePathProvider()}" '
-        '"${AppStrings.singleInstanceArgAutostart}"';
+        '"${LaunchArgsConstants.autostartArg}"';
 
     if (scope.requiresElevation) {
       final result = await _elevatedRegistryExecutor.setRunValue(

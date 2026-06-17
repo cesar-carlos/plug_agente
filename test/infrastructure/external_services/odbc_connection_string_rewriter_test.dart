@@ -1,10 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_string_rewriter.dart';
 
 void main() {
+  late ConfigService connectionStringSource;
+
+  setUp(() {
+    connectionStringSource = ConfigService(ConfigValidator());
+  });
+
   group('OdbcConnectionStringRewriter.overrideDatabase', () {
     test('replaces an existing DATABASE key preserving the original key name', () {
       final result = OdbcConnectionStringRewriter.overrideDatabase(
@@ -65,6 +73,7 @@ void main() {
       final result = OdbcConnectionStringRewriter.resolve(
         config,
         _databaseConfig(),
+        connectionStringSource,
         databaseOverride: 'override_db',
       );
       expect(result, contains('Database=override_db'));
@@ -75,6 +84,7 @@ void main() {
       final result = OdbcConnectionStringRewriter.resolve(
         config,
         _databaseConfig(),
+        connectionStringSource,
       );
       expect(result, 'Driver={ODBC};Server=localhost;Database=base');
     });
@@ -86,6 +96,7 @@ void main() {
       final result = OdbcConnectionStringRewriter.resolve(
         config,
         _databaseConfig(),
+        connectionStringSource,
       );
       expect(result, contains('PWD=secure-secret'));
       expect(result, contains('Database=base'));
@@ -99,6 +110,7 @@ void main() {
       final result = OdbcConnectionStringRewriter.resolve(
         config,
         _databaseConfig(),
+        connectionStringSource,
       );
       expect(result, contains('DATABASE=demo'));
     });
@@ -108,6 +120,7 @@ void main() {
       final result = OdbcConnectionStringRewriter.resolve(
         config,
         _databaseConfig(),
+        connectionStringSource,
         databaseOverride: '   ',
       );
       expect(result, 'Driver={ODBC};Database=base');

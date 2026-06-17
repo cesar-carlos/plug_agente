@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/ports/i_playground_db_connection_gateway.dart';
+import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/test_db_connection.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -43,6 +45,8 @@ void main() {
     late MockTestDbConnection mockTestDbConnection;
     late MockExecuteStreamingQuery mockExecuteStreamingQuery;
     late MockPlaygroundDbConnectionGateway mockDbConnectionGateway;
+    late ConfigService connectionStringSource;
+
     late PlaygroundProvider provider;
 
     setUpAll(() {
@@ -54,6 +58,7 @@ void main() {
     });
 
     setUp(() {
+      connectionStringSource = ConfigService(ConfigValidator());
       mockExecutePlaygroundQuery = MockExecutePlaygroundQuery();
       mockTestDbConnection = MockTestDbConnection();
       mockExecuteStreamingQuery = MockExecuteStreamingQuery();
@@ -64,6 +69,7 @@ void main() {
       provider = PlaygroundProvider(
         mockExecutePlaygroundQuery,
         mockExecuteStreamingQuery,
+        connectionStringSource: connectionStringSource,
         dbConnectionGateway: mockDbConnectionGateway,
       );
     });
@@ -292,6 +298,7 @@ void main() {
       final p = PlaygroundProvider(
         mockExecutePlaygroundQuery,
         mockExecuteStreamingQuery,
+        connectionStringSource: connectionStringSource,
         dbConnectionGateway: gateway,
       );
       p.setQuery('SELECT 1');
@@ -331,6 +338,7 @@ void main() {
         final p = PlaygroundProvider(
           mockExecutePlaygroundQuery,
           mockExecuteStreamingQuery,
+          connectionStringSource: connectionStringSource,
           dbConnectionGateway: gateway,
         );
         p.setQuery('SELECT 1');

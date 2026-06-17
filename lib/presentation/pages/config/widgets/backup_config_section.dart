@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart' show shutdownApp;
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/theme/theme.dart';
@@ -39,11 +38,11 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
     unawaited(_loadPendingRestoreFailure());
   }
 
-  ILocalAppDataBackupService? _backupService(BuildContext context) =>
-      readOptionalPresentationProvider<ILocalAppDataBackupService>(context);
+  ILocalAppDataBackupService? get _backupService =>
+      readOptionalGetItService<ILocalAppDataBackupService>();
 
   Future<void> _loadPendingRestoreFailure() async {
-    final service = _backupService(context);
+    final service = _backupService;
     if (service == null) {
       return;
     }
@@ -56,7 +55,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
 
   Future<void> _dismissRestoreFailure() async {
     setState(() => _pendingRestoreFailure = null);
-    final service = _backupService(context);
+    final service = _backupService;
     if (service != null) {
       await service.clearRestoreFailureDiagnostics();
     }
@@ -96,7 +95,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
       if (!mounted) {
         return;
       }
-      final service = _backupService(context);
+      final service = _backupService;
       if (service == null) {
         return;
       }
@@ -140,7 +139,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
 
   Future<void> _restore() async {
     final l10n = AppLocalizations.of(context)!;
-    final service = _backupService(context);
+    final service = _backupService;
     if (service == null) {
       return;
     }
@@ -210,7 +209,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
       return;
     }
 
-    final settingsStore = readOptionalPresentationProvider<IAppSettingsStore>(context);
+    final settingsStore = readOptionalGetItService<IAppSettingsStore>();
     await settingsStore?.flushPendingPersistence();
     await shutdownApp();
 
@@ -281,10 +280,8 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
             Text(l10n.configBackupDuplicateNote, style: context.captionText),
             const SizedBox(height: AppSpacing.sm),
             Text(l10n.configBackupSingleInstanceNote, style: context.captionText),
-            if (l10n.localeName.startsWith('pt')) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(AppStrings.singleInstanceMessage, style: context.captionText),
-            ],
+            const SizedBox(height: AppSpacing.sm),
+            Text(l10n.configBackupSingleInstanceDialogMessage, style: context.captionText),
             const SizedBox(height: AppSpacing.sm),
             Text(
               l10n.configBackupRestoreDiagnosticsHint(AppConstants.lastRestoreErrorFileName),

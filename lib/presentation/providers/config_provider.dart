@@ -10,9 +10,9 @@ import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/url_utils.dart';
 import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
+import 'package:plug_agente/presentation/providers/presentation_error_state.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
@@ -36,7 +36,7 @@ class ConfigProvider extends ChangeNotifier {
 
   Config? _currentConfig;
   bool _isLoading = false;
-  String _error = '';
+  PresentationErrorState? _errorState;
   bool _isPasswordVisible = false;
   int _batchDepth = 0;
   bool _batchedStateChanged = false;
@@ -46,12 +46,14 @@ class ConfigProvider extends ChangeNotifier {
 
   Config? get currentConfig => _currentConfig;
   bool get isLoading => _isLoading;
-  String get error => _error;
+  PresentationErrorState? get errorState => _errorState;
+  String get error => _errorState?.message ?? '';
+  bool get errorCanRetry => _errorState?.canRetry ?? false;
   bool get isPasswordVisible => _isPasswordVisible;
 
   Future<void> _loadCurrentConfig() async {
     _isLoading = true;
-    _error = '';
+    _clearErrorState();
     notifyListeners();
 
     final result = await _loadConfigUseCase(null);
@@ -68,11 +70,7 @@ class ConfigProvider extends ChangeNotifier {
           AppLogger.info('No config found, creating new one');
           _createDefaultConfig();
         } else {
-          _error = failure.toDisplayMessage();
-          AppLogger.error(
-            'Failed to load config: ${failure.toDisplayMessage()}',
-            failure.toTechnicalMessage(),
-          );
+          _applyFailure(failure);
         }
       },
     );
@@ -88,7 +86,7 @@ class ConfigProvider extends ChangeNotifier {
   Future<void> loadConfigById(String id) async {
     final requestToken = ++_loadRequestToken;
     _isLoading = true;
-    _error = '';
+    _clearErrorState();
     notifyListeners();
 
     final result = await _loadConfigUseCase(id);
@@ -104,11 +102,7 @@ class ConfigProvider extends ChangeNotifier {
     } else {
       final failure = result.exceptionOrNull()!;
       _currentConfig = null;
-      _error = failure.toDisplayMessage();
-      AppLogger.error(
-        'Failed to load config: ${failure.toDisplayMessage()}',
-        failure.toTechnicalMessage(),
-      );
+      _applyFailure(failure);
     }
 
     _isLoading = false;
@@ -160,7 +154,9 @@ class ConfigProvider extends ChangeNotifier {
 
   Future<Result<Config>> _performSingleSaveConfig() async {
     if (_currentConfig == null) {
-      _error = 'No configuration to save';
+      _applyFailure(
+        domain_errors.ValidationFailure('Nenhuma configuração para salvar'),
+      );
       notifyListeners();
       return Failure(
         domain_errors.ValidationFailure('Nenhuma configuração para salvar'),
@@ -168,7 +164,7 @@ class ConfigProvider extends ChangeNotifier {
     }
 
     _isLoading = true;
-    _error = '';
+    _clearErrorState();
     notifyListeners();
 
     final connectionString = _configService.generateConnectionStringForPersistence(
@@ -184,17 +180,11 @@ class ConfigProvider extends ChangeNotifier {
     result.fold(
       (savedConfig) {
         _currentConfig = savedConfig;
-        _error = '';
+        _clearErrorState();
         AppLogger.info('Config saved successfully');
         unawaited(_activeConfigResolver.setActiveConfigId(savedConfig.id));
       },
-      (failure) {
-        _error = failure.toDisplayMessage();
-        AppLogger.error(
-          'Failed to save config: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
-      },
+      _applyFailure,
     );
 
     _isLoading = false;
@@ -384,8 +374,19 @@ class ConfigProvider extends ChangeNotifier {
   }
 
   void clearError() {
-    _error = '';
+    if (_errorState == null) {
+      return;
+    }
+    _clearErrorState();
     notifyListeners();
+  }
+
+  void _applyFailure(Object failure) {
+    _errorState = PresentationErrorState.fromFailure(failure);
+  }
+
+  void _clearErrorState() {
+    _errorState = null;
   }
 
   void _validateIncrementalField(String field, Config? config) {
@@ -395,8 +396,8 @@ class ConfigProvider extends ChangeNotifier {
     final validation = _configValidator.validate(config);
     validation.fold(
       (_) {
-        if (_error.isNotEmpty) {
-          _error = '';
+        if (_errorState != null) {
+          _clearErrorState();
           _notifyStateChanged();
         }
       },
@@ -405,7 +406,7 @@ class ConfigProvider extends ChangeNotifier {
         if (!message.toLowerCase().contains(field.toLowerCase())) {
           return;
         }
-        _error = message;
+        _errorState = PresentationErrorState.fromFailure(failure, log: false);
         _notifyStateChanged();
       },
     );

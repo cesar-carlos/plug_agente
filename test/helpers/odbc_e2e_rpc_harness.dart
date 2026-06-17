@@ -4,10 +4,12 @@ import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
+import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -28,6 +30,7 @@ import 'package:uuid/uuid.dart';
 import 'e2e_env.dart';
 import 'mock_odbc_connection_settings.dart';
 import 'odbc_e2e_coverage_sql.dart';
+import 'rpc_method_dispatcher_test_support.dart';
 
 class MockAgentConfigRepository extends Mock implements IAgentConfigRepository {}
 
@@ -114,6 +117,7 @@ class OdbcE2eRpcHarness {
     );
     final gateway = OdbcDatabaseGateway(
       AgentConfigQueryConfigSource(configRepo),
+      ConfigService(ConfigValidator()),
       service,
       pool,
       retry,
@@ -182,6 +186,7 @@ class OdbcE2eRpcHarness {
       getClientTokenPolicy: getClientTokenPolicy,
       getPolicyRateLimiter: ClientTokenGetPolicyRateLimiter(maxCallsPerMinute: 0),
       featureFlags: featureFlags,
+      streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
     );
 
     return OdbcE2eRpcHarness._(

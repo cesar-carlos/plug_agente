@@ -42,6 +42,8 @@ import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collecto
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../helpers/rpc_method_dispatcher_test_support.dart';
+
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
@@ -199,6 +201,7 @@ void main() {
       );
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -364,6 +367,7 @@ void main() {
       when(() => mockFeatureFlags.enableRemoteAgentActions).thenReturn(false);
 
       final dispatcherWithAudit = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -505,6 +509,7 @@ void main() {
       final metrics = MetricsCollector();
       final metricsBridge = RpcDispatchMetricsCollector(metrics);
       final metricsDispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -557,6 +562,7 @@ void main() {
     test('should reject agent.action.run when subsystem is draining before use case', () async {
       final guard = AgentActionRuntimeStateGuard()..markDraining(reason: 'shutdown');
       final drainingDispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -617,6 +623,7 @@ void main() {
         runtimeSessionId: 'sess-notify-test',
       );
       final dispatcherWithAudit = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -694,6 +701,7 @@ void main() {
       );
 
       final dispatcherWithAudit = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -1372,6 +1380,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -1461,6 +1470,7 @@ void main() {
       final expectedTtl = retentionSettings.agentActionRpcIdempotencyTtl;
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -1545,6 +1555,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -1656,6 +1667,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -1833,6 +1845,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _healthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -2049,6 +2062,7 @@ void main() {
         when(() => mockFeatureFlags.enableClientTokenAuthorization).thenReturn(true);
 
         final dispatcherWithAudit = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _healthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2125,6 +2139,7 @@ void main() {
         ).thenAnswer((_) async => Success(execution));
 
         final dispatcherWithAudit = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _healthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2189,6 +2204,7 @@ void main() {
         );
 
         final dispatcherWithAudit = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _healthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2264,6 +2280,7 @@ void main() {
         final metrics = MetricsCollector();
         var rateLimitedMetricInvocations = 0;
         final dispatcherWithAudit = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: HealthService(
             metricsCollector: metrics,
@@ -2345,6 +2362,7 @@ void main() {
       test('should invoke permission denied callback when policy denies run', () async {
         var permissionDeniedInvocations = 0;
         final dispatcherWithMetrics = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _healthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2619,6 +2637,7 @@ void main() {
         );
         var auditCorrelatedCount = 0;
         final dispatcherWithAudit = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _healthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2717,6 +2736,7 @@ void main() {
           ).thenAnswer((_) async => Success(execution));
 
           final dispatcherWithAudit = RpcMethodDispatcher(
+            streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
             databaseGateway: mockGateway,
             healthService: _healthService(mockGateway),
             normalizerService: mockNormalizer,

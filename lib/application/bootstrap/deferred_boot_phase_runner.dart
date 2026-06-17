@@ -78,8 +78,9 @@ class DeferredBootPhaseRunner {
 
   Future<void> _warmUpConnectionPool() async {
     final configResolver = _dependencies.activeConfigResolver;
+    final connectionStringSource = _dependencies.connectionStringSource;
     final pool = _dependencies.connectionPool;
-    if (configResolver == null || pool == null) {
+    if (configResolver == null || connectionStringSource == null || pool == null) {
       return;
     }
 
@@ -88,7 +89,7 @@ class DeferredBootPhaseRunner {
 
       await configResult.fold(
         (agentConfig) async {
-          final connectionString = agentConfig.resolveConnectionString();
+          final connectionString = connectionStringSource.resolveConnectionString(agentConfig);
           if (connectionString.isEmpty) {
             developer.log(
               'Skipping pool warm-up: no connection string configured',

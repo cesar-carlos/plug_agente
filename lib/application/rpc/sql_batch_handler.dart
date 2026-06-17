@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
+import 'package:plug_agente/application/mappers/sql_command_wire_mapper.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
@@ -33,6 +34,7 @@ class SqlBatchHandler {
     required Duration batchExecutionStageBudget,
     ValidateSqlBatch? validateSqlBatch,
     SqlBatchSupportsPageOffsetPagination? supportsPageOffsetPagination,
+    SqlCommandWireMapper? sqlCommandWireMapper,
   }) : _featureFlags = featureFlags,
        _support = support,
        _clientTokenGate = clientTokenGate,
@@ -41,7 +43,8 @@ class SqlBatchHandler {
        _validateSqlBatch = validateSqlBatch ?? const ValidateSqlBatch(),
        _sqlBatchTotalBudgetDuration = sqlBatchTotalBudget,
        _batchExecutionStageBudgetDuration = batchExecutionStageBudget,
-       _supportsPageOffsetPagination = supportsPageOffsetPagination ?? _allowPageOffsetPagination;
+       _supportsPageOffsetPagination = supportsPageOffsetPagination ?? _allowPageOffsetPagination,
+       _sqlCommandWireMapper = sqlCommandWireMapper ?? const SqlCommandWireMapper();
 
   static bool _allowPageOffsetPagination(Map<String, dynamic> negotiatedExtensions) => true;
 
@@ -56,6 +59,7 @@ class SqlBatchHandler {
   final Duration _sqlBatchTotalBudgetDuration;
   final Duration _batchExecutionStageBudgetDuration;
   final SqlBatchSupportsPageOffsetPagination _supportsPageOffsetPagination;
+  final SqlCommandWireMapper _sqlCommandWireMapper;
 
   Future<RpcResponse> handleSqlExecuteBatch(
     RpcRequest request,
@@ -130,7 +134,7 @@ class SqlBatchHandler {
 
       commandPlans.add(
         BatchCommandExecutionPlan(
-          command: SqlCommand.fromJson(commandJson),
+          command: _sqlCommandWireMapper.fromJson(commandJson),
           requestIndex: i,
           executionOrder: executionOrder,
         ),
@@ -188,7 +192,9 @@ class SqlBatchHandler {
     }
 
     final optionsJson = params['options'] as Map<String, dynamic>?;
-    final options = optionsJson != null ? SqlExecutionOptions.fromJson(optionsJson) : const SqlExecutionOptions();
+    final options = optionsJson != null
+        ? _sqlCommandWireMapper.optionsFromJson(optionsJson)
+        : const SqlExecutionOptions();
     final effectiveOptions = SqlExecutionOptions(
       timeoutMs: options.timeoutMs,
       maxRows: options.maxRows < limits.maxRows ? options.maxRows : limits.maxRows,
@@ -248,7 +254,7 @@ class SqlBatchHandler {
           'execution_id': _uuid.v4(),
           'started_at': _executionTimestampUtcIso(batchStartedAt),
           'finished_at': _executionTimestampUtcIso(batchFinishedAt),
-          'items': items.map((r) => r.toJson()).toList(growable: false),
+          'items': items.map(_sqlCommandWireMapper.resultToJson).toList(growable: false),
           'total_commands': commands.length,
           'successful_commands': items.where((r) => r.ok).length,
           'failed_commands': items.where((r) => !r.ok).length,

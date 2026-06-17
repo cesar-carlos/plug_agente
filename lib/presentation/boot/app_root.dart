@@ -67,7 +67,6 @@ import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_com_object_invocation_diagnostics.dart';
-import 'package:plug_agente/domain/repositories/i_protocol_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
@@ -85,7 +84,6 @@ import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
 import 'package:plug_agente/presentation/providers/notification_provider.dart';
 import 'package:plug_agente/presentation/providers/playground_provider.dart';
-import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
 import 'package:plug_agente/presentation/providers/runtime_mode_provider.dart';
 import 'package:plug_agente/presentation/providers/sql_investigation_provider.dart';
 import 'package:plug_agente/presentation/providers/system_settings_provider.dart';
@@ -111,7 +109,6 @@ class AppRoot extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ...buildPresentationInfrastructureProviders(capabilities: capabilities),
         ChangeNotifierProvider(
           create: (context) => RuntimeModeProvider(getIt<RuntimeCapabilities>()),
         ),
@@ -212,6 +209,7 @@ class AppRoot extends StatelessWidget {
           create: (context) => PlaygroundProvider(
             getIt<ExecutePlaygroundQuery>(),
             getIt<ExecuteStreamingQuery>(),
+            connectionStringSource: getIt<ConfigService>(),
           ),
           update: (context, connection, playground) {
             playground!.bindDbConnectionGateway(
@@ -276,9 +274,6 @@ class AppRoot extends StatelessWidget {
           create: (context) => WebSocketLogProvider(
             transportClient: getIt<ITransportClient>(),
           ),
-        ),
-        Provider<IProtocolMetricsCollector>(
-          create: (_) => getIt<IProtocolMetricsCollector>(),
         ),
         ChangeNotifierProvider(
           create: (context) => SqlInvestigationProvider(

@@ -7,7 +7,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CANONICAL_PATH = PROJECT_ROOT / "constants" / "autostart_arg.txt"
-APP_STRINGS_PATH = PROJECT_ROOT / "lib" / "core" / "constants" / "app_strings.dart"
+LAUNCH_ARGS_CONSTANTS_PATH = PROJECT_ROOT / "lib" / "core" / "constants" / "launch_args_constants.dart"
 HEADER_PATH = PROJECT_ROOT / "windows" / "runner" / "launch_args_constants.h"
 CONSTANTS_ISS_PATH = PROJECT_ROOT / "installer" / "constants.iss"
 
@@ -20,10 +20,10 @@ def main() -> int:
 
     failed = False
 
-    app_strings = APP_STRINGS_PATH.read_text(encoding="utf-8")
-    if f"singleInstanceArgAutostart = '{canonical}'" not in app_strings:
+    launch_args_constants = LAUNCH_ARGS_CONSTANTS_PATH.read_text(encoding="utf-8")
+    if f"autostartArg = '{canonical}'" not in launch_args_constants:
         print(
-            f"MISMATCH: app_strings.dart does not contain singleInstanceArgAutostart = '{canonical}'"
+            f"MISMATCH: launch_args_constants.dart does not contain autostartArg = '{canonical}'"
         )
         failed = True
 

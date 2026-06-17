@@ -3,7 +3,7 @@ import 'dart:developer' as developer;
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/core/constants/connection_constants.dart';
-import 'package:plug_agente/core/di/service_locator.dart' show resolveOdbcRuntimeTuning;
+import 'package:plug_agente/core/di/odbc_runtime_helpers.dart' show resolveOdbcRuntimeTuning;
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';

@@ -35,6 +35,8 @@ import 'package:plug_agente/infrastructure/metrics/rpc_dispatch_metrics_collecto
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../helpers/rpc_method_dispatcher_test_support.dart';
+
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
@@ -272,6 +274,7 @@ void main() {
       });
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -329,6 +332,7 @@ void main() {
 
     test('should return OpenRPC document for rpc.discover when loader is configured', () async {
       final discoverDispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -376,6 +380,7 @@ void main() {
 
     test('should return structured internalError when OpenRPC document load fails', () async {
       final discoverDispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -442,6 +447,7 @@ void main() {
       _stubAgentConfigRepository(mockConfigRepo, config);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -647,6 +653,7 @@ void main() {
       ).thenReturn(true);
 
       final limitedDispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -736,6 +743,7 @@ void main() {
       _stubAgentConfigRepository(mockConfigRepo, config);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -819,6 +827,7 @@ void main() {
       _stubAgentConfigRepository(mockConfigRepo, config);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -1842,6 +1851,7 @@ void main() {
         final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -1934,6 +1944,7 @@ void main() {
         );
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2040,6 +2051,7 @@ void main() {
         });
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2120,6 +2132,7 @@ void main() {
         final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2216,6 +2229,7 @@ void main() {
         );
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2302,6 +2316,7 @@ void main() {
         final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2389,6 +2404,7 @@ void main() {
         final metrics = MetricsCollector();
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2485,6 +2501,7 @@ void main() {
         );
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2652,6 +2669,7 @@ void main() {
         });
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -2718,6 +2736,7 @@ void main() {
         _stubAgentConfigRepository(mockConfigRepo, config);
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -3628,6 +3647,7 @@ void main() {
       );
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -3705,6 +3725,7 @@ void main() {
         when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -3829,6 +3850,7 @@ void main() {
         });
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -3922,6 +3944,7 @@ void main() {
         when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -3979,6 +4002,7 @@ void main() {
         when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -4060,6 +4084,7 @@ void main() {
         when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -4122,6 +4147,7 @@ void main() {
         when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -4205,6 +4231,7 @@ void main() {
         when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
         dispatcher = RpcMethodDispatcher(
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           databaseGateway: mockGateway,
           healthService: _testHealthService(mockGateway),
           normalizerService: mockNormalizer,
@@ -4267,6 +4294,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketIdempotency).thenReturn(true);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,
@@ -4476,6 +4504,7 @@ void main() {
           ).thenAnswer((_) => completer.future);
 
           dispatcher = RpcMethodDispatcher(
+            streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
             databaseGateway: mockGateway,
             healthService: _testHealthService(mockGateway),
             normalizerService: mockNormalizer,
@@ -4573,6 +4602,7 @@ void main() {
           ).thenAnswer((_) => completer.future);
 
           dispatcher = RpcMethodDispatcher(
+            streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
             databaseGateway: mockGateway,
             healthService: _testHealthService(mockGateway),
             normalizerService: mockNormalizer,
@@ -4677,6 +4707,7 @@ void main() {
           ).thenAnswer((_) => completer.future);
 
           dispatcher = RpcMethodDispatcher(
+            streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
             databaseGateway: mockGateway,
             healthService: _testHealthService(mockGateway),
             normalizerService: mockNormalizer,
@@ -4811,6 +4842,7 @@ void main() {
       when(() => mockFeatureFlags.enableAgentActionRemoteAudit).thenReturn(false);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,

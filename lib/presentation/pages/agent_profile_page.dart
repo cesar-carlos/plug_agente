@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/application/services/agent_profile_lookup_gateways.dart';
 import 'package:plug_agente/application/services/agent_register_profile_provider.dart';
 import 'package:plug_agente/application/use_cases/fetch_agent_hub_profile.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cep.dart';
 import 'package:plug_agente/application/use_cases/lookup_agent_cnpj.dart';
 import 'package:plug_agente/application/use_cases/sync_agent_profile_with_hub.dart';
 import 'package:plug_agente/application/validation/agent_profile_schema.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
@@ -175,6 +177,14 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       final result = await _lookupAgentCnpj(
         rawDocument: _formController.documentController.text,
         invalidLengthMessage: l10n.agentProfileLookupCnpjInvalid,
+        errorMessages: OpenCnpjLookupErrorMessages(
+          emptyResponse: l10n.agentProfileOpenCnpjEmptyResponse,
+          invalidPayload: l10n.agentProfileOpenCnpjInvalidPayload,
+          notFound: l10n.agentProfileOpenCnpjNotFound,
+          rateLimit: l10n.agentProfileOpenCnpjRateLimit,
+          networkError: l10n.agentProfileOpenCnpjNetworkError,
+          unexpectedError: l10n.agentProfileOpenCnpjUnexpectedError,
+        ),
       );
 
       if (!mounted) {
@@ -219,6 +229,13 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       final result = await _lookupAgentCep(
         rawPostalCode: _formController.postalCodeController.text,
         invalidLengthMessage: l10n.agentProfileLookupCepInvalid,
+        errorMessages: ViaCepLookupErrorMessages(
+          emptyResponse: l10n.agentProfileViaCepEmptyResponse,
+          notFound: l10n.agentProfileViaCepNotFound,
+          invalidPayload: l10n.agentProfileViaCepInvalidPayload,
+          networkError: l10n.agentProfileViaCepNetworkError,
+          unexpectedError: l10n.agentProfileViaCepUnexpectedError,
+        ),
       );
 
       if (!mounted) {
@@ -322,8 +339,8 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
     super.didChangeDependencies();
     if (!_lookupDependenciesInitialized) {
       _lookupDependenciesInitialized = true;
-      _lookupAgentCnpj = widget.lookupAgentCnpj ?? context.read<LookupAgentCnpj>();
-      _lookupAgentCep = widget.lookupAgentCep ?? context.read<LookupAgentCep>();
+      _lookupAgentCnpj = widget.lookupAgentCnpj ?? getIt<LookupAgentCnpj>();
+      _lookupAgentCep = widget.lookupAgentCep ?? getIt<LookupAgentCep>();
     }
   }
 
@@ -332,9 +349,9 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
       configProvider: context.read<ConfigProvider>(),
       authProvider: context.read<AuthProvider>(),
       connectionProvider: context.read<ConnectionProvider>(),
-      syncAgentProfileWithHub: context.read<SyncAgentProfileWithHub>(),
-      fetchAgentHubProfile: context.read<FetchAgentHubProfile>(),
-      registerProfileProvider: context.read<AgentRegisterProfileProvider>(),
+      syncAgentProfileWithHub: getIt<SyncAgentProfileWithHub>(),
+      fetchAgentHubProfile: getIt<FetchAgentHubProfile>(),
+      registerProfileProvider: getIt<AgentRegisterProfileProvider>(),
     );
   }
 

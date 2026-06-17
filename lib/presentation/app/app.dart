@@ -68,7 +68,7 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
       return;
     }
 
-    final windowManager = readOptionalPresentationProvider<IWindowManagerService>(context);
+    final windowManager = readOptionalGetItService<IWindowManagerService>();
     if (windowManager != null) {
       try {
         await windowManager.show();

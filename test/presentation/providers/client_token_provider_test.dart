@@ -86,9 +86,9 @@ void main() {
         () => mockListClientTokens(query: any(named: 'query')),
       ).thenAnswer((_) async => Success(tokens));
 
-      final success = await provider.loadTokens();
+      final result = await provider.loadTokens();
 
-      expect(success, isTrue);
+      expect(result.isSuccess(), isTrue);
       expect(provider.tokens, hasLength(1));
       expect(provider.tokens.first.id, equals('token-1'));
       expect(provider.error, isEmpty);
@@ -128,7 +128,7 @@ void main() {
           ),
         ]),
       );
-      expect(await latestFuture, isTrue);
+      expect((await latestFuture).isSuccess(), isTrue);
 
       firstLoad.complete(
         Success(<ClientTokenSummary>[
@@ -144,7 +144,7 @@ void main() {
           ),
         ]),
       );
-      expect(await staleFuture, isFalse);
+      expect((await staleFuture).isError(), isTrue);
 
       expect(provider.tokens, hasLength(1));
       expect(provider.tokens.single.id, equals('token-new'));
@@ -158,9 +158,9 @@ void main() {
         (_) async => Failure(domain.ServerFailure('failed to load tokens')),
       );
 
-      final success = await provider.loadTokens();
+      final result = await provider.loadTokens();
 
-      expect(success, isFalse);
+      expect(result.isError(), isTrue);
       expect(provider.tokens, isEmpty);
       expect(provider.error, contains('failed to load tokens'));
       expect(provider.hasLoaded, isFalse);
@@ -187,9 +187,9 @@ void main() {
         ]),
       );
 
-      final success = await provider.createToken(_buildRequest());
+      final result = await provider.createToken(_buildRequest());
 
-      expect(success, isTrue);
+      expect(result.isSuccess(), isTrue);
       expect(provider.lastCreatedToken, equals('new-token'));
       expect(provider.tokens, hasLength(1));
       expect(provider.error, isEmpty);
@@ -206,9 +206,9 @@ void main() {
 
       expect(provider.isLoading, isTrue);
 
-      final success = await future;
+      final result = await future;
 
-      expect(success, isFalse);
+      expect(result.isError(), isTrue);
       expect(provider.isLoading, isFalse);
       expect(provider.error, contains('load failed'));
     });
@@ -218,9 +218,9 @@ void main() {
         (_) async => Failure(domain.ValidationFailure('invalid request')),
       );
 
-      final success = await provider.createToken(_buildRequest());
+      final result = await provider.createToken(_buildRequest());
 
-      expect(success, isFalse);
+      expect(result.isError(), isTrue);
       expect(provider.lastCreatedToken, isNull);
       expect(provider.error, contains('invalid request'));
     });
@@ -233,9 +233,9 @@ void main() {
         () => mockListClientTokens(query: any(named: 'query')),
       ).thenAnswer((_) async => const Success(<ClientTokenSummary>[]));
 
-      final success = await provider.revokeToken('token-1');
+      final result = await provider.revokeToken('token-1');
 
-      expect(success, isTrue);
+      expect(result.isSuccess(), isTrue);
       expect(provider.tokens, isEmpty);
       expect(provider.error, isEmpty);
     });
@@ -282,13 +282,13 @@ void main() {
         ),
       );
 
-      final success = await provider.updateToken(
+      final result = await provider.updateToken(
         'token-1',
         _buildRequest(name: 'New name'),
         refreshTokens: false,
       );
 
-      expect(success, isTrue);
+      expect(result.isSuccess(), isTrue);
       expect(provider.lastCreatedToken, equals('rotated-token-value'));
       expect(provider.lastUpdateOutcome, equals(ClientTokenUpdateOutcome.rotated));
       expect(provider.tokens.single.name, equals('New name'));
@@ -332,13 +332,13 @@ void main() {
         ),
       );
 
-      final success = await provider.updateToken(
+      final result = await provider.updateToken(
         'token-1',
         _buildRequest(name: 'New name'),
         refreshTokens: false,
       );
 
-      expect(success, isTrue);
+      expect(result.isSuccess(), isTrue);
       expect(provider.lastCreatedToken, isNull);
       expect(provider.lastUpdateOutcome, equals(ClientTokenUpdateOutcome.metadataOnly));
       expect(provider.tokens.single.name, equals('New name'));
@@ -383,13 +383,13 @@ void main() {
         ),
       );
 
-      final success = await provider.updateToken(
+      final result = await provider.updateToken(
         'token-1',
         _buildRequest(name: 'Original'),
         refreshTokens: false,
       );
 
-      expect(success, isTrue);
+      expect(result.isSuccess(), isTrue);
       expect(provider.lastCreatedToken, isNull);
       expect(provider.lastUpdateOutcome, equals(ClientTokenUpdateOutcome.unchanged));
       expect(provider.tokens.single.name, equals('Original'));
@@ -424,9 +424,9 @@ void main() {
         () => mockRevokeClientToken('token-1'),
       ).thenAnswer((_) async => const Success(unit));
 
-      final success = await provider.revokeToken('token-1');
+      final result = await provider.revokeToken('token-1');
 
-      expect(success, isTrue);
+      expect(result.isSuccess(), isTrue);
       expect(provider.tokens, isEmpty);
       expect(provider.error, isEmpty);
     });
@@ -440,11 +440,11 @@ void main() {
       final revokeFuture = provider.revokeToken('token-1');
 
       expect(provider.isListMutationInProgress, isTrue);
-      expect(await provider.deleteToken('token-2'), isFalse);
+      expect((await provider.deleteToken('token-2')).isError(), isTrue);
       verifyNever(() => mockDeleteClientToken(any()));
 
       revokeCompleter.complete(const Success(unit));
-      expect(await revokeFuture, isTrue);
+      expect((await revokeFuture).isSuccess(), isTrue);
     });
 
     test('should expose copying state while token secret is loading', () async {

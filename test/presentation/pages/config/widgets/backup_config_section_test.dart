@@ -1,14 +1,10 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/domain/backup/local_data_backup.dart';
 import 'package:plug_agente/domain/repositories/i_local_app_data_backup_service.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/backup_config_section.dart';
-import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
-import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
 class _FakeBackupService implements ILocalAppDataBackupService {
@@ -48,14 +44,7 @@ class _FakeBackupService implements ILocalAppDataBackupService {
 Future<void> _pumpBackupSection(WidgetTester tester, Widget child) async {
   await tester.binding.setSurfaceSize(const Size(1400, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  await tester.pumpWidget(
-    MultiProvider(
-      providers: buildPresentationInfrastructureProviders(
-        capabilities: RuntimeCapabilities.full(),
-      ),
-      child: child,
-    ),
-  );
+  await tester.pumpWidget(child);
 }
 
 void main() {
@@ -83,7 +72,7 @@ void main() {
     expect(find.byKey(const ValueKey('backup_secure_storage_secrets_notice')), findsOneWidget);
     expect(find.text(l10n.configBackupSecureStorageSecretsNote), findsOneWidget);
     expect(find.byKey(const ValueKey('backup_include_secure_storage_secrets_checkbox')), findsOneWidget);
-    expect(find.text(AppStrings.singleInstanceMessage), findsNothing);
+    expect(find.text(l10n.configBackupSingleInstanceDialogMessage), findsOneWidget);
   });
 
   testWidgets('shows secure storage export warning when opt-in checkbox is checked', (tester) async {
@@ -110,7 +99,8 @@ void main() {
     expect(find.text(l10n.configBackupIncludeSecureStorageSecretsWarning), findsOneWidget);
   });
 
-  testWidgets('shows AppStrings single-instance line in Portuguese locale', (tester) async {
+  testWidgets('shows localized single-instance dialog message', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('pt'));
     await _pumpBackupSection(
       tester,
       const FluentApp(
@@ -124,7 +114,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(AppStrings.singleInstanceMessage), findsOneWidget);
+    expect(find.text(l10n.configBackupSingleInstanceDialogMessage), findsOneWidget);
   });
 
   testWidgets('does not show restore failure notice when there is none', (tester) async {

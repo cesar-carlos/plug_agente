@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/utils/odbc_connection_string_database_override.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/infrastructure/builders/odbc_connection_builder.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 
@@ -15,11 +16,12 @@ final class OdbcConnectionStringRewriter {
   /// overriding the target database with [databaseOverride].
   static String resolve(
     Config config,
-    DatabaseConfig databaseConfig, {
+    DatabaseConfig databaseConfig,
+    IConfigConnectionStringSource connectionStringSource, {
     String? databaseOverride,
   }) {
     final override = databaseOverride?.trim();
-    final resolved = config.resolveConnectionString().trim();
+    final resolved = connectionStringSource.resolveConnectionString(config).trim();
 
     if (override != null && override.isNotEmpty) {
       final overriddenDatabaseConfig = DatabaseConfig(

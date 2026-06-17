@@ -1,8 +1,24 @@
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain_failures;
+import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Incremental consumer for `streamQueryMulti` items.
 typedef OdbcMultiResultItemHandler = Future<void> Function(QueryResultMultiItem item);
+
+domain_failures.Failure _mapStreamQueryMultiError(
+  Object error, {
+  required String operation,
+}) {
+  if (error is domain_failures.Failure) {
+    return error;
+  }
+
+  return OdbcFailureMapper.mapStreamingError(
+    error,
+    operation: operation,
+  );
+}
 
 /// Streams `streamQueryMulti` items to [onItem] without building a full
 /// [QueryResultMulti] first.
@@ -14,14 +30,22 @@ Future<Result<void>> forEachStreamQueryMulti(
 ) async {
   await for (final itemResult in queries.streamQueryMulti(connectionId, sql)) {
     if (itemResult.isError()) {
-      return Failure(itemResult.exceptionOrNull()!);
+      return Failure(
+        _mapStreamQueryMultiError(
+          itemResult.exceptionOrNull()!,
+          operation: 'streamQueryMulti',
+        ),
+      );
     }
     try {
       await onItem(itemResult.getOrThrow());
-    } on Exception catch (error) {
-      return Failure(error);
     } on Object catch (error) {
-      return Failure(Exception(error.toString()));
+      return Failure(
+        _mapStreamQueryMultiError(
+          error,
+          operation: 'streamQueryMulti.onItem',
+        ),
+      );
     }
   }
 

@@ -9,7 +9,7 @@ on:
       - 'installer/constants.iss'
       - 'installer/setup.iss'
       - 'lib/core/constants/app_version.g.dart'
-      - 'lib/core/constants/app_strings.dart'
+      - 'lib/core/constants/launch_args_constants.dart'
       - 'scripts/verify_autostart_constant.py'
       - 'windows/runner/launch_args_constants.h'
   pull_request:
@@ -19,7 +19,7 @@ on:
       - 'installer/constants.iss'
       - 'installer/setup.iss'
       - 'lib/core/constants/app_version.g.dart'
-      - 'lib/core/constants/app_strings.dart'
+      - 'lib/core/constants/launch_args_constants.dart'
       - 'scripts/verify_autostart_constant.py'
       - 'windows/runner/launch_args_constants.h'
 

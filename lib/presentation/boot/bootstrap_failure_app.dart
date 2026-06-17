@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
@@ -63,8 +62,10 @@ class _BootstrapFailurePageState extends State<_BootstrapFailurePage> {
     }
     _dialogShown = true;
 
+    final l10n = AppLocalizations.of(context)!;
     final userMessage = BootstrapFailureMessageBuilder.userMessage(
       widget.error,
+      l10n,
     );
     final details = BootstrapFailureMessageBuilder.technicalDetails(
       error: widget.error,
@@ -73,16 +74,16 @@ class _BootstrapFailurePageState extends State<_BootstrapFailurePage> {
 
     await MessageModal.show<void>(
       context: context,
-      title: AppStrings.bootstrapFailureTitle,
+      title: l10n.bootstrapFailureTitle,
       message: userMessage,
       type: MessageType.error,
-      confirmText: AppStrings.bootstrapFailureButtonClose,
+      confirmText: l10n.bootstrapFailureButtonClose,
       onConfirm: _requestClose,
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const SizedBox(height: 12),
-          const Text(AppStrings.bootstrapFailureTechnicalDetails),
+          Text(l10n.bootstrapFailureTechnicalDetails),
           const SizedBox(height: 8),
           SizedBox(
             width: 720,
@@ -123,22 +124,22 @@ class _BootstrapFailurePageState extends State<_BootstrapFailurePage> {
 class BootstrapFailureMessageBuilder {
   BootstrapFailureMessageBuilder._();
 
-  static String userMessage(Object error) {
+  static String userMessage(Object error, AppLocalizations l10n) {
     if (error is GlobalStorageBootstrapException) {
-      return AppStrings.bootstrapFailureStorageMessage;
+      return l10n.bootstrapFailureStorageMessage;
     }
 
     if (error is StateError) {
       final message = error.message.toLowerCase();
       if (message.contains('cannot run application')) {
-        return AppStrings.bootstrapFailureUnsupportedOsMessage;
+        return l10n.bootstrapFailureUnsupportedOsMessage;
       }
       if (message.contains('odbc initialization failed')) {
-        return AppStrings.bootstrapFailureOdbcMessage;
+        return l10n.bootstrapFailureOdbcMessage;
       }
     }
 
-    return AppStrings.bootstrapFailureGenericMessage;
+    return l10n.bootstrapFailureGenericMessage;
   }
 
   static String technicalDetails({

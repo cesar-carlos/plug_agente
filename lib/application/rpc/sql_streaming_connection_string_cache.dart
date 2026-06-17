@@ -1,5 +1,6 @@
 import 'package:plug_agente/application/rpc/sql_streaming_connection_string_resolver.dart';
 import 'package:plug_agente/domain/entities/config.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 
 class _TimedConnectionStringEntry {
   const _TimedConnectionStringEntry({
@@ -14,11 +15,14 @@ class _TimedConnectionStringEntry {
 /// Short-TTL cache for resolved streaming ODBC connection strings.
 final class SqlStreamingConnectionStringCache {
   SqlStreamingConnectionStringCache({
+    required IConfigConnectionStringSource connectionStringSource,
     Duration ttl = const Duration(seconds: 5),
     DateTime Function()? clock,
-  }) : _ttl = ttl,
+  }) : _connectionStringSource = connectionStringSource,
+       _ttl = ttl,
        _clock = clock ?? DateTime.now;
 
+  final IConfigConnectionStringSource _connectionStringSource;
   final Duration _ttl;
   final DateTime Function() _clock;
   final Map<String, _TimedConnectionStringEntry> _entries = {};
@@ -37,6 +41,7 @@ final class SqlStreamingConnectionStringCache {
 
     final resolved = resolveSqlStreamingConnectionString(
       config,
+      _connectionStringSource,
       databaseOverride: databaseOverride,
     );
     _entries[cacheKey] = _TimedConnectionStringEntry(

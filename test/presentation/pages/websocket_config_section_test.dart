@@ -506,6 +506,8 @@ Widget _buildWidget({
 }) {
   final flags = featureFlags ?? FeatureFlags(InMemoryAppSettingsStore());
   final signingConfig = payloadSigningConfig ?? PayloadSigningConfig.empty();
+  getIt.registerSingleton<FeatureFlags>(flags);
+  getIt.registerSingleton<PayloadSigningConfig>(signingConfig);
   final form = formController ?? WebsocketConfigFormController();
   return FluentApp(
     locale: const Locale('pt'),

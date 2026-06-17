@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
@@ -57,10 +57,10 @@ Future<void> main(List<String> args) async {
   );
   checks.add(
     registryEntries.any((registryEntry) => registryEntry.entry?.hasAutostartArgument ?? false)
-        ? const _CheckResult.pass('Autostart argument', AppStrings.singleInstanceArgAutostart)
+        ? const _CheckResult.pass('Autostart argument', LaunchArgsConstants.autostartArg)
         : const _CheckResult.fail(
             'Autostart argument',
-            'Startup entry must include ${AppStrings.singleInstanceArgAutostart}.',
+            'Startup entry must include ${LaunchArgsConstants.autostartArg}.',
           ),
   );
 

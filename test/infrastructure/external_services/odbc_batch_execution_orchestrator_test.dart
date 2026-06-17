@@ -2,6 +2,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -860,6 +862,7 @@ String _resolveConnectionString(
   return OdbcConnectionStringRewriter.resolve(
     config,
     databaseConfig,
+    ConfigService(ConfigValidator()),
     databaseOverride: databaseOverride,
   );
 }

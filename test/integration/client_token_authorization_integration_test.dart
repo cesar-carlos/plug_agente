@@ -32,6 +32,8 @@ import 'package:plug_agente/infrastructure/services/authorization_policy_resolve
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../helpers/rpc_method_dispatcher_test_support.dart';
+
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 HealthService _healthServiceForIntegration(IDatabaseGateway gateway) => HealthService(
@@ -177,6 +179,7 @@ void main() {
       getPolicyRateLimiter: _integrationNoopGetPolicyRateLimiter,
       featureFlags: mockFeatureFlags,
       authMetrics: authMetrics,
+      streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
     );
   });
 
@@ -399,6 +402,7 @@ void main() {
           getPolicyRateLimiter: _integrationNoopGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           authMetrics: authMetrics,
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         );
 
         const request = RpcRequest(
@@ -485,6 +489,7 @@ void main() {
           getPolicyRateLimiter: _integrationNoopGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           authMetrics: authMetrics,
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         );
 
         final queryResponse = QueryResponse(
@@ -567,6 +572,7 @@ void main() {
           getPolicyRateLimiter: _integrationNoopGetPolicyRateLimiter,
           featureFlags: mockFeatureFlags,
           authMetrics: authMetrics,
+          streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         );
 
         final response = await dispatcherWithLocalResolver.dispatch(

@@ -4,13 +4,14 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/config/payload_signing_diagnostics.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/providers/presentation_provider_read.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
-import 'package:provider/provider.dart';
 
 class WebSocketPayloadSigningSection extends StatefulWidget {
   const WebSocketPayloadSigningSection({super.key});
@@ -28,13 +29,18 @@ class _WebSocketPayloadSigningSectionState extends State<WebSocketPayloadSigning
   PayloadSigningDiagnostics? _cachedDiagnostics;
   Object? _cachedDiagnosticsKey;
 
-  FeatureFlags get _flags => context.read<FeatureFlags>();
-  PayloadSigningConfig get _config => context.read<PayloadSigningConfig>();
+  FeatureFlags get _flags => getIt<FeatureFlags>();
+  PayloadSigningConfig get _config =>
+      readOptionalGetItService<PayloadSigningConfig>() ??
+      PayloadSigningConfig.empty(
+        secureStorageAvailable: false,
+        warnings: const <String>['payload_signing_config_not_registered'],
+      );
 
   @override
   void initState() {
     super.initState();
-    final flags = context.read<FeatureFlags>();
+    final flags = getIt<FeatureFlags>();
     _outgoingSigningEnabled = flags.enablePayloadSigning;
     _incomingSignatureRequired = flags.requireIncomingPayloadSignatures;
   }

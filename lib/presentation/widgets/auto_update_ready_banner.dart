@@ -48,7 +48,7 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     if (_settingsStore != null) {
       return;
     }
-    _settingsStore = readOptionalPresentationProvider<IAppSettingsStore>(context);
+    _settingsStore = readOptionalGetItService<IAppSettingsStore>();
     if (_settingsStore != null) {
       _hydrateDismissState();
     }

@@ -3,8 +3,7 @@ import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart'
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
 import 'package:plug_agente/application/use_cases/schedule_notification.dart';
 import 'package:plug_agente/application/use_cases/send_notification.dart';
-import 'package:plug_agente/core/logger/app_logger.dart';
-import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/presentation/providers/presentation_error_state.dart';
 
 class NotificationProvider extends ChangeNotifier {
   NotificationProvider(
@@ -19,10 +18,12 @@ class NotificationProvider extends ChangeNotifier {
   final CancelAllNotifications _cancelAllNotifications;
 
   bool _isLoading = false;
-  String? _error;
+  PresentationErrorState? _errorState;
 
   bool get isLoading => _isLoading;
-  String? get error => _error;
+  PresentationErrorState? get errorState => _errorState;
+  String? get error => _errorState?.message;
+  bool get errorCanRetry => _errorState?.canRetry ?? false;
 
   Future<void> showNotification({
     required String title,
@@ -30,7 +31,7 @@ class NotificationProvider extends ChangeNotifier {
     String? payload,
   }) async {
     _isLoading = true;
-    _error = null;
+    _clearErrorState();
     notifyListeners();
 
     final result = await _sendNotification(
@@ -44,11 +45,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toDisplayMessage();
-        AppLogger.error(
-          'Failed to send notification: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
+        _applyFailure(failure);
         _isLoading = false;
       },
     );
@@ -63,7 +60,7 @@ class NotificationProvider extends ChangeNotifier {
     String? payload,
   }) async {
     _isLoading = true;
-    _error = null;
+    _clearErrorState();
     notifyListeners();
 
     final result = await _scheduleNotification(
@@ -78,11 +75,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toDisplayMessage();
-        AppLogger.error(
-          'Failed to schedule notification: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
+        _applyFailure(failure);
         _isLoading = false;
       },
     );
@@ -92,7 +85,7 @@ class NotificationProvider extends ChangeNotifier {
 
   Future<void> cancelNotification(int id) async {
     _isLoading = true;
-    _error = null;
+    _clearErrorState();
     notifyListeners();
 
     final result = await _cancelNotification(id);
@@ -102,11 +95,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toDisplayMessage();
-        AppLogger.error(
-          'Failed to cancel notification: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
+        _applyFailure(failure);
         _isLoading = false;
       },
     );
@@ -116,7 +105,7 @@ class NotificationProvider extends ChangeNotifier {
 
   Future<void> cancelAllNotifications() async {
     _isLoading = true;
-    _error = null;
+    _clearErrorState();
     notifyListeners();
 
     final result = await _cancelAllNotifications();
@@ -126,11 +115,7 @@ class NotificationProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toDisplayMessage();
-        AppLogger.error(
-          'Failed to cancel all notifications: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
+        _applyFailure(failure);
         _isLoading = false;
       },
     );
@@ -139,7 +124,18 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   void clearError() {
-    _error = null;
+    if (_errorState == null) {
+      return;
+    }
+    _clearErrorState();
     notifyListeners();
+  }
+
+  void _applyFailure(Object failure) {
+    _errorState = PresentationErrorState.fromFailure(failure);
+  }
+
+  void _clearErrorState() {
+    _errorState = null;
   }
 }

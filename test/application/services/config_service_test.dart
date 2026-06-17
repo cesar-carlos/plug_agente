@@ -41,5 +41,39 @@ void main() {
       expect(persisted, isNot(contains('PWD=')));
       expect(persisted, contains('SERVER=localhost,1433'));
     });
+
+    group('resolveConnectionString', () {
+      test('injects secure password into redacted persisted connection string', () {
+        final config = baseConfig.copyWith(
+          connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost,1433;DATABASE=demo;UID=sa',
+          password: 'secure-secret',
+        );
+
+        final resolved = service.resolveConnectionString(config);
+
+        expect(resolved, contains('PWD=secure-secret'));
+        expect(resolved, contains('SERVER=localhost,1433'));
+      });
+
+      test('keeps embedded password when persisted connection string already has PWD', () {
+        final config = baseConfig.copyWith(
+          connectionString:
+              'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=embedded',
+          password: 'ignored',
+        );
+
+        final resolved = service.resolveConnectionString(config);
+
+        expect(resolved, contains('PWD=embedded'));
+        expect(resolved, isNot(contains('PWD=ignored')));
+      });
+
+      test('builds from structured fields when persisted connection string is blank', () {
+        final resolved = service.resolveConnectionString(baseConfig);
+
+        expect(resolved, contains('PWD=runtime-secret'));
+        expect(resolved, contains('DATABASE=demo'));
+      });
+    });
   });
 }

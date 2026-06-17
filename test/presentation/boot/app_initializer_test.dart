@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/bootstrap/agent_actions_boot_phases.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -147,7 +147,7 @@ void main() {
       },
     );
 
-    await initializer.initialize(const <String>[AppStrings.singleInstanceArgAutostart]);
+    await initializer.initialize(const <String>[LaunchArgsConstants.autostartArg]);
 
     expect(nativeWindowRestored, isTrue);
   });

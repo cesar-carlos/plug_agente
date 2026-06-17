@@ -4717,4 +4717,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String formNumericMaxValue(int max) {
     return 'Maximum value: $max';
   }
+
+  @override
+  String get legacyDatabaseMigrationFailedTitle => 'Legacy database migration failed';
+
+  @override
+  String get bootstrapFailureTitle => 'Startup failed';
+
+  @override
+  String get bootstrapFailureButtonClose => 'Close application';
+
+  @override
+  String get bootstrapFailureTechnicalDetails => 'Technical details:';
+
+  @override
+  String get bootstrapFailureStorageMessage =>
+      'The app could not start because it could not access a global configuration directory.\n\nRun Plug Agente as administrator or adjust write permissions for ProgramData/Public Documents.';
+
+  @override
+  String get bootstrapFailureGenericMessage =>
+      'A failure occurred while starting the app. Close and reopen it. If the problem persists, run as administrator and review system permissions.';
+
+  @override
+  String get bootstrapFailureUnsupportedOsMessage =>
+      'This computer does not meet the minimum requirements for Plug Agente. Update Windows or review the compatibility documentation before trying again.';
+
+  @override
+  String get bootstrapFailureOdbcMessage =>
+      'ODBC access could not be initialized. Verify that the correct ODBC driver is installed, that the DSN or connection string is configured, and that Plug Agente is allowed to load the driver.';
+
+  @override
+  String get configBackupSingleInstanceDialogMessage => 'Plug Agente is already running.';
+
+  @override
+  String get agentProfileOpenCnpjEmptyResponse => 'Empty response from the CNPJ lookup service.';
+
+  @override
+  String get agentProfileOpenCnpjInvalidPayload => 'Invalid response from the CNPJ lookup service.';
+
+  @override
+  String get agentProfileOpenCnpjNotFound => 'CNPJ was not found in the queried database.';
+
+  @override
+  String get agentProfileOpenCnpjRateLimit => 'CNPJ lookup rate limit exceeded. Try again shortly.';
+
+  @override
+  String get agentProfileOpenCnpjNetworkError => 'Could not look up the CNPJ. Check your connection.';
+
+  @override
+  String get agentProfileOpenCnpjUnexpectedError => 'Unexpected error while looking up the CNPJ.';
+
+  @override
+  String get agentProfileViaCepNotFound => 'Postal code not found.';
+
+  @override
+  String get agentProfileViaCepEmptyResponse => 'Empty response from the postal code lookup service.';
+
+  @override
+  String get agentProfileViaCepInvalidPayload => 'Invalid response from the postal code lookup service.';
+
+  @override
+  String get agentProfileViaCepNetworkError => 'Could not look up the postal code. Check your connection.';
+
+  @override
+  String get agentProfileViaCepUnexpectedError => 'Unexpected error while looking up the postal code.';
 }

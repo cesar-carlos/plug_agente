@@ -4732,4 +4732,69 @@ class AppLocalizationsPt extends AppLocalizations {
   String formNumericMaxValue(int max) {
     return 'Valor máximo: $max';
   }
+
+  @override
+  String get legacyDatabaseMigrationFailedTitle => 'Falha na migração do banco de dados legado';
+
+  @override
+  String get bootstrapFailureTitle => 'Falha na inicialização';
+
+  @override
+  String get bootstrapFailureButtonClose => 'Fechar aplicativo';
+
+  @override
+  String get bootstrapFailureTechnicalDetails => 'Detalhes técnicos:';
+
+  @override
+  String get bootstrapFailureStorageMessage =>
+      'Não foi possível iniciar porque o aplicativo não conseguiu acessar um diretório global de configuração.\n\nExecute o Plug Agente como administrador ou ajuste as permissões de escrita em ProgramData/Public Documents.';
+
+  @override
+  String get bootstrapFailureGenericMessage =>
+      'Ocorreu uma falha durante a inicialização do aplicativo. Feche e abra novamente. Se o problema persistir, execute como administrador e revise as permissões do sistema.';
+
+  @override
+  String get bootstrapFailureUnsupportedOsMessage =>
+      'Este computador não atende aos requisitos mínimos do Plug Agente. Atualize o Windows ou consulte a documentação de compatibilidade antes de tentar novamente.';
+
+  @override
+  String get bootstrapFailureOdbcMessage =>
+      'Não foi possível inicializar o acesso ODBC. Verifique se o driver ODBC correto está instalado, se o DSN ou a string de conexão está configurada e se o Plug Agente tem permissão para carregar o driver.';
+
+  @override
+  String get configBackupSingleInstanceDialogMessage => 'O aplicativo Plug Agente já está em execução.';
+
+  @override
+  String get agentProfileOpenCnpjEmptyResponse => 'Resposta vazia do serviço de consulta de CNPJ.';
+
+  @override
+  String get agentProfileOpenCnpjInvalidPayload => 'Resposta inválida do serviço de consulta de CNPJ.';
+
+  @override
+  String get agentProfileOpenCnpjNotFound => 'CNPJ não encontrado na base consultada.';
+
+  @override
+  String get agentProfileOpenCnpjRateLimit =>
+      'Limite de consultas ao serviço de CNPJ excedido. Tente novamente em instantes.';
+
+  @override
+  String get agentProfileOpenCnpjNetworkError => 'Não foi possível consultar o CNPJ. Verifique a conexão.';
+
+  @override
+  String get agentProfileOpenCnpjUnexpectedError => 'Erro inesperado ao consultar o CNPJ.';
+
+  @override
+  String get agentProfileViaCepNotFound => 'CEP não encontrado.';
+
+  @override
+  String get agentProfileViaCepEmptyResponse => 'Resposta vazia do serviço de consulta de CEP.';
+
+  @override
+  String get agentProfileViaCepInvalidPayload => 'Resposta inválida do serviço de consulta de CEP.';
+
+  @override
+  String get agentProfileViaCepNetworkError => 'Não foi possível consultar o CEP. Verifique a conexão.';
+
+  @override
+  String get agentProfileViaCepUnexpectedError => 'Erro inesperado ao consultar o CEP.';
 }

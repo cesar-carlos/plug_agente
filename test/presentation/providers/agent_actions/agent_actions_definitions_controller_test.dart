@@ -464,7 +464,7 @@ void main() {
         canSave: false,
       );
 
-      expect(saved, isFalse);
+      expect(saved.isError(), isTrue);
       expect(controller.isSaving, isFalse);
       verifyNever(() => saveDefinition(any()));
     });
@@ -481,7 +481,7 @@ void main() {
         canSave: true,
       );
 
-      expect(saved, isFalse);
+      expect(saved.isError(), isTrue);
       expect(controller.isSaving, isFalse);
       expect(controller.lastOperationErrorMessage, failure.toString());
       expect(stateChangeCount, greaterThanOrEqualTo(2));
@@ -502,7 +502,7 @@ void main() {
         canSave: true,
       );
 
-      expect(saved, isTrue);
+      expect(saved.isSuccess(), isTrue);
       expect(controller.isSaving, isFalse);
       expect(controller.selectedActionId, 'saved-action');
       expect(controller.lastOperationErrorMessage, isNull);
@@ -529,7 +529,7 @@ void main() {
         canSave: true,
       );
 
-      expect(saved, isTrue);
+      expect(saved.isSuccess(), isTrue);
       verify(() => saveDefinition(any())).called(1);
     });
   });

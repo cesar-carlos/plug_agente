@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/utils/launch_args.dart';
 
 void main() {
@@ -11,9 +11,9 @@ void main() {
       if (file.existsSync()) {
         final canonical = file.readAsStringSync().trim();
         expect(
-          AppStrings.singleInstanceArgAutostart,
+          LaunchArgsConstants.autostartArg,
           equals(canonical),
-          reason: 'app_strings must match constants/autostart_arg.txt',
+          reason: 'launch_args_constants must match constants/autostart_arg.txt',
         );
       }
     });

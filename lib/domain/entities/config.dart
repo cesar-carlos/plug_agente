@@ -1,9 +1,6 @@
 // ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
 // Reason: Config uses ID-based equality for collections and state comparison.
 
-import 'package:plug_agente/core/constants/sql_anywhere_connection_string.dart';
-import 'package:plug_agente/core/utils/odbc_connection_string_secrets.dart';
-
 class Config {
   const Config({
     required this.id,
@@ -158,45 +155,4 @@ class Config {
 
   @override
   int get hashCode => id.hashCode;
-
-  String resolveConnectionString() {
-    final persisted = connectionString.trim();
-    if (persisted.isNotEmpty) {
-      final embeddedPassword = OdbcConnectionStringSecrets.extractPasswordFromConnectionString(
-        persisted,
-      );
-      if (embeddedPassword == null) {
-        final storedPassword = password?.trim();
-        if (storedPassword != null && storedPassword.isNotEmpty) {
-          return OdbcConnectionStringSecrets.injectPasswordIntoConnectionString(
-            persisted,
-            storedPassword,
-          );
-        }
-      }
-      return persisted;
-    }
-
-    final passwordSegment = password != null ? ';PWD=$password' : '';
-
-    return switch (driverName) {
-      'SQL Server' =>
-        'DRIVER={${odbcDriverName.isNotEmpty ? odbcDriverName : 'ODBC Driver 17 for SQL Server'}};'
-            'SERVER=$host,$port;DATABASE=$databaseName;UID=$username$passwordSegment',
-      'PostgreSQL' =>
-        'DRIVER={${odbcDriverName.isNotEmpty ? odbcDriverName : 'PostgreSQL Unicode'}};'
-            'SERVER=$host;PORT=$port;DATABASE=$databaseName;UID=$username$passwordSegment',
-      'SQL Anywhere' => SqlAnywhereConnectionString.build(
-        driverName: odbcDriverName,
-        username: username,
-        database: databaseName,
-        host: host,
-        port: port,
-        password: password,
-      ),
-      _ =>
-        'DRIVER={${odbcDriverName.isNotEmpty ? odbcDriverName : driverName}};'
-            'SERVER=$host;PORT=$port;DATABASE=$databaseName;UID=$username$passwordSegment',
-    };
-  }
 }

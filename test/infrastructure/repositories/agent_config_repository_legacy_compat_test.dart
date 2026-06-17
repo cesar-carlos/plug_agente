@@ -493,7 +493,7 @@ void main() {
       final reloaded = (await repository.getById('cfg-resolve')).getOrThrow();
       expect(reloaded.password, 'runtime-secret');
 
-      final resolved = reloaded.resolveConnectionString();
+      final resolved = configService.resolveConnectionString(reloaded);
       expect(resolved, contains('PWD=runtime-secret'));
       expect(resolved, contains('SERVER=localhost,1433'));
     });

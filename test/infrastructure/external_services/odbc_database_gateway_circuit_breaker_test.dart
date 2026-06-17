@@ -2,6 +2,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -49,6 +51,7 @@ void main() {
       mockConnectionPool = MockConnectionPool();
       gateway = OdbcDatabaseGateway(
         AgentConfigQueryConfigSource(mockConfigRepository),
+        ConfigService(ConfigValidator()),
         mockService,
         mockConnectionPool,
         RetryManager(),

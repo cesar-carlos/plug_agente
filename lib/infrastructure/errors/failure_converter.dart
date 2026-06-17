@@ -41,37 +41,40 @@ class FailureConverter {
     // Direct exception handling for known types
     if (exception is FormatException) {
       return ValidationFailure.withContext(
-        message: exception.toString(),
+        message: _validationMessage,
         cause: exception,
-        context: context,
+        context: _withTechnicalDetail(exception, context),
       );
     }
 
     if (exception is ArgumentError) {
       return ValidationFailure.withContext(
-        message: exception.toString(),
+        message: _validationMessage,
         cause: exception,
-        context: context,
+        context: _withTechnicalDetail(exception, context),
       );
     }
 
     if (exception is StateError) {
       return ValidationFailure.withContext(
-        message: exception.toString(),
+        message: _stateErrorMessage,
         cause: exception,
-        context: context,
+        context: _withTechnicalDetail(exception, context),
       );
     }
 
     // For SocketException - capture address info
     if (exception is SocketException) {
       return NetworkFailure.withContext(
-        message: _extractMessage(exception),
+        message: _networkMessage,
         cause: exception,
-        context: {
-          ...context,
-          'address': exception.address?.host,
-        },
+        context: _withTechnicalDetail(
+          exception,
+          {
+            ...context,
+            'address': exception.address?.host,
+          },
+        ),
       );
     }
 
@@ -80,27 +83,30 @@ class FailureConverter {
     if (errorString.contains('odbc') || errorString.contains('sql') || errorString.contains('database')) {
       if (errorString.contains('connection') || errorString.contains('connect')) {
         return ConnectionFailure.withContext(
-          message: _extractMessage(exception),
+          message: _connectionMessage,
           cause: exception,
-          context: context,
+          context: _withTechnicalDetail(exception, context),
         );
       }
       if (errorString.contains('query') || errorString.contains('execute') || errorString.contains('syntax')) {
         final isTimeout = errorString.contains('timeout');
         return QueryExecutionFailure.withContext(
-          message: _extractMessage(exception),
+          message: _queryExecutionMessage,
           cause: exception,
-          context: {
-            ...context,
-            if (isTimeout) 'timeout': true,
-            if (isTimeout) 'timeout_stage': 'sql',
-          },
+          context: _withTechnicalDetail(
+            exception,
+            {
+              ...context,
+              if (isTimeout) 'timeout': true,
+              if (isTimeout) 'timeout_stage': 'sql',
+            },
+          ),
         );
       }
       return DatabaseFailure.withContext(
-        message: _extractMessage(exception),
+        message: _databaseMessage,
         cause: exception,
-        context: context,
+        context: _withTechnicalDetail(exception, context),
       );
     }
 
@@ -111,38 +117,87 @@ class FailureConverter {
         errorString.contains('timeout')) {
       final isTimeout = errorString.contains('timeout');
       return NetworkFailure.withContext(
-        message: _extractMessage(exception),
+        message: _networkMessage,
         cause: exception,
-        context: {
-          ...context,
-          if (isTimeout) 'timeout': true,
-          if (isTimeout) 'timeout_stage': 'transport',
-        },
+        context: _withTechnicalDetail(
+          exception,
+          {
+            ...context,
+            if (isTimeout) 'timeout': true,
+            if (isTimeout) 'timeout_stage': 'transport',
+          },
+        ),
       );
     }
 
     // Default: server error
     return ServerFailure.withContext(
-      message: _extractMessage(exception),
+      message: _serverMessage(exception),
       cause: exception,
-      context: context,
+      context: _withTechnicalDetail(exception, context),
     );
   }
 
-  /// Extracts a meaningful error message from an exception.
-  ///
-  /// Returns the exception's message or a default message if unavailable.
-  static String _extractMessage(Object exception) {
+  static const String _validationMessage = 'The provided input is invalid.';
+  static const String _stateErrorMessage = 'The operation is not allowed in the current state.';
+  static const String _networkMessage = 'Unable to reach the remote endpoint.';
+  static const String _connectionMessage = 'Unable to connect to the database.';
+  static const String _queryExecutionMessage = 'The query could not be executed.';
+  static const String _databaseMessage = 'A database error occurred.';
+
+  static String _serverMessage(Object exception) {
+    final detail = _technicalDetail(exception);
+    if (detail.isEmpty || detail == 'Exception') {
+      return 'An error occurred';
+    }
+    return 'An unexpected error occurred.';
+  }
+
+  static String _technicalDetail(Object exception) {
     if (exception is Failure) {
       return exception.message;
     }
 
-    final string = exception.toString();
-    if (string.isNotEmpty && string != 'Exception') {
-      return string;
+    return exception.toString();
+  }
+
+  static Map<String, dynamic> _withTechnicalDetail(
+    Object exception,
+    Map<String, dynamic> context,
+  ) {
+    final detail = _technicalDetail(exception);
+    if (detail.isEmpty || detail == 'Exception') {
+      return context;
     }
 
-    return 'An error occurred';
+    return {
+      ...context,
+      'technical_message': detail,
+    };
+  }
+
+  static String _dioUserMessage(DioException exception) {
+    return switch (exception.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout => 'The request timed out.',
+      DioExceptionType.connectionError => 'Unable to reach the remote endpoint.',
+      DioExceptionType.badCertificate => 'The secure connection could not be established.',
+      DioExceptionType.cancel => 'The request was cancelled.',
+      DioExceptionType.badResponse => _dioBadResponseMessage(exception),
+      DioExceptionType.unknown => _serverMessage(exception),
+    };
+  }
+
+  static String _dioBadResponseMessage(DioException exception) {
+    final statusCode = exception.response?.statusCode ?? 0;
+    if (statusCode >= 500 && statusCode < 600) {
+      return 'The remote service is temporarily unavailable.';
+    }
+    if (statusCode >= 400 && statusCode < 500) {
+      return 'The request was rejected by the remote service.';
+    }
+    return 'The remote service returned an unexpected response.';
   }
 
   static Failure _mapDioException(DioException exception, Map<String, dynamic> context) {
@@ -159,39 +214,42 @@ class FailureConverter {
       case DioExceptionType.connectionError:
       case DioExceptionType.badCertificate:
         return NetworkFailure.withContext(
-          message: _extractMessage(exception),
+          message: _dioUserMessage(exception),
           cause: exception,
-          context: dioContext,
+          context: _withTechnicalDetail(exception, dioContext),
         );
       case DioExceptionType.badResponse:
         final statusCode = exception.response?.statusCode ?? 0;
         if (statusCode >= 500 && statusCode < 600) {
           return NetworkFailure.withContext(
-            message: _extractMessage(exception),
+            message: _dioUserMessage(exception),
             cause: exception,
-            context: dioContext,
+            context: _withTechnicalDetail(exception, dioContext),
           );
         }
         if (statusCode >= 400 && statusCode < 500) {
           return ValidationFailure.withContext(
-            message: _extractMessage(exception),
+            message: _dioUserMessage(exception),
             cause: exception,
-            context: dioContext,
+            context: _withTechnicalDetail(exception, dioContext),
           );
         }
         return NetworkFailure.withContext(
-          message: _extractMessage(exception),
+          message: _dioUserMessage(exception),
           cause: exception,
-          context: dioContext,
+          context: _withTechnicalDetail(exception, dioContext),
         );
       case DioExceptionType.cancel:
         return NetworkFailure.withContext(
-          message: _extractMessage(exception),
+          message: _dioUserMessage(exception),
           cause: exception,
-          context: {
-            ...dioContext,
-            'cancelled': true,
-          },
+          context: _withTechnicalDetail(
+            exception,
+            {
+              ...dioContext,
+              'cancelled': true,
+            },
+          ),
         );
       case DioExceptionType.unknown:
         break;
@@ -200,16 +258,16 @@ class FailureConverter {
     final lower = exception.toString().toLowerCase();
     if (lower.contains('socket') || lower.contains('connection') || lower.contains('timeout')) {
       return NetworkFailure.withContext(
-        message: _extractMessage(exception),
+        message: _networkMessage,
         cause: exception,
-        context: dioContext,
+        context: _withTechnicalDetail(exception, dioContext),
       );
     }
 
     return ServerFailure.withContext(
-      message: _extractMessage(exception),
+      message: _serverMessage(exception),
       cause: exception,
-      context: dioContext,
+      context: _withTechnicalDetail(exception, dioContext),
     );
   }
 

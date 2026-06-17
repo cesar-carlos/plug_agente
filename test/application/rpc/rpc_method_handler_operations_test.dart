@@ -16,6 +16,8 @@ import 'package:plug_agente/domain/repositories/i_idempotency_store.dart' show I
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../helpers/rpc_method_dispatcher_test_support.dart';
+
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
@@ -37,6 +39,7 @@ DefaultRpcMethodHandlerOperations _buildOperations({
 }) {
   final gateway = MockDatabaseGateway();
   return DefaultRpcMethodHandlerOperations(
+    streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
     databaseGateway: gateway,
     healthService: HealthService(
       metricsCollector: MetricsCollector(),
@@ -127,6 +130,7 @@ void main() {
     test('handleAgentGetHealth succeeds without client token', () async {
       final gateway = MockDatabaseGateway();
       final operations = DefaultRpcMethodHandlerOperations(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: gateway,
         healthService: HealthService(
           metricsCollector: MetricsCollector(),

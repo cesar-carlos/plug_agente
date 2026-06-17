@@ -13,9 +13,10 @@ import 'package:plug_agente/domain/entities/client_token_secret_lookup.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/entities/client_token_update_result.dart';
 import 'package:plug_agente/domain/entities/token_audit_event.dart';
-import 'package:plug_agente/domain/errors/failure_extensions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
+import 'package:plug_agente/presentation/providers/presentation_error_state.dart';
+import 'package:plug_agente/presentation/providers/presentation_operation_failures.dart';
 import 'package:result_dart/result_dart.dart';
 
 class ClientTokenProvider extends ChangeNotifier {
@@ -46,7 +47,7 @@ class ClientTokenProvider extends ChangeNotifier {
   String? _revokingTokenId;
   String? _deletingTokenId;
   String? _copyingTokenSecretId;
-  String _error = '';
+  PresentationErrorState? _errorState;
   String? _lastCreatedToken;
   ClientTokenUpdateOutcome? _lastUpdateOutcome;
   bool _hasLoaded = false;
@@ -62,7 +63,9 @@ class ClientTokenProvider extends ChangeNotifier {
   String? get revokingTokenId => _revokingTokenId;
   String? get deletingTokenId => _deletingTokenId;
   String? get copyingTokenSecretId => _copyingTokenSecretId;
-  String get error => _error;
+  PresentationErrorState? get errorState => _errorState;
+  String get error => _errorState?.message ?? '';
+  bool get errorCanRetry => _errorState?.canRetry ?? false;
   String? get lastCreatedToken => _lastCreatedToken;
 
   /// Outcome of the most recent successful update. `null` outside of a
@@ -73,7 +76,7 @@ class ClientTokenProvider extends ChangeNotifier {
   bool get isListMutationInProgress => _isRevoking || _isDeleting;
   bool get isTokenMutationInProgress => _isCreating || _isRevoking || _isDeleting;
 
-  Future<bool> loadTokens({
+  Future<Result<void>> loadTokens({
     bool silent = false,
     ClientTokenListQuery? query,
   }) async {
@@ -82,102 +85,96 @@ class ClientTokenProvider extends ChangeNotifier {
     final generation = ++_loadGeneration;
 
     _isLoading = true;
-    _error = '';
+    _clearErrorState();
     notifyListeners();
 
     final result = await _listClientTokens(query: effectiveQuery);
 
     if (generation != _loadGeneration) {
-      return false;
+      _isLoading = false;
+      notifyListeners();
+      return Failure(PresentationOperationFailures.superseded);
     }
 
-    var isSuccess = false;
-    result.fold(
-      (tokens) {
-        _tokens = tokens;
-        _error = '';
-        _hasLoaded = true;
-        isSuccess = true;
-      },
-      (failure) {
-        _error = failure.toDisplayMessage();
-      },
-    );
+    if (result.isError()) {
+      final failure = result.exceptionOrNull()!;
+      _applyFailure(failure);
+      _isLoading = false;
+      notifyListeners();
+      return Failure(failure);
+    }
 
+    _tokens = result.getOrThrow();
+    _clearErrorState();
+    _hasLoaded = true;
     _isLoading = false;
     notifyListeners();
-
-    return isSuccess;
+    return const Success(unit);
   }
 
-  Future<bool> createToken(
+  Future<Result<void>> createToken(
     ClientTokenCreateRequest request, {
     bool refreshTokens = true,
   }) async {
     _isCreating = true;
-    _error = '';
+    _clearErrorState();
     _lastCreatedToken = null;
     notifyListeners();
 
     final result = await _createClientToken(request);
-    var isSuccess = false;
 
-    await result.fold(
-      (token) async {
-        _lastCreatedToken = token;
-        _error = '';
-        isSuccess = true;
-        if (refreshTokens) {
-          await loadTokens(silent: true);
-        }
-      },
-      (failure) async {
-        _error = failure.toDisplayMessage();
-      },
-    );
+    late final Result<void> outcome;
+    if (result.isError()) {
+      final failure = result.exceptionOrNull()!;
+      _applyFailure(failure);
+      outcome = Failure(failure);
+    } else {
+      _lastCreatedToken = result.getOrThrow();
+      _clearErrorState();
+      outcome = refreshTokens ? await loadTokens(silent: true) : const Success(unit);
+    }
 
     _isCreating = false;
     notifyListeners();
-    return isSuccess;
+    return outcome;
   }
 
-  Future<bool> revokeToken(String tokenId) async {
+  Future<Result<void>> revokeToken(String tokenId) async {
     if (isListMutationInProgress) {
-      return false;
+      return Failure(PresentationOperationFailures.operationBlocked);
     }
     _isRevoking = true;
     _revokingTokenId = tokenId;
-    _error = '';
+    _clearErrorState();
     notifyListeners();
 
     final result = await _revokeClientToken(tokenId);
-    var isSuccess = false;
 
-    await result.fold(
-      (_) async {
-        _error = '';
-        isSuccess = true;
-        _markTokenRevokedInMemory(tokenId);
-      },
-      (failure) async {
-        _error = failure.toDisplayMessage();
-      },
-    );
+    late final Result<void> outcome;
+    if (result.isError()) {
+      final failure = result.exceptionOrNull()!;
+      _applyFailure(failure);
+      outcome = Failure(failure);
+    } else {
+      _clearErrorState();
+      _markTokenRevokedInMemory(tokenId);
+      outcome = const Success(unit);
+    }
 
     _isRevoking = false;
     _revokingTokenId = null;
     notifyListeners();
-    return isSuccess;
+    return outcome;
   }
 
-  Future<bool> updateToken(
+  Future<Result<void>> updateToken(
     String tokenId,
     ClientTokenCreateRequest request, {
     bool refreshTokens = true,
     int? expectedVersion,
   }) async {
     _isCreating = true;
-    _error = '';
+    _clearErrorState();
     _lastCreatedToken = null;
     _lastUpdateOutcome = null;
     notifyListeners();
@@ -187,19 +184,20 @@ class ClientTokenProvider extends ChangeNotifier {
       request,
       expectedVersion: expectedVersion,
     );
-    var isSuccess = false;
 
-    await result.fold(
-      (updateResult) async {
-        _error = '';
-        _lastUpdateOutcome = updateResult.outcome;
-        _lastCreatedToken = updateResult.didRotateToken ? updateResult.tokenValue : null;
-        isSuccess = true;
-        if (updateResult.outcome == ClientTokenUpdateOutcome.unchanged) {
-          // Persisted state already matched the request; nothing in memory
-          // needs to change either.
-          return;
-        }
+    late final Result<void> outcome;
+    if (result.isError()) {
+      final failure = result.exceptionOrNull()!;
+      _applyFailure(failure);
+      outcome = Failure(failure);
+    } else {
+      final updateResult = result.getOrThrow();
+      _clearErrorState();
+      _lastUpdateOutcome = updateResult.outcome;
+      _lastCreatedToken = updateResult.didRotateToken ? updateResult.tokenValue : null;
+      if (updateResult.outcome == ClientTokenUpdateOutcome.unchanged) {
+        outcome = const Success(unit);
+      } else {
         final patched = _applyUpdatedTokenInMemory(
           tokenId: tokenId,
           request: request,
@@ -207,18 +205,15 @@ class ClientTokenProvider extends ChangeNotifier {
           updatedAt: updateResult.updatedAt,
           didRotateToken: updateResult.didRotateToken,
         );
-        if (refreshTokens && !patched) {
-          await loadTokens(silent: true);
-        }
-      },
-      (failure) async {
-        _error = failure.toDisplayMessage();
-      },
-    );
+        outcome = refreshTokens && !patched
+            ? await loadTokens(silent: true)
+            : const Success(unit);
+      }
+    }
 
     _isCreating = false;
     notifyListeners();
-    return isSuccess;
+    return outcome;
   }
 
   void clearLastUpdateOutcome() {
@@ -233,33 +228,32 @@ class ClientTokenProvider extends ChangeNotifier {
     return _isRevoking && _revokingTokenId == tokenId;
   }
 
-  Future<bool> deleteToken(String tokenId) async {
+  Future<Result<void>> deleteToken(String tokenId) async {
     if (isListMutationInProgress) {
-      return false;
+      return Failure(PresentationOperationFailures.operationBlocked);
     }
     _isDeleting = true;
     _deletingTokenId = tokenId;
-    _error = '';
+    _clearErrorState();
     notifyListeners();
 
     final result = await _deleteClientToken(tokenId);
-    var isSuccess = false;
 
-    await result.fold(
-      (_) async {
-        _error = '';
-        isSuccess = true;
-        _tokens = _tokens.where((token) => token.id != tokenId).toList();
-      },
-      (failure) async {
-        _error = failure.toDisplayMessage();
-      },
-    );
+    late final Result<void> outcome;
+    if (result.isError()) {
+      final failure = result.exceptionOrNull()!;
+      _applyFailure(failure);
+      outcome = Failure(failure);
+    } else {
+      _clearErrorState();
+      _tokens = _tokens.where((token) => token.id != tokenId).toList();
+      outcome = const Success(unit);
+    }
 
     _isDeleting = false;
     _deletingTokenId = null;
     notifyListeners();
-    return isSuccess;
+    return outcome;
   }
 
   bool isDeletingToken(String tokenId) {
@@ -291,10 +285,10 @@ class ClientTokenProvider extends ChangeNotifier {
   }
 
   void clearError() {
-    if (_error.isEmpty) {
+    if (_errorState == null) {
       return;
     }
-    _error = '';
+    _clearErrorState();
     notifyListeners();
   }
 
@@ -331,6 +325,14 @@ class ClientTokenProvider extends ChangeNotifier {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  void _applyFailure(Object failure) {
+    _errorState = PresentationErrorState.fromFailure(failure);
+  }
+
+  void _clearErrorState() {
+    _errorState = null;
   }
 
   bool _applyUpdatedTokenInMemory({

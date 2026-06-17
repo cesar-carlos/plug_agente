@@ -19,9 +19,10 @@ void main() {
         );
 
         expect(failure, isA<ValidationFailure>());
-        expect(failure.message, contains('Invalid format'));
+        expect(failure.message, equals('The provided input is invalid.'));
         expect(failure.cause, equals(exception));
-        expect(failure.context, {'operation': 'test'});
+        expect(failure.context, containsPair('operation', 'test'));
+        expect(failure.context['technical_message'], contains('Invalid format'));
       });
 
       test('should convert ArgumentError to ValidationFailure', () {
@@ -148,6 +149,8 @@ void main() {
         );
 
         expect(failure, isA<ServerFailure>());
+        expect(failure.message, equals('An unexpected error occurred.'));
+        expect(failure.context['technical_message'], equals('Exception: Unknown error'));
       });
 
       test('should include additionalContext in converted failure', () {

@@ -24,6 +24,8 @@ import 'package:plug_agente/infrastructure/metrics/odbc_native_metrics_service.d
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../helpers/rpc_method_dispatcher_test_support.dart';
+
 class MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 class MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
@@ -34,8 +36,7 @@ class MockGetClientTokenPolicy extends Mock implements GetClientTokenPolicy {}
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
-class MockStreamingDatabaseGateway extends Mock
-    implements IStreamingDatabaseGateway, IStreamingGatewayDiagnostics {}
+class MockStreamingDatabaseGateway extends Mock implements IStreamingDatabaseGateway, IStreamingGatewayDiagnostics {}
 
 class MockOdbcNativeMetricsService extends Mock implements OdbcNativeMetricsService {}
 
@@ -44,8 +45,9 @@ HealthService _testHealthService(IDatabaseGateway gateway) => HealthService(
   gateway: gateway,
 );
 
-final ClientTokenGetPolicyRateLimiter _testDisabledGetPolicyRateLimiter =
-    ClientTokenGetPolicyRateLimiter(maxCallsPerMinute: 0);
+final ClientTokenGetPolicyRateLimiter _testDisabledGetPolicyRateLimiter = ClientTokenGetPolicyRateLimiter(
+  maxCallsPerMinute: 0,
+);
 
 void main() {
   setUpAll(() {
@@ -150,6 +152,7 @@ void main() {
       when(() => mockStreamingGateway.activeStreamCount).thenReturn(0);
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: mockGateway,
         healthService: _testHealthService(mockGateway),
         normalizerService: mockNormalizer,

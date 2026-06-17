@@ -21,6 +21,7 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/query/prepared_query_execution.dart';
 import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
@@ -46,6 +47,7 @@ class SqlRpcDbStreamingExecutor {
     IAgentConfigRepository? configRepository,
     IActiveConfigQueryCache? configQueryCache,
     SqlStreamingConnectionStringCache? streamingConnectionStringCache,
+    IConfigConnectionStringSource? connectionStringSource,
     IStreamingDatabaseGateway? streamingGateway,
     IRpcDispatchMetricsCollector? dispatchMetrics,
     IOdbcConnectionSettings? odbcConnectionSettings,
@@ -59,8 +61,10 @@ class SqlRpcDbStreamingExecutor {
        _activeConfigResolver = activeConfigResolver,
        _configRepository = configRepository,
        _configQueryCache = configQueryCache,
-       _streamingConnectionStringCache =
-           streamingConnectionStringCache ?? SqlStreamingConnectionStringCache(),
+       _streamingConnectionStringCache = _resolveStreamingConnectionStringCache(
+         streamingConnectionStringCache: streamingConnectionStringCache,
+         connectionStringSource: connectionStringSource,
+       ),
        _streamingGateway = streamingGateway,
        _dispatchMetrics = dispatchMetrics,
        _odbcConnectionSettings = odbcConnectionSettings,
@@ -81,6 +85,21 @@ class SqlRpcDbStreamingExecutor {
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
   final IOdbcConnectionSettings? _odbcConnectionSettings;
   final IStreamingNamedParameterPreparer _streamingNamedParameterPreparer;
+
+  static SqlStreamingConnectionStringCache _resolveStreamingConnectionStringCache({
+    required SqlStreamingConnectionStringCache? streamingConnectionStringCache,
+    required IConfigConnectionStringSource? connectionStringSource,
+  }) {
+    if (streamingConnectionStringCache != null) {
+      return streamingConnectionStringCache;
+    }
+    if (connectionStringSource != null) {
+      return SqlStreamingConnectionStringCache(connectionStringSource: connectionStringSource);
+    }
+    throw ArgumentError(
+      'SqlRpcDbStreamingExecutor requires streamingConnectionStringCache or connectionStringSource.',
+    );
+  }
 
   /// Tries to stream directly from DB when enabled. Returns skip reason when falling back.
   Future<SqlDbStreamingTryResult> tryStreamingFromDb(
@@ -308,7 +327,9 @@ class SqlRpcDbStreamingExecutor {
           instance: request.id?.toString(),
           useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
         );
-        return SqlDbStreamingTryResult(response: RpcResponse.error(id: request.id, error: rpcError));
+        return SqlDbStreamingTryResult(
+          response: RpcResponse.error(id: request.id, error: rpcError),
+        );
       }
 
       if (overflowed) {

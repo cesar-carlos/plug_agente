@@ -17,7 +17,6 @@ import 'package:plug_agente/presentation/providers/agent_operational_readiness_p
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
-import 'package:plug_agente/presentation/providers/presentation_infrastructure_providers.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -83,9 +82,6 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: MultiProvider(
           providers: [
-            ...buildPresentationInfrastructureProviders(
-              capabilities: getIt<RuntimeCapabilities>(),
-            ),
             ChangeNotifierProvider<ConfigProvider>.value(value: configProvider),
             ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
             ChangeNotifierProvider<ConnectionProvider>.value(value: connectionProvider),

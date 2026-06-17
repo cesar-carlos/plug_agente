@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
+import 'package:plug_agente/domain/repositories/i_global_storage_acl_bootstrap.dart';
+import 'package:plug_agente/domain/repositories/noop_global_storage_acl_bootstrap.dart';
 
 class GlobalStorageContext {
   const GlobalStorageContext({required this.appDirectoryPath});
@@ -59,7 +60,7 @@ class GlobalStoragePathResolver {
   static Future<GlobalStorageContext> resolveContext({
     String appFolderName = defaultAppFolderName,
     List<String>? candidateDirectories,
-    GlobalStorageAclBootstrap? directoryAclBootstrap,
+    IGlobalStorageAclBootstrap? directoryAclBootstrap,
   }) async {
     final appDirectoryPath = await resolveWritableAppDirectory(
       appFolderName: appFolderName,
@@ -72,11 +73,11 @@ class GlobalStoragePathResolver {
   static Future<String> resolveWritableAppDirectory({
     String appFolderName = defaultAppFolderName,
     List<String>? candidateDirectories,
-    GlobalStorageAclBootstrap? directoryAclBootstrap,
+    IGlobalStorageAclBootstrap? directoryAclBootstrap,
   }) async {
     final candidates = candidateDirectories ?? _buildCandidateDirectories(appFolderName);
     final failures = <String>[];
-    final aclBootstrap = directoryAclBootstrap ?? GlobalStorageAclBootstrap();
+    final aclBootstrap = directoryAclBootstrap ?? const NoopGlobalStorageAclBootstrap();
 
     for (final candidate in candidates) {
       try {

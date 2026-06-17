@@ -29,6 +29,7 @@ import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart
 import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
@@ -63,6 +64,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     IAgentConfigRepository? configRepository,
     IActiveConfigQueryCache? configQueryCache,
     SqlStreamingConnectionStringCache? streamingConnectionStringCache,
+    IConfigConnectionStringSource? connectionStringSource,
     IIdempotencyStore? idempotencyStore,
     IAuthorizationMetricsCollector? authMetrics,
     IDeprecationMetricsCollector? deprecationMetrics,
@@ -121,6 +123,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
       configRepository: configRepository,
       configQueryCache: configQueryCache,
       streamingConnectionStringCache: streamingConnectionStringCache,
+      connectionStringSource: connectionStringSource,
       idempotencyStore: idempotencyStore,
       authMetrics: authMetrics,
       deprecationMetrics: deprecationMetrics,

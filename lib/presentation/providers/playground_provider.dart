@@ -11,6 +11,7 @@ import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/presentation/mappers/playground_ui_strings.dart';
 import 'package:plug_agente/presentation/providers/playground_query_controller.dart';
 import 'package:plug_agente/presentation/providers/playground_query_session.dart';
@@ -38,9 +39,11 @@ class PlaygroundProvider extends ChangeNotifier {
   PlaygroundProvider(
     this._executePlaygroundQuery,
     ExecuteStreamingQuery executeStreamingQuery, {
+    required IConfigConnectionStringSource connectionStringSource,
     IPlaygroundDbConnectionGateway? dbConnectionGateway,
     PlaygroundUiStrings? uiStrings,
-  }) : _dbConnectionGateway = dbConnectionGateway ?? _NoOpPlaygroundDbConnectionGateway(),
+  }) : _connectionStringSource = connectionStringSource,
+       _dbConnectionGateway = dbConnectionGateway ?? _NoOpPlaygroundDbConnectionGateway(),
        _ui = uiStrings ?? PlaygroundUiStrings.english,
        _querySession = PlaygroundQuerySession(uiStrings: uiStrings),
        _streamingSession = PlaygroundStreamingSession(
@@ -50,6 +53,7 @@ class PlaygroundProvider extends ChangeNotifier {
   }
 
   final ExecutePlaygroundQuery _executePlaygroundQuery;
+  final IConfigConnectionStringSource _connectionStringSource;
   IPlaygroundDbConnectionGateway _dbConnectionGateway;
   final PlaygroundStreamingSession _streamingSession;
   PlaygroundUiStrings _ui;
@@ -229,7 +233,7 @@ class PlaygroundProvider extends ChangeNotifier {
     notifyListeners();
 
     final result = await _queryController.testConnection(
-      config.resolveConnectionString(),
+      _connectionStringSource.resolveConnectionString(config),
     );
 
     result.fold(
@@ -264,7 +268,7 @@ class PlaygroundProvider extends ChangeNotifier {
       _rejectStreamingValidation(_ui.queryValidationEmpty);
       return;
     }
-    final connectionString = config.resolveConnectionString();
+    final connectionString = _connectionStringSource.resolveConnectionString(config);
     if (connectionString.trim().isEmpty) {
       _rejectStreamingValidation(
         _ui.queryValidationConnectionStringEmpty,

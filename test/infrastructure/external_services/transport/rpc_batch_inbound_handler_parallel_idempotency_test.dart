@@ -28,6 +28,8 @@ import 'package:plug_agente/infrastructure/validation/rpc_request_schema_validat
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../helpers/rpc_method_dispatcher_test_support.dart';
+
 class _MockFeatureFlags extends Mock implements FeatureFlags {}
 
 class _MockDatabaseGateway extends Mock implements IDatabaseGateway {}
@@ -175,6 +177,7 @@ void main() {
       featureFlags: featureFlags,
       idempotencyStore: idempotencyStore,
       streamingGateway: _MockStreamingDatabaseGateway(),
+      streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
     );
 
     protocol = ProtocolConfig(

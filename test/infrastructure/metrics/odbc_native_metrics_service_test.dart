@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -92,6 +94,7 @@ void main() {
       service = OdbcNativeMetricsService(
         mockService,
         configRepository: mockConfigRepository,
+        connectionStringSource: ConfigService(ConfigValidator()),
         settings: MockOdbcConnectionSettings(),
         runtimeTuning: runtimeTuning,
         metricsCollector: metricsCollector,

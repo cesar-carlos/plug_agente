@@ -1,28 +1,23 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:math';
 import 'dart:ui' show VoidCallback;
 
 import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
-import 'package:plug_agente/application/repositories/degraded_update_preferences_repository.dart';
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
-import 'package:plug_agente/application/repositories/update_preferences_repository.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/pending_silent_update_reconciler.dart';
-import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
-import 'package:plug_agente/application/services/settings_backed_pending_silent_update_store.dart';
-import 'package:plug_agente/application/services/silent_update_diagnostics_store.dart';
-import 'package:plug_agente/application/services/silent_update_download_apply_service.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_collaborators.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_diagnostics_store.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_download_apply_service.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_probe_pipeline.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_scheduler.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
-import 'package:plug_agente/application/services/silent_update_probe_pipeline.dart';
-import 'package:plug_agente/application/services/silent_update_scheduler.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -31,7 +26,7 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
-export 'package:plug_agente/application/services/silent_update_download_apply_service.dart'
+export 'package:plug_agente/application/services/silent_update/silent_update_download_apply_service.dart'
     show CloseApplicationForSilentUpdate;
 
 abstract interface class ISilentUpdateCoordinator {
@@ -110,13 +105,6 @@ abstract interface class ISilentUpdateCoordinator {
   void requestCancellation();
 }
 
-/// Signature for the callback that flips the app off the tray and exits the
-/// process so the prepared helper can install the new version. The optional
-/// [noticeTitle] / [noticeBody] are forwarded to the OS toast so the user
-/// gets a final on-screen warning before the close, even if the in-app
-/// dialog was dismissed.
-typedef CloseApplicationForSilentUpdate = Future<void> Function({String? noticeTitle, String? noticeBody});
-
 class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   SilentUpdateCoordinator(
     this._capabilities,
@@ -143,187 +131,59 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     SilentUpdateDownloadApplyService? downloadApplyService,
     PendingSilentUpdateReconciler? pendingReconciler,
     DateTime Function()? clock,
-  }) : _appcastProbeService = appcastProbeService ?? AppcastProbeService(),
-       _silentUpdateInstaller = silentUpdateInstaller,
-       _preferences =
-           updatePreferencesRepository ??
-           (settingsStore != null ? UpdatePreferencesRepository(settingsStore: settingsStore) : null),
-       _closeApplicationForSilentUpdate = closeApplicationForSilentUpdate,
-       _onDiagnosticsChanged = onDiagnosticsChanged,
-       _helperWaitDuration = helperWaitDuration,
-       _signatureVerifier = signatureVerifier ?? Ed25519AppcastSignatureVerifier(),
-       _checkIdRecorder = checkIdRecorder ?? UpdateCheckIdRecorder(settingsStore: settingsStore),
-       _metricsCollector = metricsCollector,
-       _diagnosticsGateway = diagnosticsGateway,
-       _uacDetector = uacDetector ?? const NoopUacDetector(),
-       _launcherStatusReader = launcherStatusReader ?? const NoopSilentUpdateLauncherStatusReader(),
-       _clock = clock ?? DateTime.now {
-    final wiredPreferences = _preferences ?? DegradedUpdatePreferencesRepository();
-    _automaticFailureBreaker = PersistentCircuitBreaker(
-      persistence: wiredPreferences.automaticFailureCircuitPersistence(),
-      threshold: automaticFailureCooldownThreshold,
-      cooldown: automaticFailureCooldown,
-      logName: 'silent_update_coordinator',
-      clock: clock,
-    );
-    _pendingStore =
-        pendingStore ??
-        (_preferences != null
-            ? SettingsBackedPendingSilentUpdateStore(preferences: _preferences)
-            : InMemoryPendingSilentUpdateStore());
-    _diagnosticsStore =
-        diagnosticsStore ??
-        SilentUpdateDiagnosticsStore(
-          preferences: wiredPreferences,
-        );
-    _scheduler =
-        scheduler ??
-        SilentUpdateScheduler(
-          automaticFailureBreaker: _automaticFailureBreaker,
-          bootJitterProvider: bootJitterProvider,
-          clock: clock,
-        );
-    _probePipeline = SilentUpdateProbePipeline(
-      appcastProbeService: _appcastProbeService,
-      signatureVerifier: _signatureVerifier,
-      uacDetector: _uacDetector,
-      pendingStore: _pendingStore,
-      automaticFailureBreaker: _automaticFailureBreaker,
-      metricsCollector: _metricsCollector,
-      clock: _clock,
-    );
-    _downloadApplyService =
-        downloadApplyService ??
-        SilentUpdateDownloadApplyService(
-          installer: _silentUpdateInstaller,
-          pendingStore: _pendingStore,
-          automaticFailureBreaker: _automaticFailureBreaker,
-          launcherStatusReader: _launcherStatusReader,
-          preferences: _preferences,
-          metricsCollector: _metricsCollector,
-          closeApplicationForSilentUpdate: _closeApplicationForSilentUpdate,
-          clock: _clock,
-        );
-    _pendingReconciler =
-        pendingReconciler ??
-        PendingSilentUpdateReconciler(
-          pendingStore: _pendingStore,
-          launcherStatusReader: _launcherStatusReader,
-          automaticFailureBreaker: _automaticFailureBreaker,
-          feedUrlResolver: _feedUrlResolver,
-          checkIdRecorder: _checkIdRecorder,
-          helperWaitDuration: _helperWaitDuration,
-          clock: _clock,
-        );
-    _warnIfUacDetectorIsNoopOnSupportedRuntime();
+  }) : _collaborators = SilentUpdateCollaborators.create(
+         capabilities: _capabilities,
+         feedUrlResolver: _feedUrlResolver,
+         appcastProbeService: appcastProbeService,
+         silentUpdateInstaller: silentUpdateInstaller,
+         settingsStore: settingsStore,
+         updatePreferencesRepository: updatePreferencesRepository,
+         closeApplicationForSilentUpdate: closeApplicationForSilentUpdate,
+         onDiagnosticsChanged: onDiagnosticsChanged,
+         automaticFailureCooldownThreshold: automaticFailureCooldownThreshold,
+         automaticFailureCooldown: automaticFailureCooldown,
+         helperWaitDuration: helperWaitDuration,
+         bootJitterProvider: bootJitterProvider,
+         signatureVerifier: signatureVerifier,
+         checkIdRecorder: checkIdRecorder,
+         metricsCollector: metricsCollector,
+         diagnosticsGateway: diagnosticsGateway,
+         uacDetector: uacDetector,
+         pendingStore: pendingStore,
+         launcherStatusReader: launcherStatusReader,
+         diagnosticsStore: diagnosticsStore,
+         scheduler: scheduler,
+         downloadApplyService: downloadApplyService,
+         pendingReconciler: pendingReconciler,
+         clock: clock,
+       ),
+       _silentUpdateInstaller = silentUpdateInstaller {
+    _collaborators.uacGuard.warnIfDetectorIsNoopOnSupportedRuntime();
     hydratePersistedDiagnostics();
   }
 
-  /// Logs a loud warning when the runtime *does* support auto-update
-  /// (so silent installs can actually trigger UAC prompts), yet the
-  /// injected detector is the no-op fallback. Catches DI mistakes early
-  /// instead of letting the UAC gate silently approve every install.
-  void _warnIfUacDetectorIsNoopOnSupportedRuntime() {
-    if (!_capabilities.supportsAutoUpdate) return;
-    if (_uacDetector is! NoopUacDetector) return;
-    developer.log(
-      'SilentUpdateCoordinator is using NoopUacDetector on a runtime '
-      'that supports auto-update (supportsAutoUpdate=true). The UAC '
-      'gate will never engage; verify the DI registrar wires a real '
-      'detector (e.g. WindowsUacDetector) on Windows.',
-      name: 'silent_update_coordinator',
-      level: 900,
-    );
-  }
-
   final RuntimeCapabilities _capabilities;
-
-  /// Returns the current resolved feed URL, or `null` when not configured.
   final String? Function() _feedUrlResolver;
-  final IAppcastProbeService _appcastProbeService;
   final ISilentUpdateInstaller? _silentUpdateInstaller;
-  final IUpdatePreferencesRepository? _preferences;
-  final CloseApplicationForSilentUpdate? _closeApplicationForSilentUpdate;
-  final VoidCallback? _onDiagnosticsChanged;
-  final Duration _helperWaitDuration;
-  late final SilentUpdateDiagnosticsStore _diagnosticsStore;
-  late final SilentUpdateScheduler _scheduler;
-  late final SilentUpdateProbePipeline _probePipeline;
-  late final SilentUpdateDownloadApplyService _downloadApplyService;
-  late final PendingSilentUpdateReconciler _pendingReconciler;
-
-  /// Ed25519 verifier for `plug:edSignature`. Default is the pure-Dart
-  /// implementation; tests can inject a deterministic fake.
-  final IAppcastSignatureVerifier _signatureVerifier;
-
-  /// Generates UUIDv7 correlation IDs for each silent cycle and keeps a
-  /// ring buffer of recent IDs for offline log correlation.
-  final UpdateCheckIdRecorder _checkIdRecorder;
-
-  /// Optional metrics sink for probe/download duration histograms. `null`
-  /// disables sampling (tests / minimal DI).
-  final IAutoUpdateMetricsCollector? _metricsCollector;
-
-  /// Optional best-effort push of a non-sensitive subset of diagnostics
-  /// to the hub at the end of each silent cycle. Never propagates errors:
-  /// a flaky transport must not break the update flow.
-  final IAutoUpdateDiagnosticsGateway? _diagnosticsGateway;
-
-  /// Detects whether applying an update would trigger a UAC prompt.
-  /// Defaults to a no-op when not configured (test/non-Windows). The
-  /// automatic flow honours the detector; manual / user-initiated checks
-  /// bypass it because the operator has already consented to the
-  /// upcoming UAC prompt by clicking "Install".
-  final IUacDetector _uacDetector;
-
-  /// Persistence boundary for the in-flight/staged install record.
-  /// Hides `dart:io` from the application layer.
-  late final IPendingSilentUpdateStore _pendingStore;
-
-  /// Reads the on-disk helper status file. Hides `dart:io`.
-  final ISilentUpdateLauncherStatusReader _launcherStatusReader;
-
-  /// Injected clock so tests can control "now" without sleeping and so
-  /// late-callback detection survives NTP step adjustments. Returns
-  /// wall-clock by default.
-  final DateTime Function() _clock;
-
-  /// Reusable circuit breaker that ladders failures into a cooldown
-  /// window so the silent flow stops hammering a degraded feed.
-  late final PersistentCircuitBreaker _automaticFailureBreaker;
+  final SilentUpdateCollaborators _collaborators;
 
   bool _isSilentCheckInProgress = false;
   bool _cancelRequested = false;
+  String? _currentCheckId;
 
-  /// Set once a prepared helper has been launched in this session. Guards
-  /// against a double launch when both the UI "Install now" action
-  /// (`triggerAppClose: true`) and the shutdown path
-  /// (`triggerAppClose: false`) fire for the same pending record: the native
-  /// helper holds a global mutex, so a second launch would only overwrite a
+  SilentUpdateDiagnosticsStore get _diagnosticsStore => _collaborators.diagnosticsStore;
+
   UpdateCheckDiagnostics? get _lastAutomaticDiagnostics => _diagnosticsStore.lastAutomaticDiagnostics;
 
   set _lastAutomaticDiagnostics(UpdateCheckDiagnostics? value) {
     _diagnosticsStore.lastAutomaticDiagnostics = value;
   }
 
-  /// Set at the start of every silent cycle (`checkSilently` /
-  /// `_reconcilePendingSilentUpdate`) and propagated to all
-  /// `UpdateCheckDiagnostics` constructed during that cycle.
-  String? _currentCheckId;
-
-  // Shared defaults live in `AutoUpdateDefaults` so the orchestrator
-  // and the coordinator do not need cross-class "public alias"
-  // constants to stay in sync.
-
-  // ---------------------------------------------------------------------------
-  // Public interface
-  // ---------------------------------------------------------------------------
-
   @override
   bool get isSilentCheckInProgress => _isSilentCheckInProgress;
 
   @override
-  bool get automaticSilentUpdatesEnabled => _preferences?.automaticSilentUpdatesEnabled ?? true;
+  bool get automaticSilentUpdatesEnabled => _collaborators.preferences.automaticSilentUpdatesEnabled;
 
   @override
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics => _diagnosticsStore.lastAutomaticDiagnostics;
@@ -337,7 +197,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   @override
   Future<void> reconcilePendingAndSchedule() async {
     await _reconcilePendingSilentUpdate();
-    _scheduler.stop();
+    _collaborators.scheduler.stop();
     if (automaticSilentUpdatesEnabled) {
       scheduleAndStart();
     }
@@ -359,50 +219,28 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       );
     }
 
-    _currentCheckId = _checkIdRecorder.newId();
-    unawaited(_checkIdRecorder.record(_currentCheckId!, source: 'silent'));
+    _currentCheckId = _collaborators.checkIdRecorder.newId();
+    unawaited(_collaborators.checkIdRecorder.record(_currentCheckId!, source: 'silent'));
 
     if (!automaticSilentUpdatesEnabled) {
-      final now = _clock();
-      _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
-        checkedAt: now,
-        configuredFeedUrl: feedUrl,
-        requestedFeedUrl: feedUrl,
-        checkId: _currentCheckId,
-        currentVersion: AppConstants.appVersion,
-        completedAt: now,
+      return _completeEarlyCheck(
+        feedUrl: feedUrl,
+        outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled),
         completionSource: UpdateCheckCompletionSource.automaticDisabled,
-        updateAvailable: false,
       );
-      await _persistLastAutomaticDiagnostics();
-      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
-      return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled);
     }
 
-    // Quiet hours gate. Sits before installer/pending checks so the window
-    // is honoured even when settings are mid-migration. The periodic timer
-    // keeps firing; on the next tick outside the window the silent path
-    // resumes normally.
-    if (_scheduler.isWithinQuietHours()) {
-      final quietNow = _clock();
-      _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
-        checkedAt: quietNow,
-        configuredFeedUrl: feedUrl,
-        requestedFeedUrl: feedUrl,
-        checkId: _currentCheckId,
-        currentVersion: AppConstants.appVersion,
-        completedAt: quietNow,
+    if (_collaborators.scheduler.isWithinQuietHours()) {
+      return _completeEarlyCheck(
+        feedUrl: feedUrl,
+        outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.skippedByQuietHours),
         completionSource: UpdateCheckCompletionSource.automaticQuietHours,
-        updateAvailable: false,
       );
-      await _persistLastAutomaticDiagnostics();
-      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
-      return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.skippedByQuietHours);
     }
 
     final installer = _silentUpdateInstaller;
     if (installer == null) {
-      final now = _clock();
+      final now = _collaborators.clock();
       _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
         checkedAt: now,
         configuredFeedUrl: feedUrl,
@@ -414,7 +252,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         errorMessage: 'Silent update installer is not configured',
       );
       await _persistLastAutomaticDiagnostics();
-      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+      _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
       return Failure<SilentUpdateOutcome, Exception>(
         domain.ConfigurationFailure.withContext(
           message: 'Silent update installer is not configured',
@@ -426,10 +264,10 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     _isSilentCheckInProgress = true;
     _cancelRequested = false;
     try {
-      final pending = await _pendingStore.read();
+      final pending = await _collaborators.pendingStore.read();
       if (pending != null && pending is PendingSilentUpdateDownloaded) {
-        final now = _clock();
-        final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+        final now = _collaborators.clock();
+        final launcherStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
         _lastAutomaticDiagnostics = PendingSilentUpdateReconciler.diagnosticsForPending(
           pending: pending,
           launcherStatus: launcherStatus,
@@ -440,23 +278,23 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           errorMessage: 'Silent update already has a pending installer execution',
         );
         await _persistLastAutomaticDiagnostics();
-        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+        _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
         return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.pendingInProgress);
       }
 
-      await _downloadApplyService.cleanupArtifacts(installer);
-      final cooldownResult = await _scheduler.buildCooldownResult(
+      await _collaborators.downloadApplyService.cleanupArtifacts(installer);
+      final cooldownResult = await _collaborators.scheduler.buildCooldownResult(
         feedUrl: feedUrl,
         checkId: _currentCheckId,
         onDiagnostics: (diagnostics) => _lastAutomaticDiagnostics = diagnostics,
         persistDiagnostics: _persistLastAutomaticDiagnostics,
       );
       if (cooldownResult != null) {
-        _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+        _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
         return cooldownResult;
       }
 
-      final startedAt = _clock();
+      final startedAt = _collaborators.clock();
       _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
         checkedAt: startedAt,
         configuredFeedUrl: feedUrl,
@@ -467,12 +305,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       );
       await _persistLastAutomaticDiagnostics();
 
-      // Capture bucket before the probe so the same value is used for both
-      // diagnostics and eligibility; avoids generating two different random
-      // numbers on first execution when the value is not yet persisted.
-      final bucket = await _rolloutBucket();
+      final bucket = await _collaborators.rolloutBucketResolver.resolve();
       final probeDiagnostics = _lastAutomaticDiagnostics!;
-      final probePipelineResult = await _probePipeline.run(
+      final probePipelineResult = await _collaborators.probePipeline.run(
         SilentUpdateProbePipelineRequest(
           feedUrl: feedUrl,
           checkId: _currentCheckId,
@@ -490,13 +325,13 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       switch (probePipelineResult) {
         case SilentUpdateProbeTerminal(:final outcome, :final notifyDiagnostics):
           if (notifyDiagnostics) {
-            _notifyDiagnosticsChanged();
+            _collaborators.diagnosticsNotifier.notifyChanged();
           }
-          _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           return outcome;
         case SilentUpdateProbeCancelled():
           final outcome = await _completeAutomaticCancellation(feedUrl);
-          _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           return outcome;
         case SilentUpdateProbeProceedToDownload(
           probeResult: final probed,
@@ -506,7 +341,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           remoteVersion = version;
       }
 
-      final stageResult = await _downloadApplyService.downloadAndStage(
+      final stageResult = await _collaborators.downloadApplyService.downloadAndStage(
         SilentUpdateDownloadStageRequest(
           probeResult: probeResult,
           remoteVersion: remoteVersion,
@@ -515,28 +350,28 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           getDiagnostics: () => _lastAutomaticDiagnostics,
           onDiagnosticsUpdated: (diagnostics) => _lastAutomaticDiagnostics = diagnostics,
           persistDiagnostics: _persistLastAutomaticDiagnostics,
-          notifyDiagnosticsChanged: _notifyDiagnosticsChanged,
+          notifyDiagnosticsChanged: _collaborators.diagnosticsNotifier.notifyChanged,
         ),
       );
       switch (stageResult) {
         case SilentUpdateDownloadStageCancelled():
           final outcome = await _completeAutomaticCancellation(feedUrl);
-          _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           return outcome;
         case SilentUpdateDownloadStageFailure(:final error):
-          _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           return Failure<SilentUpdateOutcome, Exception>(error);
         case SilentUpdateDownloadStageDisabled():
-          _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled);
         case SilentUpdateDownloadStageReady():
-          _notifyDiagnosticsChanged();
-          _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+          _collaborators.diagnosticsNotifier.notifyChanged();
+          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
       }
     } on FormatException catch (error) {
-      final now = _clock();
-      final failureState = await _automaticFailureBreaker.recordFailure();
+      final now = _collaborators.clock();
+      final failureState = await _collaborators.automaticFailureBreaker.recordFailure();
       _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
         completedAt: now,
         completionSource: UpdateCheckCompletionSource.automaticValidationFailure,
@@ -545,7 +380,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         errorMessage: error.message,
       );
       await _persistLastAutomaticDiagnostics();
-      _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.silent);
+      _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
       return Failure<SilentUpdateOutcome, Exception>(
         domain.ValidationFailure.withContext(
           message: error.message,
@@ -559,43 +394,47 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     }
   }
 
-  Future<Result<SilentUpdateOutcome>> _completeAutomaticCancellation(String feedUrl) async {
-    await _pendingStore.clear();
-    // Cancellation is a user-initiated state change, not a fault: do not
-    // count it toward the automatic failure cooldown and clear any prior
-    // cooldown so the user can resume immediately if they re-enable.
-    await _automaticFailureBreaker.reset();
-    final now = _clock();
-    final existing = _lastAutomaticDiagnostics;
-    _lastAutomaticDiagnostics =
-        (existing ??
-                UpdateCheckDiagnostics(
-                  checkedAt: now,
-                  configuredFeedUrl: feedUrl,
-                  requestedFeedUrl: feedUrl,
-                  checkId: _currentCheckId,
-                  currentVersion: AppConstants.appVersion,
-                ))
-            .copyWith(
-              completedAt: now,
-              completionSource: UpdateCheckCompletionSource.automaticCancelled,
-              updateAvailable: false,
-              errorMessage: 'Silent update cancelled because automatic silent updates were disabled',
-            );
+  Future<Result<SilentUpdateOutcome>> _completeEarlyCheck({
+    required String feedUrl,
+    required Result<SilentUpdateOutcome> outcome,
+    required UpdateCheckCompletionSource completionSource,
+  }) async {
+    final now = _collaborators.clock();
+    _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
+      checkedAt: now,
+      configuredFeedUrl: feedUrl,
+      requestedFeedUrl: feedUrl,
+      checkId: _currentCheckId,
+      currentVersion: AppConstants.appVersion,
+      completedAt: now,
+      completionSource: completionSource,
+      updateAvailable: false,
+    );
     await _persistLastAutomaticDiagnostics();
-    return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.cancelled);
+    _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+    return outcome;
+  }
+
+  Future<Result<SilentUpdateOutcome>> _completeAutomaticCancellation(String feedUrl) {
+    return _collaborators.cancellationHandler.completeAutomaticCancellation(
+      feedUrl: feedUrl,
+      checkId: _currentCheckId,
+      existingDiagnostics: _lastAutomaticDiagnostics,
+      onDiagnosticsUpdated: (diagnostics) => _lastAutomaticDiagnostics = diagnostics,
+      persistDiagnostics: _persistLastAutomaticDiagnostics,
+    );
   }
 
   @override
   void scheduleAndStart({bool runImmediately = true}) {
-    _scheduler.scheduleAndStart(
+    _collaborators.scheduler.scheduleAndStart(
       runImmediately: runImmediately,
       onCheck: checkSilently,
     );
   }
 
   @override
-  void stop() => _scheduler.stop();
+  void stop() => _collaborators.scheduler.stop();
 
   @override
   void requestCancellation() {
@@ -605,7 +444,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   }
 
   @override
-  Future<bool> get hasPendingDownloadedUpdate => _downloadApplyService.hasPendingDownloadedUpdate();
+  Future<bool> get hasPendingDownloadedUpdate => _collaborators.downloadApplyService.hasPendingDownloadedUpdate();
 
   @override
   Future<Result<void>> applyPendingDownloadedUpdate({
@@ -613,93 +452,28 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     String? noticeBody,
     bool triggerAppClose = true,
   }) {
-    return _downloadApplyService.applyPendingDownloadedUpdate(
+    return _collaborators.downloadApplyService.applyPendingDownloadedUpdate(
       noticeTitle: noticeTitle,
       noticeBody: noticeBody,
       triggerAppClose: triggerAppClose,
       getDiagnostics: () => _lastAutomaticDiagnostics,
       onDiagnosticsUpdated: (diagnostics) => _lastAutomaticDiagnostics = diagnostics,
       persistDiagnostics: _persistLastAutomaticDiagnostics,
-      notifyDiagnosticsChanged: _notifyDiagnosticsChanged,
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
-  void _notifyDiagnosticsChanged() {
-    final callback = _onDiagnosticsChanged;
-    if (callback == null) return;
-    try {
-      callback();
-    } on Object catch (error, stackTrace) {
-      developer.log(
-        'onDiagnosticsChanged callback threw (ignored)',
-        name: 'silent_update_coordinator',
-        level: 900,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
-  /// Best-effort push of the latest automatic diagnostics to the hub. The
-  /// telemetry contract demands the gateway throttle, omit sensitive
-  /// fields and swallow errors, so this method never awaits the future
-  /// and never propagates exceptions.
-  void _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource source) {
-    final gateway = _diagnosticsGateway;
-    final diagnostics = _lastAutomaticDiagnostics;
-    if (gateway == null || diagnostics == null) return;
-    unawaited(
-      Future<void>(() async {
-        try {
-          await gateway.push(diagnostics: diagnostics, source: source);
-        } on Object catch (error, stackTrace) {
-          developer.log(
-            'Auto-update diagnostics push threw (ignored)',
-            name: 'silent_update_coordinator',
-            level: 800,
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      }),
+      notifyDiagnosticsChanged: _collaborators.diagnosticsNotifier.notifyChanged,
     );
   }
 
   Future<void> _persistLastAutomaticDiagnostics() => _diagnosticsStore.persist();
 
-  Future<int> _rolloutBucket() async {
-    final existing = _preferences?.readRolloutBucket();
-    if (existing != null && existing >= 0 && existing < 100) return existing;
-    final generated = Random.secure().nextInt(100);
-    final preferences = _preferences;
-    if (preferences != null) {
-      try {
-        await preferences.writeRolloutBucket(generated);
-      } on Exception catch (error, stackTrace) {
-        developer.log(
-          'Failed to persist rollout bucket; using in-memory value for this check',
-          name: 'silent_update_coordinator',
-          level: 900,
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-    }
-    return generated;
-  }
-
   Future<void> _reconcilePendingSilentUpdate() async {
-    await _pendingReconciler.reconcile(
+    await _collaborators.pendingReconciler.reconcile(
       PendingSilentUpdateReconcileRequest(
         onCheckIdAssigned: (checkId) => _currentCheckId = checkId,
         onDiagnosticsUpdated: (diagnostics) => _lastAutomaticDiagnostics = diagnostics,
         persistDiagnostics: _persistLastAutomaticDiagnostics,
-        pushDiagnostics: () => _pushDiagnosticsBestEffort(AutoUpdateDiagnosticsSource.reconcile),
+        pushDiagnostics: () => _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.reconcile),
       ),
     );
   }
+
 }

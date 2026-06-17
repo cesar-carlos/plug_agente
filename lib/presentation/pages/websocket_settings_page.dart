@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
@@ -61,9 +62,9 @@ class _WebSocketSettingsPageState extends State<WebSocketSettingsPage> {
       return;
     }
     _configDependenciesInitialized = true;
-    _featureFlags = context.read<FeatureFlags>();
+    _featureFlags = getIt<FeatureFlags>();
     _payloadSigningConfig =
-        readOptionalPresentationProvider<PayloadSigningConfig>(context) ??
+        readOptionalGetItService<PayloadSigningConfig>() ??
         PayloadSigningConfig.empty(
           secureStorageAvailable: false,
           warnings: const <String>['payload_signing_config_not_registered'],

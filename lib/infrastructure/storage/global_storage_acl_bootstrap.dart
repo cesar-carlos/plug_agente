@@ -1,9 +1,10 @@
+import 'package:plug_agente/domain/repositories/i_global_storage_acl_bootstrap.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_marker_store.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_directory_acl_normalizer.dart';
 import 'package:plug_agente/infrastructure/storage/icacls_grant_outcome.dart';
 
 /// Ensures shared global storage directory ACLs are normalized once per app version.
-class GlobalStorageAclBootstrap {
+class GlobalStorageAclBootstrap implements IGlobalStorageAclBootstrap {
   GlobalStorageAclBootstrap({
     GlobalStorageDirectoryAclNormalizer? normalizer,
     GlobalStorageAclMarkerStore? markerStore,
@@ -24,6 +25,7 @@ class GlobalStorageAclBootstrap {
 
   GlobalStorageAclMarkerStore get markerStore => _markerStore;
 
+  @override
   Future<void> ensureDirectoryAcls(String appDirectoryPath) async {
     _lastAppDirectoryPath = appDirectoryPath;
 

@@ -17,6 +17,8 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../helpers/rpc_method_dispatcher_test_support.dart';
+
 class _MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 class _MockQueryNormalizerService extends Mock implements QueryNormalizerService {}
@@ -110,6 +112,7 @@ void main() {
       );
 
       dispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
         databaseGateway: gateway,
         healthService: HealthService(
           metricsCollector: MetricsCollector(),

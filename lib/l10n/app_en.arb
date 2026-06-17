@@ -1137,7 +1137,7 @@
   "configBackupDuplicateNote": "Restoring the same backup on two machines can register the same agent twice. The app checks the hub when possible; if that check fails, you must confirm that you accept the risk.",
   "configBackupSingleInstanceNote": "Do not run two copies of the app against the same global data folder.",
   "@configBackupSingleInstanceNote": {
-    "description": "Warns about two instances sharing one data directory (see AppStrings.singleInstanceMessage for the native single-instance dialog in PT)."
+    "description": "Warns about two instances sharing one data directory."
   },
   "configBackupRestoreDiagnosticsHint": "If restore fails after the app closes, details are saved as {fileName} in the app data folder.",
   "@configBackupRestoreDiagnosticsHint": {
@@ -1874,5 +1874,25 @@
         "type": "int"
       }
     }
-  }
+  },
+  "legacyDatabaseMigrationFailedTitle": "Legacy database migration failed",
+  "bootstrapFailureTitle": "Startup failed",
+  "bootstrapFailureButtonClose": "Close application",
+  "bootstrapFailureTechnicalDetails": "Technical details:",
+  "bootstrapFailureStorageMessage": "The app could not start because it could not access a global configuration directory.\n\nRun Plug Agente as administrator or adjust write permissions for ProgramData/Public Documents.",
+  "bootstrapFailureGenericMessage": "A failure occurred while starting the app. Close and reopen it. If the problem persists, run as administrator and review system permissions.",
+  "bootstrapFailureUnsupportedOsMessage": "This computer does not meet the minimum requirements for Plug Agente. Update Windows or review the compatibility documentation before trying again.",
+  "bootstrapFailureOdbcMessage": "ODBC access could not be initialized. Verify that the correct ODBC driver is installed, that the DSN or connection string is configured, and that Plug Agente is allowed to load the driver.",
+  "configBackupSingleInstanceDialogMessage": "Plug Agente is already running.",
+  "agentProfileOpenCnpjEmptyResponse": "Empty response from the CNPJ lookup service.",
+  "agentProfileOpenCnpjInvalidPayload": "Invalid response from the CNPJ lookup service.",
+  "agentProfileOpenCnpjNotFound": "CNPJ was not found in the queried database.",
+  "agentProfileOpenCnpjRateLimit": "CNPJ lookup rate limit exceeded. Try again shortly.",
+  "agentProfileOpenCnpjNetworkError": "Could not look up the CNPJ. Check your connection.",
+  "agentProfileOpenCnpjUnexpectedError": "Unexpected error while looking up the CNPJ.",
+  "agentProfileViaCepNotFound": "Postal code not found.",
+  "agentProfileViaCepEmptyResponse": "Empty response from the postal code lookup service.",
+  "agentProfileViaCepInvalidPayload": "Invalid response from the postal code lookup service.",
+  "agentProfileViaCepNetworkError": "Could not look up the postal code. Check your connection.",
+  "agentProfileViaCepUnexpectedError": "Unexpected error while looking up the postal code."
 }

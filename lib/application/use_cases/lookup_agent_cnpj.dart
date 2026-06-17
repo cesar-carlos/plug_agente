@@ -18,6 +18,7 @@ class LookupAgentCnpj {
   Future<Result<OpenCnpjCompanyData>> call({
     required String rawDocument,
     required String invalidLengthMessage,
+    required OpenCnpjLookupErrorMessages errorMessages,
   }) {
     final digits = rawDocument.replaceAll(_nonDigits, '');
     if (digits.length != _expectedCnpjLength) {
@@ -26,6 +27,6 @@ class LookupAgentCnpj {
       );
     }
 
-    return _gateway.lookupCnpj(digits);
+    return _gateway.lookupCnpj(digits, errorMessages: errorMessages);
   }
 }

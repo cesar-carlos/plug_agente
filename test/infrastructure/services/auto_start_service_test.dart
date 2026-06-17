@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
+import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
@@ -85,7 +85,7 @@ void main() {
       final addCall = calls.singleWhere((call) => call.arguments.contains('add'));
       check(addCall.executable).equals('reg');
       check(addCall.arguments).contains(_hkcuRunKey);
-      check(addCall.arguments.join(' ')).contains(AppStrings.singleInstanceArgAutostart);
+      check(addCall.arguments.join(' ')).contains(LaunchArgsConstants.autostartArg);
     });
 
     test('should report repair needed for duplicate HKCU and HKLM entries without elevation', () async {
@@ -440,7 +440,7 @@ void main() {
       final calls = <_ProcessInvocation>[];
       final results = Queue<ProcessResult>.from(<ProcessResult>[
         ..._queries(
-          hkcu: _querySuccess(_hkcuRunKey, '"$_currentExecutable" "${AppStrings.singleInstanceArgAutostart}-extra"'),
+          hkcu: _querySuccess(_hkcuRunKey, '"$_currentExecutable" "${LaunchArgsConstants.autostartArg}-extra"'),
         ),
         ProcessResult(3, 0, '', ''),
         ..._queries(
@@ -538,5 +538,5 @@ ProcessResult _queryNotFound() {
 }
 
 String _startupValue(String executablePath) {
-  return '"$executablePath" "${AppStrings.singleInstanceArgAutostart}"';
+  return '"$executablePath" "${LaunchArgsConstants.autostartArg}"';
 }

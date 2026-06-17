@@ -44,6 +44,8 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:socket_io_client/src/manager.dart' as socket_io_manager;
 import 'package:uuid/uuid.dart';
 
+import '../../helpers/rpc_method_dispatcher_test_support.dart';
+
 NetworkFailure requireNetworkFailure(Result<void> result) {
   expect(result.isError(), isTrue);
   final Object? error = result.exceptionOrNull();
@@ -2399,6 +2401,7 @@ void main() {
             getClientTokenPolicy: mockGetClientTokenPolicy,
             getPolicyRateLimiter: _transportTestNoopGetPolicyRateLimiter,
             featureFlags: mockFeatureFlags,
+            streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
           );
 
           final integrationClient = SocketIOTransportClientV2(

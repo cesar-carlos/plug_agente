@@ -10,6 +10,8 @@ import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_metadata_cache.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
@@ -237,6 +239,7 @@ Future<String> _buildSqlRpcStreamingBenchmarkReport({required int iterations}) a
     streamingNamedParameterPreparer: _PassthroughStreamingNamedParameterPreparer(),
     activeConfigResolver: resolver,
     configQueryCache: configCache,
+    connectionStringSource: ConfigService(ConfigValidator()),
     streamingGateway: gateway,
   );
 

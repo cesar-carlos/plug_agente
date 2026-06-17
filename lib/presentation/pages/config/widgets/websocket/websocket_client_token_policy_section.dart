@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
-import 'package:provider/provider.dart';
 
 class WebSocketClientTokenPolicySection extends StatefulWidget {
   const WebSocketClientTokenPolicySection({super.key});
@@ -21,12 +21,12 @@ class _WebSocketClientTokenPolicySectionState extends State<WebSocketClientToken
   late bool _introspectionEnabled;
   bool _isPersisting = false;
 
-  FeatureFlags get _flags => context.read<FeatureFlags>();
+  FeatureFlags get _flags => getIt<FeatureFlags>();
 
   @override
   void initState() {
     super.initState();
-    _introspectionEnabled = context.read<FeatureFlags>().enableClientTokenPolicyIntrospection;
+    _introspectionEnabled = getIt<FeatureFlags>().enableClientTokenPolicyIntrospection;
   }
 
   Future<void> _onChanged(bool enabled) async {

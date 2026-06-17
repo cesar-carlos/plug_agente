@@ -1874,5 +1874,25 @@
         "type": "int"
       }
     }
-  }
+  },
+  "legacyDatabaseMigrationFailedTitle": "Falha na migração do banco de dados legado",
+  "bootstrapFailureTitle": "Falha na inicialização",
+  "bootstrapFailureButtonClose": "Fechar aplicativo",
+  "bootstrapFailureTechnicalDetails": "Detalhes técnicos:",
+  "bootstrapFailureStorageMessage": "Não foi possível iniciar porque o aplicativo não conseguiu acessar um diretório global de configuração.\n\nExecute o Plug Agente como administrador ou ajuste as permissões de escrita em ProgramData/Public Documents.",
+  "bootstrapFailureGenericMessage": "Ocorreu uma falha durante a inicialização do aplicativo. Feche e abra novamente. Se o problema persistir, execute como administrador e revise as permissões do sistema.",
+  "bootstrapFailureUnsupportedOsMessage": "Este computador não atende aos requisitos mínimos do Plug Agente. Atualize o Windows ou consulte a documentação de compatibilidade antes de tentar novamente.",
+  "bootstrapFailureOdbcMessage": "Não foi possível inicializar o acesso ODBC. Verifique se o driver ODBC correto está instalado, se o DSN ou a string de conexão está configurada e se o Plug Agente tem permissão para carregar o driver.",
+  "configBackupSingleInstanceDialogMessage": "O aplicativo Plug Agente já está em execução.",
+  "agentProfileOpenCnpjEmptyResponse": "Resposta vazia do serviço de consulta de CNPJ.",
+  "agentProfileOpenCnpjInvalidPayload": "Resposta inválida do serviço de consulta de CNPJ.",
+  "agentProfileOpenCnpjNotFound": "CNPJ não encontrado na base consultada.",
+  "agentProfileOpenCnpjRateLimit": "Limite de consultas ao serviço de CNPJ excedido. Tente novamente em instantes.",
+  "agentProfileOpenCnpjNetworkError": "Não foi possível consultar o CNPJ. Verifique a conexão.",
+  "agentProfileOpenCnpjUnexpectedError": "Erro inesperado ao consultar o CNPJ.",
+  "agentProfileViaCepNotFound": "CEP não encontrado.",
+  "agentProfileViaCepEmptyResponse": "Resposta vazia do serviço de consulta de CEP.",
+  "agentProfileViaCepInvalidPayload": "Resposta inválida do serviço de consulta de CEP.",
+  "agentProfileViaCepNetworkError": "Não foi possível consultar o CEP. Verifique a conexão.",
+  "agentProfileViaCepUnexpectedError": "Erro inesperado ao consultar o CEP."
 }

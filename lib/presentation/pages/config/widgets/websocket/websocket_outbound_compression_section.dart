@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -10,7 +11,6 @@ import 'package:plug_agente/shared/widgets/common/feedback/settings_feedback.dar
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/settings_components.dart';
-import 'package:provider/provider.dart';
 
 class WebSocketOutboundCompressionSection extends StatefulWidget {
   const WebSocketOutboundCompressionSection({super.key});
@@ -23,12 +23,12 @@ class _WebSocketOutboundCompressionSectionState extends State<WebSocketOutboundC
   late OutboundCompressionMode _mode;
   bool _isPersisting = false;
 
-  FeatureFlags get _flags => context.read<FeatureFlags>();
+  FeatureFlags get _flags => getIt<FeatureFlags>();
 
   @override
   void initState() {
     super.initState();
-    _mode = context.read<FeatureFlags>().outboundCompressionMode;
+    _mode = getIt<FeatureFlags>().outboundCompressionMode;
   }
 
   Future<void> _onModeChanged(OutboundCompressionMode mode) async {

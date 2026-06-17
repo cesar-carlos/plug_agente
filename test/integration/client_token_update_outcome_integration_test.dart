@@ -18,7 +18,6 @@ void main() {
     late AppDatabase db;
     late _InMemorySecretStore secretStore;
     late _RecordingAuditStore auditStore;
-    late ClientTokenLocalDataSource dataSource;
     late ClientTokenRepository repository;
     late UpdateClientToken useCase;
 
@@ -26,8 +25,8 @@ void main() {
       db = AppDatabase(executor: NativeDatabase.memory());
       secretStore = _InMemorySecretStore();
       auditStore = _RecordingAuditStore();
-      dataSource = ClientTokenLocalDataSource(db, secretStore: secretStore);
-      repository = ClientTokenRepository(dataSource);
+      final dataSource = ClientTokenLocalDataSource(db);
+      repository = ClientTokenRepository(dataSource, secretStore: secretStore);
       useCase = UpdateClientToken(repository, auditStore: auditStore);
     });
 
@@ -43,7 +42,7 @@ void main() {
       String name = 'integration-name',
       Map<String, dynamic> payload = const {'database': 'ERP'},
     }) async {
-      final tokenValue = await dataSource.createToken(
+      final tokenValue = (await repository.createToken(
         ClientTokenCreateRequest(
           clientId: clientId,
           name: name,
@@ -52,8 +51,8 @@ void main() {
           rules: rules,
           payload: payload,
         ),
-      );
-      final list = await dataSource.listTokens();
+      )).getOrNull()!;
+      final list = (await repository.listTokens()).getOrNull()!;
       return (tokenValue: tokenValue, tokenId: list.single.id);
     }
 
@@ -98,9 +97,8 @@ void main() {
       expect(updateResult.outcome, ClientTokenUpdateOutcome.metadataOnly);
       expect(updateResult.tokenValue, isNull);
 
-      final stored = await dataSource.getTokenById(seeded.tokenId);
-      expect(stored, isNotNull);
-      expect(stored!.tokenValue, equals(seeded.tokenValue));
+      final stored = (await repository.getTokenById(seeded.tokenId)).getOrNull()!;
+      expect(stored.tokenValue, equals(seeded.tokenValue));
       expect(stored.clientId, 'renamed-client');
       expect(stored.name, 'renamed-name');
 
@@ -132,8 +130,8 @@ void main() {
       expect(updateResult.tokenValue, isNotNull);
       expect(updateResult.tokenValue, isNot(seeded.tokenValue));
 
-      final stored = await dataSource.getTokenById(seeded.tokenId);
-      expect(stored!.tokenValue, equals(updateResult.tokenValue));
+      final stored = (await repository.getTokenById(seeded.tokenId)).getOrNull()!;
+      expect(stored.tokenValue, equals(updateResult.tokenValue));
 
       // Old secret hash entry must be cleaned up after rotation.
       expect(
@@ -153,7 +151,7 @@ void main() {
         effect: ClientTokenRuleEffect.allow,
       );
       final seeded = await seedToken(rules: const [rule]);
-      final beforeRow = await dataSource.getTokenById(seeded.tokenId);
+      final beforeRow = (await repository.getTokenById(seeded.tokenId)).getOrNull()!;
 
       final result = await useCase(
         seeded.tokenId,
@@ -172,10 +170,10 @@ void main() {
       final updateResult = result.getOrNull()!;
       expect(updateResult.outcome, ClientTokenUpdateOutcome.unchanged);
       expect(updateResult.tokenValue, isNull);
-      expect(updateResult.version, equals(beforeRow!.version));
+      expect(updateResult.version, equals(beforeRow.version));
 
-      final afterRow = await dataSource.getTokenById(seeded.tokenId);
-      expect(afterRow!.tokenValue, equals(beforeRow.tokenValue));
+      final afterRow = (await repository.getTokenById(seeded.tokenId)).getOrNull()!;
+      expect(afterRow.tokenValue, equals(beforeRow.tokenValue));
       expect(afterRow.version, equals(beforeRow.version));
       expect(afterRow.updatedAt, equals(beforeRow.updatedAt));
       expect(auditStore.recorded, isEmpty);

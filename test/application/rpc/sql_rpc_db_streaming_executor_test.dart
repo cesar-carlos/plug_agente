@@ -6,6 +6,8 @@ import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
@@ -178,6 +180,7 @@ void main() {
       sqlExecuteTotalBudget: const Duration(seconds: 30),
       streamingNamedParameterPreparer: _PassthroughStreamingNamedParameterPreparer(),
       activeConfigResolver: resolver,
+      connectionStringSource: ConfigService(ConfigValidator()),
       streamingGateway: gateway,
     );
   });

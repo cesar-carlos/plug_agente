@@ -4,8 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/entities/auth_token.dart';
-import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
+import 'package:plug_agente/presentation/providers/presentation_error_state.dart';
 
 enum AuthStatus { unauthenticated, authenticating, authenticated, error }
 
@@ -15,13 +16,15 @@ class AuthProvider extends ChangeNotifier {
   final HubSessionCoordinator _hubSessionCoordinator;
 
   AuthStatus _status = AuthStatus.unauthenticated;
-  String _error = '';
+  PresentationErrorState? _errorState;
   AuthToken? _currentToken;
   String? _activeConfigId;
   bool _suppressAuthSuccessModalOnce = false;
 
   AuthStatus get status => _status;
-  String get error => _error;
+  PresentationErrorState? get errorState => _errorState;
+  String get error => _errorState?.message ?? '';
+  bool get errorCanRetry => _errorState?.canRetry ?? false;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
   AuthToken? get currentToken => _currentToken;
   String? get activeConfigId => _activeConfigId;
@@ -49,7 +52,7 @@ class AuthProvider extends ChangeNotifier {
     final normalizedConfigId = _normalizeConfigId(configId);
 
     _status = AuthStatus.authenticating;
-    _error = '';
+    _clearErrorState();
     notifyListeners();
 
     final result = await _hubSessionCoordinator.login(
@@ -63,18 +66,14 @@ class AuthProvider extends ChangeNotifier {
         _currentToken = token;
         _activeConfigId = normalizedConfigId;
         _status = AuthStatus.authenticated;
-        _error = '';
+        _clearErrorState();
         AppLogger.info('Login successful');
       },
       (failure) {
         _currentToken = previousToken;
         _activeConfigId = previousConfigId;
         _status = previousToken == null ? AuthStatus.error : previousStatus;
-        _error = failure.toDisplayMessage();
-        AppLogger.error(
-          'Login failed: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
+        _applyFailure(failure);
       },
     );
 
@@ -90,7 +89,9 @@ class AuthProvider extends ChangeNotifier {
       _currentToken = null;
       _activeConfigId = null;
       _status = AuthStatus.unauthenticated;
-      _error = 'No refresh token available';
+      _applyFailure(
+        domain.ValidationFailure('No refresh token available'),
+      );
       notifyListeners();
       return;
     }
@@ -106,18 +107,14 @@ class AuthProvider extends ChangeNotifier {
         _currentToken = token;
         _activeConfigId = _normalizeConfigId(configId);
         _status = AuthStatus.authenticated;
-        _error = '';
+        _clearErrorState();
         AppLogger.info('Token refreshed successfully');
       },
       (failure) {
         _currentToken = null;
         _activeConfigId = null;
         _status = AuthStatus.unauthenticated;
-        _error = failure.toDisplayMessage();
-        AppLogger.error(
-          'Token refresh failed: ${failure.toDisplayMessage()}',
-          failure.toTechnicalMessage(),
-        );
+        _applyFailure(failure);
       },
     );
 
@@ -131,7 +128,7 @@ class AuthProvider extends ChangeNotifier {
     _currentToken = null;
     _activeConfigId = null;
     _status = AuthStatus.unauthenticated;
-    _error = '';
+    _clearErrorState();
     notifyListeners();
     AppLogger.info('User logged out');
     if (clearStoredSession && configId != null && configId.trim().isNotEmpty) {
@@ -139,11 +136,7 @@ class AuthProvider extends ChangeNotifier {
       result.fold(
         (_) {},
         (failure) {
-          _error = failure.toDisplayMessage();
-          AppLogger.error(
-            'Failed to clear stored session: ${failure.toDisplayMessage()}',
-            failure.toTechnicalMessage(),
-          );
+          _applyFailure(failure);
           notifyListeners();
         },
       );
@@ -160,7 +153,7 @@ class AuthProvider extends ChangeNotifier {
     _currentToken = token;
     _activeConfigId = _normalizeConfigId(configId) ?? _activeConfigId;
     _status = authenticated ? AuthStatus.authenticated : AuthStatus.unauthenticated;
-    _error = '';
+    _clearErrorState();
     if (silent && !priorAuthenticated && _status == AuthStatus.authenticated) {
       _suppressAuthSuccessModalOnce = true;
     }
@@ -181,13 +174,24 @@ class AuthProvider extends ChangeNotifier {
     _currentToken = null;
     _activeConfigId = null;
     _status = AuthStatus.unauthenticated;
-    _error = message;
+    _errorState = PresentationErrorState(message: message);
     notifyListeners();
   }
 
   void clearError() {
-    _error = '';
+    if (_errorState == null) {
+      return;
+    }
+    _clearErrorState();
     notifyListeners();
+  }
+
+  void _applyFailure(Object failure) {
+    _errorState = PresentationErrorState.fromFailure(failure);
+  }
+
+  void _clearErrorState() {
+    _errorState = null;
   }
 
   bool _matchesConfig(String? configId) {

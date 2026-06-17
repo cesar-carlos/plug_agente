@@ -440,14 +440,15 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       case AgentActionDraftSaveRejected(:final message):
         _setValidationMessage(message);
         return _showValidationDialog(message);
-      case AgentActionDraftSaveForwarded(:final persisted):
-        if (!persisted) {
-          final validationMessage = _draft.validationMessage;
-          if (validationMessage != null && validationMessage.isNotEmpty) {
-            return _showValidationDialog(validationMessage);
-          }
-          return _showSaveFailureDialog();
+      case AgentActionDraftSaveForwarded(:final result):
+        if (result.isSuccess()) {
+          break;
         }
+        final validationMessage = _draft.validationMessage;
+        if (validationMessage != null && validationMessage.isNotEmpty) {
+          return _showValidationDialog(validationMessage);
+        }
+        return _showSaveFailureDialog();
     }
 
     setState(() {

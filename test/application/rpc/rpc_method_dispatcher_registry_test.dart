@@ -15,6 +15,8 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../helpers/rpc_method_dispatcher_test_support.dart';
+
 class _MockDatabaseGateway extends Mock implements IDatabaseGateway {}
 
 class _MockHealthService extends Mock implements HealthService {}
@@ -70,6 +72,7 @@ RpcMethodDispatcher _buildDispatcher({
   RpcMethodConcurrencyLimiter? methodConcurrencyLimiter,
 }) {
   return RpcMethodDispatcher(
+    streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
     databaseGateway: _MockDatabaseGateway(),
     healthService: _MockHealthService(),
     normalizerService: _MockQueryNormalizerService(),

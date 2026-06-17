@@ -2,6 +2,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/application/services/config_service.dart';
+import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -58,6 +60,7 @@ void main() {
       mockSettings = MockOdbcConnectionSettings();
       gateway = OdbcDatabaseGateway(
         AgentConfigQueryConfigSource(mockConfigRepository),
+        ConfigService(ConfigValidator()),
         mockService,
         mockConnectionPool,
         retryManager,
@@ -2104,6 +2107,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           nativePool,
           retryManager,
@@ -2181,6 +2185,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           nativePool,
           retryManager,
@@ -2259,6 +2264,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           nativePool,
           retryManager,
@@ -2907,6 +2913,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         mockSettings = MockOdbcConnectionSettings(poolSize: 4);
         gateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           mockConnectionPool,
           retryManager,
@@ -2986,6 +2993,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         mockSettings = MockOdbcConnectionSettings(poolSize: 4);
         gateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           mockConnectionPool,
           retryManager,
@@ -3068,6 +3076,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           nativePool,
           retryManager,
@@ -3134,6 +3143,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           nativePool,
           retryManager,
@@ -3200,6 +3210,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           nativePool,
           retryManager,
@@ -3277,6 +3288,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final nativePool = MockNativeCompatibleConnectionPool();
         final nativeGateway = OdbcDatabaseGateway(
           AgentConfigQueryConfigSource(mockConfigRepository),
+          ConfigService(ConfigValidator()),
           mockService,
           nativePool,
           retryManager,

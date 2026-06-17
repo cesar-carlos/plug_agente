@@ -41,7 +41,7 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (!_controllerInitialized) {
       _controllerInitialized = true;
       _controller = ClientTokenSectionController(
-        settingsStoreLookup: () => readOptionalPresentationProvider<IAppSettingsStore>(context),
+        settingsStoreLookup: () => readOptionalGetItService<IAppSettingsStore>(),
         onSectionChanged: () {
           if (mounted) {
             setState(() {});

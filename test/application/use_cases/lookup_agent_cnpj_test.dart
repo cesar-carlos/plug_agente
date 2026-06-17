@@ -7,10 +7,23 @@ import 'package:result_dart/result_dart.dart';
 
 class _MockOpenCnpjLookup extends Mock implements IOpenCnpjLookup {}
 
+const _testErrorMessages = OpenCnpjLookupErrorMessages(
+  emptyResponse: 'empty response',
+  invalidPayload: 'invalid payload',
+  notFound: 'not found',
+  rateLimit: 'rate limit',
+  networkError: 'network error',
+  unexpectedError: 'unexpected error',
+);
+
 void main() {
   group('LookupAgentCnpj', () {
     late _MockOpenCnpjLookup gateway;
     late LookupAgentCnpj useCase;
+
+    setUpAll(() {
+      registerFallbackValue(_testErrorMessages);
+    });
 
     setUp(() {
       gateway = _MockOpenCnpjLookup();
@@ -21,17 +34,25 @@ void main() {
       final result = await useCase(
         rawDocument: '123.456',
         invalidLengthMessage: 'invalid length',
+        errorMessages: _testErrorMessages,
       );
 
       expect(result.isError(), isTrue);
       final failure = result.exceptionOrNull();
       expect(failure, isA<ValidationFailure>());
       expect((failure! as ValidationFailure).message, equals('invalid length'));
-      verifyNever(() => gateway.lookupCnpj(any()));
+      verifyNever(
+        () => gateway.lookupCnpj(any(), errorMessages: any(named: 'errorMessages')),
+      );
     });
 
     test('delegates sanitized digits to gateway when input has 14 digits', () async {
-      when(() => gateway.lookupCnpj('11222333000181')).thenAnswer(
+      when(
+        () => gateway.lookupCnpj(
+          '11222333000181',
+          errorMessages: _testErrorMessages,
+        ),
+      ).thenAnswer(
         (_) async => const Success(
           OpenCnpjCompanyData(
             cnpj: '11222333000181',
@@ -43,10 +64,16 @@ void main() {
       final result = await useCase(
         rawDocument: '11.222.333/0001-81',
         invalidLengthMessage: 'invalid length',
+        errorMessages: _testErrorMessages,
       );
 
       expect(result.isSuccess(), isTrue);
-      verify(() => gateway.lookupCnpj('11222333000181')).called(1);
+      verify(
+        () => gateway.lookupCnpj(
+          '11222333000181',
+          errorMessages: _testErrorMessages,
+        ),
+      ).called(1);
     });
   });
 }

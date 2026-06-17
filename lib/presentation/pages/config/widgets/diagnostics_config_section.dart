@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
+import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/value_objects/hub_recovery_diagnostics_snapshot.dart';
@@ -44,8 +45,8 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
       return;
     }
     _dependenciesInitialized = true;
-    _flags = context.read<FeatureFlags>();
-    _hubResilience = context.read<HubResilienceConfig>();
+    _flags = getIt<FeatureFlags>();
+    _hubResilience = getIt<HubResilienceConfig>();
     _odbcPaginatedSqlLog = _flags.enableOdbcPaginatedSqlDebugLog;
     _enableHardReloginRecovery = _flags.enableHubHardReloginRecovery;
     _reloadHubReconnectFields();

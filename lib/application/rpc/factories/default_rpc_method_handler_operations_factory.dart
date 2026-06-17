@@ -30,6 +30,7 @@ import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart
 import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
@@ -71,6 +72,7 @@ class DefaultRpcMethodHandlerOperationsFactory {
     IAgentConfigRepository? configRepository,
     IActiveConfigQueryCache? configQueryCache,
     SqlStreamingConnectionStringCache? streamingConnectionStringCache,
+    IConfigConnectionStringSource? connectionStringSource,
     IIdempotencyStore? idempotencyStore,
     IAuthorizationMetricsCollector? authMetrics,
     IDeprecationMetricsCollector? deprecationMetrics,
@@ -114,6 +116,12 @@ class DefaultRpcMethodHandlerOperationsFactory {
       authorizationStageBudget: authorizationStageBudget,
     );
 
+    final resolvedStreamingConnectionStringCache =
+        streamingConnectionStringCache ??
+        (connectionStringSource != null
+            ? SqlStreamingConnectionStringCache(connectionStringSource: connectionStringSource)
+            : null);
+
     return DefaultRpcMethodHandlerOperations.assemble(
       sqlOperations: _sqlFactory.create(
         databaseGateway: databaseGateway,
@@ -124,7 +132,8 @@ class DefaultRpcMethodHandlerOperationsFactory {
         activeConfigResolver: activeConfigResolver,
         configRepository: configRepository,
         configQueryCache: configQueryCache,
-        streamingConnectionStringCache: streamingConnectionStringCache,
+        streamingConnectionStringCache: resolvedStreamingConnectionStringCache,
+        connectionStringSource: connectionStringSource,
         authMetrics: authMetrics,
         deprecationMetrics: deprecationMetrics,
         dispatchMetrics: dispatchMetrics,

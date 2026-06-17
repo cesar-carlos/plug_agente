@@ -14,6 +14,7 @@ import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
+import 'package:plug_agente/domain/repositories/i_config_connection_string_source.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_circuit_breaker.dart';
@@ -67,6 +68,7 @@ import 'package:uuid/uuid.dart';
 class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagnostics, IOdbcConnectionCircuitBreaker {
   OdbcDatabaseGateway(
     this._configSource,
+    this._connectionStringSource,
     this._service,
     IConnectionPool connectionPool,
     IRetryManager retryManager,
@@ -205,6 +207,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
 
   final OdbcService _service;
   final IQueryConfigSource _configSource;
+  final IConfigConnectionStringSource _connectionStringSource;
   final MetricsCollector _metrics;
   final IOdbcConnectionSettings _settings;
   final OdbcGatewayRetryCoordinator _retryCoordinator;
@@ -557,6 +560,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     return OdbcConnectionStringRewriter.resolve(
       config,
       databaseConfig,
+      _connectionStringSource,
       databaseOverride: databaseOverride,
     );
   }

@@ -13,6 +13,7 @@ import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
 import 'package:plug_agente/application/services/agent_action_execution_periodic_purge.dart';
 import 'package:plug_agente/application/services/agent_action_remote_audit_periodic_purge.dart';
+import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/elevated_bridge_artifacts_periodic_purge.dart';
 import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_purge.dart';
 import 'package:plug_agente/application/use_cases/cleanup_agent_action_captured_output.dart';
@@ -247,6 +248,7 @@ class AppInitializer {
           ? getIt<AgentActionRuntimeStateGuard>()
           : null,
       activeConfigResolver: getIt.isRegistered<ActiveConfigResolver>() ? getIt<ActiveConfigResolver>() : null,
+      connectionStringSource: getIt.isRegistered<ConfigService>() ? getIt<ConfigService>() : null,
       connectionPool: getIt.isRegistered<IConnectionPool>() ? getIt<IConnectionPool>() : null,
       autoUpdateOrchestrator: getIt.isRegistered<IAutoUpdateOrchestrator>() ? getIt<IAutoUpdateOrchestrator>() : null,
     );

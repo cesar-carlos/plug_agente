@@ -1,3 +1,4 @@
+import 'package:plug_agente/domain/services/agent_profile_lookup_error_messages.dart';
 import 'package:result_dart/result_dart.dart';
 
 class OpenCnpjCompanyData {
@@ -52,10 +53,16 @@ class ViaCepAddress {
 /// that the presentation layer can consume without depending on transport
 /// implementation details.
 abstract interface class IOpenCnpjLookup {
-  Future<Result<OpenCnpjCompanyData>> lookupCnpj(String cnpjDigits);
+  Future<Result<OpenCnpjCompanyData>> lookupCnpj(
+    String cnpjDigits, {
+    required OpenCnpjLookupErrorMessages errorMessages,
+  });
 }
 
 /// Application boundary for postal code lookup providers.
 abstract interface class IViaCepLookup {
-  Future<Result<ViaCepAddress>> lookupCep(String cepDigits);
+  Future<Result<ViaCepAddress>> lookupCep(
+    String cepDigits, {
+    required ViaCepLookupErrorMessages errorMessages,
+  });
 }

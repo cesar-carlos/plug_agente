@@ -5384,7 +5384,7 @@ abstract class AppLocalizations {
   /// **'Restoring the same backup on two machines can register the same agent twice. The app checks the hub when possible; if that check fails, you must confirm that you accept the risk.'**
   String get configBackupDuplicateNote;
 
-  /// Warns about two instances sharing one data directory (see AppStrings.singleInstanceMessage for the native single-instance dialog in PT).
+  /// Warns about two instances sharing one data directory.
   ///
   /// In en, this message translates to:
   /// **'Do not run two copies of the app against the same global data folder.'**
@@ -8815,6 +8815,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Maximum value: {max}'**
   String formNumericMaxValue(int max);
+
+  /// No description provided for @legacyDatabaseMigrationFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Legacy database migration failed'**
+  String get legacyDatabaseMigrationFailedTitle;
+
+  /// No description provided for @bootstrapFailureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup failed'**
+  String get bootstrapFailureTitle;
+
+  /// No description provided for @bootstrapFailureButtonClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close application'**
+  String get bootstrapFailureButtonClose;
+
+  /// No description provided for @bootstrapFailureTechnicalDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Technical details:'**
+  String get bootstrapFailureTechnicalDetails;
+
+  /// No description provided for @bootstrapFailureStorageMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The app could not start because it could not access a global configuration directory.\n\nRun Plug Agente as administrator or adjust write permissions for ProgramData/Public Documents.'**
+  String get bootstrapFailureStorageMessage;
+
+  /// No description provided for @bootstrapFailureGenericMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A failure occurred while starting the app. Close and reopen it. If the problem persists, run as administrator and review system permissions.'**
+  String get bootstrapFailureGenericMessage;
+
+  /// No description provided for @bootstrapFailureUnsupportedOsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This computer does not meet the minimum requirements for Plug Agente. Update Windows or review the compatibility documentation before trying again.'**
+  String get bootstrapFailureUnsupportedOsMessage;
+
+  /// No description provided for @bootstrapFailureOdbcMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'ODBC access could not be initialized. Verify that the correct ODBC driver is installed, that the DSN or connection string is configured, and that Plug Agente is allowed to load the driver.'**
+  String get bootstrapFailureOdbcMessage;
+
+  /// No description provided for @configBackupSingleInstanceDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Plug Agente is already running.'**
+  String get configBackupSingleInstanceDialogMessage;
+
+  /// No description provided for @agentProfileOpenCnpjEmptyResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty response from the CNPJ lookup service.'**
+  String get agentProfileOpenCnpjEmptyResponse;
+
+  /// No description provided for @agentProfileOpenCnpjInvalidPayload.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid response from the CNPJ lookup service.'**
+  String get agentProfileOpenCnpjInvalidPayload;
+
+  /// No description provided for @agentProfileOpenCnpjNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'CNPJ was not found in the queried database.'**
+  String get agentProfileOpenCnpjNotFound;
+
+  /// No description provided for @agentProfileOpenCnpjRateLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'CNPJ lookup rate limit exceeded. Try again shortly.'**
+  String get agentProfileOpenCnpjRateLimit;
+
+  /// No description provided for @agentProfileOpenCnpjNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not look up the CNPJ. Check your connection.'**
+  String get agentProfileOpenCnpjNetworkError;
+
+  /// No description provided for @agentProfileOpenCnpjUnexpectedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unexpected error while looking up the CNPJ.'**
+  String get agentProfileOpenCnpjUnexpectedError;
+
+  /// No description provided for @agentProfileViaCepNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Postal code not found.'**
+  String get agentProfileViaCepNotFound;
+
+  /// No description provided for @agentProfileViaCepEmptyResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty response from the postal code lookup service.'**
+  String get agentProfileViaCepEmptyResponse;
+
+  /// No description provided for @agentProfileViaCepInvalidPayload.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid response from the postal code lookup service.'**
+  String get agentProfileViaCepInvalidPayload;
+
+  /// No description provided for @agentProfileViaCepNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not look up the postal code. Check your connection.'**
+  String get agentProfileViaCepNetworkError;
+
+  /// No description provided for @agentProfileViaCepUnexpectedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unexpected error while looking up the postal code.'**
+  String get agentProfileViaCepUnexpectedError;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

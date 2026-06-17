@@ -17,12 +17,12 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Falha na inicializacao'), findsOneWidget);
+    expect(find.text('Falha na inicialização'), findsOneWidget);
     expect(
       find.textContaining('Execute o Plug Agente como administrador'),
       findsOneWidget,
     );
-    expect(find.text('Detalhes tecnicos:'), findsOneWidget);
+    expect(find.text('Detalhes técnicos:'), findsOneWidget);
     expect(find.textContaining('trace line'), findsOneWidget);
     expect(find.text('Fechar aplicativo'), findsOneWidget);
   });

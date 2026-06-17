@@ -1,8 +1,16 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/agent_profile_lookup_error_messages.dart';
 import 'package:plug_agente/infrastructure/external_services/via_cep_client.dart';
+
+const _testErrorMessages = ViaCepLookupErrorMessages(
+  emptyResponse: 'empty response',
+  notFound: 'not found',
+  invalidPayload: 'invalid payload',
+  networkError: 'network error',
+  unexpectedError: 'unexpected error',
+);
 
 void main() {
   group('ViaCepClient', () {
@@ -29,7 +37,10 @@ void main() {
       );
 
       final client = ViaCepClient(dio);
-      final result = await client.lookupCep('01001000');
+      final result = await client.lookupCep(
+        '01001000',
+        errorMessages: _testErrorMessages,
+      );
 
       expect(result.isSuccess(), isTrue);
       final address = result.getOrThrow();
@@ -55,14 +66,17 @@ void main() {
       );
 
       final client = ViaCepClient(dio);
-      final result = await client.lookupCep('00000000');
+      final result = await client.lookupCep(
+        '00000000',
+        errorMessages: _testErrorMessages,
+      );
 
       expect(result.isError(), isTrue);
       final err = result.exceptionOrNull();
       expect(err, isA<domain.ValidationFailure>());
       expect(
         (err! as domain.Failure).message,
-        AppStrings.msgViaCepNotFound,
+        _testErrorMessages.notFound,
       );
     });
 
@@ -87,14 +101,17 @@ void main() {
         );
 
         final client = ViaCepClient(dio);
-        final result = await client.lookupCep('01001000');
+        final result = await client.lookupCep(
+          '01001000',
+          errorMessages: _testErrorMessages,
+        );
 
         expect(result.isError(), isTrue);
         final err = result.exceptionOrNull();
         expect(err, isA<domain.ServerFailure>());
         expect(
           (err! as domain.Failure).message,
-          AppStrings.msgViaCepInvalidPayload,
+          _testErrorMessages.invalidPayload,
         );
       },
     );

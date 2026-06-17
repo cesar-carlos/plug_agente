@@ -75,7 +75,7 @@ class _PlaygroundPageState extends State<PlaygroundPage> {
   }
 
   IAppSettingsStore? _settingsStore(BuildContext context) =>
-      readOptionalPresentationProvider<IAppSettingsStore>(context);
+      readOptionalGetItService<IAppSettingsStore>();
 
   Future<void> _restoreStreamingMode() async {
     await _settingsController.restoreStreamingModeSafely(

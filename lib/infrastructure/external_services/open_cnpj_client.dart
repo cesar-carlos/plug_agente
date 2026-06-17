@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:plug_agente/core/constants/app_strings.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/agent_profile_lookup_error_messages.dart';
 import 'package:plug_agente/domain/services/agent_profile_lookup_gateways.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -12,7 +12,10 @@ class OpenCnpjClient implements IOpenCnpjLookup {
   final Dio _dio;
 
   @override
-  Future<Result<OpenCnpjCompanyData>> lookupCnpj(String cnpjDigits) async {
+  Future<Result<OpenCnpjCompanyData>> lookupCnpj(
+    String cnpjDigits, {
+    required OpenCnpjLookupErrorMessages errorMessages,
+  }) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         '$apiBaseUrl/$cnpjDigits',
@@ -20,7 +23,7 @@ class OpenCnpjClient implements IOpenCnpjLookup {
       final payload = response.data;
       if (payload == null) {
         return Failure(
-          domain.ValidationFailure(AppStrings.msgOpenCnpjEmptyResponse),
+          domain.ValidationFailure(errorMessages.emptyResponse),
         );
       }
 
@@ -28,7 +31,7 @@ class OpenCnpjClient implements IOpenCnpjLookup {
       final legalName = _readString(payload, 'razao_social');
       if (document == null || legalName == null) {
         return Failure(
-          domain.ServerFailure(AppStrings.msgOpenCnpjInvalidPayload),
+          domain.ServerFailure(errorMessages.invalidPayload),
         );
       }
 
@@ -53,18 +56,18 @@ class OpenCnpjClient implements IOpenCnpjLookup {
       final statusCode = error.response?.statusCode;
       if (statusCode == 404) {
         return Failure(
-          domain.ValidationFailure(AppStrings.msgOpenCnpjNotFound),
+          domain.ValidationFailure(errorMessages.notFound),
         );
       }
       if (statusCode == 429) {
         return Failure(
-          domain.ServerFailure(AppStrings.msgOpenCnpjRateLimit),
+          domain.ServerFailure(errorMessages.rateLimit),
         );
       }
 
       return Failure(
         domain.NetworkFailure.withContext(
-          message: AppStrings.msgOpenCnpjNetworkError,
+          message: errorMessages.networkError,
           cause: error,
           context: {'service': 'opencnpj'},
         ),
@@ -72,7 +75,7 @@ class OpenCnpjClient implements IOpenCnpjLookup {
     } on Exception catch (error) {
       return Failure(
         domain.ServerFailure.withContext(
-          message: AppStrings.msgOpenCnpjUnexpectedError,
+          message: errorMessages.unexpectedError,
           cause: error,
           context: {'service': 'opencnpj'},
         ),
