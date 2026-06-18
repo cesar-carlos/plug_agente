@@ -3,12 +3,11 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:plug_agente/application/bootstrap/deferred_boot_phase_outcome.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
+import 'package:plug_agente/application/services/startup_session_orchestrator.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
-import 'package:plug_agente/core/utils/url_utils.dart';
-import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/domain/errors/failure_extensions.dart';
-import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
+import 'package:plug_agente/presentation/adapters/startup_session_ports_adapter.dart';
+import 'package:plug_agente/presentation/boot/hub_recovery_auth_bridge_wiring.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -37,6 +36,7 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
   AuthProvider? _authProvider;
   ConfigProvider? _configProvider;
   String? _lastOdbcSignature;
+  String? _lastBootstrapFailedSignature;
   bool _startupFlowHandled = false;
   bool _startupFlowRunning = false;
 
@@ -66,8 +66,12 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
     _authProvider = authProvider;
     _configProvider = configProvider;
 
-    connectionProvider.setAuthProvider(authProvider);
     connectionProvider.setConfigProvider(configProvider);
+    wireHubRecoveryAuthBridge(
+      authProvider: authProvider,
+      connectionProvider: connectionProvider,
+      sessionCoordinator: widget.hubSessionCoordinator,
+    );
 
     configProvider.removeListener(_onConfigStateChanged);
     configProvider.addListener(_onConfigStateChanged);
@@ -81,6 +85,10 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
     if (_startupFlowHandled) {
       return;
     }
+    final signature = _startupConfigSignature(_configProvider?.currentConfig);
+    if (_lastBootstrapFailedSignature != null && signature == _lastBootstrapFailedSignature) {
+      return;
+    }
     unawaited(_runStartupFlow());
   }
 
@@ -91,33 +99,37 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
 
     _startupFlowRunning = true;
     try {
-      final deferredBootstrap = widget.runDeferredBootstrapBeforeConnect;
-      if (deferredBootstrap != null) {
-        try {
-          final outcome = await deferredBootstrap();
-          if (outcome.shouldSkipHubAutoConnect) {
-            AppLogger.warning(
-              'Skipping Hub auto-connect after critical deferred bootstrap failure',
-            );
-            _markStartupFlowHandled();
-            return;
-          }
-        } on Object catch (error, stackTrace) {
-          AppLogger.error(
-            'Deferred bootstrap failed before Hub auto-connect',
-            error,
-            stackTrace,
-          );
-          _markStartupFlowHandled();
-          return;
-        }
-      }
-
-      if (!mounted || _startupFlowHandled) {
+      final connectionProvider = _connectionProvider;
+      final authProvider = _authProvider;
+      final configProvider = _configProvider;
+      if (connectionProvider == null || authProvider == null || configProvider == null) {
         return;
       }
 
-      await _attemptStartupLoginAndConnect();
+      final currentConfig = configProvider.currentConfig;
+      final signature = _startupConfigSignature(currentConfig);
+      if (_lastBootstrapFailedSignature != null && signature == _lastBootstrapFailedSignature) {
+        return;
+      }
+
+      final result = await StartupSessionOrchestrator(
+        hubSessionCoordinator: widget.hubSessionCoordinator,
+        ports: startupSessionPortsFromProviders(
+          configProvider: configProvider,
+          authProvider: authProvider,
+          connectionProvider: connectionProvider,
+        ),
+      ).run(
+        runDeferredBootstrapBeforeConnect: widget.runDeferredBootstrapBeforeConnect,
+        defaultServerUrl: widget.defaultServerUrl,
+      );
+
+      if (result == StartupSessionFlowResult.completed ||
+          result == StartupSessionFlowResult.deferredBootstrapFailed) {
+        _markStartupFlowHandled();
+      } else if (result == StartupSessionFlowResult.bootstrapFailed) {
+        _lastBootstrapFailedSignature = signature;
+      }
     } finally {
       _startupFlowRunning = false;
     }
@@ -139,118 +151,6 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
     _lastOdbcSignature = signature;
   }
 
-  Future<void> _attemptStartupLoginAndConnect() async {
-    if (!mounted || _startupFlowHandled) {
-      return;
-    }
-
-    final configProvider = _configProvider;
-    final connectionProvider = _connectionProvider;
-    final authProvider = _authProvider;
-    if (configProvider == null || connectionProvider == null || authProvider == null) {
-      return;
-    }
-
-    if (configProvider.isLoading) {
-      return;
-    }
-    if (connectionProvider.isConnected ||
-        connectionProvider.status == ConnectionStatus.connecting ||
-        connectionProvider.status == ConnectionStatus.negotiating ||
-        connectionProvider.status == ConnectionStatus.reconnecting) {
-      _markStartupFlowHandled();
-      return;
-    }
-
-    final config = configProvider.currentConfig;
-    if (config == null) {
-      _markStartupFlowHandled();
-      return;
-    }
-
-    final startupContext = _buildStartupContext(config);
-    if (startupContext == null) {
-      _markStartupFlowHandled();
-      return;
-    }
-
-    final bootstrapResult = await widget.hubSessionCoordinator.bootstrapAutoSession(
-      configId: startupContext.configId,
-      serverUrl: startupContext.serverUrl,
-      agentId: startupContext.agentId,
-    );
-
-    var shouldStop = false;
-    AuthToken? startupToken;
-    bootstrapResult.fold(
-      (session) {
-        startupToken = session.token;
-        authProvider.restoreToken(
-          session.token,
-          configId: startupContext.configId,
-          silent: true,
-        );
-      },
-      (failure) {
-        if (failure is domain_errors.Failure && failure.isTransient) {
-          connectionProvider.startPersistentHubRecovery(
-            configId: startupContext.configId,
-            serverUrl: startupContext.serverUrl,
-            agentId: startupContext.agentId,
-          );
-        } else {
-          authProvider.setRecoveryError(failure.toDisplayMessage());
-        }
-        _markStartupFlowHandled();
-        shouldStop = true;
-      },
-    );
-    if (shouldStop || startupToken == null) {
-      return;
-    }
-
-    final connectResult = await connectionProvider.connect(
-      startupContext.serverUrl,
-      startupContext.agentId,
-      configId: startupContext.configId,
-      authToken: startupToken!.token,
-      recoverOnFailure: true,
-    );
-    if (connectResult.isSuccess() ||
-        connectionProvider.status == ConnectionStatus.reconnecting ||
-        connectionProvider.isReconnecting) {
-      _markStartupFlowHandled();
-    }
-  }
-
-  _StartupContext? _buildStartupContext(Config config) {
-    final serverUrl = normalizeServerUrl(config.serverUrl);
-    final agentId = config.agentId.trim();
-
-    if (serverUrl.isEmpty || serverUrl.toLowerCase() == widget.defaultServerUrl || agentId.isEmpty) {
-      return null;
-    }
-
-    final authToken = config.authToken?.trim();
-    final refreshToken = config.refreshToken?.trim();
-    final hasAuthTokenPair =
-        authToken != null && authToken.isNotEmpty && refreshToken != null && refreshToken.isNotEmpty;
-    final authUsername = config.authUsername?.trim();
-    final authPassword = config.authPassword?.trim();
-    final hasAuthCredentials =
-        authUsername != null && authUsername.isNotEmpty && authPassword != null && authPassword.isNotEmpty;
-
-    if (!hasAuthTokenPair && !hasAuthCredentials) {
-      return null;
-    }
-
-    return _StartupContext(
-      configId: config.id,
-      serverUrl: serverUrl,
-      agentId: agentId,
-    );
-  }
-
   void _markStartupFlowHandled() {
     if (_startupFlowHandled) {
       return;
@@ -263,14 +163,17 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
   Widget build(BuildContext context) => widget.child;
 }
 
-class _StartupContext {
-  const _StartupContext({
-    required this.configId,
-    required this.serverUrl,
-    required this.agentId,
-  });
-
-  final String configId;
-  final String serverUrl;
-  final String agentId;
+String? _startupConfigSignature(Config? config) {
+  if (config == null) {
+    return null;
+  }
+  return [
+    config.id,
+    config.serverUrl.trim(),
+    config.agentId.trim(),
+    config.authToken?.trim() ?? '',
+    config.refreshToken?.trim() ?? '',
+    config.authUsername?.trim() ?? '',
+    config.authPassword?.trim() ?? '',
+  ].join('|');
 }

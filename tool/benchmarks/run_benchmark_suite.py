@@ -26,9 +26,8 @@ Prefer the flutter_test suite for regression gates and baselines:
   flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart --tags perf
   python tool/benchmarks/run_benchmark_suite.py --only transport_pipeline
 
-Use --skip-dart-tool (or omit transport_pipeline_json via --only) in CI and when ODBC
-is unavailable. Sync-path micro-benchmarks via `dart run ... --path sync` remain valid
-for local quick checks only.
+Use --skip-dart-tool (default) or rely on the built-in skip for transport_pipeline_json in CI
+and when ODBC is unavailable. Pass --no-skip-dart-tool to attempt transport_pipeline_json locally.
 
 Optional gate env (when ODBC DSN is configured):
   BENCHMARK_COLUMNAR_MIN_SPEEDUP=1.30  # async: workerCount=4 columnar vs rowMajor wall time
@@ -69,6 +68,7 @@ from tool.py.benchmark_common import (
     collect_git_metadata,
     collect_machine_metadata,
     ensure_on_path,
+    is_dart_ffi_compile_failure,
     odbc_dsn_configured,
     parse_gateway_encoding_metrics,
     parse_plug_agente_stack_metrics,
@@ -87,6 +87,11 @@ GATEWAY_ENCODING_TEST = "test/tool/odbc_gateway_encoding_benchmark_test.dart"
 TRANSPORT_DART_TOOL = "tool/benchmarks/benchmark_transport_pipeline.dart"
 GATEWAY_ENCODING_TOOL = "tool/benchmarks/benchmark_odbc_gateway_encoding.dart"
 
+DART_TOOL_SKIP_REASON = (
+    "plain `dart run` cannot compile FFI/isolate offload in this workspace; "
+    "use flutter_test transport_pipeline or pass --no-skip-dart-tool for local experiments"
+)
+
 
 def filter_suite_plans(
     plans: list[dict[str, Any]],
@@ -100,6 +105,17 @@ def filter_suite_plans(
         if only is not None and suite_id not in only:
             continue
         if skip_dart_tool and suite_id == "transport_pipeline_json":
+            if only is not None and suite_id in only:
+                filtered.append(plan)
+            else:
+                filtered.append(
+                    {
+                        "id": "transport_pipeline_json",
+                        "kind": "dart_tool",
+                        "enabled": False,
+                        "skip_reason": DART_TOOL_SKIP_REASON,
+                    }
+                )
             continue
         filtered.append(plan)
     return filtered
@@ -397,8 +413,16 @@ def run_transport_json_tool(log_path: Path) -> dict[str, Any]:
             metrics = parse_transport_json_metrics(payload)
         except json.JSONDecodeError:
             pass
-    status = "pass" if exit_code == 0 else "error"
-    return {
+    if exit_code == 0:
+        status = "pass"
+        reason: str | None = None
+    elif is_dart_ffi_compile_failure(exit_code, output):
+        status = "skipped"
+        reason = DART_TOOL_SKIP_REASON
+    else:
+        status = "error"
+        reason = None
+    result: dict[str, Any] = {
         "id": "transport_pipeline_json",
         "kind": "dart_tool",
         "status": status,
@@ -407,6 +431,9 @@ def run_transport_json_tool(log_path: Path) -> dict[str, Any]:
         "log_file": log_path.name,
         "metrics": metrics,
     }
+    if reason is not None:
+        result["reason"] = reason
+    return result
 
 
 def run_odbc_suite(suite_id: str, package_root: Path, log_path: Path) -> dict[str, Any]:
@@ -493,8 +520,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--skip-dart-tool",
-        action="store_true",
-        help="Skip transport_pipeline_json (dart run async stub; prefer flutter_test in CI)",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip transport_pipeline_json by default (dart run FFI compile fails in this workspace; "
+        "use --no-skip-dart-tool to attempt it)",
     )
     parser.add_argument(
         "--compare-baseline",

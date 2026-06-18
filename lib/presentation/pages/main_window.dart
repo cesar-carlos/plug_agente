@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/routes/app_router.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/navigation/nav_destination.dart';
@@ -35,6 +36,17 @@ class _MainWindowState extends State<MainWindow> {
     final l10n = AppLocalizations.of(context)!;
     final selectedDestination = _getCurrentDestination(context);
     final runtimeMode = context.watch<RuntimeModeProvider>();
+    final capabilities = runtimeMode.capabilities;
+    final allowedDestinations = NavDestination.navOrder
+        .where(
+          (destination) => isRouteAllowedForCapabilities(
+            location: destination.route,
+            capabilities: capabilities,
+          ),
+        )
+        .toList(growable: false);
+    final selectedIndex = allowedDestinations.indexOf(selectedDestination);
+    final paneSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
 
     return NavigationView(
       appBar: const NavigationAppBar(
@@ -42,13 +54,15 @@ class _MainWindowState extends State<MainWindow> {
         automaticallyImplyLeading: false,
       ),
       pane: NavigationPane(
-        selected: NavDestination.navOrder.indexOf(selectedDestination),
+        selected: paneSelectedIndex,
         onChanged: (index) {
-          final destination = NavDestination.fromIndex(index);
-          _navigateToDestination(context, destination);
+          if (index < 0 || index >= allowedDestinations.length) {
+            return;
+          }
+          _navigateToDestination(context, allowedDestinations[index]);
         },
         displayMode: PaneDisplayMode.compact,
-        items: NavDestination.navOrder.map((dest) {
+        items: allowedDestinations.map((dest) {
           return PaneItem(
                 icon: Icon(dest.icon),
                 title: Text(dest.localizedTitle(l10n)),

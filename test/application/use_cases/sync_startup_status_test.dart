@@ -65,4 +65,29 @@ void main() {
     expect(result.isError(), isTrue);
     expect(result.exceptionOrNull(), isA<StartupServiceFailure>());
   });
+
+  test('validates launch configuration when stored preference is enabled but system is unhealthy', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(true);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(false),
+    );
+    when(() => repository.persistStartWithWindows(false)).thenAnswer(
+      (_) async => const Success(unit),
+    );
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.needsRepair),
+    );
+
+    final result = await useCase();
+
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull()?.reconciledStartWithWindows, isFalse);
+    verify(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).called(1);
+    verify(() => repository.persistStartWithWindows(false)).called(1);
+  });
 }

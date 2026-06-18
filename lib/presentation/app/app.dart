@@ -19,11 +19,14 @@ class PlugAgentApp extends StatefulWidget {
   const PlugAgentApp({
     required this.capabilities,
     this.initialRoute,
+    @visibleForTesting this.routerOverride,
     super.key,
   });
 
   final String? initialRoute;
   final RuntimeCapabilities capabilities;
+  @visibleForTesting
+  final GoRouter? routerOverride;
 
   @override
   State<PlugAgentApp> createState() => _PlugAgentAppState();
@@ -38,10 +41,12 @@ class _PlugAgentAppState extends State<PlugAgentApp> {
   @override
   void initState() {
     super.initState();
-    _router = createAppRouter(
-      capabilities: widget.capabilities,
-      initialLocation: widget.initialRoute,
-    );
+    _router =
+        widget.routerOverride ??
+        createAppRouter(
+          capabilities: widget.capabilities,
+          initialLocation: widget.initialRoute,
+        );
     _runtimeChannel.setMethodCallHandler(_handleRuntimeMethodCall);
   }
 

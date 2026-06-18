@@ -5,6 +5,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_circuit_breaker.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_sql_execution_idle_wait_port.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_runtime_lifecycle.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_gateway.dart';
@@ -16,11 +17,17 @@ class _MockConnectionPool extends Mock implements IConnectionPool {}
 
 class _MockCircuitBreakerGateway extends Mock implements IOdbcConnectionCircuitBreaker {}
 
+class _MockSqlExecutionIdleWaitPort extends Mock implements ISqlExecutionIdleWaitPort {}
+
 class _MockOdbcService extends Mock implements OdbcService {}
 
 class _MockOdbcConnectionSettings extends Mock implements IOdbcConnectionSettings {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(const Duration(seconds: 30));
+  });
+
   group('OdbcWorkerRuntimeRecoveryService', () {
     late _MockConnectionPool connectionPool;
     late _MockCircuitBreakerGateway databaseGateway;
@@ -29,6 +36,7 @@ void main() {
     late OdbcRuntimeLifecycle runtimeLifecycle;
     late OdbcStreamingGateway streamingGatewayConcrete;
     late MetricsCollector metrics;
+    late _MockSqlExecutionIdleWaitPort sqlExecutionIdleWaitPort;
     late OdbcWorkerRuntimeRecoveryService service;
 
     setUp(() {
@@ -42,6 +50,7 @@ void main() {
       when(odbcService.initialize).thenAnswer((_) async => const Success(unit));
       runtimeLifecycle = OdbcRuntimeLifecycle(odbcService);
       metrics = MetricsCollector();
+      sqlExecutionIdleWaitPort = _MockSqlExecutionIdleWaitPort();
       streamingGatewayConcrete = OdbcStreamingGateway(
         odbcService,
         settings,
@@ -53,15 +62,37 @@ void main() {
         streamingGateway: streamingGateway,
         runtimeLifecycle: runtimeLifecycle,
         inFlightExecutionRegistry: inFlightRegistry,
+        sqlExecutionIdleWaitPort: sqlExecutionIdleWaitPort,
         streamingGatewayConcrete: streamingGatewayConcrete,
         metrics: metrics,
       );
 
+      when(
+        () => sqlExecutionIdleWaitPort.waitForActiveWorkers(timeout: any(named: 'timeout')),
+      ).thenAnswer((_) async => const Success(unit));
       when(() => connectionPool.closeAll()).thenAnswer((_) async => const Success(unit));
     });
 
     tearDown(() {
       metrics.dispose();
+    });
+
+    test('waits for in-flight SQL workers before closing the pool', () async {
+      final callOrder = <String>[];
+      when(
+        () => sqlExecutionIdleWaitPort.waitForActiveWorkers(timeout: any(named: 'timeout')),
+      ).thenAnswer((_) async {
+        callOrder.add('wait_sql_idle');
+        return const Success(unit);
+      });
+      when(() => connectionPool.closeAll()).thenAnswer((_) async {
+        callOrder.add('close_pool');
+        return const Success(unit);
+      });
+
+      await service.recoverAfterNativeWorkerCrash();
+
+      expect(callOrder, <String>['wait_sql_idle', 'close_pool']);
     });
 
     test('invalidates pools, breakers, in-flight registry, and re-initializes ODBC', () async {
@@ -72,6 +103,9 @@ void main() {
 
       await service.recoverAfterNativeWorkerCrash();
 
+      verify(
+        () => sqlExecutionIdleWaitPort.waitForActiveWorkers(timeout: any(named: 'timeout')),
+      ).called(1);
       verify(() => connectionPool.closeAll()).called(1);
       verify(() => databaseGateway.clearAllCircuitBreakers()).called(1);
       verify(() => streamingGateway.clearAllCircuitBreakers()).called(1);

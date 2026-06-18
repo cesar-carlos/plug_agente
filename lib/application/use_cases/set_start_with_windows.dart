@@ -47,24 +47,21 @@ class SetStartWithWindows {
     }
 
     final persistResult = await _repository.persistStartWithWindows(value);
-    final preferencePersisted = persistResult.isSuccess();
-    persistResult.fold(
-      (_) {},
+    return persistResult.fold(
+      (_) => Success(
+        SetStartWithWindowsOutcome(
+          change: value ? StartupChangeOutcome.enabled : StartupChangeOutcome.disabled,
+          launchConfiguration: launchConfiguration,
+        ),
+      ),
       (failure) {
         developer.log(
           'Failed to persist startWithWindows after system toggle: $failure',
           name: 'set_start_with_windows',
           level: 900,
         );
+        return Failure(failure);
       },
-    );
-
-    return Success(
-      SetStartWithWindowsOutcome(
-        change: value ? StartupChangeOutcome.enabled : StartupChangeOutcome.disabled,
-        launchConfiguration: launchConfiguration,
-        preferencePersisted: preferencePersisted,
-      ),
     );
   }
 }

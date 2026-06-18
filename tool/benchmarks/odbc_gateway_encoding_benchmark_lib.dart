@@ -195,7 +195,8 @@ String resolveDefaultOdbcBenchQuery({String? dsn}) {
   if (normalized.contains('sql anywhere') || normalized.contains('sybase')) {
     return 'SELECT TOP 1000 table_id, table_name, creator, table_type FROM SYS.SYSTABLE';
   }
-  return 'SELECT TOP 1000 * FROM sys.objects';
+  return 'SELECT TOP 8000 object_id, name, type, type_desc, modify_date '
+      'FROM sys.objects ORDER BY object_id';
 }
 
 String? _readArg(List<String> args, String name) {

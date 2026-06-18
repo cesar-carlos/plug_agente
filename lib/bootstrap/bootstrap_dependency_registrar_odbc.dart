@@ -127,6 +127,9 @@ void _registerOdbc(
         return sqlQueue;
       },
     )
+    ..registerLazySingleton<ISqlExecutionIdleWaitPort>(
+      () => SqlExecutionIdleWaitAdapter(getIt<SqlExecutionQueue>()),
+    )
     ..registerLazySingleton<OdbcStreamingGateway>(
       () => OdbcStreamingGateway(
         getIt<odbc.OdbcService>(),
@@ -151,6 +154,7 @@ void _registerOdbc(
         streamingGateway: getIt<OdbcStreamingGateway>(),
         runtimeLifecycle: getIt<OdbcRuntimeLifecycle>(),
         inFlightExecutionRegistry: getIt<OdbcInFlightExecutionRegistry>(),
+        sqlExecutionIdleWaitPort: getIt<ISqlExecutionIdleWaitPort>(),
         streamingGatewayConcrete: getIt<OdbcStreamingGateway>(),
         metrics: getIt<MetricsCollector>(),
       ),
@@ -197,11 +201,15 @@ void _registerOdbc(
     ..registerLazySingleton<IOdbcApplicationRuntimeResetPort>(
       () => OdbcApplicationRuntimeResetService(getIt: getIt),
     )
+    ..registerLazySingleton<IOdbcRuntimeReloadTeardownPort>(
+      () => OdbcRuntimeReloadTeardownService(getIt: getIt),
+    )
     ..registerLazySingleton<IOdbcRuntimeReloader>(
       () => OdbcRuntimeReloader(
         getIt: getIt,
         odbcWorkerLocator: odbcWorkerLocator,
         applicationRuntimeResetPort: getIt<IOdbcApplicationRuntimeResetPort>(),
+        teardownPort: getIt<IOdbcRuntimeReloadTeardownPort>(),
       ),
     );
 }

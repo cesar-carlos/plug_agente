@@ -461,6 +461,56 @@ void main() {
       );
     });
 
+    test('should report disabled when registry entry exists but is unhealthy', () async {
+      final calls = <_ProcessInvocation>[];
+      final results = Queue<ProcessResult>.from(
+        _queries(hkcu: _querySuccess(_hkcuRunKey, '"$_currentExecutable"')),
+      );
+
+      final service = _makeService(
+        calls: calls,
+        results: results,
+      );
+
+      final result = await service.isEnabled();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (enabled) => check(enabled).isFalse(),
+        (_) => fail('Expected success'),
+      );
+    });
+
+    test('should report disabled when registry entry targets stale executable', () async {
+      final results = Queue<ProcessResult>.from(
+        _queries(hkcu: _querySuccess(_hkcuRunKey, _startupValue(_oldExecutable))),
+      );
+
+      final service = _makeService(results: results);
+      final result = await service.isEnabled();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (enabled) => check(enabled).isFalse(),
+        (_) => fail('Expected success'),
+      );
+    });
+
+    test('should detect missing autostart argument for current executable', () async {
+      final results = Queue<ProcessResult>.from(
+        _queries(hkcu: _querySuccess(_hkcuRunKey, '"$_currentExecutable"')),
+      );
+
+      final service = _makeService(results: results);
+      final result = await service.hasRegistryEntryMissingAutostartForCurrentExecutable();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (missing) => check(missing).isTrue(),
+        (_) => fail('Expected success'),
+      );
+    });
+
     test('should build startup diagnostic report with scope details', () async {
       final results = Queue<ProcessResult>.from(
         _queries(

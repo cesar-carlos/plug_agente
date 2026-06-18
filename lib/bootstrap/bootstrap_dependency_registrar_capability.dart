@@ -20,22 +20,7 @@ void registerPlugCapabilityServices(
     );
   }
 
-  if (capabilities.supportsWindowManager) {
-    developer.log(
-      'Registering AutoStartService',
-      name: 'plug_dependency_registrar',
-    );
-    getIt.registerLazySingleton<IStartupService>(
-      AutoStartService.new,
-    );
-  }
-
-  getIt.registerLazySingleton<IStartupPreferencesRepository>(
-    () => StartupPreferencesRepository(
-      getIt<IAppSettingsStore>(),
-      startupService: getIt.isRegistered<IStartupService>() ? getIt<IStartupService>() : null,
-    ),
-  );
+  registerPlugStartupServices(getIt, capabilities);
 
   getIt.registerLazySingleton<IAppPreferencesRepository>(
     () => AppPreferencesRepository(
@@ -44,16 +29,6 @@ void registerPlugCapabilityServices(
       updates: getIt<IUpdatePreferencesRepository>(),
     ),
   );
-
-  getIt
-    ..registerLazySingleton(() => SyncStartupStatus(getIt<IStartupPreferencesRepository>()))
-    ..registerLazySingleton(() => SetStartWithWindows(getIt<IStartupPreferencesRepository>()))
-    ..registerLazySingleton(
-      () => SetTrayBehaviorPreference(
-        getIt<IStartupPreferencesRepository>(),
-        windowManagerService: getIt.isRegistered<IWindowManagerService>() ? getIt<IWindowManagerService>() : null,
-      ),
-    );
 
   if (capabilities.supportsNotifications) {
     developer.log(

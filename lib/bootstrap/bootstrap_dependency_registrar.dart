@@ -29,8 +29,10 @@ import 'package:plug_agente/application/actions/elevated_action_status_file_sync
 import 'package:plug_agente/application/actions/elevated_agent_action_execution_service.dart';
 import 'package:plug_agente/application/actions/i_action_command_safety_assessor.dart';
 import 'package:plug_agente/application/bootstrap/odbc_application_runtime_reset_service.dart';
+import 'package:plug_agente/application/bootstrap/odbc_runtime_reload_teardown_service.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/gateway/queued_streaming_database_gateway.dart';
+import 'package:plug_agente/application/gateway/sql_execution_idle_wait_adapter.dart';
 import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
 import 'package:plug_agente/application/observability/update_check_id_recorder.dart';
 import 'package:plug_agente/application/ports/i_agent_actions_bundle_file_gateway.dart';
@@ -94,6 +96,7 @@ import 'package:plug_agente/application/use_cases/delete_agent_action_secret.dar
 import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.dart';
 import 'package:plug_agente/application/use_cases/delete_client_token.dart';
 import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.dart';
+import 'package:plug_agente/application/use_cases/ensure_startup_launch_configuration_at_boot.dart';
 import 'package:plug_agente/application/use_cases/execute_playground_query.dart';
 import 'package:plug_agente/application/use_cases/execute_streaming_query.dart';
 import 'package:plug_agente/application/use_cases/export_agent_actions_bundle.dart';
@@ -210,6 +213,7 @@ import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart'
 import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_credential_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_driver_checker.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_runtime_reload_teardown_port.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_runtime_reloader.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_streaming_session_cache.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_worker_runtime_recovery_port.dart';
@@ -220,6 +224,7 @@ import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_revoked_token_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
+import 'package:plug_agente/domain/repositories/i_sql_execution_idle_wait_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
@@ -328,6 +333,7 @@ part 'bootstrap_dependency_registrar_persistence.dart';
 part 'bootstrap_dependency_registrar_playground.dart';
 part 'bootstrap_dependency_registrar_rpc.dart';
 part 'bootstrap_dependency_registrar_shutdown.dart';
+part 'bootstrap_dependency_registrar_startup.dart';
 part 'bootstrap_dependency_registrar_transport_hub.dart';
 
 /// Registers transport, ODBC, auth, and application use-case graph on [getIt].

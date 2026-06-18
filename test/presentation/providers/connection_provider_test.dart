@@ -3,6 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/ports/i_hub_recovery_auth_bridge.dart';
+import 'package:plug_agente/application/services/hub_access_token_refresh_gate.dart';
+import 'package:plug_agente/application/services/hub_access_token_renewer.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/use_cases/check_hub_availability.dart';
 import 'package:plug_agente/application/use_cases/check_odbc_driver.dart';
@@ -16,6 +19,7 @@ import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/value_objects/auth_credentials.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/domain/value_objects/hub_recovery_ui_hint.dart';
+import 'package:plug_agente/presentation/adapters/hub_recovery_auth_bridge.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
 import 'package:plug_agente/presentation/providers/config_provider.dart';
 import 'package:plug_agente/presentation/providers/connection_provider.dart';
@@ -34,6 +38,19 @@ class _MockHubSessionCoordinator extends Mock implements HubSessionCoordinator {
 class _MockConfigProvider extends Mock implements ConfigProvider {}
 
 class _MockAuthProvider extends Mock implements AuthProvider {}
+
+class _TrackingHubAccessTokenRenewer extends HubAccessTokenRenewer {
+  _TrackingHubAccessTokenRenewer()
+    : super(_MockHubSessionCoordinator(), HubAccessTokenRefreshGate(minInterval: Duration.zero));
+
+  IHubRecoveryAuthBridge? boundBridge;
+
+  @override
+  void bindAuthBridge(IHubRecoveryAuthBridge bridge) {
+    boundBridge = bridge;
+    super.bindAuthBridge(bridge);
+  }
+}
 
 class _FakeTransport implements ITransportClient {
   void Function()? onTokenExpired;
@@ -1493,6 +1510,68 @@ void main() {
           currentToken: any<AuthToken>(named: 'currentToken'),
         ),
       );
+    });
+  });
+
+  group('HubAccessTokenRenewer auth bridge binding', () {
+    test('setHubRecoveryAuthBridge binds hub access token renewer before renew', () async {
+      final renewer = _TrackingHubAccessTokenRenewer();
+      final mockAuth = _MockAuthProvider();
+      when(() => mockAuth.currentTokenForConfig(any())).thenReturn(
+        const AuthToken(token: 'access-1', refreshToken: 'refresh-1'),
+      );
+
+      final provider = ConnectionProvider(
+        connectToHub,
+        testDb,
+        checkDriver,
+        transportClient: transport,
+        hubRecoveryAuthCoordinator: hubRecoveryAuthCoordinator,
+        hubAccessTokenRenewer: renewer,
+        authProvider: mockAuth,
+      );
+
+      expect(renewer.boundBridge, isNull);
+
+      final bridge = HubRecoveryAuthBridge(
+        sessionCoordinator: hubRecoveryAuthCoordinator,
+        authProvider: mockAuth,
+      );
+      when(
+        () => hubRecoveryAuthCoordinator.refreshSession(
+          any(),
+          configId: any(named: 'configId'),
+          currentToken: any(named: 'currentToken'),
+        ),
+      ).thenAnswer(
+        (_) async => const Success(
+          AuthToken(token: 'access-2', refreshToken: 'refresh-2'),
+        ),
+      );
+      when(
+        () => hubRecoveryAuthCoordinator.loadPersistedTokenPair(any()),
+      ).thenAnswer((_) async => null);
+
+      when(
+        () => mockAuth.restoreToken(
+          any(),
+          configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
+        ),
+      ).thenReturn(null);
+
+      provider.setHubRecoveryAuthBridge(bridge);
+
+      expect(renewer.boundBridge, same(bridge));
+
+      final renewResult = await renewer.renew(
+        serverUrl: 'https://hub.test',
+        accessToken: 'access-1',
+        configId: 'cfg-1',
+      );
+
+      expect(renewResult.isSuccess(), isTrue);
+      expect(renewResult.getOrNull()?.token, 'access-2');
     });
   });
 }

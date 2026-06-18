@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/domain/logging/structured_log_sink_registry.dart';
 import 'package:plug_agente/domain/utils/log_sanitizer.dart';
 
 abstract class Failure implements Exception {
@@ -49,14 +50,52 @@ abstract class Failure implements Exception {
   }
 
   /// Log this failure with structured logging.
-  void log() {
+  void log({
+    StackTrace? stackTrace,
+    String? operation,
+    Map<String, dynamic> additionalContext = const {},
+  }) {
+    final sink = StructuredLogSinkRegistry.instance;
+    final sanitizedContext = _buildLogContext(
+      operation: operation,
+      additionalContext: additionalContext,
+    );
+
+    if (sink != null) {
+      sink.logStructured(
+        level: 'ERROR',
+        message: '[$code] $message',
+        error: cause,
+        stackTrace: stackTrace,
+        context: sanitizedContext,
+      );
+      return;
+    }
+
     developer.log(
       message,
       name: 'failure',
       level: 1000,
       error: cause,
+      stackTrace: stackTrace,
       time: timestamp,
     );
+  }
+
+  Map<String, dynamic>? _buildLogContext({
+    String? operation,
+    Map<String, dynamic> additionalContext = const {},
+  }) {
+    final merged = <String, dynamic>{
+      'failure_code': code,
+      ...context,
+      ...additionalContext,
+      'operation': ?operation,
+    };
+    if (merged.isEmpty) {
+      return null;
+    }
+    return LogSanitizer.sanitizeMap(merged);
   }
 }
 

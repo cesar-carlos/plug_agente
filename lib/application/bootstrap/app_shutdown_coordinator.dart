@@ -19,8 +19,8 @@ class AppShutdownCoordinator {
   final ITransportClient? _transportClient;
   final IAutoUpdateOrchestrator? _autoUpdateOrchestrator;
 
-  /// Stops auto-update scheduling and tears down the hub connection layer before
-  /// the global shutdown sequence continues with agent actions and ODBC.
+  /// Stops auto-update scheduling and tears down the hub connection layer after
+  /// app-close agent actions and onAppExit policies have run.
   Future<void> runEarlyShutdownPhase() async {
     await stopAutoUpdateOrchestrator();
     await disconnectHubTransport();

@@ -12,7 +12,7 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/presentation/boot/desktop_shell_bootstrap_dependencies.dart';
 
 export 'package:plug_agente/presentation/boot/desktop_shell_bootstrap_dependencies.dart'
-    show DesktopShellBootstrapDependencies, WindowManagerRegistrar;
+    show DesktopShellBootstrapDependencies;
 
 typedef StartupWindowPreferences = ({
   bool startMinimized,
@@ -90,7 +90,7 @@ class DesktopShellBootstrap {
     RuntimeCapabilities capabilities,
   ) async {
     try {
-      final windowManagerService = WindowManagerService();
+      final windowManagerService = _dependencies.resolveWindowManager ?? WindowManagerService();
       final minSize = WindowConstraints.getMainWindowMinSize();
       const initialSize = Size(1200, 800);
 
@@ -105,11 +105,6 @@ class DesktopShellBootstrap {
         size: initialSize,
         minimumSize: minSize,
         startMinimized: preferences.startMinimized,
-      );
-
-      _dependencies.registerWindowManager?.call(
-        windowManagerService,
-        windowManagerService,
       );
 
       developer.log(

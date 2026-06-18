@@ -5,6 +5,7 @@ import 'package:plug_agente/application/bootstrap/app_shutdown_coordinator.dart'
 import 'package:plug_agente/application/bootstrap/hub_connection_shutdown_registry.dart';
 import 'package:plug_agente/bootstrap/bootstrap_dependency_registrar.dart';
 import 'package:plug_agente/bootstrap/bootstrap_odbc_worker_locator.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/feature_flags_env_seeder.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
@@ -12,6 +13,7 @@ import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/di/get_it.dart';
 import 'package:plug_agente/core/di/odbc_runtime_helpers.dart';
+import 'package:plug_agente/core/logging/error_logging_bootstrap.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -210,6 +212,12 @@ Future<void> setupDependencies({
 
   final globalStorageContext = await _resolveGlobalStorageContextOrThrow();
   getIt.registerSingleton<GlobalStorageContext>(globalStorageContext);
+  await ErrorLoggingBootstrap.upgradeToAppStorage(globalStorageContext);
+  await ErrorLoggingBootstrap.registerErrorTracker(
+    dsn: AppEnvironment.get('SENTRY_DSN') ?? '',
+    environment: AppEnvironment.get('APP_ENV') ?? 'development',
+    release: AppEnvironment.get('APP_RELEASE') ?? '',
+  );
 
   final appSettings = GlobalAppSettingsStore(
     filePath: globalStorageContext.settingsFilePath,

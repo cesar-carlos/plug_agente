@@ -34,6 +34,42 @@ void main() {
     renewer.bindAuthBridge(authBridge);
   });
 
+  test('should succeed after auth bridge is bound', () async {
+    renewer.clearAuthBridge();
+
+    when(() => authBridge.currentTokenForConfig(any())).thenReturn(
+      const AuthToken(token: 'access-1', refreshToken: 'refresh-1'),
+    );
+    when(
+      () => authBridge.refreshSession(
+        any(),
+        configId: any(named: 'configId'),
+        currentToken: any(named: 'currentToken'),
+      ),
+    ).thenAnswer(
+      (_) async => const Success(
+        AuthToken(token: 'access-2', refreshToken: 'refresh-2'),
+      ),
+    );
+    when(
+      () => authBridge.restoreToken(
+        any(),
+        configId: any(named: 'configId'),
+        silent: any(named: 'silent'),
+      ),
+    ).thenReturn(null);
+
+    renewer.bindAuthBridge(authBridge);
+
+    final result = await renewer.renew(
+      serverUrl: 'https://hub.example',
+      accessToken: 'access-1',
+    );
+
+    check(result.isSuccess()).isTrue();
+    check(result.getOrNull()?.token).equals('access-2');
+  });
+
   test('should fail when auth bridge is not bound', () async {
     renewer.clearAuthBridge();
 

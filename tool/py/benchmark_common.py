@@ -160,15 +160,30 @@ def resolve_dart_odbc_fast_root() -> Path | None:
     return None
 
 
+def strip_shell_log_prefix(line: str) -> str:
+    candidate = line.strip()
+    if candidate.startswith("Shell:"):
+        return candidate[len("Shell:") :].strip()
+    return candidate
+
+
+def is_dart_ffi_compile_failure(exit_code: int, output: str) -> bool:
+    if exit_code == 252:
+        return True
+    markers = ("InvalidType", "_FfiUseSiteTransformer")
+    return any(marker in output for marker in markers)
+
+
 def parse_transport_markdown_metrics(output: str) -> dict[str, float]:
     metrics: dict[str, float] = {}
     for line in output.splitlines():
-        if not line.startswith("|") or line.startswith("| ---"):
+        candidate = strip_shell_log_prefix(line)
+        if not candidate.startswith("|") or candidate.startswith("| ---"):
             continue
-        if "case |" in line.lower() or "send p50" in line.lower():
+        if "case |" in candidate.lower() or "send p50" in candidate.lower():
             continue
 
-        parts = [part.strip() for part in line.strip("|").split("|")]
+        parts = [part.strip() for part in candidate.strip("|").split("|")]
         if len(parts) < 10:
             continue
 

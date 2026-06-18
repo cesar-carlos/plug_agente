@@ -21,22 +21,24 @@ void resetShutdownStateForTesting() {
   _appCloseActionsDispatched = false;
 }
 
-/// Shutdown centralizado de todos os recursos.
+/// Centralized shutdown of all application resources.
 ///
-/// Sequência de encerramento:
-/// 0. Aplicar silent update pendente (antes de parar o orchestrator)
-/// 1. Parar auto-update e desconectar hub via [AppShutdownCoordinator]
-/// 2. Parar purges periodicos
-/// 3. Marcar subsistema de acoes como draining e despachar gatilhos app-close
-/// 3b. Aplicar onAppExitPolicy
-/// 4. Dispor fila SQL
-/// 5. Fechar pool de conexoes ODBC
-/// 6. Fechar banco local (Drift)
-/// 7. Encerrar metricas e tray
-/// 8. Encerrar worker ODBC
+/// Shutdown order:
+/// 0. Launch pending silent-update helper (before stopping the orchestrator)
+/// 1. Stop periodic purges
+/// 2. Mark agent-actions subsystem as draining
+/// 3. Cancel pending elevated executions
+/// 4. Dispatch app-close agent action triggers
+/// 5. Apply onAppExit policies
+/// 6. Hub disconnect and auto-update dispose via [AppShutdownCoordinator]
+/// 7. Dispose SQL execution queue
+/// 8. Drain ODBC streaming session cache
+/// 9. Close ODBC connection pool
+/// 10. Close local database (Drift), metrics, and ODBC event bridge
+/// 11. Dispose tray service
+/// 12. Shut down ODBC worker
 Future<void> shutdownApp() async {
   await _launchPendingSilentUpdateHelperIfReady();
-  await _runEarlyShutdownCoordinator();
 
   await AppShutdownSequence(getIt).run(
     runEarlyShutdownCoordinator: _runEarlyShutdownCoordinator,

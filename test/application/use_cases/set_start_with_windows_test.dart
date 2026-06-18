@@ -3,6 +3,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
 import 'package:plug_agente/application/use_cases/set_start_with_windows.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:result_dart/result_dart.dart';
@@ -69,6 +70,27 @@ void main() {
     expect(result.isSuccess(), isTrue);
     expect(result.getOrNull()?.change, StartupChangeOutcome.enabled);
     verifyNever(() => repository.enableSystemStartup());
+    verify(() => repository.persistStartWithWindows(true)).called(1);
+  });
+
+  test('returns failure when preference persistence fails after enabling startup', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.enableSystemStartup()).thenAnswer(
+      (_) async => const Success(unit),
+    );
+    when(() => repository.ensureLaunchConfiguration()).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
+    );
+    when(() => repository.persistStartWithWindows(true)).thenAnswer(
+      (_) async => Failure(
+        domain.ConfigurationFailure('Failed to persist setting'),
+      ),
+    );
+
+    final result = await useCase(true);
+
+    expect(result.isError(), isTrue);
+    verify(() => repository.enableSystemStartup()).called(1);
     verify(() => repository.persistStartWithWindows(true)).called(1);
   });
 }

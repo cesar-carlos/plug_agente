@@ -21,6 +21,8 @@ abstract final class AgentActionRuntimeStateConstants {
 
   static const String shutdownReason = 'shutdown';
 
+  static const String odbcRuntimeReloadReason = 'odbc_runtime_reload';
+
   static const String bootstrapReason = 'bootstrap';
 
   static const String appRootDisposeReason = 'app_root_dispose';

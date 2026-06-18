@@ -18,8 +18,16 @@ class SyncStartupStatus {
     final enabledResult = await _repository.readSystemStartupEnabled();
     return enabledResult.fold(
       (isEnabled) async {
-        bool? reconciled;
         final stored = _repository.startWithWindows;
+        StartupLaunchConfigurationOutcome? launchConfiguration;
+        if (isEnabled || stored) {
+          launchConfiguration = await StartupLaunchConfigurationMapper.validate(
+            _repository,
+            allowElevation: false,
+          );
+        }
+
+        bool? reconciled;
         if (isEnabled != stored) {
           developer.log(
             'Startup status out of sync (system: $isEnabled, settings: $stored), updating settings',
@@ -37,14 +45,6 @@ class SyncStartupStatus {
                 level: 900,
               );
             },
-          );
-        }
-
-        StartupLaunchConfigurationOutcome? launchConfiguration;
-        if (isEnabled) {
-          launchConfiguration = await StartupLaunchConfigurationMapper.validate(
-            _repository,
-            allowElevation: false,
           );
         }
 

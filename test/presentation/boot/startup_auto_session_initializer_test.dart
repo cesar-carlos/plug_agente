@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/presentation/boot/startup_auto_session_initializer.dart';
@@ -20,6 +21,15 @@ class _MockAuthProvider extends Mock with ChangeNotifier implements AuthProvider
 class _MockConfigProvider extends Mock with ChangeNotifier implements ConfigProvider {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(
+      const AuthToken(
+        token: 'fallback-token',
+        refreshToken: 'fallback-refresh',
+      ),
+    );
+  });
+
   group('StartupAutoSessionInitializer', () {
     late _MockHubSessionCoordinator hubSessionCoordinator;
     late _MockConnectionProvider connectionProvider;
@@ -92,6 +102,74 @@ void main() {
           agentId: any(named: 'agentId'),
         ),
       );
+    });
+
+    testWidgets('retries startup flow after terminal bootstrap failure when config changes', (tester) async {
+      var bootstrapAttempts = 0;
+      when(
+        () => hubSessionCoordinator.bootstrapAutoSession(
+          configId: any(named: 'configId'),
+          serverUrl: any(named: 'serverUrl'),
+          agentId: any(named: 'agentId'),
+        ),
+      ).thenAnswer((_) async {
+        bootstrapAttempts += 1;
+        if (bootstrapAttempts == 1) {
+          return Failure(domain_errors.ValidationFailure('Invalid credentials'));
+        }
+        return const Success(
+          HubBootstrapSession(
+            token: AuthToken(
+              token: 'access-token',
+              refreshToken: 'refresh-token',
+            ),
+            source: HubBootstrapSource.persistedToken,
+          ),
+        );
+      });
+      when(
+        () => connectionProvider.connect(
+          any(),
+          any(),
+          configId: any(named: 'configId'),
+          authToken: any(named: 'authToken'),
+          recoverOnFailure: any(named: 'recoverOnFailure'),
+        ),
+      ).thenAnswer((_) async => const Success(unit));
+      when(
+        () => authProvider.restoreToken(
+          any(),
+          configId: any(named: 'configId'),
+          silent: any(named: 'silent'),
+        ),
+      ).thenReturn(null);
+
+      await _pumpInitializer(
+        tester,
+        hubSessionCoordinator: hubSessionCoordinator,
+        connectionProvider: connectionProvider,
+        authProvider: authProvider,
+        configProvider: configProvider,
+      );
+
+      expect(bootstrapAttempts, 1);
+      verify(() => authProvider.setRecoveryError('Invalid credentials')).called(1);
+
+      when(() => configProvider.currentConfig).thenReturn(
+        _configWithStoredCredentials().copyWith(authPassword: 'new-secret'),
+      );
+      configProvider.notifyListeners();
+      await tester.pump();
+      await tester.pump();
+
+      expect(bootstrapAttempts, 2);
+      verify(
+        () => authProvider.restoreToken(
+          any(),
+          configId: 'config-1',
+          silent: true,
+        ),
+      ).called(1);
     });
   });
 }

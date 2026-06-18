@@ -320,6 +320,94 @@ void main() {
       expect(runResult.isSuccess(), isTrue);
       expect(adapter.prepareCallCount, 2);
     });
+
+    test(
+      'should block dequeued execution when runtime guard transitions to draining after enqueue',
+      () async {
+        repository.definitions['action-1'] = const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Run command',
+          state: AgentActionState.active,
+          config: CommandLineActionConfig(command: 'dir'),
+        );
+        final runner = ControlledAgentActionLocalRunner();
+        final runtimeStateGuard = AgentActionRuntimeStateGuard();
+        final orchestrator = AgentActionExecutionOrchestrator(
+          repository,
+          const Uuid(),
+          runtimeStateGuard: runtimeStateGuard,
+          now: () => DateTime(2026, 5, 15, 9),
+        );
+        final gatedContext = AgentActionGatedExecutionContext(
+          definition: repository.definitions['action-1']!,
+          runner: runner,
+        );
+        const blockingRequest = AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.remoteHub,
+          idempotencyKey: 'blocking-key',
+        );
+        const queuedRequest = AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.remoteHub,
+          idempotencyKey: 'queued-key',
+          returnWhenQueued: true,
+        );
+
+        final blockingRun = orchestrator.run(
+          gatedContext: gatedContext,
+          request: blockingRequest,
+        );
+        await waitForRunnerStarts(runner, 1);
+
+        final queuedRun = await orchestrator.run(
+          gatedContext: gatedContext,
+          request: queuedRequest,
+        );
+        expect(queuedRun.isSuccess(), isTrue);
+        expect(queuedRun.getOrThrow().status, AgentActionExecutionStatus.queued);
+
+        runtimeStateGuard.markDraining(reason: 'shutdown');
+
+        runner.completions.first.complete(
+          Success(
+            AgentActionProcessResult(
+              status: AgentActionExecutionStatus.succeeded,
+              pid: 1234,
+              exitCode: 0,
+              processStartedAt: DateTime(2026, 5, 15, 10),
+              finishedAt: DateTime(2026, 5, 15, 10, 1),
+              stdout: AgentActionCapturedOutput.disabled,
+              stderr: AgentActionCapturedOutput.disabled,
+              redactionApplied: true,
+            ),
+          ),
+        );
+
+        final blockingResult = await blockingRun;
+        expect(blockingResult.isSuccess(), isTrue);
+
+        final queuedResult = await orchestrator.run(
+          gatedContext: gatedContext,
+          request: const AgentActionExecutionRequest(
+            actionId: 'action-1',
+            source: AgentActionRequestSource.remoteHub,
+            idempotencyKey: 'queued-key',
+          ),
+        );
+        expect(queuedResult.isError(), isTrue);
+        final failure = queuedResult.exceptionOrNull()! as ActionAuthorizationFailure;
+        expect(failure.code, AgentActionFailureCode.subsystemDraining);
+        expect(failure.context['reason'], AgentActionRuntimeStateConstants.agentActionsDrainingReason);
+        expect(runner.startedCount, 1);
+
+        final rejectedExecution = repository.savedExecutions.lastWhere(
+          (execution) => execution.idempotencyKey == 'queued-key',
+        );
+        expect(rejectedExecution.status, AgentActionExecutionStatus.failed);
+        expect(rejectedExecution.failureCode, AgentActionFailureCode.subsystemDraining);
+      },
+    );
   });
 }
 

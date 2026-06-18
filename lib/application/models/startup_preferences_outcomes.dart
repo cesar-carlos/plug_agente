@@ -39,12 +39,10 @@ class SetStartWithWindowsOutcome {
   const SetStartWithWindowsOutcome({
     required this.change,
     this.launchConfiguration,
-    this.preferencePersisted = true,
   });
 
   final StartupChangeOutcome change;
   final StartupLaunchConfigurationOutcome? launchConfiguration;
-  final bool preferencePersisted;
 }
 
 enum TrayBehaviorKind {

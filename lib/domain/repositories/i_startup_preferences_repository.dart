@@ -33,4 +33,6 @@ abstract interface class IStartupPreferencesRepository {
   Future<Result<Unit>> openStartupSettings();
 
   Future<Result<String>> buildStartupDiagnosticReport();
+
+  Future<Result<bool>> hasRegistryEntryMissingAutostartForCurrentExecutable();
 }

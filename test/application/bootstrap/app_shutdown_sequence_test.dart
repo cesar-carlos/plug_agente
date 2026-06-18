@@ -57,4 +57,27 @@ void main() {
       () => connectionPool.closeAll(),
     ]);
   });
+
+  test('runs hub early phase after app-close dispatch and onAppExit policies', () async {
+    final sequence = AppShutdownSequence(getIt);
+
+    await sequence.run(
+      runEarlyShutdownCoordinator: () async {
+        shutdownEvents.add('early_shutdown');
+      },
+      dispatchAppCloseAgentActions: () async {
+        shutdownEvents.add('app_close');
+      },
+      applyOnAppExitPolicies: () async {
+        shutdownEvents.add('on_app_exit');
+      },
+      shutdownOdbcWorker: () {},
+      resetShutdownStateForTesting: () {},
+    );
+
+    expect(
+      shutdownEvents.take(3),
+      <String>['app_close', 'on_app_exit', 'early_shutdown'],
+    );
+  });
 }

@@ -123,6 +123,19 @@ class StartupPreferencesRepository implements IStartupPreferencesRepository {
     return startupService.buildStartupDiagnosticReport();
   }
 
+  @override
+  Future<Result<bool>> hasRegistryEntryMissingAutostartForCurrentExecutable() {
+    final startupService = _startupService;
+    if (startupService == null) {
+      return Future.value(
+        Failure(
+          domain.ConfigurationFailure('Startup service is unavailable'),
+        ),
+      );
+    }
+    return startupService.hasRegistryEntryMissingAutostartForCurrentExecutable();
+  }
+
   Future<Result<Unit>> _persistBool(String key, bool value) async {
     try {
       await _settings.setBool(key, value);

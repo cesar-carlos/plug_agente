@@ -394,6 +394,14 @@ class AgentActionExecutionOrchestrator {
     required AgentActionExecutionRequest request,
     required AgentActionLocalRunner runner,
   }) async {
+    final initialGuardCheck = _runtimeStateGuard?.ensureCanAcceptExecution(
+      request: request,
+      actionType: definition.type,
+    );
+    if (initialGuardCheck != null && initialGuardCheck.isError()) {
+      return Failure(initialGuardCheck.exceptionOrNull()!);
+    }
+
     var runningExecution = queuedExecution.copyWith(
       status: AgentActionExecutionStatus.running,
       processStartedAt: _now(),

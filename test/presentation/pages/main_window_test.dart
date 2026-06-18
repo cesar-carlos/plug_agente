@@ -86,6 +86,22 @@ void main() {
     expect(find.text(ptL10n.mainDegradedModeTitle), findsNothing);
   });
 
+  testWidgets('shows only dashboard navigation item in unsupported runtime mode', (tester) async {
+    await pumpWindow(
+      tester,
+      capabilities: RuntimeCapabilities.unsupported(
+        reasons: const [
+          'Sistema operacional nao suportado',
+        ],
+      ),
+    );
+
+    expect(find.text(ptL10n.navDashboard), findsOneWidget);
+    expect(find.text(ptL10n.navPlayground), findsNothing);
+    expect(find.text(ptL10n.navSettings), findsNothing);
+    expect(find.text(ptL10n.navAgentProfile), findsNothing);
+  });
+
   testWidgets('shows degraded banner for runtime detection fallback reasons', (tester) async {
     await pumpWindow(
       tester,

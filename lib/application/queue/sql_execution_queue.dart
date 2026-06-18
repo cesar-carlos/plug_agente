@@ -123,6 +123,7 @@ class SqlExecutionQueue {
 
   bool _disposed = false;
   Completer<void>? _drainedCompleter;
+  final List<Completer<void>> _activeWorkerIdleWaiters = <Completer<void>>[];
   // Consecutive `queue full` rejections without any accepted submission in
   // between. Reset whenever a submission is accepted so the next rejection
   // burst starts a fresh logging episode.
@@ -396,7 +397,56 @@ class SqlExecutionQueue {
 
     _laneCapacity.onWorkerReleased(request, metricsCollector: _metricsCollector);
     _completeDrainedIfIdle();
+    _completeActiveWorkerIdleWaitersIfNeeded();
     unawaited(_processQueue());
+  }
+
+  /// Waits until active workers reach zero without disposing the queue.
+  ///
+  /// Use before ODBC pool invalidation when hub RPC SQL may still be running.
+  Future<Result<void>> waitForActiveWorkers({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    if (_laneCapacity.activeWorkers == 0) {
+      return const Success(unit);
+    }
+
+    final completer = Completer<void>();
+    _activeWorkerIdleWaiters.add(completer);
+    try {
+      await completer.future.timeout(timeout);
+      return const Success(unit);
+    } on TimeoutException catch (error) {
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: 'SQL execution queue did not become idle within ${timeout.inSeconds}s',
+          cause: error,
+          context: {
+            'reason': SqlPipelineContextConstants.queueDisposedReason,
+            'timeout': true,
+            'timeout_stage': 'idle_wait',
+            'timeout_seconds': timeout.inSeconds,
+            'active_workers': _laneCapacity.activeWorkers,
+            'queue_size': _laneRegistry.queuedCount,
+          },
+        ),
+      );
+    } finally {
+      _activeWorkerIdleWaiters.remove(completer);
+    }
+  }
+
+  void _completeActiveWorkerIdleWaitersIfNeeded() {
+    if (_laneCapacity.activeWorkers > 0) {
+      return;
+    }
+
+    final waiters = List<Completer<void>>.from(_activeWorkerIdleWaiters);
+    for (final waiter in waiters) {
+      if (!waiter.isCompleted) {
+        waiter.complete();
+      }
+    }
   }
 
   void _completeDrainedIfIdle() {

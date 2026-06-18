@@ -55,7 +55,10 @@ class AutoStartService implements IStartupService {
 
     try {
       final queryResults = await _queryStartupRegistry();
-      final enabled = queryResults.any((result) => result.exists);
+      final expectedExecutable = _executablePathProvider();
+      final enabled = queryResults.any(
+        (result) => result.entry?.isHealthyFor(expectedExecutable) ?? false,
+      );
 
       developer.log(
         'Auto-start status: $enabled',
@@ -257,6 +260,43 @@ class AutoStartService implements IStartupService {
       return Failure(
         StartupServiceFailure(
           message: 'Failed to open Windows startup settings',
+          cause: error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<Result<bool>> hasRegistryEntryMissingAutostartForCurrentExecutable() async {
+    if (!_isWindows()) {
+      return const Success(false);
+    }
+
+    try {
+      final queryResults = await _queryStartupRegistry();
+      final expectedExecutable = _executablePathProvider();
+      final hasUnhealthyEntry = queryResults.any((result) {
+        if (!result.exists) {
+          return false;
+        }
+        final entry = result.entry;
+        if (entry == null) {
+          return false;
+        }
+        return entry.matchesExpectedExecutable(expectedExecutable) && !entry.hasAutostartArgument;
+      });
+      return Success(hasUnhealthyEntry);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to inspect startup registry entry health',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        StartupServiceFailure(
+          message: 'Failed to inspect startup registry entry health',
           cause: error,
         ),
       );

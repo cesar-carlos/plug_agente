@@ -182,7 +182,7 @@ void main() {
 
       final outcome = await provider.setStartWithWindows(true);
 
-      check(outcome).equals(StartupChangeOutcome.enabled);
+      check(outcome).isNull();
       check(provider.startWithWindows).equals(true);
       check(provider.preferenceError).isNotNull();
       check(provider.preferenceError!.code).equals(SystemSettingsErrorCode.settingsPersistenceFailed);

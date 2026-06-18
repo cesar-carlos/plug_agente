@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/bootstrap/agent_actions_boot_phases.dart';
+import 'package:plug_agente/application/use_cases/ensure_startup_launch_configuration_at_boot.dart';
 import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
@@ -69,7 +70,7 @@ void main() {
       bootstrapPhasesOverride: () async {
         bootstrapPhasesRan = true;
       },
-      initializeDesktopFeaturesOverride: (capabilities) async {
+      initializeDesktopFeaturesOverride: (capabilities, isAutostartLaunch) async {
         desktopFeaturesInitialized = true;
       },
       resolveInitialRouteOverride: (_) => '/agent-actions',
@@ -107,7 +108,7 @@ void main() {
             capturedDiagnostics = runtimeDetectionDiagnostics;
           },
       bootstrapPhasesOverride: () async {},
-      initializeDesktopFeaturesOverride: (capabilities) async {},
+      initializeDesktopFeaturesOverride: (capabilities, isAutostartLaunch) async {},
     );
 
     final result = await initializer.initialize(const <String>[]);
@@ -245,7 +246,50 @@ void main() {
     expect(capturedCall?.method, 'showWindow');
   });
 
+  test('validates startup launch configuration before desktop shell initialization', () async {
+    var bootValidationRan = false;
+    var desktopShellInitialized = false;
+
+    final initializer = AppInitializer(
+      runtimeProbe: _FakeWindowsRuntimeProbe(
+        result: const Success(
+          WindowsVersionInfo(
+            majorVersion: 10,
+            minorVersion: 0,
+            buildNumber: 26200,
+            isServer: false,
+            productName: 'Windows 11 Pro',
+          ),
+        ),
+      ),
+      setupDependenciesOverride:
+          ({
+            required RuntimeCapabilities capabilities,
+            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+          }) async {},
+      bootstrapPhasesOverride: () async {},
+      ensureStartupLaunchConfigurationOverride: (args) async {
+        bootValidationRan = true;
+        expect(desktopShellInitialized, isFalse);
+        return const EnsureStartupLaunchConfigurationAtBootOutcome(
+          isAutostartLaunch: false,
+        );
+      },
+      initializeDesktopFeaturesOverride: (capabilities, isAutostartLaunch) async {
+        desktopShellInitialized = true;
+      },
+    );
+
+    await initializer.initialize(const <String>[]);
+
+    expect(bootValidationRan, isTrue);
+    expect(desktopShellInitialized, isTrue);
+  });
+
   test('bootstrap source should not invoke PrepareElevatedActionRunner', () {
+    final orchestratorSource = File(
+      p.join('lib', 'application', 'bootstrap', 'app_bootstrap_orchestrator.dart'),
+    ).readAsStringSync();
     final initializerSource = File(
       p.join('lib', 'presentation', 'boot', 'app_initializer.dart'),
     ).readAsStringSync();
@@ -253,6 +297,7 @@ void main() {
       p.join('lib', 'application', 'bootstrap', 'agent_actions_boot_phases.dart'),
     ).readAsStringSync();
 
+    expect(orchestratorSource.contains('PrepareElevatedActionRunner'), isFalse);
     expect(initializerSource.contains('PrepareElevatedActionRunner'), isFalse);
     expect(initializerSource.contains('prepareElevatedActionRunner'), isFalse);
     expect(agentActionsSource.contains('_refreshElevatedActionRunnerReadiness'), isTrue);
@@ -297,7 +342,7 @@ void main() {
             required RuntimeCapabilities capabilities,
             RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
           }) async {},
-      initializeDesktopFeaturesOverride: (capabilities) async {},
+      initializeDesktopFeaturesOverride: (capabilities, isAutostartLaunch) async {},
       agentActionsBootPhases: _RecordingAgentActionsBootPhases(
         onDeferredScheduler: () {
           expect(guard.snapshot.status, AgentActionSubsystemStatus.starting);

@@ -1,14 +1,12 @@
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/domain/logging/i_structured_log_sink.dart';
+import 'package:plug_agente/domain/utils/log_sanitizer.dart';
 
-/// No-op error tracking stub.
+/// Local error tracking facade with optional remote backend integration.
 ///
-/// Currently all methods fall back to local logging only — no external service
-/// is integrated. [isEnabled] reflects whether a DSN was provided at
-/// [initialize], but even when true nothing is sent remotely.
-///
-/// To integrate a real backend (e.g. Sentry): replace the bodies of
-/// [captureException] and [captureFailure] with SDK calls.
+/// When no DSN is configured, errors are routed to the composite structured
+/// sink (console + file) when available, otherwise to [AppLogger] only.
 class ErrorTracker {
   ErrorTracker._();
 
@@ -17,24 +15,27 @@ class ErrorTracker {
   static String _environment = 'development';
   static String _release = '';
   static Map<String, dynamic> _tags = {};
+  static IStructuredLogSink? _sink;
 
   static Future<void> initialize({
     String dsn = '',
     String environment = 'development',
     String release = '',
     Map<String, dynamic> tags = const {},
+    IStructuredLogSink? sink,
   }) async {
     _dsn = dsn;
     _environment = environment;
     _release = release;
     _tags = tags;
+    _sink = sink;
+    _isInitialized = true;
 
     if (dsn.isEmpty) {
-      AppLogger.warning('Error tracking disabled (no DSN provided)');
+      AppLogger.info('Error tracking initialized without remote DSN');
       return;
     }
 
-    _isInitialized = true;
     AppLogger.info('Error tracking initialized: $_environment');
   }
 
@@ -45,20 +46,19 @@ class ErrorTracker {
     Map<String, dynamic> context = const {},
     bool fatal = false,
   }) {
-    if (!_isInitialized || _dsn.isEmpty) {
-      // Fallback to local logging only
-      AppLogger.error(
-        'Exception captured: $exception',
-        exception,
-        stackTrace,
-      );
-      return;
-    }
+    final enrichedContext = _enrichContext(
+      operation: operation,
+      context: context,
+      fatal: fatal,
+    );
+    final message = fatal ? 'Fatal exception captured: $exception' : 'Exception captured: $exception';
 
-    AppLogger.error(
-      'Exception tracked: $exception',
-      exception,
-      stackTrace,
+    _log(
+      level: 'ERROR',
+      message: message,
+      error: exception,
+      stackTrace: stackTrace,
+      context: enrichedContext,
     );
   }
 
@@ -68,20 +68,26 @@ class ErrorTracker {
     Map<String, dynamic> additionalContext = const {},
     StackTrace? stackTrace,
   }) {
-    if (!_isInitialized || _dsn.isEmpty) {
-      // Log to local only
-      AppLogger.error(
-        '[${failure.code}] ${failure.message}',
-        failure.cause,
-        stackTrace,
-      );
-      return;
-    }
+    failure.log(
+      stackTrace: stackTrace,
+      operation: operation,
+      additionalContext: additionalContext,
+    );
+  }
 
-    AppLogger.error(
-      'Failure tracked: [${failure.code}] ${failure.message}',
-      failure.cause,
-      stackTrace,
+  static void logStructured({
+    required String level,
+    required String message,
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, dynamic>? context,
+  }) {
+    _log(
+      level: level,
+      message: message,
+      error: error,
+      stackTrace: stackTrace,
+      context: context,
     );
   }
 
@@ -131,4 +137,50 @@ class ErrorTracker {
     'release': _release,
     'tags': _tags,
   };
+
+  static void _log({
+    required String level,
+    required String message,
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, dynamic>? context,
+  }) {
+    final sink = _sink;
+    if (sink != null) {
+      sink.logStructured(
+        level: level,
+        message: message,
+        error: error,
+        stackTrace: stackTrace,
+        context: _sanitizeContext(context),
+      );
+      return;
+    }
+
+    if (level == 'WARNING') {
+      AppLogger.warning(message, error, stackTrace, context);
+      return;
+    }
+
+    AppLogger.error(message, error, stackTrace, context);
+  }
+
+  static Map<String, dynamic> _enrichContext({
+    required Map<String, dynamic> context,
+    String? operation,
+    bool fatal = false,
+  }) {
+    return <String, dynamic>{
+      'operation': ?operation,
+      if (fatal) 'fatal': true,
+      ...context,
+    };
+  }
+
+  static Map<String, dynamic>? _sanitizeContext(Map<String, dynamic>? context) {
+    if (context == null || context.isEmpty) {
+      return null;
+    }
+    return LogSanitizer.sanitizeMap(Map<String, dynamic>.from(context));
+  }
 }

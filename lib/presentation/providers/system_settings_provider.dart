@@ -8,6 +8,7 @@ import 'package:plug_agente/application/use_cases/set_start_with_windows.dart';
 import 'package:plug_agente/application/use_cases/set_tray_behavior_preference.dart';
 import 'package:plug_agente/application/use_cases/startup_launch_configuration_mapper.dart';
 import 'package:plug_agente/application/use_cases/sync_startup_status.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:plug_agente/presentation/providers/system_settings_error.dart';
@@ -130,17 +131,17 @@ class SystemSettingsProvider extends ChangeNotifier {
     return result.fold(
       (outcome) {
         _startWithWindows = value;
-        if (!outcome.preferencePersisted) {
-          _preferenceError = const SystemSettingsErrorState(
-            code: SystemSettingsErrorCode.settingsPersistenceFailed,
-          );
-        }
         _applyLaunchConfigurationOutcome(outcome.launchConfiguration);
         _notifyIfActive();
         return outcome.change;
       },
       (failure) {
-        _startupError = SystemSettingsFailureMapper.startupFailure(failure);
+        if (failure is domain.Failure) {
+          _startWithWindows = value;
+          _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
+        } else {
+          _startupError = SystemSettingsFailureMapper.startupFailure(failure);
+        }
         _notifyIfActive();
         return null;
       },

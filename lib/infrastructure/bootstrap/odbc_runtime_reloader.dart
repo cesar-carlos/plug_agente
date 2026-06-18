@@ -9,8 +9,8 @@ import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_application_runtime_reset_port.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_runtime_reload_teardown_port.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_runtime_reloader.dart';
-import 'package:plug_agente/domain/repositories/i_odbc_streaming_session_cache.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
@@ -29,30 +29,34 @@ final class OdbcRuntimeReloader implements IOdbcRuntimeReloader {
     required GetIt getIt,
     required odbc.ServiceLocator odbcWorkerLocator,
     required IOdbcApplicationRuntimeResetPort applicationRuntimeResetPort,
+    required IOdbcRuntimeReloadTeardownPort teardownPort,
   }) : _getIt = getIt,
        _odbcWorkerLocator = odbcWorkerLocator,
-       _applicationRuntimeResetPort = applicationRuntimeResetPort;
+       _applicationRuntimeResetPort = applicationRuntimeResetPort,
+       _teardownPort = teardownPort;
 
   final GetIt _getIt;
   final odbc.ServiceLocator _odbcWorkerLocator;
   final IOdbcApplicationRuntimeResetPort _applicationRuntimeResetPort;
+  final IOdbcRuntimeReloadTeardownPort _teardownPort;
 
   @override
   Future<bool> reload() async {
+    var agentActionsMarkedDraining = false;
     try {
       if (_getIt.isRegistered<OdbcConnectionStringTtlCache>()) {
         _getIt<OdbcConnectionStringTtlCache>().invalidate();
       }
 
-      if (_getIt.isRegistered<ITransportClient>()) {
-        await _getIt<ITransportClient>().disconnect();
-      }
+      agentActionsMarkedDraining = _teardownPort.markAgentActionsDraining();
 
       if (_getIt.isRegistered<ISqlInvestigationCollector>()) {
         _getIt<ISqlInvestigationCollector>().clear();
       }
 
-      await _drainStreamingSessionCache();
+      await _teardownPort.disposeSqlExecutionQueue();
+      await _teardownPort.drainStreamingSessionCache();
+      await _teardownPort.disconnectHubTransport();
 
       if (_getIt.isRegistered<IConnectionPool>()) {
         await _getIt<IConnectionPool>().closeAll();
@@ -103,8 +107,14 @@ final class OdbcRuntimeReloader implements IOdbcRuntimeReloader {
       );
 
       await _primeReloadedOdbcRuntimeDependencies();
+      if (agentActionsMarkedDraining) {
+        _teardownPort.markAgentActionsReady();
+      }
       return true;
     } on Object catch (error, stackTrace) {
+      if (agentActionsMarkedDraining) {
+        _teardownPort.markAgentActionsReady();
+      }
       developer.log(
         'Failed to reload ODBC runtime dependencies',
         name: 'service_locator',
@@ -114,25 +124,6 @@ final class OdbcRuntimeReloader implements IOdbcRuntimeReloader {
       );
       return false;
     }
-  }
-
-  Future<void> _drainStreamingSessionCache() async {
-    if (!_getIt.isRegistered<IOdbcStreamingSessionCache>()) {
-      return;
-    }
-
-    final drainResult = await _getIt<IOdbcStreamingSessionCache>().drainCachedSessions();
-    drainResult.fold(
-      (_) {},
-      (failure) {
-        developer.log(
-          'Streaming session cache drain completed with errors before ODBC reload',
-          name: 'service_locator',
-          level: 900,
-          error: failure,
-        );
-      },
-    );
   }
 
   Future<void> _resetLazySingletonIfRegistered<T extends Object>() async {
