@@ -15,9 +15,12 @@
 
 ## Resumo executivo
 
-O `plug_agente` passou a anunciar e negociar tres extensoes (ADRs 0009,
-0010, 0011). O hub so ativa o comportamento quando **ambos** os lados
-ecoam o mesmo valor em `agent:capabilities.extensions` apos o handshake.
+O `plug_server` implementou o lado hub em
+[`560ef2f`](https://github.com/cesar-carlos/plug_server/commit/560ef2f) (2026-06-24).
+O agente anuncia as extensoes em
+[`741b5677`](https://github.com/cesar-carlos/plug_agente/commit/741b5677).
+Comportamento ativo apos **deploy coordenado** e handshake com intersecao
+das tres chaves em `negotiatedExtensions`.
 
 | Extensao | O hub precisa? | Sem hub | Com hub alinhado |
 | -------- | -------------- | ------- | ---------------- |

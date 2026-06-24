@@ -4,7 +4,13 @@ Checklist para o time do hub alinhar com a onda de performance do
 `plug_agente` (extensoes ADR 0009/0010/0011). Use como guia de PR e
 homologacao.
 
-## Pre-requisitos no agente (ja entregues neste repo)
+> **Atualizado 2026-06-24:** hub implementado em
+> [`560ef2f`](https://github.com/cesar-carlos/plug_server/commit/560ef2f);
+> agente em
+> [`741b5677`](https://github.com/cesar-carlos/plug_agente/commit/741b5677).
+> Pendente apenas validacao pos-deploy e scheduler opcional de poll.
+
+## Pre-requisitos no agente (entregues)
 
 - [x] Anunciar extensoes em `ProtocolCapabilities.defaultCapabilities()`
 - [x] Negociar intersecao em `ProtocolNegotiator`
@@ -18,9 +24,9 @@ homologacao.
 
 ### Contrato e negociacao
 
-- [ ] `HUB_TRANSPORT_EXTENSIONS` inclui `clientRequestIdEcho`, `agentPhaseTimings`, `healthPiggyback`
-- [ ] `transport_extension_negotiation.ts` com helpers de intersecao
-- [ ] Testes unitarios do contrato e negociacao
+- [x] `HUB_TRANSPORT_EXTENSIONS` inclui `clientRequestIdEcho`, `agentPhaseTimings`, `healthPiggyback`
+- [x] `transport_extension_negotiation.ts` com helpers de intersecao
+- [x] Testes unitarios do contrato e negociacao
 
 **Arquivos:**
 
@@ -33,10 +39,10 @@ homologacao.
 
 ### ADR 0009 — client request id echo
 
-- [ ] Dispatch relay usa `client_request_id` como `body.id` quando negociado
-- [ ] `meta.request_id` permanece UUID do hub
-- [ ] Forwarder compara `body.id` da resposta com `clientRequestId` (nao hub UUID)
-- [ ] Teste e2e cross-module fast-path + Opcao A
+- [x] Dispatch relay usa `client_request_id` como `body.id` quando negociado
+- [x] `meta.request_id` permanece UUID do hub
+- [x] Forwarder compara `body.id` da resposta com `clientRequestId` (nao hub UUID)
+- [x] Teste e2e cross-module fast-path + Opcao A
 
 **Arquivos:**
 
@@ -48,19 +54,19 @@ homologacao.
 
 ### ADR 0010 — agent phase timings
 
-- [ ] Hub anuncia `agentPhaseTimings: "v1"`
-- [ ] Forwarder/bridge nao remove `meta.agent_phases` das respostas
-- [ ] (Opcional) Documentar em `communication_sync_plug_agente.md`
+- [x] Hub anuncia `agentPhaseTimings: "v1"`
+- [x] Forwarder/bridge nao remove `meta.agent_phases` das respostas
+- [x] Runbook [`plug_server/docs/runbooks/socket_perf_investigation.md`](../../../plug_server/docs/runbooks/socket_perf_investigation.md)
 
-**Arquivos:** principalmente `agent_transport_contract.ts`; revisar forwarder se houver mutacao de `meta`.
+**Arquivos:** principalmente `agent_transport_contract.ts`; forwarder pass-through.
 
 ### ADR 0011 — health piggyback
 
-- [ ] Servico para validar frescor e registrar snapshot
-- [ ] Hook no forwarder relay (respostas unary que nao sao `agent.getHealth`)
-- [ ] Metricas `plug_agent_health_poll_total` e `plug_agent_health_piggyback_used_total`
-- [ ] `agentRegistry.shouldSkipScheduledHealthPoll()` + limpeza no disconnect
-- [ ] Testes do servico de piggyback
+- [x] Servico para validar frescor e registrar snapshot
+- [x] Hook no forwarder relay (respostas unary que nao sao `agent.getHealth`)
+- [x] Metricas `plug_agent_health_poll_total` e `plug_agent_health_piggyback_used_total`
+- [x] `agentRegistry.shouldSkipScheduledHealthPoll()` + limpeza no disconnect
+- [x] Testes do servico de piggyback
 
 **Arquivos:**
 
@@ -77,7 +83,7 @@ homologacao.
 
 - [ ] Scheduler de `agent.getHealth` que chama `shouldSkipScheduledHealthPoll` antes de poll
 - [ ] Brotli alinhado hub + agente (roadmap item 10)
-- [ ] Atualizar `plug_server/docs/plug_agente/04_agent_implementation_status.md` apos release
+- [x] Atualizar `plug_server/docs/plug_agente/04_agent_implementation_status.md` apos release
 
 ## Comandos de teste (hub)
 
