@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
+import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
 
 /// Protocol capabilities for negotiation between client and server.
 ///
@@ -68,6 +69,12 @@ class ProtocolCapabilities {
       'recommendedStreamPullWindowSize':
           recommendedStreamPullWindowSize ?? ConnectionConstants.recommendedStreamPullWindowSize,
       'maxStreamPullWindowSize': maxStreamPullWindowSize ?? ConnectionConstants.maxBackpressureChunkQueueSize,
+      TransportExtensionNegotiation.clientRequestIdEcho:
+          TransportExtensionNegotiation.clientRequestIdEchoVersion,
+      TransportExtensionNegotiation.agentPhaseTimings:
+          TransportExtensionNegotiation.agentPhaseTimingsVersion,
+      TransportExtensionNegotiation.healthPiggyback:
+          TransportExtensionNegotiation.defaultHealthPiggybackAdvertisement(),
     };
     if (binaryPayload) {
       extensions['transportFrame'] = 'payload-frame/1.0';

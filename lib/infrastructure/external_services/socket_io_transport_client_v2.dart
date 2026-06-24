@@ -15,6 +15,7 @@ import 'package:plug_agente/domain/repositories/i_agent_actions_remote_capabilit
 import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/domain/services/i_agent_health_status_provider.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat_controller.dart';
@@ -51,6 +52,7 @@ class SocketIOTransportClientV2Options {
     this.metricsCollector,
     this.jsonSchemaValidator,
     this.schemaCatalog = const RpcMethodSchemaCatalog(),
+    this.healthService,
   });
 
   final PayloadSigner? payloadSigner;
@@ -63,6 +65,7 @@ class SocketIOTransportClientV2Options {
   final MetricsCollector? metricsCollector;
   final JsonSchemaContractValidator? jsonSchemaValidator;
   final RpcMethodSchemaCatalog schemaCatalog;
+  final IAgentHealthStatusProvider? healthService;
 }
 
 /// Socket.IO transport client for the v2 RPC contract.
@@ -154,6 +157,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost with _Socke
         onDisconnect: (reason) => _lifecycle.handleDisconnect(reason),
         onCapabilitiesEnvelope: _handleCapabilitiesNegotiation,
         onHeartbeatAck: (data) => _heartbeatBridge.handleHeartbeatAck(data),
+        healthService: options.healthService,
       ),
     );
     _pipeline = pipeline;

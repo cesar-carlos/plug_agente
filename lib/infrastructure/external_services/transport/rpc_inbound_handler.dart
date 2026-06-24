@@ -3,13 +3,18 @@ import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/protocol/rpc_wire_ack_id.dart';
+import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/domain/services/i_agent_health_status_provider.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/agent_latency_trace.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_batch_inbound_handler.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_health_piggyback_sampler.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_ack_coalescer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_concurrency_slots.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_rate_limit_responder.dart';
@@ -18,6 +23,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbou
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_validation_responder.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_wire_payload.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_guard_mapping.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_response_enricher.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_schema_validation_pipeline.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_validation_error_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
@@ -64,6 +70,7 @@ class RpcInboundHandler {
     RpcMethodSchemaCatalog schemaCatalog = const RpcMethodSchemaCatalog(),
     MetricsCollector? metricsCollector,
     void Function(bool paused)? setHubSqlDashboardCapturePaused,
+    IAgentHealthStatusProvider? healthService,
   }) : _featureFlags = featureFlags,
        _protocolProvider = protocolProvider,
        _agentIdProvider = agentIdProvider,
@@ -77,6 +84,23 @@ class RpcInboundHandler {
        _streamEmitterFactory = streamEmitterFactory,
        _hasReceivedCapabilities = hasReceivedCapabilities,
        _setHubSqlDashboardCapturePaused = setHubSqlDashboardCapturePaused {
+    _healthPiggybackSampler = healthService == null
+        ? null
+        : RpcHealthPiggybackSampler(
+            healthService: healthService,
+            negotiationProvider: () =>
+                TransportExtensionNegotiation.parseHealthPiggyback(
+                  protocolProvider().negotiatedExtensions,
+                ) ??
+                const HealthPiggybackNegotiation(
+                  intervalRequests: TransportExtensionNegotiation.defaultHealthPiggybackIntervalRequests,
+                  freshnessThresholdMs: TransportExtensionNegotiation.defaultHealthPiggybackFreshnessThresholdMs,
+                ),
+          );
+    _responseEnricher = RpcInboundResponseEnricher(
+      healthPiggybackSampler: _healthPiggybackSampler,
+    );
+
     final emitRpcResponseWithContext =
         emitRpcResponseWithMethodContext ??
         ((dynamic responseData, {Map<Object?, String> methodsById = const <Object?, String>{}}) {
@@ -122,6 +146,7 @@ class RpcInboundHandler {
       hasNullIdCompatibilityViolation: _hasNullIdCompatibilityViolation,
       metricsCollector: metricsCollector,
       setHubSqlDashboardCapturePaused: _setHubSqlDashboardCapturePaused,
+      responseEnricher: _responseEnricher,
     );
   }
 
@@ -138,6 +163,8 @@ class RpcInboundHandler {
   final IRpcStreamEmitter Function() _streamEmitterFactory;
   final bool Function() _hasReceivedCapabilities;
   final void Function(bool paused)? _setHubSqlDashboardCapturePaused;
+  late final RpcHealthPiggybackSampler? _healthPiggybackSampler;
+  late final RpcInboundResponseEnricher _responseEnricher;
 
   late final RpcInboundConcurrencySlots _concurrencySlots;
   late final RpcInboundResponseEmitter _responseEmitter;
@@ -276,6 +303,13 @@ class RpcInboundHandler {
       }
 
       final request = RpcRequest.fromJson(requestMap);
+      final negotiatedExtensions = _protocolProvider().negotiatedExtensions;
+      final latencyTrace =
+          TransportExtensionNegotiation.isAgentPhaseTimingsNegotiated(negotiatedExtensions) &&
+              (request.meta?.requestServerTimings ?? false)
+          ? AgentLatencyTrace()
+          : null;
+      latencyTrace?.markFrameDecodeComplete();
       if (_hasNullIdCompatibilityViolation(requestMap)) {
         await _validationResponder.sendSchemaValidationError(
           null,
@@ -290,9 +324,13 @@ class RpcInboundHandler {
       if (_featureFlags.enableSocketDeliveryGuarantees && !request.isNotification) {
         // Ack means "accepted for processing", not "dispatch completed".
         // The hub may receive this before ODBC work finishes; see delivery guarantees doc.
-        _ackCoalescer.scheduleAck(request.id);
+        final wireAckId = resolveRpcWireAckId(request);
+        if (wireAckId != null) {
+          _ackCoalescer.scheduleAck(wireAckId);
+        }
       }
       socketAck?.call();
+      latencyTrace?.markPreDispatchComplete();
 
       final guardResult = _requestGuard.evaluate(request);
       if (guardResult != RpcRequestGuardResult.allow) {
@@ -324,6 +362,7 @@ class RpcInboundHandler {
         _setHubSqlDashboardCapturePaused?.call(true);
       }
       try {
+        latencyTrace?.markDispatchStarted();
         final response = await _dispatcher.dispatch(
           request,
           _agentIdProvider(),
@@ -332,10 +371,17 @@ class RpcInboundHandler {
           limits: protocol.effectiveLimits,
           negotiatedExtensions: protocol.negotiatedExtensions,
         );
+        latencyTrace?.markDispatchComplete(isSqlMethod: request.method.startsWith('sql.'));
         final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
-        _authorizationDecisionLogger.log(
+        final enrichedResponse = _responseEnricher.enrichUnaryResponse(
           request: request,
           response: tracedResponse,
+          negotiatedExtensions: negotiatedExtensions,
+          latencyTrace: latencyTrace,
+        );
+        _authorizationDecisionLogger.log(
+          request: request,
+          response: enrichedResponse,
           clientToken: clientToken,
         );
 
@@ -344,7 +390,7 @@ class RpcInboundHandler {
         }
 
         await _responseEmitter.emit(
-          tracedResponse,
+          enrichedResponse,
           methodsById: <Object?, String>{request.id: request.method},
         );
       } finally {
@@ -402,7 +448,10 @@ class RpcInboundHandler {
   /// will observe the disconnection and re-dispatch on reconnect. The handler
   /// instance is reusable: a subsequent `rpc:request` rearms the buffer and
   /// timer transparently.
-  void resetAckBuffer() => _ackCoalescer.resetAckBuffer();
+  void resetAckBuffer() {
+    _ackCoalescer.resetAckBuffer();
+    _healthPiggybackSampler?.reset();
+  }
 
   bool _hasNullIdCompatibilityViolation(Map<String, dynamic> requestMap) {
     return rpcInboundHasNullIdCompatibilityViolation(

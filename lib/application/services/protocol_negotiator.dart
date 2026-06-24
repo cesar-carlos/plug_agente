@@ -1,6 +1,7 @@
 import 'package:plug_agente/core/constants/rpc_batch_constants.dart';
 import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
+import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 
 /// Service for negotiating protocol configuration between client and server.
@@ -237,7 +238,54 @@ class ProtocolNegotiator implements IProtocolNegotiator {
       negotiated['recommendedStreamPullWindowSize'] = clamped;
     }
 
+    final clientRequestIdEcho = agentExtensions[TransportExtensionNegotiation.clientRequestIdEcho];
+    if (clientRequestIdEcho != null &&
+        clientRequestIdEcho == serverExtensions[TransportExtensionNegotiation.clientRequestIdEcho]) {
+      negotiated[TransportExtensionNegotiation.clientRequestIdEcho] = clientRequestIdEcho;
+    }
+
+    final agentPhaseTimings = agentExtensions[TransportExtensionNegotiation.agentPhaseTimings];
+    if (agentPhaseTimings != null &&
+        agentPhaseTimings == serverExtensions[TransportExtensionNegotiation.agentPhaseTimings]) {
+      negotiated[TransportExtensionNegotiation.agentPhaseTimings] = agentPhaseTimings;
+    }
+
+    final healthPiggyback = _negotiateHealthPiggyback(
+      agentExtensions[TransportExtensionNegotiation.healthPiggyback],
+      serverExtensions[TransportExtensionNegotiation.healthPiggyback],
+    );
+    if (healthPiggyback != null) {
+      negotiated[TransportExtensionNegotiation.healthPiggyback] = healthPiggyback;
+    }
+
     return negotiated;
+  }
+
+  Map<String, dynamic>? _negotiateHealthPiggyback(
+    Object? agentRaw,
+    Object? serverRaw,
+  ) {
+    if (agentRaw is! Map || serverRaw is! Map) {
+      return null;
+    }
+    final agentMap = Map<String, dynamic>.from(agentRaw);
+    final serverMap = Map<String, dynamic>.from(serverRaw);
+    final intervalRequests =
+        _negotiateMinPositiveInt(
+          agentMap['intervalRequests'],
+          serverMap['intervalRequests'],
+        ) ??
+        TransportExtensionNegotiation.defaultHealthPiggybackIntervalRequests;
+    final freshnessThresholdMs =
+        _negotiateMinPositiveInt(
+          agentMap['freshnessThresholdMs'],
+          serverMap['freshnessThresholdMs'],
+        ) ??
+        TransportExtensionNegotiation.defaultHealthPiggybackFreshnessThresholdMs;
+    return <String, dynamic>{
+      'intervalRequests': intervalRequests,
+      'freshnessThresholdMs': freshnessThresholdMs,
+    };
   }
 
   Map<String, dynamic>? _negotiateParallelBatchDispatch(

@@ -8,6 +8,7 @@ import 'package:plug_agente/bootstrap/bootstrap_odbc_worker_locator.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/feature_flags_env_seeder.dart';
+import 'package:plug_agente/core/config/feature_flags_performance_defaults_migrator.dart';
 import 'package:plug_agente/core/config/hub_resilience_config.dart';
 import 'package:plug_agente/core/config/payload_signing_config.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
@@ -236,6 +237,7 @@ Future<void> setupDependencies({
   }
   await _migrateLegacyUserPreferences(appSettings);
   await FeatureFlagsEnvSeeder.applyUnsetOverrides(appSettings);
+  await FeatureFlagsPerformanceDefaultsMigrator.apply(appSettings);
   getIt.registerSingleton<IAppSettingsStore>(appSettings);
 
   final agentRuntimeIdentity = await AgentRuntimeIdentity.load(settings: appSettings);

@@ -48,6 +48,10 @@ docs/
 |- security/
 |  \- auto_update_threat_model.md
 |  \- (threat models e notas de hardening por superficie)
+|- plug_server/
+|  |- readme.md
+|  |- 01_transport_extensions.md
+|  \- 02_implementation_checklist.md
 \- testing/
    |- readme.md
    |- e2e_setup.md
@@ -73,4 +77,5 @@ docs/
 - [Contrato remoto de acoes](implemente/acoes/contrato_remoto.md)
 - [Seguranca de acoes agendadas](implemente/acoes/seguranca_acoes.md)
 - [Threat model do auto-update](security/auto_update_threat_model.md)
+- [Ajustes necessarios no `plug_server`](plug_server/readme.md)
 - [Guia de instalacao](install/readme.md)

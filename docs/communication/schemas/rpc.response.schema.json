@@ -83,7 +83,15 @@
         "tracestate": { "type": "string" },
         "request_id": { "type": "string" },
         "agent_id": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "timestamp": { "type": "string", "format": "date-time" },
+        "agent_phases": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        },
+        "health_snapshot": {
+          "type": "object",
+          "additionalProperties": true
+        }
       },
       "additionalProperties": false
     }

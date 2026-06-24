@@ -4,6 +4,7 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_protocol_negotiator.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
+import 'package:plug_agente/domain/services/i_agent_health_status_provider.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
@@ -78,6 +79,7 @@ final class TransportRpcPipelineAssemblyDeps {
     required this.onDisconnect,
     required this.onCapabilitiesEnvelope,
     required this.onHeartbeatAck,
+    this.healthService,
   });
 
   final FeatureFlags featureFlags;
@@ -131,6 +133,7 @@ final class TransportRpcPipelineAssemblyDeps {
   final void Function(dynamic reason) onDisconnect;
   final void Function(dynamic data) onCapabilitiesEnvelope;
   final void Function(dynamic data) onHeartbeatAck;
+  final IAgentHealthStatusProvider? healthService;
 }
 
 /// Builds RPC pipeline collaborators for the Socket.IO transport client.
@@ -220,6 +223,7 @@ final class TransportRpcPipelineAssembler {
       schemaCatalog: deps.schemaCatalog,
       metricsCollector: deps.metricsCollector,
       setHubSqlDashboardCapturePaused: deps.setHubSqlDashboardCapturePaused,
+      healthService: deps.healthService,
     );
     final rpcResponseDeliveryCoordinator = RpcResponseDeliveryCoordinator(
       responsePreparer: responsePreparer,

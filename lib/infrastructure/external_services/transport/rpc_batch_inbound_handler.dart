@@ -9,12 +9,14 @@ import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/domain/protocol/rpc_wire_ack_id.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_request_dispatcher.dart';
 import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_guard_mapping.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_response_enricher.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_validation_error_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_response_preparer.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
@@ -51,6 +53,7 @@ class RpcBatchInboundHandler {
     MetricsCollector? metricsCollector,
     int Function()? poolSizeProvider,
     void Function(bool paused)? setHubSqlDashboardCapturePaused,
+    RpcInboundResponseEnricher? responseEnricher,
   }) : _featureFlags = featureFlags,
        _protocolProvider = protocolProvider,
        _logSummarizer = logSummarizer,
@@ -67,7 +70,8 @@ class RpcBatchInboundHandler {
        _hasNullIdCompatibilityViolation = hasNullIdCompatibilityViolation,
        _metricsCollector = metricsCollector,
        _poolSizeProvider = poolSizeProvider ?? _defaultPoolSize,
-       _setHubSqlDashboardCapturePaused = setHubSqlDashboardCapturePaused;
+       _setHubSqlDashboardCapturePaused = setHubSqlDashboardCapturePaused,
+       _responseEnricher = responseEnricher;
 
   static int _defaultPoolSize() => ConnectionConstants.poolSize;
 
@@ -99,6 +103,7 @@ class RpcBatchInboundHandler {
   final MetricsCollector? _metricsCollector;
   final int Function() _poolSizeProvider;
   final void Function(bool paused)? _setHubSqlDashboardCapturePaused;
+  final RpcInboundResponseEnricher? _responseEnricher;
 
   /// Validates the batch envelope, dispatches each item independently, then
   /// emits the merged batch response (optionally preserving order based on the
@@ -563,15 +568,22 @@ class RpcBatchInboundHandler {
         negotiatedExtensions: _protocolProvider().negotiatedExtensions,
       );
       final tracedResponse = _responsePreparer.attachRequestTrace(request, response);
+      final enrichedResponse =
+          _responseEnricher?.enrichUnaryResponse(
+            request: request,
+            response: tracedResponse,
+            negotiatedExtensions: _protocolProvider().negotiatedExtensions,
+          ) ??
+          tracedResponse;
       _authorizationDecisionLogger.log(
         request: request,
-        response: tracedResponse,
+        response: enrichedResponse,
         clientToken: clientToken,
       );
       if (_featureFlags.enableSocketNotificationsContract && request.isNotification) {
         return (index: index, response: null, id: request.id, method: request.method);
       }
-      return (index: index, response: tracedResponse, id: request.id, method: request.method);
+      return (index: index, response: enrichedResponse, id: request.id, method: request.method);
     } on Exception catch (error, stackTrace) {
       // A per-item exception must not discard all other batch responses.
       // Map to internalError for this specific request.id and continue.
@@ -621,7 +633,13 @@ class RpcBatchInboundHandler {
 
   Future<void> _emitBatchRequestAck(List<RpcRequest> requests) async {
     if (requests.isEmpty) return;
-    final ids = requests.where((r) => r.id != null).map((r) => r.id.toString()).toList();
+    final ids = <String>[];
+    for (final request in requests) {
+      final wireAckId = resolveRpcWireAckId(request);
+      if (wireAckId != null) {
+        ids.add(wireAckId);
+      }
+    }
     if (ids.isEmpty) return;
     final ackPayload = {
       'request_ids': ids,

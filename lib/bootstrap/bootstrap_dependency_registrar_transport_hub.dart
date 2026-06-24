@@ -56,6 +56,7 @@ void _registerTransportHub(GetIt getIt) {
             jsonSchemaValidator: getIt.isRegistered<JsonSchemaContractValidator>()
                 ? getIt<JsonSchemaContractValidator>()
                 : null,
+            healthService: getIt<HealthService>(),
           ),
         );
       },

@@ -3,6 +3,7 @@ import 'package:plug_agente/application/services/protocol_negotiator.dart';
 import 'package:plug_agente/core/constants/protocol_version.dart';
 import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
+import 'package:plug_agente/domain/protocol/transport_extension_negotiation.dart';
 
 void main() {
   group('ProtocolNegotiator', () {
@@ -265,6 +266,61 @@ void main() {
       expect(config.maxInflationRatio, 10);
       expect(config.signatureRequired, isTrue);
       expect(config.signatureAlgorithms, ['hmac-sha256']);
+    });
+
+    test('should negotiate performance observability extensions when hub echoes them', () {
+      final agentCaps = ProtocolCapabilities.defaultCapabilities();
+      final serverCaps = ProtocolCapabilities(
+        protocols: agentCaps.protocols,
+        encodings: agentCaps.encodings,
+        compressions: agentCaps.compressions,
+        extensions: {
+          ...agentCaps.extensions,
+        },
+        limits: agentCaps.limits,
+      );
+
+      final config = negotiator.negotiate(
+        agentCapabilities: agentCaps,
+        serverCapabilities: serverCaps,
+      );
+
+      expect(
+        config.negotiatedExtensions[TransportExtensionNegotiation.clientRequestIdEcho],
+        TransportExtensionNegotiation.clientRequestIdEchoVersion,
+      );
+      expect(
+        config.negotiatedExtensions[TransportExtensionNegotiation.agentPhaseTimings],
+        TransportExtensionNegotiation.agentPhaseTimingsVersion,
+      );
+      expect(
+        config.negotiatedExtensions[TransportExtensionNegotiation.healthPiggyback],
+        isA<Map<String, dynamic>>(),
+      );
+    });
+
+    test('should omit performance observability extensions when hub does not advertise them', () {
+      final agentCaps = ProtocolCapabilities.defaultCapabilities();
+      final serverExtensions = Map<String, dynamic>.from(agentCaps.extensions)
+        ..remove(TransportExtensionNegotiation.clientRequestIdEcho)
+        ..remove(TransportExtensionNegotiation.agentPhaseTimings)
+        ..remove(TransportExtensionNegotiation.healthPiggyback);
+      final serverCaps = ProtocolCapabilities(
+        protocols: agentCaps.protocols,
+        encodings: agentCaps.encodings,
+        compressions: agentCaps.compressions,
+        extensions: serverExtensions,
+        limits: agentCaps.limits,
+      );
+
+      final config = negotiator.negotiate(
+        agentCapabilities: agentCaps,
+        serverCapabilities: serverCaps,
+      );
+
+      expect(config.negotiatedExtensions.containsKey(TransportExtensionNegotiation.clientRequestIdEcho), isFalse);
+      expect(config.negotiatedExtensions.containsKey(TransportExtensionNegotiation.agentPhaseTimings), isFalse);
+      expect(config.negotiatedExtensions.containsKey(TransportExtensionNegotiation.healthPiggyback), isFalse);
     });
   });
 }

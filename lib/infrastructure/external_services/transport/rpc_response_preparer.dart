@@ -290,6 +290,8 @@ class RpcResponsePreparer {
       requestId: responseMeta?.requestId ?? requestMeta?.requestId,
       agentId: responseMeta?.agentId,
       timestamp: responseMeta?.timestamp,
+      agentPhases: responseMeta?.agentPhases ?? requestMeta?.agentPhases,
+      healthSnapshot: responseMeta?.healthSnapshot ?? requestMeta?.healthSnapshot,
     );
 
     if (response.isError) {

@@ -37,9 +37,10 @@ import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.d
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
+import 'package:plug_agente/domain/services/i_agent_health_status_provider.dart';
 
 /// Service for reporting application health and metrics.
-class HealthService {
+class HealthService implements IAgentHealthStatusProvider {
   HealthService({
     required IMetricsCollector metricsCollector,
     required IDatabaseGateway gateway,
@@ -127,6 +128,7 @@ class HealthService {
   final QueryMetricsHealthSectionBuilder _queryMetricsSectionBuilder;
 
   /// Gets current health status with system metrics.
+  @override
   Map<String, Object?> getHealthStatus() {
     return _buildHealthStatus();
   }

@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:plug_agente/domain/protocol/rpc_request.dart';
+import 'package:plug_agente/domain/protocol/rpc_wire_ack_id.dart';
 
 enum RpcRequestGuardResult {
   allow,
@@ -34,17 +35,17 @@ class RpcRequestGuard {
       return RpcRequestGuardResult.rateLimited;
     }
 
-    final requestId = request.id?.toString();
-    if (requestId == null || requestId.trim().isEmpty) {
+    final replayKey = resolveRpcReplayGuardKey(request);
+    if (replayKey == null || replayKey.trim().isEmpty) {
       return RpcRequestGuardResult.allow;
     }
 
     _cleanupReplayCache(now);
-    if (_recentRpcRequestIds.containsKey(requestId)) {
+    if (_recentRpcRequestIds.containsKey(replayKey)) {
       return RpcRequestGuardResult.replayDetected;
     }
 
-    _recentRpcRequestIds[requestId] = now;
+    _recentRpcRequestIds[replayKey] = now;
     return RpcRequestGuardResult.allow;
   }
 
