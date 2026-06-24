@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Orquestra o build do instalador Windows: sincroniza versao, build Flutter e
-compila Inno Setup.
+Orquestra o build do instalador Windows: build Flutter e compila Inno Setup.
 
-Fluxo: update_version.py -> flutter build windows --release -> ISCC setup.iss
+Fluxo: flutter build windows --release -> ISCC setup.iss
+Opcional: --sync-version executa update_version.py antes do build.
 
 Saida: installer/dist/PlugAgente-Setup-{versao}.exe
 
@@ -11,6 +11,7 @@ Requisitos: Flutter no PATH, Inno Setup 6 (ISCC no PATH ou em Program Files).
 Execute a partir da raiz: python installer/build_installer.py
 """
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -237,13 +238,29 @@ def sign_file(path: Path) -> None:
     run([signtool, "verify", "/pa", "/v", str(path)])
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Gera o instalador Windows (.exe) do Plug Agente.",
+    )
+    parser.add_argument(
+        "--sync-version",
+        action="store_true",
+        help="Sincroniza a versao do pubspec.yaml antes do build (update_version.py).",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     ensure_signing_matches_runtime()
 
-    print("1. Executando update_version.py...", flush=True)
-    run([sys.executable, str(INSTALLER_DIR / "update_version.py")])
+    step = 1
+    if args.sync_version:
+        print(f"{step}. Executando update_version.py...", flush=True)
+        run([sys.executable, str(INSTALLER_DIR / "update_version.py")])
+        step += 1
 
-    print("\n2. Build Flutter (windows --release)...", flush=True)
+    print(f"\n{step}. Build Flutter (windows --release)...", flush=True)
     flutter_cmd = ["flutter", "build", "windows", "--release"]
     feed_url = resolve_auto_update_feed_url()
     if feed_url:
@@ -269,7 +286,8 @@ def main() -> None:
     if not BUILD_DIR.exists():
         raise SystemExit(f"Erro: pasta de build nao encontrada: {BUILD_DIR}")
 
-    print("\n2.1. Build elevated action runner helper...", flush=True)
+    step += 1
+    print(f"\n{step}. Build elevated action runner helper...", flush=True)
     elevated_runner_script = PROJECT_ROOT / "tool" / "elevated" / "build_elevated_runner.py"
     if elevated_runner_script.exists():
         run([sys.executable, str(elevated_runner_script)])
@@ -290,21 +308,23 @@ def main() -> None:
     helper_exe = BUILD_DIR / "plug_update_helper.exe"
     elevated_helper_exe = BUILD_DIR / "plug_agente_elevated_runner.exe"
     if should_sign_artifacts():
-        print("\n3.1. Assinando executavel Windows...", flush=True)
+        step += 1
+        print(f"\n{step}.1. Assinando executavel Windows...", flush=True)
         sign_file(app_exe)
-        print("\n3.2. Assinando helper de update Windows...", flush=True)
+        print(f"\n{step}.2. Assinando helper de update Windows...", flush=True)
         sign_file(helper_exe)
-        print("\n3.3. Assinando elevated action runner...", flush=True)
+        print(f"\n{step}.3. Assinando elevated action runner...", flush=True)
         sign_file(elevated_helper_exe)
 
-    print("\n4. Compilando instalador Inno Setup...", flush=True)
+    step += 1
+    print(f"\n{step}. Compilando instalador Inno Setup...", flush=True)
     iscc = find_iscc()
     run([iscc, str(SETUP_ISS)], cwd=INSTALLER_DIR)
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     installer_path = find_generated_installer()
     if should_sign_artifacts():
-        print("\n4.1. Assinando instalador Windows...", flush=True)
+        print(f"\n{step}.1. Assinando instalador Windows...", flush=True)
         sign_file(installer_path)
     print(f"\nInstalador gerado em: {installer_path}", flush=True)
 
