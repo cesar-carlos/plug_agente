@@ -46,6 +46,7 @@ class SilentUpdateCollaborators {
     required this.launcherStatusReader,
     required this.clock,
     required this.diagnosticsNotifier,
+    this.metricsCollector,
   });
 
   factory SilentUpdateCollaborators.create({
@@ -110,7 +111,6 @@ class SilentUpdateCollaborators {
     final resolvedProbePipeline = SilentUpdateProbePipeline(
       appcastProbeService: appcastProbe,
       signatureVerifier: resolvedSignatureVerifier,
-      uacDetector: resolvedUacDetector,
       pendingStore: resolvedPendingStore,
       automaticFailureBreaker: automaticFailureBreaker,
       metricsCollector: metricsCollector,
@@ -126,6 +126,7 @@ class SilentUpdateCollaborators {
           preferences: preferences,
           metricsCollector: metricsCollector,
           closeApplicationForSilentUpdate: closeApplicationForSilentUpdate,
+          helperWaitDuration: helperWaitDuration,
           clock: resolvedClock,
         );
     final resolvedPendingReconciler =
@@ -168,6 +169,7 @@ class SilentUpdateCollaborators {
       launcherStatusReader: resolvedLauncherStatusReader,
       clock: resolvedClock,
       diagnosticsNotifier: diagnosticsNotifier,
+      metricsCollector: metricsCollector,
     );
   }
 
@@ -187,4 +189,5 @@ class SilentUpdateCollaborators {
   final ISilentUpdateLauncherStatusReader launcherStatusReader;
   final DateTime Function() clock;
   final SilentUpdateDiagnosticsNotifier diagnosticsNotifier;
+  final IAutoUpdateMetricsCollector? metricsCollector;
 }

@@ -17,7 +17,6 @@ void main() {
   group('SilentUpdateProbePipeline', () {
     late FakeAppcastProbeService probe;
     late FakeAppcastSignatureVerifier signatureVerifier;
-    late FakeUacDetector uacDetector;
     late FakePendingSilentUpdateStore pendingStore;
     late PersistentCircuitBreaker breaker;
     late SilentUpdateProbePipeline pipeline;
@@ -59,7 +58,6 @@ void main() {
       );
       probe = FakeAppcastProbeService();
       signatureVerifier = FakeAppcastSignatureVerifier();
-      uacDetector = FakeUacDetector(requiresConsent: false);
       pendingStore = FakePendingSilentUpdateStore();
       breaker = PersistentCircuitBreaker(
         persistence: InMemoryCircuitBreakerPersistence(),
@@ -71,7 +69,6 @@ void main() {
       pipeline = SilentUpdateProbePipeline(
         appcastProbeService: probe,
         signatureVerifier: signatureVerifier,
-        uacDetector: uacDetector,
         pendingStore: pendingStore,
         automaticFailureBreaker: breaker,
         clock: () => DateTime.utc(2026, 6, 10, 12),
@@ -179,47 +176,19 @@ void main() {
       expect(latestDiagnostics?.rolloutPercentage, 25);
     });
 
-    test('returns requiresUserConsent when UAC gate blocks automatic download', () async {
-      uacDetector = FakeUacDetector(requiresConsent: true);
-      pipeline = SilentUpdateProbePipeline(
-        appcastProbeService: probe,
-        signatureVerifier: signatureVerifier,
-        uacDetector: uacDetector,
-        pendingStore: pendingStore,
-        automaticFailureBreaker: breaker,
-        clock: () => DateTime.utc(2026, 6, 10, 12),
-      );
-
+    test('proceeds to download (UAC gate removed from probe; elevation happens at apply)', () async {
       final result = await pipeline.run(request());
 
-      expect(result, isA<SilentUpdateProbeTerminal>());
-      final terminal = result as SilentUpdateProbeTerminal;
-      terminal.outcome.fold(
-        (outcome) => expect(outcome, SilentUpdateOutcome.requiresUserConsent),
-        (_) => fail('Expected success'),
-      );
-      expect(terminal.notifyDiagnostics, isTrue);
-      expect(uacDetector.callCount, 1);
-      expect(pendingStore.writeCount, 0);
-      expect(latestDiagnostics?.completionSource, UpdateCheckCompletionSource.automaticAwaitingUserConsent);
+      expect(result, isA<SilentUpdateProbeProceedToDownload>());
+      expect(pendingStore.writeCount, 1);
+      expect(latestDiagnostics?.updateAvailable, isTrue);
       expect(latestDiagnostics?.pendingVersion, '99.0.0+1');
     });
 
-    test('userInitiated bypasses UAC gate and proceeds to download', () async {
-      uacDetector = FakeUacDetector(requiresConsent: true);
-      pipeline = SilentUpdateProbePipeline(
-        appcastProbeService: probe,
-        signatureVerifier: signatureVerifier,
-        uacDetector: uacDetector,
-        pendingStore: pendingStore,
-        automaticFailureBreaker: breaker,
-        clock: () => DateTime.utc(2026, 6, 10, 12),
-      );
-
+    test('userInitiated proceeds to download', () async {
       final result = await pipeline.run(request(userInitiated: true));
 
       expect(result, isA<SilentUpdateProbeProceedToDownload>());
-      expect(uacDetector.callCount, 0);
       expect(pendingStore.writeCount, 1);
       expect(pendingStore.pending, isA<PendingSilentUpdateProbed>());
     });

@@ -185,6 +185,7 @@ class SilentUpdateLauncherStatus {
     required this.elevatedDurationMs,
     required this.elevatedRetryStarted,
     required this.waitForAppExitDurationMs,
+    required this.appExitTimedOut,
     required this.appPid,
     required this.signatureStatus,
     required this.signatureRequired,
@@ -207,6 +208,13 @@ class SilentUpdateLauncherStatus {
   final int? elevatedDurationMs;
   final bool? elevatedRetryStarted;
   final int? waitForAppExitDurationMs;
+
+  /// True when the helper's wait for this process to exit hit
+  /// `waitPidTimeoutSeconds` before the process actually terminated, so the
+  /// installer ran while relying on Inno Setup's `/CLOSEAPPLICATIONS` to
+  /// force it closed instead of a confirmed clean exit. `null` on records
+  /// written by older helper builds that predate this field.
+  final bool? appExitTimedOut;
   final int? appPid;
   final String? signatureStatus;
   final bool? signatureRequired;
@@ -240,6 +248,7 @@ class SilentUpdateLauncherStatus {
       elevatedDurationMs: _readInt(json['elevatedDurationMs']),
       elevatedRetryStarted: json['elevatedRetryStarted'] as bool?,
       waitForAppExitDurationMs: _readInt(json['waitForAppExitDurationMs']),
+      appExitTimedOut: json['appExitTimedOut'] as bool?,
       appPid: _readInt(json['appPid']),
       signatureStatus: json['signatureStatus'] as String?,
       signatureRequired: json['signatureRequired'] as bool?,

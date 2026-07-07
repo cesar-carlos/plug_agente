@@ -54,6 +54,8 @@ class UpdatesSettingsProvider extends ChangeNotifier {
 
   bool get automaticSilentUpdatesEnabled => _orchestrator.automaticSilentUpdatesEnabled;
 
+  bool get automaticSilentUpdatesAutoApplyEnabled => _orchestrator.automaticSilentUpdatesAutoApplyEnabled;
+
   bool get isCheckingUpdates => _isCheckingUpdates;
 
   bool get isCheckingAutomaticUpdates => _orchestrator.isSilentCheckInProgress;
@@ -185,6 +187,13 @@ class UpdatesSettingsProvider extends ChangeNotifier {
 
   Future<void> setAutomaticSilentUpdatesEnabled(BuildContext context, bool value) =>
       _actionHandler.setAutomaticSilentUpdatesEnabled(
+        context,
+        value,
+        onSuccess: _onOrchestratorChanged,
+      );
+
+  Future<void> setAutomaticSilentUpdatesAutoApplyEnabled(BuildContext context, bool value) =>
+      _actionHandler.setAutomaticSilentUpdatesAutoApplyEnabled(
         context,
         value,
         onSuccess: _onOrchestratorChanged,

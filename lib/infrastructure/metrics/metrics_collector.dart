@@ -293,6 +293,10 @@ class MetricsCollectorCore {
 
   void recordAutoUpdateUserInitiatedApplyFailure() => autoUpdateMetrics.recordAutoUpdateUserInitiatedApplyFailure();
 
+  void recordAutoUpdateAutomaticApplySuccess() => autoUpdateMetrics.recordAutoUpdateAutomaticApplySuccess();
+
+  void recordAutoUpdateAutomaticApplyFailure() => autoUpdateMetrics.recordAutoUpdateAutomaticApplyFailure();
+
   void recordSuccess({
     required String queryId,
     required String query,

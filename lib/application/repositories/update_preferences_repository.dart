@@ -31,12 +31,20 @@ class UpdatePreferencesRepository implements IUpdatePreferencesRepository {
       _settingsStore.getBool(AppSettingsKeys.automaticSilentUpdatesEnabled) ?? true;
 
   @override
+  bool get automaticSilentUpdatesAutoApplyEnabled =>
+      _settingsStore.getBool(AppSettingsKeys.automaticSilentUpdatesAutoApplyEnabled) ?? true;
+
+  @override
   Future<void> setUpdateNotificationsEnabled(bool enabled) =>
       _settingsStore.setBool(AppSettingsKeys.updateNotificationsEnabled, enabled);
 
   @override
   Future<void> setAutomaticSilentUpdatesEnabled(bool enabled) =>
       _settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, enabled);
+
+  @override
+  Future<void> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled) =>
+      _settingsStore.setBool(AppSettingsKeys.automaticSilentUpdatesAutoApplyEnabled, enabled);
 
   @override
   String? readLastManualDiagnosticsJson() => _settingsStore.getString(AutoUpdateSettingsKeys.lastManualDiagnostics);

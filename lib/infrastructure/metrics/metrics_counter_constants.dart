@@ -185,6 +185,8 @@ abstract final class MetricsCounterNames {
   static const String autoUpdateAwaitingUserConsentCounter = 'auto_update_awaiting_user_consent';
   static const String autoUpdateUserInitiatedApplySuccessCounter = 'auto_update_user_initiated_apply_success';
   static const String autoUpdateUserInitiatedApplyFailureCounter = 'auto_update_user_initiated_apply_failure';
+  static const String autoUpdateAutomaticApplySuccessCounter = 'auto_update_automatic_apply_success';
+  static const String autoUpdateAutomaticApplyFailureCounter = 'auto_update_automatic_apply_failure';
   static const String autoUpdateNotificationsPreferenceEnabledCounter = 'auto_update_notifications_preference_enabled';
   static const String autoUpdateNotificationsPreferenceDisabledCounter =
       'auto_update_notifications_preference_disabled';

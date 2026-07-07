@@ -6,9 +6,11 @@ import 'package:plug_agente/application/repositories/i_circuit_breaker_persisten
 abstract interface class IUpdatePreferencesRepository {
   bool get updateNotificationsEnabled;
   bool get automaticSilentUpdatesEnabled;
+  bool get automaticSilentUpdatesAutoApplyEnabled;
 
   Future<void> setUpdateNotificationsEnabled(bool enabled);
   Future<void> setAutomaticSilentUpdatesEnabled(bool enabled);
+  Future<void> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled);
 
   String? readLastManualDiagnosticsJson();
   String? readLastBackgroundDiagnosticsJson();

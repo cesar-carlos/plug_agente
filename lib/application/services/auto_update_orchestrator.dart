@@ -272,6 +272,9 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   bool get automaticSilentUpdatesEnabled => _silentCoordinator.automaticSilentUpdatesEnabled;
 
   @override
+  bool get automaticSilentUpdatesAutoApplyEnabled => _silentCoordinator.automaticSilentUpdatesAutoApplyEnabled;
+
+  @override
   bool get updateNotificationsEnabled => _preferences?.updateNotificationsEnabled ?? true;
 
   @override
@@ -375,6 +378,35 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
           cause: error,
           context: <String, dynamic>{
             'operation': 'setAutomaticSilentUpdatesEnabled',
+            'enabled': enabled,
+          },
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<Result<void>> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled) async {
+    final preferences = _preferences;
+    if (preferences == null) {
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Settings store is not available',
+          context: <String, dynamic>{'operation': 'setAutomaticSilentUpdatesAutoApplyEnabled'},
+        ),
+      );
+    }
+    try {
+      await preferences.setAutomaticSilentUpdatesAutoApplyEnabled(enabled);
+      _notifyChanges();
+      return const Success(unit);
+    } on Exception catch (error) {
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to update automatic silent update auto-apply preference',
+          cause: error,
+          context: <String, dynamic>{
+            'operation': 'setAutomaticSilentUpdatesAutoApplyEnabled',
             'enabled': enabled,
           },
         ),

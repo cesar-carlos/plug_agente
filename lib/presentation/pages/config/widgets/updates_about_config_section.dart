@@ -19,11 +19,13 @@ class UpdatesAboutConfigSection extends StatelessWidget {
     required this.autoUpdateFeedStatus,
     required this.updateNotificationsEnabled,
     required this.automaticSilentUpdatesEnabled,
+    required this.automaticSilentUpdatesAutoApplyEnabled,
     required this.onCheckUpdates,
     required this.onCheckAutomaticUpdates,
     required this.onCopyUpdateDiagnostics,
     required this.onUpdateNotificationsChanged,
     required this.onAutomaticSilentUpdatesChanged,
+    required this.onAutomaticSilentUpdatesAutoApplyChanged,
     required this.onUseManualOnlyUpdateMode,
     this.isAutoUpdateAvailable = true,
     this.unavailableMessage,
@@ -43,11 +45,13 @@ class UpdatesAboutConfigSection extends StatelessWidget {
   final String autoUpdateFeedStatus;
   final bool updateNotificationsEnabled;
   final bool automaticSilentUpdatesEnabled;
+  final bool automaticSilentUpdatesAutoApplyEnabled;
   final VoidCallback onCheckUpdates;
   final VoidCallback onCheckAutomaticUpdates;
   final VoidCallback onCopyUpdateDiagnostics;
   final ValueChanged<bool> onUpdateNotificationsChanged;
   final ValueChanged<bool> onAutomaticSilentUpdatesChanged;
+  final ValueChanged<bool> onAutomaticSilentUpdatesAutoApplyChanged;
   final VoidCallback onUseManualOnlyUpdateMode;
   final bool isAutoUpdateAvailable;
   final String? unavailableMessage;
@@ -194,6 +198,14 @@ class UpdatesAboutConfigSection extends StatelessWidget {
                     onChanged: onAutomaticSilentUpdatesChanged,
                   ),
                   if (automaticSilentUpdatesEnabled) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    SettingsToggleTile(
+                      key: const ValueKey('automatic_silent_updates_auto_apply_toggle'),
+                      label: l10n.configAutomaticSilentUpdatesAutoApplyToggle,
+                      description: l10n.configAutomaticSilentUpdatesAutoApplyDescription,
+                      value: automaticSilentUpdatesAutoApplyEnabled,
+                      onChanged: onAutomaticSilentUpdatesAutoApplyChanged,
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     Button(
                       key: const ValueKey('automatic_updates_check_now_button'),

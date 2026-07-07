@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
@@ -30,10 +32,11 @@ class FakeLauncherStatusReader implements ISilentUpdateLauncherStatusReader {
 SilentUpdateDownloadApplyService _makeService({
   FakeSilentUpdateInstaller? installer,
   FakePendingSilentUpdateStore? pendingStore,
-  FakeLauncherStatusReader? launcherStatusReader,
+  ISilentUpdateLauncherStatusReader? launcherStatusReader,
   PersistentCircuitBreaker? automaticFailureBreaker,
   CloseApplicationForSilentUpdate? closeApplicationForSilentUpdate,
   DateTime Function()? clock,
+  CurrentProcessIdResolver? currentProcessIdResolver,
 }) {
   return SilentUpdateDownloadApplyService(
     installer: installer,
@@ -50,6 +53,7 @@ SilentUpdateDownloadApplyService _makeService({
     launcherStatusReader: launcherStatusReader ?? FakeLauncherStatusReader(),
     closeApplicationForSilentUpdate: closeApplicationForSilentUpdate,
     clock: clock ?? (() => DateTime.utc(2026, 6, 10, 12)),
+    currentProcessIdResolver: currentProcessIdResolver,
   );
 }
 
@@ -303,6 +307,75 @@ void main() {
       });
     });
 
+    group('resolvePersistedDownloadedPending', () {
+      test('returns none when store is empty', () async {
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedNone>());
+      });
+
+      test('clears stale pending when artifacts are missing', () async {
+        pendingStore.pending = _downloadedPending();
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedStaleCleared>());
+        expect(pendingStore.clearCount, 1);
+        expect(pendingStore.pending, isNull);
+      });
+
+      test('returns ready when artifacts exist and helper is not in flight', () async {
+        final pending = PendingSilentUpdateDownloaded(
+          version: '99.0.0+1',
+          startedAt: DateTime.utc(2026, 6, 10, 10),
+          installerPath: r'C:\PlugAgente\updates\PlugAgente-Setup-99.0.0.exe',
+          logPath: r'C:\PlugAgente\updates\PlugAgente-Update-99.0.0+1.log',
+          launcherPath: r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+          launcherStatusPath: r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+          installDirectory: r'C:\PlugAgente',
+          strategy: 'currentUserThenElevated',
+          appPid: 1234,
+          assetSize: 5,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          installDirectoryWritable: true,
+          requireValidSignature: false,
+          updateDirectorySecurityStatus: 'restricted',
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedReady>());
+        expect((resolution as PendingDownloadedReady).pending.version, '99.0.0+1');
+      });
+
+      test('returns inFlight when helper status indicates active install', () async {
+        final pending = _downloadedPending();
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          launcherStatusReader: _InFlightLauncherStatusReader(
+            pending: pending,
+            lastUpdatedAt: DateTime.utc(2026, 6, 10, 12, 5),
+          ),
+          automaticFailureBreaker: breaker,
+          clock: () => DateTime.utc(2026, 6, 10, 12, 10),
+        );
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedInFlight>());
+      });
+    });
+
     group('applyPendingDownloadedUpdate', () {
       Future<Result<void>> apply({
         bool triggerAppClose = true,
@@ -323,6 +396,36 @@ void main() {
           triggerAppClose: triggerAppClose,
         );
       }
+
+      test('uses current process id resolver instead of persisted appPid', () async {
+        final pending = PendingSilentUpdateDownloaded(
+          version: '99.0.0+1',
+          startedAt: DateTime.utc(2026, 6, 10, 12),
+          installerPath: r'C:\PlugAgente\updates\PlugAgente-Setup-99.0.0.exe',
+          logPath: r'C:\PlugAgente\updates\PlugAgente-Update-99.0.0+1.log',
+          launcherPath: r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+          launcherStatusPath: r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+          installDirectory: r'C:\PlugAgente',
+          strategy: 'currentUserThenElevated',
+          appPid: 1,
+          assetSize: 5,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          installDirectoryWritable: true,
+          requireValidSignature: false,
+          updateDirectorySecurityStatus: 'restricted',
+        );
+        pendingStore.pending = pending;
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          automaticFailureBreaker: breaker,
+          currentProcessIdResolver: () => 4242,
+        );
+
+        await apply(triggerAppClose: false);
+
+        expect(installer.lastLaunchRequest?.appPid, 4242);
+      });
 
       test('launches helper, updates diagnostics and closes app on success', () async {
         pendingStore.pending = _downloadedPending();
@@ -454,6 +557,52 @@ void main() {
         expect(installer.launchHelperCount, 1);
         expect(closeCount, 1);
       });
+
+      test('two concurrent calls launch the helper only once (guard is claimed before the await)', () async {
+        pendingStore.pending = _downloadedPending();
+        final launchGate = Completer<void>();
+        installer.onBeforeLaunchReturn = () => launchGate.future;
+
+        // Start both calls back-to-back, before either has a chance to
+        // resolve `launchPreparedHelper`. If the guard were claimed only
+        // after the await (the pre-fix behavior), both would observe
+        // `_applyInProgress == false` and both would call the installer.
+        final firstFuture = apply(triggerAppClose: false);
+        final secondFuture = apply(triggerAppClose: false);
+
+        // Let both calls run up to the point where they'd read the guard.
+        await Future<void>.delayed(Duration.zero);
+        expect(installer.launchHelperCount, 1, reason: 'only the first call should have started the launch');
+
+        launchGate.complete();
+        final results = await Future.wait([firstFuture, secondFuture]);
+
+        expect(results[0].isSuccess(), isTrue);
+        expect(results[1].isSuccess(), isTrue);
+        expect(installer.launchHelperCount, 1);
+      });
+
+      test('reports and logs when closing the app for install fails, instead of losing the error', () async {
+        pendingStore.pending = _downloadedPending();
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          automaticFailureBreaker: breaker,
+          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+            throw StateError('window manager refused to close');
+          },
+        );
+
+        final result = await apply();
+        // The close failure is reported asynchronously via `.catchError`;
+        // give the microtask queue a chance to run it.
+        await Future<void>.delayed(Duration.zero);
+
+        expect(result.isSuccess(), isTrue, reason: 'launching the helper already succeeded');
+        expect(latestDiagnostics?.completionSource, UpdateCheckCompletionSource.automaticInstallFailure);
+        expect(latestDiagnostics?.errorMessage, contains('window manager refused to close'));
+        expect(notifyCount, greaterThanOrEqualTo(2));
+      });
     });
 
     group('cleanupArtifacts', () {
@@ -475,6 +624,49 @@ void main() {
       });
     });
   });
+}
+
+class _InFlightLauncherStatusReader implements ISilentUpdateLauncherStatusReader {
+  _InFlightLauncherStatusReader({
+    required this.pending,
+    required this.lastUpdatedAt,
+  });
+
+  final PendingSilentUpdateDownloaded pending;
+  final DateTime lastUpdatedAt;
+
+  @override
+  Future<bool> fileExists(String? path) async {
+    if (path == null || path.isEmpty) return false;
+    return path == pending.installerPath || path == pending.launcherPath;
+  }
+
+  @override
+  Future<SilentUpdateLauncherStatus?> read(String? statusPath) async {
+    return SilentUpdateLauncherStatus(
+      state: 'started',
+      strategy: pending.strategy,
+      installDirectory: pending.installDirectory,
+      installerPath: pending.installerPath,
+      logPath: pending.logPath,
+      nonAdminExitCode: null,
+      nonAdminDurationMs: null,
+      elevatedExitCode: null,
+      elevatedDurationMs: null,
+      elevatedRetryStarted: null,
+      waitForAppExitDurationMs: null,
+      appExitTimedOut: null,
+      appPid: pending.appPid,
+      signatureStatus: null,
+      signatureRequired: null,
+      actualSha256: null,
+      hashValidationStatus: null,
+      installDirectoryWritable: true,
+      elevatedCancelled: null,
+      errorMessage: null,
+      lastUpdatedAt: lastUpdatedAt,
+    );
+  }
 }
 
 class _FailingCleanupInstaller implements ISilentUpdateInstaller {

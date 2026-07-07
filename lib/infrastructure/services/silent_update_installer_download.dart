@@ -62,11 +62,24 @@ final class SilentUpdateInstallerDownload {
     dio.options.sendTimeout = _downloadTimeout;
     var didTimeOut = false;
     var didCancel = false;
-    final timeoutTimer = Timer(_downloadTimeout, () {
-      didTimeOut = true;
-      didCancel = true;
-      dio.close(force: true);
-    });
+
+    // Stall watchdog, not a total-duration cap: rearmed every time data
+    // actually arrives (response headers, then each body chunk below) so a
+    // large installer downloading steadily over a slow-but-healthy
+    // connection is never aborted just because the whole transfer takes
+    // longer than `_downloadTimeout`. Only `_downloadTimeout` of silence
+    // (no bytes at all) counts as a stall.
+    Timer? stallTimer;
+    void armStallTimer() {
+      stallTimer?.cancel();
+      stallTimer = Timer(_downloadTimeout, () {
+        didTimeOut = true;
+        didCancel = true;
+        dio.close(force: true);
+      });
+    }
+
+    armStallTimer();
     Timer? cancelPollTimer;
     if (cancelRequested != null) {
       cancelPollTimer = Timer.periodic(_cancelPollInterval, (_) {
@@ -100,6 +113,10 @@ final class SilentUpdateInstallerDownload {
               throw TimeoutException('Silent update asset download timed out', _downloadTimeout);
             },
           );
+      // Headers arrived, so the connection is alive; rearm the watchdog for
+      // the body-streaming phase below instead of letting the timer keep
+      // counting down from before the request even started.
+      armStallTimer();
       if (cancelRequested?.call() ?? false) {
         didCancel = true;
         return _cancelledDownloadFailure(assetUri, version);
@@ -162,6 +179,7 @@ final class SilentUpdateInstallerDownload {
       try {
         var downloadedBytes = effectiveStartOffset;
         await for (final chunk in body.stream) {
+          armStallTimer();
           if (cancelRequested?.call() ?? false) {
             didCancel = true;
             break;
@@ -245,7 +263,7 @@ final class SilentUpdateInstallerDownload {
         ),
       );
     } finally {
-      timeoutTimer.cancel();
+      stallTimer?.cancel();
       cancelPollTimer?.cancel();
     }
   }

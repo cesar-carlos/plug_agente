@@ -13,6 +13,7 @@ class UpdatesConfigViewState {
     required this.autoUpdateFeedStatus,
     required this.updateNotificationsEnabled,
     required this.automaticSilentUpdatesEnabled,
+    required this.automaticSilentUpdatesAutoApplyEnabled,
     required this.isCheckingUpdates,
     required this.isCheckingAutomaticUpdates,
     required this.isAutoUpdateAvailable,
@@ -35,6 +36,7 @@ class UpdatesConfigViewState {
       autoUpdateFeedStatus: provider.autoUpdateFeedStatusLabel(l10n),
       updateNotificationsEnabled: provider.updateNotificationsEnabled,
       automaticSilentUpdatesEnabled: provider.automaticSilentUpdatesEnabled,
+      automaticSilentUpdatesAutoApplyEnabled: provider.automaticSilentUpdatesAutoApplyEnabled,
       isCheckingUpdates: provider.isCheckingUpdates,
       isCheckingAutomaticUpdates: provider.isCheckingAutomaticUpdates,
       isAutoUpdateAvailable: provider.isAutoUpdateAvailable,
@@ -53,6 +55,7 @@ class UpdatesConfigViewState {
   final String autoUpdateFeedStatus;
   final bool updateNotificationsEnabled;
   final bool automaticSilentUpdatesEnabled;
+  final bool automaticSilentUpdatesAutoApplyEnabled;
   final bool isCheckingUpdates;
   final bool isCheckingAutomaticUpdates;
   final bool isAutoUpdateAvailable;
@@ -73,6 +76,7 @@ class UpdatesConfigViewState {
             autoUpdateFeedStatus == other.autoUpdateFeedStatus &&
             updateNotificationsEnabled == other.updateNotificationsEnabled &&
             automaticSilentUpdatesEnabled == other.automaticSilentUpdatesEnabled &&
+            automaticSilentUpdatesAutoApplyEnabled == other.automaticSilentUpdatesAutoApplyEnabled &&
             isCheckingUpdates == other.isCheckingUpdates &&
             isCheckingAutomaticUpdates == other.isCheckingAutomaticUpdates &&
             isAutoUpdateAvailable == other.isAutoUpdateAvailable &&
@@ -92,6 +96,7 @@ class UpdatesConfigViewState {
     autoUpdateFeedStatus,
     updateNotificationsEnabled,
     automaticSilentUpdatesEnabled,
+    automaticSilentUpdatesAutoApplyEnabled,
     isCheckingUpdates,
     isCheckingAutomaticUpdates,
     isAutoUpdateAvailable,

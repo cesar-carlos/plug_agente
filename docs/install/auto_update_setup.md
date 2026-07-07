@@ -9,10 +9,10 @@ O app tem dois fluxos de update:
 
 - verificacao manual via `auto_updater`/WinSparkle, mantendo interacao do
   usuario;
-- instalacao automatica silenciosa, ligada por padrao, com verificacao e
-  download em background, validacao e *staging* do instalador por helper
-  nativo; a aplicacao do update (helper + fechamento) e explicita ou
-  ocorre ao encerrar o app naturalmente.
+- instalacao automatica silenciosa, ligada por padrao, com verificacao,
+  download e apply em background (quando auto-apply esta ligado), validacao e
+  *staging* do instalador por helper nativo; com auto-apply desligado, o apply
+  permanece explicito via banner ou shutdown natural.
 
 O recurso fica ativo quando:
 
@@ -52,6 +52,7 @@ AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 # AUTO_UPDATE_QUIET_HOURS_START=22:00
 # AUTO_UPDATE_QUIET_HOURS_END=06:00
 # AUTO_UPDATE_HELPER_WAIT_MINUTES=30
+# AUTO_UPDATE_AUTO_APPLY=true
 ```
 
 ### Variaveis adicionais
@@ -63,6 +64,7 @@ AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 | `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` | `30` | 0 desliga o aviso pre-fechamento; max 120. Tempo de espera apos a notificacao "fechando para atualizar" antes do `exit`. |
 | `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela onde checagens automaticas retornam `skippedByQuietHours`. Suporta janelas que cruzam meia-noite. |
 | `AUTO_UPDATE_HELPER_WAIT_MINUTES` | `30` | min 5, max 120. Tempo maximo que o reconcile aguarda um helper pendente antes de considerar o pending stale e limpar. |
+| `AUTO_UPDATE_AUTO_APPLY` | `true` | quando `false`/`0`, o fluxo silencioso faz apenas download e *staging*; o apply exige banner ou shutdown. Opt-out por deploy. |
 | `AUTO_UPDATE_FEED_PUBLIC_KEY` | nao definido | CSV base64 de chaves Ed25519 (ver secao de assinatura). |
 | `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE` | `false` | quando `true`, items sem `plug:edSignature` valido sao rejeitados. |
 
@@ -184,42 +186,55 @@ alguns segundos para propagar.
 
 O app executa o fluxo silencioso no boot e no intervalo configurado por
 `AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, respeitando `AUTO_UPDATE_CHANNEL`,
-rollout, cooldown, quiet hours, gate UAC e pending update.
+rollout, cooldown, quiet hours e pending update.
 
-O ciclo divide-se em duas fases: **verificacao + download** (automaticos) e
-**apply** (explicito ou no shutdown natural). Enquanto o instalador esta apenas
-*staged* em disco, o agente permanece online e conectado ao hub.
+O ciclo divide-se em **verificacao + download** (automaticos) e **apply**
+(automatico quando `AUTO_UPDATE_AUTO_APPLY` e a preferencia
+`settings.automatic_silent_updates_auto_apply_enabled` estao ligadas; caso
+contrario, explicito via banner ou no shutdown natural). Enquanto o instalador
+esta apenas *staged* em disco, o agente permanece online e conectado ao hub.
 
 ### Fase automatica (boot / timer)
 
-1. Ler o appcast e localizar o item mais recente.
-2. Comparar a versao remota com `AppConstants.appVersion`.
-3. Rejeitar o fluxo se `plug:sha256`, tamanho, nome do asset, URL do
-   instalador, assinatura Ed25519 (quando exigida) ou gate UAC estiverem
-   ausentes ou invalidos.
-4. Quando UAC exige consentimento e o check nao e iniciado pelo usuario,
-   parar apos o probe com `requiresUserConsent` (sem download).
+1. Validar pending persistido: artefatos ausentes sao limpos; helper em
+   execucao bloqueia novo ciclo; update ja staged pode seguir para auto-apply.
+2. Ler o appcast e localizar o item mais recente.
+3. Comparar a versao remota com `AppConstants.appVersion`.
+4. Rejeitar o fluxo se `plug:sha256`, tamanho, nome do asset, URL do
+   instalador ou assinatura Ed25519 (quando exigida) estiverem ausentes ou
+   invalidos. O gate UAC **nao** bloqueia mais o download automatico.
 5. Baixar o `.exe` para a pasta global de updates, primeiro como `.part`.
 6. Validar tamanho e SHA-256.
 7. Copiar `plug_update_helper.exe` do bundle instalado para a pasta global de
    updates (`deferHelperLaunch: true` — o helper **nao** e iniciado nesta
-   fase).
+   fase quando auto-apply esta desligado).
 8. Persistir pending update (`PendingSilentUpdateDownloaded`) e concluir com
-   `SilentUpdateOutcome.installerReady`. O app **nao** fecha sozinho.
+   `SilentUpdateOutcome.installerReady`.
+9. Quando auto-apply esta ligado, lancar o helper e fechar o app logo apos o
+   staging (toast de pre-fechamento conforme
+   `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS`).
 
-### Fase de apply (explicita ou no shutdown)
+### Fase de apply (automatica, explicita ou no shutdown)
 
-O helper nativo so e lancado quando:
+O helper nativo e lancado quando:
 
+- auto-apply esta ligado e o download terminou com sucesso (caminho padrao
+  para agentes 24/7); ou
 - o operador confirma no banner in-app (`applyPendingSilentUpdate` ou
-  `applyAvailableUpdate` quando UAC bloqueou o download automatico); ou
+  `applyAvailableUpdate` para sessoes legadas com estado `awaitingUserConsent`);
+  ou
 - o app encerra naturalmente com update staged (`shutdownApp` chama
   `applyPendingSilentUpdate(triggerAppClose: false)` antes de parar o
   orchestrator).
 
-No apply explicito pelo banner, o app exibe toast de pre-fechamento
-(`AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS`) e fecha para o helper instalar.
-No shutdown natural, o helper e lancado sem reentrar na logica de close.
+No apply explicito pelo banner ou no auto-apply, o app exibe toast de
+pre-fechamento (`AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS`) e fecha para o helper
+instalar. No shutdown natural, o helper e lancado sem reentrar na logica de
+close.
+
+Em instalacoes sob `Program Files`, o Windows ainda pode exibir prompt UAC
+**na instalacao** (elevacao do helper). Isso e esperado e nao bloqueia mais o
+download automatico.
 
 O helper recebe argumentos explicitos, incluindo versao, instalador,
 diretorio atual de instalacao, log, status JSON, PID do app e estrategia de
@@ -387,15 +402,18 @@ PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
 1. Instale uma versao antiga.
 2. Abra **Configuracoes** > **Atualizacoes**.
 3. Confirme que **Instalar atualizacoes automaticamente** esta ligado.
-4. Clique em **Tentar atualizacao automatica agora** para exercitar o fluxo
+4. Opcional: confirme o toggle de **aplicar automaticamente** (ligado por
+   padrao; desligue para testar o fluxo legado com banner).
+5. Clique em **Tentar atualizacao automatica agora** para exercitar o fluxo
    silencioso com as mesmas validacoes do boot.
-5. Se quiser testar o fluxo manual, clique no botao de refresh da verificacao
+6. Se quiser testar o fluxo manual, clique no botao de refresh da verificacao
    manual.
-6. Confirme:
-   - com versao nova: download e staging concluem; o banner oferece apply
-     (o helper so inicia apos confirmacao ou ao fechar o app);
-   - com UAC bloqueando download automatico: banner de consentimento; o botao
-     dispara download + apply em uma acao (`applyAvailableUpdate`);
+7. Confirme:
+   - com versao nova e auto-apply ligado: download, staging e apply ocorrem
+     sem clicar no banner (o app fecha para o helper instalar);
+   - com auto-apply desligado: download e staging concluem; o banner oferece
+     apply manual;
+   - em `Program Files`, UAC pode aparecer **na instalacao**, nao no download;
    - sem versao nova: a UI informa que nao ha atualizacao;
    - em cooldown: a UI registra `automaticCooldown`;
    - com falha: a UI mostra detalhes tecnicos copiaveis.

@@ -267,6 +267,7 @@ class _ConfigUpdatesTab extends StatelessWidget {
       autoUpdateFeedStatus: updatesState.autoUpdateFeedStatus,
       updateNotificationsEnabled: updatesState.updateNotificationsEnabled,
       automaticSilentUpdatesEnabled: updatesState.automaticSilentUpdatesEnabled,
+      automaticSilentUpdatesAutoApplyEnabled: updatesState.automaticSilentUpdatesAutoApplyEnabled,
       isCheckingUpdates: updatesState.isCheckingUpdates,
       isCheckingAutomaticUpdates: updatesState.isCheckingAutomaticUpdates,
       isAutoUpdateAvailable: updatesState.isAutoUpdateAvailable,
@@ -281,6 +282,9 @@ class _ConfigUpdatesTab extends StatelessWidget {
       },
       onAutomaticSilentUpdatesChanged: (value) {
         unawaited(updates.setAutomaticSilentUpdatesEnabled(context, value));
+      },
+      onAutomaticSilentUpdatesAutoApplyChanged: (value) {
+        unawaited(updates.setAutomaticSilentUpdatesAutoApplyEnabled(context, value));
       },
       onUseManualOnlyUpdateMode: () {
         unawaited(updates.applyManualOnlyUpdateMode(context));

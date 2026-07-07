@@ -61,6 +61,10 @@
       "type": ["integer", "null"],
       "minimum": 0
     },
+    "appExitTimedOut": {
+      "type": ["boolean", "null"],
+      "description": "True when the app process was still running after waitPidTimeoutSeconds elapsed, so the helper proceeded to run the installer relying on Inno Setup's /CLOSEAPPLICATIONS instead of a confirmed clean exit."
+    },
     "appPid": {
       "type": ["integer", "null"],
       "minimum": 0,

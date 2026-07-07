@@ -46,6 +46,9 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
   bool automaticSilentUpdatesEnabled = false;
 
   @override
+  bool automaticSilentUpdatesAutoApplyEnabled = true;
+
+  @override
   bool updateNotificationsEnabled = false;
 
   @override
@@ -83,6 +86,12 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
 
   @override
   Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled) async => const Success(unit);
+
+  @override
+  Future<Result<void>> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled) async {
+    automaticSilentUpdatesAutoApplyEnabled = enabled;
+    return const Success(unit);
+  }
 
   @override
   Future<Result<void>> setUpdateNotificationsEnabled(bool enabled) async => const Success(unit);

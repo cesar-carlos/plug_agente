@@ -18,6 +18,8 @@ import 'package:plug_agente/application/services/silent_update/silent_update_pro
 import 'package:plug_agente/application/services/silent_update/silent_update_scheduler.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
@@ -32,6 +34,7 @@ export 'package:plug_agente/application/services/silent_update/silent_update_dow
 abstract interface class ISilentUpdateCoordinator {
   bool get isSilentCheckInProgress;
   bool get automaticSilentUpdatesEnabled;
+  bool get automaticSilentUpdatesAutoApplyEnabled;
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics;
 
   /// True when a silent download finished and the installer is staged on
@@ -48,24 +51,14 @@ abstract interface class ISilentUpdateCoordinator {
   /// the periodic silent check timer when automatic silent updates are enabled.
   Future<void> reconcilePendingAndSchedule();
 
-  /// Triggers the silent cycle (probe → validation → download → stage).
-  /// The success bucket carries a [SilentUpdateOutcome] discriminating the
-  /// reason the cycle ended (installer ready, no new version, rollout
-  /// skipped, cooldown, disabled, cancelled, pending in progress, already
-  /// in progress).
+  /// Triggers the silent cycle (probe → validation → download → stage →
+  /// optional auto-apply). The success bucket carries a [SilentUpdateOutcome]
+  /// discriminating the reason the cycle ended.
   ///
-  /// The cycle never closes the app on its own anymore: when a new version
-  /// is downloaded the outcome is [SilentUpdateOutcome.installerReady] and
-  /// the agent keeps running normally until [applyPendingDownloadedUpdate]
-  /// is invoked.
-  ///
-  /// When Windows UAC is enabled and the current process is not running
-  /// elevated, the automatic flow (default `userInitiated: false`) stops
-  /// after probing the appcast and surfaces a new
-  /// [SilentUpdateOutcome.requiresUserConsent] outcome without downloading.
-  /// Pass `userInitiated: true` from the UI banner so the operator's
-  /// explicit click bypasses the UAC gate and runs the full download +
-  /// stage cycle.
+  /// When auto-apply is enabled (default), a staged update is applied
+  /// automatically after download without waiting for banner confirmation.
+  /// Pass `userInitiated: true` from UI flows that require explicit
+  /// operator confirmation before apply.
   Future<Result<SilentUpdateOutcome>> checkSilently({bool userInitiated = false});
 
   /// Launches the staged update helper for a previously downloaded install
@@ -162,6 +155,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     hydratePersistedDiagnostics();
   }
 
+  static const String _defaultAutoApplyNoticeTitle = 'Plug Agente: update ready';
+  static const String _defaultAutoApplyNoticeBody = 'Closing to install the update.';
+
   final RuntimeCapabilities _capabilities;
   final String? Function() _feedUrlResolver;
   final ISilentUpdateInstaller? _silentUpdateInstaller;
@@ -184,6 +180,10 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
 
   @override
   bool get automaticSilentUpdatesEnabled => _collaborators.preferences.automaticSilentUpdatesEnabled;
+
+  @override
+  bool get automaticSilentUpdatesAutoApplyEnabled =>
+      _collaborators.preferences.automaticSilentUpdatesAutoApplyEnabled;
 
   @override
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics => _diagnosticsStore.lastAutomaticDiagnostics;
@@ -264,22 +264,32 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     _isSilentCheckInProgress = true;
     _cancelRequested = false;
     try {
-      final pending = await _collaborators.pendingStore.read();
-      if (pending != null && pending is PendingSilentUpdateDownloaded) {
-        final now = _collaborators.clock();
-        final launcherStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
-        _lastAutomaticDiagnostics = PendingSilentUpdateReconciler.diagnosticsForPending(
-          pending: pending,
-          launcherStatus: launcherStatus,
-          feedUrl: feedUrl,
-          now: now,
-          checkId: _currentCheckId,
-          completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
-          errorMessage: 'Silent update already has a pending installer execution',
-        );
-        await _persistLastAutomaticDiagnostics();
-        _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
-        return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.pendingInProgress);
+      final pendingResolution = await _collaborators.downloadApplyService.resolvePersistedDownloadedPending();
+      switch (pendingResolution) {
+        case PendingDownloadedInFlight(:final pending):
+          final now = _collaborators.clock();
+          final launcherStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
+          _lastAutomaticDiagnostics = PendingSilentUpdateReconciler.diagnosticsForPending(
+            pending: pending,
+            launcherStatus: launcherStatus,
+            feedUrl: feedUrl,
+            now: now,
+            checkId: _currentCheckId,
+            completionSource: UpdateCheckCompletionSource.automaticInstallStarted,
+            errorMessage: 'Silent update installer is still running',
+            updateAvailable: true,
+          );
+          await _persistLastAutomaticDiagnostics();
+          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+          return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.pendingInProgress);
+        case PendingDownloadedReady(:final pending):
+          if (_shouldAutoApply() && !_cancelRequested) {
+            return _autoApplyStagedUpdate(feedUrl: feedUrl);
+          }
+          return _returnInstallerReady(feedUrl: feedUrl, pending: pending);
+        case PendingDownloadedNone():
+        case PendingDownloadedStaleCleared():
+          break;
       }
 
       await _collaborators.downloadApplyService.cleanupArtifacts(installer);
@@ -367,6 +377,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         case SilentUpdateDownloadStageReady():
           _collaborators.diagnosticsNotifier.notifyChanged();
           _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+          if (_shouldAutoApply() && !_cancelRequested) {
+            return _autoApplyStagedUpdate(feedUrl: feedUrl);
+          }
           return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
       }
     } on FormatException catch (error) {
@@ -474,6 +487,64 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         pushDiagnostics: () => _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.reconcile),
       ),
     );
+  }
+
+  bool _shouldAutoApply() {
+    return shouldAutoApplySilentUpdate(
+      automaticSilentUpdatesEnabled: automaticSilentUpdatesEnabled,
+      automaticSilentUpdatesAutoApplyEnabled: automaticSilentUpdatesAutoApplyEnabled,
+      environment: AppEnvironment.snapshot(),
+    );
+  }
+
+  Future<Result<SilentUpdateOutcome>> _returnInstallerReady({
+    required String feedUrl,
+    required PendingSilentUpdateDownloaded pending,
+  }) async {
+    final now = _collaborators.clock();
+    final launcherStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
+    _lastAutomaticDiagnostics = PendingSilentUpdateReconciler.diagnosticsForPending(
+      pending: pending,
+      launcherStatus: launcherStatus,
+      feedUrl: feedUrl,
+      now: now,
+      checkId: _currentCheckId,
+      completionSource: UpdateCheckCompletionSource.automaticInstallReady,
+      updateAvailable: true,
+    );
+    await _persistLastAutomaticDiagnostics();
+    _collaborators.diagnosticsNotifier.notifyChanged();
+    _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+    return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
+  }
+
+  Future<Result<SilentUpdateOutcome>> _autoApplyStagedUpdate({required String feedUrl}) async {
+    if (!automaticSilentUpdatesEnabled || _cancelRequested) {
+      return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
+    }
+
+    final applyResult = await applyPendingDownloadedUpdate(
+      noticeTitle: _defaultAutoApplyNoticeTitle,
+      noticeBody: _defaultAutoApplyNoticeBody,
+    );
+    Exception? applyError;
+    applyResult.fold(
+      (_) {},
+      (error) => applyError = error,
+    );
+    if (applyError == null) {
+      _collaborators.metricsCollector?.recordAutoUpdateAutomaticApplySuccess();
+      _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+      return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
+    }
+
+    _collaborators.metricsCollector?.recordAutoUpdateAutomaticApplyFailure();
+    _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+    final pending = await _collaborators.pendingStore.read();
+    if (pending is PendingSilentUpdateDownloaded) {
+      return _returnInstallerReady(feedUrl: feedUrl, pending: pending);
+    }
+    return Failure<SilentUpdateOutcome, Exception>(applyError!);
   }
 
 }

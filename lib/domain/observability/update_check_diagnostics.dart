@@ -14,16 +14,15 @@ enum UpdateCheckCompletionSource {
   automaticValidationFailure,
   automaticDownloadFailure,
 
-  /// Download succeeded and installer + helper are staged on disk. The
-  /// agent is still fully connected and operational; only an explicit
-  /// apply (user-initiated or natural app close) will trigger the helper
-  /// process and the actual install.
+  /// Download succeeded and installer + helper are staged on disk. When
+  /// auto-apply is enabled (default), the coordinator launches the helper
+  /// immediately after staging. When auto-apply is off, the agent stays
+  /// online until an explicit apply or natural shutdown.
   automaticInstallReady,
 
-  /// Probe detected a new version, but the automatic flow stopped before
-  /// downloading because Windows UAC would prompt the user for elevation
-  /// during install. The operator must confirm via the in-app banner
-  /// before the download proceeds; the agent keeps running normally.
+  /// Legacy completion from builds that blocked automatic download when
+  /// Windows UAC would prompt during install. Retained for persisted
+  /// diagnostics and banner compatibility.
   automaticAwaitingUserConsent,
 
   automaticInstallStarted,

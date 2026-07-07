@@ -29,6 +29,9 @@ class _MockOrchestrator implements IAutoUpdateOrchestrator {
   final bool automaticSilentUpdatesEnabled = false;
 
   @override
+  final bool automaticSilentUpdatesAutoApplyEnabled = true;
+
+  @override
   final bool updateNotificationsEnabled = true;
 
   @override
@@ -78,6 +81,9 @@ class _MockOrchestrator implements IAutoUpdateOrchestrator {
 
   @override
   Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled) async => const Success(unit);
+
+  @override
+  Future<Result<void>> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled) async => const Success(unit);
 
   @override
   Future<Result<void>> setUpdateNotificationsEnabled(bool enabled) async => const Success(unit);

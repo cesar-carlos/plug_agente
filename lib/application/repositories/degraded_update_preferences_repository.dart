@@ -21,6 +21,7 @@ class DegradedUpdatePreferencesRepository implements IUpdatePreferencesRepositor
 
   bool _updateNotificationsEnabled = true;
   bool _automaticSilentUpdatesEnabled = true;
+  bool _automaticSilentUpdatesAutoApplyEnabled = true;
 
   final ICircuitBreakerPersistence _manualTimeoutCircuit;
   final ICircuitBreakerPersistence _automaticFailureCircuit;
@@ -32,6 +33,9 @@ class DegradedUpdatePreferencesRepository implements IUpdatePreferencesRepositor
   bool get automaticSilentUpdatesEnabled => _automaticSilentUpdatesEnabled;
 
   @override
+  bool get automaticSilentUpdatesAutoApplyEnabled => _automaticSilentUpdatesAutoApplyEnabled;
+
+  @override
   Future<void> setUpdateNotificationsEnabled(bool enabled) async {
     _updateNotificationsEnabled = enabled;
   }
@@ -39,6 +43,11 @@ class DegradedUpdatePreferencesRepository implements IUpdatePreferencesRepositor
   @override
   Future<void> setAutomaticSilentUpdatesEnabled(bool enabled) async {
     _automaticSilentUpdatesEnabled = enabled;
+  }
+
+  @override
+  Future<void> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled) async {
+    _automaticSilentUpdatesAutoApplyEnabled = enabled;
   }
 
   @override

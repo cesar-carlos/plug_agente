@@ -11,6 +11,7 @@ import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/silent_update_coordinator.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/silent_update_outcome.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
@@ -29,13 +30,23 @@ SilentUpdateCoordinator _makeCoordinator({
   ISilentUpdateLauncherStatusReader? launcherStatusReader,
   DateTime Function()? clock,
   Duration helperWaitDuration = const Duration(minutes: 30),
+  bool autoApplyEnabled = true,
 }) {
-  final settings = store ?? InMemoryAppSettingsStore();
+  final settings =
+      store ??
+      InMemoryAppSettingsStore(
+        autoApplyEnabled
+            ? null
+            : <String, Object>{
+                AppSettingsKeys.automaticSilentUpdatesAutoApplyEnabled: false,
+              },
+      );
   dotenv.clean();
   dotenv.loadFromString(
     envString:
         'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
-        'AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600',
+        'AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600'
+        '${autoApplyEnabled ? '' : '\nAUTO_UPDATE_AUTO_APPLY=false'}',
   );
   return SilentUpdateCoordinator(
     RuntimeCapabilities.full(),
@@ -89,6 +100,7 @@ SilentUpdateLauncherStatus _launcherStatus({
     elevatedDurationMs: null,
     elevatedRetryStarted: null,
     waitForAppExitDurationMs: null,
+    appExitTimedOut: null,
     appPid: 9999,
     signatureStatus: null,
     signatureRequired: null,
@@ -174,6 +186,7 @@ void main() {
           var closeCalled = false;
           final coordinator = _makeCoordinator(
             installer: installer,
+            autoApplyEnabled: false,
             closeApp: ({String? noticeTitle, String? noticeBody}) async {
               closeCalled = true;
             },
@@ -214,6 +227,80 @@ void main() {
       );
 
       test(
+        'auto-applies staged update by default after successful download',
+        () async {
+          final installer = FakeSilentUpdateInstaller();
+          var closeCalled = false;
+          final coordinator = _makeCoordinator(
+            installer: installer,
+            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+              closeCalled = true;
+            },
+          );
+
+          final result = await coordinator.checkSilently();
+          await Future<void>.delayed(Duration.zero);
+
+          expect(result.isSuccess(), isTrue);
+          expect(installer.launchHelperCount, 1);
+          expect(closeCalled, isTrue);
+          expect(
+            coordinator.lastAutomaticDiagnostics?.completionSource,
+            UpdateCheckCompletionSource.automaticInstallStarted,
+          );
+        },
+      );
+
+      test(
+        'clears stale pending on checkSilently and continues with probe',
+        () async {
+          final store = InMemoryAppSettingsStore();
+          final probe = FakeAppcastProbeService()
+            ..result = const AppcastProbeResult(
+              requestUrl: 'https://example.com/appcast.xml',
+              latestVersion: AppConstants.appVersion,
+              assetUrl: 'https://example.com/PlugAgente-Setup-current.exe',
+              assetSize: 5,
+              assetName: 'PlugAgente-Setup-current.exe',
+              sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+              itemCount: 1,
+            );
+          final stalePending = <String, Object?>{
+            'version': '99.0.0+1',
+            'installerPath': r'C:\Missing\App\updates\PlugAgente-Setup-99.0.0.exe',
+            'launcherPath': r'C:\Missing\App\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+            'launcherStatusPath': r'C:\Missing\App\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+            'logPath': r'C:\Missing\App\updates\PlugAgente-Update-99.0.0+1.log',
+            'installDirectory': r'C:\Missing\App',
+            'strategy': 'currentUserThenElevated',
+            'appPid': 9999,
+            'updateDirectorySecurityStatus': 'restricted',
+            'startedAt': DateTime.utc(2026, 6, 10, 10).toIso8601String(),
+          };
+          await store.setString(
+            'auto_update.pending_silent_update',
+            jsonEncode(stalePending),
+          );
+
+          final coordinator = _makeCoordinator(
+            store: store,
+            probe: probe,
+            autoApplyEnabled: false,
+          );
+
+          final result = await coordinator.checkSilently();
+
+          expect(store.getString('auto_update.pending_silent_update'), isNull);
+          expect(probe.callCount, 1);
+          expect(result.isSuccess(), isTrue);
+          result.fold(
+            (outcome) => expect(outcome, SilentUpdateOutcome.noNewVersion),
+            (_) => fail('Expected success'),
+          );
+        },
+      );
+
+      test(
         'applyPendingDownloadedUpdate launches helper and invokes close',
         () async {
           final installer = FakeSilentUpdateInstaller();
@@ -222,6 +309,7 @@ void main() {
           String? capturedBody;
           final coordinator = _makeCoordinator(
             installer: installer,
+            autoApplyEnabled: false,
             closeApp: ({String? noticeTitle, String? noticeBody}) async {
               closeCalled = true;
               capturedTitle = noticeTitle;
@@ -263,6 +351,7 @@ void main() {
           var closeCalled = false;
           final coordinator = _makeCoordinator(
             installer: installer,
+            autoApplyEnabled: false,
             closeApp: ({String? noticeTitle, String? noticeBody}) async {
               closeCalled = true;
             },
@@ -299,6 +388,7 @@ void main() {
           var closeCount = 0;
           final coordinator = _makeCoordinator(
             installer: installer,
+            autoApplyEnabled: false,
             closeApp: ({String? noticeTitle, String? noticeBody}) async {
               closeCount++;
             },
@@ -495,51 +585,55 @@ void main() {
         expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isFalse);
       });
 
-      test('blocks automatic download when UAC detector requires user consent', () async {
+      test('downloads automatically even when UAC detector requires user consent', () async {
         final installer = FakeSilentUpdateInstaller();
         final uacDetector = _StubUacDetector(requiresConsent: true);
         final coordinator = _makeCoordinator(
           installer: installer,
           uacDetector: uacDetector,
+          autoApplyEnabled: false,
         );
 
         final result = await coordinator.checkSilently();
 
         expect(result.isSuccess(), isTrue);
         result.fold(
-          (outcome) => expect(outcome, SilentUpdateOutcome.requiresUserConsent),
+          (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
           (_) => fail('Expected success'),
         );
-        expect(installer.installCount, 0, reason: 'UAC gate must stop before downloading');
-        expect(uacDetector.callCount, greaterThanOrEqualTo(1));
-        final diagnostics = coordinator.lastAutomaticDiagnostics;
+        expect(installer.installCount, 1, reason: 'UAC no longer blocks automatic download');
         expect(
-          diagnostics?.completionSource,
-          UpdateCheckCompletionSource.automaticAwaitingUserConsent,
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallReady,
         );
-        expect(diagnostics?.updateAvailable, isTrue);
-        expect(diagnostics?.pendingVersion, '99.0.0+1');
       });
 
-      test('userInitiated bypasses UAC gate and runs full download', () async {
+      test('userInitiated runs full download and auto-applies when enabled', () async {
         final installer = FakeSilentUpdateInstaller();
         final uacDetector = _StubUacDetector(requiresConsent: true);
+        var closeCalled = false;
         final coordinator = _makeCoordinator(
           installer: installer,
           uacDetector: uacDetector,
+          closeApp: ({String? noticeTitle, String? noticeBody}) async {
+            closeCalled = true;
+          },
         );
 
         final result = await coordinator.checkSilently(userInitiated: true);
+        await Future<void>.delayed(Duration.zero);
 
         expect(result.isSuccess(), isTrue);
         result.fold(
           (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
           (_) => fail('Expected success'),
         );
-        expect(installer.installCount, 1, reason: 'user-initiated path must bypass UAC gate');
+        expect(installer.installCount, 1);
+        expect(installer.launchHelperCount, 1);
+        expect(closeCalled, isTrue);
         expect(
           coordinator.lastAutomaticDiagnostics?.completionSource,
-          UpdateCheckCompletionSource.automaticInstallReady,
+          UpdateCheckCompletionSource.automaticInstallStarted,
         );
       });
 
@@ -549,6 +643,7 @@ void main() {
         final coordinator = _makeCoordinator(
           installer: installer,
           uacDetector: uacDetector,
+          autoApplyEnabled: false,
         );
 
         final result = await coordinator.checkSilently();

@@ -125,6 +125,11 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
   Result<void> launchResult = const Success(unit);
   Future<void> Function()? onBeforeReturn;
 
+  /// Lets tests hold `launchPreparedHelper` mid-flight (e.g. to simulate a
+  /// second concurrent `applyPendingDownloadedUpdate` call arriving before
+  /// the first one's `await` resolves).
+  Future<void> Function()? onBeforeLaunchReturn;
+
   @override
   Future<Result<SilentUpdateInstallResult>> install(SilentUpdateInstallRequest request) async {
     installCount++;
@@ -139,6 +144,9 @@ class FakeSilentUpdateInstaller implements ISilentUpdateInstaller {
   Future<Result<void>> launchPreparedHelper(SilentUpdateLaunchRequest request) async {
     launchHelperCount++;
     lastLaunchRequest = request;
+    if (onBeforeLaunchReturn != null) {
+      await onBeforeLaunchReturn!.call();
+    }
     return launchResult;
   }
 

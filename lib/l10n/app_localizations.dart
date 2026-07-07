@@ -5846,6 +5846,30 @@ abstract class AppLocalizations {
   /// **'Try automatic update now'**
   String get configAutomaticSilentUpdatesCheckNow;
 
+  /// No description provided for @configAutomaticSilentUpdatesAutoApplyToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply updates automatically after download'**
+  String get configAutomaticSilentUpdatesAutoApplyToggle;
+
+  /// No description provided for @configAutomaticSilentUpdatesAutoApplyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When enabled, the agent closes and installs a staged update without waiting for banner confirmation or app shutdown. Windows may still request UAC during installation.'**
+  String get configAutomaticSilentUpdatesAutoApplyDescription;
+
+  /// No description provided for @configAutomaticSilentUpdatesAutoApplyEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update apply enabled.'**
+  String get configAutomaticSilentUpdatesAutoApplyEnabled;
+
+  /// No description provided for @configAutomaticSilentUpdatesAutoApplyDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update apply disabled. Staged updates wait for banner confirmation or app shutdown.'**
+  String get configAutomaticSilentUpdatesAutoApplyDisabled;
+
   /// No description provided for @configAutoUpdateFeedOfficial.
   ///
   /// In en, this message translates to:

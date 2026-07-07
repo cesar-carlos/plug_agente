@@ -105,6 +105,11 @@ const String defaultAutoUpdateChannel = 'stable';
 const int _defaultDownloadTimeoutSeconds = 300;
 const int _minimumDownloadTimeoutSeconds = 60;
 
+/// Stall (inactivity) timeout for the silent-update asset download, in
+/// seconds: aborts the transfer when no bytes arrive for this long, not
+/// after this much total download time. A large installer over a slow but
+/// steady connection keeps resetting this window on every chunk received,
+/// so it is never aborted purely for taking longer than this value.
 int resolveAutoUpdateDownloadTimeoutSeconds({
   required Map<String, String> environment,
 }) {
@@ -290,4 +295,33 @@ bool resolveAutoUpdateDownloadResume({
     '0' || 'false' || 'no' || 'nao' => false,
     _ => true,
   };
+}
+
+/// When `true` (default), the silent flow applies a staged update
+/// automatically after download without waiting for banner click or
+/// natural app shutdown. Set `AUTO_UPDATE_AUTO_APPLY=false` to opt out
+/// per deployment.
+bool resolveAutoUpdateAutoApply({
+  required Map<String, String> environment,
+  String? fromDefine,
+}) {
+  final raw = (fromDefine ?? const String.fromEnvironment('AUTO_UPDATE_AUTO_APPLY')).trim();
+  final value = raw.isNotEmpty ? raw : environment['AUTO_UPDATE_AUTO_APPLY']?.trim() ?? '';
+  if (value.isEmpty) return true;
+  return switch (value.toLowerCase()) {
+    '0' || 'false' || 'no' || 'nao' => false,
+    _ => true,
+  };
+}
+
+/// Effective auto-apply policy combining env, persisted preference, and
+/// the master automatic silent-updates switch.
+bool shouldAutoApplySilentUpdate({
+  required bool automaticSilentUpdatesEnabled,
+  required bool automaticSilentUpdatesAutoApplyEnabled,
+  required Map<String, String> environment,
+}) {
+  return automaticSilentUpdatesEnabled &&
+      automaticSilentUpdatesAutoApplyEnabled &&
+      resolveAutoUpdateAutoApply(environment: environment);
 }

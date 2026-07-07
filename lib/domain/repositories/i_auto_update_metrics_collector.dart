@@ -55,6 +55,14 @@ abstract interface class IAutoUpdateSilentMetricsCollector {
   /// flow could not produce a ready installer (network error, cooldown,
   /// cancelled, etc.).
   void recordAutoUpdateUserInitiatedApplyFailure();
+
+  /// Automatic silent flow applied a staged update without operator
+  /// confirmation (download finished and auto-apply succeeded).
+  void recordAutoUpdateAutomaticApplySuccess();
+
+  /// Automatic silent flow attempted auto-apply after staging but the
+  /// helper launch or pre-close step failed.
+  void recordAutoUpdateAutomaticApplyFailure();
 }
 
 /// Operator preference changes from Settings (notifications, silent

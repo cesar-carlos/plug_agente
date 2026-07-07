@@ -126,6 +126,16 @@ final class AutoUpdateMetricsCollectorImpl implements IAutoUpdateMetricsCollecto
   }
 
   @override
+  void recordAutoUpdateAutomaticApplySuccess() {
+    _store.incrementEventCounter(MetricsCounterNames.autoUpdateAutomaticApplySuccessCounter);
+  }
+
+  @override
+  void recordAutoUpdateAutomaticApplyFailure() {
+    _store.incrementEventCounter(MetricsCounterNames.autoUpdateAutomaticApplyFailureCounter);
+  }
+
+  @override
   void recordAutoUpdateNotificationsPreferenceEnabled() {
     _store.incrementEventCounter(MetricsCounterNames.autoUpdateNotificationsPreferenceEnabledCounter);
   }

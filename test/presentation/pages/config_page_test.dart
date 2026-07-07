@@ -41,6 +41,7 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     this.lastBackgroundDiagnostics,
     this.lastAutomaticDiagnostics,
     this.automaticSilentUpdatesEnabled = true,
+    this.automaticSilentUpdatesAutoApplyEnabled = true,
     this.updateNotificationsEnabled = true,
   });
 
@@ -49,6 +50,9 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
 
   @override
   bool automaticSilentUpdatesEnabled;
+
+  @override
+  bool automaticSilentUpdatesAutoApplyEnabled;
 
   @override
   bool updateNotificationsEnabled;
@@ -100,6 +104,12 @@ class FakeAutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     if (onSetAutomaticSilentUpdatesEnabled != null) {
       return onSetAutomaticSilentUpdatesEnabled!.call(enabled);
     }
+    return const Success(unit);
+  }
+
+  @override
+  Future<Result<void>> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled) async {
+    automaticSilentUpdatesAutoApplyEnabled = enabled;
     return const Success(unit);
   }
 
@@ -507,7 +517,7 @@ void main() {
 
     expect(find.text(ptL10n.configAutomaticSilentUpdatesToggle), findsOneWidget);
 
-    await tester.tap(find.byType(ToggleSwitch).last);
+    await tester.tap(find.byKey(const ValueKey('automatic_silent_updates_toggle')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 4));
 
@@ -666,7 +676,11 @@ void main() {
     await tester.tap(find.text(ptL10n.configTabUpdatesAbout));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('updates_copy_diagnostics_button')));
+    final copyButton = find.byKey(const ValueKey('updates_copy_diagnostics_button')).first;
+    await tester.ensureVisible(copyButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(copyButton);
     await tester.pump();
     await tester.pump(const Duration(seconds: 4));
 

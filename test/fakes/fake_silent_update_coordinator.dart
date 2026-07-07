@@ -36,6 +36,11 @@ class FakeSilentUpdateCoordinator implements ISilentUpdateCoordinator {
   bool get automaticSilentUpdatesEnabled => automaticSilentUpdatesEnabledValue;
 
   @override
+  bool get automaticSilentUpdatesAutoApplyEnabled => automaticSilentUpdatesAutoApplyEnabledValue;
+
+  bool automaticSilentUpdatesAutoApplyEnabledValue = true;
+
+  @override
   Future<bool> get hasPendingDownloadedUpdate async => hasPendingDownloadedUpdateValue;
 
   @override

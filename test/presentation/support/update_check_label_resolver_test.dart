@@ -15,10 +15,14 @@ class _StubOrchestrator implements IAutoUpdateOrchestrator {
     this.automaticSilentUpdatesEnabled = false,
     this.updateNotificationsEnabled = true,
     this.lastBackgroundDiagnostics,
-  }) : hasUpdateAwaitingUserConsent = false;
+  }) : automaticSilentUpdatesAutoApplyEnabled = true,
+       hasUpdateAwaitingUserConsent = false;
 
   @override
   final bool automaticSilentUpdatesEnabled;
+
+  @override
+  final bool automaticSilentUpdatesAutoApplyEnabled;
 
   @override
   final bool updateNotificationsEnabled;
@@ -61,6 +65,9 @@ class _StubOrchestrator implements IAutoUpdateOrchestrator {
 
   @override
   Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled) async => throw UnimplementedError();
+
+  @override
+  Future<Result<void>> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled) async => throw UnimplementedError();
 
   @override
   Future<Result<void>> setUpdateNotificationsEnabled(bool enabled) async => throw UnimplementedError();

@@ -392,4 +392,68 @@ void main() {
       );
     });
   });
+
+  group('resolveAutoUpdateAutoApply', () {
+    test('defaults to true when env is absent', () {
+      expect(resolveAutoUpdateAutoApply(environment: const {}), isTrue);
+    });
+
+    test('returns false for opt-out values', () {
+      for (final value in ['0', 'false', 'no', 'nao', 'FALSE']) {
+        expect(
+          resolveAutoUpdateAutoApply(
+            environment: {'AUTO_UPDATE_AUTO_APPLY': value},
+          ),
+          isFalse,
+          reason: 'expected false for $value',
+        );
+      }
+    });
+
+    test('returns true for explicit enable values', () {
+      expect(
+        resolveAutoUpdateAutoApply(
+          environment: const {'AUTO_UPDATE_AUTO_APPLY': 'true'},
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('shouldAutoApplySilentUpdate', () {
+    test('requires master switch, pref, and env', () {
+      expect(
+        shouldAutoApplySilentUpdate(
+          automaticSilentUpdatesEnabled: true,
+          automaticSilentUpdatesAutoApplyEnabled: true,
+          environment: const {},
+        ),
+        isTrue,
+      );
+      expect(
+        shouldAutoApplySilentUpdate(
+          automaticSilentUpdatesEnabled: false,
+          automaticSilentUpdatesAutoApplyEnabled: true,
+          environment: const {},
+        ),
+        isFalse,
+      );
+      expect(
+        shouldAutoApplySilentUpdate(
+          automaticSilentUpdatesEnabled: true,
+          automaticSilentUpdatesAutoApplyEnabled: false,
+          environment: const {},
+        ),
+        isFalse,
+      );
+      expect(
+        shouldAutoApplySilentUpdate(
+          automaticSilentUpdatesEnabled: true,
+          automaticSilentUpdatesAutoApplyEnabled: true,
+          environment: const {'AUTO_UPDATE_AUTO_APPLY': 'false'},
+        ),
+        isFalse,
+      );
+    });
+  });
 }

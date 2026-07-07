@@ -10,13 +10,16 @@ class InMemoryUpdatePreferencesRepository implements IUpdatePreferencesRepositor
   InMemoryUpdatePreferencesRepository({
     bool updateNotificationsEnabled = true,
     bool automaticSilentUpdatesEnabled = true,
+    bool automaticSilentUpdatesAutoApplyEnabled = true,
     bool freezeUpdateNotifications = false,
   }) : _updateNotificationsEnabled = updateNotificationsEnabled,
        _automaticSilentUpdatesEnabled = automaticSilentUpdatesEnabled,
+       _automaticSilentUpdatesAutoApplyEnabled = automaticSilentUpdatesAutoApplyEnabled,
        _freezeUpdateNotifications = freezeUpdateNotifications;
 
   bool _updateNotificationsEnabled;
   bool _automaticSilentUpdatesEnabled;
+  bool _automaticSilentUpdatesAutoApplyEnabled;
   final bool _freezeUpdateNotifications;
 
   String? _lastManualDiagnosticsJson;
@@ -35,6 +38,9 @@ class InMemoryUpdatePreferencesRepository implements IUpdatePreferencesRepositor
   bool get automaticSilentUpdatesEnabled => _automaticSilentUpdatesEnabled;
 
   @override
+  bool get automaticSilentUpdatesAutoApplyEnabled => _automaticSilentUpdatesAutoApplyEnabled;
+
+  @override
   Future<void> setUpdateNotificationsEnabled(bool enabled) async {
     if (_freezeUpdateNotifications) {
       return;
@@ -45,6 +51,11 @@ class InMemoryUpdatePreferencesRepository implements IUpdatePreferencesRepositor
   @override
   Future<void> setAutomaticSilentUpdatesEnabled(bool enabled) async {
     _automaticSilentUpdatesEnabled = enabled;
+  }
+
+  @override
+  Future<void> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled) async {
+    _automaticSilentUpdatesAutoApplyEnabled = enabled;
   }
 
   @override

@@ -3157,6 +3157,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get configAutomaticSilentUpdatesCheckNow => 'Tentar atualização automática agora';
 
   @override
+  String get configAutomaticSilentUpdatesAutoApplyToggle => 'Aplicar atualizações automaticamente após o download';
+
+  @override
+  String get configAutomaticSilentUpdatesAutoApplyDescription =>
+      'Quando ativado, o agente fecha e instala a atualização preparada sem aguardar confirmação no banner ou encerramento do app. O Windows ainda pode solicitar UAC durante a instalação.';
+
+  @override
+  String get configAutomaticSilentUpdatesAutoApplyEnabled => 'Aplicação automática de atualizações ativada.';
+
+  @override
+  String get configAutomaticSilentUpdatesAutoApplyDisabled =>
+      'Aplicação automática de atualizações desativada. Atualizações preparadas aguardam confirmação no banner ou encerramento do app.';
+
+  @override
   String get configAutoUpdateFeedOfficial => 'Feed: oficial';
 
   @override

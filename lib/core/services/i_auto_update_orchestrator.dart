@@ -7,6 +7,10 @@ abstract class IAutoUpdateOrchestrator {
   bool get isAvailable;
   bool get automaticSilentUpdatesEnabled;
 
+  /// When false, staged silent updates are not applied automatically after
+  /// download; the operator must confirm via banner or wait for shutdown.
+  bool get automaticSilentUpdatesAutoApplyEnabled;
+
   /// When false, proactive update UI (banner) is hidden and WinSparkle
   /// background checks are skipped while [automaticSilentUpdatesEnabled]
   /// is false. Silent install continues when automatic updates are on.
@@ -24,10 +28,10 @@ abstract class IAutoUpdateOrchestrator {
   /// instead of blocking `existsSync` calls on the event loop.
   Future<bool> get hasPendingDownloadedUpdate;
 
-  /// `true` when the silent flow detected a newer version but stopped
-  /// before downloading because Windows UAC would prompt the user for
-  /// elevation. The UI shows a different banner whose action triggers
-  /// [applyAvailableUpdate] (download + apply in one shot).
+  /// `true` when persisted diagnostics still carry the legacy
+  /// [UpdateCheckCompletionSource.automaticAwaitingUserConsent] completion
+  /// from builds that blocked download on the UAC gate. New automatic
+  /// checks proceed to download and apply without this intermediate state.
   bool get hasUpdateAwaitingUserConsent;
 
   /// Broadcasts a `void` event whenever the silent update state surface
@@ -46,6 +50,8 @@ abstract class IAutoUpdateOrchestrator {
   Future<void> initialize();
 
   Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled);
+
+  Future<Result<void>> setAutomaticSilentUpdatesAutoApplyEnabled(bool enabled);
 
   Future<Result<void>> setUpdateNotificationsEnabled(bool enabled);
 

@@ -8,7 +8,6 @@ import 'package:plug_agente/application/services/silent_update_outcome.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
-import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -77,14 +76,12 @@ class SilentUpdateProbePipeline {
   SilentUpdateProbePipeline({
     required IAppcastProbeService appcastProbeService,
     required IAppcastSignatureVerifier signatureVerifier,
-    required IUacDetector uacDetector,
     required IPendingSilentUpdateStore pendingStore,
     required PersistentCircuitBreaker automaticFailureBreaker,
     IAutoUpdateMetricsCollector? metricsCollector,
     DateTime Function()? clock,
   }) : _appcastProbeService = appcastProbeService,
        _signatureVerifier = signatureVerifier,
-       _uacDetector = uacDetector,
        _pendingStore = pendingStore,
        _automaticFailureBreaker = automaticFailureBreaker,
        _metricsCollector = metricsCollector,
@@ -92,7 +89,6 @@ class SilentUpdateProbePipeline {
 
   final IAppcastProbeService _appcastProbeService;
   final IAppcastSignatureVerifier _signatureVerifier;
-  final IUacDetector _uacDetector;
   final IPendingSilentUpdateStore _pendingStore;
   final PersistentCircuitBreaker _automaticFailureBreaker;
   final IAutoUpdateMetricsCollector? _metricsCollector;
@@ -287,25 +283,6 @@ class SilentUpdateProbePipeline {
       return SilentUpdateProbeTerminal(
         diagnostics: diagnostics,
         outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.noNewVersion),
-      );
-    }
-
-    if (!request.userInitiated && _uacDetector.requiresUserConsentForElevation()) {
-      final now = _clock();
-      await _automaticFailureBreaker.reset();
-      await publish(
-        diagnostics.copyWith(
-          completedAt: now,
-          completionSource: UpdateCheckCompletionSource.automaticAwaitingUserConsent,
-          updateAvailable: true,
-          pendingVersion: remoteVersion,
-        ),
-      );
-      _metricsCollector?.recordAutoUpdateAwaitingUserConsent();
-      return SilentUpdateProbeTerminal(
-        diagnostics: diagnostics,
-        outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.requiresUserConsent),
-        notifyDiagnostics: true,
       );
     }
 

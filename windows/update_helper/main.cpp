@@ -63,6 +63,7 @@ struct HelperStatus {
   std::uint64_t actualAssetSize = 0;
   DWORD waitPidTimeoutSeconds = kDefaultWaitPidTimeoutSeconds;
   DWORD waitForAppExitDurationMs = 0;
+  bool appExitTimedOut = false;
   DWORD nonAdminExitCode = 0;
   bool hasNonAdminExitCode = false;
   DWORD nonAdminDurationMs = 0;
@@ -266,6 +267,7 @@ bool write_status_file(const HelperStatus& status) {
       &json, &first, [&]() { append_json_number(&json, "waitPidTimeoutSeconds", status.waitPidTimeoutSeconds); });
   append_field(
       &json, &first, [&]() { append_json_number(&json, "waitForAppExitDurationMs", status.waitForAppExitDurationMs); });
+  append_field(&json, &first, [&]() { append_json_bool(&json, "appExitTimedOut", status.appExitTimedOut); });
   append_field(&json, &first, [&]() { append_json_string(&json, "signatureStatus", status.signatureStatus); });
   append_field(&json, &first, [&]() { append_json_string(&json, "startedAt", status.startedAt); });
   append_field(&json, &first, [&]() { append_json_string(&json, "lastUpdatedAt", now_iso8601()); });
@@ -534,19 +536,36 @@ bool parse_options(const std::vector<std::wstring>& args, Options* options, std:
   return true;
 }
 
-DWORD wait_for_process_exit(DWORD pid, DWORD timeout_seconds) {
+struct WaitForAppExitResult {
+  DWORD durationMs = 0;
+  // True when the app process was still running when the wait deadline was
+  // reached (WAIT_TIMEOUT), as opposed to having actually exited
+  // (WAIT_OBJECT_0) or not existing at all (pid == 0 / OpenProcess failed,
+  // e.g. because it already exited before this helper started waiting).
+  // Callers use this to flag on-disk status instead of silently assuming
+  // the app closed cleanly before running the installer.
+  bool timedOut = false;
+};
+
+WaitForAppExitResult wait_for_process_exit(DWORD pid, DWORD timeout_seconds) {
+  WaitForAppExitResult result{};
   const auto started_at = std::chrono::steady_clock::now();
   if (pid == 0) {
-    return 0;
+    return result;
   }
   const HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, pid);
   if (process == nullptr) {
-    return elapsed_ms(started_at);
+    // The process is already gone (most common case: it exited before the
+    // helper got around to opening a handle to it).
+    result.durationMs = elapsed_ms(started_at);
+    return result;
   }
   const DWORD timeout_ms = timeout_seconds >= (MAXDWORD / 1000) ? MAXDWORD : timeout_seconds * 1000;
-  WaitForSingleObject(process, timeout_ms);
+  const DWORD wait_status = WaitForSingleObject(process, timeout_ms);
   CloseHandle(process);
-  return elapsed_ms(started_at);
+  result.durationMs = elapsed_ms(started_at);
+  result.timedOut = wait_status == WAIT_TIMEOUT;
+  return result;
 }
 
 bool can_write_to_directory(const std::wstring& directory) {
@@ -897,7 +916,19 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE previous_instance, PWSTR com
 
   status.state = kStateWaitingForAppExit;
   write_status_file(status);
-  status.waitForAppExitDurationMs = wait_for_process_exit(options.appPid, options.waitPidTimeoutSeconds);
+  const WaitForAppExitResult wait_result = wait_for_process_exit(options.appPid, options.waitPidTimeoutSeconds);
+  status.waitForAppExitDurationMs = wait_result.durationMs;
+  status.appExitTimedOut = wait_result.timedOut;
+  if (wait_result.timedOut) {
+    // The app did not exit within the wait window. Proceeding anyway relies
+    // on Inno Setup's /CLOSEAPPLICATIONS to force it closed; record this on
+    // disk so a subsequent failure can be explained instead of looking like
+    // an unrelated installer error, and so operators can tell a normal
+    // "already exited" run apart from a "had to be force-closed" one.
+    status.errorMessage = L"App did not exit within " + std::to_wstring(options.waitPidTimeoutSeconds) +
+                           L"s; proceeding with install and relying on /CLOSEAPPLICATIONS to close it";
+  }
+  write_status_file(status);
 
   const std::vector<std::wstring> base_args = build_base_setup_args(options);
   if (options.tryCurrentUserFirst) {

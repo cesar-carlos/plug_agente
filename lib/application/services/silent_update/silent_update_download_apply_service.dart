@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io' show pid;
 
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
+import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
@@ -17,6 +19,32 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
 typedef CloseApplicationForSilentUpdate = Future<void> Function({String? noticeTitle, String? noticeBody});
+
+typedef CurrentProcessIdResolver = int Function();
+
+sealed class PendingDownloadedResolution {
+  const PendingDownloadedResolution();
+}
+
+final class PendingDownloadedNone extends PendingDownloadedResolution {
+  const PendingDownloadedNone();
+}
+
+final class PendingDownloadedStaleCleared extends PendingDownloadedResolution {
+  const PendingDownloadedStaleCleared();
+}
+
+final class PendingDownloadedInFlight extends PendingDownloadedResolution {
+  const PendingDownloadedInFlight(this.pending);
+
+  final PendingSilentUpdateDownloaded pending;
+}
+
+final class PendingDownloadedReady extends PendingDownloadedResolution {
+  const PendingDownloadedReady(this.pending);
+
+  final PendingSilentUpdateDownloaded pending;
+}
 
 sealed class SilentUpdateDownloadStageResult {
   const SilentUpdateDownloadStageResult();
@@ -74,6 +102,8 @@ class SilentUpdateDownloadApplyService {
     IUpdatePreferencesRepository? preferences,
     IAutoUpdateMetricsCollector? metricsCollector,
     CloseApplicationForSilentUpdate? closeApplicationForSilentUpdate,
+    CurrentProcessIdResolver? currentProcessIdResolver,
+    Duration helperWaitDuration = AutoUpdateDefaults.helperWaitDuration,
     DateTime Function()? clock,
   }) : _installer = installer,
        _pendingStore = pendingStore,
@@ -82,6 +112,8 @@ class SilentUpdateDownloadApplyService {
        _preferences = preferences,
        _metricsCollector = metricsCollector,
        _closeApplicationForSilentUpdate = closeApplicationForSilentUpdate,
+       _currentProcessIdResolver = currentProcessIdResolver ?? (() => pid),
+       _helperWaitDuration = helperWaitDuration,
        _clock = clock ?? DateTime.now;
 
   final ISilentUpdateInstaller? _installer;
@@ -91,6 +123,8 @@ class SilentUpdateDownloadApplyService {
   final IUpdatePreferencesRepository? _preferences;
   final IAutoUpdateMetricsCollector? _metricsCollector;
   final CloseApplicationForSilentUpdate? _closeApplicationForSilentUpdate;
+  final CurrentProcessIdResolver _currentProcessIdResolver;
+  final Duration _helperWaitDuration;
   final DateTime Function() _clock;
 
   bool _applyInProgress = false;
@@ -247,9 +281,54 @@ class SilentUpdateDownloadApplyService {
   Future<bool> hasPendingDownloadedUpdate() async {
     final pending = await _pendingStore.read();
     if (pending is! PendingSilentUpdateDownloaded) return false;
+    return _artifactsExistOnDisk(pending);
+  }
+
+  Future<PendingDownloadedResolution> resolvePersistedDownloadedPending() async {
+    final pending = await _pendingStore.read();
+    if (pending is! PendingSilentUpdateDownloaded) {
+      return const PendingDownloadedNone();
+    }
+
+    if (!await _artifactsExistOnDisk(pending)) {
+      developer.log(
+        'Clearing stale pending silent update (artifacts missing on disk): version=${pending.version}',
+        name: 'silent_update_download_apply',
+        level: 800,
+      );
+      await _pendingStore.clear();
+      return const PendingDownloadedStaleCleared();
+    }
+
+    final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+    if (_isHelperInstallInFlight(pending, launcherStatus)) {
+      return PendingDownloadedInFlight(pending);
+    }
+
+    return PendingDownloadedReady(pending);
+  }
+
+  Future<bool> _artifactsExistOnDisk(PendingSilentUpdateDownloaded pending) async {
     final installerExists = await _launcherStatusReader.fileExists(pending.installerPath);
     final launcherExists = await _launcherStatusReader.fileExists(pending.launcherPath);
     return installerExists && launcherExists;
+  }
+
+  bool _isHelperInstallInFlight(
+    PendingSilentUpdateDownloaded pending,
+    SilentUpdateLauncherStatus? launcherStatus,
+  ) {
+    final now = _clock();
+    final startedAt = launcherStatus?.lastUpdatedAt ?? pending.startedAt;
+    if (startedAt == null || now.difference(startedAt) > _helperWaitDuration) {
+      return false;
+    }
+    final state = launcherStatus?.state;
+    return state == null ||
+        state == 'started' ||
+        state == 'waitingForAppExit' ||
+        state == 'nonAdminStarted' ||
+        state == 'elevatedStarted';
   }
 
   Future<Result<void>> applyPendingDownloadedUpdate({
@@ -263,17 +342,30 @@ class SilentUpdateDownloadApplyService {
   }) async {
     if (_applyInProgress) {
       if (triggerAppClose) {
-        final closeApplication = _closeApplicationForSilentUpdate;
-        if (closeApplication != null) {
-          unawaited(
-            closeApplication(noticeTitle: noticeTitle, noticeBody: noticeBody),
-          );
-        }
+        _closeApplicationOrReportFailure(
+          noticeTitle: noticeTitle,
+          noticeBody: noticeBody,
+          getDiagnostics: getDiagnostics,
+          onDiagnosticsUpdated: onDiagnosticsUpdated,
+          persistDiagnostics: persistDiagnostics,
+          notifyDiagnosticsChanged: notifyDiagnosticsChanged,
+        );
       }
       return const Success(unit);
     }
+
+    // Claim the guard synchronously, before the first `await` below. `await`
+    // always yields to the event loop in Dart even when the awaited value is
+    // already available, so claiming the guard any later (e.g. after reading
+    // the pending record) leaves a window where a second call arriving in
+    // between would see `_applyInProgress == false` too and race to launch
+    // the helper twice. Every early-return path below resets the flag so a
+    // genuine failure (no pending record, no installer, launch error, ...)
+    // can still be retried.
+    _applyInProgress = true;
     final pending = await _pendingStore.read();
     if (pending == null) {
+      _applyInProgress = false;
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'No prepared silent update is available to apply',
@@ -286,6 +378,7 @@ class SilentUpdateDownloadApplyService {
     }
     final installer = _installer;
     if (installer == null) {
+      _applyInProgress = false;
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'Silent update installer is not configured',
@@ -297,6 +390,7 @@ class SilentUpdateDownloadApplyService {
       );
     }
     if (pending is! PendingSilentUpdateDownloaded || !pending.hasFullApplyMetadata) {
+      _applyInProgress = false;
       return Failure(
         domain.ConfigurationFailure.withContext(
           message: 'Pending silent update is missing helper launch metadata',
@@ -308,6 +402,7 @@ class SilentUpdateDownloadApplyService {
         ),
       );
     }
+
     final launchResult = await installer.launchPreparedHelper(
       SilentUpdateLaunchRequest(
         version: pending.version,
@@ -320,7 +415,7 @@ class SilentUpdateDownloadApplyService {
         sha256: pending.sha256!,
         installDirectoryWritable: pending.installDirectoryWritable!,
         requireValidSignature: pending.requireValidSignature!,
-        appPid: pending.appPid,
+        appPid: _currentProcessIdResolver(),
       ),
     );
     Exception? launchError;
@@ -329,9 +424,9 @@ class SilentUpdateDownloadApplyService {
       (error) => launchError = error,
     );
     if (launchError != null) {
+      _applyInProgress = false;
       return Failure(launchError!);
     }
-    _applyInProgress = true;
 
     final now = _clock();
     onDiagnosticsUpdated(
@@ -344,14 +439,57 @@ class SilentUpdateDownloadApplyService {
     notifyDiagnosticsChanged();
 
     if (triggerAppClose) {
-      final closeApplication = _closeApplicationForSilentUpdate;
-      if (closeApplication != null) {
-        unawaited(
-          closeApplication(noticeTitle: noticeTitle, noticeBody: noticeBody),
-        );
-      }
+      _closeApplicationOrReportFailure(
+        noticeTitle: noticeTitle,
+        noticeBody: noticeBody,
+        getDiagnostics: getDiagnostics,
+        onDiagnosticsUpdated: onDiagnosticsUpdated,
+        persistDiagnostics: persistDiagnostics,
+        notifyDiagnosticsChanged: notifyDiagnosticsChanged,
+      );
     }
     return const Success(unit);
+  }
+
+  /// Fires the app-close callback without blocking the caller, but unlike a
+  /// bare `unawaited(...)`, an exception here is never lost: the helper has
+  /// already been launched and is waiting for this process to exit, so the
+  /// operator needs to know the app failed to close on its own instead of
+  /// staring at a UI stuck on "closing" forever.
+  void _closeApplicationOrReportFailure({
+    required String? noticeTitle,
+    required String? noticeBody,
+    required UpdateCheckDiagnostics? Function() getDiagnostics,
+    required void Function(UpdateCheckDiagnostics?) onDiagnosticsUpdated,
+    required Future<void> Function() persistDiagnostics,
+    required void Function() notifyDiagnosticsChanged,
+  }) {
+    final closeApplication = _closeApplicationForSilentUpdate;
+    if (closeApplication == null) return;
+    unawaited(
+      closeApplication(noticeTitle: noticeTitle, noticeBody: noticeBody).catchError((
+        Object error,
+        StackTrace stackTrace,
+      ) async {
+        developer.log(
+          'Silent update failed to close the app for install; the helper is '
+          'already launched and waiting for this process to exit',
+          name: 'silent_update_download_apply',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+        onDiagnosticsUpdated(
+          getDiagnostics()?.copyWith(
+            completedAt: _clock(),
+            completionSource: UpdateCheckCompletionSource.automaticInstallFailure,
+            errorMessage: 'Failed to close the app to finish installing the update: $error',
+          ),
+        );
+        await persistDiagnostics();
+        notifyDiagnosticsChanged();
+      }),
+    );
   }
 
   bool _isCancellationFailure(Exception error) {

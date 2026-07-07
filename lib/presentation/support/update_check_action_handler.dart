@@ -368,6 +368,23 @@ class UpdateCheckActionHandler {
     );
   }
 
+  Future<void> setAutomaticSilentUpdatesAutoApplyEnabled(
+    BuildContext context,
+    bool value, {
+    required Future<void> Function() onSuccess,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    await _applyPreferenceChange(
+      context: context,
+      l10n: l10n,
+      apply: () => _orchestrator.setAutomaticSilentUpdatesAutoApplyEnabled(value),
+      onSuccess: onSuccess,
+      successTitle: value
+          ? l10n.configAutomaticSilentUpdatesAutoApplyEnabled
+          : l10n.configAutomaticSilentUpdatesAutoApplyDisabled,
+    );
+  }
+
   Future<void> _applyPreferenceChange({
     required BuildContext context,
     required AppLocalizations l10n,
