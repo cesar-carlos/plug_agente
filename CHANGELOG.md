@@ -5,8 +5,27 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+## 1.8.6 - 2026-07-07
+
+### Added
+
+- Silent auto-update P0 fixes: resolve stale `PendingSilentUpdateDownloaded`
+  on each check, refresh the app PID at apply time, and auto-apply staged
+  installs after download (default on; opt out via `AUTO_UPDATE_AUTO_APPLY`
+  or Settings > Updates).
+- Settings toggle for automatic silent-update apply and metrics for
+  auto-apply success/failure.
+- ODBC P0/P1 hardening: circuit breaker, cancel paths, pool audit, benchmarks,
+  and Playground policy gates.
+- SQL auto DB streaming, TOP/pagination hardening, and RPC streaming limits.
+- Transport extensions per hub ADR 0009–0011 (delivery guarantees, chunk
+  streaming, coalesced acks, schema warm-up).
+- Bootstrap orchestration with startup session and structured error logging.
+
 ### Changed
 
+- Removed the UAC gate from the silent-update probe stage; elevation consent
+  is evaluated at apply time instead of blocking downloads.
 - Defaulted `enableSocketDeliveryGuarantees` to `true` so the agent always
   emits `rpc:request_ack`. The hub arms a 1 s ack-retry timer
   (`SOCKET_AGENT_ACK_TIMEOUT_MS`); without acks the agent re-parsed,
@@ -54,6 +73,17 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   dispatched manually. The workflow falls back to `GITHUB_TOKEN` with a
   `::warning::` when the secret is missing. See
   `docs/install/release_guide.md` for the setup procedure.
+
+### Fixed
+
+- Hub persistent reconnect survives transient hard relogin without dropping
+  the long-lived session.
+- `main()` runs Flutter bootstrap inside a guarded zone for clearer crash
+  diagnostics.
+- SQL Server and SQL Anywhere row-major streaming, 256 MB buffer cap, and
+  connection-failure hints.
+- Release preflight and appcast unittest paths after the `tool/` layout move.
+- CI: pin Windows jobs to `windows-2022` for VS toolchain compatibility.
 
 ## 1.8.2 - 2026-06-01
 
