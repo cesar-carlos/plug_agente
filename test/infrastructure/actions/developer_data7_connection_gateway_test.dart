@@ -7,6 +7,7 @@ import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_config_locator.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_connection_catalog.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_connection_gateway.dart';
+import 'package:plug_agente/infrastructure/actions/windows_action_path_normalizer.dart';
 
 void main() {
   group('DeveloperData7ConnectionGateway', () {
@@ -90,7 +91,13 @@ void main() {
       final lookup = result.getOrThrow();
       expect(lookup.connections, hasLength(2));
       expect(lookup.connections.map((c) => c.label), containsAll(['Estacao', 'Campo']));
-      expect(lookup.resolvedConfigPath.displayPath, configFile.path);
+      expect(lookup.resolvedConfigPath.originalPath, configFile.path);
+      expect(
+        WindowsActionPathNormalizer.normalizeForComparison(lookup.resolvedConfigPath.displayPath),
+        WindowsActionPathNormalizer.normalizeForComparison(
+          await File(configFile.path).resolveSymbolicLinks(),
+        ),
+      );
       expect(lookup.usedDefaultLocation, isFalse);
     });
 
