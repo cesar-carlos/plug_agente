@@ -63,15 +63,15 @@ jobs:
         run: python3 -m pip install --quiet "cryptography>=42.0.0"
 
       - name: Run appcast tooling unit tests
-        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.test_appcast_signing -v
+        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.appcast.test_appcast_signing -v
 
       - name: Ensure appcast signing tests did not skip
         shell: bash
         run: |
           set -e
-          output="$(python3 -m unittest tool.test_appcast_signing -v 2>&1)"
+          output="$(python3 -m unittest tool.appcast.test_appcast_signing -v 2>&1)"
           if echo "$output" | grep -q 'skipped='; then
-            echo "tool.test_appcast_signing reported skipped tests:" >&2
+            echo "tool.appcast.test_appcast_signing reported skipped tests:" >&2
             echo "$output" >&2
             exit 1
           fi
