@@ -9,8 +9,10 @@ O app tem dois fluxos de update:
 
 - verificacao manual via `auto_updater`/WinSparkle, mantendo interacao do
   usuario;
-- instalacao automatica silenciosa, ligada por padrao, com download,
-  validacao e execucao do instalador por helper nativo.
+- instalacao automatica silenciosa, ligada por padrao, com verificacao e
+  download em background, validacao e *staging* do instalador por helper
+  nativo; a aplicacao do update (helper + fechamento) e explicita ou
+  ocorre ao encerrar o app naturalmente.
 
 O recurso fica ativo quando:
 
@@ -182,22 +184,44 @@ alguns segundos para propagar.
 
 O app executa o fluxo silencioso no boot e no intervalo configurado por
 `AUTO_UPDATE_CHECK_INTERVAL_SECONDS`, respeitando `AUTO_UPDATE_CHANNEL`,
-rollout, cooldown e pending update.
+rollout, cooldown, quiet hours, gate UAC e pending update.
 
-Etapas:
+O ciclo divide-se em duas fases: **verificacao + download** (automaticos) e
+**apply** (explicito ou no shutdown natural). Enquanto o instalador esta apenas
+*staged* em disco, o agente permanece online e conectado ao hub.
+
+### Fase automatica (boot / timer)
 
 1. Ler o appcast e localizar o item mais recente.
 2. Comparar a versao remota com `AppConstants.appVersion`.
-3. Rejeitar o fluxo se `plug:sha256`, tamanho, nome do asset ou URL do
-   instalador estiverem ausentes ou invalidos.
-4. Baixar o `.exe` para a pasta global de updates, primeiro como `.part`.
-5. Validar tamanho e SHA-256.
-6. Copiar `plug_update_helper.exe` do bundle instalado para a pasta global de
-   updates.
-7. Persistir pending update e iniciar o helper detached.
-8. Fechar o app para permitir a instalacao.
+3. Rejeitar o fluxo se `plug:sha256`, tamanho, nome do asset, URL do
+   instalador, assinatura Ed25519 (quando exigida) ou gate UAC estiverem
+   ausentes ou invalidos.
+4. Quando UAC exige consentimento e o check nao e iniciado pelo usuario,
+   parar apos o probe com `requiresUserConsent` (sem download).
+5. Baixar o `.exe` para a pasta global de updates, primeiro como `.part`.
+6. Validar tamanho e SHA-256.
+7. Copiar `plug_update_helper.exe` do bundle instalado para a pasta global de
+   updates (`deferHelperLaunch: true` — o helper **nao** e iniciado nesta
+   fase).
+8. Persistir pending update (`PendingSilentUpdateDownloaded`) e concluir com
+   `SilentUpdateOutcome.installerReady`. O app **nao** fecha sozinho.
 
-O helper nativo recebe argumentos explicitos, incluindo versao, instalador,
+### Fase de apply (explicita ou no shutdown)
+
+O helper nativo so e lancado quando:
+
+- o operador confirma no banner in-app (`applyPendingSilentUpdate` ou
+  `applyAvailableUpdate` quando UAC bloqueou o download automatico); ou
+- o app encerra naturalmente com update staged (`shutdownApp` chama
+  `applyPendingSilentUpdate(triggerAppClose: false)` antes de parar o
+  orchestrator).
+
+No apply explicito pelo banner, o app exibe toast de pre-fechamento
+(`AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS`) e fecha para o helper instalar.
+No shutdown natural, o helper e lancado sem reentrar na logica de close.
+
+O helper recebe argumentos explicitos, incluindo versao, instalador,
 diretorio atual de instalacao, log, status JSON, PID do app e estrategia de
 permissao.
 
@@ -228,10 +252,11 @@ criar um servico privilegiado permanente.
 
 ## Pending Update, Cooldown e Diagnosticos
 
-Antes de fechar o app, o orquestrador persiste pending update com versao,
-paths do instalador/log/helper/status, estrategia e PID.
+Apos o download bem-sucedido, o orquestrador persiste pending update com versao,
+paths do instalador/log/helper/status, estrategia e PID. O agente continua
+operacional ate o apply.
 
-No proximo boot:
+No proximo boot (reconcile):
 
 - sucesso e marcado quando `AppConstants.appVersion >= pendingVersion`;
 - caso contrario, o app le o status JSON do helper e registra falha/retry;
@@ -367,7 +392,10 @@ PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
 5. Se quiser testar o fluxo manual, clique no botao de refresh da verificacao
    manual.
 6. Confirme:
-   - com versao nova: download, validacao e helper sao iniciados;
+   - com versao nova: download e staging concluem; o banner oferece apply
+     (o helper so inicia apos confirmacao ou ao fechar o app);
+   - com UAC bloqueando download automatico: banner de consentimento; o botao
+     dispara download + apply em uma acao (`applyAvailableUpdate`);
    - sem versao nova: a UI informa que nao ha atualizacao;
    - em cooldown: a UI registra `automaticCooldown`;
    - com falha: a UI mostra detalhes tecnicos copiaveis.
