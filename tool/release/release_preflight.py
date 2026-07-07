@@ -55,16 +55,22 @@ def resolve_command(cmd: Sequence[str]) -> list[str]:
 
 
 def run(cmd: Sequence[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    result = subprocess.run(
         resolve_command(cmd),
         cwd=PROJECT_ROOT,
-        check=check,
+        check=False,
         text=True,
         encoding="utf-8",
         errors="replace",
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
+    if check and result.returncode != 0:
+        label = " ".join(cmd)
+        output = (result.stdout or "").strip()
+        detail = f"\n--- command output ({label}) ---\n{output}" if output else ""
+        raise subprocess.CalledProcessError(result.returncode, list(cmd), output, detail)
+    return result
 
 
 def parse_required(pattern: str, content: str, label: str) -> str:
@@ -244,7 +250,7 @@ def ensure_appcast_signing_tests_not_skipped() -> None:
         ["python", "-m", "unittest", "tool.appcast.test_appcast_signing", "-v"],
         check=False,
     )
-    combined = f"{result.stdout}\n{result.stderr}"
+    combined = (result.stdout or "").strip()
     if result.returncode != 0:
         raise RuntimeError(
             "tool.appcast.test_appcast_signing failed. Install cryptography and re-run preflight."
@@ -465,6 +471,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.check_pages:
             ensure_github_pages_workflow_ready(args.repo)
         run_optional_checks(args)
+    except subprocess.CalledProcessError as error:
+        print(f"Release preflight failed: Command {error.cmd!r} returned non-zero exit status {error.returncode}.", file=sys.stderr)
+        combined = (error.stdout or error.stderr or "").strip()
+        if combined:
+            print(combined, file=sys.stderr)
+        return 1
     except Exception as error:
         print(f"Release preflight failed: {error}", file=sys.stderr)
         return 1
