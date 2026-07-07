@@ -4,6 +4,7 @@ import 'package:plug_agente/application/services/hub_resilience_coordinator.dart
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failure_extensions.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain_errors;
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart';
 import 'package:result_dart/result_dart.dart';
@@ -50,6 +51,12 @@ final class HubConnectionSessionOrchestrator {
         serverUrl,
         agentId,
         authToken: authToken,
+      ),
+      staleResult: Failure(
+        domain_errors.ConnectionFailure.withContext(
+          message: 'Connection attempt superseded by a newer request',
+          context: {'operation': 'connect', 'reason': 'stale_epoch'},
+        ),
       ),
     );
 

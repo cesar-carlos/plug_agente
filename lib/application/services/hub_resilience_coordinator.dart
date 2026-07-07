@@ -42,6 +42,7 @@ enum HardReloginOutcome {
   success,
   skippedCooldown,
   authBridgeUnavailable,
+  transientFailure,
   failed,
 }
 
@@ -343,14 +344,16 @@ class HubResilienceCoordinator {
           );
         },
         (Object failure) {
-          // Only clear the stored session when the credentials are definitively
-          // invalid (non-transient failure). A transient failure (e.g. network
-          // error) should not permanently log the user out during an automatic
-          // recovery cycle.
           final isTransient = failure is domain_errors.Failure && failure.isTransient;
-          if (!isTransient) {
-            unawaited(bridge.clearStoredSession(context.configId));
+          if (isTransient) {
+            AppLogger.warning(
+              'resilience: ${resilienceLogPrefix()}hard_relogin event=transient_failure '
+              'display=${failure.toDisplayMessage()} '
+              'technical=${failure.toTechnicalMessage()}',
+            );
+            return const HardReloginResult(outcome: HardReloginOutcome.transientFailure);
           }
+          unawaited(bridge.clearStoredSession(context.configId));
           bridge.setRecoveryError(failure.toDisplayMessage());
           return HardReloginResult(
             outcome: HardReloginOutcome.failed,

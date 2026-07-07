@@ -5,6 +5,7 @@ import 'package:plug_agente/application/ports/i_connection_context_source.dart';
 import 'package:plug_agente/application/services/hub_recovery_orchestrator.dart';
 import 'package:plug_agente/application/services/hub_recovery_runtime_dependencies.dart';
 import 'package:plug_agente/application/services/hub_resilience_coordinator.dart';
+import 'package:plug_agente/core/constants/transport_reconnect_constants.dart';
 import 'package:plug_agente/domain/value_objects/hub_connection_context.dart';
 import 'package:plug_agente/domain/value_objects/hub_recovery_ui_hint.dart';
 
@@ -240,5 +241,98 @@ void main() {
       expect(reconnectInvocations, 5);
       expect(hardReloginInvocations, 1);
     });
+
+    test(
+      'runPersistentTick bumps persistent failure when hard relogin fails transiently',
+      () async {
+        var bumpFailureCalls = 0;
+        String? bumpReason;
+        late final HubRecoveryOrchestrator orchestrator;
+        final deps = HubRecoveryRuntimeDependencies(
+          resilienceCoordinator: _MockHubResilienceCoordinator(),
+          contextSource: _FakeHubContextSource(),
+          checkHubAvailability: null,
+          uiSink: _FakeHubRecoveryUiSink(),
+          resilienceLogPrefix: () => '',
+          isDisconnectRequested: () => false,
+          tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
+          attemptReconnect:
+              (String serverUrl, String agentId, {String? authToken, bool recordErrorMessage = true}) async {
+                orchestrator.noteTransportConnectFailureDuringRecovery();
+                return false;
+              },
+          disconnectTransportForRecovery: () async {},
+          executeHardRelogin:
+              (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async =>
+                  null,
+          bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {
+            bumpFailureCalls++;
+            bumpReason = reason;
+          },
+          isStatusError: () => false,
+          cancelPersistentRetryTimer: () {},
+        );
+        orchestrator = HubRecoveryOrchestrator(
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          runtime: deps,
+        );
+        orchestrator.consecutiveReconnectFailures = 3;
+
+        await orchestrator.runPersistentTick(
+          tokenRefreshIntervalAttempts: 2,
+          recoveryEnabled: true,
+          hardReloginFailureThreshold: 3,
+        );
+
+        expect(bumpFailureCalls, 1);
+        expect(bumpReason, TransportReconnectConstants.socketReconnectFailedReason);
+      },
+    );
+
+    test(
+      'runPersistentTick stops without bumping failure when hard relogin fails permanently',
+      () async {
+        var bumpFailureCalls = 0;
+        late final HubRecoveryOrchestrator orchestrator;
+        final deps = HubRecoveryRuntimeDependencies(
+          resilienceCoordinator: _MockHubResilienceCoordinator(),
+          contextSource: _FakeHubContextSource(),
+          checkHubAvailability: null,
+          uiSink: _FakeHubRecoveryUiSink(),
+          resilienceLogPrefix: () => '',
+          isDisconnectRequested: () => false,
+          tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
+          attemptReconnect:
+              (String serverUrl, String agentId, {String? authToken, bool recordErrorMessage = true}) async {
+                orchestrator.noteTransportConnectFailureDuringRecovery();
+                return false;
+              },
+          disconnectTransportForRecovery: () async {},
+          executeHardRelogin:
+              (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async =>
+                  null,
+          bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {
+            bumpFailureCalls++;
+          },
+          isStatusError: () => true,
+          cancelPersistentRetryTimer: () {},
+        );
+        orchestrator = HubRecoveryOrchestrator(
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          runtime: deps,
+        );
+        orchestrator.consecutiveReconnectFailures = 3;
+
+        await orchestrator.runPersistentTick(
+          tokenRefreshIntervalAttempts: 2,
+          recoveryEnabled: true,
+          hardReloginFailureThreshold: 3,
+        );
+
+        expect(bumpFailureCalls, 0);
+      },
+    );
   });
 }

@@ -25,6 +25,7 @@ final class HubHardReloginExecutor {
 
     switch (result.outcome) {
       case HardReloginOutcome.skippedCooldown:
+      case HardReloginOutcome.transientFailure:
         _deps.clearHubRecoveryUiHint();
         return null;
       case HardReloginOutcome.authBridgeUnavailable:

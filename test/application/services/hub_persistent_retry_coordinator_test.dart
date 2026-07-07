@@ -117,4 +117,42 @@ void main() {
     expect(exhaustedFailures, 2);
     expect(orchestrator.persistentFailureCount, 2);
   });
+
+  test('increments persistentFailureCount without exhausting when maxFailedTicks is 0', () {
+    final orchestrator = HubRecoveryOrchestrator(
+      initialReconnectDelay: const Duration(seconds: 1),
+      maxReconnectDelay: const Duration(seconds: 2),
+      runtime: _minimalRecoveryRuntime(),
+    );
+    var exhausted = false;
+    final coordinator = HubPersistentRetryCoordinator(
+      runtime: HubPersistentRetryRuntimeDependencies(
+        resilienceLogPrefix: () => '',
+        maxFailedTicks: 0,
+        resolveConnectionContext: () => const HubConnectionContext(
+          configId: 'cfg',
+          serverUrl: 'http://hub',
+          agentId: 'agent-1',
+        ),
+        runPersistentTick: () async {},
+        resetPersistentRetryCounters: orchestrator.resetPersistentRetryCounters,
+        onPersistentRetryExhausted: (_, _) {
+          exhausted = true;
+        },
+      ),
+    );
+
+    const context = HubConnectionContext(
+      configId: 'cfg',
+      serverUrl: 'http://hub',
+      agentId: 'agent-1',
+    );
+
+    coordinator.bumpPersistentReconnectFailure(context, reason: 'one', orchestrator: orchestrator);
+    coordinator.bumpPersistentReconnectFailure(context, reason: 'two', orchestrator: orchestrator);
+
+    expect(orchestrator.persistentFailureCount, 2);
+    expect(exhausted, isFalse);
+    expect(coordinator.hasActiveTimer, isFalse);
+  });
 }

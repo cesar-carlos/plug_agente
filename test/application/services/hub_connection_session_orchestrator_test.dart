@@ -112,6 +112,17 @@ void main() {
   late HubRecoveryOrchestrator hubRecoveryOrchestrator;
   late _FakeConnectionContextSource contextSource;
 
+  setUpAll(() {
+    registerFallbackValue(
+      Failure(
+        domain_failures.ConnectionFailure.withContext(
+          message: 'fallback stale connect failure',
+          context: const {'operation': 'connect'},
+        ),
+      ),
+    );
+  });
+
   setUp(() {
     connectToHub = _MockConnectToHub();
     transportClient = _MockTransportClient();
@@ -124,7 +135,10 @@ void main() {
     when(() => resilienceCoordinator.clearResilienceRecovery()).thenReturn(null);
     when(() => resilienceCoordinator.cancelNegotiatingWatchdog()).thenReturn(null);
     when(
-      () => resilienceCoordinator.runSerializedHubConnect<Result<void>>(any()),
+      () => resilienceCoordinator.runSerializedHubConnect<Result<void>>(
+        any(),
+        staleResult: any(named: 'staleResult'),
+      ),
     ).thenAnswer((invocation) async {
       final operation = invocation.positionalArguments[0] as Future<Result<void>> Function();
       return operation();
@@ -157,6 +171,12 @@ void main() {
     expect(enteredNegotiating, isTrue);
     expect(hubRecoveryOrchestrator.persistentFailureCount, 0);
     verify(() => transportClient.setOnTokenExpired(any())).called(1);
+    verify(
+      () => resilienceCoordinator.runSerializedHubConnect<Result<void>>(
+        any(),
+        staleResult: any(named: 'staleResult', that: isA<Failure>()),
+      ),
+    ).called(1);
   });
 
   test('connect starts persistent retry when recoverOnFailure and context exists', () async {

@@ -60,10 +60,10 @@ final class HubPersistentRetryCoordinator {
     required String reason,
     required HubRecoveryOrchestrator orchestrator,
   }) {
+    orchestrator.bumpPersistentFailure();
     if (_deps.maxFailedTicks <= 0) {
       return;
     }
-    orchestrator.bumpPersistentFailure();
     _failureLogCount++;
     const stride = ConnectionConstants.hubReconnectFailureLogThrottleStride;
     if (_failureLogCount == 1 || _failureLogCount % stride == 0) {

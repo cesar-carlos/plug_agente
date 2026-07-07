@@ -356,5 +356,33 @@ void main() {
       expect(result.outcome, HardReloginOutcome.failed);
       verify(() => bridge.setRecoveryError(any())).called(1);
     });
+
+    test('should return transientFailure outcome when hard relogin fails transiently', () async {
+      final bridge = _MockRecoveryAuthBridge();
+      when(() => bridge.logout(configId: 'cfg-1')).thenAnswer((_) async {});
+      when(
+        () => bridge.loginWithStoredCredentials(
+          'https://hub.test',
+          'agent-1',
+          configId: 'cfg-1',
+        ),
+      ).thenAnswer((_) async => Failure(domain_errors.NetworkFailure('offline')));
+
+      final coordinator = HubResilienceCoordinator(
+        environment: _environment(),
+        recoveryAuthBridge: bridge,
+      );
+
+      final result = await coordinator.executeHardRelogin(
+        _context,
+        logSummary: 'trigger=test',
+        hardReloginCooldown: Duration.zero,
+        ignoreCooldown: true,
+      );
+
+      expect(result.outcome, HardReloginOutcome.transientFailure);
+      verifyNever(() => bridge.clearStoredSession(any()));
+      verifyNever(() => bridge.setRecoveryError(any()));
+    });
   });
 }

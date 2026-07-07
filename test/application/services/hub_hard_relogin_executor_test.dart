@@ -24,6 +24,7 @@ void main() {
   late HubRecoveryUiHint? uiHint;
   late String? hardReloginError;
   late String? storedToken;
+  late int cancelPersistentRetryTimerCalls;
 
   const context = HubConnectionContext(
     configId: 'cfg-1',
@@ -36,6 +37,7 @@ void main() {
     uiHint = null;
     hardReloginError = null;
     storedToken = null;
+    cancelPersistentRetryTimerCalls = 0;
 
     executor = HubHardReloginExecutor(
       runtime: HubHardReloginRuntimeDependencies(
@@ -43,7 +45,7 @@ void main() {
         hardReloginCooldown: const Duration(seconds: 30),
         setHubRecoveryUiHint: (hint) => uiHint = hint,
         clearHubRecoveryUiHint: () => uiHint = HubRecoveryUiHint.none,
-        cancelPersistentRetryTimer: () {},
+        cancelPersistentRetryTimer: () => cancelPersistentRetryTimerCalls++,
         onAuthBridgeUnavailable: () => hardReloginError = 'auth-bridge-unavailable',
         onHardReloginFailed: (message) => hardReloginError = message,
         onHardReloginSuccess: (token) {
@@ -107,5 +109,26 @@ void main() {
     expect(token, isNull);
     expect(hardReloginError, 'sign-in failed');
     verify(() => resilienceCoordinator.clearResilienceRecovery()).called(1);
+  });
+
+  test('keeps persistent retry alive when hard relogin fails transiently', () async {
+    when(
+      () => resilienceCoordinator.executeHardRelogin(
+        context,
+        logSummary: any(named: 'logSummary'),
+        hardReloginCooldown: any(named: 'hardReloginCooldown'),
+        ignoreCooldown: any(named: 'ignoreCooldown'),
+      ),
+    ).thenAnswer(
+      (_) async => const HardReloginResult(outcome: HardReloginOutcome.transientFailure),
+    );
+
+    final token = await executor.execute(context, logSummary: 'persistent');
+
+    expect(token, isNull);
+    expect(hardReloginError, isNull);
+    expect(cancelPersistentRetryTimerCalls, 0);
+    expect(uiHint, HubRecoveryUiHint.none);
+    verifyNever(() => resilienceCoordinator.clearResilienceRecovery());
   });
 }
