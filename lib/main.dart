@@ -12,12 +12,12 @@ import 'package:plug_agente/presentation/boot/app_root.dart';
 import 'package:plug_agente/presentation/boot/bootstrap_failure_app.dart';
 
 Future<void> main(List<String> args) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await ErrorLoggingBootstrap.initializeEarly();
-  _installGlobalErrorHandlers();
-
   await runZonedGuarded(
     () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      await ErrorLoggingBootstrap.initializeEarly();
+      _installGlobalErrorHandlers();
+
       try {
         final initializer = AppInitializer(runtimeProbe: WindowsRuntimeProbe());
         final bootstrapData = await initializer.initialize(args);
