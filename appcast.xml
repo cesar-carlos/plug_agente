@@ -5,6 +5,12 @@
   <link>https://github.com/cesar-carlos/plug_agente/releases</link>
   <description>Atualizações do Plug Agente</description>
   <item>
+   <title>Version 1.8.6+1</title>
+   <pubDate>Tue, 07 Jul 2026 17:38:14 +0000</pubDate>
+   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.8.5...v1.8.6</description>
+   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.8.6/PlugAgente-Setup-1.8.6.exe" sparkle:version="1.8.6+1" sparkle:os="windows" plug:sha256="00b1448f32e482346c5c86ce8eeaf3b57abfd4c2e2712cbe0a7885195a56bd9f" plug:channel="stable" plug:rolloutPercentage="100" length="21601434" type="application/octet-stream" />
+  </item>
+  <item>
    <title>Version 1.8.5+1</title>
    <pubDate>Thu, 11 Jun 2026 18:22:03 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.8.4...v1.8.5</description>
@@ -57,12 +63,6 @@
    <pubDate>Wed, 27 May 2026 22:21:00 +0000</pubDate>
    <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.9...v1.7.0</description>
    <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.7.0/PlugAgente-Setup-1.7.0.exe" sparkle:version="1.7.0+1" sparkle:os="windows" plug:sha256="96be38b83aa045a6e86b1f1a9b952102159a57fae9d77df61aa09c6e45499fe9" plug:channel="stable" plug:rolloutPercentage="100" length="21233068" type="application/octet-stream" />
-  </item>
-  <item>
-   <title>Version 1.6.9+1</title>
-   <pubDate>Sat, 23 May 2026 18:44:30 +0000</pubDate>
-   <description>**Full Changelog**: https://github.com/cesar-carlos/plug_agente/compare/v1.6.8...v1.6.9</description>
-   <enclosure url="https://github.com/cesar-carlos/plug_agente/releases/download/v1.6.9/PlugAgente-Setup-1.6.9.exe" sparkle:version="1.6.9+1" sparkle:os="windows" plug:sha256="9e0e536071e5240e2a4d81c2dc8065b335a0e53698b99fa5875f84c016749eee" plug:channel="stable" plug:rolloutPercentage="100" length="21173534" type="application/octet-stream" />
   </item>
  </channel>
 </rss>
