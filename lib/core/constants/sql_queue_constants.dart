@@ -11,8 +11,7 @@ abstract final class SqlQueueConstants {
   static const int defaultSqlQueueMaxSize = 16;
 
   /// SQL execution queue maximum size (configurable via SQL_QUEUE_MAX_SIZE env var).
-  static int get sqlQueueMaxSize =>
-      ConnectionConstantsEnv.positiveInt('SQL_QUEUE_MAX_SIZE') ?? defaultSqlQueueMaxSize;
+  static int get sqlQueueMaxSize => ConnectionConstantsEnv.positiveInt('SQL_QUEUE_MAX_SIZE') ?? defaultSqlQueueMaxSize;
 
   /// SQL execution queue maximum concurrent workers.
   ///

@@ -10,22 +10,24 @@ import 'package:plug_agente/infrastructure/stores/secure_storage_guard.dart';
 
 Future<void> _insertConfig(AppDatabase database, String id) async {
   final now = DateTime.utc(2025);
-  await database.into(database.configTable).insert(
-    ConfigTableCompanion.insert(
-      id: id,
-      serverUrl: const Value('https://hub.example.com'),
-      agentId: const Value('agent-1'),
-      driverName: 'SQL Server',
-      odbcDriverName: const Value('ODBC Driver 17 for SQL Server'),
-      connectionString: '',
-      username: 'sa',
-      databaseName: 'legacy_db',
-      host: 'localhost',
-      port: 1433,
-      createdAt: now,
-      updatedAt: now,
-    ),
-  );
+  await database
+      .into(database.configTable)
+      .insert(
+        ConfigTableCompanion.insert(
+          id: id,
+          serverUrl: const Value('https://hub.example.com'),
+          agentId: const Value('agent-1'),
+          driverName: 'SQL Server',
+          odbcDriverName: const Value('ODBC Driver 17 for SQL Server'),
+          connectionString: '',
+          username: 'sa',
+          databaseName: 'legacy_db',
+          host: 'localhost',
+          port: 1433,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
 }
 
 void main() {
@@ -56,9 +58,7 @@ void main() {
       final failure = result.exceptionOrNull()! as domain.ConfigurationFailure;
       expect(failure.context['reason'], SecureStorageGuard.unavailableReason);
 
-      final row = await (database.select(database.configTable)
-            ..where((tbl) => tbl.id.equals('cfg-1')))
-          .getSingle();
+      final row = await (database.select(database.configTable)..where((tbl) => tbl.id.equals('cfg-1'))).getSingle();
       expect(row.authToken, isNull);
       expect(row.refreshToken, isNull);
     });

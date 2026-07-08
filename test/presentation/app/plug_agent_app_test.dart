@@ -107,15 +107,13 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
     String? noticeTitle,
     String? noticeBody,
     bool triggerAppClose = true,
-  }) async =>
-      const Success(unit);
+  }) async => const Success(unit);
 
   @override
   Future<Result<void>> applyAvailableUpdate({
     String? noticeTitle,
     String? noticeBody,
-  }) async =>
-      const Success(unit);
+  }) async => const Success(unit);
 
   @override
   Future<void> dispose() async {}

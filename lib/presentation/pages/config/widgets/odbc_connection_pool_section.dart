@@ -125,8 +125,7 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
     setState(() => _isSaving = true);
     try {
       final settings = getIt<IOdbcConnectionSettings>();
-      final reloadOdbcRuntime =
-          widget._reloadOdbcRuntime ?? getIt<ReloadOdbcRuntimeDependencies>();
+      final reloadOdbcRuntime = widget._reloadOdbcRuntime ?? getIt<ReloadOdbcRuntimeDependencies>();
       await settings.setPoolSize(poolSize);
       await settings.setLoginTimeoutSeconds(loginTimeout);
       await settings.setMaxResultBufferMb(maxResultBuffer);

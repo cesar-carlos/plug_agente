@@ -19,9 +19,7 @@ bool connectionStringLooksLikeSqlServer(String connectionString) {
 
 bool connectionStringLooksLikePostgreSQL(String connectionString) {
   final normalized = connectionString.toLowerCase();
-  return normalized.contains('postgresql') ||
-      normalized.contains('postgres') ||
-      normalized.contains('psqlodbc');
+  return normalized.contains('postgresql') || normalized.contains('postgres') || normalized.contains('psqlodbc');
 }
 
 /// Text-heavy ODBC drivers that benefit from deferred string materialization.
@@ -34,6 +32,5 @@ bool connectionStringBenefitsFromLazyStrings(String connectionString) {
 /// Drivers whose columnar decode path is unreliable and should use row-major
 /// streaming with lazy string materialization instead.
 bool connectionStringPrefersRowMajorStreaming(String connectionString) {
-  return connectionStringLooksLikeSqlAnywhere(connectionString) ||
-      connectionStringLooksLikeSqlServer(connectionString);
+  return connectionStringLooksLikeSqlAnywhere(connectionString) || connectionStringLooksLikeSqlServer(connectionString);
 }

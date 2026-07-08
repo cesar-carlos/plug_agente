@@ -263,8 +263,7 @@ void main() {
               },
           disconnectTransportForRecovery: () async {},
           executeHardRelogin:
-              (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async =>
-                  null,
+              (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async => null,
           bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {
             bumpFailureCalls++;
             bumpReason = reason;
@@ -310,8 +309,7 @@ void main() {
               },
           disconnectTransportForRecovery: () async {},
           executeHardRelogin:
-              (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async =>
-                  null,
+              (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async => null,
           bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {
             bumpFailureCalls++;
           },

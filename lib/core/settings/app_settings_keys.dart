@@ -11,8 +11,7 @@ class AppSettingsKeys {
   /// When false, staged silent updates are not applied automatically after
   /// download; the operator must confirm via the in-app banner or wait for
   /// natural app shutdown. Defaults to enabled.
-  static const String automaticSilentUpdatesAutoApplyEnabled =
-      'settings.automatic_silent_updates_auto_apply_enabled';
+  static const String automaticSilentUpdatesAutoApplyEnabled = 'settings.automatic_silent_updates_auto_apply_enabled';
 
   /// When false, hides proactive update UI (in-app banner) and disables
   /// WinSparkle background checks while automatic silent updates are off.

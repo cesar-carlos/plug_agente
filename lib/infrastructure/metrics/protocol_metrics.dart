@@ -110,8 +110,7 @@ class ProtocolMetricsCollector implements IProtocolMetricsCollector {
     int maxEntries = 1000,
     int? rpcChunkSampleRate,
   }) : _maxEntries = maxEntries < 1 ? 1 : maxEntries,
-       _rpcChunkSampleRate =
-           rpcChunkSampleRate ?? ConnectionConstants.protocolMetricsRpcChunkSampleRate;
+       _rpcChunkSampleRate = rpcChunkSampleRate ?? ConnectionConstants.protocolMetricsRpcChunkSampleRate;
 
   // ListQueue keeps `record` O(1) at the ring-buffer cap. Using a plain List
   // forced `removeRange(0, 1)` on every record at cap, an O(n) shift on the

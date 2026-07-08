@@ -13,11 +13,11 @@ class PeriodicPurgeRunner {
     required String logName,
     required String Function(int count) successLogMessage,
     required String failureLogMessage,
-  })  : _purge = purge,
-        _interval = interval,
-        _logName = logName,
-        _successLogMessage = successLogMessage,
-        _failureLogMessage = failureLogMessage;
+  }) : _purge = purge,
+       _interval = interval,
+       _logName = logName,
+       _successLogMessage = successLogMessage,
+       _failureLogMessage = failureLogMessage;
 
   final PeriodicPurge _purge;
   final Duration _interval;

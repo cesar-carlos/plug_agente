@@ -112,20 +112,20 @@ class _StartupAutoSessionInitializerState extends State<StartupAutoSessionInitia
         return;
       }
 
-      final result = await StartupSessionOrchestrator(
-        hubSessionCoordinator: widget.hubSessionCoordinator,
-        ports: startupSessionPortsFromProviders(
-          configProvider: configProvider,
-          authProvider: authProvider,
-          connectionProvider: connectionProvider,
-        ),
-      ).run(
-        runDeferredBootstrapBeforeConnect: widget.runDeferredBootstrapBeforeConnect,
-        defaultServerUrl: widget.defaultServerUrl,
-      );
+      final result =
+          await StartupSessionOrchestrator(
+            hubSessionCoordinator: widget.hubSessionCoordinator,
+            ports: startupSessionPortsFromProviders(
+              configProvider: configProvider,
+              authProvider: authProvider,
+              connectionProvider: connectionProvider,
+            ),
+          ).run(
+            runDeferredBootstrapBeforeConnect: widget.runDeferredBootstrapBeforeConnect,
+            defaultServerUrl: widget.defaultServerUrl,
+          );
 
-      if (result == StartupSessionFlowResult.completed ||
-          result == StartupSessionFlowResult.deferredBootstrapFailed) {
+      if (result == StartupSessionFlowResult.completed || result == StartupSessionFlowResult.deferredBootstrapFailed) {
         _markStartupFlowHandled();
       } else if (result == StartupSessionFlowResult.bootstrapFailed) {
         _lastBootstrapFailedSignature = signature;

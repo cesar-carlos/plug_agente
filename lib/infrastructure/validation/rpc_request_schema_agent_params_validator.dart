@@ -123,7 +123,9 @@ final class RpcRequestSchemaAgentParamsValidator {
     if (params.containsKey('max_output_bytes')) {
       final parsed = RpcRequestSchemaValidationSupport.tryParsePositiveInt(params['max_output_bytes']);
       if (parsed == null) {
-        return RpcRequestSchemaValidationSupport.invalidParams('Field "params.max_output_bytes" must be a positive integer');
+        return RpcRequestSchemaValidationSupport.invalidParams(
+          'Field "params.max_output_bytes" must be a positive integer',
+        );
       }
       if (parsed > AgentActionRpcConstants.maxMaxOutputBytesPerStream) {
         return RpcRequestSchemaValidationSupport.invalidParams(

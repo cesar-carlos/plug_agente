@@ -21,7 +21,9 @@ Future<void> main(List<String> args) async {
         compact = true;
       case '--help':
       case '-h':
-        stdout.writeln('Usage: dart run tool/odbc/export_odbc_health_snapshot_template.dart [--output path] [--compact]');
+        stdout.writeln(
+          'Usage: dart run tool/odbc/export_odbc_health_snapshot_template.dart [--output path] [--compact]',
+        );
         return;
       default:
         stderr.writeln('Unknown argument: $arg');

@@ -69,11 +69,11 @@ class AppInitializer {
          initializeDesktopFeaturesOverride:
              initializeDesktopFeaturesOverride ??
              ((capabilities, isAutostartLaunch) => _defaultInitializeDesktopFeatures(
-                   capabilities,
-                   isAutostartLaunch,
-                   nativeWindowVisibilityFallback: nativeWindowVisibilityFallback,
-                   desktopShellBootstrapDependencies: desktopShellBootstrapDependencies,
-                 )),
+               capabilities,
+               isAutostartLaunch,
+               nativeWindowVisibilityFallback: nativeWindowVisibilityFallback,
+               desktopShellBootstrapDependencies: desktopShellBootstrapDependencies,
+             )),
          resolveInitialRouteOverride: resolveInitialRouteOverride,
          ensureStartupLaunchConfigurationOverride: ensureStartupLaunchConfigurationOverride,
          agentActionsBootPhases: agentActionsBootPhases,

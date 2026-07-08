@@ -28,10 +28,7 @@ final class SecureStorageRuntimeProbe {
 
   Future<bool> probe({bool forceRefresh = false}) async {
     final now = _nowProvider();
-    if (!forceRefresh &&
-        _lastProbeAt != null &&
-        _lastProbeOk != null &&
-        now.difference(_lastProbeAt!) < _cacheTtl) {
+    if (!forceRefresh && _lastProbeAt != null && _lastProbeOk != null && now.difference(_lastProbeAt!) < _cacheTtl) {
       return _lastProbeOk!;
     }
 

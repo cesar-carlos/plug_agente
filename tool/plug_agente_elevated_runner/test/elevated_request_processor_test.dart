@@ -188,12 +188,13 @@ void main() {
 
         await processor.processPendingRequests();
 
-        final status = jsonDecode(
-              await File(
-                ElevatedContract.statusFilePath(tempDir.path, 'exec-2'),
-              ).readAsString(),
-            )
-            as Map<String, dynamic>;
+        final status =
+            jsonDecode(
+                  await File(
+                    ElevatedContract.statusFilePath(tempDir.path, 'exec-2'),
+                  ).readAsString(),
+                )
+                as Map<String, dynamic>;
         expect(status['status'], 'failed');
         expect(status['failureCode'], 'ACTION_ELEVATED_NOT_CONFIGURED');
       },

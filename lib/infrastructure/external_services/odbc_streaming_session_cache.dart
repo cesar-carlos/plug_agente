@@ -35,10 +35,9 @@ final class OdbcStreamingSessionCache implements IOdbcStreamingSessionCache {
   }) : _ttl = ttl ?? ConnectionConstants.streamingConnectReuseTtl,
        _maxEntries = maxEntries ?? ConnectionConstants.streamingConnectReuseMaxEntries,
        _clock = clock ?? DateTime.now,
-       _disconnectConnection = disconnectConnection ??
-           (odbcService == null
-               ? null
-               : (String connectionId) => odbcService.disconnect(connectionId));
+       _disconnectConnection =
+           disconnectConnection ??
+           (odbcService == null ? null : (String connectionId) => odbcService.disconnect(connectionId));
 
   final Duration _ttl;
   final int _maxEntries;

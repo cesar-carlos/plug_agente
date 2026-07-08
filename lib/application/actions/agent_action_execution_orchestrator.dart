@@ -579,8 +579,7 @@ class AgentActionExecutionOrchestrator {
     final message = failure.toUserMessage();
     final context = {
       ...failure.context,
-      if (!failure.context.containsKey('technical_message'))
-        'technical_message': _technicalDetailFor(failure),
+      if (!failure.context.containsKey('technical_message')) 'technical_message': _technicalDetailFor(failure),
     };
 
     return switch (failure) {

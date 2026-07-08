@@ -203,8 +203,7 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
         (error) => downloadError = error,
       );
       if (downloadError != null) {
-        preservePartForResume =
-            resumeEnabled && SilentUpdateInstallerDownload.isResumableDownloadError(downloadError!);
+        preservePartForResume = resumeEnabled && SilentUpdateInstallerDownload.isResumableDownloadError(downloadError!);
         return Failure<SilentUpdateInstallResult, Exception>(downloadError!);
       }
 

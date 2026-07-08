@@ -57,8 +57,7 @@ class _QueryResultDataGridState extends State<QueryResultDataGrid> {
     // Compare by identity first (fast path). Fall back to length check as
     // a secondary signal, but always update when identity differs — an in-place
     // replacement with the same length must not leave _rowsCache stale.
-    final dataChanged = !identical(oldWidget.data, widget.data) ||
-        oldWidget.dataRevision != widget.dataRevision;
+    final dataChanged = !identical(oldWidget.data, widget.data) || oldWidget.dataRevision != widget.dataRevision;
     if (dataChanged) {
       _dataSource.updateData(widget.data);
     }

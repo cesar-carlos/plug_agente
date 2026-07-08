@@ -199,8 +199,7 @@ class ConnectionCircuitBreaker {
   }
 
   bool _isAuthenticationFailure(domain.ConnectionFailure failure) {
-    return failure.context['reason']?.toString() ==
-        OdbcContextConstants.authenticationFailedReason;
+    return failure.context['reason']?.toString() == OdbcContextConstants.authenticationFailedReason;
   }
 
   bool _isLocalPressureFailure(domain.ConnectionFailure failure) {

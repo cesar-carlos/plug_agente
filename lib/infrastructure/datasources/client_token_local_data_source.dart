@@ -99,11 +99,14 @@ class ClientTokenLocalDataSource {
   }
 
   Future<void> replaceTokenRows({
-    required List<({
-      ClientTokenSummary summary,
-      String tokenHash,
-      String? persistedTokenValue,
-    })> rows,
+    required List<
+      ({
+        ClientTokenSummary summary,
+        String tokenHash,
+        String? persistedTokenValue,
+      })
+    >
+    rows,
   }) async {
     if (rows.isEmpty) {
       return;

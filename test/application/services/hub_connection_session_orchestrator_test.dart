@@ -151,8 +151,9 @@ void main() {
 
   test('connect enters negotiating state when transport connect succeeds', () async {
     var enteredNegotiating = false;
-    when(() => connectToHub('http://hub', 'agent-1', authToken: any(named: 'authToken')))
-        .thenAnswer((_) async => const Success(unit));
+    when(
+      () => connectToHub('http://hub', 'agent-1', authToken: any(named: 'authToken')),
+    ).thenAnswer((_) async => const Success(unit));
 
     final orchestrator = HubConnectionSessionOrchestrator(
       runtime: _runtimeDeps(
@@ -187,8 +188,9 @@ void main() {
       serverUrl: 'http://hub',
       agentId: 'agent-1',
     );
-    when(() => connectToHub('http://hub', 'agent-1', authToken: any(named: 'authToken')))
-        .thenAnswer((_) async => Failure(failure));
+    when(
+      () => connectToHub('http://hub', 'agent-1', authToken: any(named: 'authToken')),
+    ).thenAnswer((_) async => Failure(failure));
     when(() => resilienceCoordinator.beginResilienceRecovery()).thenReturn(null);
 
     final orchestrator = HubConnectionSessionOrchestrator(

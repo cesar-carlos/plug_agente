@@ -201,8 +201,7 @@ final class DirectOdbcQueryExecutor {
             }
 
             final response = outcome.response!;
-            if (afterVacuousPooledMulti &&
-                OdbcQueryExecutionPolicies.isVacuousMultiResultResponse(request, response)) {
+            if (afterVacuousPooledMulti && OdbcQueryExecutionPolicies.isVacuousMultiResultResponse(request, response)) {
               _metrics.recordMultiResultDirectStillVacuous();
               developer.log(
                 'Direct connection multi-result still vacuous after pooled empty '

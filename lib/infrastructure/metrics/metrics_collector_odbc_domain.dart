@@ -10,7 +10,8 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
       store.counterValue(MetricsCounterNames.multiResultPoolVacuousFallbackCounter);
   int get multiResultDirectStillVacuousCount =>
       store.counterValue(MetricsCounterNames.multiResultDirectStillVacuousCounter);
-  int get transactionalBatchDirectPathCount => store.counterValue(MetricsCounterNames.transactionalBatchDirectPathCounter);
+  int get transactionalBatchDirectPathCount =>
+      store.counterValue(MetricsCounterNames.transactionalBatchDirectPathCounter);
   int get transactionalBatchNativePoolPathCount =>
       store.counterValue(MetricsCounterNames.transactionalBatchNativePoolPathCounter);
   int get transactionalBatchNativePoolFallbackCount =>
@@ -25,8 +26,10 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
   int get odbcNativeCompatibleAcquireSuccessCount =>
       store.counterValue(MetricsCounterNames.odbcNativeCompatibleAcquireSuccessCounter);
   int get readOnlyBatchParallelCount => store.counterValue(MetricsCounterNames.readOnlyBatchParallelCounter);
-  int get readOnlyBatchParallelCappedCount => store.counterValue(MetricsCounterNames.readOnlyBatchParallelCappedCounter);
-  int get readOnlyBatchNativePoolPathCount => store.counterValue(MetricsCounterNames.readOnlyBatchNativePoolPathCounter);
+  int get readOnlyBatchParallelCappedCount =>
+      store.counterValue(MetricsCounterNames.readOnlyBatchParallelCappedCounter);
+  int get readOnlyBatchNativePoolPathCount =>
+      store.counterValue(MetricsCounterNames.readOnlyBatchNativePoolPathCounter);
   int get readOnlyBatchNativePoolFallbackCount =>
       store.counterValue(MetricsCounterNames.readOnlyBatchNativePoolFallbackCounter);
   int get directConnectionAcquireTimeoutCount =>
@@ -75,7 +78,8 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
     _recordTimestampSample(timestamps, DateTime.now());
   }
 
-  void recordPreparedPrepareTime(Duration prepareTime) => _recordDurationSample(store.preparedPrepareTimes, prepareTime);
+  void recordPreparedPrepareTime(Duration prepareTime) =>
+      _recordDurationSample(store.preparedPrepareTimes, prepareTime);
 
   void recordStreamingBatchedPath() => _incrementEventCounter(MetricsCounterNames.streamingBatchedPathCounter);
 
@@ -129,8 +133,7 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
   void recordOdbcNativeFallback(String reason) {
     final normalizedReason = reason.trim().isEmpty ? 'unknown' : reason.trim();
     _incrementEventCounter(MetricsCounterNames.odbcNativeFallbackTotalCounter);
-    store.odbcNativeFallbackReasons[normalizedReason] =
-        (store.odbcNativeFallbackReasons[normalizedReason] ?? 0) + 1;
+    store.odbcNativeFallbackReasons[normalizedReason] = (store.odbcNativeFallbackReasons[normalizedReason] ?? 0) + 1;
     recordDiagnosticReason(
       category: 'odbc_native_fallback',
       reason: normalizedReason,
@@ -150,7 +153,8 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
   void recordOdbcInvalidConnectionRecycle() =>
       _incrementEventCounter(MetricsCounterNames.odbcInvalidConnectionRecycleCounter);
 
-  void recordOdbcNativePoolOptionsSkip() => _incrementEventCounter(MetricsCounterNames.odbcNativePoolOptionsSkipCounter);
+  void recordOdbcNativePoolOptionsSkip() =>
+      _incrementEventCounter(MetricsCounterNames.odbcNativePoolOptionsSkipCounter);
 
   void recordOdbcNativeCompatibleAcquireAttempt() =>
       _incrementEventCounter(MetricsCounterNames.odbcNativeCompatibleAcquireAttemptCounter);
@@ -250,7 +254,8 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
 
   void recordOdbcEventPoolResize() => _incrementEventCounter(MetricsCounterNames.odbcEventPoolResizeCounter);
 
-  void recordOdbcEventSlowQueryDetected() => _incrementEventCounter(MetricsCounterNames.odbcEventSlowQueryDetectedCounter);
+  void recordOdbcEventSlowQueryDetected() =>
+      _incrementEventCounter(MetricsCounterNames.odbcEventSlowQueryDetectedCounter);
 
   void recordTransactionalBatchReadOnlyInference() =>
       _incrementEventCounter(MetricsCounterNames.transactionalBatchReadOnlyInferenceCounter);
@@ -274,7 +279,8 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
     _incrementEventCounter(MetricsCounterNames.preparedStatementCacheHitCounter);
   }
 
-  void recordPreparedStatementCacheMiss() => _incrementEventCounter(MetricsCounterNames.preparedStatementCacheMissCounter);
+  void recordPreparedStatementCacheMiss() =>
+      _incrementEventCounter(MetricsCounterNames.preparedStatementCacheMissCounter);
 
   void recordStreamCancelRequest() => _incrementEventCounter(MetricsCounterNames.streamCancelRequestCounter);
 

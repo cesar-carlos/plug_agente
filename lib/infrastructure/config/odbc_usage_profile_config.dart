@@ -8,10 +8,10 @@ const String odbcUsageProfileEnvKey = 'ODBC_USAGE_PROFILE';
 /// Only `balancedServer` and `highThroughput` are exposed for plug_agente;
 /// unknown values fall back to [OdbcUsageProfile.balancedServer].
 OdbcUsageProfile resolveOdbcUsageProfile({String? rawValue}) {
-  final normalized = (rawValue ?? AppEnvironment.get(odbcUsageProfileEnvKey))
-      ?.trim()
-      .toLowerCase()
-      .replaceAll(RegExp(r'[\s_-]+'), '');
+  final normalized = (rawValue ?? AppEnvironment.get(odbcUsageProfileEnvKey))?.trim().toLowerCase().replaceAll(
+    RegExp(r'[\s_-]+'),
+    '',
+  );
   return switch (normalized) {
     'highthroughput' || 'high' || 'throughput' => OdbcUsageProfile.highThroughput,
     'balancedserver' || 'server' || 'balanced' || null || '' => OdbcUsageProfile.balancedServer,

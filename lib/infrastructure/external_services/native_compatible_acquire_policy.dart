@@ -77,8 +77,7 @@ final class NativeCompatibleAcquirePolicy {
     if (acquireOptions != null || request.expectMultipleResults) {
       return false;
     }
-    if (_hasNamedParameters(preparedExecution) &&
-        !_isSafeParameterizedNativeSelect(databaseType, preparedExecution)) {
+    if (_hasNamedParameters(preparedExecution) && !_isSafeParameterizedNativeSelect(databaseType, preparedExecution)) {
       return false;
     }
     if (timeout != null &&

@@ -205,9 +205,7 @@ class ClientTokenProvider extends ChangeNotifier {
           updatedAt: updateResult.updatedAt,
           didRotateToken: updateResult.didRotateToken,
         );
-        outcome = refreshTokens && !patched
-            ? await loadTokens(silent: true)
-            : const Success(unit);
+        outcome = refreshTokens && !patched ? await loadTokens(silent: true) : const Success(unit);
       }
     }
 

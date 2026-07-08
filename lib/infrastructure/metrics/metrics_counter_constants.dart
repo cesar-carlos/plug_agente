@@ -121,8 +121,7 @@ abstract final class MetricsCounterNames {
   static const String agentActionCancelKillPermissionDeniedCounter = 'agent_action_cancel_kill_permission_denied';
   static const String agentActionCancelProcessNotActiveCounter = 'agent_action_cancel_process_not_active';
   static const String agentActionCancelProcessIdMismatchCounter = 'agent_action_cancel_process_id_mismatch';
-  static const String agentActionCancelProcessIdentityMismatchCounter =
-      'agent_action_cancel_process_identity_mismatch';
+  static const String agentActionCancelProcessIdentityMismatchCounter = 'agent_action_cancel_process_identity_mismatch';
   static const String agentActionCancelProcessIdentityUnavailableCounter =
       'agent_action_cancel_process_identity_unavailable';
   static const String agentActionCapturedStdoutTruncatedCounter = 'agent_action_captured_output_stdout_truncated';

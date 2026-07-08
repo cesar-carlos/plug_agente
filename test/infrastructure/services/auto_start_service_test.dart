@@ -21,8 +21,7 @@ class _ProcessInvocation {
 }
 
 class _FakeRegistryReader implements IStartupRunValueRegistryReader {
-  _FakeRegistryReader(Queue<Map<StartupRegistryScope, StartupRunValueReadResult>> snapshots)
-    : _snapshots = snapshots;
+  _FakeRegistryReader(Queue<Map<StartupRegistryScope, StartupRunValueReadResult>> snapshots) : _snapshots = snapshots;
 
   final Queue<Map<StartupRegistryScope, StartupRunValueReadResult>> _snapshots;
   Map<StartupRegistryScope, StartupRunValueReadResult> _activeSnapshot = {};

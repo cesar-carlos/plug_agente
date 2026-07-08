@@ -59,8 +59,7 @@ class DashboardRpcLogFormatter {
       String raw;
       if (data is Map || data is List) {
         final compact = jsonEncode(data);
-        raw = dashboardRpcLogPreferCompactFormat(event) ||
-                compact.length > dashboardRpcLogMaxFormattedDataChars
+        raw = dashboardRpcLogPreferCompactFormat(event) || compact.length > dashboardRpcLogMaxFormattedDataChars
             ? compact
             : const JsonEncoder.withIndent('  ').convert(data);
       } else {

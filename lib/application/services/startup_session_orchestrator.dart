@@ -121,9 +121,7 @@ class StartupSessionOrchestrator {
       },
     );
     if (shouldStop || startupToken == null) {
-      return bootstrapFailedTerminally
-          ? _StartupAttemptOutcome.bootstrapFailed
-          : _StartupAttemptOutcome.skipped;
+      return bootstrapFailedTerminally ? _StartupAttemptOutcome.bootstrapFailed : _StartupAttemptOutcome.skipped;
     }
 
     final connectResult = await connectionGateway.connect(

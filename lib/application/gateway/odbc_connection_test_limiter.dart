@@ -32,8 +32,7 @@ final class OdbcConnectionTestLimiter {
           cause: error,
           context: {
             'reason': OdbcContextConstants.connectionTestRateLimitedReason,
-            'user_message':
-                'Muitos testes de conexão em andamento. Aguarde um momento e tente novamente.',
+            'user_message': 'Muitos testes de conexão em andamento. Aguarde um momento e tente novamente.',
           },
         ),
       );

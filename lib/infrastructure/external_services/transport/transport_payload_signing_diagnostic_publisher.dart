@@ -6,11 +6,12 @@ import 'package:plug_agente/core/logger/log_rate_limiter.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 
-typedef TransportDiagnosticLogCallback = void Function(
-  String level,
-  String event,
-  Map<String, dynamic> diagnostic,
-);
+typedef TransportDiagnosticLogCallback =
+    void Function(
+      String level,
+      String event,
+      Map<String, dynamic> diagnostic,
+    );
 
 /// Publishes structured payload-signing diagnostics for transport lifecycle stages.
 class TransportPayloadSigningDiagnosticPublisher {

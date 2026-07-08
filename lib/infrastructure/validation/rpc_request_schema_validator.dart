@@ -78,15 +78,16 @@ class RpcRequestSchemaValidator {
         data['params'],
         'agent.getHealth',
       ),
-      AgentActionRpcConstants.agentActionGetExecutionRpcMethodName => _agentParamsValidator
-          .validateAgentActionGetExecutionParams(data['params']),
+      AgentActionRpcConstants.agentActionGetExecutionRpcMethodName =>
+        _agentParamsValidator.validateAgentActionGetExecutionParams(data['params']),
       AgentActionRpcConstants.agentActionRunRpcMethodName => _agentParamsValidator.validateAgentActionRunParams(
         data['params'],
       ),
-      AgentActionRpcConstants.agentActionValidateRunRpcMethodName => _agentParamsValidator
-          .validateAgentActionValidateRunParams(data['params']),
-      AgentActionRpcConstants.agentActionCancelRpcMethodName => _agentParamsValidator
-          .validateAgentActionCancelParams(data['params']),
+      AgentActionRpcConstants.agentActionValidateRunRpcMethodName =>
+        _agentParamsValidator.validateAgentActionValidateRunParams(data['params']),
+      AgentActionRpcConstants.agentActionCancelRpcMethodName => _agentParamsValidator.validateAgentActionCancelParams(
+        data['params'],
+      ),
       'client_token.getPolicy' => _agentParamsValidator.validateOptionalClientTokenAliasParams(
         data['params'],
         'client_token.getPolicy',

@@ -69,7 +69,9 @@ class SocketIOTransportClientV2Options {
 }
 
 /// Socket.IO transport client for the v2 RPC contract.
-final class SocketIOTransportClientV2 extends _SocketIoTransportHost with _SocketIoTransportEmit implements ITransportClient {
+final class SocketIOTransportClientV2 extends _SocketIoTransportHost
+    with _SocketIoTransportEmit
+    implements ITransportClient {
   SocketIOTransportClientV2({
     required SocketDataSource dataSource,
     required IProtocolNegotiator negotiator,
@@ -316,8 +318,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost with _Socke
     String serverUrl,
     String agentId, {
     String? authToken,
-  }) =>
-      _lifecycle.connect(serverUrl, agentId, authToken: authToken);
+  }) => _lifecycle.connect(serverUrl, agentId, authToken: authToken);
 
   @override
   Future<Result<void>> disconnect() => _lifecycle.disconnect();
@@ -349,8 +350,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost with _Socke
   void _handleConnectionError(
     dynamic error,
     Completer<Result<void>> completer,
-  ) =>
-      _pipeline.connectionErrorHandler.handleConnectionError(error, completer);
+  ) => _pipeline.connectionErrorHandler.handleConnectionError(error, completer);
 
   void _handleSocketError(dynamic error) => _pipeline.connectionErrorHandler.handleSocketError(error);
 

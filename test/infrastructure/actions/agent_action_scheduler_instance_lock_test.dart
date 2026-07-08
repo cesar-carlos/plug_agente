@@ -52,26 +52,26 @@ void main() {
     test(
       'should normalize lock file ACL after successful acquire',
       () async {
-      var fileNormalized = false;
-      final lock = AgentActionSchedulerInstanceLock(
-        storageContext: storageContext,
-        aclBootstrap: GlobalStorageAclBootstrap(
-          normalizer: GlobalStorageDirectoryAclNormalizer(
-            commandRunner: IcaclsCommandRunner(
-              processRunner: (executable, arguments) async {
-                if (arguments.first.contains('agent_action_scheduler.lock')) {
-                  fileNormalized = true;
-                }
-                return ProcessResult(0, 0, '', '');
-              },
+        var fileNormalized = false;
+        final lock = AgentActionSchedulerInstanceLock(
+          storageContext: storageContext,
+          aclBootstrap: GlobalStorageAclBootstrap(
+            normalizer: GlobalStorageDirectoryAclNormalizer(
+              commandRunner: IcaclsCommandRunner(
+                processRunner: (executable, arguments) async {
+                  if (arguments.first.contains('agent_action_scheduler.lock')) {
+                    fileNormalized = true;
+                  }
+                  return ProcessResult(0, 0, '', '');
+                },
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      expect((await lock.tryAcquire()).isSuccess(), isTrue);
-      expect(fileNormalized, isTrue);
-      await lock.release();
+        expect((await lock.tryAcquire()).isSuccess(), isTrue);
+        expect(fileNormalized, isTrue);
+        await lock.release();
       },
       skip: Platform.isWindows ? false : 'Lock file ACL normalization requires Windows',
     );

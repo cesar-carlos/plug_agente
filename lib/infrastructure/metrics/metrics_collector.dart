@@ -135,12 +135,11 @@ class MetricsCollectorCore {
     required int thresholdPercent,
     required int currentSize,
     required int maxSize,
-  }) =>
-      sqlQueueMetrics.recordQueueSaturation(
-        thresholdPercent: thresholdPercent,
-        currentSize: currentSize,
-        maxSize: maxSize,
-      );
+  }) => sqlQueueMetrics.recordQueueSaturation(
+    thresholdPercent: thresholdPercent,
+    currentSize: currentSize,
+    maxSize: maxSize,
+  );
 
   void recordQueueWaitTime(Duration waitTime) => sqlQueueMetrics.recordQueueWaitTime(waitTime);
 
@@ -162,8 +161,7 @@ class MetricsCollectorCore {
 
   void recordPendingDequeueWaitTime(Duration wait) => actionQueueMetrics.recordPendingDequeueWaitTime(wait);
 
-  void recordTerminalOutcome(AgentActionExecutionStatus status) =>
-      agentActionMetrics.recordTerminalOutcome(status);
+  void recordTerminalOutcome(AgentActionExecutionStatus status) => agentActionMetrics.recordTerminalOutcome(status);
 
   void recordExecutionDuration(Duration duration) => agentActionMetrics.recordExecutionDuration(duration);
 
@@ -204,15 +202,14 @@ class MetricsCollectorCore {
     required bool stderrTruncated,
     int stdoutUtf8Bytes = 0,
     int stderrUtf8Bytes = 0,
-  }) =>
-      agentActionMetrics.recordCapturedOutputPersisted(
-        stdoutCaptured: stdoutCaptured,
-        stderrCaptured: stderrCaptured,
-        stdoutTruncated: stdoutTruncated,
-        stderrTruncated: stderrTruncated,
-        stdoutUtf8Bytes: stdoutUtf8Bytes,
-        stderrUtf8Bytes: stderrUtf8Bytes,
-      );
+  }) => agentActionMetrics.recordCapturedOutputPersisted(
+    stdoutCaptured: stdoutCaptured,
+    stderrCaptured: stderrCaptured,
+    stdoutTruncated: stdoutTruncated,
+    stderrTruncated: stderrTruncated,
+    stdoutUtf8Bytes: stdoutUtf8Bytes,
+    stderrUtf8Bytes: stderrUtf8Bytes,
+  );
 
   void recordCapturedOutputCleared(int executionCount) =>
       agentActionMetrics.recordCapturedOutputCleared(executionCount);
@@ -230,19 +227,16 @@ class MetricsCollectorCore {
   void recordSqlQueueWorkersEqualPool({
     required int workers,
     required int poolSize,
-  }) =>
-      sqlQueueMetrics.recordSqlQueueWorkersEqualPool(workers: workers, poolSize: poolSize);
+  }) => sqlQueueMetrics.recordSqlQueueWorkersEqualPool(workers: workers, poolSize: poolSize);
 
   void recordDiagnosticReason({
     required String category,
     required String reason,
-  }) =>
-      store.recordDiagnosticReason(category: category, reason: reason);
+  }) => store.recordDiagnosticReason(category: category, reason: reason);
 
   void recordAutoUpdateManualCheckStarted() => autoUpdateMetrics.recordAutoUpdateManualCheckStarted();
 
-  void recordAutoUpdateManualCheckSuccessAvailable() =>
-      autoUpdateMetrics.recordAutoUpdateManualCheckSuccessAvailable();
+  void recordAutoUpdateManualCheckSuccessAvailable() => autoUpdateMetrics.recordAutoUpdateManualCheckSuccessAvailable();
 
   void recordAutoUpdateManualCheckSuccessNotAvailable() =>
       autoUpdateMetrics.recordAutoUpdateManualCheckSuccessNotAvailable();
@@ -265,8 +259,7 @@ class MetricsCollectorCore {
   void recordAutoUpdateBackgroundCheckTriggerFailure() =>
       autoUpdateMetrics.recordAutoUpdateBackgroundCheckTriggerFailure();
 
-  void recordAutoUpdateBackgroundCheckUpdaterError() =>
-      autoUpdateMetrics.recordAutoUpdateBackgroundCheckUpdaterError();
+  void recordAutoUpdateBackgroundCheckUpdaterError() => autoUpdateMetrics.recordAutoUpdateBackgroundCheckUpdaterError();
 
   void recordAutoUpdateNotificationsPreferenceEnabled() =>
       autoUpdateMetrics.recordAutoUpdateNotificationsPreferenceEnabled();
@@ -375,8 +368,7 @@ class MetricsCollectorCore {
 
   void _incrementEventCounter(String counter) => store.incrementEventCounter(counter);
 
-  void _recordDurationSample(ListQueue<Duration> samples, Duration value) =>
-      store.recordDurationSample(samples, value);
+  void _recordDurationSample(ListQueue<Duration> samples, Duration value) => store.recordDurationSample(samples, value);
 
   void _recordTimestampSample(ListQueue<DateTime> samples, DateTime value) =>
       store.recordTimestampSample(samples, value);

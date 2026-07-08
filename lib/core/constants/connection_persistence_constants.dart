@@ -29,7 +29,9 @@ abstract final class ConnectionPersistenceConstants {
   ///
   /// Override with env `AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS` (60..259200).
   static Duration get agentActionRpcIdempotencyEntryTtl {
-    final parsed = int.tryParse(ConnectionConstantsEnv.optional('AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS') ?? '');
+    final parsed = int.tryParse(
+      ConnectionConstantsEnv.optional('AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS') ?? '',
+    );
     if (parsed != null && parsed > 0) {
       return Duration(seconds: parsed.clamp(60, 259200));
     }

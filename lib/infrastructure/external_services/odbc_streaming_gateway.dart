@@ -99,7 +99,8 @@ class OdbcStreamingGateway
                  ),
              sessionCache: streamingSessionCache,
            ),
-       _queryStreamOpener = queryStreamOpener ??
+       _queryStreamOpener =
+           queryStreamOpener ??
            OdbcStreamingQueryStreamOpener(
              service: _service,
              batchedQuerySource: batchedQuerySource,

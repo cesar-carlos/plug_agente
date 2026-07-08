@@ -10,13 +10,12 @@ class AgentActionCapturedOutputPeriodicPurge {
     AgentActionCapturedOutputPurge purge, {
     Duration interval = ConnectionConstants.agentActionCapturedOutputPurgeInterval,
   }) : _runner = PeriodicPurgeRunner(
-          purge: () => purge(),
-          interval: interval,
-          logName: 'agent_action_captured_output_periodic_purge',
-          successLogMessage: (int count) =>
-              'Cleared captured output on $count agent action execution row(s) (periodic)',
-          failureLogMessage: 'Periodic agent action captured output purge failed (continuing)',
-        );
+         purge: () => purge(),
+         interval: interval,
+         logName: 'agent_action_captured_output_periodic_purge',
+         successLogMessage: (int count) => 'Cleared captured output on $count agent action execution row(s) (periodic)',
+         failureLogMessage: 'Periodic agent action captured output purge failed (continuing)',
+       );
 
   final PeriodicPurgeRunner _runner;
 

@@ -32,12 +32,10 @@ void main() {
     required int failed,
   }) {
     provider.executionsController.executions = <AgentActionExecution>[
-      for (var index = 0; index < queued; index++)
-        buildExecution('queued-$index', AgentActionExecutionStatus.queued),
+      for (var index = 0; index < queued; index++) buildExecution('queued-$index', AgentActionExecutionStatus.queued),
       for (var index = 0; index < running; index++)
         buildExecution('running-$index', AgentActionExecutionStatus.running),
-      for (var index = 0; index < failed; index++)
-        buildExecution('failed-$index', AgentActionExecutionStatus.failed),
+      for (var index = 0; index < failed; index++) buildExecution('failed-$index', AgentActionExecutionStatus.failed),
     ];
     provider.executionsController.invalidateCaches();
   }

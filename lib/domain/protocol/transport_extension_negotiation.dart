@@ -27,8 +27,7 @@ abstract final class TransportExtensionNegotiation {
       return null;
     }
     final interval = _positiveInt(raw['intervalRequests']) ?? defaultHealthPiggybackIntervalRequests;
-    final freshnessMs =
-        _positiveInt(raw['freshnessThresholdMs']) ?? defaultHealthPiggybackFreshnessThresholdMs;
+    final freshnessMs = _positiveInt(raw['freshnessThresholdMs']) ?? defaultHealthPiggybackFreshnessThresholdMs;
     return HealthPiggybackNegotiation(
       intervalRequests: interval,
       freshnessThresholdMs: freshnessMs,

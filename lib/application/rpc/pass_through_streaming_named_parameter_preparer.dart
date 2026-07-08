@@ -6,8 +6,7 @@ import 'package:result_dart/result_dart.dart';
 final class PassThroughStreamingNamedParameterPreparer implements IStreamingNamedParameterPreparer {
   const PassThroughStreamingNamedParameterPreparer();
 
-  static const PassThroughStreamingNamedParameterPreparer instance =
-      PassThroughStreamingNamedParameterPreparer();
+  static const PassThroughStreamingNamedParameterPreparer instance = PassThroughStreamingNamedParameterPreparer();
 
   @override
   Result<OdbcPreparedQueryExecution> prepare({

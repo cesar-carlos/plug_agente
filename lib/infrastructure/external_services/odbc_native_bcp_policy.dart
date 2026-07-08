@@ -7,9 +7,7 @@ const String odbcNativeBcpUnavailableReason = 'native_bcp_unavailable';
 const String odbcNativeBcpFailedReason = 'native_bcp_failed';
 
 bool isOdbcNativeBcpPilotEnabled({String? rawValue}) {
-  final normalized = (rawValue ?? AppEnvironment.get(odbcEnableNativeBcpEnvKey))
-      ?.trim()
-      .toLowerCase();
+  final normalized = (rawValue ?? AppEnvironment.get(odbcEnableNativeBcpEnvKey))?.trim().toLowerCase();
   return normalized == '1' || normalized == 'true' || normalized == 'yes';
 }
 

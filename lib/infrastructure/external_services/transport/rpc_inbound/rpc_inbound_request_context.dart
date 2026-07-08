@@ -58,6 +58,5 @@ bool rpcInboundShouldCreateStreamEmitter({
     return false;
   }
   final negotiatedStreaming = negotiatedExtensions['streamingResults'] as bool? ?? false;
-  return negotiatedStreaming &&
-      (featureFlags.enableSocketStreamingChunks || featureFlags.enableSocketStreamingFromDb);
+  return negotiatedStreaming && (featureFlags.enableSocketStreamingChunks || featureFlags.enableSocketStreamingFromDb);
 }

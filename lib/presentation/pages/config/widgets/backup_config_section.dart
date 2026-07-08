@@ -38,8 +38,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
     unawaited(_loadPendingRestoreFailure());
   }
 
-  ILocalAppDataBackupService? get _backupService =>
-      readOptionalGetItService<ILocalAppDataBackupService>();
+  ILocalAppDataBackupService? get _backupService => readOptionalGetItService<ILocalAppDataBackupService>();
 
   Future<void> _loadPendingRestoreFailure() async {
     final service = _backupService;

@@ -198,7 +198,8 @@ mixin TransportPipelineSend {
       var usedGzipCompressIsolate = false;
 
       if (shouldCompress) {
-        final useIsolate = originalSize >=
+        final useIsolate =
+            originalSize >=
             RpcChunkTransportPolicy.gzipIsolateThresholdBytes(
               metricEventName,
               defaultThreshold: gzipIsolateThresholdBytes,

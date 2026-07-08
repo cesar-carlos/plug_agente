@@ -140,8 +140,7 @@ Future<Map<String, Object?>?> _runScenario({
 
 bool _shouldSkipScenario(_Scenario scenario) {
   final globalSkip = Platform.environment['ODBC_GATEWAY_ENCODING_SKIP_COLUMNAR_COMPRESSED'];
-  if (scenario.encodingEnv == 'columnarCompressed' &&
-      (globalSkip == '1' || globalSkip == 'true')) {
+  if (scenario.encodingEnv == 'columnarCompressed' && (globalSkip == '1' || globalSkip == 'true')) {
     return true;
   }
   final key = 'ODBC_GATEWAY_ENCODING_SKIP_${scenario.name}';
@@ -158,9 +157,8 @@ Future<void> runOdbcGatewayEncodingBenchmarkCli(List<String> args) async {
     return;
   }
 
-  final sql = _readArg(args, '--sql') ??
-      Platform.environment['ODBC_BENCH_QUERY'] ??
-      resolveDefaultOdbcBenchQuery(dsn: dsn);
+  final sql =
+      _readArg(args, '--sql') ?? Platform.environment['ODBC_BENCH_QUERY'] ?? resolveDefaultOdbcBenchQuery(dsn: dsn);
   final iterations = int.tryParse(_readArg(args, '--iterations') ?? '6') ?? 6;
   final jsonOutput = args.contains('--json');
 

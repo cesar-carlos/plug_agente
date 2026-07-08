@@ -266,8 +266,7 @@ void main() {
 
     test('should accept valid WITH (CTE) query', () async {
       // Arrange
-      const validQuery =
-          'WITH cte AS (SELECT 1 AS id) SELECT id FROM cte ORDER BY id';
+      const validQuery = 'WITH cte AS (SELECT 1 AS id) SELECT id FROM cte ORDER BY id';
       final config = Config(
         id: 'config-1',
         agentId: 'agent-123',

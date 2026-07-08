@@ -100,8 +100,7 @@ void main() {
       });
 
       final config = _buildConfig().copyWith(
-        connectionString:
-            'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=demo;UID=sa',
+        connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=demo;UID=sa',
         password: 'secure-secret',
       );
 
@@ -160,27 +159,27 @@ void main() {
         _stubExecutePlaygroundQuery(
           mockExecutePlaygroundQuery,
           answer: (_) async {
-          return rd.Success(
-            QueryResponse(
-              id: 'resp-1',
-              requestId: 'req-1',
-              agentId: 'agent-1',
-              data: const [
-                {'id': 1},
-                {'id': 2},
-              ],
-              affectedRows: 2,
-              timestamp: DateTime.now(),
-              pagination: const QueryPaginationInfo(
-                page: 1,
-                pageSize: 50,
-                returnedRows: 2,
-                hasNextPage: true,
-                hasPreviousPage: false,
+            return rd.Success(
+              QueryResponse(
+                id: 'resp-1',
+                requestId: 'req-1',
+                agentId: 'agent-1',
+                data: const [
+                  {'id': 1},
+                  {'id': 2},
+                ],
+                affectedRows: 2,
+                timestamp: DateTime.now(),
+                pagination: const QueryPaginationInfo(
+                  page: 1,
+                  pageSize: 50,
+                  returnedRows: 2,
+                  hasNextPage: true,
+                  hasPreviousPage: false,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
         );
 
         await provider.executeQuery(resetPagination: true);
@@ -199,27 +198,27 @@ void main() {
       _stubExecutePlaygroundQuery(
         mockExecutePlaygroundQuery,
         answer: (invocation) async {
-        final pagination = invocation.namedArguments[#pagination] as QueryPaginationRequest;
-        return rd.Success(
-          QueryResponse(
-            id: 'resp-${pagination.page}',
-            requestId: 'req-${pagination.page}',
-            agentId: 'agent-1',
-            data: [
-              {'page': pagination.page},
-            ],
-            affectedRows: 1,
-            timestamp: DateTime.now(),
-            pagination: QueryPaginationInfo(
-              page: pagination.page,
-              pageSize: pagination.pageSize,
-              returnedRows: 1,
-              hasNextPage: pagination.page == 1,
-              hasPreviousPage: pagination.page > 1,
+          final pagination = invocation.namedArguments[#pagination] as QueryPaginationRequest;
+          return rd.Success(
+            QueryResponse(
+              id: 'resp-${pagination.page}',
+              requestId: 'req-${pagination.page}',
+              agentId: 'agent-1',
+              data: [
+                {'page': pagination.page},
+              ],
+              affectedRows: 1,
+              timestamp: DateTime.now(),
+              pagination: QueryPaginationInfo(
+                page: pagination.page,
+                pageSize: pagination.pageSize,
+                returnedRows: 1,
+                hasNextPage: pagination.page == 1,
+                hasPreviousPage: pagination.page > 1,
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
       );
 
       await provider.executeQuery(resetPagination: true);
@@ -236,41 +235,41 @@ void main() {
       _stubExecutePlaygroundQuery(
         mockExecutePlaygroundQuery,
         answer: (_) async {
-        return rd.Success(
-          QueryResponse(
-            id: 'resp-1',
-            requestId: 'req-1',
-            agentId: 'agent-1',
-            data: const [
-              {'first_value': 1},
-            ],
-            affectedRows: 1,
-            timestamp: DateTime.now(),
-            resultSets: const [
-              QueryResultSet(
-                index: 0,
-                rows: [
-                  {'first_value': 1},
-                ],
-                rowCount: 1,
-                columnMetadata: [
-                  {'name': 'first_value'},
-                ],
-              ),
-              QueryResultSet(
-                index: 1,
-                rows: [
-                  {'second_value': 2},
-                ],
-                rowCount: 1,
-                columnMetadata: [
-                  {'name': 'second_value'},
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+          return rd.Success(
+            QueryResponse(
+              id: 'resp-1',
+              requestId: 'req-1',
+              agentId: 'agent-1',
+              data: const [
+                {'first_value': 1},
+              ],
+              affectedRows: 1,
+              timestamp: DateTime.now(),
+              resultSets: const [
+                QueryResultSet(
+                  index: 0,
+                  rows: [
+                    {'first_value': 1},
+                  ],
+                  rowCount: 1,
+                  columnMetadata: [
+                    {'name': 'first_value'},
+                  ],
+                ),
+                QueryResultSet(
+                  index: 1,
+                  rows: [
+                    {'second_value': 2},
+                  ],
+                  rowCount: 1,
+                  columnMetadata: [
+                    {'name': 'second_value'},
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
       );
 
       await provider.executeQuery(resetPagination: true);

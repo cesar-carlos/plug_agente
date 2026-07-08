@@ -17,7 +17,10 @@ void main() {
 
       expect(restored.sql, command.sql);
       expect(restored.params, command.params);
-      expect(json, {'sql': 'SELECT 1', 'params': {'id': 42}});
+      expect(json, {
+        'sql': 'SELECT 1',
+        'params': {'id': 42},
+      });
     });
 
     test('resultFromJson accepts snake_case and camelCase metadata keys', () {

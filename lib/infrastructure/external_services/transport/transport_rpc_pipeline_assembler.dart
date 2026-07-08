@@ -103,7 +103,8 @@ final class TransportRpcPipelineAssemblyDeps {
   final Future<void> Function(
     dynamic responseData, {
     Map<Object?, String> methodsById,
-  }) emitRpcResponse;
+  })
+  emitRpcResponse;
   final Future<Result<Map<String, dynamic>>> Function(String event, dynamic logicalPayload) prepareOutgoingPayload;
   final void Function(String direction, String event, dynamic data) logMessage;
   final ProtocolConfig Function() currentProtocol;
@@ -126,7 +127,8 @@ final class TransportRpcPipelineAssemblyDeps {
   final void Function({
     required String event,
     required dynamic logicalPayload,
-  }) publishLargeResponseAdvice;
+  })
+  publishLargeResponseAdvice;
   final Future<void> Function(dynamic requestId) emitInternalErrorResponse;
   final void Function(dynamic error, Completer<Result<void>> completer) onConnectError;
   final void Function(dynamic error) onSocketError;

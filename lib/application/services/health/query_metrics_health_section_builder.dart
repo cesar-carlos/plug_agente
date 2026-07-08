@@ -17,8 +17,7 @@ final class QueryMetricsHealthSectionBuilder {
     return {
       'sql_total': metrics['query_timeout'] ?? 0,
       'pool_total':
-          (metrics['pool_acquire_timeout'] as int? ?? 0) +
-          (metrics['direct_connection_acquire_timeout'] as int? ?? 0),
+          (metrics['pool_acquire_timeout'] as int? ?? 0) + (metrics['direct_connection_acquire_timeout'] as int? ?? 0),
       'cancel_success_total': metrics['timeout_cancel_success'] ?? 0,
       'cancel_failure_total': metrics['timeout_cancel_failure'] ?? 0,
     };

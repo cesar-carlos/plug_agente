@@ -9,8 +9,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbou
 void main() {
   group('RpcInboundResponseEnricher', () {
     const negotiated = <String, dynamic>{
-      TransportExtensionNegotiation.agentPhaseTimings:
-          TransportExtensionNegotiation.agentPhaseTimingsVersion,
+      TransportExtensionNegotiation.agentPhaseTimings: TransportExtensionNegotiation.agentPhaseTimingsVersion,
     };
 
     test('attaches agent_phases when consumer opted into server timings', () {

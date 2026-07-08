@@ -57,8 +57,7 @@ void main() {
 
       test('keeps embedded password when persisted connection string already has PWD', () {
         final config = baseConfig.copyWith(
-          connectionString:
-              'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=embedded',
+          connectionString: 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;UID=sa;PWD=embedded',
           password: 'ignored',
         );
 

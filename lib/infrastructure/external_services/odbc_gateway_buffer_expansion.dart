@@ -7,8 +7,7 @@ class OdbcGatewayBufferExpansion {
   OdbcGatewayBufferExpansion._();
 
   static const int bufferRetryMarginBytes = 1024 * 1024;
-  static const int maxAutoExpandedBufferBytes =
-      ConnectionConstants.maxAutoExpandedResultBufferBytes;
+  static const int maxAutoExpandedBufferBytes = ConnectionConstants.maxAutoExpandedResultBufferBytes;
 
   static final RegExp _needBytesPattern = RegExp(
     r'need\s+(\d+)\s+bytes',

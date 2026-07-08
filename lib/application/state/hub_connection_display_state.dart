@@ -20,8 +20,7 @@ final class HubConnectionDisplayState {
 
   bool get isConnected => status == ConnectionStatus.connected;
 
-  bool get isConnectingOrNegotiating =>
-      status == ConnectionStatus.connecting || status == ConnectionStatus.negotiating;
+  bool get isConnectingOrNegotiating => status == ConnectionStatus.connecting || status == ConnectionStatus.negotiating;
 
   bool get isReconnectingEffective => isReconnecting || status == ConnectionStatus.reconnecting;
 }

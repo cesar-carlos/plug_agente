@@ -233,9 +233,7 @@ class SqlExecuteHandler {
           clientToken: clientToken,
           database: database,
         );
-        if (!streamingTry.succeeded &&
-            !explicitPreferDbStreaming &&
-            (prefersDbStreaming || autoPreferDbStreaming)) {
+        if (!streamingTry.succeeded && !explicitPreferDbStreaming && (prefersDbStreaming || autoPreferDbStreaming)) {
           streamingTry = await _dbStreamingExecutor.tryStreamingFromDb(
             request,
             queryRequest,

@@ -327,10 +327,8 @@ class ClientTokenSectionController {
         return payload;
       }
       formErrorKey = switch (payloadValidationError) {
-        ClientTokenPayloadValidationError.databaseMustBeString =>
-          ClientTokenFormErrorKey.payloadDatabaseMustBeString,
-        ClientTokenPayloadValidationError.databaseCannotBeEmpty =>
-          ClientTokenFormErrorKey.payloadDatabaseCannotBeEmpty,
+        ClientTokenPayloadValidationError.databaseMustBeString => ClientTokenFormErrorKey.payloadDatabaseMustBeString,
+        ClientTokenPayloadValidationError.databaseCannotBeEmpty => ClientTokenFormErrorKey.payloadDatabaseCannotBeEmpty,
       };
       notifyCreateTokenDialogChanged();
       return null;

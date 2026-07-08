@@ -69,10 +69,8 @@ class ProtocolCapabilities {
       'recommendedStreamPullWindowSize':
           recommendedStreamPullWindowSize ?? ConnectionConstants.recommendedStreamPullWindowSize,
       'maxStreamPullWindowSize': maxStreamPullWindowSize ?? ConnectionConstants.maxBackpressureChunkQueueSize,
-      TransportExtensionNegotiation.clientRequestIdEcho:
-          TransportExtensionNegotiation.clientRequestIdEchoVersion,
-      TransportExtensionNegotiation.agentPhaseTimings:
-          TransportExtensionNegotiation.agentPhaseTimingsVersion,
+      TransportExtensionNegotiation.clientRequestIdEcho: TransportExtensionNegotiation.clientRequestIdEchoVersion,
+      TransportExtensionNegotiation.agentPhaseTimings: TransportExtensionNegotiation.agentPhaseTimingsVersion,
       TransportExtensionNegotiation.healthPiggyback:
           TransportExtensionNegotiation.defaultHealthPiggybackAdvertisement(),
     };

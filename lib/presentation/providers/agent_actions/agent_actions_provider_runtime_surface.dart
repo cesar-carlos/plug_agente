@@ -19,8 +19,7 @@ extension AgentActionsProviderRuntimeSurface on AgentActionsProvider {
 
   Future<void> prepareElevatedRunner() => _runtimeController.prepareElevatedRunner();
 
-  Future<void> setMaintenanceMode({required bool enabled}) =>
-      _runtimeController.setMaintenanceMode(enabled: enabled);
+  Future<void> setMaintenanceMode({required bool enabled}) => _runtimeController.setMaintenanceMode(enabled: enabled);
 
   Future<void> setMaintenanceStrictMode({required bool enabled}) =>
       _runtimeController.setMaintenanceStrictMode(enabled: enabled);

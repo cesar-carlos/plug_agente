@@ -68,9 +68,8 @@ final class SqlExecuteMaterializedResultPolicy {
     // When the hub negotiates a high transport max_rows (e.g. 50_000), reject only if the
     // effective request budget exceeds agent materialized caps — not because transport max
     // itself is large.
-    final exceedsTransportMaxRows = transportMaxRows != null &&
-        effectiveMaxRows > rowThreshold &&
-        effectiveMaxRows > transportMaxRows;
+    final exceedsTransportMaxRows =
+        transportMaxRows != null && effectiveMaxRows > rowThreshold && effectiveMaxRows > transportMaxRows;
 
     return exceedsRows || exceedsBytes || exceedsTransportMaxRows;
   }
@@ -143,9 +142,9 @@ final class SqlExecuteMaterializedResultPolicy {
         : RpcSqlBudgetConstants.materializedResultTooLargeReason;
     final userMessage = unpaginated
         ? 'This query has no server-side pagination. Enable ODBC streaming mode in Playground '
-            'or add OFFSET/FETCH pagination for large result sets.'
+              'or add OFFSET/FETCH pagination for large result sets.'
         : 'This page size may return too many rows for materialized Playground results. '
-            'Enable ODBC streaming mode or reduce the page size.';
+              'Enable ODBC streaming mode or reduce the page size.';
 
     return domain.QueryExecutionFailure.withContext(
       message: unpaginated

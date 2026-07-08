@@ -33,12 +33,14 @@ import '../../tool/benchmarks/benchmark_plug_agente_stack.dart' as benchmark;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() {
-    registerFallbackValue(QueryRequest(
-      id: 'fallback',
-      agentId: 'agent-1',
-      query: 'SELECT 1',
-      timestamp: DateTime.utc(2026, 6, 16),
-    ));
+    registerFallbackValue(
+      QueryRequest(
+        id: 'fallback',
+        agentId: 'agent-1',
+        query: 'SELECT 1',
+        timestamp: DateTime.utc(2026, 6, 16),
+      ),
+    );
   });
 
   test(

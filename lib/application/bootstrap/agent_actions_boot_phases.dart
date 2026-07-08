@@ -13,8 +13,7 @@ abstract interface class AgentActionsBootPhasesContract {
 }
 
 class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
-  const AgentActionsBootPhases({required AgentActionsBootPhasesDependencies dependencies})
-    : _deps = dependencies;
+  const AgentActionsBootPhases({required AgentActionsBootPhasesDependencies dependencies}) : _deps = dependencies;
 
   final AgentActionsBootPhasesDependencies _deps;
 
@@ -124,16 +123,14 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
     await _runInitialPurge(
       purge: _deps.cleanupExpiredElevatedBridgeArtifacts?.call,
       successLogSuffix: 'stale elevated bridge artifact file(s) during bootstrap',
-      failureLogMessage:
-          'Failed to purge stale elevated bridge artifacts during bootstrap (continuing without)',
+      failureLogMessage: 'Failed to purge stale elevated bridge artifacts during bootstrap (continuing without)',
     );
   }
 
   void _startElevatedBridgeArtifactsPeriodicPurge() {
     _startPeriodicPurge(
       start: _deps.elevatedBridgeArtifactsPeriodicPurge?.start,
-      failureLogMessage:
-          'Failed to start periodic elevated bridge artifact purge (continuing without)',
+      failureLogMessage: 'Failed to start periodic elevated bridge artifact purge (continuing without)',
     );
   }
 
@@ -174,16 +171,14 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
     await _runInitialPurge(
       purge: _deps.cleanupExpiredRpcIdempotencyCache.call,
       successLogSuffix: 'expired RPC idempotency cache row(s) during bootstrap',
-      failureLogMessage:
-          'Failed to purge expired RPC idempotency cache during bootstrap (continuing without)',
+      failureLogMessage: 'Failed to purge expired RPC idempotency cache during bootstrap (continuing without)',
     );
   }
 
   void _startRpcIdempotencyPeriodicPurge() {
     _startPeriodicPurge(
       start: _deps.rpcIdempotencyCachePeriodicPurge.start,
-      failureLogMessage:
-          'Failed to start periodic RPC idempotency cache purge (continuing without)',
+      failureLogMessage: 'Failed to start periodic RPC idempotency cache purge (continuing without)',
     );
   }
 
@@ -191,16 +186,14 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
     await _runInitialPurge(
       purge: _deps.cleanupExpiredAgentActionRemoteAudit.call,
       successLogSuffix: 'old agent action remote audit row(s) during bootstrap',
-      failureLogMessage:
-          'Failed to purge old agent action remote audit rows during bootstrap (continuing without)',
+      failureLogMessage: 'Failed to purge old agent action remote audit rows during bootstrap (continuing without)',
     );
   }
 
   void _startAgentActionRemoteAuditPeriodicPurge() {
     _startPeriodicPurge(
       start: _deps.agentActionRemoteAuditPeriodicPurge.start,
-      failureLogMessage:
-          'Failed to start periodic agent action remote audit purge (continuing without)',
+      failureLogMessage: 'Failed to start periodic agent action remote audit purge (continuing without)',
     );
   }
 
@@ -208,18 +201,15 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
     await _runInitialPurge(
       purge: _deps.cleanupAgentActionCapturedOutput?.call,
       successLogSuffix: 'agent action execution row(s) during bootstrap',
-      failureLogMessage:
-          'Failed to clear old agent action captured output during bootstrap (continuing without)',
-      successLogBuilder: (count) =>
-          'Cleared captured output on $count agent action execution row(s) during bootstrap',
+      failureLogMessage: 'Failed to clear old agent action captured output during bootstrap (continuing without)',
+      successLogBuilder: (count) => 'Cleared captured output on $count agent action execution row(s) during bootstrap',
     );
   }
 
   void _startAgentActionCapturedOutputPeriodicPurge() {
     _startPeriodicPurge(
       start: _deps.agentActionCapturedOutputPeriodicPurge?.start,
-      failureLogMessage:
-          'Failed to start periodic agent action captured output purge (continuing without)',
+      failureLogMessage: 'Failed to start periodic agent action captured output purge (continuing without)',
     );
   }
 
@@ -227,16 +217,14 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
     await _runInitialPurge(
       purge: _deps.cleanupAgentActionExecutions.call,
       successLogSuffix: 'old terminal agent action execution row(s) during bootstrap',
-      failureLogMessage:
-          'Failed to purge old agent action executions during bootstrap (continuing without)',
+      failureLogMessage: 'Failed to purge old agent action executions during bootstrap (continuing without)',
     );
   }
 
   void _startAgentActionExecutionPeriodicPurge() {
     _startPeriodicPurge(
       start: _deps.agentActionExecutionPeriodicPurge.start,
-      failureLogMessage:
-          'Failed to start periodic agent action execution history purge (continuing without)',
+      failureLogMessage: 'Failed to start periodic agent action execution history purge (continuing without)',
     );
   }
 

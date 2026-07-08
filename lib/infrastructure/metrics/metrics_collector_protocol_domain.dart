@@ -156,14 +156,12 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
     );
   }
 
-  void recordRpcResponseEmitFailure() =>
-      _incrementEventCounter(MetricsCounterNames.rpcResponseEmitFailureCounter);
+  void recordRpcResponseEmitFailure() => _incrementEventCounter(MetricsCounterNames.rpcResponseEmitFailureCounter);
 
   void recordRpcResponseEmitSkippedDisconnected() =>
       _incrementEventCounter(MetricsCounterNames.rpcResponseEmitSkippedDisconnectedCounter);
 
-  void recordRpcStreamPullInvalid() =>
-      _incrementEventCounter(MetricsCounterNames.rpcStreamPullInvalidCounter);
+  void recordRpcStreamPullInvalid() => _incrementEventCounter(MetricsCounterNames.rpcStreamPullInvalidCounter);
 
   void recordSqlStreamCancelled(String reason) {
     _incrementEventCounter(MetricsCounterNames.rpcSqlStreamCancelledCounter);

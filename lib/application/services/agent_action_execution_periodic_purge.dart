@@ -10,13 +10,12 @@ class AgentActionExecutionPeriodicPurge {
     AgentActionExecutionHistoryPurge purge, {
     Duration interval = ConnectionConstants.agentActionExecutionPurgeInterval,
   }) : _runner = PeriodicPurgeRunner(
-          purge: () => purge(),
-          interval: interval,
-          logName: 'agent_action_execution_periodic_purge',
-          successLogMessage: (int count) =>
-              'Purged $count old terminal agent action execution row(s) (periodic)',
-          failureLogMessage: 'Periodic agent action execution history purge failed (continuing)',
-        );
+         purge: () => purge(),
+         interval: interval,
+         logName: 'agent_action_execution_periodic_purge',
+         successLogMessage: (int count) => 'Purged $count old terminal agent action execution row(s) (periodic)',
+         failureLogMessage: 'Periodic agent action execution history purge failed (continuing)',
+       );
 
   final PeriodicPurgeRunner _runner;
 

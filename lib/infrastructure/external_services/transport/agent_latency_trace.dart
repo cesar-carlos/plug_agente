@@ -1,8 +1,7 @@
 /// Wall-clock phase timings for a single inbound RPC when the consumer opted in
 /// via `meta.requestServerTimings` and `agentPhaseTimings` is negotiated.
 final class AgentLatencyTrace {
-  AgentLatencyTrace({DateTime Function()? nowProvider})
-    : _nowProvider = nowProvider ?? DateTime.now;
+  AgentLatencyTrace({DateTime Function()? nowProvider}) : _nowProvider = nowProvider ?? DateTime.now;
 
   final DateTime Function() _nowProvider;
   final Map<String, double> _phasesMs = <String, double>{};

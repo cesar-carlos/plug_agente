@@ -75,9 +75,7 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
     );
     _useNativeOdbcPool = _prefs.getBool(_keyUseNativeOdbcPool) ?? false;
     _nativePoolTestOnCheckout =
-        readOdbcNativePoolTestOnCheckoutOverride() ??
-        _prefs.getBool(_keyNativePoolTestOnCheckout) ??
-        true;
+        readOdbcNativePoolTestOnCheckoutOverride() ?? _prefs.getBool(_keyNativePoolTestOnCheckout) ?? true;
   }
 
   Future<int> _loadPoolSize() async {

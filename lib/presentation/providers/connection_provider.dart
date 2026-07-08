@@ -83,8 +83,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
           authProvider: () => _authProvider,
           configProvider: () => _configProvider,
         );
-    final recoveryAuthBridge =
-        hubRecoveryAuthBridge ?? _buildRecoveryAuthBridge(_hubSessionCoordinator, _authProvider);
+    final recoveryAuthBridge = hubRecoveryAuthBridge ?? _buildRecoveryAuthBridge(_hubSessionCoordinator, _authProvider);
 
     _hubConnectionCoordinator =
         hubConnectionCoordinator ??

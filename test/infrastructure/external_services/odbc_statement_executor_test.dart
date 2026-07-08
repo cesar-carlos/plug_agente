@@ -181,7 +181,9 @@ void main() {
           never.complete(const Success(QueryResult(columns: [], rows: [], rowCount: 0)));
         }
       });
-      when(() => service.executePreparedParamValuesFromObjects(any(), any(), any(), any())).thenAnswer((_) => never.future);
+      when(
+        () => service.executePreparedParamValuesFromObjects(any(), any(), any(), any()),
+      ).thenAnswer((_) => never.future);
       when(() => service.cancelStatement('c1', 4)).thenAnswer((_) async => const Success(unit));
 
       await expectLater(

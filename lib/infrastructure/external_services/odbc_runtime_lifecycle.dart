@@ -65,9 +65,7 @@ final class OdbcRuntimeLifecycle {
             operation: operation,
             context: {
               'reason': OdbcContextConstants.odbcInitializationFailedReason,
-              'user_message':
-                  userMessage ??
-                  'Não foi possível inicializar o ambiente ODBC neste computador.',
+              'user_message': userMessage ?? 'Não foi possível inicializar o ambiente ODBC neste computador.',
             },
           ),
         );

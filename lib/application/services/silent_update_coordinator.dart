@@ -182,8 +182,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   bool get automaticSilentUpdatesEnabled => _collaborators.preferences.automaticSilentUpdatesEnabled;
 
   @override
-  bool get automaticSilentUpdatesAutoApplyEnabled =>
-      _collaborators.preferences.automaticSilentUpdatesAutoApplyEnabled;
+  bool get automaticSilentUpdatesAutoApplyEnabled => _collaborators.preferences.automaticSilentUpdatesAutoApplyEnabled;
 
   @override
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics => _diagnosticsStore.lastAutomaticDiagnostics;
@@ -546,5 +545,4 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     }
     return Failure<SilentUpdateOutcome, Exception>(applyError!);
   }
-
 }

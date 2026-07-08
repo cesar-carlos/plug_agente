@@ -7,9 +7,7 @@ void _registerActionsUseCases(GetIt getIt) {
         getIt<IAgentConfigRepository>(),
         getIt<ConfigService>(),
         circuitBreakerResetProvider: () =>
-            getIt.isRegistered<IOdbcCircuitBreakerReset>()
-                ? getIt<IOdbcCircuitBreakerReset>()
-                : null,
+            getIt.isRegistered<IOdbcCircuitBreakerReset>() ? getIt<IOdbcCircuitBreakerReset>() : null,
         metadataCache: getIt<ActiveConfigMetadataCache>(),
         streamingConnectionStringCache: getIt<SqlStreamingConnectionStringCache>(),
       ),

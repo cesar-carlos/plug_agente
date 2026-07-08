@@ -105,7 +105,9 @@ void main() {
       print('        dart run tool/e2e/promote_e2e_signing_from_monorepo_env.dart');
       print('        dart run tool/e2e/export_e2e_secrets_from_local.dart  (Config → WebSocket signing)');
       print('        Or paste PAYLOAD_SIGNING_KEY_ID and PAYLOAD_SIGNING_KEY into plug_agente/.env');
-      print('        Or: dart run tool/e2e/generate_dev_e2e_signing.dart --write  (dev only; mirror to plug_server/.env)');
+      print(
+        '        Or: dart run tool/e2e/generate_dev_e2e_signing.dart --write  (dev only; mirror to plug_server/.env)',
+      );
     } else {
       print('  Hint: dart run tool/e2e/sync_e2e_hub_env_from_local.dart --export-secure');
     }

@@ -20,9 +20,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         getIt<IAgentConfigRepository>(),
         getIt<IAppSettingsStore>(),
         circuitBreakerResetProvider: () =>
-            getIt.isRegistered<IOdbcCircuitBreakerReset>()
-                ? getIt<IOdbcCircuitBreakerReset>()
-                : null,
+            getIt.isRegistered<IOdbcCircuitBreakerReset>() ? getIt<IOdbcCircuitBreakerReset>() : null,
         metadataCache: getIt<ActiveConfigMetadataCache>(),
       ),
     )

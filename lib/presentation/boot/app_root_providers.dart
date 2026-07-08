@@ -233,7 +233,9 @@ List<SingleChildWidget> buildAppRootProviders() {
             retentionSettings: getIt<AgentActionRetentionSettings>(),
             bundleFileGateway: getIt<IAgentActionsBundleFileGateway>(),
             saveAgentActionSecret: getIt.isRegistered<SaveAgentActionSecret>() ? getIt<SaveAgentActionSecret>() : null,
-            deleteAgentActionSecret: getIt.isRegistered<DeleteAgentActionSecret>() ? getIt<DeleteAgentActionSecret>() : null,
+            deleteAgentActionSecret: getIt.isRegistered<DeleteAgentActionSecret>()
+                ? getIt<DeleteAgentActionSecret>()
+                : null,
           ),
           preflightSettings: getIt<AgentActionPreflightSettings>(),
           runtimeStateGuard: getIt.isRegistered<AgentActionRuntimeStateGuard>()
@@ -251,7 +253,9 @@ List<SingleChildWidget> buildAppRootProviders() {
               ? getIt<PrepareElevatedActionRunner>()
               : null,
           globalStorageContext: getIt.isRegistered<GlobalStorageContext>() ? getIt<GlobalStorageContext>() : null,
-          triggerScheduler: getIt.isRegistered<AgentActionTriggerScheduler>() ? getIt<AgentActionTriggerScheduler>() : null,
+          triggerScheduler: getIt.isRegistered<AgentActionTriggerScheduler>()
+              ? getIt<AgentActionTriggerScheduler>()
+              : null,
           comObjectInvocationDiagnostics: getIt.isRegistered<IComObjectInvocationDiagnostics>()
               ? getIt<IComObjectInvocationDiagnostics>()
               : null,

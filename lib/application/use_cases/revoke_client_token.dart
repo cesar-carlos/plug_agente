@@ -62,9 +62,7 @@ class RevokeClientToken {
     }
     final featureFlags = _featureFlags;
     final revokedTokenStore = _revokedTokenStore;
-    if (featureFlags == null ||
-        revokedTokenStore == null ||
-        !featureFlags.enableSocketRevokedTokenInSession) {
+    if (featureFlags == null || revokedTokenStore == null || !featureFlags.enableSocketRevokedTokenInSession) {
       return;
     }
     revokedTokenStore.add(trimmed);

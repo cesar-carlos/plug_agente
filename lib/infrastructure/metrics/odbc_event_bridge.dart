@@ -80,19 +80,19 @@ final class OdbcEventBridge {
       case WorkerRecovered(:final timestamp):
         _metrics?.recordOdbcEventWorkerRecovered();
         unawaited(() async {
-        try {
-          await _workerRecoveryPort?.recoverAfterNativeWorkerCrash();
-        } on Object catch (error, stackTrace) {
-          developer.log(
-            'ODBC worker recovery failed after native worker crash',
-            name: _logName,
-            level: 1000,
-            time: timestamp,
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      }());
+          try {
+            await _workerRecoveryPort?.recoverAfterNativeWorkerCrash();
+          } on Object catch (error, stackTrace) {
+            developer.log(
+              'ODBC worker recovery failed after native worker crash',
+              name: _logName,
+              level: 1000,
+              time: timestamp,
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
+        }());
         developer.log(
           'ODBC async worker recovered after crash',
           name: _logName,

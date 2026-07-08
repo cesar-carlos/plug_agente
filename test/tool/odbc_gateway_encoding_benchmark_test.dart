@@ -9,8 +9,7 @@ import '../../tool/benchmarks/odbc_gateway_encoding_benchmark_lib.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final dsn = Platform.environment['ODBC_TEST_DSN']?.trim() ??
-      Platform.environment['ODBC_DSN']?.trim();
+  final dsn = Platform.environment['ODBC_TEST_DSN']?.trim() ?? Platform.environment['ODBC_DSN']?.trim();
   final skipReason = dsn == null || dsn.isEmpty
       ? 'Set ODBC_TEST_DSN or ODBC_DSN to run gateway encoding benchmark.'
       : null;
@@ -20,11 +19,9 @@ void main() {
     () async {
       await AppEnvironment.loadOptional();
 
-      final resolvedDsn = Platform.environment['ODBC_TEST_DSN']?.trim() ??
-          Platform.environment['ODBC_DSN']?.trim() ??
-          dsn;
-      final sql = Platform.environment['ODBC_BENCH_QUERY'] ??
-          resolveDefaultOdbcBenchQuery(dsn: resolvedDsn);
+      final resolvedDsn =
+          Platform.environment['ODBC_TEST_DSN']?.trim() ?? Platform.environment['ODBC_DSN']?.trim() ?? dsn;
+      final sql = Platform.environment['ODBC_BENCH_QUERY'] ?? resolveDefaultOdbcBenchQuery(dsn: resolvedDsn);
       final payload = await runOdbcGatewayEncodingBenchmark(
         dsn: resolvedDsn!,
         sql: sql,

@@ -140,11 +140,8 @@ final class AdaptiveOdbcConnectionPool
       driverInfo: driverInfo,
     );
     _lastCircuitKey = circuitKey;
-    final canTryNativeWithoutOptions =
-        allowNativeWithoutOptions || options == null;
-    if (_shouldUseNativePool(databaseType) &&
-        !_isNativeCircuitOpen(circuitKey) &&
-        canTryNativeWithoutOptions) {
+    final canTryNativeWithoutOptions = allowNativeWithoutOptions || options == null;
+    if (_shouldUseNativePool(databaseType) && !_isNativeCircuitOpen(circuitKey) && canTryNativeWithoutOptions) {
       final nativeAcquire = await _nativePool.acquireWithin(
         connectionString,
         acquireTimeout: acquireTimeout,

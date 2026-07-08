@@ -50,8 +50,9 @@ void main() {
       );
 
       when(() => idempotencyStore.getRecord(any())).thenAnswer((_) async => null);
-      when(() => idempotencyStore.set(any(), any(), any(), requestFingerprint: any(named: 'requestFingerprint')))
-          .thenAnswer((_) async {});
+      when(
+        () => idempotencyStore.set(any(), any(), any(), requestFingerprint: any(named: 'requestFingerprint')),
+      ).thenAnswer((_) async {});
 
       await orchestrator.runIdempotentExecution(
         request: request,
@@ -80,8 +81,9 @@ void main() {
       );
 
       when(() => idempotencyStore.getRecord(any())).thenAnswer((_) async => null);
-      when(() => idempotencyStore.set(any(), any(), any(), requestFingerprint: any(named: 'requestFingerprint')))
-          .thenAnswer((_) async {});
+      when(
+        () => idempotencyStore.set(any(), any(), any(), requestFingerprint: any(named: 'requestFingerprint')),
+      ).thenAnswer((_) async {});
 
       await orchestrator.runIdempotentExecution(
         request: request,

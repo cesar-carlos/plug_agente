@@ -10,13 +10,12 @@ class ElevatedBridgeArtifactsPeriodicPurge {
     ElevatedBridgeArtifactsExpiredPurge purge, {
     Duration interval = AgentActionElevatedConstants.bridgeArtifactPurgeInterval,
   }) : _runner = PeriodicPurgeRunner(
-          purge: () => purge(),
-          interval: interval,
-          logName: 'elevated_bridge_artifacts_periodic_purge',
-          successLogMessage: (int count) =>
-              'Purged $count stale elevated bridge artifact file(s) (periodic)',
-          failureLogMessage: 'Periodic elevated bridge artifact purge failed (continuing)',
-        );
+         purge: () => purge(),
+         interval: interval,
+         logName: 'elevated_bridge_artifacts_periodic_purge',
+         successLogMessage: (int count) => 'Purged $count stale elevated bridge artifact file(s) (periodic)',
+         failureLogMessage: 'Periodic elevated bridge artifact purge failed (continuing)',
+       );
 
   final PeriodicPurgeRunner _runner;
 

@@ -200,7 +200,8 @@ abstract final class SocketTransportConstants {
   static const int defaultSigningIsolateThresholdBytes = 64 * 1024;
 
   static int get signingIsolateThresholdBytes =>
-      ConnectionConstantsEnv.positiveInt('TRANSPORT_SIGNING_ISOLATE_THRESHOLD_BYTES') ?? defaultSigningIsolateThresholdBytes;
+      ConnectionConstantsEnv.positiveInt('TRANSPORT_SIGNING_ISOLATE_THRESHOLD_BYTES') ??
+      defaultSigningIsolateThresholdBytes;
 
   /// Default credit advertised in
   /// `agent:capabilities.extensions.recommendedStreamPullWindowSize`.
@@ -215,7 +216,8 @@ abstract final class SocketTransportConstants {
   /// `AGENT_STREAM_PULL_WINDOW_RECOMMENDED` (positive integer); clamped to
   /// `[1..maxBackpressureChunkQueueSize]`.
   static int get recommendedStreamPullWindowSize {
-    final raw = ConnectionConstantsEnv.positiveInt('AGENT_STREAM_PULL_WINDOW_RECOMMENDED') ??
+    final raw =
+        ConnectionConstantsEnv.positiveInt('AGENT_STREAM_PULL_WINDOW_RECOMMENDED') ??
         defaultRecommendedStreamPullWindowSize;
     return raw.clamp(1, maxBackpressureChunkQueueSize);
   }

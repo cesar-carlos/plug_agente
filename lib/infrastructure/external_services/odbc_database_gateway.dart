@@ -540,8 +540,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     String? databaseOverride,
   }) {
     final override = databaseOverride?.trim() ?? '';
-    final cacheKey =
-        '${config.id}:${config.updatedAt.millisecondsSinceEpoch}:$override';
+    final cacheKey = '${config.id}:${config.updatedAt.millisecondsSinceEpoch}:$override';
     return _connectionStringCache.resolve(
       cacheKey: cacheKey,
       compute: () => _resolveConnectionString(
@@ -564,5 +563,4 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       databaseOverride: databaseOverride,
     );
   }
-
 }

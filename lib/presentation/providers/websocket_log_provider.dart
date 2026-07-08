@@ -33,8 +33,7 @@ class WebSocketMessage {
     required this.event,
     required this.data,
     String? formattedPreview,
-  }) : formattedData =
-           formattedPreview ?? DashboardRpcLogFormatter.computeFormattedData(data, event: event);
+  }) : formattedData = formattedPreview ?? DashboardRpcLogFormatter.computeFormattedData(data, event: event);
 
   final DateTime timestamp;
   final String direction;

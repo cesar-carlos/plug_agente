@@ -133,8 +133,7 @@ class SqlDbStreamingAutoPolicy {
     if (matchesTableAllowlist(normalized)) {
       return DbStreamingAutoReason.allowlist;
     }
-    if (effectiveMaxRows != null &&
-        effectiveMaxRows >= limits.streamingRowThreshold) {
+    if (effectiveMaxRows != null && effectiveMaxRows >= limits.streamingRowThreshold) {
       return DbStreamingAutoReason.largeMaxRows;
     }
     if (largeSqlSignals.any(normalized.contains)) {

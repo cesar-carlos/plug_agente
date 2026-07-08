@@ -13,13 +13,12 @@ class RpcIdempotencyCachePeriodicPurge {
     RpcIdempotencyExpiredPurge purge, {
     Duration interval = ConnectionConstants.rpcIdempotencyExpiredPurgeInterval,
   }) : _runner = PeriodicPurgeRunner(
-          purge: () => purge(),
-          interval: interval,
-          logName: 'rpc_idempotency_cache_periodic_purge',
-          successLogMessage: (int count) =>
-              'Purged $count expired RPC idempotency cache row(s) (periodic)',
-          failureLogMessage: 'Periodic RPC idempotency cache purge failed (continuing)',
-        );
+         purge: () => purge(),
+         interval: interval,
+         logName: 'rpc_idempotency_cache_periodic_purge',
+         successLogMessage: (int count) => 'Purged $count expired RPC idempotency cache row(s) (periodic)',
+         failureLogMessage: 'Periodic RPC idempotency cache purge failed (continuing)',
+       );
 
   final PeriodicPurgeRunner _runner;
 

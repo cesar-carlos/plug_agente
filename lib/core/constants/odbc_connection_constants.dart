@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:plug_agente/core/constants/connection_constants_env.dart';
 import 'package:plug_agente/core/constants/direct_odbc_operation_class.dart';
+
 /// ODBC pool, query, bulk-insert, and direct-connection limits.
 abstract final class OdbcConnectionConstants {
   OdbcConnectionConstants._();

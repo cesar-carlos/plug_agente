@@ -19,7 +19,13 @@ void main() {
       (_) => Stream<rd.Result<QueryResultMultiItem>>.fromIterable([
         const rd.Success(
           QueryResultMultiItem.resultSet(
-            QueryResult(columns: ['v'], rows: [[1]], rowCount: 1),
+            QueryResult(
+              columns: ['v'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
           ),
         ),
         const rd.Success(QueryResultMultiItem.rowCount(3)),
@@ -45,7 +51,13 @@ void main() {
       (_) => Stream<rd.Result<QueryResultMultiItem>>.fromIterable([
         const rd.Success(
           QueryResultMultiItem.resultSet(
-            QueryResult(columns: ['v'], rows: [[1]], rowCount: 1),
+            QueryResult(
+              columns: ['v'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
           ),
         ),
         const rd.Success(QueryResultMultiItem.rowCount(3)),
@@ -86,7 +98,13 @@ void main() {
       (_) => Stream<rd.Result<QueryResultMultiItem>>.fromIterable([
         const rd.Success(
           QueryResultMultiItem.resultSet(
-            QueryResult(columns: ['v'], rows: [[1]], rowCount: 1),
+            QueryResult(
+              columns: ['v'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
           ),
         ),
       ]),

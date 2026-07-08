@@ -10,13 +10,12 @@ class AgentActionRemoteAuditPeriodicPurge {
     AgentActionRemoteAuditExpiredPurge purge, {
     Duration interval = ConnectionConstants.agentActionRemoteAuditPurgeInterval,
   }) : _runner = PeriodicPurgeRunner(
-          purge: () => purge(),
-          interval: interval,
-          logName: 'agent_action_remote_audit_periodic_purge',
-          successLogMessage: (int count) =>
-              'Purged $count old agent action remote audit row(s) (periodic)',
-          failureLogMessage: 'Periodic agent action remote audit purge failed (continuing)',
-        );
+         purge: () => purge(),
+         interval: interval,
+         logName: 'agent_action_remote_audit_periodic_purge',
+         successLogMessage: (int count) => 'Purged $count old agent action remote audit row(s) (periodic)',
+         failureLogMessage: 'Periodic agent action remote audit purge failed (continuing)',
+       );
 
   final PeriodicPurgeRunner _runner;
 

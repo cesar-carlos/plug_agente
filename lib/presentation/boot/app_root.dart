@@ -63,8 +63,7 @@ class _ProviderInitializerState extends State<_ProviderInitializer> {
   @override
   void dispose() {
     final shouldMarkDrainingOnDispose =
-        !_isReassembling &&
-        WidgetsBinding.instance.lifecycleState == AppLifecycleState.detached;
+        !_isReassembling && WidgetsBinding.instance.lifecycleState == AppLifecycleState.detached;
     if (shouldMarkDrainingOnDispose && getIt.isRegistered<AgentActionRuntimeStateGuard>()) {
       final guard = getIt<AgentActionRuntimeStateGuard>();
       if (guard.snapshot.status != AgentActionSubsystemStatus.draining) {
