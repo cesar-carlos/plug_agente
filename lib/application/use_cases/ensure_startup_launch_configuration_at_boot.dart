@@ -42,7 +42,7 @@ class EnsureStartupLaunchConfigurationAtBoot {
       );
     }
 
-    if (!effectiveAutostartLaunch && _repository.startMinimized) {
+    if (!effectiveAutostartLaunch && _repository.startWithWindows && _repository.startMinimized) {
       final missingAutostart = await _hasRegistryEntryMissingAutostart();
       if (missingAutostart) {
         developer.log(

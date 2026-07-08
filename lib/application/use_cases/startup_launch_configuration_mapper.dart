@@ -43,7 +43,7 @@ class StartupLaunchConfigurationMapper {
         StartupLaunchConfigurationOutcomeType.repaired,
       ),
       StartupLaunchConfigurationStatus.needsRepair => const StartupLaunchConfigurationOutcome(
-        StartupLaunchConfigurationOutcomeType.repairFailed,
+        StartupLaunchConfigurationOutcomeType.needsRepair,
       ),
       StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry => const StartupLaunchConfigurationOutcome(
         StartupLaunchConfigurationOutcomeType.repairedWithLegacyEntry,
@@ -60,7 +60,7 @@ class StartupLaunchConfigurationMapper {
     if (failure is StartupServiceFailure) {
       return StartupLaunchConfigurationOutcome(
         StartupLaunchConfigurationOutcomeType.repairFailed,
-        startupFailureCode: failure.code,
+        startupFailureCode: failure.startupCode,
       );
     }
     return const StartupLaunchConfigurationOutcome(

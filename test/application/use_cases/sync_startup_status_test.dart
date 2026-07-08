@@ -55,7 +55,7 @@ void main() {
   test('returns failure when system startup status cannot be read', () async {
     when(() => repository.isStartupServiceAvailable).thenReturn(true);
     when(() => repository.readSystemStartupEnabled()).thenAnswer(
-      (_) async => const Failure(
+      (_) async => Failure(
         StartupServiceFailure(message: 'Registry read failed'),
       ),
     );
@@ -66,7 +66,29 @@ void main() {
     expect(result.exceptionOrNull(), isA<StartupServiceFailure>());
   });
 
-  test('validates launch configuration when stored preference is enabled but system is unhealthy', () async {
+  test('preserves stored preference when startup entry is present but needs repair', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(true);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(false),
+    );
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.needsRepair),
+    );
+
+    final result = await useCase();
+
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull()?.reconciledStartWithWindows, isNull);
+    verify(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).called(1);
+    verifyNever(() => repository.persistStartWithWindows(false));
+  });
+
+  test('reconciles stored preference to disabled when no repairable entry exists', () async {
     when(() => repository.isStartupServiceAvailable).thenReturn(true);
     when(() => repository.startWithWindows).thenReturn(true);
     when(() => repository.readSystemStartupEnabled()).thenAnswer(
@@ -78,7 +100,7 @@ void main() {
     when(
       () => repository.ensureLaunchConfiguration(allowElevation: false),
     ).thenAnswer(
-      (_) async => const Success(StartupLaunchConfigurationStatus.needsRepair),
+      (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
     );
 
     final result = await useCase();

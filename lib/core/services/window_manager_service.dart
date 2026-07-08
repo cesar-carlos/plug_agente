@@ -156,67 +156,23 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
       _logger.i('Showing window...');
 
       await windowManager.setSkipTaskbar(false);
-      await Future<void>.delayed(WindowTimings.showInitialDelay);
 
-      final isMinimized = await windowManager.isMinimized();
-      final isVisible = await windowManager.isVisible();
-
-      _logger.i(
-        'State before show - minimized: $isMinimized, visible: $isVisible',
-      );
-
-      if (isMinimized) {
-        _logger.i('Window is minimized, restoring...');
+      if (await windowManager.isMinimized()) {
         await windowManager.restore();
         await Future<void>.delayed(WindowTimings.showRestoreDelay);
       }
 
-      _logger.i('Calling show()...');
       await windowManager.show();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-
-      final isVisibleAfterShow = await windowManager.isVisible();
-      _logger.i('Visible after show(): $isVisibleAfterShow');
-
-      if (!isVisibleAfterShow) {
-        _logger.w(
-          'Window not visible after show(), trying restore...',
-        );
-        await windowManager.restore();
-        await Future<void>.delayed(WindowTimings.showRestoreDelay);
-        await windowManager.show();
-        await Future<void>.delayed(WindowTimings.showRestoreDelay);
-      }
-
-      _logger.i('Focusing window...');
       await windowManager.focus();
-      await Future<void>.delayed(WindowTimings.showInitialDelay);
-
-      final finalIsVisible = await windowManager.isVisible();
-      final finalIsMinimized = await windowManager.isMinimized();
-      _logger.i(
-        'Window shown - visible: $finalIsVisible, minimized: $finalIsMinimized',
-      );
-
-      if (!finalIsVisible) {
-        _logger.e(
-          'Window still not visible after all show attempts',
-        );
-        await windowManager.restore();
-        await Future<void>.delayed(WindowTimings.showFinalDelay);
-        await windowManager.show();
-        await windowManager.focus();
-      }
-    } on Exception catch (e, stackTrace) {
-      _logger.e('Failed to show window', error: e, stackTrace: stackTrace);
+    } on Exception catch (error, stackTrace) {
+      _logger.e('Failed to show window', error: error, stackTrace: stackTrace);
       try {
-        _logger.i('Trying alternative show path...');
         await windowManager.restore();
         await Future<void>.delayed(WindowTimings.showRestoreDelay);
         await windowManager.show();
         await windowManager.focus();
-      } on Exception catch (e2) {
-        _logger.e('Critical error showing window', error: e2);
+      } on Exception catch (retryError) {
+        _logger.e('Critical error showing window', error: retryError);
         rethrow;
       }
     }

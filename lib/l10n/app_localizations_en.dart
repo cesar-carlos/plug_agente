@@ -3601,7 +3601,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gsStartupLaunchConfigurationRepaired => 'Startup entry repaired.';
 
   @override
-  String get gsStartupLaunchConfigurationRepairFailed => 'Startup entry needs repair';
+  String get gsStartupLaunchConfigurationNeedsRepair => 'Startup entry needs repair.';
+
+  @override
+  String get gsStartupLaunchConfigurationRepairFailed => 'Could not repair startup entry.';
 
   @override
   String get gsStartupLaunchConfigurationRepairedWithLegacyEntry =>
@@ -3618,6 +3621,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gsStartupFailureRegistryWrite => 'Could not write the startup entry.';
+
+  @override
+  String get gsStartupFailureRegistryRead => 'Could not read the startup entry.';
 
   @override
   String get gsStartupFailureDuplicateEntryHint => 'A duplicate legacy installer entry may exist.';

@@ -233,12 +233,14 @@ class _SystemSettingsFeedbackMessage extends StatelessWidget {
 }
 
 bool _showsRepairAction(SystemSettingsNoticeCode code) {
-  return code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed ||
+  return code == SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair ||
+      code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed ||
       code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry;
 }
 
 bool _showsDiagnosticAction(SystemSettingsNoticeCode code) {
-  return code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed ||
+  return code == SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair ||
+      code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed ||
       code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry;
 }
 
@@ -263,12 +265,13 @@ String _translateNotice(AppLocalizations l10n, SystemSettingsNoticeState notice)
   final base = switch (notice.code) {
     SystemSettingsNoticeCode.startupLaunchConfigurationReady => l10n.gsStartupLaunchConfigurationReady,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => l10n.gsStartupLaunchConfigurationRepaired,
+    SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair => l10n.gsStartupLaunchConfigurationNeedsRepair,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => l10n.gsStartupLaunchConfigurationRepairFailed,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry =>
       l10n.gsStartupLaunchConfigurationRepairedWithLegacyEntry,
   };
   final withHint = _appendStartupFailureHint(l10n, base, notice.startupFailureCode);
-  if (notice.code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed &&
+  if (notice.code == SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair &&
       notice.startupFailureCode == null) {
     return '$withHint ${l10n.gsStartupFailureDuplicateEntryHint}';
   }
@@ -293,6 +296,7 @@ String? _startupFailureHint(AppLocalizations l10n, StartupServiceFailureCode? co
     StartupServiceFailureCode.accessDenied => l10n.gsStartupFailureAccessDenied,
     StartupServiceFailureCode.registryDeleteFailed => l10n.gsStartupFailureRegistryDelete,
     StartupServiceFailureCode.registryWriteFailed => l10n.gsStartupFailureRegistryWrite,
+    StartupServiceFailureCode.registryReadFailed => l10n.gsStartupFailureRegistryRead,
     StartupServiceFailureCode.unknown || StartupServiceFailureCode.unsupportedPlatform || null => null,
   };
 }
@@ -301,6 +305,7 @@ AppFeedbackTone _noticeTone(SystemSettingsNoticeState notice) {
   return switch (notice.code) {
     SystemSettingsNoticeCode.startupLaunchConfigurationReady => AppFeedbackTone.info,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => AppFeedbackTone.success,
+    SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair => AppFeedbackTone.warning,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => AppFeedbackTone.warning,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry => AppFeedbackTone.info,
   };
@@ -310,6 +315,7 @@ IconData _noticeIcon(SystemSettingsNoticeState notice) {
   return switch (notice.code) {
     SystemSettingsNoticeCode.startupLaunchConfigurationReady => FluentIcons.info,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepaired => FluentIcons.completed,
+    SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair => FluentIcons.warning,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed => FluentIcons.warning,
     SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry => FluentIcons.info,
   };

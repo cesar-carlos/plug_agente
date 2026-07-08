@@ -62,4 +62,19 @@ void main() {
     expect(outcome.isAutostartLaunch, isTrue);
     verifyNever(() => repository.hasRegistryEntryMissingAutostartForCurrentExecutable());
   });
+
+  test('does not use legacy autostart fallback when start with Windows is disabled', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(false);
+    when(() => repository.startMinimized).thenReturn(true);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(false),
+    );
+
+    final outcome = await useCase(launchArgs: const <String>[]);
+
+    expect(outcome.isAutostartLaunch, isFalse);
+    verifyNever(() => repository.ensureLaunchConfiguration(allowElevation: false));
+    verifyNever(() => repository.hasRegistryEntryMissingAutostartForCurrentExecutable());
+  });
 }

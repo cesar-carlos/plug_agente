@@ -59,6 +59,30 @@ class StartupRegistryEntry {
     return hasAutostartArgument && matchesExpectedExecutable(expectedExecutablePath);
   }
 
+  static StartupRegistryEntry? fromRawValue({
+    required StartupRegistryScope scope,
+    required String valueName,
+    required String rawValue,
+  }) {
+    final trimmed = rawValue.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final executablePath = _parseExecutablePath(trimmed);
+    if (executablePath == null || executablePath.isEmpty) {
+      return null;
+    }
+
+    return StartupRegistryEntry(
+      scope: scope,
+      valueName: valueName,
+      rawValue: trimmed,
+      executablePath: executablePath,
+      arguments: _parseArguments(trimmed),
+    );
+  }
+
   static StartupRegistryEntry? tryParse({
     required StartupRegistryScope scope,
     required String valueName,
@@ -80,17 +104,10 @@ class StartupRegistryEntry {
         return null;
       }
 
-      final executablePath = _parseExecutablePath(rawValue);
-      if (executablePath == null || executablePath.isEmpty) {
-        return null;
-      }
-
-      return StartupRegistryEntry(
+      return fromRawValue(
         scope: scope,
         valueName: valueName,
         rawValue: rawValue,
-        executablePath: executablePath,
-        arguments: _parseArguments(rawValue),
       );
     }
 

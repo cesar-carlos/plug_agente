@@ -6710,10 +6710,16 @@ abstract class AppLocalizations {
   /// **'Startup entry repaired.'**
   String get gsStartupLaunchConfigurationRepaired;
 
+  /// No description provided for @gsStartupLaunchConfigurationNeedsRepair.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup entry needs repair.'**
+  String get gsStartupLaunchConfigurationNeedsRepair;
+
   /// No description provided for @gsStartupLaunchConfigurationRepairFailed.
   ///
   /// In en, this message translates to:
-  /// **'Startup entry needs repair'**
+  /// **'Could not repair startup entry.'**
   String get gsStartupLaunchConfigurationRepairFailed;
 
   /// No description provided for @gsStartupLaunchConfigurationRepairedWithLegacyEntry.
@@ -6745,6 +6751,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not write the startup entry.'**
   String get gsStartupFailureRegistryWrite;
+
+  /// No description provided for @gsStartupFailureRegistryRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the startup entry.'**
+  String get gsStartupFailureRegistryRead;
 
   /// No description provided for @gsStartupFailureDuplicateEntryHint.
   ///

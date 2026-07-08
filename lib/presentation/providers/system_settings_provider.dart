@@ -136,7 +136,9 @@ class SystemSettingsProvider extends ChangeNotifier {
         return outcome.change;
       },
       (failure) {
-        if (failure is domain.Failure) {
+        if (failure is StartupServiceFailure) {
+          _startupError = SystemSettingsFailureMapper.startupFailure(failure);
+        } else if (failure is domain.Failure) {
           _startWithWindows = value;
           _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
         } else {
@@ -164,6 +166,10 @@ class SystemSettingsProvider extends ChangeNotifier {
       return;
     }
     _applyLaunchConfigurationOutcome(outcome);
+    await _syncStartWithWindowsAfterRepair(outcome);
+    if (_isDisposed) {
+      return;
+    }
     _notifyIfActive();
   }
 
@@ -284,6 +290,50 @@ class SystemSettingsProvider extends ChangeNotifier {
   void _applyLaunchConfigurationOutcome(StartupLaunchConfigurationOutcome? outcome) {
     _startupError = null;
     _startupNotice = SystemSettingsFailureMapper.noticeFromLaunchOutcome(outcome);
+  }
+
+  Future<void> _syncStartWithWindowsAfterRepair(StartupLaunchConfigurationOutcome? outcome) async {
+    final type = outcome?.type;
+    if (type == StartupLaunchConfigurationOutcomeType.repairFailed ||
+        type == StartupLaunchConfigurationOutcomeType.needsRepair) {
+      return;
+    }
+
+    final enabledResult = await _repository.readSystemStartupEnabled();
+    if (_isDisposed) {
+      return;
+    }
+
+    await enabledResult.fold(
+      (enabled) async {
+        if (_startWithWindows == enabled) {
+          return;
+        }
+
+        final persistResult = await _repository.persistStartWithWindows(enabled);
+        if (_isDisposed) {
+          return;
+        }
+        persistResult.fold(
+          (_) {
+            _startWithWindows = enabled;
+          },
+          (failure) {
+            _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
+          },
+        );
+      },
+      (failure) async {
+        // The repair itself succeeded; this post-repair reconciliation is
+        // best-effort. Surfacing a "toggle failed" error here would
+        // contradict the repair notice the user just received.
+        developer.log(
+          'Failed to read startup status after repair: $failure',
+          name: 'system_settings_provider',
+          level: 900,
+        );
+      },
+    );
   }
 
   void _notifyIfActive() {

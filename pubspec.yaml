@@ -90,8 +90,6 @@ dependencies:
   fluentui_system_icons: ^1.1.273
   window_manager: ^0.5.1
   tray_manager: ^0.5.2
-  auto_start_flutter: ^1.0.0
-
   # Config/env
   flutter_dotenv: ^6.0.1
 

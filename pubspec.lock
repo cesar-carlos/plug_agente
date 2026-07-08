@@ -49,14 +49,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.0"
-  auto_start_flutter:
-    dependency: "direct main"
-    description:
-      name: auto_start_flutter
-      sha256: "125e29562d19f0ef26ce353d3e6144c5e3dd18d31b9191f590b76b3a4998d063"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
   auto_updater:
     dependency: "direct main"
     description:

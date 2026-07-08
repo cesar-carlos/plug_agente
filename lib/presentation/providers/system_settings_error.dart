@@ -24,6 +24,7 @@ enum SystemSettingsErrorCode {
 enum SystemSettingsNoticeCode {
   startupLaunchConfigurationReady,
   startupLaunchConfigurationRepaired,
+  startupLaunchConfigurationNeedsRepair,
   startupLaunchConfigurationRepairFailed,
   startupLaunchConfigurationRepairedWithLegacyEntry,
 }

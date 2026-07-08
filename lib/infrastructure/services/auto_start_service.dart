@@ -6,6 +6,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
 import 'package:plug_agente/infrastructure/services/windows_elevated_registry_executor.dart';
+import 'package:plug_agente/infrastructure/services/windows_startup_run_value_reader.dart';
 import 'package:result_dart/result_dart.dart';
 
 typedef ProcessRunner =
@@ -32,12 +33,14 @@ class AutoStartService implements IStartupService {
     WindowsPlatformResolver? isWindows,
     ExecutablePathProvider? executablePathProvider,
     WindowsElevatedRegistryExecutor? elevatedRegistryExecutor,
+    IStartupRunValueRegistryReader? registryReader,
   }) : _processRunner = processRunner ?? Process.run,
        _processStarter = processStarter ?? _defaultProcessStarter,
        _isWindows = isWindows ?? (() => Platform.isWindows),
        _executablePathProvider = executablePathProvider ?? (() => Platform.resolvedExecutable),
        _elevatedRegistryExecutor =
-           elevatedRegistryExecutor ?? WindowsElevatedRegistryExecutor(processRunner: processRunner);
+           elevatedRegistryExecutor ?? WindowsElevatedRegistryExecutor(processRunner: processRunner),
+       _registryReader = registryReader ?? const Win32StartupRunValueRegistryReader();
 
   static const String runValueName = 'Plug Agente';
 
@@ -46,6 +49,7 @@ class AutoStartService implements IStartupService {
   final WindowsPlatformResolver _isWindows;
   final ExecutablePathProvider _executablePathProvider;
   final WindowsElevatedRegistryExecutor _elevatedRegistryExecutor;
+  final IStartupRunValueRegistryReader _registryReader;
 
   @override
   Future<Result<bool>> isEnabled() async {
@@ -67,6 +71,15 @@ class AutoStartService implements IStartupService {
       );
 
       return Success(enabled);
+    } on StartupServiceFailure catch (error, stackTrace) {
+      developer.log(
+        'Failed to query auto-start status',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(error);
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to query auto-start status',
@@ -93,7 +106,16 @@ class AutoStartService implements IStartupService {
     }
 
     try {
-      return _evaluateLaunchConfiguration(allowElevation: allowElevation);
+      return await _evaluateLaunchConfiguration(allowElevation: allowElevation);
+    } on StartupServiceFailure catch (error, stackTrace) {
+      developer.log(
+        'Failed to validate auto-start launch configuration',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(error);
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to validate auto-start launch configuration',
@@ -149,10 +171,10 @@ class AutoStartService implements IStartupService {
   @override
   Future<Result<Unit>> enable() async {
     if (!_isWindows()) {
-      return const Failure(
+      return Failure(
         StartupServiceFailure(
           message: 'Auto-start is not supported on this platform.',
-          code: StartupServiceFailureCode.unsupportedPlatform,
+          startupCode: StartupServiceFailureCode.unsupportedPlatform,
         ),
       );
     }
@@ -172,7 +194,16 @@ class AutoStartService implements IStartupService {
         return const Success(unit);
       }
 
-      return _writeStartupEntry(StartupRegistryScope.currentUser);
+      return await _writeStartupEntry(StartupRegistryScope.currentUser);
+    } on StartupServiceFailure catch (error, stackTrace) {
+      developer.log(
+        'Failed to enable auto-start',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(error);
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to enable auto-start',
@@ -213,6 +244,15 @@ class AutoStartService implements IStartupService {
         level: 800,
       );
       return const Success(unit);
+    } on StartupServiceFailure catch (error, stackTrace) {
+      developer.log(
+        'Failed to disable auto-start',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(error);
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to disable auto-start',
@@ -286,6 +326,15 @@ class AutoStartService implements IStartupService {
         return entry.matchesExpectedExecutable(expectedExecutable) && !entry.hasAutostartArgument;
       });
       return Success(hasUnhealthyEntry);
+    } on StartupServiceFailure catch (error, stackTrace) {
+      developer.log(
+        'Failed to inspect startup registry entry health',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(error);
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to inspect startup registry entry health',
@@ -306,10 +355,10 @@ class AutoStartService implements IStartupService {
   @override
   Future<Result<String>> buildStartupDiagnosticReport() async {
     if (!_isWindows()) {
-      return const Failure(
+      return Failure(
         StartupServiceFailure(
           message: 'Startup diagnostics are only available on Windows.',
-          code: StartupServiceFailureCode.unsupportedPlatform,
+          startupCode: StartupServiceFailureCode.unsupportedPlatform,
         ),
       );
     }
@@ -333,6 +382,10 @@ class AutoStartService implements IStartupService {
             ..writeln('  Has autostart arg: ${entry.hasAutostartArgument}')
             ..writeln('  Healthy for current exe: ${entry.isHealthyFor(expectedExecutable)}')
             ..writeln('  Raw value: ${entry.rawValue}');
+        } else if (result.readResult.status == StartupRunValueReadStatus.failed) {
+          buffer.writeln('  Read failed (Win32 status: ${result.readResult.nativeStatus})');
+        } else if (result.readResult.status == StartupRunValueReadStatus.accessDenied) {
+          buffer.writeln('  Read denied (Win32 status: ${result.readResult.nativeStatus})');
         }
         buffer.writeln();
       }
@@ -341,6 +394,15 @@ class AutoStartService implements IStartupService {
       buffer.writeln('Needs repair: ${_needsRepair(existing)}');
 
       return Success(buffer.toString().trimRight());
+    } on StartupServiceFailure catch (error, stackTrace) {
+      developer.log(
+        'Failed to build startup diagnostic report',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(error);
     } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to build startup diagnostic report',
@@ -361,24 +423,43 @@ class AutoStartService implements IStartupService {
   Future<List<_StartupRegistryQueryResult>> _queryStartupRegistry() async {
     final results = <_StartupRegistryQueryResult>[];
     for (final scope in StartupRegistryScope.values) {
-      final result = await _runRegCommand(<String>[
-        'query',
-        scope.runKeyPath,
-        '/v',
-        runValueName,
-      ]);
-      final output = '${result.stdout}\n${result.stderr}';
+      final readResult = _registryReader.read(
+        scope: scope,
+        valueName: runValueName,
+      );
+
+      switch (readResult.status) {
+        case StartupRunValueReadStatus.accessDenied:
+          throw StartupServiceFailure(
+            message: 'Permission denied when querying auto-start in ${scope.label}.',
+            startupCode: StartupServiceFailureCode.accessDenied,
+            registryScopeLabel: scope.label,
+            nativeStatus: readResult.nativeStatus,
+          );
+        case StartupRunValueReadStatus.failed:
+          throw StartupServiceFailure(
+            message: 'Failed when querying auto-start in ${scope.label}.',
+            startupCode: StartupServiceFailureCode.registryReadFailed,
+            registryScopeLabel: scope.label,
+            nativeStatus: readResult.nativeStatus,
+          );
+        case StartupRunValueReadStatus.notFound:
+        case StartupRunValueReadStatus.found:
+          break;
+      }
+
+      final rawValue = readResult.value;
       results.add(
         _StartupRegistryQueryResult(
           scope: scope,
-          result: result,
-          entry: result.exitCode == 0
-              ? StartupRegistryEntry.tryParse(
+          readResult: readResult,
+          entry: rawValue == null
+              ? null
+              : StartupRegistryEntry.fromRawValue(
                   scope: scope,
                   valueName: runValueName,
-                  output: output,
-                )
-              : null,
+                  rawValue: rawValue,
+                ),
         ),
       );
     }
@@ -629,7 +710,7 @@ class AutoStartService implements IStartupService {
     );
     return StartupServiceFailure(
       message: message,
-      code: code,
+      startupCode: code,
       registryScopeLabel: scope.label,
     );
   }
@@ -676,13 +757,13 @@ class AutoStartService implements IStartupService {
 class _StartupRegistryQueryResult {
   const _StartupRegistryQueryResult({
     required this.scope,
-    required this.result,
+    required this.readResult,
     required this.entry,
   });
 
   final StartupRegistryScope scope;
-  final ProcessResult result;
+  final StartupRunValueReadResult readResult;
   final StartupRegistryEntry? entry;
 
-  bool get exists => result.exitCode == 0;
+  bool get exists => readResult.status == StartupRunValueReadStatus.found;
 }

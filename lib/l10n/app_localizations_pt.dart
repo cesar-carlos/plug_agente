@@ -3612,7 +3612,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gsStartupLaunchConfigurationRepaired => 'Entrada de inicialização reparada.';
 
   @override
-  String get gsStartupLaunchConfigurationRepairFailed => 'Entrada de inicialização precisa de reparo';
+  String get gsStartupLaunchConfigurationNeedsRepair => 'Entrada de inicialização precisa de reparo.';
+
+  @override
+  String get gsStartupLaunchConfigurationRepairFailed => 'Não foi possível reparar a entrada de inicialização.';
 
   @override
   String get gsStartupLaunchConfigurationRepairedWithLegacyEntry =>
@@ -3629,6 +3632,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gsStartupFailureRegistryWrite => 'Não foi possível gravar a entrada de inicialização.';
+
+  @override
+  String get gsStartupFailureRegistryRead => 'Não foi possível ler a entrada de inicialização.';
 
   @override
   String get gsStartupFailureDuplicateEntryHint => 'Pode existir uma entrada antiga do instalador duplicada.';

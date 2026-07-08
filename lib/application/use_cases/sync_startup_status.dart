@@ -27,8 +27,18 @@ class SyncStartupStatus {
           );
         }
 
+        // `needsRepair` means the entry exists but is broken; `repairFailed`
+        // means validation itself failed. Either way the real state is not
+        // "user disabled startup", so the stored preference must survive
+        // until a repair (or an explicit toggle) resolves it.
+        final launchConfigurationType = launchConfiguration?.type;
+        final hasRepairableStoredEntry =
+            stored &&
+            !isEnabled &&
+            (launchConfigurationType == StartupLaunchConfigurationOutcomeType.needsRepair ||
+                launchConfigurationType == StartupLaunchConfigurationOutcomeType.repairFailed);
         bool? reconciled;
-        if (isEnabled != stored) {
+        if (isEnabled != stored && !hasRepairableStoredEntry) {
           developer.log(
             'Startup status out of sync (system: $isEnabled, settings: $stored), updating settings',
             name: 'sync_startup_status',
@@ -45,6 +55,12 @@ class SyncStartupStatus {
                 level: 900,
               );
             },
+          );
+        } else if (hasRepairableStoredEntry) {
+          developer.log(
+            'Startup entry needs repair; preserving stored startup preference until repair completes',
+            name: 'sync_startup_status',
+            level: 800,
           );
         }
 

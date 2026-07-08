@@ -40,6 +40,51 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
       check(entry.matchesExpectedExecutable(r'C:\Program Files\PlugAgente\plug_agente.exe')).equals(false);
     });
 
+    test('should parse REG_EXPAND_SZ reg query output', () {
+      const output = r'''
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+    Plug Agente    REG_EXPAND_SZ    "%ProgramFiles%\PlugAgente\plug_agente.exe" "--autostart"
+''';
+
+      final entry = StartupRegistryEntry.tryParse(
+        scope: StartupRegistryScope.currentUser,
+        valueName: 'Plug Agente',
+        output: output,
+      );
+
+      check(entry).isNotNull();
+      check(entry!.executablePath).equals(r'%ProgramFiles%\PlugAgente\plug_agente.exe');
+      check(entry.hasAutostartArgument).equals(true);
+    });
+
+    test('should treat environment-variable executable paths as unhealthy until repair converges', () {
+      const output = r'''
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+    Plug Agente    REG_EXPAND_SZ    "%ProgramFiles%\PlugAgente\plug_agente.exe" "--autostart"
+''';
+
+      final entry = StartupRegistryEntry.tryParse(
+        scope: StartupRegistryScope.currentUser,
+        valueName: 'Plug Agente',
+        output: output,
+      );
+
+      check(entry).isNotNull();
+      check(entry!.matchesExpectedExecutable(r'C:\Program Files\PlugAgente\plug_agente.exe')).equals(false);
+      check(entry.isHealthyFor(r'C:\Program Files\PlugAgente\plug_agente.exe')).equals(false);
+    });
+
+    test('should parse raw registry value without reg.exe output wrapper', () {
+      final entry = StartupRegistryEntry.fromRawValue(
+        scope: StartupRegistryScope.currentUser,
+        valueName: 'Plug Agente',
+        rawValue: r'"C:\Program Files\PlugAgente\plug_agente.exe" "--autostart"',
+      );
+
+      check(entry).isNotNull();
+      check(entry!.executablePath).equals(r'C:\Program Files\PlugAgente\plug_agente.exe');
+      check(entry.hasAutostartArgument).equals(true);
+    });
     test('should reject partial autostart token', () {
       const output = r'''
 HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run

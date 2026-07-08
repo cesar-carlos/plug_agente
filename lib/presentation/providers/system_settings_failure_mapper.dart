@@ -17,7 +17,7 @@ class SystemSettingsFailureMapper {
       );
       return SystemSettingsErrorState(
         code: SystemSettingsErrorCode.startupToggleFailed,
-        startupFailureCode: failure.code,
+        startupFailureCode: failure.startupCode,
       );
     }
     return const SystemSettingsErrorState(
@@ -36,7 +36,7 @@ class SystemSettingsFailureMapper {
   static SystemSettingsErrorState openSystemSettingsFailure(Object failure) {
     return SystemSettingsErrorState(
       code: SystemSettingsErrorCode.startupOpenSystemSettingsFailed,
-      startupFailureCode: failure is StartupServiceFailure ? failure.code : null,
+      startupFailureCode: failure is StartupServiceFailure ? failure.startupCode : null,
     );
   }
 
@@ -53,7 +53,7 @@ class SystemSettingsFailureMapper {
         StartupLaunchConfigurationOutcomeType.repairFailed =>
           SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
         StartupLaunchConfigurationOutcomeType.needsRepair =>
-          SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed,
+          SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair,
         StartupLaunchConfigurationOutcomeType.repairedWithLegacyEntry =>
           SystemSettingsNoticeCode.startupLaunchConfigurationRepairedWithLegacyEntry,
         StartupLaunchConfigurationOutcomeType.none => SystemSettingsNoticeCode.startupLaunchConfigurationReady,

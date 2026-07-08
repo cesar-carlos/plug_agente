@@ -48,7 +48,7 @@ void main() {
   test('returns failure when system startup toggle fails', () async {
     when(() => repository.isStartupServiceAvailable).thenReturn(true);
     when(() => repository.enableSystemStartup()).thenAnswer(
-      (_) async => const Failure(
+      (_) async => Failure(
         StartupServiceFailure(message: 'Access denied'),
       ),
     );

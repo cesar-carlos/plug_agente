@@ -150,7 +150,7 @@ void main() {
 
     test('should not update settings when startup service fails', () async {
       when(() => mockStartupService.enable()).thenAnswer(
-        (_) async => const Failure(
+        (_) async => Failure(
           StartupServiceFailure(
             message: 'Failed to enable startup',
           ),
@@ -304,7 +304,7 @@ void main() {
       'should surface startup error when startup status sync fails on init',
       () async {
         when(() => mockStartupService.isEnabled()).thenAnswer(
-          (_) async => const Failure(
+          (_) async => Failure(
             StartupServiceFailure(
               message: 'Failed to check startup status',
             ),
@@ -326,7 +326,7 @@ void main() {
 
     test('should set typed error when startup enable fails', () async {
       when(() => mockStartupService.enable()).thenAnswer(
-        (_) async => const Failure(
+        (_) async => Failure(
           StartupServiceFailure(
             message: 'Registry access denied',
           ),
@@ -369,7 +369,7 @@ void main() {
         () => mockStartupService.isEnabled(),
       ).thenAnswer((_) async => const Success(true));
       when(() => mockStartupService.ensureLaunchConfiguration(allowElevation: false)).thenAnswer(
-        (_) async => const Failure(
+        (_) async => Failure(
           StartupServiceFailure(message: 'Missing launch argument'),
         ),
       );
@@ -443,7 +443,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
       check(provider.startupNotice).isNotNull();
-      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed);
+      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair);
       verifyNever(() => mockStartupService.ensureLaunchConfiguration());
     });
 
@@ -459,6 +459,30 @@ void main() {
 
       await provider.repairStartupLaunchConfiguration();
 
+      check(provider.startupNotice).isNotNull();
+      check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepaired);
+    });
+
+    test('should resync startWithWindows after successful startup launch repair', () async {
+      var startupStatusReads = 0;
+      when(() => mockStartupService.isEnabled()).thenAnswer((_) async {
+        startupStatusReads += 1;
+        return Success(startupStatusReads > 1);
+      });
+      when(
+        () => mockStartupService.ensureLaunchConfiguration(),
+      ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
+
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
+        startupService: mockStartupService,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      await provider.repairStartupLaunchConfiguration();
+
+      check(provider.startWithWindows).equals(true);
+      check(prefs.getBool(AppSettingsKeys.startWithWindows)).equals(true);
       check(provider.startupNotice).isNotNull();
       check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepaired);
     });
@@ -523,7 +547,7 @@ void main() {
 
     test('should clear error when clearError is called', () async {
       when(() => mockStartupService.enable()).thenAnswer(
-        (_) async => const Failure(
+        (_) async => Failure(
           StartupServiceFailure(message: 'Test error'),
         ),
       );
@@ -552,7 +576,7 @@ void main() {
 
     test('should set startupOpenSystemSettingsFailed when openSystemSettings fails', () async {
       when(() => mockStartupService.openSystemSettings()).thenAnswer(
-        (_) async => const Failure(
+        (_) async => Failure(
           StartupServiceFailure(message: 'Cannot launch shell'),
         ),
       );
