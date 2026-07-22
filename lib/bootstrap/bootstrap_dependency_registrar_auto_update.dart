@@ -37,12 +37,12 @@ void _registerAutoUpdate(GetIt getIt) {
       () => UpdateCheckIdRecorder(settingsStore: getIt<IAppSettingsStore>()),
     )
     // Throttled diagnostics gateway. The Plug hub method
-    // `agent.autoUpdate.diagnostics.push` is documented as **proposta**
-    // (decisao 3 of plano_auto_update_evolution.md): the agent side is
-    // production-wired but the actual outbound transport is currently a
-    // no-op. When the hub partner ships the method, swap the closure
-    // below for a real RPC sender — every call site in the orchestrator
-    // and coordinator is already in place, so the change is one line.
+    // `agent.autoUpdate.diagnostics.push` remains a **proposta** (Decisao 3
+    // of plano_auto_update_evolution.md): schema exists under
+    // docs/communication/schemas/, but it is intentionally **not** listed in
+    // openrpc.json / rpc.discover until the hub consumes it. Outbound
+    // transport is currently a no-op; when the hub ships the method, swap the
+    // closure below for a real RPC sender and re-add the OpenRPC entry.
     ..registerLazySingleton<IAutoUpdateDiagnosticsGateway>(
       () => ThrottledAutoUpdateDiagnosticsGateway(
         transport: (payload) async {

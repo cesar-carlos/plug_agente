@@ -129,7 +129,7 @@ void main() {
       );
     });
 
-    test('should read idempotency store only once on cache miss', () async {
+    test('should prefetch then re-check idempotency store under lock on cache miss', () async {
       const request = RpcRequest(
         jsonrpc: '2.0',
         method: 'sql.execute',
@@ -143,7 +143,8 @@ void main() {
       final response = await dispatcher.dispatch(request, 'agent-1');
 
       expect(response.isSuccess, isTrue);
-      verify(() => store.getRecord('sql.execute:key-abc')).called(1);
+      // Outer prefetch + exclusive-lock re-check (stagger-safe).
+      verify(() => store.getRecord('sql.execute:key-abc')).called(2);
       verify(
         () => store.set(
           'sql.execute:key-abc',

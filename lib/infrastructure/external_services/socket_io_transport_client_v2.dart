@@ -186,13 +186,16 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
       isConnected: () => _lifecycle.isConnected,
       emitHeartbeat: _emitAgentHeartbeatViaBridge,
       logMessage: _logHeartbeatEventViaBridge,
-      onConnectionStale: () => _onReconnectionNeeded?.call(),
+      onConnectionStale: () {
+        _lifecycle.closeSocket();
+        _onReconnectionNeeded?.call();
+      },
     );
     _heartbeatBridge = SocketIoTransportHeartbeatBridge(
       heartbeat: _heartbeat,
       agentIdProvider: () => _lifecycle.agentId,
       protocolNameProvider: () => _lifecycle.currentProtocol.protocol,
-      emitEvent: _emitEvent,
+      emitEventAsync: _emitEventAsync,
       logMessage: _logMessage,
       decodeIncomingPayload: _decodeIncomingPayloadOrThrow,
     );
@@ -358,7 +361,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
     _pipeline.capabilitiesLifecycleHandler.handle(_pipeline.capabilitiesNegotiator.handleEnvelope(data));
   }
 
-  void _emitAgentHeartbeatViaBridge() => _heartbeatBridge.emitAgentHeartbeat();
+  Future<bool> _emitAgentHeartbeatViaBridge() => _heartbeatBridge.emitAgentHeartbeat();
 
   void _logHeartbeatEventViaBridge(String direction, String event, dynamic data) =>
       _heartbeatBridge.logHeartbeatEvent(direction, event, data);

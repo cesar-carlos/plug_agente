@@ -95,6 +95,8 @@ class RpcResponsePreparer {
       };
     }
     if (!_usesBinaryTransport() && _featureFlags.enablePayloadSigning) {
+      // Unreachable under mandatory binary PayloadFrame transport in production;
+      // retained for the non-binary FeatureFlags path if ever re-enabled.
       final signer = _payloadSigner;
       if (signer != null) {
         json['signature'] = signer.sign(json).toJson();
@@ -334,9 +336,14 @@ class RpcResponsePreparer {
   }
 
   /// Verifies the HMAC signature attached to an inbound JSON-only payload
-  /// (legacy non-binary transport). When signatures are not required, unsigned
-  /// payloads are accepted but signed payloads still must be verifiable.
+  /// (legacy non-binary transport). Under binary transport the frame HMAC is
+  /// already verified by the PayloadFrame codec; logical `signature` is skipped.
+  /// When signatures are not required, unsigned payloads are accepted but
+  /// signed payloads still must be verifiable.
   bool verifyIncomingSignature(Map<String, dynamic> payload) {
+    if (_usesBinaryTransport()) {
+      return true;
+    }
     final sigJson = payload['signature'] as Map<String, dynamic>?;
     final signatureRequired = _protocolProvider().signatureRequired || _featureFlags.requireIncomingPayloadSignatures;
     if (_payloadSigner == null) {

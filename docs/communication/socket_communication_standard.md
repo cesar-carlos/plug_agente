@@ -102,7 +102,7 @@ Cross-references:
 | `sql.cancel`                                                         | implemented (via feature flag)                                                                                             |
 | Streaming chunked                                                    | implemented (`enableSocketStreamingChunks`; default **on**; acima de `streaming_row_threshold`, gated por `streamingResults` negociado)                         |
 | Streaming direto do banco (SELECT sem params)                        | implemented (`enableSocketStreamingFromDb`; default **on**)                                                                |
-| Backpressure                                                         | implemented (`enableSocketBackpressure`; default **off**; `window_size` em `rpc:stream.pull`)                              |
+| Backpressure                                                         | implemented (`enableSocketBackpressure`; default **on**; `window_size` em `rpc:stream.pull`)                               |
 | Ack explicito de prontidao (`agent:ready`)                           | implemented (agent-side; opcional e retrocompativel)                                                                       |
 | Notification JSON-RPC (sem resposta)                                 | implemented (via feature flag); contrato formal                                                                            |
 | Regras estritas de batch (IDs unicos/ordem)                          | implemented (via feature flag); contrato formal                                                                            |
@@ -139,14 +139,14 @@ Cross-references:
 **Implemented** indica codigo e contrato disponiveis no runtime, nao que a
 funcionalidade esteja ativa em instalacao padrao. Flags abaixo iniciam
 **desligadas** (`FeatureFlags` / preferencias do app):
-`enableSocketBackpressure`, `enablePayloadSigning`, `enableSocketIdempotency`,
+`enablePayloadSigning`, `enableSocketIdempotency`,
 `enableSocketTimeoutByStage`. Flags de protocolo maduro / performance
-(ex.: `enableSocketCancelMethod`, `enableSocketSchemaValidation`,
-`enableClientTokenAuthorization`, `enableSocketStreamingFromDb`,
-`enableSocketStreamingChunks`, `enableSocketDeliveryGuarantees`,
-`enableParallelJsonRpcBatchDispatch`) iniciam **ligadas**. Habilite ou
-desabilite cada flag nas configuracoes do agente quando o hub exigir
-comportamento diferente do default.
+(ex.: `enableSocketBackpressure`, `enableSocketCancelMethod`,
+`enableSocketSchemaValidation`, `enableClientTokenAuthorization`,
+`enableSocketStreamingFromDb`, `enableSocketStreamingChunks`,
+`enableSocketDeliveryGuarantees`, `enableParallelJsonRpcBatchDispatch`)
+iniciam **ligadas**. Habilite ou desabilite cada flag nas configuracoes do
+agente quando o hub exigir comportamento diferente do default.
 
 ## Plug JSON-RPC Profile
 
@@ -206,7 +206,10 @@ handshake.
 | `agent:capabilities`   | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
 | `agent:register_error` | hub -> agente | `{ code, reason, message }` (estrutura JSON, NAO PayloadFrame)          | rejeicao de `agent:register`. Ver tabela de codigos abaixo.                                                                                                |
 | `agent:ready`          | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                 |
-| `rpc:request`          | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response`                                                                                                                                             |
+| `agent:heartbeat`      | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol, trace_id }>`             | liveness periodico (v2); hub responde com `hub:heartbeat_ack` espelhando `trace_id` quando presente                                                        |
+| `hub:heartbeat_ack`    | hub -> agente | `PayloadFrame<{ agent_id?, timestamp?, protocol?, trace_id? }>`         | ack de heartbeat; ausencia prolongada marca sessao stale e aciona reconexao                                                                                |
+| `rpc:request`          | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response` (e acks/streaming conforme flags)                                                                                                           |
+| `rpc:response`         | agente -> hub | `PayloadFrame<JSON-RPC 2.0 response>`                                   | resposta unica ou erro; resultados grandes podem usar `rpc:chunk`/`rpc:complete`                                                                           |
 | `rpc:request_ack`      | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
 | `rpc:batch_ack`        | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`                            | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
 | `rpc:chunk`            | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
@@ -1019,7 +1022,8 @@ O objeto `error.data` segue um formato estruturado para UX e troubleshooting:
 ## Metodo `sql.cancel` (via feature flag)
 
 Quando `enableSocketCancelMethod` esta ativo, o metodo `sql.cancel` permite
-cancelar uma execucao em streaming ativa.
+cancelar uma execucao em streaming ativa ou uma execucao ODBC materializada
+ainda registrada no abort in-flight (nao-streaming).
 
 ### Request
 
@@ -1070,7 +1074,8 @@ sessao `/agents`) nao exigem token no cancelamento.
       "technical_message": "sql.cancel: clientToken does not match the token that started the stream.",
       "correlation_id": "corr-cancel-mismatch",
       "timestamp": "2026-03-12T10:00:04Z",
-      "detail": "sql.cancel: clientToken does not match the token that started the stream."
+      "detail": "sql.cancel: clientToken does not match the token that started the stream.",
+      "subreason": "cancel_token_mismatch"
     }
   }
 }
@@ -1106,6 +1111,10 @@ intervalo.
 }
 ```
 
+Quando o cancelamento aborta uma execucao ODBC materializada registrada
+(in-flight, nao-streaming), o result inclui tambem
+`"via_in_flight_abort": true`.
+
 ### Erro quando execucao nao encontrada
 
 ```json
@@ -1128,10 +1137,14 @@ intervalo.
 }
 ```
 
-**Nota**: O cancelamento aplica-se apenas a execucoes em streaming rastreadas pelo
-runtime quando `enableSocketCancelMethod` esta ativo. Hoje isso cobre o caminho
-de streaming ativo do banco; respostas chunked geradas apos materializacao do
-resultado nao sao cancelaveis por este metodo.
+**Nota**: O cancelamento cobre (1) execucoes em streaming rastreadas pelo
+`SqlStreamingCoordinator` e (2) execucoes ODBC materializadas ainda registradas
+no abort in-flight, quando `enableSocketCancelMethod` esta ativo. Sucesso no
+caminho (2) exige que o handle esteja registrado; IDs desconhecidos continuam
+como `-32109` / `execution_not_found`. Respostas chunked geradas apos
+materializacao sem registro in-flight nao sao cancelaveis por este metodo. O
+ownership de `client_token` aplica-se ao caminho streaming; o abort in-flight
+nao inventa checagem de owner quando o registry nao guarda token.
 
 ## Metodo `agent.getProfile`
 
@@ -1521,6 +1534,7 @@ Exemplo de capacidades anunciadas (alinhado a
   "compressions": ["gzip", "none"],
   "extensions": {
     "batchSupport": true,
+    "bulkInsert": true,
     "binaryPayload": true,
     "transportFrame": "payload-frame/1.0",
     "compressionThreshold": 4096,
@@ -1530,6 +1544,14 @@ Exemplo de capacidades anunciadas (alinhado a
     "signatureScope": "transport-frame",
     "signatureAlgorithms": ["hmac-sha256"],
     "streamingResults": true,
+    "recommendedStreamPullWindowSize": 12,
+    "maxStreamPullWindowSize": 1000,
+    "clientRequestIdEcho": "v1",
+    "agentPhaseTimings": "v1",
+    "healthPiggyback": {
+      "intervalRequests": 50,
+      "freshnessThresholdMs": 5000
+    },
     "agentActions": {
       "enabled": true,
       "version": 1,
@@ -1606,8 +1628,15 @@ Exemplo de capacidades anunciadas (alinhado a
 }
 ```
 
-Quando o backpressure esta ativo, o mesmo bloco `extensions` tambem pode incluir
-`recommendedStreamPullWindowSize` e `maxStreamPullWindowSize`.
+Extensoes de performance (`clientRequestIdEcho`, `agentPhaseTimings`,
+`healthPiggyback`) sao anunciadas pelo agente em
+`ProtocolCapabilities.defaultCapabilities`. Detalhe de consumo no hub:
+[`docs/plug_server/01_transport_extensions.md`](../plug_server/01_transport_extensions.md).
+
+Hints de backpressure (`recommendedStreamPullWindowSize`,
+`maxStreamPullWindowSize`) tambem entram no anuncio padrao; o hub so usa
+`window_size` ativamente quando `enableSocketBackpressure` esta ligado no
+agente.
 
 O mapa `limits` negociado segue a secao "Limites negociados por transporte"; nao
 e repetido neste exemplo.
@@ -1790,135 +1819,47 @@ O agente anuncia limites em `agent:register` via campo `limits` dentro de `capab
 
 Garantir integridade e autenticidade de payloads em transito entre hub e agente.
 
-Guia de cliente (encode/verify): [`socketio_client_binary_transport.md`](socketio_client_binary_transport.md)
-(secao Assinatura e validacao logica).
+**Detalhe normativo de frame, canonicalizacao HMAC, exemplos e ordem de
+verificacao:** [`socketio_client_binary_transport.md`](socketio_client_binary_transport.md)
+(secao Assinatura e validacao logica). Vetores:
+`test/fixtures/payload_signing_test_vectors.json`.
 
-### Mecanismo (implementado)
-
-Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
-
-```json
-{
-  "schemaVersion": "1.0",
-  "enc": "json",
-  "cmp": "gzip",
-  "contentType": "application/json",
-  "originalSize": 1200,
-  "compressedSize": 340,
-  "payload": "<binary>",
-  "traceId": "trace-123",
-  "requestId": "req-123",
-  "signature": {
-    "alg": "hmac-sha256",
-    "value": "base64-encoded-hmac",
-    "key_id": "shared-key-01"
-  }
-}
-```
-
-### Campos
-
-
-| Campo              | Tipo   | Descricao                       |
-| ------------------ | ------ | ------------------------------- |
-| `signature.alg`    | string | Algoritmo (ex.: `hmac-sha256`)  |
-| `signature.value`  | string | Assinatura codificada em base64 |
-| `signature.key_id` | string | Identificador da chave usada    |
-
-
-### Regras
+### Politica (contrato)
 
 - **Opcional antes da negociacao obrigatoria**: o emissor pode omitir
-`signature`; o receptor aceita sem verificar enquanto a sessao nao exigir
-assinatura.
-- **Verificacao**: quando presente, o receptor **deve** verificar. Se invalida,
-retorna `-32001` (`Authentication failed`) com `error.data.reason`:
-`invalid_signature` (frame de transporte ou assinatura legada no JSON logico).
-Se o frame vier assinado e o receptor nao tiver chave para verificar, o frame
-tambem e rejeitado como assinatura invalida.
-- **Politica negociada**: depois de `agent:capabilities`, o valor negociado
-`signatureRequired` e autoritativo. Se o hub exigir assinatura e o agente nao
-tiver signer configurado ou algoritmo comum, a negociacao falha explicitamente.
-- **Escopo principal**: a assinatura cobre `schemaVersion`, `enc`, `cmp`,
-`contentType`, tamanhos, `traceId`, `requestId` e os bytes do `payload`.
-- **Canonicalizacao**: o HMAC usa JSON canonico UTF-8 sem espacos, com chaves de
-objetos ordenadas lexicograficamente em todos os niveis. No `PayloadFrame`, o
-campo `payload` entra na entrada canonica como base64 dos bytes transmitidos e
-o campo `signature` nunca participa da assinatura.
-- **Compatibilidade**: quando o modo binario estiver desativado por feature
-flag, a assinatura legada sobre o payload logico JSON continua sendo aceita.
-- **`signatureScope`**: valor negociado `transport-frame` indica que a politica
-de `signatureRequired` se aplica a assinatura do `PayloadFrame` (camada 1).
-Assinatura no envelope JSON logico (camada 2) e compatibilidade legada e nao e
-anunciada por `signatureScope`.
-- **Algoritmos suportados**: `hmac-sha256` (inicial). Extensivel para `ed25519` no futuro.
-- **Key management**: chaves compartilhadas ficam no secure storage local. As
-variaveis `PAYLOAD_SIGNING_KEY`/`PAYLOAD_SIGNING_KEY_ID` continuam aceitas para
-bootstrap legado e sao migradas para storage seguro quando possivel.
-`PAYLOAD_SIGNING_KEYS_JSON` ou `PAYLOAD_SIGNING_KEYS` permitem multiplas chaves;
-`PAYLOAD_SIGNING_ACTIVE_KEY_ID` define a chave ativa de assinatura. O agente
-assina com a chave ativa e verifica com qualquer `key_id` configurado.
-
-### Frame vs logical signing (hub implementer)
-
-Duas camadas de assinatura existem; **nao misture ambas na mesma mensagem**.
-
-1. **Frame de transporte** (`PayloadFrame.signature`): padrao para todo trafego
-   Socket.IO apos `agent:capabilities` com `binaryPayload` e `transportFrame`.
-   O hub verifica **antes** de descomprimir/decodificar. Entrada canonica =
-   campos do frame + base64 dos bytes em `payload`; exclua `signature`.
-2. **JSON logico** (`signature` no topo do JSON-RPC decodificado): **somente
-   legado** quando o `PayloadFrame` binario nao e usado. O hub verifica **depois**
-   do decode JSON, antes do dispatch RPC.
-
-No contrato atual, sessoes exigem frames binarios — implemente **somente a
-camada 1**. A camada 2 existe para retrocompatibilidade.
-
-Ambas as falhas retornam `-32001` / `reason: invalid_signature`; use logs ou
-estagio da validacao (decode do frame vs validacao RPC) para distinguir.
-
-`signatureRequired` negociado aplica-se a assinatura de **frame** em modo
-binario; assinatura logica segue `enablePayloadSigning` apenas quando o
-transporte binario esta desligado.
-
-Vetores de contrato: `test/fixtures/payload_signing_test_vectors.json`. Ordem
-de recebimento recomendada: ver secao "Assinatura e validacao logica" em
-`docs/communication/socketio_client_binary_transport.md`.
+  `signature`; o receptor aceita sem verificar enquanto a sessao nao exigir
+  assinatura.
+- **Verificacao**: quando presente, o receptor **deve** verificar. Assinatura
+  invalida ou frame assinado sem chave local para verificar retorna `-32001`
+  (`Authentication failed`) com `error.data.reason`: `invalid_signature`.
+- **Politica negociada**: apos `agent:capabilities`, `signatureRequired` e
+  autoritativo. Se o hub exigir assinatura e o agente nao tiver signer /
+  algoritmo comum, a negociacao falha explicitamente.
+- **Escopo negociado**: `signatureScope: transport-frame` — assinatura cobre o
+  `PayloadFrame` (camada fisica). Assinatura no JSON logico e somente legado
+  quando o transporte binario nao e usado; o runtime atual exige frames
+  binarios.
+- **Algoritmo**: `hmac-sha256` (inicial). Extensivel para `ed25519` no futuro.
+- **Key management**: chaves em secure storage local; bootstrap legado via
+  `PAYLOAD_SIGNING_KEY` / `PAYLOAD_SIGNING_KEY_ID`; multiplas chaves via
+  `PAYLOAD_SIGNING_KEYS_JSON` ou `PAYLOAD_SIGNING_KEYS`; ativa via
+  `PAYLOAD_SIGNING_ACTIVE_KEY_ID`.
 
 ### Feature flag
 
-- `enablePayloadSigning`: quando ativo, o agente assina frames de saida apenas
-se houver signer configurado e algoritmo compartilhado negociado. Antes de
-`agent:capabilities`, assinatura outbound opcional fica desativada para evitar
-quebrar hubs sem chave; o agente so assina antes da negociacao quando a
-configuracao local exige assinaturas inbound.
-- `requireIncomingPayloadSignatures`: quando ativo, o agente exige assinatura em
-frames de entrada antes da negociacao. Apos `agent:capabilities`, prevalece
-`signatureRequired` negociado.
+- `enablePayloadSigning` (default **off**): assina frames de saida quando houver
+  signer e algoritmo compartilhado negociado. Antes de `agent:capabilities`,
+  assinatura outbound opcional fica desativada salvo se a config local exigir
+  assinaturas inbound.
+- `requireIncomingPayloadSignatures`: exige assinatura inbound antes da
+  negociacao; apos `agent:capabilities`, prevalece `signatureRequired`.
 
-### Implementacao
+### Implementacao (agente)
 
-- Classe `PayloadSigner` em `infrastructure/security/payload_signer.dart`.
-- Canonicalizacao em `infrastructure/security/payload_signing_canonicalizer.dart`.
-- Chaves resolvidas por `PayloadSigningKeyResolver`: secure storage local,
-bootstrap por env legado e suporte a multiplas chaves para rotacao.
-- Rotacao controlada: `PayloadSigningConfig` oferece operacoes atomicas locais
-para adicionar chave, ativar `key_id` existente e remover chave antiga
-(`upsertKey`, `activateKey`, `removeKey`). Persistir o resultado via
-`PayloadSigningKeyStore.save()` antes de exigir a chave nova no hub.
-- Integrado ao `SocketIOTransportClientV2`: assina frames enviados e verifica
-frames recebidos.
-- Diagnostico visivel no tracer WebSocket: evento
-`payload_signing:diagnostic` com estado de signer, fonte da chave, `key_id`
-ativo, quantidade de chaves e politica negociada, sem expor segredos.
-- O diagnostico tambem inclui um bloco `health` derivado de
-`PayloadSigningDiagnostics`, com status (`ok`, `warning`, `error`), issues
-acionaveis, estado de rotacao (`rotation_ready`) e disponibilidade de secure
-storage. A UI de configuracao exibe esses alertas antes de conectar.
-- Vetores de contrato HMAC em `test/fixtures/payload_signing_test_vectors.json`
-para alinhamento com o hub.
-- Comparacao constant-time para prevenir timing attacks.
-- Feature flag `enablePayloadSigning` (default `false`).
+- `PayloadSigner`, `payload_signing_canonicalizer.dart`,
+  `PayloadSigningKeyResolver`, `PayloadSigningConfig` (rotacao local).
+- Integrado ao `SocketIOTransportClientV2` (sign/verify de frames).
+- Diagnostico no tracer: evento `payload_signing:diagnostic` (sem segredos).
 
 ## Limites operacionais atuais
 
@@ -2018,9 +1959,10 @@ nao expuser `streamingResults`.
   nomes simples (`users`) e nomes qualificados (`public.users`), separados por
   virgula. CTEs, joins e subqueries exigem `options.prefer_db_streaming=true`
   para evitar roteamento automatico por heuristica parcial.
-- Backpressure: opt-in via `enableSocketBackpressure` (default **off**); o hub
-envia `rpc:stream.pull` com `window_size` para controlar quantos chunks o
-agente envia por vez; credito inicial de 1 chunk.
+- Backpressure: `enableSocketBackpressure` (default **on**); o hub envia
+`rpc:stream.pull` com `window_size` para controlar quantos chunks o agente
+envia por vez; credito inicial de 1 chunk. Desligue a flag apenas se o hub
+nao emitir pulls e o passthrough unbounded for aceitavel.
 - `api_version`/`meta` disponiveis via feature flag `enableSocketApiVersionMeta`;
 contrato formal na secao "api_version e meta".
 - `agent:ready` e enviado apos `agent:capabilities` como ack explicito de
@@ -2196,6 +2138,13 @@ Pendencias: [`socket_communication_backlog.md`](socket_communication_backlog.md)
 
 - `docs/communication/schemas/payload-frame.schema.json`
 
+### Propostas / auxiliar (fora do `rpc.discover` ate o hub consumir)
+
+- `docs/communication/schemas/auto_update_diagnostics.schema.json` — params de
+  `agent.autoUpdate.diagnostics.push` (proposta; ver backlog).
+- `docs/communication/schemas/silent_update_launcher_status.schema.json` —
+  status do helper nativo de silent update (nao e metodo RPC Socket).
+
 ### OpenRPC
 
 - `docs/communication/openrpc.json` — descoberta dos metodos via
@@ -2203,6 +2152,8 @@ Pendencias: [`socket_communication_backlog.md`](socket_communication_backlog.md)
   `flutter test test/docs/openrpc_contract_test.dart` (versao do documento,
   metodos publicados, schemas referenciados e exemplos coerentes com os
   schemas em `docs/communication/schemas/`).
+  Nota: `agent.action.run` reutiliza o schema de result de
+  `agent.action.getExecution` no MVP.
 
 ### Fixtures de contrato (JSON-RPC)
 

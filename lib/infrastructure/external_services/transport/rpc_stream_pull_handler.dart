@@ -1,6 +1,7 @@
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
+import 'package:plug_agente/core/logger/log_rate_limiter.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
@@ -40,6 +41,7 @@ class RpcStreamPullHandler {
   final void Function(String direction, String event, dynamic data) _logMessage;
   final MetricsCollector? _metricsCollector;
   final StreamEmitterRegistry _streamEmitters;
+  final LogRateLimiter _pullWarningLimiter = LogRateLimiter();
 
   IRpcStreamEmitter createStreamEmitter() {
     if (!_featureFlags.enableSocketBackpressure) {
@@ -86,6 +88,14 @@ class RpcStreamPullHandler {
       if (emitter != null) {
         _streamEmitters.touch(pull.streamId);
         emitter.releaseChunks(pull.windowSize);
+      } else if (!_featureFlags.enableSocketBackpressure) {
+        if (_pullWarningLimiter.shouldLog('rpc_stream_pull_passthrough')) {
+          AppLogger.warning(
+            'Ignoring rpc:stream.pull under passthrough streaming '
+            '(enableSocketBackpressure=false); credits are not applied. '
+            'stream_id=${pull.streamId}',
+          );
+        }
       }
     } on Object catch (error, stackTrace) {
       AppLogger.warning(
@@ -107,12 +117,7 @@ class RpcStreamPullHandler {
     if (_featureFlags.enableSocketSchemaValidation) {
       Result<void> validation;
       if (event == 'rpc:chunk') {
-        final chunkIndex = payload['chunk_index'];
-        if (chunkIndex is int && chunkIndex > 0) {
-          validation = const Success(unit);
-        } else {
-          validation = _contractValidator.validateStreamChunk(payload);
-        }
+        validation = _contractValidator.validateStreamChunk(payload);
       } else if (event == 'rpc:complete') {
         validation = _contractValidator.validateStreamComplete(payload);
       } else {

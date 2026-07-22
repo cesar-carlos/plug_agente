@@ -1,36 +1,32 @@
 import 'package:plug_agente/core/logger/app_logger.dart';
-import 'package:plug_agente/infrastructure/external_services/external_services.dart' show SocketIOTransportClientV2;
 import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat_controller.dart';
-import 'package:plug_agente/infrastructure/external_services/socket_io_transport_client_v2.dart'
-    show SocketIOTransportClientV2;
-import 'package:plug_agente/infrastructure/infrastructure.dart' show SocketIOTransportClientV2;
 
-/// Heartbeat emit/ack wiring extracted from [SocketIOTransportClientV2].
+/// Heartbeat emit/ack wiring extracted from the Socket.IO transport client.
 final class SocketIoTransportHeartbeatBridge {
   SocketIoTransportHeartbeatBridge({
     required SocketIoHeartbeatController heartbeat,
     required String Function() agentIdProvider,
     required String Function() protocolNameProvider,
-    required void Function(String event, dynamic payload) emitEvent,
+    required Future<bool> Function(String event, dynamic payload) emitEventAsync,
     required void Function(String direction, String event, dynamic data) logMessage,
     required dynamic Function(dynamic data, {required String sourceEvent}) decodeIncomingPayload,
   }) : _heartbeat = heartbeat,
        _agentIdProvider = agentIdProvider,
        _protocolNameProvider = protocolNameProvider,
-       _emitEvent = emitEvent,
+       _emitEventAsync = emitEventAsync,
        _logMessage = logMessage,
        _decodeIncomingPayload = decodeIncomingPayload;
 
   final SocketIoHeartbeatController _heartbeat;
   final String Function() _agentIdProvider;
   final String Function() _protocolNameProvider;
-  final void Function(String event, dynamic payload) _emitEvent;
+  final Future<bool> Function(String event, dynamic payload) _emitEventAsync;
   final void Function(String direction, String event, dynamic data) _logMessage;
   final dynamic Function(dynamic data, {required String sourceEvent}) _decodeIncomingPayload;
 
   SocketIoHeartbeatController get heartbeat => _heartbeat;
 
-  void emitAgentHeartbeat() {
+  Future<bool> emitAgentHeartbeat() {
     final agentId = _agentIdProvider();
     final traceId = '${DateTime.now().microsecondsSinceEpoch}-${agentId.hashCode.toUnsigned(20).toRadixString(16)}';
     final payload = <String, dynamic>{
@@ -39,7 +35,7 @@ final class SocketIoTransportHeartbeatBridge {
       'protocol': _protocolNameProvider(),
       'trace_id': traceId,
     };
-    _emitEvent('agent:heartbeat', payload);
+    return _emitEventAsync('agent:heartbeat', payload);
   }
 
   void logHeartbeatEvent(String direction, String event, dynamic data) {

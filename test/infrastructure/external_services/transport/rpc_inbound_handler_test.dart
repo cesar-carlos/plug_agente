@@ -1337,6 +1337,23 @@ void main() {
       expect(emittedEvents.any((e) => e.event == 'rpc:batch_ack'), isFalse);
     });
 
+    test('does not emit request_ack when guard rejects replay', () async {
+      final wire = await frameRequest('ack-replay');
+
+      await handler.handleRequest(wire);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      emittedEvents.clear();
+
+      await handler.handleRequest(wire);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+
+      expect(emittedEvents.any((e) => e.event == 'rpc:request_ack'), isFalse);
+      expect(emittedEvents.any((e) => e.event == 'rpc:batch_ack'), isFalse);
+      expect(emittedResponses, isNotEmpty);
+      final replayResponse = emittedResponses.last as RpcResponse;
+      expect(replayResponse.error, isNotNull);
+    });
+
     test('resetAckBuffer drops queued acks without emitting after the timer', () async {
       final wire = await frameRequest('ack-reset');
 

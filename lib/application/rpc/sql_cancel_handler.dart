@@ -110,12 +110,17 @@ class SqlCancelHandler {
       if (abortPort != null) {
         final abortResult = await abortPort.abortInFlightExecution(abortTargetId);
         return abortResult.fold(
-          (_) => _cancelSuccessResponse(
-            request: request,
-            executionId: executionId,
-            requestId: requestId,
-            viaInFlightAbort: true,
-          ),
+          (aborted) {
+            if (!aborted) {
+              return _support.executionNotFound(request);
+            }
+            return _cancelSuccessResponse(
+              request: request,
+              executionId: executionId,
+              requestId: requestId,
+              viaInFlightAbort: true,
+            );
+          },
           (failure) {
             final rpcError = FailureToRpcErrorMapper.map(
               failure as domain.Failure,

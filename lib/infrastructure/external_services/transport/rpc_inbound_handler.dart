@@ -321,14 +321,6 @@ class RpcInboundHandler {
         return;
       }
 
-      if (_featureFlags.enableSocketDeliveryGuarantees && !request.isNotification) {
-        // Ack means "accepted for processing", not "dispatch completed".
-        // The hub may receive this before ODBC work finishes; see delivery guarantees doc.
-        final wireAckId = resolveRpcWireAckId(request);
-        if (wireAckId != null) {
-          _ackCoalescer.scheduleAck(wireAckId);
-        }
-      }
       socketAck?.call();
       latencyTrace?.markPreDispatchComplete();
 
@@ -345,6 +337,16 @@ class RpcInboundHandler {
           methodsById: <Object?, String>{request.id: request.method},
         );
         return;
+      }
+
+      if (_featureFlags.enableSocketDeliveryGuarantees && !request.isNotification) {
+        // Ack means "accepted for processing" after guard checks (rate-limit /
+        // replay), not "dispatch completed". The hub may still receive this
+        // before ODBC work finishes; see delivery guarantees doc.
+        final wireAckId = resolveRpcWireAckId(request);
+        if (wireAckId != null) {
+          _ackCoalescer.scheduleAck(wireAckId);
+        }
       }
 
       final clientToken = extractClientTokenFromRpcParams(request.params);

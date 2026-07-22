@@ -47,16 +47,29 @@ class PayloadFrameCodec {
   final LogRateLimiter _warningLimiter = LogRateLimiter();
 
   /// Returns `true` when [payload] looks like a [PayloadFrame] envelope
-  /// (cheap structural sniff, used to differentiate transport frames from
-  /// legacy raw JSON-RPC payloads).
+  /// (cheap structural sniff). Non-frames are rejected by decode after
+  /// negotiation; this does not accept legacy raw JSON-RPC payloads.
   bool looksLikePayloadFrame(dynamic payload) {
-    return payload is Map<String, dynamic> &&
-        payload.containsKey('schemaVersion') &&
-        payload.containsKey('enc') &&
-        payload.containsKey('cmp') &&
-        payload.containsKey('payload') &&
-        payload.containsKey('originalSize') &&
-        payload.containsKey('compressedSize');
+    final map = _asStringKeyedMap(payload);
+    if (map == null) {
+      return false;
+    }
+    return map.containsKey('schemaVersion') &&
+        map.containsKey('enc') &&
+        map.containsKey('cmp') &&
+        map.containsKey('payload') &&
+        map.containsKey('originalSize') &&
+        map.containsKey('compressedSize');
+  }
+
+  Map<String, dynamic>? _asStringKeyedMap(dynamic payload) {
+    if (payload is Map<String, dynamic>) {
+      return payload;
+    }
+    if (payload is Map) {
+      return Map<String, dynamic>.from(payload);
+    }
+    return null;
   }
 
   /// Whether outgoing transport frames must carry an HMAC signature.
@@ -203,7 +216,7 @@ class PayloadFrameCodec {
 
     final protocol = _protocolProvider();
     try {
-      final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
+      final frame = PayloadFrame.fromJson(_requireFrameMap(payload));
       final validationResult = _validateFrameAgainstLocalCapabilities(frame, sourceEvent: sourceEvent);
       if (validationResult.isError()) {
         return Failure(validationResult.exceptionOrNull()! as domain.Failure);
@@ -247,7 +260,7 @@ class PayloadFrameCodec {
 
     final protocol = _protocolProvider();
     try {
-      final frame = PayloadFrame.fromJson(payload as Map<String, dynamic>);
+      final frame = PayloadFrame.fromJson(_requireFrameMap(payload));
       final validationResult = _validateFrameAgainstLocalCapabilities(frame, sourceEvent: sourceEvent);
       if (validationResult.isError()) {
         return Failure(validationResult.exceptionOrNull()! as domain.Failure);
@@ -317,6 +330,14 @@ class PayloadFrameCodec {
       );
     }
     return const Success(unit);
+  }
+
+  Map<String, dynamic> _requireFrameMap(dynamic payload) {
+    final map = _asStringKeyedMap(payload);
+    if (map == null) {
+      throw StateError('PayloadFrame shape check passed but map normalization failed');
+    }
+    return map;
   }
 
   Result<void> _validateFrameAgainstLocalCapabilities(

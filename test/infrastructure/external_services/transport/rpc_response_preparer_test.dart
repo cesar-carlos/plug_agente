@@ -243,8 +243,8 @@ void main() {
       expect(preparer.verifyIncomingSignature({'id': 1}), isTrue);
     });
 
-    test('rejects unsigned payload when negotiated signatureRequired is true', () {
-      final strictPreparer = RpcResponsePreparer(
+    test('skips logical signature under binary transport when signatureRequired', () {
+      final binaryPreparer = RpcResponsePreparer(
         featureFlags: featureFlags,
         logSummarizer: summarizer,
         contractValidator: const RpcContractValidator(),
@@ -255,6 +255,24 @@ void main() {
           signatureRequired: true,
         ),
         usesBinaryTransport: () => true,
+        agentIdProvider: () => 'agent-1',
+      );
+
+      expect(binaryPreparer.verifyIncomingSignature({'id': 1}), isTrue);
+    });
+
+    test('rejects unsigned payload when signatureRequired and non-binary', () {
+      final strictPreparer = RpcResponsePreparer(
+        featureFlags: featureFlags,
+        logSummarizer: summarizer,
+        contractValidator: const RpcContractValidator(),
+        protocolProvider: () => const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+          signatureRequired: true,
+        ),
+        usesBinaryTransport: () => false,
         agentIdProvider: () => 'agent-1',
       );
 

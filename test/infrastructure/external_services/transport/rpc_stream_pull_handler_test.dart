@@ -40,7 +40,7 @@ void main() {
       );
     }
 
-    test('should validate rpc:chunk schema only for chunk 0', () async {
+    test('should validate rpc:chunk schema for every chunk index', () async {
       final handler = createHandler();
       final emitter = handler.createStreamEmitter();
 

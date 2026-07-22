@@ -39,7 +39,9 @@ itens.
 
 ## Criterio de rollout
 
-- Manter dual-stack durante migracao.
+- Transporte de aplicacao e **somente** `PayloadFrame` (sem dual-stack /
+  JSON cru em eventos de app). Clientes novos devem seguir
+  [`socketio_client_binary_transport.md`](socketio_client_binary_transport.md).
 - Liberar por feature flag, quando aplicavel.
 - Promover para default apenas apos compatibilidade validada com clientes.
 

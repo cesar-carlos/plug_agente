@@ -22,7 +22,6 @@ class AppConstants {
   static const String agentConfigFileName = 'agent_config.json';
 
   static const String socketEventAgentRegister = 'agent:register';
-  static const String socketEventAgentUnregister = 'agent:unregister';
 
   static const String authAgentLoginPath = '/api/v1/auth/agent-login';
   static const String authAgentLoginCompatPath = '/auth/agent-login';

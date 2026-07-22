@@ -22,10 +22,11 @@ comando.
 
 ## Proximos itens (quando priorizado)
 
-- Spec RPC `agent.autoUpdate.diagnostics.push` — lado agente (schema + OpenRPC
-  + push) entregue; aguarda Decisao 3 / consumo no hub
-  (`docs/implemente/plano_auto_update_evolution.md`). Schema:
-  `docs/communication/schemas/auto_update_diagnostics.schema.json`.
+- Spec RPC `agent.autoUpdate.diagnostics.push` — schema agente entregue
+  (`docs/communication/schemas/auto_update_diagnostics.schema.json`); transport
+  outbound ainda no-op ate Decisao 3 / consumo no hub
+  (`docs/implemente/plano_auto_update_evolution.md`). **Nao** publicado em
+  `openrpc.json` / `rpc.discover` ate o hub aceitar o metodo.
 - Homologacao E2E hub-agente para `client_token.getPolicy` (rate limit, `retry_after_ms` / `reset_at`).
 - Teste de carga do limitador com muitos escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`).
 - Homologacao do guia de cliente para encode/compress/decode/decompress.

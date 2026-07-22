@@ -338,6 +338,23 @@ void main() {
       expect(data['reason'], equals(RpcClientTokenConstants.missingClientTokenReason));
     });
 
+    test('should map cancel_token_mismatch ValidationFailure with subreason', () {
+      final failure = ValidationFailure.withContext(
+        message: 'sql.cancel: clientToken does not match the token that started the stream.',
+        context: {
+          'reason': 'cancel_token_mismatch',
+          'execution_id': 'exec-1',
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.invalidParams));
+      expect(data['reason'], equals('invalid_params'));
+      expect(data['subreason'], equals('cancel_token_mismatch'));
+    });
+
     test('should map sql_queue_full to rateLimited with subreason', () {
       final failure = ConfigurationFailure.withContext(
         message: 'SQL execution queue is full; system is under heavy load',

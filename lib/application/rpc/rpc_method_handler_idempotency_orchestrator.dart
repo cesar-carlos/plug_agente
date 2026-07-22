@@ -83,7 +83,6 @@ class RpcMethodHandlerIdempotencyOrchestrator {
   Duration rpcIdempotencyEntryTtl(RpcRequest request) {
     switch (request.method) {
       case AgentActionRpcConstants.agentActionRunRpcMethodName:
-      case AgentActionRpcConstants.agentActionValidateRunRpcMethodName:
         return _agentActionRetentionSettings?.agentActionRpcIdempotencyTtl ??
             ConnectionConstants.agentActionRpcIdempotencyEntryTtl;
       default:
@@ -263,6 +262,7 @@ class RpcMethodHandlerIdempotencyOrchestrator {
     required String? idempotencyKey,
     required String idempotencyFingerprint,
     required Future<RpcResponse> Function() execute,
+    // Prefetch remains a caller fast-path; the lock always re-checks cache.
     bool idempotentCachePrefetched = false,
   }) async {
     if (request.isNotification ||
@@ -277,15 +277,15 @@ class RpcMethodHandlerIdempotencyOrchestrator {
     final response = await _idempotencyCoordinator.runExclusive(
       namespacedKey: namespacedKey,
       action: () async {
-        if (!idempotentCachePrefetched) {
-          final cached = await consumeIdempotentCacheIfAny(
-            request,
-            idempotencyKey,
-            idempotencyFingerprint,
-          );
-          if (cached != null) {
-            return cached;
-          }
+        // Always re-check under the lock so staggered retries reuse a response
+        // written by the leader even when the outer path already prefetched.
+        final cached = await consumeIdempotentCacheIfAny(
+          request,
+          idempotencyKey,
+          idempotencyFingerprint,
+        );
+        if (cached != null) {
+          return cached;
         }
         final executed = await execute();
         final sanitized = RpcWireMap.sanitizeRpcResponse(executed);

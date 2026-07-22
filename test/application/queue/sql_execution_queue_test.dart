@@ -505,7 +505,7 @@ void main() {
 
     test('should request native abort port when queue wait times out after worker started', () async {
       final abortPort = _MockInFlightAbortPort();
-      when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const res.Success(res.unit));
+      when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const res.Success(true));
       final queue = SqlExecutionQueue(
         maxQueueSize: 4,
         maxConcurrentWorkers: 1,

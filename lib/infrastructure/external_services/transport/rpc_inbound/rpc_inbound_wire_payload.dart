@@ -37,8 +37,13 @@ RpcInboundBestEffortRequestIdentity extractBestEffortRequestIdentityForRateLimit
   required PayloadFrameCodec frameCodec,
 }) {
   try {
-    if (payload is Map<String, dynamic> && frameCodec.looksLikePayloadFrame(payload)) {
-      final decodeResult = frameCodec.decodeIncoming(payload, sourceEvent: 'rpc:request');
+    final mapPayload = payload is Map<String, dynamic>
+        ? payload
+        : payload is Map
+        ? Map<String, dynamic>.from(payload)
+        : null;
+    if (mapPayload != null && frameCodec.looksLikePayloadFrame(mapPayload)) {
+      final decodeResult = frameCodec.decodeIncoming(mapPayload, sourceEvent: 'rpc:request');
       if (decodeResult.isSuccess()) {
         final decodedPayload = decodeResult.getOrThrow();
         if (decodedPayload is Map<String, dynamic>) {
@@ -50,10 +55,10 @@ RpcInboundBestEffortRequestIdentity extractBestEffortRequestIdentityForRateLimit
       }
       return const RpcInboundBestEffortRequestIdentity();
     }
-    if (payload is Map<String, dynamic>) {
+    if (mapPayload != null) {
       return RpcInboundBestEffortRequestIdentity(
-        id: payload['id'],
-        method: payload['method'],
+        id: mapPayload['id'],
+        method: mapPayload['method'],
       );
     }
     return const RpcInboundBestEffortRequestIdentity();
@@ -72,10 +77,17 @@ dynamic extractRequestIdFromRpcWirePayload(
   required PayloadFrameCodec frameCodec,
 }) {
   if (frameCodec.looksLikePayloadFrame(payload)) {
-    return (payload as Map<String, dynamic>)['requestId'];
+    final map = payload is Map<String, dynamic>
+        ? payload
+        : Map<String, dynamic>.from(payload as Map);
+    return map['requestId'];
   }
   if (payload is Map<String, dynamic>) {
     return payload['id'] ?? payload['request_id'];
+  }
+  if (payload is Map) {
+    final map = Map<String, dynamic>.from(payload);
+    return map['id'] ?? map['request_id'];
   }
   return null;
 }

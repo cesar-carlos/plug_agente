@@ -7,7 +7,7 @@ void main() {
       expect(
         () => SocketIoHeartbeatController(
           isConnected: () => true,
-          emitHeartbeat: () {},
+          emitHeartbeat: () async => true,
           logMessage: (_, _, _) {},
           onConnectionStale: () {},
           interval: const Duration(milliseconds: 10),
@@ -24,7 +24,7 @@ void main() {
 
       final controller = SocketIoHeartbeatController(
         isConnected: () => connected,
-        emitHeartbeat: () {},
+        emitHeartbeat: () async => true,
         logMessage: (_, _, _) {},
         onConnectionStale: () => staleCalls.add(1),
         interval: const Duration(milliseconds: 10),
@@ -45,7 +45,7 @@ void main() {
 
       final controller = SocketIoHeartbeatController(
         isConnected: () => connected,
-        emitHeartbeat: () {},
+        emitHeartbeat: () async => true,
         logMessage: (_, _, _) {},
         onConnectionStale: () => staleCalls.add(1),
         interval: const Duration(milliseconds: 20),
@@ -60,6 +60,35 @@ void main() {
       controller.onAckReceived();
       controller.stop();
 
+      expect(staleCalls, isEmpty);
+    });
+
+    test('failed emit does not arm ack wait or count as miss', () async {
+      final staleCalls = <int>[];
+      final logs = <String>[];
+      var emitCalls = 0;
+
+      final controller = SocketIoHeartbeatController(
+        isConnected: () => true,
+        emitHeartbeat: () async {
+          emitCalls++;
+          return false;
+        },
+        logMessage: (direction, event, _) {
+          logs.add('$direction:$event');
+        },
+        onConnectionStale: () => staleCalls.add(1),
+        interval: const Duration(milliseconds: 20),
+        ackTimeout: const Duration(milliseconds: 8),
+        maxMissed: 2,
+      );
+
+      controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 55));
+      controller.stop();
+
+      expect(emitCalls, greaterThanOrEqualTo(2));
+      expect(logs, everyElement(contains('heartbeat_emit_failed')));
       expect(staleCalls, isEmpty);
     });
   });

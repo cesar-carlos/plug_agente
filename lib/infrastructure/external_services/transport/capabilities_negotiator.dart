@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -197,20 +198,18 @@ class CapabilitiesNegotiator {
       final agentCapabilities = _localCapabilitiesProvider();
       final rawServerCapabilities = payload['capabilities'];
       if (rawServerCapabilities == null) {
-        // Hub did not send a capabilities envelope. Falling back to the agent's
-        // own capabilities means the agent will assume the hub supports every
-        // extension it advertises (binary payload, compression, etc.), which may
-        // not be true for legacy hubs. If this causes problems, investigate
-        // whether the hub needs to be updated to send `capabilities`.
         AppLogger.warning(
           'agent:capabilities payload missing "capabilities" field — '
-          'negotiating as if server matches agent capabilities. '
-          'Update the hub to include capabilities for accurate negotiation.',
+          'failing negotiation. Hub must include capabilities for accurate negotiation.',
+        );
+        return CapabilitiesNegotiationFailure(
+          error: StateError('agent:capabilities payload missing "capabilities" field'),
+          stackTrace: StackTrace.current,
         );
       }
-      final serverCapabilities = rawServerCapabilities != null
-          ? ProtocolCapabilities.fromJson(rawServerCapabilities as Map<String, dynamic>)
-          : agentCapabilities;
+      final serverCapabilities = ProtocolCapabilities.fromJson(
+        rawServerCapabilities as Map<String, dynamic>,
+      );
 
       // negotiate() throws StateError when no common protocols exist.
       // The StateError is caught by the outer `on Object catch` at the bottom
@@ -251,7 +250,7 @@ class CapabilitiesNegotiator {
 
     final registerData = <String, dynamic>{
       'agentId': _agentIdProvider(),
-      'timestamp': DateTime.now().toIso8601String(),
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
       'capabilities': agentCapabilities.toJson(),
     };
     final profileData = await _registerProfileProvider?.call();
@@ -268,7 +267,7 @@ class CapabilitiesNegotiator {
       }
     }
 
-    final emitted = await _emit('agent:register', registerData);
+    final emitted = await _emit(AppConstants.socketEventAgentRegister, registerData);
     return emitted;
   }
 

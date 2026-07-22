@@ -181,7 +181,7 @@ prod: so vale a pena se o volume de poll for material).
 | Replay / idempotency relay | Agente indexa por `meta.request_id` |
 | `rpc:batch_ack` coalescing | Lado agente apenas |
 | Defaults de delivery guarantees / streaming chunks | Prefs locais do agente + migrator no boot |
-| Brotli (roadmap item 10) | Coordenacao futura; nenhum dos dois lados shippou |
+| Brotli / codecs extras | Fora do backlog de comunicacao atual; coordenar em plano futuro quando priorizado |
 
 ---
 

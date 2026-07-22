@@ -28,7 +28,7 @@ SqlRpcMethodHandlerSupport _support() {
     ),
     executionNotFound: (request) => RpcResponse.error(
       id: request.id,
-      error: const RpcError(code: -32001, message: 'execution not found'),
+      error: const RpcError(code: -32109, message: 'execution not found'),
     ),
     consumeIdempotentCacheIfAny: (_, key, fingerprint) async => null,
     storeIdempotentSuccessIfApplicable:
@@ -69,7 +69,7 @@ void main() {
     abortPort = _MockAbortPort();
     when(() => featureFlags.enableSocketCancelMethod).thenReturn(true);
     when(() => featureFlags.enableSocketTimeoutByStage).thenReturn(false);
-    when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const Success(unit));
+    when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const Success(true));
   });
 
   test('cancels materialized execution via in-flight abort port', () async {
@@ -90,5 +90,25 @@ void main() {
     expect(result?['cancelled'], isTrue);
     expect(result?['via_in_flight_abort'], isTrue);
     verify(() => abortPort.abortInFlightExecution('req-materialized')).called(1);
+  });
+
+  test('returns execution not found when abort port reports nothing registered', () async {
+    when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const Success(false));
+
+    final handler = SqlCancelHandler(
+      featureFlags: featureFlags,
+      support: _support(),
+      sqlStreamingCoordinator: SqlStreamingCoordinator(gateway: _MockStreamingGateway()),
+      streamingGateway: _MockStreamingGateway(),
+      inFlightAbortPort: abortPort,
+    );
+
+    final response = await handler.handleSqlCancel(
+      const RpcRequest(jsonrpc: '2.0', id: 1, method: 'sql.cancel', params: {'request_id': 'req-missing'}),
+    );
+
+    expect(response.error?.code, -32109);
+    expect(response.result, isNull);
+    verify(() => abortPort.abortInFlightExecution('req-missing')).called(1);
   });
 }

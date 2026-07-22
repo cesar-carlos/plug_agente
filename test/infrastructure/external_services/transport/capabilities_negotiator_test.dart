@@ -85,6 +85,9 @@ void main() {
       final payload = emitted.single.payload as Map<String, dynamic>;
       expect(payload['agentId'], 'agent-1');
       expect(payload['capabilities'], isA<Map<String, dynamic>>());
+      final timestamp = payload['timestamp'] as String;
+      expect(timestamp.endsWith('Z'), isTrue);
+      expect(DateTime.parse(timestamp).isUtc, isTrue);
     });
 
     test('includes optional profile sync metadata when provider returns it', () async {
@@ -264,6 +267,29 @@ void main() {
       final outcome = neg.handleEnvelope('not a map');
 
       expect(outcome, isA<CapabilitiesNegotiationFailure>());
+    });
+
+    test('returns failure when capabilities field is missing', () {
+      when(
+        () => negotiator.negotiate(
+          agentCapabilities: any(named: 'agentCapabilities'),
+          serverCapabilities: any(named: 'serverCapabilities'),
+        ),
+      ).thenReturn(binaryProtocol());
+
+      final neg = buildNegotiator();
+      final outcome = neg.handleEnvelope(<String, dynamic>{
+        'agentId': 'agent-1',
+      });
+
+      expect(outcome, isA<CapabilitiesNegotiationFailure>());
+      expect(neg.hasReceivedCapabilities, isFalse);
+      verifyNever(
+        () => negotiator.negotiate(
+          agentCapabilities: any(named: 'agentCapabilities'),
+          serverCapabilities: any(named: 'serverCapabilities'),
+        ),
+      );
     });
   });
 

@@ -65,7 +65,7 @@ ativa, `client_token` (ou aliases) e obrigatorio; ausencia retorna `-32001` com
 `payload.agent_actions.action_ids`; ausente, o scope autoriza qualquer acao que
 tambem esteja aprovada localmente. Tokens sem metadados de escopo de acao
 (payload legado) continuam autorizados apos o SQL sintetico de autorizacao.
-Negacao por escopo/allowlist retorna `-32001` com `reason`
+Negacao por escopo/allowlist retorna `-32002` com `reason`
 `agent_action_permission_denied` e `data` incluindo `required_scope` e
 `action_id` quando aplicavel.
 - **Result:** objeto alinhado a

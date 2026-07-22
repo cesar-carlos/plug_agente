@@ -185,7 +185,10 @@ final class TransportRpcPipelineAssembler {
       registerProfileProvider: deps.registerProfileProvider,
       emit: deps.emitEventAsync,
       decodeIncoming: frameCodec.decodeIncoming,
-      onTimeoutReconnect: () => deps.onReconnectionNeeded?.call(),
+      onTimeoutReconnect: () {
+        deps.closeSocket();
+        deps.onReconnectionNeeded?.call();
+      },
       payloadSigner: deps.payloadSigner,
     );
     final authorizationDecisionLogger = AuthorizationDecisionLogger(

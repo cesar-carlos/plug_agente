@@ -88,6 +88,22 @@ void main() {
       expect(codec.looksLikePayloadFrame(null), isFalse);
       expect(codec.looksLikePayloadFrame(42), isFalse);
     });
+
+    test('detects frame envelopes from Map with non-string typed keys', () {
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+      );
+      final typed = TransportPipeline(
+        encoding: 'json',
+        compression: 'gzip',
+      ).prepareSend({'foo': 'bar'}).getOrThrow().toJson();
+      final loose = Map<dynamic, dynamic>.from(typed);
+      expect(codec.looksLikePayloadFrame(loose), isTrue);
+    });
   });
 
   group('PayloadFrameCodec.prepareOutgoing + decodeIncoming', () {

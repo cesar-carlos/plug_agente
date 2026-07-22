@@ -26,6 +26,9 @@ Documentos do contrato Socket.IO / Plug JSON-RPC entre o agente e o hub.
   `backlog.md`.
 - O `standard.md` e a fonte de verdade do contrato implementado; nao adicionar
   ali itens ainda nao entregues / propostas (ficam no backlog ou plano).
+- `openrpc.json` / `rpc.discover` lista **somente** metodos com wire ativo no
+  runtime; propostas (ex. auto-update diagnostics) ficam no backlog + schema,
+  fora do discover ate o hub consumir.
 - Detalhe de cliente `PayloadFrame`:
   [`socketio_client_binary_transport.md`](socketio_client_binary_transport.md)
   — o standard so resume e aponta.

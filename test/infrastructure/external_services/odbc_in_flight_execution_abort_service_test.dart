@@ -44,14 +44,14 @@ void main() {
 
     final result = await abortService.abortInFlightExecution('req-1');
 
-    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull(), isTrue);
     verify(() => service.cancelStatement('conn-1', 7)).called(1);
   });
 
-  test('abortInFlightExecution is no-op when request is not registered', () async {
+  test('abortInFlightExecution returns false when request is not registered', () async {
     final result = await abortService.abortInFlightExecution('missing');
 
-    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull(), isFalse);
     verifyNever(() => service.cancelStatement(any(), any()));
     verifyNever(() => service.asyncCancel(any()));
   });
@@ -64,7 +64,7 @@ void main() {
 
     final result = await abortService.abortInFlightExecution('req-1');
 
-    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull(), isTrue);
     expect(discarded, contains('conn-1'));
   });
 }

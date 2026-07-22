@@ -300,10 +300,13 @@ class FailureToRpcErrorMapper {
   }
 
   static String? _subreasonIfDistinct(String? domainReason, String resolvedReason) {
-    if (domainReason == null || !_isQueueOrBackpressureReason(domainReason)) {
+    if (domainReason == null || domainReason == resolvedReason) {
       return null;
     }
-    return domainReason == resolvedReason ? null : domainReason;
+    if (_isQueueOrBackpressureReason(domainReason) || domainReason == 'cancel_token_mismatch') {
+      return domainReason;
+    }
+    return null;
   }
 
   static bool _isQueueOrBackpressureReason(String reason) {

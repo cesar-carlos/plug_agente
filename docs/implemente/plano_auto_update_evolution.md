@@ -337,8 +337,9 @@ Goal: operador ve estado da frota inteira. Bloqueado por decisao 3.
   (detalhe fora do standard ate o hub consumir o metodo em producao).
 - [x] Schema em
   `docs/communication/schemas/auto_update_diagnostics.schema.json`.
-- [x] Entrada em `docs/communication/openrpc.json` (agente; hub ainda
-  precisa aceitar/consumir — Decisao 3).
+- [ ] Entrada em `docs/communication/openrpc.json` / `rpc.discover` — **adiada**
+  ate Decisao 3 (hub aceitar/consumir); schema permanece publicado fora do
+  discover.
 
 #### 7B. Cliente envia apos cada check
 

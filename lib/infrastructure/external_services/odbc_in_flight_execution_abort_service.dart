@@ -20,14 +20,14 @@ final class OdbcInFlightExecutionAbortService implements ISqlInFlightExecutionAb
   final void Function(String connectionId)? _markConnectionForDiscard;
 
   @override
-  Future<Result<void>> abortInFlightExecution(String requestId) async {
+  Future<Result<bool>> abortInFlightExecution(String requestId) async {
     if (requestId.isEmpty) {
-      return const Success(unit);
+      return const Success(false);
     }
 
     final handle = _registry.peek(requestId);
     if (handle == null) {
-      return const Success(unit);
+      return const Success(false);
     }
 
     if (handle.hasNativeCancelTarget) {
@@ -42,6 +42,6 @@ final class OdbcInFlightExecutionAbortService implements ISqlInFlightExecutionAb
       );
     }
 
-    return const Success(unit);
+    return const Success(true);
   }
 }

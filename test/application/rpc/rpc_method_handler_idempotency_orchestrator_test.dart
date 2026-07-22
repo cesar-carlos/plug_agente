@@ -101,5 +101,47 @@ void main() {
         ),
       ).called(1);
     });
+
+    test('re-checks cache under lock even when idempotentCachePrefetched is true', () async {
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-follower',
+        params: <String, dynamic>{
+          'sql': 'SELECT 1',
+          'idempotency_key': 'key-stagger',
+        },
+      );
+      final cachedResponse = RpcResponse.success(
+        id: 'req-leader',
+        result: const {'ok': true, 'from_cache': true},
+      );
+
+      when(() => idempotencyStore.getRecord(any())).thenAnswer(
+        (_) async => IdempotencyRecord(
+          response: cachedResponse,
+          requestFingerprint: 'fp-stagger',
+        ),
+      );
+
+      var executeCalls = 0;
+      final response = await orchestrator.runIdempotentExecution(
+        request: request,
+        idempotencyKey: 'key-stagger',
+        idempotencyFingerprint: 'fp-stagger',
+        idempotentCachePrefetched: true,
+        execute: () async {
+          executeCalls++;
+          return RpcResponse.success(id: 'req-follower', result: const {'ok': true});
+        },
+      );
+
+      expect(executeCalls, 0);
+      expect(response.id, 'req-follower');
+      expect(response.result, cachedResponse.result);
+      verifyNever(
+        () => idempotencyStore.set(any(), any(), any(), requestFingerprint: any(named: 'requestFingerprint')),
+      );
+    });
   });
 }

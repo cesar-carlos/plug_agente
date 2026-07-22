@@ -30,7 +30,7 @@ final class SocketIoHeartbeatController {
   }
 
   final bool Function() isConnected;
-  final void Function() emitHeartbeat;
+  final Future<bool> Function() emitHeartbeat;
   final void Function(String direction, String event, dynamic data) logMessage;
   final void Function() onConnectionStale;
 
@@ -82,9 +82,21 @@ final class SocketIoHeartbeatController {
       return;
     }
 
-    _waitingAck = true;
-    emitHeartbeat();
+    unawaited(_emitAndArmAck());
+  }
 
+  Future<void> _emitAndArmAck() async {
+    final emitted = await emitHeartbeat();
+    if (!emitted) {
+      logMessage('ERROR', 'heartbeat_emit_failed', {
+        'missed_heartbeats': _missedHeartbeats,
+      });
+      return;
+    }
+    if (!isConnected()) {
+      return;
+    }
+    _waitingAck = true;
     _ackTimer?.cancel();
     _ackTimer = Timer(_ackTimeout, _handleTimeout);
   }

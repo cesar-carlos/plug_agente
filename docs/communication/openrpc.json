@@ -132,24 +132,6 @@
       }
     },
     {
-      "name": "agent.autoUpdate.diagnostics.push",
-      "summary": "Client -> hub notification carrying a non-sensitive subset of UpdateCheckDiagnostics for fleet-wide observability. Throttled to 1/min/client. Proposal stage: pending hub-side wiring (see decision 3 in plano_auto_update_evolution.md).",
-      "paramStructure": "by-name",
-      "params": [
-        {
-          "name": "params",
-          "required": true,
-          "schema": {
-            "$ref": "./schemas/auto_update_diagnostics.schema.json"
-          }
-        }
-      ],
-      "result": {
-        "name": "result",
-        "schema": { "type": "null" }
-      }
-    },
-    {
       "name": "agent.action.run",
       "summary": "Dispatch an enabled remote logical trigger for a saved action approved for remote execution (requires idempotency_key; optional trigger_id when multiple remote triggers exist); requires client_token when client-token authorization is enabled; optional trace_id and requested_by for correlation",
       "paramStructure": "by-name",
@@ -257,13 +239,23 @@
         "name": "result",
         "schema": {
           "type": "object",
-          "required": ["openrpc", "info", "methods"],
+          "required": [
+            "openrpc",
+            "info",
+            "methods"
+          ],
           "properties": {
-            "openrpc": { "type": "string" },
-            "info": { "type": "object" },
+            "openrpc": {
+              "type": "string"
+            },
+            "info": {
+              "type": "object"
+            },
             "methods": {
               "type": "array",
-              "items": { "type": "object" }
+              "items": {
+                "type": "object"
+              }
             }
           },
           "additionalProperties": true
