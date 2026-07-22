@@ -47,7 +47,7 @@ abstract class IAutoUpdateOrchestrator {
   UpdateCheckDiagnostics? get lastBackgroundDiagnostics;
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics;
 
-  Future<void> initialize();
+  Future<Result<void>> initialize();
 
   Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled);
 

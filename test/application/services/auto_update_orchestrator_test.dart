@@ -20,6 +20,7 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 import '../../fakes/fake_silent_update_coordinator.dart';
+import '../../fakes/in_memory_update_preferences_repository.dart';
 import '../../helpers/auto_update_test_fakes.dart';
 
 void main() {
@@ -399,6 +400,24 @@ void main() {
           UpdateCheckCompletionSource.notInitialized,
         );
         expect(metricsCollector.autoUpdateManualCheckNotInitializedCount, 1);
+      });
+
+      test('initialize returns typed ConfigurationFailure when gateway setup fails', () async {
+        final fakeGateway = FakeAutoUpdaterGateway()..setFeedError = Exception('init failed');
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: fakeGateway,
+          settingsStore: settingsStore,
+          metricsCollector: metricsCollector,
+        );
+
+        final result = await orchestrator.initialize();
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (error) => expect(error, isA<domain.ConfigurationFailure>()),
+        );
       });
 
       test('persists diagnostics and hydrates them in a new orchestrator instance', () async {
@@ -874,6 +893,29 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         expect(changeCount, greaterThan(0));
+      });
+
+      test('setAutomaticSilentUpdatesEnabled surfaces ConfigurationFailure on persist error', () async {
+        final preferences = InMemoryUpdatePreferencesRepository();
+        preferences.forcedPersistError = StateError('disk full');
+        final orchestrator = AutoUpdateOrchestrator(
+          RuntimeCapabilities.full(),
+          updaterGateway: FakeAutoUpdaterGateway(),
+          appcastProbeService: FakeAppcastProbeService(),
+          updatePreferencesRepository: preferences,
+          metricsCollector: metricsCollector,
+        );
+
+        final result = await orchestrator.setAutomaticSilentUpdatesEnabled(false);
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected ConfigurationFailure'),
+          (error) {
+            expect(error, isA<domain.ConfigurationFailure>());
+            expect((error as domain.Failure).message, contains('persist'));
+          },
+        );
       });
     });
 

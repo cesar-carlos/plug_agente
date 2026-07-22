@@ -61,7 +61,7 @@ class _StubOrchestrator implements IAutoUpdateOrchestrator {
   Future<Result<SilentUpdateOutcome>> checkSilently() async => throw UnimplementedError();
 
   @override
-  Future<void> initialize() async {}
+  Future<Result<void>> initialize() async => const Success(unit);
 
   @override
   Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled) async => throw UnimplementedError();

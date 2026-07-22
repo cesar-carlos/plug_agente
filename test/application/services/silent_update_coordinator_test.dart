@@ -179,6 +179,45 @@ void main() {
         );
       });
 
+      test('surfaces staged Ready when automatic updates are disabled', () async {
+        final store = InMemoryAppSettingsStore();
+        await store.setBool(AppSettingsKeys.automaticSilentUpdatesEnabled, false);
+        final now = DateTime(2026, 6, 10, 12);
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: now)),
+        );
+        final installer = FakeSilentUpdateInstaller();
+        final probe = FakeAppcastProbeService();
+        final coordinator = _makeCoordinator(
+          store: store,
+          installer: installer,
+          probe: probe,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(),
+          autoApplyEnabled: false,
+        );
+
+        final result = await coordinator.checkSilently();
+
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
+          (_) => fail('Expected success'),
+        );
+        expect(installer.installCount, 0);
+        expect(probe.callCount, 0);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallReady,
+        );
+        expect(
+          store.getString('auto_update.pending_silent_update'),
+          isNotNull,
+          reason: 'preference-off must keep Ready for manual apply',
+        );
+      });
+
       test(
         'stages installer without closing app when newer version is found',
         () async {
@@ -541,13 +580,18 @@ void main() {
 
         expect(result.isSuccess(), isTrue);
         result.fold(
-          (outcome) => expect(outcome, SilentUpdateOutcome.silentDisabled),
+          (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
           (_) => fail('Expected success'),
         );
         expect(closeCalled, isFalse);
         expect(
           coordinator.lastAutomaticDiagnostics?.completionSource,
-          UpdateCheckCompletionSource.automaticDisabled,
+          UpdateCheckCompletionSource.automaticInstallReady,
+        );
+        expect(
+          store.getString('auto_update.pending_silent_update'),
+          isNotNull,
+          reason: 'staged Ready must remain for manual apply after preference off',
         );
       });
 
@@ -583,6 +627,62 @@ void main() {
           UpdateCheckCompletionSource.automaticQuietHours,
         );
         expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isFalse);
+      });
+
+      test('auto-applies staged pending during quiet hours instead of skipping', () async {
+        dotenv.clean();
+        dotenv.loadFromString(
+          envString:
+              'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
+              'AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600\n'
+              'AUTO_UPDATE_QUIET_HOURS_START=22:00\n'
+              'AUTO_UPDATE_QUIET_HOURS_END=06:00',
+        );
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 3, 30);
+        final pending = PendingSilentUpdateDownloaded(
+          version: '99.0.0+1',
+          startedAt: now.subtract(const Duration(minutes: 10)),
+          installerPath: r'C:\App\updates\PlugAgente-Setup-99.0.0.exe',
+          logPath: r'C:\App\updates\PlugAgente-Update-99.0.0+1.log',
+          launcherPath: r'C:\App\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+          launcherStatusPath: r'C:\App\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+          installDirectory: r'C:\App',
+          strategy: 'currentUserThenElevated',
+          appPid: 1234,
+          assetSize: 5,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          installDirectoryWritable: true,
+          requireValidSignature: false,
+        );
+        await store.setString('auto_update.pending_silent_update', jsonEncode(pending.toJson()));
+
+        final installer = FakeSilentUpdateInstaller();
+        var closeCalled = false;
+        final probe = FakeAppcastProbeService();
+        final coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: probe,
+          silentUpdateInstaller: installer,
+          settingsStore: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(),
+          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+            closeCalled = true;
+          },
+        );
+
+        final result = await coordinator.checkSilently();
+
+        expect(probe.callCount, 0, reason: 'quiet hours must still skip new probes');
+        expect(installer.launchHelperCount, 1);
+        expect(closeCalled, isTrue);
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
+          (_) => fail('Expected success'),
+        );
       });
 
       test('downloads automatically even when UAC detector requires user consent', () async {
@@ -800,6 +900,146 @@ void main() {
         );
         expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isTrue);
         expect(store.getInt('auto_update.automatic_failure_count'), isNull);
+      });
+
+      test('keeps staged pending as Ready when no status file and startedAt is recent', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final startedAt = now.subtract(const Duration(minutes: 5));
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
+        );
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNotNull);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallReady,
+        );
+        expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isTrue);
+        expect(store.getInt('auto_update.automatic_failure_count'), isNull);
+      });
+
+      test('keeps staged pending as Ready when no status file and startedAt is old but within TTL', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final startedAt = now.subtract(const Duration(hours: 2));
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
+        );
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNotNull);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallReady,
+        );
+        expect(store.getInt('auto_update.automatic_failure_count'), isNull);
+      });
+
+      test('clears staged pending past TTL without incrementing failure breaker', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final startedAt = now.subtract(const Duration(days: 8));
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
+        );
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNull);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticPendingFailed,
+        );
+        expect(store.getInt('auto_update.automatic_failure_count'), isNull);
+      });
+
+      test('fails and clears when launched helper times out without completion', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final launchedAt = now.subtract(const Duration(hours: 2));
+        final pendingJson = _downloadedPendingJson(version: '99.0.0+1', startedAt: launchedAt);
+        pendingJson['launchedAt'] = launchedAt.toIso8601String();
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(pendingJson),
+        );
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(
+            status: _launcherStatus(state: 'started', lastUpdatedAt: launchedAt),
+          ),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNull);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticPendingFailed,
+        );
+        expect(coordinator.lastAutomaticDiagnostics?.automaticFailureCount, 1);
+      });
+
+      test('resets breaker on terminal helper success even when app version is still older', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final launchedAt = now.subtract(const Duration(hours: 2));
+        final pendingJson = _downloadedPendingJson(version: '99.0.0+1', startedAt: launchedAt);
+        pendingJson['launchedAt'] = launchedAt.toIso8601String();
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(pendingJson),
+        );
+        await store.setInt('auto_update.automatic_failure_count', 2);
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(
+            status: _launcherStatus(state: 'completed', lastUpdatedAt: launchedAt),
+          ),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNull);
+        expect(
+          store.getInt('auto_update.automatic_failure_count'),
+          isNull,
+          reason: 'terminal success must reset breaker (parity with resolve)',
+        );
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticPendingFailed,
+          reason: 'diagnostics still follow version catch-up, not helper status alone',
+        );
       });
 
       test('clears pending and records automaticPendingCompleted when app version caught up', () async {

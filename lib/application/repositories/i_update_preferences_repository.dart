@@ -32,6 +32,10 @@ abstract interface class IUpdatePreferencesRepository {
   /// does not support deferred persistence.
   Future<void> flushPendingPersistence();
 
+  /// Error from the most recent settings persist, or null on success.
+  /// Mirrors the backing app settings store persist-error surface.
+  Object? get lastPersistError;
+
   /// Manual WinSparkle check timeout circuit (`timeout_*` keys).
   ICircuitBreakerPersistence manualTimeoutCircuitPersistence();
 

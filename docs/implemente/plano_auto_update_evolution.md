@@ -281,7 +281,7 @@ Goal: usuario nao e surpreendido pelo fechamento do app.
 
 - [x] Widget test cobre release notes.
 - [x] Coordinator test cobre `skippedByQuietHours`.
-- [ ] Doc explica interacao quiet hours x pending update.
+- [x] Doc explica interacao quiet hours x pending update.
 
 ### Fase 6 - Refactor de API
 

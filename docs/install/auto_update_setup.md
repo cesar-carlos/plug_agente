@@ -62,8 +62,8 @@ AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 | `AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS` | `300` | minimo 60. Timeout do `HttpClient` durante o download do instalador. |
 | `AUTO_UPDATE_DOWNLOAD_RESUME` | `true` | quando `false` desliga `HTTP Range`; use apenas em proxies que nao honram `Range`. |
 | `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` | `30` | 0 desliga o aviso pre-fechamento; max 120. Tempo de espera apos a notificacao "fechando para atualizar" antes do `exit`. |
-| `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela onde checagens automaticas retornam `skippedByQuietHours`. Suporta janelas que cruzam meia-noite. |
-| `AUTO_UPDATE_HELPER_WAIT_MINUTES` | `30` | min 5, max 120. Tempo maximo que o reconcile aguarda um helper pendente antes de considerar o pending stale e limpar. |
+| `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela onde **novos** downloads automaticos retornam `skippedByQuietHours`. Pending ja *staged* ainda pode auto-aplicar / permanecer Ready. Suporta janelas que cruzam meia-noite. |
+| `AUTO_UPDATE_HELPER_WAIT_MINUTES` | `30` | min 5, max 120. Tempo maximo que o reconcile aguarda um helper **ja lancado** (status / `launchedAt`) antes de marcar falha e limpar. Download apenas staged nao usa este timeout para clear+fail. |
 | `AUTO_UPDATE_AUTO_APPLY` | `true` | quando `false`/`0`, o fluxo silencioso faz apenas download e *staging*; o apply exige banner ou shutdown. Opt-out por deploy. |
 | `AUTO_UPDATE_FEED_PUBLIC_KEY` | nao definido | CSV base64 de chaves Ed25519 (ver secao de assinatura). |
 | `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE` | `false` | quando `true`, items sem `plug:edSignature` valido sao rejeitados. |
@@ -274,10 +274,27 @@ operacional ate o apply.
 No proximo boot (reconcile):
 
 - sucesso e marcado quando `AppConstants.appVersion >= pendingVersion`;
-- caso contrario, o app le o status JSON do helper e registra falha/retry;
+- pending *staged* (Downloaded sem evidencia de launch: sem `launchedAt` e
+  sem status do helper) permanece Ready — nao e limpo nem marcado como falha,
+  **exceto** quando `startedAt` ultrapassa o TTL de staged
+  (`AutoUpdateDefaults.stagedPendingTtl`, 7 dias): nesse caso o pending e
+  limpo (ops bound para Ready indefinido);
+- helper em execucao (status in-progress ou `launchedAt` recente dentro de
+  `AUTO_UPDATE_HELPER_WAIT_MINUTES`) permanece pending in-progress;
+  `hasPendingDownloadedUpdate` / banner Ready **excluem** in-flight (nao
+  oferecem Install enquanto o helper ja esta rodando);
+- falha/clear apos evidencia de launch + timeout do helper, ou status
+  terminal de falha do helper — **reconcile e resolve** compartilham a mesma
+  politica fail+cooldown (nunca Ready/retry apos launch concluido/expirado);
+- `launchedAt` e persistido **antes** do spawn do helper (e flushed) para que
+  um kill entre `Process.start` e a escrita antiga nao deixe Ready sem
+  evidencia de launch;
 - o contador de falhas automaticas entra em cooldown depois de 3 falhas por 6
   horas;
-- durante cooldown, o fluxo automatico nao baixa nem inicia instalador.
+- durante cooldown, o fluxo automatico nao baixa nem inicia instalador;
+- se a preferencia automatica for desligada **depois** de um stage bem-sucedido,
+  o pending Ready e **mantido** para apply manual (banner/shutdown); so o
+  download em voo e cancelado.
 
 A tela **Atualizacoes/Sobre** mostra diagnosticos copiaveis com:
 

@@ -304,7 +304,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   UpdateCheckDiagnostics? get lastAutomaticDiagnostics => _silentCoordinator.lastAutomaticDiagnostics;
 
   @override
-  Future<void> initialize() async {
+  Future<Result<void>> initialize() async {
     final feedUrl = _feedUrl;
     if (feedUrl == null) {
       developer.log(
@@ -312,7 +312,12 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
         name: 'auto_update_orchestrator',
         level: 800,
       );
-      return;
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Auto-update feed URL is not configured',
+          context: <String, dynamic>{'operation': 'initialize'},
+        ),
+      );
     }
     if (_isInitialized) {
       developer.log(
@@ -320,7 +325,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
         name: 'auto_update_orchestrator',
         level: 800,
       );
-      return;
+      return const Success(unit);
     }
     final updaterIntervalSeconds = _resolveWinSparkleIntervalSeconds();
     try {
@@ -333,13 +338,24 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
         name: 'auto_update_orchestrator',
         level: 800,
       );
-    } on Exception catch (e, s) {
+      return const Success(unit);
+    } on Exception catch (error, stackTrace) {
       developer.log(
         'Failed to initialize auto-update',
         name: 'auto_update_orchestrator',
         level: 900,
-        error: e,
-        stackTrace: s,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Failed to initialize auto-update',
+          cause: error,
+          context: <String, dynamic>{
+            'operation': 'initialize',
+            'feedUrl': feedUrl,
+          },
+        ),
       );
     }
   }
@@ -357,6 +373,13 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     }
     try {
       await preferences.setAutomaticSilentUpdatesEnabled(enabled);
+      final persistFailure = await _configurationFailureIfPersistErrored(
+        preferences: preferences,
+        message: 'Failed to persist automatic silent update preference',
+        operation: 'setAutomaticSilentUpdatesEnabled',
+        context: <String, dynamic>{'enabled': enabled},
+      );
+      if (persistFailure != null) return Failure(persistFailure);
       if (_isInitialized) {
         await _updaterGateway.setScheduledCheckInterval(_resolveWinSparkleIntervalSeconds());
       }
@@ -373,7 +396,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
       return const Success(unit);
     } on Exception catch (error) {
       return Failure(
-        domain.ServerFailure.withContext(
+        domain.ConfigurationFailure.withContext(
           message: 'Failed to update automatic silent update preference',
           cause: error,
           context: <String, dynamic>{
@@ -398,11 +421,18 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     }
     try {
       await preferences.setAutomaticSilentUpdatesAutoApplyEnabled(enabled);
+      final persistFailure = await _configurationFailureIfPersistErrored(
+        preferences: preferences,
+        message: 'Failed to persist automatic silent update auto-apply preference',
+        operation: 'setAutomaticSilentUpdatesAutoApplyEnabled',
+        context: <String, dynamic>{'enabled': enabled},
+      );
+      if (persistFailure != null) return Failure(persistFailure);
       _notifyChanges();
       return const Success(unit);
     } on Exception catch (error) {
       return Failure(
-        domain.ServerFailure.withContext(
+        domain.ConfigurationFailure.withContext(
           message: 'Failed to update automatic silent update auto-apply preference',
           cause: error,
           context: <String, dynamic>{
@@ -427,6 +457,13 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     }
     try {
       await preferences.setUpdateNotificationsEnabled(enabled);
+      final persistFailure = await _configurationFailureIfPersistErrored(
+        preferences: preferences,
+        message: 'Failed to persist update notification preference',
+        operation: 'setUpdateNotificationsEnabled',
+        context: <String, dynamic>{'enabled': enabled},
+      );
+      if (persistFailure != null) return Failure(persistFailure);
       if (_isInitialized) {
         await _updaterGateway.setScheduledCheckInterval(_resolveWinSparkleIntervalSeconds());
       }
@@ -440,7 +477,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
       return const Success(unit);
     } on Exception catch (error) {
       return Failure(
-        domain.ServerFailure.withContext(
+        domain.ConfigurationFailure.withContext(
           message: 'Failed to update update notification preference',
           cause: error,
           context: <String, dynamic>{
@@ -450,6 +487,26 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
         ),
       );
     }
+  }
+
+  Future<domain.ConfigurationFailure?> _configurationFailureIfPersistErrored({
+    required IUpdatePreferencesRepository preferences,
+    required String message,
+    required String operation,
+    Map<String, dynamic> context = const <String, dynamic>{},
+  }) async {
+    await preferences.flushPendingPersistence();
+    final persistError = preferences.lastPersistError;
+    if (persistError == null) return null;
+    return domain.ConfigurationFailure.withContext(
+      message: message,
+      cause: persistError is Exception ? persistError : null,
+      context: <String, dynamic>{
+        'operation': operation,
+        'persistError': persistError.toString(),
+        ...context,
+      },
+    );
   }
 
   @override
@@ -477,7 +534,18 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
   @override
   Future<void> startAutomaticChecks() async {
     if (!isAvailable) return;
-    await initialize();
+    final initResult = await initialize();
+    initResult.fold(
+      (_) {},
+      (error) {
+        developer.log(
+          'Auto-update initialize failed during startAutomaticChecks; continuing reconcile',
+          name: 'auto_update_orchestrator',
+          level: 900,
+          error: error,
+        );
+      },
+    );
     await _silentCoordinator.reconcilePendingAndSchedule();
     if (!automaticSilentUpdatesEnabled && updateNotificationsEnabled) {
       unawaited(checkInBackground());

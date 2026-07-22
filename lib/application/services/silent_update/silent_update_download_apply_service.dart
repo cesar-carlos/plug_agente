@@ -11,10 +11,13 @@ import 'package:plug_agente/application/services/auto_update_failure_messages.da
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_helper_launch_state.dart';
 import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
+import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
@@ -64,10 +67,6 @@ final class SilentUpdateDownloadStageCancelled extends SilentUpdateDownloadStage
   const SilentUpdateDownloadStageCancelled();
 }
 
-final class SilentUpdateDownloadStageDisabled extends SilentUpdateDownloadStageResult {
-  const SilentUpdateDownloadStageDisabled();
-}
-
 class SilentUpdateDownloadStageRequest {
   const SilentUpdateDownloadStageRequest({
     required this.probeResult,
@@ -104,6 +103,7 @@ class SilentUpdateDownloadApplyService {
     CloseApplicationForSilentUpdate? closeApplicationForSilentUpdate,
     CurrentProcessIdResolver? currentProcessIdResolver,
     Duration helperWaitDuration = AutoUpdateDefaults.helperWaitDuration,
+    Duration stagedPendingTtl = AutoUpdateDefaults.stagedPendingTtl,
     DateTime Function()? clock,
   }) : _installer = installer,
        _pendingStore = pendingStore,
@@ -114,6 +114,7 @@ class SilentUpdateDownloadApplyService {
        _closeApplicationForSilentUpdate = closeApplicationForSilentUpdate,
        _currentProcessIdResolver = currentProcessIdResolver ?? (() => pid),
        _helperWaitDuration = helperWaitDuration,
+       _stagedPendingTtl = stagedPendingTtl,
        _clock = clock ?? DateTime.now;
 
   final ISilentUpdateInstaller? _installer;
@@ -125,6 +126,7 @@ class SilentUpdateDownloadApplyService {
   final CloseApplicationForSilentUpdate? _closeApplicationForSilentUpdate;
   final CurrentProcessIdResolver _currentProcessIdResolver;
   final Duration _helperWaitDuration;
+  final Duration _stagedPendingTtl;
   final DateTime Function() _clock;
 
   bool _applyInProgress = false;
@@ -260,28 +262,43 @@ class SilentUpdateDownloadApplyService {
       return const SilentUpdateDownloadStageCancelled();
     }
 
+    // Preference turned off mid-flight after a successful stage: keep staged
+    // Ready for manual banner/shutdown apply. Do not wipe useful artifacts.
     if (!request.automaticSilentUpdatesEnabled()) {
-      await _pendingStore.clear();
-      final disabledAt = _clock();
-      request.onDiagnosticsUpdated(
-        request.getDiagnostics()?.copyWith(
-          completedAt: disabledAt,
-          completionSource: UpdateCheckCompletionSource.automaticDisabled,
-          updateAvailable: false,
-        ),
-      );
-      await request.persistDiagnostics();
       request.notifyDiagnosticsChanged();
-      return const SilentUpdateDownloadStageDisabled();
     }
 
     return const SilentUpdateDownloadStageReady();
   }
 
+  /// True when a staged update is Ready for a real apply: artifacts on disk,
+  /// helper not in-flight, launch not already concluded/timed out, and within
+  /// staged TTL. Read-only — clearing stale/expired records belongs to
+  /// [resolvePersistedDownloadedPending] / reconcile, not banner polls.
   Future<bool> hasPendingDownloadedUpdate() async {
     final pending = await _pendingStore.read();
     if (pending is! PendingSilentUpdateDownloaded) return false;
-    return _artifactsExistOnDisk(pending);
+    if (!await _artifactsExistOnDisk(pending)) return false;
+
+    final now = _clock();
+    final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+    if (_isHelperInstallInFlight(pending, launcherStatus)) return false;
+    if (SilentUpdateHelperLaunchState.isLaunchConcludedOrTimedOut(
+      launchedAt: pending.launchedAt,
+      launcherStatus: launcherStatus,
+      now: now,
+      helperWaitDuration: _helperWaitDuration,
+    )) {
+      return false;
+    }
+    if (SilentUpdateHelperLaunchState.isStagedPendingExpired(
+      startedAt: pending.startedAt,
+      now: now,
+      stagedPendingTtl: _stagedPendingTtl,
+    )) {
+      return false;
+    }
+    return true;
   }
 
   Future<PendingDownloadedResolution> resolvePersistedDownloadedPending() async {
@@ -300,9 +317,49 @@ class SilentUpdateDownloadApplyService {
       return const PendingDownloadedStaleCleared();
     }
 
+    final now = _clock();
     final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+
     if (_isHelperInstallInFlight(pending, launcherStatus)) {
       return PendingDownloadedInFlight(pending);
+    }
+
+    // Same fail+cooldown policy as PendingSilentUpdateReconciler: after a real
+    // launch concludes or times out, never report Ready (would spawn a 2nd helper).
+    if (SilentUpdateHelperLaunchState.isLaunchConcludedOrTimedOut(
+      launchedAt: pending.launchedAt,
+      launcherStatus: launcherStatus,
+      now: now,
+      helperWaitDuration: _helperWaitDuration,
+    )) {
+      developer.log(
+        'Clearing pending silent update after launch concluded/timed out: version=${pending.version}',
+        name: 'silent_update_download_apply',
+        level: 800,
+      );
+      await _finalizeConcludedOrTimedOutPending(
+        pending: pending,
+        launcherStatus: launcherStatus,
+      );
+      return const PendingDownloadedStaleCleared();
+    }
+
+    if (SilentUpdateHelperLaunchState.isStagedPendingExpired(
+      startedAt: pending.startedAt,
+      now: now,
+      stagedPendingTtl: _stagedPendingTtl,
+    )) {
+      developer.log(
+        'Clearing staged pending silent update past TTL: version=${pending.version}',
+        name: 'silent_update_download_apply',
+        level: 800,
+      );
+      await _pendingStore.clear();
+      final installer = _installer;
+      if (installer != null) {
+        await cleanupArtifacts(installer);
+      }
+      return const PendingDownloadedStaleCleared();
     }
 
     return PendingDownloadedReady(pending);
@@ -318,17 +375,40 @@ class SilentUpdateDownloadApplyService {
     PendingSilentUpdateDownloaded pending,
     SilentUpdateLauncherStatus? launcherStatus,
   ) {
-    final now = _clock();
-    final startedAt = launcherStatus?.lastUpdatedAt ?? pending.startedAt;
-    if (startedAt == null || now.difference(startedAt) > _helperWaitDuration) {
+    return SilentUpdateHelperLaunchState.isInFlight(
+      launchedAt: pending.launchedAt,
+      launcherStatus: launcherStatus,
+      now: _clock(),
+      helperWaitDuration: _helperWaitDuration,
+    );
+  }
+
+  Future<void> _finalizeConcludedOrTimedOutPending({
+    required PendingSilentUpdateDownloaded pending,
+    required SilentUpdateLauncherStatus? launcherStatus,
+  }) async {
+    final resetBreaker = SilentUpdateHelperLaunchState.shouldResetBreakerForConcludedLaunch(
+      versionCompleted: _isVersionCompleted(pending.version),
+      launcherStatus: launcherStatus,
+    );
+    if (resetBreaker) {
+      await _automaticFailureBreaker.reset();
+    } else {
+      await _automaticFailureBreaker.recordFailure();
+    }
+    await _pendingStore.clear();
+    final installer = _installer;
+    if (installer != null) {
+      await cleanupArtifacts(installer);
+    }
+  }
+
+  bool _isVersionCompleted(String pendingVersion) {
+    try {
+      return AppVersionComparator.compare(AppConstants.appVersion, pendingVersion) >= 0;
+    } on FormatException {
       return false;
     }
-    final state = launcherStatus?.state;
-    return state == null ||
-        state == 'started' ||
-        state == 'waitingForAppExit' ||
-        state == 'nonAdminStarted' ||
-        state == 'elevatedStarted';
   }
 
   Future<Result<void>> applyPendingDownloadedUpdate({
@@ -403,6 +483,78 @@ class SilentUpdateDownloadApplyService {
       );
     }
 
+    final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+    if (_isHelperInstallInFlight(pending, launcherStatus)) {
+      // Idempotent Success across process restarts: recent launchedAt / helper
+      // status means a helper is already running — do not spawn a second one.
+      _applyInProgress = false;
+      if (triggerAppClose) {
+        _closeApplicationOrReportFailure(
+          noticeTitle: noticeTitle,
+          noticeBody: noticeBody,
+          getDiagnostics: getDiagnostics,
+          onDiagnosticsUpdated: onDiagnosticsUpdated,
+          persistDiagnostics: persistDiagnostics,
+          notifyDiagnosticsChanged: notifyDiagnosticsChanged,
+        );
+      }
+      return const Success(unit);
+    }
+
+    // Same gate as resolve: concluded/timed-out launch must never re-spawn.
+    if (SilentUpdateHelperLaunchState.isLaunchConcludedOrTimedOut(
+      launchedAt: pending.launchedAt,
+      launcherStatus: launcherStatus,
+      now: _clock(),
+      helperWaitDuration: _helperWaitDuration,
+    )) {
+      final treatAsSuccess = SilentUpdateHelperLaunchState.shouldResetBreakerForConcludedLaunch(
+        versionCompleted: _isVersionCompleted(pending.version),
+        launcherStatus: launcherStatus,
+      );
+      developer.log(
+        'Refusing apply after launch concluded/timed out: version=${pending.version}',
+        name: 'silent_update_download_apply',
+        level: 800,
+      );
+      await _finalizeConcludedOrTimedOutPending(
+        pending: pending,
+        launcherStatus: launcherStatus,
+      );
+      _applyInProgress = false;
+      if (treatAsSuccess) {
+        if (triggerAppClose) {
+          _closeApplicationOrReportFailure(
+            noticeTitle: noticeTitle,
+            noticeBody: noticeBody,
+            getDiagnostics: getDiagnostics,
+            onDiagnosticsUpdated: onDiagnosticsUpdated,
+            persistDiagnostics: persistDiagnostics,
+            notifyDiagnosticsChanged: notifyDiagnosticsChanged,
+          );
+        }
+        return const Success(unit);
+      }
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Pending silent update launch already concluded or timed out',
+          context: <String, dynamic>{
+            'operation': 'applyPendingDownloadedUpdate',
+            'reason': 'launch_concluded_or_timed_out',
+            'version': pending.version,
+          },
+        ),
+      );
+    }
+
+    // Persist launch evidence before spawn so a kill between Process.start and
+    // the old post-spawn write cannot leave Ready with no launchedAt (reconcile
+    // would re-apply). Flush so the stamp survives an immediate process death.
+    final now = _clock();
+    final pendingWithLaunch = pending.copyWith(launchedAt: now);
+    await _pendingStore.write(pendingWithLaunch);
+    await _preferences?.flushPendingPersistence();
+
     final launchResult = await installer.launchPreparedHelper(
       SilentUpdateLaunchRequest(
         version: pending.version,
@@ -424,11 +576,14 @@ class SilentUpdateDownloadApplyService {
       (error) => launchError = error,
     );
     if (launchError != null) {
+      // Roll back launch stamp so a failed spawn does not look in-flight for
+      // the full helper wait window.
+      await _pendingStore.write(pending.copyWith(clearLaunchedAt: true));
+      await _preferences?.flushPendingPersistence();
       _applyInProgress = false;
       return Failure(launchError!);
     }
 
-    final now = _clock();
     onDiagnosticsUpdated(
       getDiagnostics()?.copyWith(
         completedAt: now,
@@ -471,6 +626,9 @@ class SilentUpdateDownloadApplyService {
         Object error,
         StackTrace stackTrace,
       ) async {
+        // Helper already launched; reset so a later retry/UI path is not stuck
+        // behind a permanent in-process apply guard while the process continues.
+        _applyInProgress = false;
         developer.log(
           'Silent update failed to close the app for install; the helper is '
           'already launched and waiting for this process to exit',

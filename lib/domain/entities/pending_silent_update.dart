@@ -79,6 +79,7 @@ sealed class PendingSilentUpdate {
         requireValidSignature: requireValidSignature,
         appPid: appPid,
         updateDirectorySecurityStatus: updateDirectorySecurityStatus,
+        launchedAt: _readDateTime(json['launchedAt']),
       );
     }
 
@@ -124,6 +125,7 @@ final class PendingSilentUpdateDownloaded extends PendingSilentUpdate {
     this.requireValidSignature,
     this.strategy,
     this.updateDirectorySecurityStatus,
+    this.launchedAt,
   });
 
   final String installerPath;
@@ -144,11 +146,42 @@ final class PendingSilentUpdateDownloaded extends PendingSilentUpdate {
   final String? strategy;
   final String? updateDirectorySecurityStatus;
 
+  /// Armed / pre-spawn stamp written immediately before
+  /// `Process.start` (rolled back if spawn fails). Distinguishes
+  /// staged-only downloads from an attempted helper launch so reconcile /
+  /// in-flight gates never treat [startedAt] alone as launch evidence.
+  final DateTime? launchedAt;
+
   /// Convenience flag used by the coordinator to decide whether the
   /// record carries every field needed to launch the helper without an
   /// extra round-trip.
   bool get hasFullApplyMetadata =>
       assetSize != null && sha256 != null && installDirectoryWritable != null && requireValidSignature != null;
+
+  PendingSilentUpdateDownloaded copyWith({
+    DateTime? startedAt,
+    DateTime? launchedAt,
+    bool clearLaunchedAt = false,
+    int? appPid,
+  }) {
+    return PendingSilentUpdateDownloaded(
+      version: version,
+      startedAt: startedAt ?? this.startedAt,
+      installerPath: installerPath,
+      logPath: logPath,
+      launcherPath: launcherPath,
+      launcherStatusPath: launcherStatusPath,
+      installDirectory: installDirectory,
+      appPid: appPid ?? this.appPid,
+      assetSize: assetSize,
+      sha256: sha256,
+      installDirectoryWritable: installDirectoryWritable,
+      requireValidSignature: requireValidSignature,
+      strategy: strategy,
+      updateDirectorySecurityStatus: updateDirectorySecurityStatus,
+      launchedAt: clearLaunchedAt ? null : (launchedAt ?? this.launchedAt),
+    );
+  }
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
@@ -166,6 +199,7 @@ final class PendingSilentUpdateDownloaded extends PendingSilentUpdate {
     'requireValidSignature': requireValidSignature,
     'appPid': appPid,
     'updateDirectorySecurityStatus': updateDirectorySecurityStatus,
+    'launchedAt': launchedAt?.toIso8601String(),
   };
 }
 

@@ -4,6 +4,10 @@ import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 
 /// Validates UAC detector wiring for runtimes that support auto-update.
+///
+/// Kept as a constructor-time wiring warning: the UAC gate no longer blocks
+/// automatic download, but a Noop detector on a supported runtime still hides
+/// elevation signals used by diagnostics and future consent gates.
 class SilentUpdateUacGuard {
   const SilentUpdateUacGuard({
     required RuntimeCapabilities capabilities,

@@ -221,45 +221,6 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     _currentCheckId = _collaborators.checkIdRecorder.newId();
     unawaited(_collaborators.checkIdRecorder.record(_currentCheckId!, source: 'silent'));
 
-    if (!automaticSilentUpdatesEnabled) {
-      return _completeEarlyCheck(
-        feedUrl: feedUrl,
-        outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled),
-        completionSource: UpdateCheckCompletionSource.automaticDisabled,
-      );
-    }
-
-    if (_collaborators.scheduler.isWithinQuietHours()) {
-      return _completeEarlyCheck(
-        feedUrl: feedUrl,
-        outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.skippedByQuietHours),
-        completionSource: UpdateCheckCompletionSource.automaticQuietHours,
-      );
-    }
-
-    final installer = _silentUpdateInstaller;
-    if (installer == null) {
-      final now = _collaborators.clock();
-      _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
-        checkedAt: now,
-        configuredFeedUrl: feedUrl,
-        requestedFeedUrl: feedUrl,
-        checkId: _currentCheckId,
-        currentVersion: AppConstants.appVersion,
-        completedAt: now,
-        completionSource: UpdateCheckCompletionSource.automaticInstallFailure,
-        errorMessage: 'Silent update installer is not configured',
-      );
-      await _persistLastAutomaticDiagnostics();
-      _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
-      return Failure<SilentUpdateOutcome, Exception>(
-        domain.ConfigurationFailure.withContext(
-          message: 'Silent update installer is not configured',
-          context: <String, dynamic>{'operation': 'checkSilently'},
-        ),
-      );
-    }
-
     _isSilentCheckInProgress = true;
     _cancelRequested = false;
     try {
@@ -282,6 +243,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.pendingInProgress);
         case PendingDownloadedReady(:final pending):
+          // Evaluate staged pending / auto-apply before quiet-hours skip and
+          // before preference-off early exit so a downloaded update can still
+          // surface Ready (manual banner/apply) when automatic updates are off.
           if (_shouldAutoApply() && !_cancelRequested) {
             return _autoApplyStagedUpdate(feedUrl: feedUrl);
           }
@@ -289,6 +253,46 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         case PendingDownloadedNone():
         case PendingDownloadedStaleCleared():
           break;
+      }
+
+      // Preference off blocks *new* downloads only; Ready was handled above.
+      if (!automaticSilentUpdatesEnabled) {
+        return _completeEarlyCheck(
+          feedUrl: feedUrl,
+          outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled),
+          completionSource: UpdateCheckCompletionSource.automaticDisabled,
+        );
+      }
+
+      if (_collaborators.scheduler.isWithinQuietHours()) {
+        return _completeEarlyCheck(
+          feedUrl: feedUrl,
+          outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.skippedByQuietHours),
+          completionSource: UpdateCheckCompletionSource.automaticQuietHours,
+        );
+      }
+
+      final installer = _silentUpdateInstaller;
+      if (installer == null) {
+        final now = _collaborators.clock();
+        _lastAutomaticDiagnostics = UpdateCheckDiagnostics(
+          checkedAt: now,
+          configuredFeedUrl: feedUrl,
+          requestedFeedUrl: feedUrl,
+          checkId: _currentCheckId,
+          currentVersion: AppConstants.appVersion,
+          completedAt: now,
+          completionSource: UpdateCheckCompletionSource.automaticInstallFailure,
+          errorMessage: 'Silent update installer is not configured',
+        );
+        await _persistLastAutomaticDiagnostics();
+        _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+        return Failure<SilentUpdateOutcome, Exception>(
+          domain.ConfigurationFailure.withContext(
+            message: 'Silent update installer is not configured',
+            context: <String, dynamic>{'operation': 'checkSilently'},
+          ),
+        );
       }
 
       await _collaborators.downloadApplyService.cleanupArtifacts(installer);
@@ -370,9 +374,6 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         case SilentUpdateDownloadStageFailure(:final error):
           _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           return Failure<SilentUpdateOutcome, Exception>(error);
-        case SilentUpdateDownloadStageDisabled():
-          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
-          return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled);
         case SilentUpdateDownloadStageReady():
           _collaborators.diagnosticsNotifier.notifyChanged();
           _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);

@@ -25,6 +25,11 @@ abstract interface class IAppSettingsStore {
   Future<void> remove(String key);
   Future<void> setValues(Map<String, Object> values);
   Future<void> flushPendingPersistence();
+
+  /// Error from the most recent deferred disk write, or null on success.
+  /// Inspect after [flushPendingPersistence] when callers need to surface
+  /// silent persist failures as typed ConfigurationFailure.
+  Object? get lastPersistError;
 }
 
 class GlobalAppSettingsStore implements IAppSettingsStore {
@@ -255,6 +260,7 @@ class GlobalAppSettingsStore implements IAppSettingsStore {
   ///
   /// Callers can inspect this after `flushPendingPersistence()` to detect
   /// silent disk-write failures.
+  @override
   Object? lastPersistError;
 
   Future<void> _persist() {
@@ -513,4 +519,7 @@ class InMemoryAppSettingsStore implements IAppSettingsStore {
 
   @override
   Future<void> flushPendingPersistence() async {}
+
+  @override
+  Object? get lastPersistError => null;
 }

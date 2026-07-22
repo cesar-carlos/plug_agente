@@ -90,6 +90,9 @@ class DegradedUpdatePreferencesRepository implements IUpdatePreferencesRepositor
   Future<void> flushPendingPersistence() async {}
 
   @override
+  Object? get lastPersistError => null;
+
+  @override
   ICircuitBreakerPersistence manualTimeoutCircuitPersistence() => _manualTimeoutCircuit;
 
   @override

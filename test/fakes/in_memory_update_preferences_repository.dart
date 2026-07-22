@@ -111,6 +111,11 @@ class InMemoryUpdatePreferencesRepository implements IUpdatePreferencesRepositor
   @override
   Future<void> flushPendingPersistence() async {}
 
+  Object? forcedPersistError;
+
+  @override
+  Object? get lastPersistError => forcedPersistError;
+
   @override
   ICircuitBreakerPersistence manualTimeoutCircuitPersistence() => _manualTimeoutCircuit;
 

@@ -93,6 +93,9 @@ class UpdatePreferencesRepository implements IUpdatePreferencesRepository {
   Future<void> flushPendingPersistence() => _settingsStore.flushPendingPersistence();
 
   @override
+  Object? get lastPersistError => _settingsStore.lastPersistError;
+
+  @override
   ICircuitBreakerPersistence manualTimeoutCircuitPersistence() => _manualTimeoutCircuitPersistence;
 
   @override

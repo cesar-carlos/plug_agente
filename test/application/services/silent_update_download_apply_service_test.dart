@@ -238,7 +238,7 @@ void main() {
         expect(pendingStore.writeCount, 1);
       });
 
-      test('returns Disabled when automatic silent updates are off after staging', () async {
+      test('keeps staged Ready when automatic silent updates are off after staging', () async {
         var disabled = false;
         installer.onBeforeReturn = () async {
           disabled = true;
@@ -250,11 +250,10 @@ void main() {
           ),
         );
 
-        expect(result, isA<SilentUpdateDownloadStageDisabled>());
-        expect(pendingStore.clearCount, 1);
-        expect(pendingStore.pending, isNull);
-        expect(latestDiagnostics?.completionSource, UpdateCheckCompletionSource.automaticDisabled);
-        expect(latestDiagnostics?.updateAvailable, isFalse);
+        expect(result, isA<SilentUpdateDownloadStageReady>());
+        expect(pendingStore.clearCount, 0);
+        expect(pendingStore.pending, isA<PendingSilentUpdateDownloaded>());
+        expect(latestDiagnostics?.completionSource, UpdateCheckCompletionSource.automaticInstallReady);
         expect(notifyCount, 1);
       });
 
@@ -290,6 +289,18 @@ void main() {
           ..add(pending.launcherPath);
 
         expect(await service.hasPendingDownloadedUpdate(), isTrue);
+      });
+
+      test('returns false when helper is in-flight despite artifacts on disk', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 11, 50),
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        expect(await service.hasPendingDownloadedUpdate(), isFalse);
       });
 
       test('returns false when staged files are missing on disk', () async {
@@ -352,6 +363,44 @@ void main() {
         expect((resolution as PendingDownloadedReady).pending.version, '99.0.0+1');
       });
 
+      test('returns ready for staged download with recent startedAt and no status file', () async {
+        final pending = _downloadedPending();
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedReady>());
+      });
+
+      test('returns ready for staged download with old startedAt within TTL and no status file', () async {
+        final pending = PendingSilentUpdateDownloaded(
+          version: '99.0.0+1',
+          startedAt: DateTime.utc(2026, 6, 10, 8),
+          installerPath: r'C:\PlugAgente\updates\PlugAgente-Setup-99.0.0.exe',
+          logPath: r'C:\PlugAgente\updates\PlugAgente-Update-99.0.0+1.log',
+          launcherPath: r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+          launcherStatusPath: r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+          installDirectory: r'C:\PlugAgente',
+          strategy: 'currentUserThenElevated',
+          appPid: 1234,
+          assetSize: 5,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          installDirectoryWritable: true,
+          requireValidSignature: false,
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedReady>());
+      });
+
       test('returns inFlight when helper status indicates active install', () async {
         final pending = _downloadedPending();
         pendingStore.pending = pending;
@@ -373,6 +422,107 @@ void main() {
         final resolution = await service.resolvePersistedDownloadedPending();
 
         expect(resolution, isA<PendingDownloadedInFlight>());
+      });
+
+      test('returns inFlight when launchedAt is recent even without status file', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 11, 50),
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedInFlight>());
+      });
+
+      test('clears and returns stale when launchedAt is outside helper wait without status', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 10),
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedStaleCleared>());
+        expect(pendingStore.clearCount, 1);
+        expect(pendingStore.pending, isNull);
+        expect(breaker.failureCount, 1);
+      });
+
+      test('resets breaker on terminal helper success even when app version is still older', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 10),
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+        await breaker.recordFailure();
+        await breaker.recordFailure();
+
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          launcherStatusReader: _TerminalLauncherStatusReader(
+            pending: pending,
+            state: 'completed',
+            lastUpdatedAt: DateTime.utc(2026, 6, 10, 10),
+          ),
+          automaticFailureBreaker: breaker,
+          clock: () => DateTime.utc(2026, 6, 10, 12),
+        );
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedStaleCleared>());
+        expect(pendingStore.pending, isNull);
+        expect(
+          breaker.failureCount,
+          0,
+          reason: 'terminal success must reset breaker (parity with reconcile)',
+        );
+      });
+
+      test('clears staged pending past TTL', () async {
+        final pending = PendingSilentUpdateDownloaded(
+          version: '99.0.0+1',
+          startedAt: DateTime.utc(2026, 6, 1, 12),
+          installerPath: r'C:\PlugAgente\updates\PlugAgente-Setup-99.0.0.exe',
+          logPath: r'C:\PlugAgente\updates\PlugAgente-Update-99.0.0+1.log',
+          launcherPath: r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.exe',
+          launcherStatusPath: r'C:\PlugAgente\updates\PlugAgente-Update-Helper-99.0.0+1.status.json',
+          installDirectory: r'C:\PlugAgente',
+          strategy: 'currentUserThenElevated',
+          appPid: 1234,
+          assetSize: 5,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          installDirectoryWritable: true,
+          requireValidSignature: false,
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          launcherStatusReader: launcherStatusReader,
+          automaticFailureBreaker: breaker,
+          clock: () => DateTime.utc(2026, 6, 10, 12),
+        );
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedStaleCleared>());
+        expect(pendingStore.clearCount, 1);
+        expect(installer.cleanupCount, 1);
       });
     });
 
@@ -534,6 +684,116 @@ void main() {
 
         expect(result.isError(), isTrue);
         expect(installer.launchHelperCount, 1);
+        expect(
+          pendingStore.pending,
+          isA<PendingSilentUpdateDownloaded>().having(
+            (value) => value.launchedAt,
+            'launchedAt',
+            isNull,
+          ),
+          reason: 'failed spawn must roll back launchedAt so retry is not blocked',
+        );
+      });
+
+      test('persists launchedAt before spawn so reconcile treats as in-flight', () async {
+        pendingStore.pending = _downloadedPending();
+        DateTime? launchedAtSeenDuringSpawn;
+        installer.onBeforeLaunchReturn = () async {
+          final current = pendingStore.pending;
+          launchedAtSeenDuringSpawn =
+              current is PendingSilentUpdateDownloaded ? current.launchedAt : null;
+        };
+
+        final result = await apply(triggerAppClose: false);
+
+        expect(result.isSuccess(), isTrue);
+        expect(launchedAtSeenDuringSpawn, isNotNull);
+        expect(
+          (pendingStore.pending! as PendingSilentUpdateDownloaded).launchedAt,
+          launchedAtSeenDuringSpawn,
+        );
+      });
+
+      test('apply with recent launchedAt is idempotent Success without second launch', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 11, 55),
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+        var closeCount = 0;
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          launcherStatusReader: launcherStatusReader,
+          automaticFailureBreaker: breaker,
+          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+            closeCount++;
+          },
+        );
+
+        final result = await apply();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(result.isSuccess(), isTrue);
+        expect(installer.launchHelperCount, 0);
+        expect(closeCount, 1);
+      });
+
+      test('apply with concluded/timed-out launch fails without spawning a second helper', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 10),
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        final result = await apply(triggerAppClose: false);
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (error) {
+            expect(error, isA<domain.ConfigurationFailure>());
+            expect(
+              (error as domain.ConfigurationFailure).context['reason'],
+              'launch_concluded_or_timed_out',
+            );
+          },
+        );
+        expect(installer.launchHelperCount, 0);
+        expect(pendingStore.pending, isNull);
+        expect(breaker.failureCount, 1);
+        expect(installer.cleanupCount, 1);
+      });
+
+      test('apply with terminal helper success is idempotent Success without second launch', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 10),
+        );
+        pendingStore.pending = pending;
+        await breaker.recordFailure();
+
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          launcherStatusReader: _TerminalLauncherStatusReader(
+            pending: pending,
+            state: 'completed',
+            lastUpdatedAt: DateTime.utc(2026, 6, 10, 10),
+          ),
+          automaticFailureBreaker: breaker,
+          clock: () => DateTime.utc(2026, 6, 10, 12),
+        );
+
+        final result = await apply(triggerAppClose: false);
+
+        expect(result.isSuccess(), isTrue);
+        expect(installer.launchHelperCount, 0);
+        expect(pendingStore.pending, isNull);
+        expect(breaker.failureCount, 0);
       });
 
       test('second apply is idempotent: does not relaunch helper but still closes', () async {
@@ -583,10 +843,15 @@ void main() {
       });
 
       test('reports and logs when closing the app for install fails, instead of losing the error', () async {
-        pendingStore.pending = _downloadedPending();
+        final pending = _downloadedPending();
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
         service = _makeService(
           installer: installer,
           pendingStore: pendingStore,
+          launcherStatusReader: launcherStatusReader,
           automaticFailureBreaker: breaker,
           closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
             throw StateError('window manager refused to close');
@@ -602,6 +867,19 @@ void main() {
         expect(latestDiagnostics?.completionSource, UpdateCheckCompletionSource.automaticInstallFailure);
         expect(latestDiagnostics?.errorMessage, contains('window manager refused to close'));
         expect(notifyCount, greaterThanOrEqualTo(2));
+        expect(
+          pendingStore.pending,
+          isA<PendingSilentUpdateDownloaded>().having(
+            (value) => value.launchedAt,
+            'launchedAt',
+            isNotNull,
+          ),
+        );
+
+        // Close failure resets the in-process guard; launch evidence still
+        // makes resolvePersistedDownloadedPending report in-flight.
+        final resolution = await service.resolvePersistedDownloadedPending();
+        expect(resolution, isA<PendingDownloadedInFlight>());
       });
     });
 
@@ -645,6 +923,51 @@ class _InFlightLauncherStatusReader implements ISilentUpdateLauncherStatusReader
   Future<SilentUpdateLauncherStatus?> read(String? statusPath) async {
     return SilentUpdateLauncherStatus(
       state: 'started',
+      strategy: pending.strategy,
+      installDirectory: pending.installDirectory,
+      installerPath: pending.installerPath,
+      logPath: pending.logPath,
+      nonAdminExitCode: null,
+      nonAdminDurationMs: null,
+      elevatedExitCode: null,
+      elevatedDurationMs: null,
+      elevatedRetryStarted: null,
+      waitForAppExitDurationMs: null,
+      appExitTimedOut: null,
+      appPid: pending.appPid,
+      signatureStatus: null,
+      signatureRequired: null,
+      actualSha256: null,
+      hashValidationStatus: null,
+      installDirectoryWritable: true,
+      elevatedCancelled: null,
+      errorMessage: null,
+      lastUpdatedAt: lastUpdatedAt,
+    );
+  }
+}
+
+class _TerminalLauncherStatusReader implements ISilentUpdateLauncherStatusReader {
+  _TerminalLauncherStatusReader({
+    required this.pending,
+    required this.state,
+    required this.lastUpdatedAt,
+  });
+
+  final PendingSilentUpdateDownloaded pending;
+  final String state;
+  final DateTime lastUpdatedAt;
+
+  @override
+  Future<bool> fileExists(String? path) async {
+    if (path == null || path.isEmpty) return false;
+    return path == pending.installerPath || path == pending.launcherPath;
+  }
+
+  @override
+  Future<SilentUpdateLauncherStatus?> read(String? statusPath) async {
+    return SilentUpdateLauncherStatus(
+      state: state,
       strategy: pending.strategy,
       installDirectory: pending.installDirectory,
       installerPath: pending.installerPath,

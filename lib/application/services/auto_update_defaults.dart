@@ -16,8 +16,14 @@ abstract final class AutoUpdateDefaults {
   /// counter crosses [automaticFailureCooldownThreshold].
   static const Duration automaticFailureCooldown = Duration(hours: 6);
 
-  /// Maximum wall-clock window during which the reconciler treats an
-  /// in-flight helper as still running. Past this point the pending
-  /// record is marked failed instead of kept alive.
+  /// Maximum wall-clock window during which the reconciler treats a
+  /// *launched* helper as still running. Past this point a launched pending
+  /// record is marked failed instead of kept alive. Staged-only downloads
+  /// (no launch evidence) are unaffected.
   static const Duration helperWaitDuration = Duration(minutes: 30);
+
+  /// Maximum age for a staged (downloaded, not launched) pending update.
+  /// Past this ops bound the record and artifacts are cleared so Ready does
+  /// not linger indefinitely when the feed moves on or the user never applies.
+  static const Duration stagedPendingTtl = Duration(days: 7);
 }

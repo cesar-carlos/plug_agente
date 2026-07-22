@@ -82,7 +82,7 @@ class _FakeOrchestrator implements IAutoUpdateOrchestrator {
   Future<Result<SilentUpdateOutcome>> checkSilently() async => const Success(SilentUpdateOutcome.noNewVersion);
 
   @override
-  Future<void> initialize() async {}
+  Future<Result<void>> initialize() async => const Success(unit);
 
   @override
   Future<Result<void>> setAutomaticSilentUpdatesEnabled(bool enabled) async => const Success(unit);

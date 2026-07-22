@@ -7,6 +7,7 @@ import 'package:plug_agente/application/services/auto_update_defaults.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/persistent_circuit_breaker.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_helper_launch_state.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
@@ -26,8 +27,9 @@ class PendingSilentUpdateReconcileRequest {
 }
 
 /// Reconciles a persisted pending silent-update record after a process
-/// restart: stale cleanup, in-flight installer retention, successful
-/// completion, or failure with circuit-breaker accounting.
+/// restart: stale cleanup, staged Ready retention, in-flight installer
+/// retention, successful completion, or failure with circuit-breaker
+/// accounting after a real helper launch.
 class PendingSilentUpdateReconciler {
   PendingSilentUpdateReconciler({
     required IPendingSilentUpdateStore pendingStore,
@@ -36,6 +38,7 @@ class PendingSilentUpdateReconciler {
     required String? Function() feedUrlResolver,
     required UpdateCheckIdRecorder checkIdRecorder,
     Duration helperWaitDuration = AutoUpdateDefaults.helperWaitDuration,
+    Duration stagedPendingTtl = AutoUpdateDefaults.stagedPendingTtl,
     DateTime Function()? clock,
   }) : _pendingStore = pendingStore,
        _launcherStatusReader = launcherStatusReader,
@@ -43,6 +46,7 @@ class PendingSilentUpdateReconciler {
        _feedUrlResolver = feedUrlResolver,
        _checkIdRecorder = checkIdRecorder,
        _helperWaitDuration = helperWaitDuration,
+       _stagedPendingTtl = stagedPendingTtl,
        _clock = clock ?? DateTime.now;
 
   final IPendingSilentUpdateStore _pendingStore;
@@ -51,6 +55,7 @@ class PendingSilentUpdateReconciler {
   final String? Function() _feedUrlResolver;
   final UpdateCheckIdRecorder _checkIdRecorder;
   final Duration _helperWaitDuration;
+  final Duration _stagedPendingTtl;
   final DateTime Function() _clock;
 
   Future<void> reconcile(PendingSilentUpdateReconcileRequest request) async {
@@ -61,7 +66,8 @@ class PendingSilentUpdateReconciler {
     unawaited(_checkIdRecorder.record(checkId, source: 'reconcile'));
     final feedUrl = _feedUrlResolver() ?? officialAutoUpdateFeedUrl;
     final now = _clock();
-    final launcherStatusPath = pending is PendingSilentUpdateDownloaded ? pending.launcherStatusPath : null;
+    final downloaded = pending is PendingSilentUpdateDownloaded ? pending : null;
+    final launcherStatusPath = downloaded?.launcherStatusPath;
     final launcherStatus = await _launcherStatusReader.read(launcherStatusPath);
     bool completed;
     try {
@@ -79,7 +85,15 @@ class PendingSilentUpdateReconciler {
       request.pushDiagnostics();
       return;
     }
-    if (!completed && _shouldKeepPendingSilentUpdate(pending, launcherStatus, now)) {
+
+    final launchedAt = downloaded?.launchedAt;
+    if (!completed &&
+        SilentUpdateHelperLaunchState.isInFlight(
+          launchedAt: launchedAt,
+          launcherStatus: launcherStatus,
+          now: now,
+          helperWaitDuration: _helperWaitDuration,
+        )) {
       request.onDiagnosticsUpdated(
         diagnosticsForPending(
           pending: pending,
@@ -96,8 +110,67 @@ class PendingSilentUpdateReconciler {
       request.pushDiagnostics();
       return;
     }
-    final failureState = completed ? null : await _automaticFailureBreaker.recordFailure();
-    if (completed) {
+
+    // Staged download without launch evidence must stay Ready for banner /
+    // shutdown / auto-apply, unless past the staged TTL ops bound.
+    if (!completed &&
+        downloaded != null &&
+        !SilentUpdateHelperLaunchState.hasLaunchEvidence(
+          launchedAt: launchedAt,
+          launcherStatus: launcherStatus,
+        )) {
+      if (SilentUpdateHelperLaunchState.isStagedPendingExpired(
+        startedAt: downloaded.startedAt,
+        now: now,
+        stagedPendingTtl: _stagedPendingTtl,
+      )) {
+        developer.log(
+          'Clearing staged pending silent update past TTL: version=${pending.version}',
+          name: 'silent_update_coordinator',
+          level: 800,
+        );
+        request.onDiagnosticsUpdated(
+          diagnosticsForPending(
+            pending: pending,
+            launcherStatus: launcherStatus,
+            feedUrl: feedUrl,
+            now: now,
+            checkId: checkId,
+            completionSource: UpdateCheckCompletionSource.automaticPendingFailed,
+            errorMessage: 'Staged silent update expired before it was applied',
+          ),
+        );
+        await request.persistDiagnostics();
+        await _pendingStore.clear();
+        request.pushDiagnostics();
+        return;
+      }
+
+      request.onDiagnosticsUpdated(
+        diagnosticsForPending(
+          pending: pending,
+          launcherStatus: launcherStatus,
+          feedUrl: feedUrl,
+          now: now,
+          checkId: checkId,
+          completionSource: UpdateCheckCompletionSource.automaticInstallReady,
+          updateAvailable: true,
+        ),
+      );
+      await request.persistDiagnostics();
+      request.pushDiagnostics();
+      return;
+    }
+
+    // Unified with resolvePersistedDownloadedPending: launch evidence that is
+    // no longer in-flight (helper wait elapsed or terminal status) clears and
+    // fails (or completes) — never leaves Ready for an uncontrolled second launch.
+    final resetBreaker = SilentUpdateHelperLaunchState.shouldResetBreakerForConcludedLaunch(
+      versionCompleted: completed,
+      launcherStatus: launcherStatus,
+    );
+    final failureState = resetBreaker ? null : await _automaticFailureBreaker.recordFailure();
+    if (resetBreaker) {
       await _automaticFailureBreaker.reset();
     }
     request.onDiagnosticsUpdated(
@@ -177,20 +250,5 @@ class PendingSilentUpdateReconciler {
     final launcherMissing = !await _launcherStatusReader.fileExists(pending.launcherPath);
     final statusMissing = !await _launcherStatusReader.fileExists(pending.launcherStatusPath);
     return installerMissing && launcherMissing && statusMissing;
-  }
-
-  bool _shouldKeepPendingSilentUpdate(
-    PendingSilentUpdate pending,
-    SilentUpdateLauncherStatus? launcherStatus,
-    DateTime now,
-  ) {
-    final startedAt = launcherStatus?.lastUpdatedAt ?? pending.startedAt;
-    if (startedAt == null || now.difference(startedAt) > _helperWaitDuration) return false;
-    final state = launcherStatus?.state;
-    return state == null ||
-        state == 'started' ||
-        state == 'waitingForAppExit' ||
-        state == 'nonAdminStarted' ||
-        state == 'elevatedStarted';
   }
 }
