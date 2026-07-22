@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
+import 'package:plug_agente/application/services/startup_configuration_session_state.dart';
 import 'package:plug_agente/application/use_cases/sync_startup_status.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
@@ -111,5 +113,50 @@ void main() {
       () => repository.ensureLaunchConfiguration(allowElevation: false),
     ).called(1);
     verify(() => repository.persistStartWithWindows(false)).called(1);
+  });
+
+  test('keeps stored preference when ensure repairs HKCU during sync', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(true);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(false),
+    );
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry),
+    );
+
+    final result = await useCase();
+
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull()?.reconciledStartWithWindows, isNull);
+    verifyNever(() => repository.persistStartWithWindows(any()));
+  });
+
+  test('reuses boot session cache and skips ensure', () async {
+    final sessionState = StartupConfigurationSessionState()
+      ..setBootLaunchConfiguration(
+        const StartupLaunchConfigurationOutcome(
+          StartupLaunchConfigurationOutcomeType.repaired,
+        ),
+      );
+    useCase = SyncStartupStatus(repository, sessionState: sessionState);
+
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(true);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(true),
+    );
+
+    final result = await useCase();
+
+    expect(result.isSuccess(), isTrue);
+    expect(
+      result.getOrNull()?.launchConfiguration?.type,
+      StartupLaunchConfigurationOutcomeType.repaired,
+    );
+    verifyNever(() => repository.ensureLaunchConfiguration(allowElevation: false));
+    verifyNever(() => repository.ensureLaunchConfiguration());
   });
 }

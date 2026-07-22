@@ -11,10 +11,12 @@ class StartupLaunchConfigurationMapper {
   static Future<StartupLaunchConfigurationOutcome?> validate(
     IStartupPreferencesRepository repository, {
     bool allowElevation = true,
+    bool createIfMissing = true,
   }) async {
     try {
       final result = await repository.ensureLaunchConfiguration(
         allowElevation: allowElevation,
+        createIfMissing: createIfMissing,
       );
       return result.fold(
         fromStatus,

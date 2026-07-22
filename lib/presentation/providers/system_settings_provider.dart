@@ -161,7 +161,10 @@ class SystemSettingsProvider extends ChangeNotifier {
       return;
     }
 
-    final outcome = await StartupLaunchConfigurationMapper.validate(_repository);
+    final outcome = await StartupLaunchConfigurationMapper.validate(
+      _repository,
+      createIfMissing: _startWithWindows,
+    );
     if (_isDisposed) {
       return;
     }

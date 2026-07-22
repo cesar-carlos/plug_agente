@@ -22,10 +22,19 @@ void registerPlugStartupServices(
   );
 
   getIt
-    ..registerLazySingleton(() => SyncStartupStatus(getIt<IStartupPreferencesRepository>()))
+    ..registerLazySingleton(StartupConfigurationSessionState.new)
+    ..registerLazySingleton(
+      () => SyncStartupStatus(
+        getIt<IStartupPreferencesRepository>(),
+        sessionState: getIt<StartupConfigurationSessionState>(),
+      ),
+    )
     ..registerLazySingleton(() => SetStartWithWindows(getIt<IStartupPreferencesRepository>()))
     ..registerLazySingleton(
-      () => EnsureStartupLaunchConfigurationAtBoot(getIt<IStartupPreferencesRepository>()),
+      () => EnsureStartupLaunchConfigurationAtBoot(
+        getIt<IStartupPreferencesRepository>(),
+        sessionState: getIt<StartupConfigurationSessionState>(),
+      ),
     )
     ..registerLazySingleton(
       () => SetTrayBehaviorPreference(

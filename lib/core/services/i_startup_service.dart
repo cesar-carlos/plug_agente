@@ -12,6 +12,7 @@ abstract interface class IStartupService {
 
   Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration({
     bool allowElevation = true,
+    bool createIfMissing = true,
   });
 
   Future<Result<Unit>> enable();
@@ -21,8 +22,4 @@ abstract interface class IStartupService {
   Future<Result<Unit>> openSystemSettings();
 
   Future<Result<String>> buildStartupDiagnosticReport();
-
-  /// True when a registry Run entry targets the current executable but is
-  /// missing the `--autostart` launch argument.
-  Future<Result<bool>> hasRegistryEntryMissingAutostartForCurrentExecutable();
 }

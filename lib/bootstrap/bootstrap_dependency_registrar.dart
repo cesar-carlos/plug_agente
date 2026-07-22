@@ -76,6 +76,7 @@ import 'package:plug_agente/application/services/rpc_idempotency_cache_periodic_
 import 'package:plug_agente/application/services/settings_backed_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
+import 'package:plug_agente/application/services/startup_configuration_session_state.dart';
 import 'package:plug_agente/application/use_cases/apply_agent_action_on_app_exit_policies.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/backfill_agent_action_execution_correlation.dart';

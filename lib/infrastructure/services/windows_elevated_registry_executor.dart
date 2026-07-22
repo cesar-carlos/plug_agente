@@ -14,6 +14,12 @@ class WindowsElevatedRegistryExecutor {
     ProcessRunner? processRunner,
   }) : _processRunner = processRunner ?? Process.run;
 
+  /// Win32 `ERROR_ACCESS_DENIED`.
+  static const int accessDeniedExitCode = 5;
+
+  /// Win32 `ERROR_CANCELLED` (typical UAC decline).
+  static const int uacCancelledExitCode = 1223;
+
   final ProcessRunner _processRunner;
 
   Future<ProcessResult> deleteRunValue({
@@ -63,7 +69,18 @@ try {
   }
   exit \$p.ExitCode
 } catch {
-  [Console]::Error.WriteLine(\$_.Exception.Message)
+  \$native = 0
+  try { \$native = [int]\$_.Exception.NativeErrorCode } catch {}
+  if (\$native -eq $uacCancelledExitCode) { exit $uacCancelledExitCode }
+  if (\$native -eq $accessDeniedExitCode) { exit $accessDeniedExitCode }
+  \$message = \$_.Exception.Message
+  if (\$message -match 'canceled by the user|cancelled by the user|cancelada pelo usuario') {
+    exit $uacCancelledExitCode
+  }
+  if (\$message -match 'access is denied|acesso negado') {
+    exit $accessDeniedExitCode
+  }
+  [Console]::Error.WriteLine(\$message)
   exit 1
 }
 ''';
@@ -86,11 +103,17 @@ try {
   }
 
   static bool isAccessDenied(ProcessResult result) {
+    if (result.exitCode == accessDeniedExitCode) {
+      return true;
+    }
     final output = normalizedProcessOutput(result);
     return output.contains('access is denied') || output.contains('acesso negado');
   }
 
   static bool isUacCancelled(ProcessResult result) {
+    if (result.exitCode == uacCancelledExitCode) {
+      return true;
+    }
     final output = normalizedProcessOutput(result);
     return output.contains('operation was canceled by the user') ||
         output.contains('operation was cancelled by the user') ||

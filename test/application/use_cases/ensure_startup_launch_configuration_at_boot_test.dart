@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
+import 'package:plug_agente/application/services/startup_configuration_session_state.dart';
 import 'package:plug_agente/application/use_cases/ensure_startup_launch_configuration_at_boot.dart';
 import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
@@ -10,36 +12,38 @@ class _MockStartupPreferencesRepository extends Mock implements IStartupPreferen
 
 void main() {
   late _MockStartupPreferencesRepository repository;
+  late StartupConfigurationSessionState sessionState;
   late EnsureStartupLaunchConfigurationAtBoot useCase;
 
   setUp(() {
     repository = _MockStartupPreferencesRepository();
-    useCase = EnsureStartupLaunchConfigurationAtBoot(repository);
+    sessionState = StartupConfigurationSessionState();
+    useCase = EnsureStartupLaunchConfigurationAtBoot(
+      repository,
+      sessionState: sessionState,
+    );
   });
 
-  test('treats unhealthy registry entry as autostart when start minimized is enabled', () async {
+  test('does not treat unhealthy registry entry as autostart without --autostart arg', () async {
     when(() => repository.isStartupServiceAvailable).thenReturn(true);
     when(() => repository.startWithWindows).thenReturn(true);
     when(() => repository.startMinimized).thenReturn(true);
-    when(() => repository.readSystemStartupEnabled()).thenAnswer(
-      (_) async => const Success(false),
-    );
     when(
       () => repository.ensureLaunchConfiguration(allowElevation: false),
     ).thenAnswer(
-      (_) async => const Success(StartupLaunchConfigurationStatus.needsRepair),
-    );
-    when(() => repository.hasRegistryEntryMissingAutostartForCurrentExecutable()).thenAnswer(
-      (_) async => const Success(true),
+      (_) async => const Success(StartupLaunchConfigurationStatus.repaired),
     );
 
     final outcome = await useCase(launchArgs: const <String>[]);
 
-    expect(outcome.isAutostartLaunch, isTrue);
+    expect(outcome.isAutostartLaunch, isFalse);
     verify(
       () => repository.ensureLaunchConfiguration(allowElevation: false),
     ).called(1);
-    verify(() => repository.hasRegistryEntryMissingAutostartForCurrentExecutable()).called(1);
+    verifyNever(() => repository.readSystemStartupEnabled());
+    final bootCache = sessionState.takeBootLaunchConfiguration();
+    expect(bootCache.present, isTrue);
+    expect(bootCache.outcome?.type, StartupLaunchConfigurationOutcomeType.repaired);
   });
 
   test('keeps args-based autostart without registry defensive hint', () async {
@@ -60,10 +64,31 @@ void main() {
     );
 
     expect(outcome.isAutostartLaunch, isTrue);
-    verifyNever(() => repository.hasRegistryEntryMissingAutostartForCurrentExecutable());
+    verify(() => repository.readSystemStartupEnabled()).called(1);
+    final bootCache = sessionState.takeBootLaunchConfiguration();
+    expect(bootCache.present, isTrue);
+    expect(bootCache.outcome, isNull);
   });
 
-  test('does not use legacy autostart fallback when start with Windows is disabled', () async {
+  test('skips system read when start with Windows preference is already enabled', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(true);
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
+    );
+
+    final outcome = await useCase(launchArgs: const <String>[]);
+
+    expect(outcome.isAutostartLaunch, isFalse);
+    verifyNever(() => repository.readSystemStartupEnabled());
+    verify(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).called(1);
+  });
+
+  test('does not validate launch configuration when startup is disabled', () async {
     when(() => repository.isStartupServiceAvailable).thenReturn(true);
     when(() => repository.startWithWindows).thenReturn(false);
     when(() => repository.startMinimized).thenReturn(true);
@@ -74,7 +99,9 @@ void main() {
     final outcome = await useCase(launchArgs: const <String>[]);
 
     expect(outcome.isAutostartLaunch, isFalse);
+    verify(() => repository.readSystemStartupEnabled()).called(1);
     verifyNever(() => repository.ensureLaunchConfiguration(allowElevation: false));
-    verifyNever(() => repository.hasRegistryEntryMissingAutostartForCurrentExecutable());
+    final bootCache = sessionState.takeBootLaunchConfiguration();
+    expect(bootCache.present, isFalse);
   });
 }

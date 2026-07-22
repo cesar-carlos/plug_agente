@@ -2,6 +2,7 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
+import 'package:plug_agente/infrastructure/services/windows_environment_string_expander.dart';
 import 'package:win32/win32.dart';
 
 enum StartupRunValueReadStatus {
@@ -40,11 +41,17 @@ abstract interface class IStartupRunValueRegistryReader {
   });
 }
 
+typedef RegistryEnvironmentExpander = String Function(String value);
+
 /// Reads Run values through `RegOpenKeyEx`/`RegQueryValueEx` (Win32 FFI).
 class Win32StartupRunValueRegistryReader implements IStartupRunValueRegistryReader {
-  const Win32StartupRunValueRegistryReader();
+  const Win32StartupRunValueRegistryReader({
+    RegistryEnvironmentExpander? environmentExpander,
+  }) : _environmentExpander = environmentExpander ?? expandWindowsEnvironmentStrings;
 
   static const String _runSubKeyPath = r'Software\Microsoft\Windows\CurrentVersion\Run';
+
+  final RegistryEnvironmentExpander _environmentExpander;
 
   @override
   StartupRunValueReadResult read({
@@ -113,9 +120,11 @@ class Win32StartupRunValueRegistryReader implements IStartupRunValueRegistryRead
           // unparsable entry so the repair flow rewrites it.
           return const StartupRunValueReadResult.found('');
         }
-        return StartupRunValueReadResult.found(
-          dataOut.cast<Utf16>().toDartString(),
-        );
+        final rawValue = dataOut.cast<Utf16>().toDartString();
+        if (typeOut.value == REG_EXPAND_SZ) {
+          return StartupRunValueReadResult.found(_environmentExpander(rawValue));
+        }
+        return StartupRunValueReadResult.found(rawValue);
       } finally {
         calloc.free(dataOut);
         calloc.free(typeOut);

@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
 import 'package:plug_agente/infrastructure/services/windows_startup_run_value_reader.dart';
+import 'package:plug_agente/infrastructure/services/windows_startup_run_value_writer.dart';
 
 class _ProcessInvocation {
   _ProcessInvocation({
@@ -43,10 +44,44 @@ class _FakeRegistryReader implements IStartupRunValueRegistryReader {
   }
 }
 
+class _FakeRegistryWriter implements IStartupRunValueRegistryWriter {
+  _FakeRegistryWriter({
+    this.setResult = const StartupRunValueWriteResult.success(),
+    this.deleteResult = const StartupRunValueWriteResult.success(),
+    this.machineDeleteResult,
+  });
+
+  StartupRunValueWriteResult setResult;
+  StartupRunValueWriteResult deleteResult;
+  StartupRunValueWriteResult? machineDeleteResult;
+  final setCalls = <({StartupRegistryScope scope, String valueName, String rawValueData})>[];
+  final deleteCalls = <({StartupRegistryScope scope, String valueName})>[];
+
+  @override
+  StartupRunValueWriteResult setRunValue({
+    required StartupRegistryScope scope,
+    required String valueName,
+    required String rawValueData,
+  }) {
+    setCalls.add((scope: scope, valueName: valueName, rawValueData: rawValueData));
+    return setResult;
+  }
+
+  @override
+  StartupRunValueWriteResult deleteRunValue({
+    required StartupRegistryScope scope,
+    required String valueName,
+  }) {
+    deleteCalls.add((scope: scope, valueName: valueName));
+    if (scope.isMachineScope) {
+      return machineDeleteResult ?? deleteResult;
+    }
+    return deleteResult;
+  }
+}
+
 const _currentExecutable = r'C:\Program Files\PlugAgente\plug_agente.exe';
 const _oldExecutable = r'C:\Old\PlugAgente\plug_agente.exe';
-const _hkcuRunKey = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
-const _hklmRunKey = r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run';
 
 void main() {
   group('AutoStartService', () {
@@ -71,7 +106,7 @@ void main() {
       check(calls).isEmpty();
     });
 
-    test('should fail with accessDenied when registry read is denied', () async {
+    test('should fail with accessDenied when HKCU registry read is denied', () async {
       final service = _makeService(
         registrySnapshots: Queue.from([
           _registrySnapshot(hkcu: _accessDenied()),
@@ -90,7 +125,26 @@ void main() {
       );
     });
 
-    test('should fail with registryReadFailed when win32 read returns unexpected status', () async {
+    test('should ignore machine-scope accessDenied when querying startup status', () async {
+      final service = _makeService(
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+            hklm: _accessDenied(),
+          ),
+        ]),
+      );
+
+      final result = await service.isEnabled();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (enabled) => check(enabled).isTrue(),
+        (_) => fail('Expected success'),
+      );
+    });
+
+    test('should fail with registryReadFailed when HKCU win32 read returns unexpected status', () async {
       final service = _makeService(
         registrySnapshots: Queue.from([
           _registrySnapshot(hkcu: _readFailed()),
@@ -125,10 +179,28 @@ void main() {
       );
     });
 
-    test('should keep valid HKLM entry without creating duplicate HKCU entry', () async {
-      final calls = <_ProcessInvocation>[];
+    test('should report disabled when only HKLM is healthy', () async {
       final service = _makeService(
-        calls: calls,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hklm: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+      );
+
+      final result = await service.isEnabled();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (enabled) => check(enabled).isFalse(),
+        (_) => fail('Expected success'),
+      );
+    });
+
+    test('should enable startup in HKCU even when only HKLM is healthy', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hklm: _found(_startupValue(_currentExecutable)),
@@ -139,18 +211,63 @@ void main() {
       final result = await service.enable();
 
       check(result.isSuccess()).isTrue();
-      check(calls.where((call) => call.arguments.contains('add')).length).equals(0);
+      check(writer.setCalls).length.equals(1);
+      check(writer.setCalls.single.scope).equals(StartupRegistryScope.currentUser);
+      check(writer.setCalls.single.rawValueData).contains(LaunchArgsConstants.autostartArg);
+    });
+
+    test('should repair HKCU when only a healthy HKLM entry exists', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hklm: _found(_startupValue(_currentExecutable)),
+          ),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+            hklm: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+      );
+
+      final result = await service.ensureLaunchConfiguration(allowElevation: false);
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry),
+        (_) => fail('Expected success'),
+      );
+      check(writer.setCalls).length.equals(1);
+      check(writer.setCalls.single.scope).equals(StartupRegistryScope.currentUser);
+    });
+
+    test('should create HKCU entry when ensure finds no startup registry values', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+      );
+
+      final result = await service.ensureLaunchConfiguration(allowElevation: false);
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.repaired),
+        (_) => fail('Expected success'),
+      );
+      check(writer.setCalls).length.equals(1);
     });
 
     test('should enable startup in HKCU when no entry exists', () async {
-      final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
-      ]);
-
+      final writer = _FakeRegistryWriter();
       final service = _makeService(
-        calls: calls,
-        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(),
         ]),
@@ -159,17 +276,22 @@ void main() {
       final result = await service.enable();
 
       check(result.isSuccess()).isTrue();
-      final addCall = calls.singleWhere((call) => call.arguments.contains('add'));
-      check(addCall.executable).equals('reg');
-      check(addCall.arguments).contains(_hkcuRunKey);
-      check(addCall.arguments.join(' ')).contains(LaunchArgsConstants.autostartArg);
+      check(writer.setCalls).length.equals(1);
+      check(writer.setCalls.single.scope).equals(StartupRegistryScope.currentUser);
+      check(writer.setCalls.single.rawValueData).contains(LaunchArgsConstants.autostartArg);
     });
 
-    test('should report repair needed for duplicate HKCU and HKLM entries without elevation', () async {
+    test('should report legacy machine status for duplicate entries without elevation after HKCU ensure', () async {
       final calls = <_ProcessInvocation>[];
+      final writer = _FakeRegistryWriter();
       final service = _makeService(
         calls: calls,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+            hklm: _found(_startupValue(_currentExecutable)),
+          ),
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
             hklm: _found(_startupValue(_currentExecutable)),
@@ -183,21 +305,20 @@ void main() {
 
       check(result.isSuccess()).isTrue();
       result.fold(
-        (status) => check(status).equals(StartupLaunchConfigurationStatus.needsRepair),
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry),
         (_) => fail('Expected success'),
       );
       check(calls.where((call) => call.arguments.contains('delete')).length).equals(0);
+      check(writer.setCalls).isEmpty();
     });
 
     test('should remove duplicate HKLM entry when repairing launch configuration', () async {
+      final writer = _FakeRegistryWriter();
       final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
-      ]);
 
       final service = _makeService(
         calls: calls,
-        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
@@ -216,13 +337,16 @@ void main() {
         (status) => check(status).equals(StartupLaunchConfigurationStatus.repaired),
         (_) => fail('Expected success'),
       );
-      final deleteCall = calls.singleWhere((call) => call.arguments.contains('delete'));
-      check(deleteCall.arguments).contains(_hklmRunKey);
+      check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.localMachine);
+      check(calls.where((call) => call.arguments.contains('delete'))).isEmpty();
     });
 
     test(
       'should repair duplicate HKLM entry using elevated registry cmdlet after access denied',
       () async {
+        final writer = _FakeRegistryWriter(
+          machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
+        );
         final calls = <_ProcessInvocation>[];
         final results = Queue<ProcessResult>.from([
           ProcessResult(1, 1, '', 'ERROR: Access is denied.'),
@@ -232,6 +356,7 @@ void main() {
         final service = _makeService(
           calls: calls,
           results: results,
+          registryWriter: writer,
           registrySnapshots: Queue.from([
             _registrySnapshot(
               hkcu: _found(_startupValue(_currentExecutable)),
@@ -246,6 +371,7 @@ void main() {
         final result = await service.ensureLaunchConfiguration();
 
         check(result.isSuccess()).isTrue();
+        check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.localMachine);
         final elevatedCall = calls.singleWhere(
           (call) => call.executable == 'powershell' && call.arguments.join(' ').contains('-Verb RunAs'),
         );
@@ -255,6 +381,9 @@ void main() {
     );
 
     test('should return legacy machine status when HKLM delete fails but HKCU is healthy', () async {
+      final writer = _FakeRegistryWriter(
+        machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
+      );
       final results = Queue<ProcessResult>.from([
         ProcessResult(1, 1, '', 'ERROR: Access is denied.'),
         ProcessResult(2, 1, '', 'ERROR: Access is denied.'),
@@ -262,6 +391,7 @@ void main() {
 
       final service = _makeService(
         results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
@@ -284,14 +414,9 @@ void main() {
     });
 
     test('should repair stale executable path even when autostart argument exists', () async {
-      final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
-      ]);
-
+      final writer = _FakeRegistryWriter();
       final service = _makeService(
-        calls: calls,
-        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_oldExecutable)),
@@ -309,15 +434,16 @@ void main() {
         (status) => check(status).equals(StartupLaunchConfigurationStatus.repaired),
         (_) => fail('Expected success'),
       );
-      final addCall = calls.singleWhere((call) => call.arguments.contains('add'));
-      check(addCall.arguments).contains(_hkcuRunKey);
-      check(addCall.arguments.join(' ')).contains(_currentExecutable);
+      check(writer.setCalls).length.equals(1);
+      check(writer.setCalls.single.rawValueData).contains(_currentExecutable);
     });
 
     test('should disable startup from HKCU and HKLM using elevation only for HKLM access denied', () async {
       final calls = <_ProcessInvocation>[];
+      final writer = _FakeRegistryWriter(
+        machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
+      );
       final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
         ProcessResult(2, 1, '', 'ERROR: Access is denied.'),
         ProcessResult(3, 0, '', ''),
       ]);
@@ -325,6 +451,7 @@ void main() {
       final service = _makeService(
         calls: calls,
         results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
@@ -336,19 +463,18 @@ void main() {
       final result = await service.disable();
 
       check(result.isSuccess()).isTrue();
+      check(writer.deleteCalls).length.equals(2);
+      check(writer.deleteCalls.first.scope).equals(StartupRegistryScope.currentUser);
       check(calls.where((call) => call.executable == 'powershell').length).equals(1);
       check(calls.where((call) => call.arguments.join(' ').contains('-Verb RunAs')).length).equals(1);
     });
 
     test('should disable HKCU only without touching HKLM when machine entries are absent', () async {
+      final writer = _FakeRegistryWriter();
       final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
-      ]);
-
       final service = _makeService(
         calls: calls,
-        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
@@ -359,14 +485,22 @@ void main() {
       final result = await service.disable();
 
       check(result.isSuccess()).isTrue();
-      check(calls.where((call) => call.arguments.contains('delete')).length).equals(1);
+      check(writer.deleteCalls).length.equals(1);
       check(calls.any((call) => call.executable == 'powershell')).isFalse();
     });
 
-    test('should not ignore machine-scope registry read access denied when disabling', () async {
+    test('should ignore machine-scope registry read access denied when disabling without entries', () async {
+      final writer = _FakeRegistryWriter(
+        machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
+      );
       final calls = <_ProcessInvocation>[];
+      final results = Queue<ProcessResult>.from([
+        ProcessResult(1, 0, '', 'ERROR: The system was unable to find the specified registry key or value.'),
+      ]);
       final service = _makeService(
         calls: calls,
+        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hklm: _accessDenied(),
@@ -376,26 +510,55 @@ void main() {
 
       final result = await service.disable();
 
+      check(result.isSuccess()).isTrue();
+      check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.localMachine);
+      check(calls.where((call) => call.arguments.contains('delete')).length).equals(1);
+    });
+
+    test('should classify UAC cancellation by exit code', () async {
+      final writer = _FakeRegistryWriter(
+        machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
+      );
+      final results = Queue<ProcessResult>.from([
+        ProcessResult(2, 5, '', 'ERROR: Access is denied.'),
+        ProcessResult(3, 1223, '', ''),
+      ]);
+
+      final service = _makeService(
+        results: results,
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+            hklm: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+      );
+
+      final result = await service.disable();
+
       check(result.isError()).isTrue();
       result.fold(
-        (_) => fail('Expected failure when registry read is denied'),
+        (_) => fail('Expected failure when UAC is cancelled'),
         (failure) {
           check(failure).isA<StartupServiceFailure>();
-          check((failure as StartupServiceFailure).startupCode).equals(StartupServiceFailureCode.accessDenied);
+          check((failure as StartupServiceFailure).startupCode).equals(StartupServiceFailureCode.uacCancelled);
         },
       );
-      check(calls.where((call) => call.arguments.contains('delete')).length).equals(0);
     });
 
     test('should classify localized UAC cancellation with accents', () async {
+      final writer = _FakeRegistryWriter(
+        machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
+      );
       final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
         ProcessResult(2, 1, '', 'ERRO: Acesso negado.'),
         ProcessResult(3, 1, '', 'A operação foi cancelada pelo usuário.'),
       ]);
 
       final service = _makeService(
         results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
@@ -418,13 +581,13 @@ void main() {
 
     test('should not elevate HKCU add when current-user auto-start write is denied', () async {
       final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 1, '', 'ERROR: Access is denied.'),
-      ]);
+      final writer = _FakeRegistryWriter(
+        setResult: const StartupRunValueWriteResult.accessDenied(5),
+      );
 
       final service = _makeService(
         calls: calls,
-        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(),
         ]),
@@ -432,21 +595,24 @@ void main() {
       final result = await service.enable();
 
       check(result.isError()).isTrue();
-      check(calls.where((call) => call.executable == 'reg').length).equals(1);
+      check(writer.setCalls).length.equals(1);
       check(calls.any((call) => call.executable == 'powershell')).isFalse();
     });
 
     test(
       'should return explicit failure when UAC prompt is cancelled',
       () async {
+        final writer = _FakeRegistryWriter(
+          machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
+        );
         final results = Queue<ProcessResult>.from([
-          ProcessResult(1, 0, '', ''),
           ProcessResult(2, 1, '', 'ERROR: Access is denied.'),
           ProcessResult(3, 1, '', 'The operation was canceled by the user.'),
         ]);
 
         final service = _makeService(
           results: results,
+          registryWriter: writer,
           registrySnapshots: Queue.from([
             _registrySnapshot(
               hkcu: _found(_startupValue(_currentExecutable)),
@@ -467,15 +633,13 @@ void main() {
       },
     );
 
-    test('should not request UAC when reg add succeeds immediately', () async {
+    test('should not request UAC when HKCU write succeeds immediately', () async {
       final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
-      ]);
+      final writer = _FakeRegistryWriter();
 
       final service = _makeService(
         calls: calls,
-        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(),
         ]),
@@ -487,14 +651,9 @@ void main() {
     });
 
     test('should repair enabled registry entry missing autostart argument', () async {
-      final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
-      ]);
-
+      final writer = _FakeRegistryWriter();
       final service = _makeService(
-        calls: calls,
-        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found('"$_currentExecutable"'),
@@ -511,16 +670,21 @@ void main() {
         (status) => check(status).equals(StartupLaunchConfigurationStatus.repaired),
         (_) => fail('Expected success'),
       );
-      check(calls.where((call) => call.arguments.contains('add')).length).equals(1);
+      check(writer.setCalls).length.equals(1);
     });
 
-    test('should report repair needed without UAC when validation forbids elevation', () async {
+    test('should repair HKCU without UAC when validation forbids elevation', () async {
       final calls = <_ProcessInvocation>[];
+      final writer = _FakeRegistryWriter();
       final service = _makeService(
         calls: calls,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found('"$_currentExecutable"'),
+          ),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
           ),
         ]),
       );
@@ -530,16 +694,43 @@ void main() {
 
       check(result.isSuccess()).isTrue();
       result.fold(
-        (status) => check(status).equals(StartupLaunchConfigurationStatus.needsRepair),
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.repaired),
         (_) => fail('Expected success'),
       );
+      check(writer.setCalls).length.equals(1);
       check(calls).isEmpty();
     });
 
-    test('should not repair registry entry that already has autostart argument', () async {
-      final calls = <_ProcessInvocation>[];
+    test('should return failure when post-repair revalidation cannot read HKCU', () async {
+      final writer = _FakeRegistryWriter();
       final service = _makeService(
-        calls: calls,
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found('"$_currentExecutable"'),
+          ),
+          _registrySnapshot(
+            hkcu: _accessDenied(),
+          ),
+        ]),
+      );
+
+      final result = await service.ensureLaunchConfiguration(allowElevation: false);
+
+      check(result.isError()).isTrue();
+      result.fold(
+        (_) => fail('Expected failure when post-repair validation cannot read HKCU'),
+        (failure) {
+          check(failure).isA<StartupServiceFailure>();
+          check((failure as StartupServiceFailure).startupCode).equals(StartupServiceFailureCode.accessDenied);
+        },
+      );
+    });
+
+    test('should not repair registry entry that already has autostart argument', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
@@ -553,18 +744,13 @@ void main() {
         (status) => check(status).equals(StartupLaunchConfigurationStatus.unchanged),
         (_) => fail('Expected success'),
       );
-      check(calls).isEmpty();
+      check(writer.setCalls).isEmpty();
     });
 
     test('should repair registry entry when autostart argument is only a partial token', () async {
-      final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', ''),
-      ]);
-
+      final writer = _FakeRegistryWriter();
       final service = _makeService(
-        calls: calls,
-        results: results,
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found('"$_currentExecutable" "${LaunchArgsConstants.autostartArg}-extra"'),
@@ -618,29 +804,92 @@ void main() {
       );
     });
 
-    test('should detect missing autostart argument for current executable', () async {
+    test('should report legacy status when HKCU is healthy but HKLM read is denied without elevation', () async {
+      final writer = _FakeRegistryWriter();
       final service = _makeService(
+        registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
-            hkcu: _found('"$_currentExecutable"'),
+            hkcu: _found(_startupValue(_currentExecutable)),
+            hklm: _accessDenied(),
+          ),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+            hklm: _accessDenied(),
           ),
         ]),
       );
-      final result = await service.hasRegistryEntryMissingAutostartForCurrentExecutable();
+
+      final result = await service.ensureLaunchConfiguration(allowElevation: false);
 
       check(result.isSuccess()).isTrue();
       result.fold(
-        (missing) => check(missing).isTrue(),
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry),
         (_) => fail('Expected success'),
       );
+      check(writer.setCalls).isEmpty();
     });
 
-    test('should build startup diagnostic report with scope details', () async {
+    test('should attempt elevated cleanup when HKLM read is denied and elevation is allowed', () async {
+      final writer = _FakeRegistryWriter(
+        deleteResult: const StartupRunValueWriteResult.accessDenied(5),
+      );
+      final calls = <_ProcessInvocation>[];
+      final results = Queue<ProcessResult>.from([
+        ProcessResult(1, 1, '', 'ERROR: Access is denied.'),
+        ProcessResult(2, 0, '', ''),
+      ]);
+      final service = _makeService(
+        calls: calls,
+        results: results,
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+            hklm: _accessDenied(),
+          ),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+      );
+
+      final result = await service.ensureLaunchConfiguration();
+
+      check(result.isSuccess()).isTrue();
+      check(writer.deleteCalls.any((call) => call.scope == StartupRegistryScope.localMachine)).isTrue();
+      check(calls.any((call) => call.executable == 'powershell')).isTrue();
+    });
+
+    test('should not create missing HKCU entry when createIfMissing is false', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(),
+        ]),
+      );
+
+      final result = await service.ensureLaunchConfiguration(
+        allowElevation: false,
+        createIfMissing: false,
+      );
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.unchanged),
+        (_) => fail('Expected success'),
+      );
+      check(writer.setCalls).isEmpty();
+    });
+
+    test('should build startup diagnostic report with scope details and unreadable machine scopes', () async {
       final service = _makeService(
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
-            hklm: _found(_startupValue(_oldExecutable)),
+            hklm: _accessDenied(),
+            wow6432: _found(_startupValue(_oldExecutable)),
           ),
         ]),
       );
@@ -651,6 +900,7 @@ void main() {
         (report) {
           check(report).contains('HKCU');
           check(report).contains('HKLM');
+          check(report).contains('Read denied');
           check(report).contains('Needs repair: true');
         },
         (_) => fail('Expected success'),
@@ -663,6 +913,7 @@ AutoStartService _makeService({
   List<_ProcessInvocation>? calls,
   Queue<ProcessResult>? results,
   Queue<Map<StartupRegistryScope, StartupRunValueReadResult>>? registrySnapshots,
+  IStartupRunValueRegistryWriter? registryWriter,
 }) {
   return AutoStartService(
     isWindows: () => true,
@@ -673,6 +924,7 @@ AutoStartService _makeService({
             <Map<StartupRegistryScope, StartupRunValueReadResult>>{},
           ),
     ),
+    registryWriter: registryWriter ?? _FakeRegistryWriter(),
     processRunner: (String executable, List<String> arguments) async {
       calls?.add(
         _ProcessInvocation(

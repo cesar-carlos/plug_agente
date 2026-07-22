@@ -24,7 +24,7 @@ void main() {
     when(() => repository.enableSystemStartup()).thenAnswer(
       (_) async => const Success(unit),
     );
-    when(() => repository.ensureLaunchConfiguration()).thenAnswer(
+    when(() => repository.ensureLaunchConfiguration(allowElevation: false)).thenAnswer(
       (_) async => const Success(StartupLaunchConfigurationStatus.repaired),
     );
     when(() => repository.persistStartWithWindows(true)).thenAnswer(
@@ -41,7 +41,7 @@ void main() {
       StartupLaunchConfigurationOutcomeType.repaired,
     );
     verify(() => repository.enableSystemStartup()).called(1);
-    verify(() => repository.ensureLaunchConfiguration()).called(1);
+    verify(() => repository.ensureLaunchConfiguration(allowElevation: false)).called(1);
     verify(() => repository.persistStartWithWindows(true)).called(1);
   });
 
@@ -78,7 +78,7 @@ void main() {
     when(() => repository.enableSystemStartup()).thenAnswer(
       (_) async => const Success(unit),
     );
-    when(() => repository.ensureLaunchConfiguration()).thenAnswer(
+    when(() => repository.ensureLaunchConfiguration(allowElevation: false)).thenAnswer(
       (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
     );
     when(() => repository.persistStartWithWindows(true)).thenAnswer(

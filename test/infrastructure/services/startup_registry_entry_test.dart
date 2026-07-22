@@ -57,7 +57,7 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
       check(entry.hasAutostartArgument).equals(true);
     });
 
-    test('should treat environment-variable executable paths as unhealthy until repair converges', () {
+    test('should treat unexpanded environment-variable paths as unhealthy', () {
       const output = r'''
 HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
     Plug Agente    REG_EXPAND_SZ    "%ProgramFiles%\PlugAgente\plug_agente.exe" "--autostart"
@@ -72,6 +72,17 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
       check(entry).isNotNull();
       check(entry!.matchesExpectedExecutable(r'C:\Program Files\PlugAgente\plug_agente.exe')).equals(false);
       check(entry.isHealthyFor(r'C:\Program Files\PlugAgente\plug_agente.exe')).equals(false);
+    });
+
+    test('should treat expanded REG_EXPAND_SZ paths as healthy for current executable', () {
+      final entry = StartupRegistryEntry.fromRawValue(
+        scope: StartupRegistryScope.currentUser,
+        valueName: 'Plug Agente',
+        rawValue: r'"C:\Program Files\PlugAgente\plug_agente.exe" "--autostart"',
+      );
+
+      check(entry).isNotNull();
+      check(entry!.isHealthyFor(r'C:\Program Files\PlugAgente\plug_agente.exe')).equals(true);
     });
 
     test('should parse raw registry value without reg.exe output wrapper', () {

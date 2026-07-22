@@ -69,6 +69,12 @@ void main() {
     when(
       () => mockStartupService.ensureLaunchConfiguration(allowElevation: false),
     ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.unchanged));
+    when(
+      () => mockStartupService.ensureLaunchConfiguration(createIfMissing: false),
+    ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.unchanged));
+    when(
+      () => mockStartupService.ensureLaunchConfiguration(allowElevation: false, createIfMissing: false),
+    ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.unchanged));
   });
 
   group('SystemSettingsProvider', () {
@@ -349,7 +355,7 @@ void main() {
     test('should run launch configuration repair after enabling startup', () async {
       when(() => mockStartupService.enable()).thenAnswer((_) async => const Success(unit));
       when(
-        () => mockStartupService.ensureLaunchConfiguration(),
+        () => mockStartupService.ensureLaunchConfiguration(allowElevation: false),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
 
       final provider = createSystemSettingsProvider(
@@ -360,7 +366,7 @@ void main() {
       await provider.setStartWithWindows(true);
 
       verify(() => mockStartupService.enable()).called(1);
-      verify(() => mockStartupService.ensureLaunchConfiguration()).called(1);
+      verify(() => mockStartupService.ensureLaunchConfiguration(allowElevation: false)).called(1);
       check(provider.startWithWindows).equals(true);
     });
 
@@ -449,7 +455,7 @@ void main() {
 
     test('should repair startup launch configuration on demand', () async {
       when(
-        () => mockStartupService.ensureLaunchConfiguration(),
+        () => mockStartupService.ensureLaunchConfiguration(createIfMissing: false),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
 
       final provider = createSystemSettingsProvider(
@@ -461,6 +467,23 @@ void main() {
 
       check(provider.startupNotice).isNotNull();
       check(provider.startupNotice!.code).equals(SystemSettingsNoticeCode.startupLaunchConfigurationRepaired);
+      verify(() => mockStartupService.ensureLaunchConfiguration(createIfMissing: false)).called(1);
+    });
+
+    test('should repair on demand without creating missing entry when startWithWindows is off', () async {
+      when(
+        () => mockStartupService.ensureLaunchConfiguration(createIfMissing: false),
+      ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.unchanged));
+
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
+        startupService: mockStartupService,
+      );
+
+      await provider.repairStartupLaunchConfiguration();
+
+      verify(() => mockStartupService.ensureLaunchConfiguration(createIfMissing: false)).called(1);
+      check(provider.startWithWindows).equals(false);
     });
 
     test('should resync startWithWindows after successful startup launch repair', () async {
@@ -470,7 +493,7 @@ void main() {
         return Success(startupStatusReads > 1);
       });
       when(
-        () => mockStartupService.ensureLaunchConfiguration(),
+        () => mockStartupService.ensureLaunchConfiguration(createIfMissing: false),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.repaired));
 
       final provider = createSystemSettingsProvider(
@@ -489,7 +512,7 @@ void main() {
 
     test('should clear notice when startup launch repair finds healthy configuration', () async {
       when(
-        () => mockStartupService.ensureLaunchConfiguration(),
+        () => mockStartupService.ensureLaunchConfiguration(createIfMissing: false),
       ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.unchanged));
 
       final provider = createSystemSettingsProvider(

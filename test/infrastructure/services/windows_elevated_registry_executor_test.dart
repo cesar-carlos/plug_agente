@@ -37,6 +37,18 @@ void main() {
       final command = calls.single.join(' ');
       check(command).contains('-EncodedCommand');
       check(command).contains('-Verb RunAs');
+      check(command).contains('${WindowsElevatedRegistryExecutor.uacCancelledExitCode}');
+      check(command).contains('${WindowsElevatedRegistryExecutor.accessDeniedExitCode}');
+    });
+
+    test('isUacCancelled should prefer exit code over localized text', () {
+      final cancelled = ProcessResult(0, WindowsElevatedRegistryExecutor.uacCancelledExitCode, '', '');
+      check(WindowsElevatedRegistryExecutor.isUacCancelled(cancelled)).isTrue();
+      check(
+        WindowsElevatedRegistryExecutor.isAccessDenied(
+          ProcessResult(0, WindowsElevatedRegistryExecutor.accessDeniedExitCode, '', ''),
+        ),
+      ).isTrue();
     });
   });
 }

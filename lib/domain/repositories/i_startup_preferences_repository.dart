@@ -28,11 +28,10 @@ abstract interface class IStartupPreferencesRepository {
 
   Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration({
     bool allowElevation = true,
+    bool createIfMissing = true,
   });
 
   Future<Result<Unit>> openStartupSettings();
 
   Future<Result<String>> buildStartupDiagnosticReport();
-
-  Future<Result<bool>> hasRegistryEntryMissingAutostartForCurrentExecutable();
 }

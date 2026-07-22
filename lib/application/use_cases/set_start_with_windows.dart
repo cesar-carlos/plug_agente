@@ -40,8 +40,10 @@ class SetStartWithWindows {
       }
 
       if (value) {
+        // Do not prompt UAC on toggle; elevated machine cleanup stays on Repair.
         launchConfiguration = await StartupLaunchConfigurationMapper.validate(
           _repository,
+          allowElevation: false,
         );
       }
     }
