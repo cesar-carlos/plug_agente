@@ -73,6 +73,7 @@ When touching transport or protocol behavior, also read:
 When touching live-style integration tests, also read:
 
 - [e2e_setup.md](../../../docs/testing/e2e_setup.md)
+- [e2e_hub.md](../../../docs/testing/e2e_hub.md)
 - [e2e_env.dart](../../../test/helpers/e2e_env.dart)
 
 ## Working Rules

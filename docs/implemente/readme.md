@@ -5,9 +5,9 @@ correspondente: os subdocs `acoes/` sao indices que apontam aqui.
 
 | Arquivo | Quando consultar |
 | --- | --- |
-| [plano_acoes_agendadas_execucoes.md](plano_acoes_agendadas_execucoes.md) | Plano canonico de acoes agendadas e execucoes (`agent.action.*`): dominio, scheduler, runners, contrato remoto, threat model, riscos aceitos. |
+| [plano_acoes_agendadas_execucoes.md](plano_acoes_agendadas_execucoes.md) | Plano vivo de acoes: status, backlog RA, threat baseline, riscos. Historico MVP em `docs/archive/`. |
 | [plano_auto_update_evolution.md](plano_auto_update_evolution.md) | Plano de evolucao do auto-update silencioso (assinatura Ed25519, Authenticode, download resilience, rollback). |
-| [acoes/](acoes/) | Subdocs por contexto da feature de acoes (entry-points para contrato remoto, UI, seguranca). |
+| [acoes/](acoes/) | Entry-points (contrato remoto, UI, seguranca) — sem duplicar wire. |
 
 ## Convencao
 
@@ -17,3 +17,5 @@ correspondente: os subdocs `acoes/` sao indices que apontam aqui.
   de mergear feature relevante.
 - Subdocs em `acoes/` nao podem duplicar regra canonica do repositorio
   (`.cursor/rules`, `docs/communication`).
+- Historico MVP de acoes: `docs/archive/plano_acoes_mvp_2026-05.md` — nao
+  reeditar como SoT.

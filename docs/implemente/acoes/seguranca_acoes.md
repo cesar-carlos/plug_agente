@@ -19,7 +19,7 @@ Indice de flags, riscos aceitos, threat model e rollback. Plano completo:
 segue bloqueada por `COM` real aprovado (RA-01), policy fina no Hub (RA-02) e
 homologacao live assinada contra Hub real (RA-05).
 
-Rollback rapido (ordem sugerida no plano §4195 / RA-08):
+Rollback rapido (ordem sugerida no plano vivo / RA-08):
 
 1. `disableAgentActionsRemoteRollout()`
 2. `enableAgentActionsMaintenanceMode`
@@ -89,4 +89,6 @@ dart run tool/e2e/suggest_e2e_hub_from_local_config.dart --apply-url --apply-age
 
 - Contrato remoto: [`contrato_remoto.md`](contrato_remoto.md)
 - UI: [`ui_acoes.md`](ui_acoes.md)
-- E2E: `docs/testing/e2e_setup.md`
+- E2E local: `docs/testing/e2e_actions.md`
+- E2E Hub live: `docs/testing/e2e_hub.md`
+- Indice E2E: `docs/testing/e2e_setup.md`

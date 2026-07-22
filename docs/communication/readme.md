@@ -25,4 +25,9 @@ Documentos do contrato Socket.IO / Plug JSON-RPC entre o agente e o hub.
   **standard** (estado atual). Nunca duplicar entre `roadmap.md` e
   `backlog.md`.
 - O `standard.md` e a fonte de verdade do contrato implementado; nao adicionar
-  ali itens ainda nao entregues.
+  ali itens ainda nao entregues / propostas (ficam no backlog ou plano).
+- Detalhe de cliente `PayloadFrame`:
+  [`socketio_client_binary_transport.md`](socketio_client_binary_transport.md)
+  — o standard so resume e aponta.
+- Metodos `agent.action.*`: detalhe em
+  [`socket_agent_actions.md`](socket_agent_actions.md).

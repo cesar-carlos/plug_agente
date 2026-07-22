@@ -198,4 +198,5 @@ Ordem recomendada:
    - `plug_socket_relay_body_id_echo_total` → ~0 com Opcao A
    - `plug_agent_health_piggyback_used_total` vs `plug_agent_health_poll_total`
 
-Ver checklist detalhado em [`02_implementation_checklist.md`](02_implementation_checklist.md).
+Ver checklist detalhado (arquivado) em
+[`docs/archive/plug_server_02_implementation_checklist_2026-06.md`](../archive/plug_server_02_implementation_checklist_2026-06.md).

@@ -9,6 +9,10 @@ Indice principal da documentacao do projeto. Cada subpasta tem o proprio
 docs/
 |- readme.md
 |- project_overview.md
+|- archive/                         # historico (nao SoT)
+|  |- readme.md
+|  |- plano_acoes_mvp_2026-05.md
+|  \- plug_server_02_implementation_checklist_2026-06.md
 |- architecture/
 |  |- readme.md
 |  |- QUICKSTART.md
@@ -47,11 +51,9 @@ docs/
 |  \- auto_update_setup.md
 |- security/
 |  \- auto_update_threat_model.md
-|  \- (threat models e notas de hardening por superficie)
 |- plug_server/
 |  |- readme.md
-|  |- 01_transport_extensions.md
-|  \- 02_implementation_checklist.md
+|  \- 01_transport_extensions.md
 \- testing/
    |- readme.md
    |- e2e_setup.md
@@ -72,10 +74,12 @@ docs/
 - [Quick start de performance/confiabilidade](architecture/QUICKSTART.md)
 - [Pool ODBC e transacoes (runtime)](runtime/odbc_pool_and_transactions.md)
 - [Configuracao de testes E2E](testing/e2e_setup.md)
+- [Hub live E2E](testing/e2e_hub.md)
 - [Connection strings ODBC por driver](database/readme.md)
-- [Plano de acoes agendadas](implemente/plano_acoes_agendadas_execucoes.md)
+- [Plano vivo de acoes agendadas](implemente/plano_acoes_agendadas_execucoes.md)
 - [Contrato remoto de acoes](implemente/acoes/contrato_remoto.md)
 - [Seguranca de acoes agendadas](implemente/acoes/seguranca_acoes.md)
 - [Threat model do auto-update](security/auto_update_threat_model.md)
 - [Ajustes necessarios no `plug_server`](plug_server/readme.md)
 - [Guia de instalacao](install/readme.md)
+- [Archive (historico)](archive/readme.md)

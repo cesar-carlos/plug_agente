@@ -43,7 +43,7 @@ void printAgentActionSecurityGateChecklist(List<String> types) {
   print('     (or python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests)');
   print('  3. If wire/capabilities change: update OpenRPC + docs/communication/schemas');
   print('     in the same PR; gate includes test/docs/openrpc_contract_test.dart.');
-  print('  4. Confirm FeatureFlags defaults stay safe; document rollback (gate §4195).');
+  print('  4. Confirm FeatureFlags defaults stay safe; document rollback (see docs/implemente/acoes/seguranca_acoes.md).');
   print('  5. Record accepted risk in plan "Riscos aceitos" if something stays open.');
   print('');
 

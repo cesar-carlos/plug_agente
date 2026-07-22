@@ -46,7 +46,7 @@ Resumo executivo. Detalhes na secao de cada fase mais abaixo.
 | P2 | 6A | `Result<ManualCheckOutcome>` para `checkManual()` | nao | `lib/core/services/i_auto_update_orchestrator.dart` |
 | P2 | 6B | Schema JSON do launcher status + `json_serializable` | nao | `docs/communication/schemas/silent_update_launcher_status.schema.json` |
 | P2 | 6C | Extrair `ManualUpdateOrchestrator` | nao | `lib/application/services/manual_update_orchestrator.dart` |
-| P2 | 7A | Spec RPC `agent.autoUpdate.diagnostics.push` | Decisao hub | `docs/communication/socket_communication_standard.md` |
+| P2 | 7A | Spec RPC `agent.autoUpdate.diagnostics.push` | Decisao hub | `docs/communication/socket_communication_backlog.md` + schema `auto_update_diagnostics.schema.json` |
 | P2 | 7B | Gateway cliente push | dep 7A | novo gateway |
 | P2 | 7C | E2E test gated `RUN_LIVE_HUB_TESTS` | dep 7B | `test/live/` |
 | P3 | 8A | Backup pre-install no helper C++ | dep 1C | `windows/update_helper/main.cpp` |
@@ -333,10 +333,12 @@ Goal: operador ve estado da frota inteira. Bloqueado por decisao 3.
 
 #### 7A. Novo metodo RPC
 
-- [x] Spec em `docs/communication/socket_communication_standard.md`.
+- [x] Spec rascunho em `docs/communication/socket_communication_backlog.md`
+  (detalhe fora do standard ate o hub consumir o metodo em producao).
 - [x] Schema em
   `docs/communication/schemas/auto_update_diagnostics.schema.json`.
-- [x] Atualizar `docs/communication/openrpc.json`.
+- [x] Entrada em `docs/communication/openrpc.json` (agente; hub ainda
+  precisa aceitar/consumir — Decisao 3).
 
 #### 7B. Cliente envia apos cada check
 

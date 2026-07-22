@@ -72,4 +72,4 @@ streaming com benchmark representativo (ver
 - Producao: `ODBC_DSN_POSTGRESQL`
 - Testes E2E: `ODBC_TEST_DSN_POSTGRESQL`
 
-Ver `.env.example` e `docs/testing/e2e_setup.md` para mais detalhes.
+Ver `.env.example` e `docs/testing/e2e_odbc.md` para mais detalhes.

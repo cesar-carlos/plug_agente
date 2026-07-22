@@ -156,8 +156,9 @@ Regras praticas:
 
 ## Cross-references
 
-- Tuning vigente: `performance_reliability_improvements.md`
+- Tuning vigente (runtime): `docs/runtime/odbc_pool_and_transactions.md`
+- Status do eixo: `performance_reliability_improvements.md`
 - Criterios de avaliacao do worker pool: `odbc_worker_evaluation_criteria.md`
 - Quick start operacional: `QUICKSTART.md`
 - Concorrencia da fila SQL: `docs/testing/sql_queue_concurrency_tests.md`
-- Variaveis E2E: `docs/testing/e2e_setup.md`
+- Variaveis E2E ODBC: `docs/testing/e2e_odbc.md`

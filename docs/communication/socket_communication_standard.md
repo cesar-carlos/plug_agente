@@ -49,9 +49,9 @@ Visao geral por tema (links externos para subdocs e ancoras internas):
   [Limites operacionais atuais](#limites-operacionais-atuais)
 - [Limitacoes e observacoes](#limitacoes-e-observacoes-do-estado-atual),
   [Checklist de homologacao do cliente](#checklist-de-homologacao-do-cliente)
-- [Changelog do protocolo](#changelog-do-protocolo-implementado),
-  [Schemas JSON](#schemas-json-contrato),
+- [Schemas JSON](#schemas-json-contrato),
   [Referencias internas](#referencias-internas)
+- Changelog historico: [socket_communication_roadmap.md](socket_communication_roadmap.md)
 
 Cross-references:
 
@@ -245,52 +245,23 @@ enviar RPC antes disso, o agente rejeita a request com erro de contrato
 
 ## Camadas do transporte
 
-O padrao fisico da comunicacao agora tem duas camadas:
+Duas camadas: **payload logico** (JSON-RPC / handshake / streaming) e
+**payload fisico** (`PayloadFrame` + GZIP opcional + assinatura).
 
-1. **Payload logico**
-  - envelope JSON-RPC, handshake, heartbeat, ack ou evento de streaming.
-2. **Payload fisico**
-  - o payload logico e serializado em JSON UTF-8, opcionalmente comprimido com
-   GZIP e empacotado em `PayloadFrame`.
+Guia normativo completo (encode/decode, compressao, assinatura, exemplos de
+cliente): [`socketio_client_binary_transport.md`](socketio_client_binary_transport.md).
 
-Fluxo de saida implementado:
-
-1. montar o payload logico;
-2. serializar em bytes (`enc: json`);
-3. aplicar compressao quando o tamanho atingir `compressionThreshold`;
-4. montar `PayloadFrame` com `originalSize`, `compressedSize`, `traceId` e
-  `requestId`;
-5. assinar o frame quando a sessao negociada tiver algoritmo de assinatura
-compartilhado e `enablePayloadSigning` estiver ativo, ou quando a sessao
-negociada exigir assinatura;
-6. emitir via Socket.IO.
-
-Fluxo de entrada implementado:
-
-1. receber `PayloadFrame`;
-2. validar algoritmo, tamanhos e razao maxima de expansao;
-3. verificar assinatura do frame quando presente;
-4. descomprimir quando `cmp == gzip`;
-5. decodificar o payload logico;
-6. validar schema/contrato e despachar.
+Resumo no agente: serializar JSON UTF-8 → comprimir se `>= compressionThreshold`
+→ montar frame → assinar quando `enablePayloadSigning` / sessao exigir → emitir.
+Inbound: validar frame → verificar assinatura → descomprimir → parse → schema →
+dispatch.
 
 ## Arquivos e payloads binarios de negocio
 
-O transporte binario implementado e o **frame fisico** da mensagem. Ele nao
-significa que existe um metodo RPC generico de upload/download de arquivo.
-
-Regras atuais:
-
-- nao existe API dedicada de transferencia de arquivo no contrato publicado;
-- se um metodo de negocio precisar carregar conteudo de arquivo, esse conteudo
-deve primeiro ser serializado no payload logico do metodo;
-- depois disso, **a mensagem inteira** segue o mesmo processo padrao:
-serializacao -> compressao -> frame binario;
-- clientes nao devem tentar “pular” o `PayloadFrame` e enviar bytes crus fora
-do contrato Socket.IO/JSON-RPC.
-
-Para cargas grandes, a recomendacao operacional e usar chunking no nivel do
-metodo de negocio, sem abrir excecao para o transporte.
+O `PayloadFrame` e o frame fisico da mensagem — **nao** existe API generica de
+upload/download. Conteudo de arquivo deve ir no payload logico do metodo; a
+mensagem inteira segue o mesmo pipeline. Cargas grandes: chunking no metodo de
+negocio. Detalhes: [`socketio_client_binary_transport.md`](socketio_client_binary_transport.md).
 
 ## Streaming chunked (`enableSocketStreamingChunks`, default **on**)
 
@@ -1819,6 +1790,9 @@ O agente anuncia limites em `agent:register` via campo `limits` dentro de `capab
 
 Garantir integridade e autenticidade de payloads em transito entre hub e agente.
 
+Guia de cliente (encode/verify): [`socketio_client_binary_transport.md`](socketio_client_binary_transport.md)
+(secao Assinatura e validacao logica).
+
 ### Mecanismo (implementado)
 
 Quando ativo, o emissor inclui `signature` no `PayloadFrame`:
@@ -2166,185 +2140,11 @@ disponivel via `enableTokenAudit`; persistencia em JSONL.
 - Respeita limite de 32 itens por batch com IDs unicos.
 - Valida schemas de params conforme schemas publicados.
 
-## Changelog do protocolo (implementado)
+## Changelog do protocolo
 
-### `v2.0`
-
-- Introducao de JSON-RPC 2.0 no transporte Socket.IO.
-- Inclusao de `sql.execute` e `sql.executeBatch`.
-- Catalogo de erros padronizado e mapeamento de failures.
-- Negociacao de capacidades no handshake.
-
-### `v2.1` (auth + contratos formais)
-
-- Client token authorization com tokens opacos (hash SHA-256 em SQLite local).
-- Permissoes armazenadas no banco; token usado apenas para lookup.
-- `params.client_token` (ou `clientToken`, `auth`) obrigatorio quando auth ativo.
-- Contrato formal de notifications JSON-RPC (request sem `id`, sem response).
-- Contrato formal de batch (IDs unicos, max 32, ordenacao, atomicidade).
-- `api_version` + `meta` formalizados como contrato obrigatorio.
-- Schemas JSON de params por metodo (`sql.execute`, `sql.executeBatch`, `sql.cancel`, `agent.getProfile`).
-- Schemas JSON de streaming (`rpc:chunk`, `rpc:complete`, `rpc:stream.pull`).
-- Politica de versao e deprecacao publicada.
-- Limites de transporte documentados (defaults fixos).
-- Assinatura de payload especificada.
-
-### `v2.2` (hardening)
-
-- Negociacao real de limites via `TransportLimits` no handshake (`agent:register` / `agent:capabilities`).
-- Assinatura de payload implementada (`PayloadSigner`, HMAC-SHA256, constant-time verify).
-- Feature flag `enablePayloadSigning` adicionada (default `false`).
-- Feature flags promovidas para default `true`: `enableClientTokenAuthorization`, `enableSocketApiVersionMeta`, `enableSocketNotificationsContract`, `enableSocketBatchStrictValidation`, `enableSocketSchemaValidation`, `enableSocketCancelMethod`.
-
-### `v2.3` (profile + observabilidade + paginacao cursor)
-
-- Plug JSON-RPC Profile formalizado sobre JSON-RPC 2.0.
-- `traceparent` e `tracestate` adicionados ao contrato de `meta`.
-- OpenRPC publicado para descoberta do contrato.
-- Schemas especificos de result por metodo (`sql.execute`, `sql.executeBatch`).
-- Paginacao por cursor opaco adicionada a `sql.execute`.
-- Semantica de erro estruturado formalizada em `error.data`.
-
-### `v2.4` (cursor keyset + output validation + discover)
-
-- Paginacao exige `ORDER BY` explicito para requests paginadas.
-- `options.cursor` passa a representar continuacao keyset com fingerprint da query.
-- `notificationNullIdCompatibility` passa a governar `id: null` em runtime.
-- Respostas `rpc:response`, `rpc:chunk`, `rpc:complete` e payloads de handshake
-sao validados antes do envio quando `enableSocketSchemaValidation` e
-`enableSocketOutgoingContractValidation` estao ativos (com omissao de
-validacao de saida acima do limiar de tamanho documentado nas limitacoes).
-- `rpc.discover` retorna o documento OpenRPC publicado.
-- Todos os eventos de aplicacao passam a trafegar em `PayloadFrame` binario.
-- Compressao GZIP foi movida para a borda de transporte com fallback `cmp: none`
-por threshold.
-- Assinatura passa a cobrir o frame de transporte quando o modo binario esta
-ativo.
-- `sql.executeBatch` aceita `commands[*].execution_order` opcional, com
-fallback para ordem da lista quando ausente.
-
-### `v2.5` (sql handling mode + passthrough explicito)
-
-- `options.execution_mode` adicionado a `sql.execute` com valores `managed`
-(default) e `preserve`.
-- `options.preserve_sql` mantido como alias legado para
-`execution_mode: "preserve"`.
-- Responses de `sql.execute` passam a incluir `sql_handling_mode`.
-- Responses de `sql.execute` passam a incluir `max_rows_handling`.
-- `execution_mode: "preserve"` nao pode ser combinado com `page`,
-`page_size` ou `cursor`.
-- `max_rows` em modo `preserve` permanece como truncamento da response, sem
-reescrita da SQL enviada pelo cliente.
-
-### Ajustes pos-v2.5 (readiness explicito e hints de backpressure)
-
-- `agent:ready` adicionado como evento opcional apos `agent:capabilities`.
-- `extensions.protocolReadyAck = true` passa a anunciar suporte ao ack explicito
-de prontidao.
-- `extensions.recommendedStreamPullWindowSize` e
-`extensions.maxStreamPullWindowSize` passam a anunciar hints opcionais para o
-hub ajustar `rpc:stream.pull`.
-
-### Ajustes 2026-05 (alinhamento com `plug_server` performance roadmap)
-
-- `enableSocketDeliveryGuarantees` passa a default **on**. Eliminava o ack
-  storm de re-emit a cada 1 s no hub (`SOCKET_AGENT_ACK_TIMEOUT_MS`).
-- `rpc:request_ack` agora e coalescido em janela de 5 ms (cap 32) emitindo
-  `rpc:batch_ack` para bursts; requests isolados continuam usando o evento
-  individual. Ambas as formas seguem aceitas pelo hub.
-- `enableSocketStreamingChunks` passa a default **on**. Streaming continua
-  gated pela negociacao de `streamingResults` e pelo
-  `streaming_row_threshold` do hub.
-- `extensions.recommendedStreamPullWindowSize` passa de `1` para `8` por
-  default; tunable por env `AGENT_STREAM_PULL_WINDOW_RECOMMENDED`.
-- `meta.request_id` na resposta agora preserva o `requestId` propagado por
-  `attachRequestTrace` (preventivo para a futura extensao
-  `clientRequestIdEcho`; comportamento atual nao muda).
-- `TransportSchemaLoader.loadAll()` aplica warmup explicito nas validacoes
-  hot path (`payload-frame`, `rpc.request`, `rpc.response`, `rpc.error`,
-  batches) para zerar custo da primeira request apos reconnect.
-
-### `v2.7` (introspecao de client token policy)
-
-- Metodo RPC `client_token.getPolicy` para retornar a politica resolvida
-(`ClientTokenPolicy`) do token apresentado, sem executar SQL.
-- Schemas JSON dedicados em `docs/communication/schemas/` para params e result.
-- OpenRPC `info.version` alinhado a `2.7.0` e entrada do metodo em `methods`.
-
-### `v2.8` (getPolicy endurecimento e metadata)
-
-- Flag `enableClientTokenPolicyIntrospection` (default true) para desligar o
-metodo sem desativar autorizacao SQL.
-- Resultado com `token_id` / `issued_at` / `updated_at` quando aplicavel; `payload`
-com redacao de chaves sensiveis na resposta RPC.
-- Rate limit por agente+credential (`CLIENT_TOKEN_GET_POLICY_MAX_PER_MINUTE`,
-default 1200) e teto de escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`,
-default 8192); erro `-32013` com `retry_after_ms` e `reset_at` em `error.data`.
-- Redacao de `payload` com allowlist para chaves operacionais (`token_scope`, etc.).
-- Metricas de dispatch para sucesso, falha agregada, falha por tipo de `Failure`, e rate limit.
-- Toggle de introspecao em configuracao desktop (WebSocket / politica de client token).
-- OpenRPC `info.version` `2.8.0`.
-
-### `v2.9` (health introspection)
-
-- Metodo RPC `agent.getHealth` para snapshot de saude do processo, pool ODBC,
-fila SQL e metricas de queries.
-- Schemas JSON dedicados em `docs/communication/schemas/` para params e result.
-- OpenRPC `info.version` `2.9.0` e entrada do metodo em `methods`.
-- `observer.*` permanece fora do contrato publicado ate existir implementacao,
-schemas, OpenRPC e testes E2E.
-
-### `v2.10` (bulk insert nativo)
-
-- Metodo RPC `sql.bulkInsert` para cargas grandes via bulk insert nativo ODBC.
-- Schemas JSON dedicados para params e result.
-- OpenRPC `info.version` `2.10.0` e entrada do metodo em `methods`.
-
-### `v2.11` / `v2.11.1` / `v2.11.2` (acoes do agente: execucao remota conservadora)
-
-- Metodo RPC `agent.action.run` para enfileirar acao salva/aprovada no agente,
-com `idempotency_key` obrigatoria, sem comando livre/ad-hoc e sem aguardar o
-processo terminar.
-- Metodo RPC `agent.action.validateRun` (`v2.11.1`) para preflight remoto com
-as mesmas chaves obrigatorias que `run`, sem persistir execucao nem iniciar
-processo; retorna resumo com `would_replay_existing_execution` quando aplicavel.
-- Metodo RPC `agent.action.cancel` para cancelar execucao `queued`/`running`,
-matando somente o processo principal quando aplicavel.
-- Metodo RPC `agent.action.getExecution` para consulta remota de execucao de
-acao salva no agente.
-- Metodos protegidos por `enableRemoteAgentActions`; quando desativados, retornam
-erro seguro sem expor historico.
-- Quando auth por token esta ativa, os metodos usam scopes proprios de acoes
-(`agent_actions.run`, `agent_actions.validate_run`, `agent_actions.cancel` e
-`agent_actions.read_execution`) sem reaproveitar permissao SQL como atalho.
-- Resultado e sempre redigido: nao retorna comando bruto, argumentos sensiveis
-ou stack trace; expoe apenas identidade auxiliar segura, preview redigido,
-status, timestamps, saida capturada ja redigida e failure acionavel.
-- `v2.11.2` adiciona status terminal `skipped`, flags explicitas de skip por
-concorrencia segura no snapshot remoto de execucao e contadores de health para
-execucoes terminais `skipped`.
-- Schemas JSON dedicados para params e result.
-- OpenRPC `info.version` `2.11.2` e entradas dos metodos em `methods`.
-
-### Alinhamento doc/codigo (pos-v2.5)
-
-- Politica de reconnect do app documentada conforme `ConnectionProvider` /
-`computeReconnectDelay` (base 5 s, teto 60 s, jitter).
-- Assinatura invalida: `error.data.reason` = `invalid_signature` com codigo
-`-32001` (inclui falha de assinatura do `PayloadFrame` na decodificacao).
-- `rpc.discover`: fluxo no dispatcher (`RpcDiscoverRpcHandler` +
-`OpenRpcDocumentLoader`), OpenRPC, e interacao com notifications estritas.
-- `agent.getProfile`: metodo RPC para consulta de cadastro atual do agente,
-documentado no OpenRPC e retornado via `rpc:response`.
-- Exemplo de `extensions` em capabilities alinhado ao default do agente.
-- Tabela "Mapa rapido de eventos" corrigida em Markdown.
-- Compressao outbound `none` / `gzip` / `auto` (politica local); fio apenas
-`cmp: none` ou `cmp: gzip`; anuncio `compressions` conforme modo.
-- `-32013`: janela de taxa (`RpcRequestGuard`) e limite de handlers concorrentes
-(`maxConcurrentRpcHandlers`, default 320).
-- Feature flags `enableSocketOutgoingContractValidation` e
-`enableSocketSummarizeLargePayloadLogs`; isolate JSON ~384 KiB e fingerprint
-de idempotencia para cargas grandes.
+Historico por versao (v2.0+) e itens entregues:
+[`socket_communication_roadmap.md`](socket_communication_roadmap.md).
+Pendencias: [`socket_communication_backlog.md`](socket_communication_backlog.md).
 
 ## Schemas JSON (contrato)
 
@@ -2414,56 +2214,6 @@ de idempotencia para cargas grandes.
   `rpc.request` / `rpc.response`, blocos `params` / `result` por schema de metodo
   e objeto `error` vs `rpc.error` quando presente).
 
-## Metodo `agent.autoUpdate.diagnostics.push` (proposta)
-
-Status: **proposta**. Aguarda decisao do time de hub (`Decisao 3` em
-[docs/implemente/plano_auto_update_evolution.md](../implemente/plano_auto_update_evolution.md)).
-
-### Resumo
-
-Cliente envia ao hub um subset nao-sensivel das `UpdateCheckDiagnostics`
-ao final de cada ciclo (manual, background, silent ou reconcile). Permite
-ao operador responder "X% da frota esta em versao N" e
-"qual e a taxa de `automaticInstallFailure` na ultima semana" sem precisar
-coletar diagnosticos manualmente.
-
-### Direcao
-
-`agent -> hub`. Notification ou request (decisao do hub). Recomendacao:
-notification (`one-way`), pois o cliente nao precisa do retorno para
-prosseguir.
-
-### Schema de `params`
-
-[docs/communication/schemas/auto_update_diagnostics.schema.json](./schemas/auto_update_diagnostics.schema.json).
-
-Campos sensiveis (`installerPath`, `launcherPath`,
-`installerLogPath`, `launcherStatusPath`, `installDirectory`,
-`actualSha256`) sao explicitamente **excluidos** do payload. O cliente
-trunca `errorMessage` em 1024 caracteres.
-
-### Throttle
-
-- 1 push por minuto por cliente (timer no gateway).
-- Se o ciclo termina mais rapido que isso, drop silencioso (nao
-  enfileira).
-- Cumpre o objetivo de "qual e o ultimo estado da frota" sem virar canal
-  de telemetria continua.
-
-### Privacy
-
-- Subset minimo: identificacao do agente, versao, timing, completion
-  source.
-- Nada do conteudo do feed nem credenciais.
-- Privacy review obrigatorio antes do go-live (Fase 7.B).
-
-### Implementacao planejada
-
-- Novo gateway em `lib/infrastructure/external_services/`.
-- Chamadas no fim de `_completeManualCheck`, no listener de background
-  e ao final de `checkSilently`/`_reconcilePendingSilentUpdate`.
-- E2E test em `test/live/` gated por `RUN_LIVE_HUB_TESTS=true`.
-
 ## Referencias internas
 
 - Modelos RPC: `lib/domain/protocol/`
@@ -2471,4 +2221,5 @@ trunca `errorMessage` em 1024 caracteres.
 - Transporte: `lib/infrastructure/external_services/socket_io_transport_client_v2.dart`
 - Negociacao: `lib/application/services/protocol_negotiator.dart`
 - Guia de cliente: `docs/communication/socketio_client_binary_transport.md`
-- Evolucao pendente: `docs/communication/socket_communication_roadmap.md`
+- Evolucao pendente: `docs/communication/socket_communication_backlog.md`
+- Changelog historico: `docs/communication/socket_communication_roadmap.md`

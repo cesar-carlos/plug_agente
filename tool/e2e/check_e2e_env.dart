@@ -226,7 +226,7 @@ void main(List<String> args) {
   } else if (!longOk) {
     print(
       '  -> sql_queue_burst_test: ignorado (query longa ausente — ODBC_INTEGRATION_LONG_QUERY* '
-      'ou ODBC_INTEGRATION_LONG_QUERY; ver docs/testing/e2e_setup.md)',
+      'ou ODBC_INTEGRATION_LONG_QUERY; ver docs/testing/e2e_odbc.md)',
     );
   }
 
@@ -330,7 +330,7 @@ void main(List<String> args) {
     print('  -> helper elevado: rode python tool/elevated/build_elevated_runner.py antes de homologar elevado na UI');
   }
   print('  -> homologacao elevada: python tool/elevated/homologate_elevated_runner.py --build [--run-unit-tests]');
-  print('     manual UI/UAC: docs/testing/e2e_setup.md');
+  print('     manual UI/UAC: docs/testing/e2e_actions.md');
 
   _printOdbcLoadAndCircuitBreakerWarnings(
     runBurst: runBurst,

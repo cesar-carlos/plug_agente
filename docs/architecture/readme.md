@@ -6,13 +6,14 @@ agente. Foco no eixo ODBC + fila SQL + circuit breaker + observabilidade.
 | Arquivo | Quando consultar |
 | --- | --- |
 | [QUICKSTART.md](QUICKSTART.md) | Tuning operacional rapido (`.env`), verificar logs e snapshots de health, troubleshooting de fila/pool/circuit breaker. |
-| [performance_reliability_improvements.md](performance_reliability_improvements.md) | Estado tecnico atual do eixo ODBC: tuning, runtime, observabilidade, encoding. |
+| [performance_reliability_improvements.md](performance_reliability_improvements.md) | Status table do eixo ODBC + validacao; detalhes de pool/workers no runtime. |
 | [odbc_worker_evaluation_criteria.md](odbc_worker_evaluation_criteria.md) | Quando ajustar `ODBC_ASYNC_*`, criterios para benchmark e por que multi-`ServiceLocator` ainda esta fora de escopo. |
 | [odbc_operational_validation_runbook.md](odbc_operational_validation_runbook.md) | Validacao operacional pos-deploy: smoke, burst, benchmark e snapshots de health. |
 
 ## Cross-references
 
-- Testes E2E e DSN: `docs/testing/e2e_setup.md` (e familias relacionadas).
+- Testes E2E e DSN: `docs/testing/e2e_odbc.md` (indice: `docs/testing/e2e_setup.md`).
+- Runtime ODBC (SoT): `docs/runtime/odbc_pool_and_transactions.md`.
 - Concorrencia da fila SQL: `docs/testing/sql_queue_concurrency_tests.md`.
 - Layer boundaries (CI): `test/architecture/layer_boundaries_test.dart` — garante
   que `domain`/`application` nao importam `infrastructure` e que o dispatcher RPC

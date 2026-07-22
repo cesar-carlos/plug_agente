@@ -20,20 +20,14 @@ O mesmo DSN pode ser configurado para producao e/ou para testes E2E:
 | SQL Server | `ODBC_DSN_SQL_SERVER` | `ODBC_TEST_DSN_SQL_SERVER` |
 | PostgreSQL | `ODBC_DSN_POSTGRESQL` | `ODBC_TEST_DSN_POSTGRESQL` |
 
-Detalhes E2E e prioridade entre DSNs: `docs/testing/e2e_setup.md`.
+Detalhes E2E e prioridade entre DSNs: `docs/testing/e2e_odbc.md`
+(indice geral: `docs/testing/e2e_setup.md`).
 
 ## Tuning compartilhado
 
-- `ODBC_POOL_SIZE` — tamanho do pool lease-based (default **8**,
-  `ConnectionConstants.defaultPoolSize`).
-- `ODBC_ASYNC_WORKER_COUNT` — workers do worker pool interno do `odbc_fast`
-  (default `min(ODBC_POOL_SIZE, CPU cores)`).
-- `ODBC_ASYNC_MAX_PENDING_REQUESTS` — fila do worker pool (default
-  `ODBC_POOL_SIZE * 4`).
-- `ODBC_RESULT_ENCODING` — `rowMajor` (default), `columnar`,
-  `columnarCompressed`.
-
-Detalhes em `docs/architecture/performance_reliability_improvements.md`.
+Defaults e regras de `ODBC_POOL_SIZE`, `ODBC_ASYNC_*` e
+`ODBC_RESULT_ENCODING`: `docs/runtime/odbc_pool_and_transactions.md`.
+Status do eixo ODBC: `docs/architecture/performance_reliability_improvements.md`.
 
 ## Pool adaptativo
 

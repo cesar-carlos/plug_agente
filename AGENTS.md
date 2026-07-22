@@ -71,12 +71,16 @@ Antes de mudar areas sensiveis, consulte tambem:
 - configuracao de testes E2E:
   `docs/testing/e2e_setup.md`
   e `test/helpers/e2e_env.dart`
+- Hub Socket.IO / live `agent.action.*`:
+  `docs/testing/e2e_hub.md`
 - acoes agendadas / execucoes (plano e gate local):
   `docs/implemente/plano_acoes_agendadas_execucoes.md`;
   homologacao local/CI: `python tool/agent_actions/run_agent_actions_operational_gate.py` (atalho);
   ou `python tool/agent_actions/preflight_agent_actions_production.py --run-contract-tests` /
   `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests`
-  (ver `docs/testing/e2e_setup.md`, secao Hub `agent.action.*`)
+  (live: `docs/testing/e2e_hub.md`)
+- historico MVP acoes (archive):
+  `docs/archive/plano_acoes_mvp_2026-05.md`
 
 ## Usage Rules
 

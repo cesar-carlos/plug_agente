@@ -202,7 +202,8 @@ Future<Result<User>> getById(String id) async {
   mensagem clara
 - Rode `dart run tool/e2e/check_e2e_env.dart` para verificar configuracao antes dos
   testes
-- Consulte `docs/testing/e2e_setup.md` para lista completa de variaveis e comandos
+- Consulte `docs/testing/e2e_setup.md` para o indice E2E e
+  `docs/testing/e2e_hub.md` / `docs/testing/e2e_odbc.md` para familias
 - Acoes agendadas (`agent.action.*`): gate local/CI sem Hub via
   `python tool/agent_actions/run_agent_actions_operational_gate.py` ou
   `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests` (manifestos
@@ -211,8 +212,8 @@ Future<Result<User>> getById(String id) async {
   `E2E_HUB_URL`, `E2E_HUB_TOKEN`,
   assinatura `PAYLOAD_SIGNING_*` e `-ValidateLiveEnv -RunLiveTests`; preflight live:
   `dart run tool/e2e/validate_live_hub_agent_actions_env.dart` (ver
-  `docs/implemente/plano_acoes_agendadas_execucoes.md` e secao Hub em
-  `e2e_setup.md`)
+  `docs/implemente/plano_acoes_agendadas_execucoes.md` e
+  `docs/testing/e2e_hub.md`)
 
 ## Expectativas de Teste no Repositorio
 

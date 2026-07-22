@@ -1,3 +1,9 @@
+# Checklist de implementacao — `plug_server` (ARCHIVE)
+
+> **Arquivado 2026-07-22.** Quase todo `[x]` apos implementacao hub/agente
+> 2026-06. Resumo vivo: [`docs/plug_server/readme.md`](../plug_server/readme.md).
+> Validacao pos-deploy abaixo ainda e util como checklist operacional.
+
 # Checklist de implementacao — `plug_server`
 
 Checklist para o time do hub alinhar com a onda de performance do

@@ -1,137 +1,52 @@
 # Contrato remoto — agent.action.* (Plug Agente)
 
-Indice focado em Socket.IO / JSON-RPC para acoes agendadas. A fonte canonica
-completa continua em
-[plano_acoes_agendadas_execucoes.md](../plano_acoes_agendadas_execucoes.md)
-(Fase 6, Test Plan, Riscos aceitos).
+Entry-point para Socket.IO / JSON-RPC de acoes. **Nao duplica** o contrato wire.
 
-**Status oficial (2026-05-21):** contrato e roteamento no agente estao
-**fechados para local/CI**; rollout de producao continua dependente de `COM`
-real aprovado (RA-01), policy fina no Hub/consumidor (RA-02) e live E2E
-assinado contra Hub real (RA-05).
+**Status (2026-05-21):** roteamento no agente fechado para local/CI; producao
+depende de RA-01 / RA-02 / RA-05.
 
-## Metodos publicados
+## Fontes de verdade
 
-| Metodo | Side effect | Batch MVP | Idempotencia |
-| --- | --- | --- | --- |
-| `agent.action.run` | Sim (enfileira execucao) | Rejeitado | `idempotency_key` obrigatorio (remoto) |
-| `agent.action.validateRun` | Nao | Permitido (com limite) | Opcional (cache RPC) |
-| `agent.action.cancel` | Sim (cancelamento) | Rejeitado | — |
-| `agent.action.getExecution` | Nao (leitura redigida) | Permitido (com limite) | — |
+| Assunto | Documento |
+| --- | --- |
+| Metodos, params, results, policy, auditoria | [`socket_agent_actions.md`](../../communication/socket_agent_actions.md) |
+| Schemas + OpenRPC | [`openrpc.json`](../../communication/openrpc.json), [`schemas/`](../../communication/schemas/) |
+| Status / backlog RA / riscos | [`plano_acoes_agendadas_execucoes.md`](../plano_acoes_agendadas_execucoes.md) |
+| Flags, rollback, live Hub | [`seguranca_acoes.md`](seguranca_acoes.md) |
+| UI | [`ui_acoes.md`](ui_acoes.md) |
+| Historico MVP | [`plano_acoes_mvp_2026-05.md`](../../archive/plano_acoes_mvp_2026-05.md) |
+
+## Metodos (resumo)
+
+| Metodo | Side effect | Nota |
+| --- | --- | --- |
+| `agent.action.run` | Sim | `idempotency_key` obrigatorio |
+| `agent.action.validateRun` | Nao | Preflight sem persistir/iniciar |
+| `agent.action.cancel` | Sim | Fila ou processo principal |
+| `agent.action.getExecution` | Nao | Leitura redigida |
 
 Constantes: `lib/core/constants/agent_action_rpc_constants.dart`.
+Transporte: so `rpc:request` / `rpc:response` em `PayloadFrame`.
 
-Transporte: apenas `rpc:request` / `rpc:response` dentro de `PayloadFrame` —
-sem evento Socket.IO paralelo.
-
-## Handshake e capability
-
-1. Hub conecta e completa `agent:register` / `agent:capabilities` (e `agent:ready`
-   quando negociado).
-2. Com `enableRemoteAgentActions=true`, o agente anuncia
-   `extensions.agentActions` via `AgentActionsRemoteCapabilityBuilder`.
-3. Metodos so executam apos roteamento em `RpcMethodDispatcher` com gates:
-   feature flag, manutencao, `AgentActionRuntimeStateGuard`, scopes/allowlist
-   (`AgentActionRemoteAuthorizationService`), rate limit
-   (`AgentActionRemoteRateLimiter`).
-
-Scopes canonicos: `agent_actions.run`, `agent_actions.validate_run`,
-`agent_actions.cancel`, `agent_actions.read_execution` (e wildcard
-`agent_actions.*`). Policy no token: bloco `payload.agent_actions` (+ aliases
-legados).
-
-## Autorizacao e erros
-
-- Autorizacao de acoes e **separada** de SQL; nao reutilizar deny de tabela como
-  permissao de comando.
-- Falhas `Action*` no wire: `category: action` + `reason` estavel
-  (`FailureToRpcErrorMapper`).
-- Codigos MVP: faixa compartilhada `-32001`..`-32015`, `-32602`; reservado
-  `-32299`..`-32200` para codigos dedicados futuros.
-- Contexto remoto inline: **rejeitado** no MVP (`supportsContext: false`, RA-03).
-
-## Schemas e OpenRPC
-
-Fonte de verdade:
-
-- `docs/communication/openrpc.json`
-- `docs/communication/schemas/rpc.params.agent-action-*.schema.json`
-- `docs/communication/schemas/rpc.result.agent-action-*.schema.json`
-- `docs/communication/socket_communication_standard.md`
-
-Testes de contrato:
-
-- `test/docs/openrpc_contract_test.dart`
-- `test/docs/communication/contract_fixtures_test.dart`
-- Fixtures: `test/fixtures/rpc/rpc_*_agent_action_*.json`
-
-## Implementacao no agente
+## Implementacao (paths)
 
 | Componente | Caminho |
 | --- | --- |
-| Dispatcher (registry) | `lib/application/rpc/rpc_method_dispatcher.dart` |
-| Handlers `agent.action.*` | `lib/application/rpc/handlers/rpc_method_handlers.dart` (registry) |
-| Operacoes | `lib/application/rpc/agent_action_rpc_method_handler_operations.dart` |
-| Batch | `lib/infrastructure/external_services/transport/rpc_batch_inbound_handler.dart` |
-| Notification / inbound | `lib/infrastructure/external_services/transport/rpc_inbound_handler.dart` |
-| Run / validate / cancel / get | use cases em `lib/application/use_cases/` |
-| Auditoria append-only | Drift `agent_action_remote_audit` + `_finishAgentActionRpcWithAudit` |
-| Output paging remoto | `lib/application/rpc/agent_action_execution_output_pager.dart` (offsets UTF-8 por stream) |
-| Capability builder | `lib/application/actions/agent_actions_remote_capability_builder.dart` |
+| Registry de handlers | `lib/application/rpc/handlers/rpc_method_handlers.dart` |
+| Operacoes RPC | `lib/application/rpc/agent_action_rpc_method_handler_operations.dart` |
+| Capability | `lib/application/actions/agent_actions_remote_capability_builder.dart` |
 | Failure mapper | `lib/application/mappers/failure_to_rpc_error_mapper.dart` |
-| Backfill correlacao | `lib/application/use_cases/backfill_agent_action_execution_correlation.dart` |
+| Use cases run/validate/cancel/get | `lib/application/use_cases/` |
 
 Teste de roteamento: `test/application/rpc/rpc_method_dispatcher_agent_action_test.dart`.
+Fixtures: `test/fixtures/rpc/rpc_*_agent_action_*.json`.
 
-**Codigos de erro:** `missing_client_token` -> `-32001` (`authenticationFailed`);
-`agent_action_permission_denied`, `agent_actions_remote_disabled`,
-`environment_profile_denied`, `remote_action_not_approved` ->
-`-32002` (`unauthorized`); `action_secret_unavailable` -> `-32602`
-(`invalidParams`).
-
-## Validacao local / CI
+## Validacao
 
 ```powershell
 python tool/agent_actions/run_agent_actions_operational_gate.py
-```
-
-Manifesto: `tool/agent_actions/manifests/agent_actions_contract_test_paths.txt`.
-
-## Live Hub (opt-in)
-
-Variaveis: ver plano **Roteiro operacional pos-MVP** e `docs/testing/e2e_setup.md`.
-
-```powershell
 dart run tool/e2e/validate_live_hub_agent_actions_env.dart
-python tool/agent_actions/homologate_hub_agent_actions.py --prepare-live-env
 python tool/agent_actions/homologate_hub_agent_actions.py --validate-live-env --run-live-tests
 ```
 
-Teste: `test/integration/hub_agent_action_rpc_live_e2e_test.dart` (tag `live`).
-
-**Avisos comuns:** JWT expirado (`fetch_e2e_hub_token_from_local_config.dart
---apply-token --force` ou credenciais no `.env`); par HMAC `e2e-dev` vs Hub
-remoto (copiar `PAYLOAD_SIGNING_*` do servidor Hub ou
-`promote_e2e_signing_from_monorepo_env.dart` quando `plug_server/.env` existir).
-
-Ver tambem [`seguranca_acoes.md`](seguranca_acoes.md) (live Hub, flags, RA).
-
-## Pendente cross-repo / producao
-
-| ID | Item |
-| --- | --- |
-| RA-01 | Registrar o primeiro handler `COM` real aprovado; sem isso `comObject` segue homologacao/stub |
-| RA-02 | Allowlist fina e rate limit no **consumidor Hub**; bridge/validator deve aceitar os metodos publicados sem afrouxar o contrato |
-| RA-03 | Contexto remoto inline no RPC (quando produto aceitar) |
-| RA-05 | Homologacao live com Hub real emitindo `agent.action.*` apos ready |
-
-## Subdocs relacionados
-
-Entregues:
-
-- [`ui_acoes.md`](ui_acoes.md)
-- [`seguranca_acoes.md`](seguranca_acoes.md)
-
-Planejados (no plano mestre ate necessidade de fatiar):
-
-- `runner_local.md`, `runner_elevado.md`, `tipos_de_acao.md`.
+Live Hub: [`e2e_hub.md`](../../testing/e2e_hub.md).

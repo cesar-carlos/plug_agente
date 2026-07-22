@@ -6,22 +6,15 @@ Este guia passo a passo ajuda a instalar o **Plug Agente** no Windows.
 
 ## Pré-requisitos
 
-Antes de começar, certifique-se de ter:
+Compatibilidade detalhada: [requirements.md](requirements.md).
+
+Antes de comecar, certifique-se de ter:
 
 1. **Windows 10 ou superior** (64 bits)
-2. **Permissões de Administrador** para instalação
-3. **Conexão com a Internet** (para atualizações, se configurado)
-4. **Espaço em disco** suficiente (mínimo 500 MB)
+2. **Permissoes de Administrador** para instalacao
+3. **Conexao com a Internet** (para atualizacoes, se configurado)
+4. **Espaco em disco** suficiente (minimo 500 MB)
 5. **Microsoft Visual C++ Redistributable x64**
-
-Compatibilidade de sistema:
-
-- **Windows 10/11**: suporte completo
-- **Windows Server 2016+**: suporte com possíveis recursos degradados
-- **Windows 8/8.1 e Windows Server 2012/2012 R2 ou inferiores**: não suportado pelo instalador
-
-Consulte [requirements.md](requirements.md) para requisitos detalhados,
-compatibilidade, validação pós-instalação e notas sobre ODBC/PATH.
 
 ---
 

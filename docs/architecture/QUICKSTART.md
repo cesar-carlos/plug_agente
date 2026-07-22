@@ -344,6 +344,7 @@ Após deploy em produção:
 
 ---
 
-**Dúvidas?** Ver `docs/architecture/performance_reliability_improvements.md` para detalhes técnicos completos.
+**Duvidas?** Runtime SoT: `docs/runtime/odbc_pool_and_transactions.md`. Status do
+eixo: `docs/architecture/performance_reliability_improvements.md`.
 Para registrar resultados reais de validação, use também
 `docs/architecture/odbc_operational_validation_runbook.md`.

@@ -69,4 +69,4 @@ lease-based continua disponivel como fallback.
 - Producao: `ODBC_DSN_SQL_SERVER`
 - Testes E2E: `ODBC_TEST_DSN_SQL_SERVER`
 
-Ver `.env.example` e `docs/testing/e2e_setup.md` para mais detalhes.
+Ver `.env.example` e `docs/testing/e2e_odbc.md` para mais detalhes.

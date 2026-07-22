@@ -96,7 +96,7 @@ void main() {
     } else {
       print('  Copy .env.example to .env and fill Hub agent.action.* variables.');
     }
-    print('  See docs/testing/e2e_setup.md (Hub agent.action.*).');
+    print('  See docs/testing/e2e_hub.md (Hub agent.action.*).');
     final onlySigning = outcome.missing.every(
       (String name) => name.contains('PAYLOAD_SIGNING'),
     );

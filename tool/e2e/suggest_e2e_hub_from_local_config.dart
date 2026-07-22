@@ -39,7 +39,7 @@ void main(List<String> args) {
   final config = readLatestLocalAgentHubConfig();
   if (config == null) {
     print('[info] No agent_config.db found under PlugAgente storage candidates.');
-    print('  Configure E2E_HUB_URL manually (see docs/testing/e2e_setup.md).');
+    print('  Configure E2E_HUB_URL manually (see docs/testing/e2e_hub.md).');
     exit(1);
   }
 
