@@ -168,15 +168,26 @@ handshake.
 
 ## Eventos Socket.IO Ativos
 
-### Negociacao
+Namespace do agente: `/agents` (JWT de `POST /auth/agent-login` no handshake).
 
+### Handshake / negociacao
+
+- `connection:ready`
+  - hub -> agente, apos autenticacao do namespace
+  - **PayloadFrame** por padrao (compat hub `SOCKET_CONNECTION_READY_COMPAT_MODE=raw_json` ate 2026-09-30)
+  - informativo para o agente atual: o runtime emite `agent:register` no `connect` Socket.IO; nao bloqueia o handshake no `connection:ready`
 - `agent:register`
   - enviado pelo agente na conexao
   - inclui identificacao, capacidades e `profile` opcional quando o cadastro do agente estiver completo
 - `agent:capabilities`
   - recebido do hub para definir protocolo efetivo
+- `agent:register_error`
+  - hub -> agente em **JSON puro** (nao `PayloadFrame`) quando o register e rejeitado
 - `agent:ready`
   - enviado pelo agente apos concluir a negociacao efetiva do protocolo
+- `agent:session.superseded`
+  - hub -> agente (socket antigo) em **JSON puro** quando outra sessao assume o mesmo `agentId`
+    (`SOCKET_AGENT_SESSION_POLICY=takeover_disconnect_previous`); antecede `disconnect`
 
 ### Heartbeat de sessao
 
@@ -192,6 +203,14 @@ handshake.
   - na ausencia de `ack` por janelas consecutivas, o agente marca conexao como
   stale e aciona fluxo de reconexao
 
+### Perfil (canal socket opcional)
+
+- `agent:profile.update` / `agent:profile.updated`
+  - self-service de cadastro via socket no hub (`PayloadFrame`)
+  - o runtime atual do agente sincroniza perfil via **REST**
+    (`PATCH /api/v1/agents/{agentId}/profile`); o canal socket e contrato do hub
+    para clientes que preferirem o mesmo namespace `/agents`
+
 ### Requisicoes de execucao
 
 - request: `rpc:request`
@@ -200,34 +219,49 @@ handshake.
 ## Mapa rapido de eventos
 
 
-| Evento                 | Direcao       | Payload esperado                                                        | Resposta                                                                                                                                                   |
-| ---------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agent:register`       | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities, profile?, profile_version?, profile_updated_at? }>` | `agent:capabilities` ou `agent:register_error`                                                                                                             |
-| `agent:capabilities`   | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
-| `agent:register_error` | hub -> agente | `{ code, reason, message }` (estrutura JSON, NAO PayloadFrame)          | rejeicao de `agent:register`. Ver tabela de codigos abaixo.                                                                                                |
-| `agent:ready`          | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                 |
-| `agent:heartbeat`      | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol, trace_id }>`             | liveness periodico (v2); hub responde com `hub:heartbeat_ack` espelhando `trace_id` quando presente                                                        |
-| `hub:heartbeat_ack`    | hub -> agente | `PayloadFrame<{ agent_id?, timestamp?, protocol?, trace_id? }>`         | ack de heartbeat; ausencia prolongada marca sessao stale e aciona reconexao                                                                                |
-| `rpc:request`          | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response` (e acks/streaming conforme flags)                                                                                                           |
-| `rpc:response`         | agente -> hub | `PayloadFrame<JSON-RPC 2.0 response>`                                   | resposta unica ou erro; resultados grandes podem usar `rpc:chunk`/`rpc:complete`                                                                           |
-| `rpc:request_ack`      | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
-| `rpc:batch_ack`        | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`                            | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
-| `rpc:chunk`            | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
-| `rpc:complete`         | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
-| `rpc:stream.pull`      | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | registrado pelo agente quando qualquer flag de streaming estiver ativa (`enableSocketBackpressure`, `enableSocketStreamingChunks` ou `enableSocketStreamingFromDb`); `window_size` so e processado ativamente quando `enableSocketBackpressure` |
+| Evento                     | Direcao       | Payload esperado                                                        | Resposta                                                                                                                                                   |
+| -------------------------- | ------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connection:ready`         | hub -> agente | `PayloadFrame<{ id, message, user? }>` (default; compat `raw_json`)     | handshake autenticado; agente pode registrar em seguida                                                                                                    |
+| `agent:register`           | agente -> hub | `PayloadFrame<{ agentId, timestamp, capabilities, profile?, profile_version?, profile_updated_at? }>` | `agent:capabilities` ou `agent:register_error`                                                                                                             |
+| `agent:capabilities`       | hub -> agente | `PayloadFrame<{ capabilities }>`                                        | define protocolo efetivo                                                                                                                                   |
+| `agent:register_error`     | hub -> agente | `{ code: number, reason: string, message, details? }` (JSON, NAO PayloadFrame) | rejeicao de `agent:register`. Ver tabela de reasons abaixo.                                                                                          |
+| `agent:session.superseded` | hub -> agente | `{ reason: "session_superseded", message, policy }` (JSON, NAO PayloadFrame) | sessao substituida; hub desliga o socket em seguida                                                                                                        |
+| `agent:ready`              | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol }>`                       | sinal opcional de prontidao explicita para hubs que anunciam `extensions.protocolReadyAck`                                                                 |
+| `agent:heartbeat`          | agente -> hub | `PayloadFrame<{ agent_id, timestamp, protocol, trace_id }>`             | liveness periodico (v2); hub responde com `hub:heartbeat_ack` espelhando `trace_id` quando presente                                                        |
+| `hub:heartbeat_ack`        | hub -> agente | `PayloadFrame<{ agent_id?, timestamp?, protocol?, trace_id? }>`         | ack de heartbeat; ausencia prolongada marca sessao stale e aciona reconexao                                                                                |
+| `agent:profile.update`     | agente -> hub | `PayloadFrame` (patch parcial snake_case)                               | `agent:profile.updated` (ack); canal opcional — agente atual usa REST                                                                                      |
+| `agent:profile.updated`    | hub -> agente | `PayloadFrame` (ack / erro estruturado)                                 | confirmacao do update                                                                                                                                      |
+| `rpc:request`              | hub -> agente | `PayloadFrame<JSON-RPC 2.0 request>`                                    | `rpc:response` (e acks/streaming conforme flags)                                                                                                           |
+| `rpc:response`             | agente -> hub | `PayloadFrame<JSON-RPC 2.0 response>`                                   | resposta unica ou erro; resultados grandes podem usar `rpc:chunk`/`rpc:complete`                                                                           |
+| `rpc:request_ack`          | agente -> hub | `PayloadFrame<{ request_id, received_at }>`                             | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
+| `rpc:batch_ack`            | agente -> hub | `PayloadFrame<{ request_ids, received_at }>`                            | (quando `enableSocketDeliveryGuarantees`)                                                                                                                  |
+| `rpc:chunk`                | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
+| `rpc:complete`             | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
+| `rpc:stream.pull`          | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | registrado pelo agente quando qualquer flag de streaming estiver ativa (`enableSocketBackpressure`, `enableSocketStreamingChunks` ou `enableSocketStreamingFromDb`); `window_size` so e processado ativamente quando `enableSocketBackpressure` |
 
 
-### Codigos de agent:register_error
+### Reasons de `agent:register_error` (wire do hub)
 
-| `code` / `reason` | Comportamento do agente |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `transient_failure` | Recuperavel: agenda novo `agent:register` via timer de capabilities sem fechar o socket |
-| `rate_limited` | Recuperavel: idem; aguarda nova tentativa apos ciclo de timeout de capabilities |
-| `auth_failed` | Terminal: fecha o socket e aciona reconexao completa com refresh de token |
-| `unauthorized` | Terminal: idem |
-| `forbidden` | Terminal: idem |
-| `agent_not_found` | Terminal: idem |
-| qualquer outro valor ou ausente | Recuperavel por padrao: tratado como `transient_failure` para nao interromper conexao por codigos desconhecidos introduzidos pelo hub |
+O hub emite **JSON puro** no shape
+`{ code: <number JSON-RPC>, reason: <string>, message: <string>, details?: object }`.
+O agente decide a estrategia pelo campo **`reason`** (nao pelo `code` numerico
+sozinho: `-32603` cobre tanto `transient_failure` quanto `internal_error`).
+
+| `reason` (hub) | `code` tipico | Comportamento do agente |
+| -------------- | ------------- | ----------------------- |
+| `transient_failure` | `-32603` | Recuperavel: agenda novo `agent:register` via timer de capabilities **sem** fechar o socket |
+| `rate_limited` | `-32013` | Recuperavel: idem; aguarda nova tentativa apos ciclo de timeout de capabilities |
+| `authentication_failed` | `-32001` | Terminal: fecha o socket e aciona reconexao completa com refresh / agent-login |
+| `unauthorized` | `-32002` | Terminal: idem (ex.: `agentId` ja ligado a outro owner) |
+| `session_active` | `-32014` | Terminal: outra sessao canonica ativa (`reject_active`); fechar no outro dispositivo ou aguardar; backoff com jitter antes de novo register |
+| `invalid_payload` | `-32009` | Terminal: frame/assinatura invalidos — corrigir encoder e reconectar |
+| `invalid_request` | `-32600` | Terminal: schema/payload invalido — corrigir e reconectar |
+| `internal_error` | `-32603` | Terminal: forca reconexao (nao confundir com `transient_failure`) |
+| qualquer outro `reason` / ausente | — | Terminal por padrao (alinhado ao hub: so `transient_failure` / `rate_limited` sao recuperaveis no mesmo socket) |
+
+Alias legado somente no cliente: se um payload antigo colocar o token string em
+`code` (ex. `"auth_failed"`, `"transient_failure"`) em vez de `reason`, o agente
+ainda classifica por esse token. O wire canonico do hub usa **`reason`**.
 
 O agente nunca envia resposta a `agent:register_error`; o evento e assimetrico.
 
@@ -286,7 +320,7 @@ Fluxo atual para resultados grandes:
 Quando `enableSocketBackpressure` esta ativo, o agente tambem anuncia em
 `capabilities.extensions`:
 
-- `recommendedStreamPullWindowSize`: `8` (default; sobreescrito por env
+- `recommendedStreamPullWindowSize`: `12` (default; sobreescrito por env
   `AGENT_STREAM_PULL_WINDOW_RECOMMENDED`, clamped em
   `[1..maxBackpressureChunkQueueSize]`). Valor maior reduz round-trip por chunk
   durante streaming sustentado.
@@ -968,7 +1002,7 @@ com bump de versao de protocolo.
 | `-32001` | token ausente/invalido | `missing_client_token` |
 | `-32002` | gate remoto ou policy | `agent_actions_remote_disabled`, `agent_action_permission_denied` |
 | `-32013` | rate limit remoto | `agent_action_remote_rate_limited` |
-| `-32015` | subsistema indisponivel | `agent_actions_draining`, `agent_actions_maintenance_mode` |
+| `-32015` | subsistema indisponivel | `agent_actions_draining`, `agent_actions_maintenance_mode`, `queue_disposed` |
 | `-32109` | execucao de acao nao encontrada | `execution_not_found` (reuso do codigo SQL) |
 
 ### Dominio SQL
@@ -1578,8 +1612,12 @@ erros exclusivamente pelo envelope JSON-RPC v2.
 
 ## Capabilities (negociacao atual)
 
-Exemplo de capacidades anunciadas (alinhado a
-`ProtocolCapabilities.defaultCapabilities` quando `binaryPayload` esta ativo):
+Exemplo de capacidades **anunciadas pelo agente** (alinhado a
+`ProtocolCapabilities.defaultCapabilities` quando `binaryPayload` esta ativo).
+O hub responde com o proprio anuncio em `agent:capabilities`; a negociacao
+efetiva usa intersecao / minimo (ex.: hub anuncia
+`paginationModes: ["page-offset","cursor-keyset"]` sem `cursor-offset`, entao
+o modo efetivo perde `cursor-offset`).
 
 ```json
 {
@@ -1690,7 +1728,8 @@ Extensoes de performance (`clientRequestIdEcho`, `agentPhaseTimings`,
 Hints de backpressure (`recommendedStreamPullWindowSize`,
 `maxStreamPullWindowSize`) tambem entram no anuncio padrao; o hub so usa
 `window_size` ativamente quando `enableSocketBackpressure` esta ligado no
-agente.
+agente. O hub tambem pode ecoar esses hints no proprio `agent:capabilities`
+para calibrar `rpc:stream.pull`.
 
 O mapa `limits` negociado segue a secao "Limites negociados por transporte"; nao
 e repetido neste exemplo.
@@ -1857,9 +1896,14 @@ O agente anuncia limites em `agent:register` via campo `limits` dentro de `capab
 }
 ```
 
-- O hub responde com `agent:capabilities` incluindo limites ajustados.
+- O hub responde com `agent:capabilities` incluindo limites ajustados
+  (hub anuncia `max_rows` ate `1_000_000` como teto de bridge; o efetivo
+  continua sendo o minimo com o agente, tipicamente `50_000`).
 - O valor efetivo e o **minimo** entre o que o agente e o hub suportam (`TransportLimits.negotiateWith`).
 - Os limites efetivos ficam armazenados em `ProtocolConfig.effectiveLimits`.
+- Compat hub: `timestamp` / `extensions` / `limits` ausentes em `agent:register`
+  ainda sao aceitos por agentes legados; o schema publicado e o runtime atual
+  do agente enviam esses campos.
 
 ### Enforcement
 

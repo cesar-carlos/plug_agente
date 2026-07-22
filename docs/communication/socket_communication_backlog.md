@@ -27,6 +27,11 @@ comando.
   outbound ainda no-op ate Decisao 3 / consumo no hub
   (`docs/implemente/plano_auto_update_evolution.md`). **Nao** publicado em
   `openrpc.json` / `rpc.discover` ate o hub aceitar o metodo.
+- Canal socket `agent:profile.update` / `agent:profile.updated` no runtime do
+  agente (hoje o sync de perfil usa apenas REST
+  `PATCH /api/v1/agents/{agentId}/profile`; o hub ja expoe o canal socket).
+- Hint de UI dedicado para `agent:session.superseded` / `session_active`
+  (runtime ja classifica e recupera; mensagem ao utilizador ainda generica).
 - Homologacao E2E hub-agente para `client_token.getPolicy` (rate limit, `retry_after_ms` / `reset_at`).
 - Teste de carga do limitador com muitos escopos distintos (`CLIENT_TOKEN_GET_POLICY_MAX_SCOPE_KEYS`).
 - Homologacao do guia de cliente para encode/compress/decode/decompress.

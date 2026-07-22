@@ -110,10 +110,10 @@ class CapabilitiesNegotiator {
 
   /// Handles an `agent:register_error` event from the hub. Cancels the in-flight
   /// timeout watchdog, logs the structured error, and triggers a forced
-  /// reconnect when the error is non-recoverable. Recoverable errors (e.g.
-  /// `transient_failure`) are logged and left for the next periodic re-register
-  /// timer to retry. Returns `true` when the transport should close the current
-  /// socket and start a forced reconnect.
+  /// reconnect when the error is non-recoverable. Recoverable errors (only
+  /// `transient_failure` / `rate_limited` on the hub wire) are logged and left
+  /// for the next periodic re-register timer to retry. Returns `true` when the
+  /// transport should close the current socket and start a forced reconnect.
   bool handleRegisterError(Map<String, dynamic> error) {
     final code = error['code']?.toString();
     final reason = error['reason']?.toString();
@@ -126,7 +126,7 @@ class CapabilitiesNegotiator {
     _capabilitiesTimeoutTimer?.cancel();
     _capabilitiesTimeoutTimer = null;
 
-    if (_isRecoverableRegisterError(code, reason)) {
+    if (_isRecoverableRegisterError(code: code, reason: reason)) {
       // Schedule another attempt via the standard timeout/re-register loop.
       _startTimeoutTimer();
       return false;
@@ -136,15 +136,30 @@ class CapabilitiesNegotiator {
     return true;
   }
 
-  static bool _isRecoverableRegisterError(String? code, String? reason) {
-    if (code == null && reason == null) return false;
-    final lc = (code ?? '').toLowerCase();
-    // Known terminal errors: force reconnect so the app can re-authenticate.
-    // Unknown codes are treated as transient to avoid unnecessary reconnect
-    // bursts when the hub introduces new error codes not yet listed here.
-    const knownTerminal = {'auth_failed', 'unauthorized', 'forbidden', 'agent_not_found'};
-    return !knownTerminal.contains(lc);
+  /// Hub wire: `{ code: number, reason: string, message, details? }`.
+  /// Only `reason` ∈ {`transient_failure`, `rate_limited`} keeps the socket open.
+  /// Numeric `code` alone is ambiguous (`-32603` is both transient and internal).
+  static bool _isRecoverableRegisterError({String? code, String? reason}) {
+    final reasonToken = reason?.trim().toLowerCase() ?? '';
+    if (reasonToken.isNotEmpty) {
+      return _recoverableRegisterReasons.contains(reasonToken);
+    }
+
+    // Legacy / miswired payloads that put a string token in `code`.
+    final codeToken = code?.trim().toLowerCase() ?? '';
+    if (codeToken.isNotEmpty && !RegExp(r'^-?\d+$').hasMatch(codeToken)) {
+      return _recoverableRegisterReasons.contains(codeToken);
+    }
+
+    // Missing reason (or numeric-only code): treat as terminal so auth/session
+    // failures from the hub force reconnect instead of silent re-register.
+    return false;
   }
+
+  static const Set<String> _recoverableRegisterReasons = {
+    'transient_failure',
+    'rate_limited',
+  };
 
   /// Sends the `agent:register` frame followed by the timeout watchdog.
   /// If local validation rejects the register payload, the timer is not

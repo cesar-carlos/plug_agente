@@ -185,6 +185,23 @@ class TransportSocketEventBinder {
       }
     });
 
+    // Hub emits plain JSON then disconnects the superseded socket under
+    // SOCKET_AGENT_SESSION_POLICY=takeover_disconnect_previous.
+    socket.on('agent:session.superseded', (data) {
+      _logMessage('RECEIVED', 'agent:session.superseded', data);
+      final map = data is Map ? data.map((key, value) => MapEntry(key.toString(), value)) : <String, dynamic>{};
+      final reason = map['reason']?.toString() ?? 'session_superseded';
+      final policy = map['policy']?.toString() ?? 'unknown';
+      final message = map['message']?.toString() ?? 'session superseded by another connection';
+      AppLogger.warning(
+        'resilience: ${_resilienceLogPrefix()}socket_transport '
+        'event=agent_session_superseded reason=$reason policy=$policy '
+        'message=$message agent_id=$_agentId — awaiting hub disconnect',
+      );
+      // Stop heartbeats early; hub will disconnect(true) immediately after.
+      _onHeartbeatStop();
+    });
+
     socket.on('hub:heartbeat_ack', _onHeartbeatAck);
 
     socket.on('rpc:request', (data) {

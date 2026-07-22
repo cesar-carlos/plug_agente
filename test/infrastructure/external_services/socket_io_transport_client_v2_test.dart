@@ -1690,7 +1690,7 @@ void main() {
       verify(() => mockSocket.dispose()).called(1);
     });
 
-    test('should close current socket when register error is a known terminal code', () async {
+    test('should close current socket when register error is a known terminal reason', () async {
       var reconnectionRequested = false;
       client.setOnReconnectionNeeded(() {
         reconnectionRequested = true;
@@ -1700,9 +1700,10 @@ void main() {
       emitEvent('connect');
       await connectFuture;
 
-      // 'auth_failed' is a known-terminal code — should force reconnect.
+      // Hub wire: numeric code + reason string (authentication_failed).
       emitEvent('agent:register_error', {
-        'code': 'auth_failed',
+        'code': -32001,
+        'reason': 'authentication_failed',
         'message': 'authentication failed',
       });
 
@@ -1722,13 +1723,33 @@ void main() {
       await connectFuture;
 
       emitEvent('agent:register_error', <dynamic, dynamic>{
-        'code': 'transient_failure',
+        'code': -32603,
+        'reason': 'transient_failure',
         'message': 'try again',
       });
 
       expect(reconnectionRequested, isFalse);
       verifyNever(() => mockSocket.disconnect());
       verifyNever(() => mockSocket.dispose());
+    });
+
+    test('should accept agent:session.superseded without crashing before hub disconnect', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+
+      expect(
+        () => emitEvent('agent:session.superseded', {
+          'reason': 'session_superseded',
+          'message': 'This session was superseded by a newer connection',
+          'policy': 'takeover_disconnect_previous',
+        }),
+        returnsNormally,
+      );
+
+      // Hub disconnects after superseded; binder must tolerate the follow-up.
+      expect(() => emitEvent('disconnect', 'io server disconnect'), returnsNormally);
     });
 
     test('should record protocol metrics for framed send and receive paths', () async {

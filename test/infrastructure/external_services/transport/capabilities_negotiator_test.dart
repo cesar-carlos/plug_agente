@@ -179,7 +179,8 @@ void main() {
       addTearDown(neg.reset);
 
       final shouldReconnect = neg.handleRegisterError({
-        'code': 'transient_failure',
+        'code': -32603,
+        'reason': 'transient_failure',
         'message': 'try again',
       });
 
@@ -187,7 +188,61 @@ void main() {
       expect(reconnectCalls, 0);
     });
 
-    test('returns true and requests reconnect for known-terminal register errors (auth_failed)', () {
+    test('returns false for rate_limited without closing the socket', () {
+      final neg = buildNegotiator();
+      addTearDown(neg.reset);
+
+      final shouldReconnect = neg.handleRegisterError({
+        'code': -32013,
+        'reason': 'rate_limited',
+        'message': 'too many register attempts',
+      });
+
+      expect(shouldReconnect, isFalse);
+      expect(reconnectCalls, 0);
+    });
+
+    test('returns true for hub wire authentication_failed (reason field)', () {
+      final neg = buildNegotiator();
+
+      final shouldReconnect = neg.handleRegisterError({
+        'code': -32001,
+        'reason': 'authentication_failed',
+        'message': 'authentication failed',
+      });
+
+      expect(shouldReconnect, isTrue);
+      expect(reconnectCalls, 1);
+    });
+
+    test('returns true for session_active (reject_active policy)', () {
+      final neg = buildNegotiator();
+
+      final shouldReconnect = neg.handleRegisterError({
+        'code': -32014,
+        'reason': 'session_active',
+        'message': 'another session is active',
+        'details': {'code': 'same_agent_session_active'},
+      });
+
+      expect(shouldReconnect, isTrue);
+      expect(reconnectCalls, 1);
+    });
+
+    test('returns true for internal_error even when code matches transient (-32603)', () {
+      final neg = buildNegotiator();
+
+      final shouldReconnect = neg.handleRegisterError({
+        'code': -32603,
+        'reason': 'internal_error',
+        'message': 'unexpected hub failure',
+      });
+
+      expect(shouldReconnect, isTrue);
+      expect(reconnectCalls, 1);
+    });
+
+    test('returns true for legacy string code auth_failed without reason', () {
       final neg = buildNegotiator();
 
       final shouldReconnect = neg.handleRegisterError({
@@ -199,18 +254,33 @@ void main() {
       expect(reconnectCalls, 1);
     });
 
-    test('should treat unknown error codes as recoverable (M2)', () {
-      // Unknown codes should NOT force immediate reconnect; they are treated
-      // as transient so the capabilities-timeout re-register loop handles them.
+    test('returns true for unknown reasons (terminal by default)', () {
+      // Unknown reasons force reconnect so auth/session failures are not
+      // silently retried on the same socket (aligned with hub register_error).
       final neg = buildNegotiator();
-      addTearDown(neg.reset);
 
-      for (final unknownCode in ['unsupported_protocol', 'new_future_code', 'unknown_error']) {
+      for (final unknownReason in ['unsupported_protocol', 'new_future_code', 'unknown_error']) {
         reconnectCalls = 0;
-        final shouldReconnect = neg.handleRegisterError({'code': unknownCode, 'message': 'msg'});
-        expect(shouldReconnect, isFalse, reason: 'code=$unknownCode should be recoverable');
-        expect(reconnectCalls, 0, reason: 'code=$unknownCode should not trigger reconnect');
+        final shouldReconnect = neg.handleRegisterError({
+          'code': -32600,
+          'reason': unknownReason,
+          'message': 'msg',
+        });
+        expect(shouldReconnect, isTrue, reason: 'reason=$unknownReason should be terminal');
+        expect(reconnectCalls, 1, reason: 'reason=$unknownReason should trigger reconnect');
       }
+    });
+
+    test('returns true when only a numeric code is present (ambiguous without reason)', () {
+      final neg = buildNegotiator();
+
+      final shouldReconnect = neg.handleRegisterError({
+        'code': -32001,
+        'message': 'missing reason',
+      });
+
+      expect(shouldReconnect, isTrue);
+      expect(reconnectCalls, 1);
     });
 
     test('should return false from sendRegisterAndStartTimeout when emit fails (H2)', () async {
