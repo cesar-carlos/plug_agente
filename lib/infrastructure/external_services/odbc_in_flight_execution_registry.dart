@@ -62,9 +62,12 @@ final class OdbcInFlightExecutionRegistry {
     if (requestId.isEmpty) {
       return;
     }
+    final wasPending = _pendingAborts.contains(requestId);
     _pendingAborts.add(requestId);
     _armPendingAbortExpiry(requestId);
-    if (_active.containsKey(requestId)) {
+    // Notify only on first arm. Re-arming from abort-without-native-target must
+    // not re-notify or fulfill loops forever while the handle still lacks a target.
+    if (!wasPending && _active.containsKey(requestId)) {
       _notifyPendingAbort(requestId);
     }
   }
