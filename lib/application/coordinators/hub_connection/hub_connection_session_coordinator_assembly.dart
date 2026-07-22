@@ -85,7 +85,7 @@ void assembleHubConnectionSessionCoordinators({
         input.displayState.error = message;
       },
       isRecoveryAlreadyInProgress: () =>
-          input.displayState.isReconnecting || input.displayState.status == ConnectionStatus.reconnecting,
+          input.displayState.isBurstRecoveryInFlight || input.displayState.status == ConnectionStatus.reconnecting,
     ),
   );
 
@@ -94,7 +94,7 @@ void assembleHubConnectionSessionCoordinators({
       resilienceCoordinator: scratch.resilienceCoordinator,
       resilienceLogPrefix: logResiliencePrefix,
       isDisconnectRequested: input.isDisconnectRequested,
-      isInternalReconnecting: () => input.displayState.isReconnecting,
+      isInternalReconnecting: () => input.displayState.isBurstRecoveryInFlight,
       resolveConnectionContext: input.contextSource.resolveConnectionContext,
       tryRefreshToken: tryRefreshToken,
       disconnectTransport: disconnectTransportForRecovery,
@@ -103,13 +103,13 @@ void assembleHubConnectionSessionCoordinators({
       recoverConnection: runBurstRecoveryForContext,
       startPersistentRetry: startPersistentRetry,
       beginTokenExpiryRecovery: () {
-        input.displayState.isReconnecting = true;
+        input.displayState.isBurstRecoveryInFlight = true;
         scratch.hubRecoveryOrchestrator.resetHardReloginCycle();
         input.displayState.status = ConnectionStatus.reconnecting;
         input.displayState.error = '';
       },
       endTokenExpiryRecovery: () {
-        input.displayState.isReconnecting = false;
+        input.displayState.isBurstRecoveryInFlight = false;
       },
       onMissingConnectionContextForTokenRefresh: () {
         input.displayState.status = ConnectionStatus.error;
@@ -135,6 +135,8 @@ void assembleHubConnectionSessionCoordinators({
     runtime: HubPersistentRetryRuntimeDependencies(
       resilienceLogPrefix: logResiliencePrefix,
       maxFailedTicks: input.effectiveHubPersistentRetryMaxFailedTicks,
+      maxUnreachableFailedTicks: input.effectiveHubPersistentUnreachableMaxFailedTicks,
+      persistentRetryInterval: input.effectiveHubPersistentRetryInterval,
       resolveConnectionContext: input.contextSource.resolveConnectionContext,
       runPersistentTick: () => scratch.hubRecoveryOrchestrator.runPersistentTick(
         tokenRefreshIntervalAttempts: input.tokenRefreshIntervalAttempts,
@@ -148,7 +150,8 @@ void assembleHubConnectionSessionCoordinators({
         AppLogger.warning(
           'resilience: ${logResiliencePrefix()}persistent_retry event=exhausted '
           'failures=$failureCount '
-          'max=${input.effectiveHubPersistentRetryMaxFailedTicks} '
+          'max_socket=${input.effectiveHubPersistentRetryMaxFailedTicks()} '
+          'max_unreachable=${input.effectiveHubPersistentUnreachableMaxFailedTicks()} '
           'agent_id=${context.agentId}',
         );
         scratch.resilienceCoordinator.clearResilienceRecovery();
@@ -190,7 +193,7 @@ void assembleHubConnectionSessionCoordinators({
       },
       enterConnected: () {
         input.displayState.status = ConnectionStatus.connected;
-        input.displayState.isReconnecting = false;
+        input.displayState.isBurstRecoveryInFlight = false;
         input.displayState.error = '';
         input.notifyStateChanged();
       },

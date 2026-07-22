@@ -5,6 +5,13 @@ import 'package:plug_agente/domain/value_objects/hub_lifecycle_notification.dart
 
 /// Handles hub transport lifecycle notifications; state mutations are delegated
 /// via [HubTransportLifecycleRuntimeDependencies] (same pattern as recovery).
+///
+/// Ownership: on `client_or_network` disconnect, update UI and let Socket.IO
+/// manager reconnect. App-owned burst recovery starts only via
+/// `onReconnectionNeeded` (reconnect_failed, heartbeat stale, negotiation
+/// failure, post-reconnect register failure) or an immediate kick for
+/// `io_server_disconnect` (transport also escalates via `onReconnectionNeeded`;
+/// the exclusive recovery gate coalesces any double schedule).
 final class HubTransportLifecycleCoordinator {
   HubTransportLifecycleCoordinator({
     required HubTransportLifecycleRuntimeDependencies runtime,
@@ -28,10 +35,16 @@ final class HubTransportLifecycleCoordinator {
             'resilience: ${_deps.resilienceLogPrefix()}hub_transport event=socket_disconnected '
             'kind=${serverInitiated ? "io_server_disconnect" : "client_or_network"} '
             'reason=${reason ?? "unknown"} '
+            'action=${serverInitiated ? "kick_app_recovery" : "await_socket_io_reconnect"} '
             'agent_id=${_deps.lastAgentId() ?? "?"}';
         AppLogger.debug(disconnectLine);
         _deps.enterReconnecting(clearError: true);
-        _deps.kickHubTransportRecovery(trigger: 'hub_transport_disconnected');
+        // Server-forced close: Socket.IO will not auto-reconnect; escalate now.
+        // client_or_network: leave L0 Socket.IO manager in charge until it
+        // escalates through onReconnectionNeeded (reconnect_failed, etc.).
+        if (serverInitiated) {
+          _deps.kickHubTransportRecovery(trigger: 'hub_transport_io_server_disconnect');
+        }
         if (_deps.hasPersistentRetryTimer() && !_deps.persistentRetryInFlight()) {
           _deps.schedulePersistentRetryTick();
         }

@@ -72,8 +72,9 @@ HubConnectionCoordinatorAssemblyInput _assemblyInput({
     maxReconnectAttempts: 5,
     effectiveHardReloginRecoveryEnabled: false,
     effectiveHardReloginFailureThreshold: 3,
-    effectiveHubPersistentRetryMaxFailedTicks: 10,
-    effectiveHubPersistentRetryInterval: const Duration(seconds: 30),
+    effectiveHubPersistentRetryMaxFailedTicks: () => 10,
+    effectiveHubPersistentUnreachableMaxFailedTicks: () => 160,
+    effectiveHubPersistentRetryInterval: () => const Duration(seconds: 30),
     effectiveHubHardReloginCooldown: const Duration(minutes: 5),
     hasAuthBridge: false,
   );

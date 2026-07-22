@@ -23,7 +23,7 @@ const _context = HubConnectionContext(
 
 HubResilienceEnvironment _environment({
   bool Function()? isDisconnectRequested,
-  bool Function()? isReconnecting,
+  bool Function()? isBurstRecoveryInFlight,
   bool Function()? hasPersistentRetryTimer,
   bool Function()? persistentRetryInFlight,
   bool Function()? isNegotiating,
@@ -36,7 +36,7 @@ HubResilienceEnvironment _environment({
 }) {
   return HubResilienceEnvironment(
     isDisconnectRequested: isDisconnectRequested ?? () => false,
-    isReconnecting: isReconnecting ?? () => false,
+    isBurstRecoveryInFlight: isBurstRecoveryInFlight ?? () => false,
     hasPersistentRetryTimer: hasPersistentRetryTimer ?? () => false,
     persistentRetryInFlight: persistentRetryInFlight ?? () => false,
     isNegotiating: isNegotiating ?? () => false,
@@ -167,7 +167,7 @@ void main() {
       var handlerRuns = 0;
       final coordinator = HubResilienceCoordinator(
         environment: _environment(
-          isReconnecting: () => true,
+          isBurstRecoveryInFlight: () => true,
           handleReconnectionNeeded: () async {
             handlerRuns++;
           },

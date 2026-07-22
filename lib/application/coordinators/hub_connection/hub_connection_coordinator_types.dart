@@ -84,6 +84,7 @@ final class HubConnectionCoordinatorAssemblyInput {
     required this.effectiveHardReloginRecoveryEnabled,
     required this.effectiveHardReloginFailureThreshold,
     required this.effectiveHubPersistentRetryMaxFailedTicks,
+    required this.effectiveHubPersistentUnreachableMaxFailedTicks,
     required this.effectiveHubPersistentRetryInterval,
     required this.effectiveHubHardReloginCooldown,
     required this.hasAuthBridge,
@@ -119,8 +120,9 @@ final class HubConnectionCoordinatorAssemblyInput {
   final int maxReconnectAttempts;
   final bool effectiveHardReloginRecoveryEnabled;
   final int effectiveHardReloginFailureThreshold;
-  final int effectiveHubPersistentRetryMaxFailedTicks;
-  final Duration effectiveHubPersistentRetryInterval;
+  final int Function() effectiveHubPersistentRetryMaxFailedTicks;
+  final int Function() effectiveHubPersistentUnreachableMaxFailedTicks;
+  final Duration Function() effectiveHubPersistentRetryInterval;
   final Duration effectiveHubHardReloginCooldown;
   final bool hasAuthBridge;
   final Random? random;

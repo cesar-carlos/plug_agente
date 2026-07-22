@@ -3675,22 +3675,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsHubReconnectSectionTitle => 'Hub reconnect (offline recovery)';
 
   @override
-  String get diagnosticsHubReconnectMaxTicksLabel => 'Max failed reconnect ticks before giving up';
+  String get diagnosticsHubReconnectMaxTicksLabel => 'Max failed socket reconnect ticks before giving up';
 
   @override
   String get diagnosticsHubReconnectMaxTicksHint =>
-      '0 keeps retrying indefinitely. Lower values stop sooner with an error.';
+      'Socket reconnect failures only. 0 = retry indefinitely. Changes apply the next time persistent retry starts (no app restart).';
+
+  @override
+  String get diagnosticsHubReconnectUnreachableMaxTicksLabel => 'Max failed unreachable-hub ticks before giving up';
+
+  @override
+  String get diagnosticsHubReconnectUnreachableMaxTicksHint =>
+      'When the hub /health probe has no response. Default 160 (~2h at 45s). 0 = unlimited. Changes apply the next time persistent retry starts.';
 
   @override
   String get diagnosticsHubReconnectIntervalLabel => 'Seconds between reconnect attempts (after burst)';
 
   @override
   String get diagnosticsHubReconnectIntervalHint =>
-      'Allowed range: 5–86400. Interval changes apply the next time persistent retry starts.';
+      'Allowed range: 5–86400. Interval and budget changes apply the next time persistent retry starts (no app restart).';
 
   @override
   String get diagnosticsHubReconnectEnvHint =>
-      'If you clear overrides (Use defaults), values may still come from HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS and HUB_PERSISTENT_RETRY_INTERVAL_SECONDS in the environment file, then built-in defaults.';
+      'If you clear overrides (Use defaults), values may still come from HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS, HUB_PERSISTENT_UNREACHABLE_MAX_FAILED_TICKS, and HUB_PERSISTENT_RETRY_INTERVAL_SECONDS in the environment file, then built-in defaults.';
 
   @override
   String get diagnosticsHubReconnectApply => 'Apply hub retry settings';
@@ -4636,6 +4643,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsHubRecoveryPersistentFailures => 'persistent_failure_count';
+
+  @override
+  String get diagnosticsHubRecoveryPersistentUnreachableFailures => 'persistent_unreachable_failure_count';
 
   @override
   String get diagnosticsHubRecoveryHardReloginAttempted => 'hard_relogin_attempted_in_cycle';

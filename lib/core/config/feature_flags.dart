@@ -37,6 +37,8 @@ class FeatureFlags {
   static const _keyEnableOdbcExperimentalDriverAdaptivePooling =
       'feature_enable_odbc_experimental_driver_adaptive_pooling';
   static const _keyHubPersistentRetryMaxFailedTicks = 'feature_hub_persistent_retry_max_failed_ticks';
+  static const _keyHubPersistentUnreachableMaxFailedTicks =
+      'feature_hub_persistent_unreachable_max_failed_ticks';
   static const _keyHubPersistentRetryIntervalSeconds = 'feature_hub_persistent_retry_interval_seconds';
   static const _keyEnableHubHardReloginRecovery = 'feature_enable_hub_hard_relogin_recovery';
   static const _keyHubHardReloginFailureThreshold = 'feature_hub_hard_relogin_failure_threshold';
@@ -326,6 +328,23 @@ class FeatureFlags {
     }
   }
 
+  /// When set, overrides unreachable-hub budget and env
+  /// (`HUB_PERSISTENT_UNREACHABLE_MAX_FAILED_TICKS`). `0` = unlimited.
+  int? get hubPersistentUnreachableMaxFailedTicksOverride {
+    if (!_prefs.containsKey(_keyHubPersistentUnreachableMaxFailedTicks)) {
+      return null;
+    }
+    return _prefs.getInt(_keyHubPersistentUnreachableMaxFailedTicks) ?? 0;
+  }
+
+  Future<void> setHubPersistentUnreachableMaxFailedTicksOverride(int? value) async {
+    if (value == null) {
+      await _prefs.remove(_keyHubPersistentUnreachableMaxFailedTicks);
+    } else {
+      await _prefs.setInt(_keyHubPersistentUnreachableMaxFailedTicks, value);
+    }
+  }
+
   /// When set, overrides the default persistent retry interval and env
   /// (`HUB_PERSISTENT_RETRY_INTERVAL_SECONDS`). Clamped between 5 and 86400 seconds.
   int? get hubPersistentRetryIntervalSecondsOverride {
@@ -345,6 +364,7 @@ class FeatureFlags {
 
   Future<void> resetHubResilienceOverrides() async {
     await _prefs.remove(_keyHubPersistentRetryMaxFailedTicks);
+    await _prefs.remove(_keyHubPersistentUnreachableMaxFailedTicks);
     await _prefs.remove(_keyHubPersistentRetryIntervalSeconds);
   }
 

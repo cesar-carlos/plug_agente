@@ -30,6 +30,7 @@ HubTransportLifecycleRuntimeDependencies _runtimeDeps({
   void Function({required bool clearError})? enterReconnecting,
   void Function()? enterConnected,
   void Function()? startProactiveTokenRefreshSchedule,
+  void Function({required String trigger})? kickHubTransportRecovery,
 }) {
   return HubTransportLifecycleRuntimeDependencies(
     resilienceCoordinator: resilience,
@@ -50,7 +51,7 @@ HubTransportLifecycleRuntimeDependencies _runtimeDeps({
     persistentRetryInFlight: () => false,
     enterReconnecting: enterReconnecting ?? ({required bool clearError}) {},
     enterConnected: enterConnected ?? () {},
-    kickHubTransportRecovery: ({required String trigger}) {},
+    kickHubTransportRecovery: kickHubTransportRecovery ?? ({required String trigger}) {},
     schedulePersistentRetryTick: () {},
     cancelPersistentRetryTimer: () {},
     startProactiveTokenRefreshSchedule: startProactiveTokenRefreshSchedule ?? () {},
@@ -108,6 +109,52 @@ void main() {
 
       verifyNever(resilience.beginResilienceRecovery);
       expect(status, 'connected');
+    });
+
+    test('client_or_network disconnect updates UI but does not kick burst recovery', () {
+      final resilience = _MockHubResilienceCoordinator();
+      var status = 'connected';
+      final kickedTriggers = <String>[];
+
+      final coordinator = HubTransportLifecycleCoordinator(
+        runtime: _runtimeDeps(
+          resilience: resilience,
+          uiSink: _RecordingUiSink(),
+          statusName: () => status,
+          isDisconnectRequested: () => false,
+          enterReconnecting: ({required bool clearError}) => status = 'reconnecting',
+          kickHubTransportRecovery: ({required String trigger}) => kickedTriggers.add(trigger),
+        ),
+      );
+
+      coordinator.handle(const HubTransportDisconnected(reason: 'transport close'));
+
+      verify(resilience.beginResilienceRecovery).called(1);
+      expect(status, 'reconnecting');
+      expect(kickedTriggers, isEmpty);
+    });
+
+    test('io_server_disconnect kicks app recovery immediately', () {
+      final resilience = _MockHubResilienceCoordinator();
+      var status = 'connected';
+      final kickedTriggers = <String>[];
+
+      final coordinator = HubTransportLifecycleCoordinator(
+        runtime: _runtimeDeps(
+          resilience: resilience,
+          uiSink: _RecordingUiSink(),
+          statusName: () => status,
+          isDisconnectRequested: () => false,
+          enterReconnecting: ({required bool clearError}) => status = 'reconnecting',
+          kickHubTransportRecovery: ({required String trigger}) => kickedTriggers.add(trigger),
+        ),
+      );
+
+      coordinator.handle(const HubTransportDisconnected(reason: 'io server disconnect'));
+
+      verify(resilience.beginResilienceRecovery).called(1);
+      expect(status, 'reconnecting');
+      expect(kickedTriggers, ['hub_transport_io_server_disconnect']);
     });
   });
 }

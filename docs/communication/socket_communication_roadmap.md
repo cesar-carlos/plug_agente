@@ -36,6 +36,7 @@ itens.
 | `rpc:stream.pull` registrado para qualquer flag de streaming ativa (nao so backpressure) | pos-v2.11 |
 | Codigos terminais vs recuperaveis de `agent:register_error` documentados e implementados | pos-v2.11 |
 | Health: `secure_storage`, streaming diagnostics (`batched_path_total`, `native_path_inference`, `worker_hold_*`), sql_queue worker kinds + `timeouts_after_worker_started_total`, cooperative cancel observability | pos-v2.11.2 |
+| Hub reconnect ownership L0→L1→L2 (`client_or_network` awaits Socket.IO; unreachable budget; `/health` via `hubHttpBaseUrl`) | pos-v2.11.2 |
 
 ## Criterio de rollout
 

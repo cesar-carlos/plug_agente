@@ -1463,17 +1463,71 @@ Regras:
 
 ### Reconnect e recovery
 
-- **Reconexao curta** (`ConnectionProvider` + `computeReconnectDelay`): apos
-desconexao, o agente agenda atrasos com backoff exponencial a partir de
-**5 s** por tentativa (`AppConstants.reconnectIntervalSeconds`), multiplicador
-**2^(tentativa-1)** (ex.: ~5 s, ~10 s, ~20 s antes das tentativas 1..3), com
-**teto de 60 s** por intervalo (`maxReconnectDelay`) e **jitter** de ±15%.
-- **Max tentativas**: 3 tentativas por ciclo de recovery
-(`AppConstants.maxReconnectAttempts` / `ConnectionConstants.defaultMaxReconnectAttempts`).
-- **Token expirado**: ao detectar `token_revoked` ou `authentication_failed`, o
-agente tenta refresh via AuthProvider e reconecta com token renovado.
-- **Heartbeat**: `agent:heartbeat` a cada 20s; ausencia de `hub:heartbeat_ack`
-em 2 janelas consecutivas aciona reconexao.
+O agente usa tres camadas de recuperacao de transporte (nao apenas o
+`ConnectionProvider`). Owners de orquestracao: `HubConnectionCoordinator` e
+`HubRecoveryOrchestrator` (UI/estado via `ConnectionProvider`).
+
+#### L0 — Socket.IO manager (transporte)
+
+- Apos disconnect `client_or_network`, o app **nao** dispara burst imediatamente:
+  o manager Socket.IO tenta reconectar sozinho.
+- Tentativas internas: `ConnectionConstants.socketReconnectionAttempts` (**5**),
+  delay inicial `socketReconnectionDelayMs` (5 s), teto
+  `socketReconnectionDelayMaxMs` (60 s).
+- Escolha de **5** (em vez de 15): caminho de transporte curto; depois disso o
+  app assume ownership via L1/L2.
+- Escalacao para o app (`onReconnectionNeeded`) quando:
+  - `reconnect_failed`
+  - falha de register pos-reconnect / negociacao
+  - heartbeat stale
+  - `io server disconnect` (o manager nao auto-reconecta; o lifecycle tambem
+    pode dar kick imediato — um exclusive recovery gate coalesces duplicatas)
+
+#### L1 — App burst
+
+- Disparado por `onReconnectionNeeded` / kick de recovery (nao por todo
+  `HubTransportDisconnected`).
+- Ate **3** tentativas (`defaultHubRecoveryBurstMaxAttempts`), com backoff
+  exponencial a partir de **5 s** (`AppConstants.reconnectIntervalSeconds`),
+  multiplicador **2^(tentativa-1)**, teto **60 s**, jitter ±15%
+  (`computeReconnectDelay`).
+- Antes de cada tentativa de socket, o agente consulta reachability HTTP
+  (`CheckHubAvailability` / `HubAvailabilityProbe` em `GET {hubHttpBaseUrl}/health`
+  ou path de env). Qualquer resposta HTTP conta como reachable (nao e o mesmo
+  que `healthPiggyback` nem `agent.getHealth`).
+
+#### L2 — Persistent retry
+
+- Apos o burst esgotar: timer periodico (`hubPersistentRetryInterval`, default
+  **45 s**).
+- Orcamentos separados:
+  - `hub_unreachable`: `hubPersistentUnreachableMaxFailedTicks` (default **160**,
+    ~2 h a 45 s; `0` = ilimitado). Override via Diagnostics, FeatureFlags ou env
+    `HUB_PERSISTENT_UNREACHABLE_MAX_FAILED_TICKS`.
+  - `socket_reconnect_failed`: `hubPersistentRetryMaxFailedTicks` (default **0** =
+    ilimitado). Override via Diagnostics / env `HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS`.
+- Intervalo e orcamentos efetivos sao **congelados em cada**
+  `HubPersistentRetryCoordinator.start()` (Diagnostics Apply vale no proximo
+  start da retentativa persistente, sem reiniciar o app; mudancas mid-flight nao
+  alteram o ciclo em andamento).
+
+#### Auth / hard relogin
+
+- Token expirado / refresh: via **auth bridge** (`IHubRecoveryAuthBridge`), nao
+  acoplado diretamente a um `AuthProvider` de UI.
+- Hard relogin automatico apos limiar de falhas consecutivas (default 3), com
+  cooldown `hubHardReloginCooldown` (60 s) na faixa persistente.
+- Refresh proativo de access JWT perto do `exp`
+  (`hubAccessTokenProactiveRefreshMargin`).
+
+#### Heartbeat
+
+- `agent:heartbeat` a cada 20s; ausencia de `hub:heartbeat_ack` em 2 janelas
+  consecutivas aciona reconexao (escala via `onReconnectionNeeded`).
+
+Ver tambem: politica de extensoes no hub em
+[`docs/plug_server/01_transport_extensions.md`](../plug_server/01_transport_extensions.md)
+(`healthPiggyback` / `agent.getHealth` ≠ probe HTTP `/health` do agente).
 
 ### Rate limiting e cota de concorrencia (agent-side)
 

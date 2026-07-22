@@ -3686,22 +3686,29 @@ class AppLocalizationsPt extends AppLocalizations {
   String get diagnosticsHubReconnectSectionTitle => 'Reconexão com o hub (recuperação offline)';
 
   @override
-  String get diagnosticsHubReconnectMaxTicksLabel => 'Máximo de tentativas falhas antes de desistir';
+  String get diagnosticsHubReconnectMaxTicksLabel => 'Máximo de falhas de reconexão do socket antes de desistir';
 
   @override
   String get diagnosticsHubReconnectMaxTicksHint =>
-      '0 mantém tentativas indefinidamente. Valores menores param antes com erro.';
+      'Somente falhas de reconexão do socket. 0 = tentar indefinidamente. As mudanças valem na próxima vez que a retentativa persistente iniciar (sem reiniciar o app).';
+
+  @override
+  String get diagnosticsHubReconnectUnreachableMaxTicksLabel => 'Máximo de falhas de hub inacessível antes de desistir';
+
+  @override
+  String get diagnosticsHubReconnectUnreachableMaxTicksHint =>
+      'Quando o probe /health do hub não responde. Padrão 160 (~2h a 45s). 0 = ilimitado. As mudanças valem na próxima vez que a retentativa persistente iniciar.';
 
   @override
   String get diagnosticsHubReconnectIntervalLabel => 'Segundos entre tentativas (após o burst)';
 
   @override
   String get diagnosticsHubReconnectIntervalHint =>
-      'Intervalo permitido: 5–86400. Mudanças no intervalo valem na próxima vez que a retentativa persistente iniciar.';
+      'Intervalo permitido: 5–86400. Mudanças de intervalo e orçamentos valem na próxima vez que a retentativa persistente iniciar (sem reiniciar o app).';
 
   @override
   String get diagnosticsHubReconnectEnvHint =>
-      'Se você limpar as preferências (Usar padrões), os valores ainda podem vir de HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS e HUB_PERSISTENT_RETRY_INTERVAL_SECONDS no arquivo de ambiente e, em seguida, dos padrões internos.';
+      'Se você limpar as preferências (Usar padrões), os valores ainda podem vir de HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS, HUB_PERSISTENT_UNREACHABLE_MAX_FAILED_TICKS e HUB_PERSISTENT_RETRY_INTERVAL_SECONDS no arquivo de ambiente e, em seguida, dos padrões internos.';
 
   @override
   String get diagnosticsHubReconnectApply => 'Aplicar ajustes de reconexão';
@@ -4651,6 +4658,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get diagnosticsHubRecoveryPersistentFailures => 'persistent_failure_count';
+
+  @override
+  String get diagnosticsHubRecoveryPersistentUnreachableFailures => 'persistent_unreachable_failure_count';
 
   @override
   String get diagnosticsHubRecoveryHardReloginAttempted => 'hard_relogin_attempted_in_cycle';

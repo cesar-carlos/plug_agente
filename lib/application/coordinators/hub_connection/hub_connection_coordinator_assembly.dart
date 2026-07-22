@@ -29,7 +29,7 @@ HubConnectionCoordinatorBundle assembleHubConnectionCoordinators(
   }
 
   void startPersistentRetry() {
-    scratch.persistentRetryCoordinator.start(interval: input.effectiveHubPersistentRetryInterval);
+    scratch.persistentRetryCoordinator.start();
   }
 
   void startProactiveTokenRefreshSchedule() {

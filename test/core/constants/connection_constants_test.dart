@@ -33,8 +33,16 @@ void main() {
       );
     });
 
-    test('should default hub persistent retry to unlimited', () {
+    test('should default hub persistent retry to unlimited socket failures', () {
       expect(ConnectionConstants.hubPersistentRetryMaxFailedTicks, 0);
+    });
+
+    test('should default hub unreachable persistent budget to about two hours', () {
+      expect(ConnectionConstants.hubPersistentUnreachableMaxFailedTicks, 160);
+    });
+
+    test('should default Socket.IO reconnection attempts to a short transport path', () {
+      expect(ConnectionConstants.socketReconnectionAttempts, 5);
     });
 
     test('should default ODBC async worker count to min pool size and processor count', () {

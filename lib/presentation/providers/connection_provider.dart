@@ -55,6 +55,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
     bool enableHardReloginRecovery = HubConnectionCoordinator.defaultEnableHardReloginRecovery,
     Duration? hubPersistentRetryInterval,
     int? hubPersistentRetryMaxFailedTicks,
+    int? hubPersistentUnreachableMaxFailedTicks,
     Duration? hubTokenRefreshMinInterval,
     Duration? hubHardReloginCooldown,
     Duration? capabilitiesNegotiationWatchdogOverride,
@@ -120,6 +121,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
           enableHardReloginRecovery: enableHardReloginRecovery,
           hubPersistentRetryInterval: hubPersistentRetryInterval,
           hubPersistentRetryMaxFailedTicks: hubPersistentRetryMaxFailedTicks,
+          hubPersistentUnreachableMaxFailedTicks: hubPersistentUnreachableMaxFailedTicks,
           hubTokenRefreshMinInterval: hubTokenRefreshMinInterval,
           hubHardReloginCooldown: hubHardReloginCooldown,
           capabilitiesNegotiationWatchdogOverride: capabilitiesNegotiationWatchdogOverride,
@@ -210,7 +212,7 @@ class ConnectionProvider extends ChangeNotifier implements HubRecoveryUiSink {
 
   bool get isConnected => _displayState.status == ConnectionStatus.connected;
 
-  bool get isReconnecting => _displayState.isReconnecting || _displayState.status == ConnectionStatus.reconnecting;
+  bool get isReconnecting => _displayState.isBurstRecoveryInFlight || _displayState.status == ConnectionStatus.reconnecting;
   bool get isConnectingOrNegotiating =>
       _displayState.status == ConnectionStatus.connecting || _displayState.status == ConnectionStatus.negotiating;
   bool get isCheckingDriver => _displayState.isCheckingDriver;

@@ -21,7 +21,7 @@ class HubAvailabilityProbe implements IHubAvailabilityProbe {
 
   @override
   Future<bool> isServerReachable(String serverUrl) async {
-    final targetUrl = joinServerUrlAndPath(serverUrl, _probePath);
+    final targetUrl = joinServerUrlAndPath(hubHttpBaseUrl(serverUrl), _probePath);
     try {
       final response = await _dio.get<void>(targetUrl);
       // Any HTTP response (including 5xx) confirms the server is reachable.

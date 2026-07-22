@@ -164,6 +164,12 @@ Regras:
 - **Nunca** usar piggyback para autorizacao — somente observabilidade
 - Limpar estado por agente em `agentRegistry.removeBySocketId`
 
+**Nota (agente):** `healthPiggyback` e `agent.getHealth` nao sao o probe HTTP
+`GET /health` usado pelo agente para reachability offline
+(`HubAvailabilityProbe` + `hubHttpBaseUrl`). Politica completa de reconnect L0–L2:
+[`docs/communication/socket_communication_standard.md`](../communication/socket_communication_standard.md)
+(secao **Reconnect e recovery**).
+
 ### Pendente opcional no hub
 
 O ADR prevê **pular polls agendados** de `agent.getHealth` quando o

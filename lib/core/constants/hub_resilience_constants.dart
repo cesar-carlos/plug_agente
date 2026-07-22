@@ -20,10 +20,16 @@ abstract final class HubResilienceConstants {
   /// hub retry. Burst escalation and proactive pre-socket relogin ignore this cooldown.
   static const Duration hubHardReloginCooldown = Duration(seconds: 60);
 
-  /// Max failed persistent reconnect ticks before giving up (`0` = unlimited).
+  /// Max failed persistent reconnect ticks for socket reconnect failures
+  /// (`0` = unlimited). Unreachable-hub failures use
+  /// [hubPersistentUnreachableMaxFailedTicks] instead.
   static const int hubPersistentRetryMaxFailedTicks = 0;
 
-  /// User-facing message when [hubPersistentRetryMaxFailedTicks] is exceeded (English;
+  /// Max consecutive `hub_unreachable` persistent ticks before giving up.
+  /// At [hubPersistentRetryInterval] (45s), 160 ≈ 2 hours. `0` = unlimited.
+  static const int hubPersistentUnreachableMaxFailedTicks = 160;
+
+  /// User-facing message when a persistent retry budget is exceeded (English;
   /// mirror in ARB for localized surfaces).
   static const String hubPersistentRetryExhaustedMessage =
       'Could not reach the hub after many attempts. Check the server URL, network, and '
@@ -32,8 +38,11 @@ abstract final class HubResilienceConstants {
   /// Legacy name; same as [defaultHubRecoveryBurstMaxAttempts] (ODBC pool options).
   static const int defaultMaxReconnectAttempts = defaultHubRecoveryBurstMaxAttempts;
 
-  /// Socket.IO client internal reconnection attempts (transport-level).
-  static const int socketReconnectionAttempts = 15;
+  /// Socket.IO client internal reconnection attempts (L0 / transport-level).
+  /// Kept short so the manager tries briefly; after `reconnect_failed` (or
+  /// `io server disconnect` / heartbeat / negotiation escalation) the app owns
+  /// recovery via L1 burst then L2 persistent retry.
+  static const int socketReconnectionAttempts = 5;
   static const int socketReconnectionDelayMs = 5000;
   static const int socketReconnectionDelayMaxMs = 60000;
 

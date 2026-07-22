@@ -29,6 +29,7 @@ final class HubRecoveryOrchestrator {
   bool hardReloginAttemptedInCycle = false;
   int persistentRetryTickCount = 0;
   int persistentFailureCount = 0;
+  int persistentUnreachableFailureCount = 0;
 
   Duration reconnectDelayForAttempt(int attempt) {
     return computeReconnectDelay(
@@ -46,12 +47,14 @@ final class HubRecoveryOrchestrator {
 
   void resetForUserConnect() {
     persistentFailureCount = 0;
+    persistentUnreachableFailureCount = 0;
     consecutiveReconnectFailures = 0;
     hardReloginAttemptedInCycle = false;
   }
 
   void resetForStartupPersistentRecovery() {
     persistentFailureCount = 0;
+    persistentUnreachableFailureCount = 0;
     persistentRetryTickCount = 0;
     consecutiveReconnectFailures = 0;
     hardReloginAttemptedInCycle = false;
@@ -60,6 +63,7 @@ final class HubRecoveryOrchestrator {
   void resetPersistentRetryCounters() {
     persistentRetryTickCount = 0;
     persistentFailureCount = 0;
+    persistentUnreachableFailureCount = 0;
   }
 
   void resetHardReloginCycle() {
@@ -72,6 +76,7 @@ final class HubRecoveryOrchestrator {
 
   void noteTransportConnectSuccessDuringRecovery() {
     persistentFailureCount = 0;
+    persistentUnreachableFailureCount = 0;
     consecutiveReconnectFailures = 0;
   }
 
@@ -85,6 +90,10 @@ final class HubRecoveryOrchestrator {
 
   void bumpPersistentFailure() {
     persistentFailureCount++;
+  }
+
+  void bumpPersistentUnreachableFailure() {
+    persistentUnreachableFailureCount++;
   }
 
   void bumpPersistentTick() {

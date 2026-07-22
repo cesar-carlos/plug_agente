@@ -58,6 +58,7 @@ final class HubConnectionCoordinator {
     bool enableHardReloginRecovery = defaultEnableHardReloginRecovery,
     Duration? hubPersistentRetryInterval,
     int? hubPersistentRetryMaxFailedTicks,
+    int? hubPersistentUnreachableMaxFailedTicks,
     Duration? hubTokenRefreshMinInterval,
     Duration? hubHardReloginCooldown,
     Duration? capabilitiesNegotiationWatchdogOverride,
@@ -71,6 +72,7 @@ final class HubConnectionCoordinator {
        _enableHardReloginRecoveryOverride = enableHardReloginRecovery,
        _hubPersistentRetryIntervalOverride = hubPersistentRetryInterval,
        _hubPersistentRetryMaxFailedTicksOverride = hubPersistentRetryMaxFailedTicks,
+       _hubPersistentUnreachableMaxFailedTicksOverride = hubPersistentUnreachableMaxFailedTicks,
        _hubHardReloginCooldownOverride = hubHardReloginCooldown,
        _hubResilience = hubResilience,
        _featureFlags = featureFlags {
@@ -110,8 +112,10 @@ final class HubConnectionCoordinator {
         maxReconnectAttempts: _maxReconnectAttempts,
         effectiveHardReloginRecoveryEnabled: _effectiveHardReloginRecoveryEnabled,
         effectiveHardReloginFailureThreshold: _effectiveHardReloginFailureThreshold,
-        effectiveHubPersistentRetryMaxFailedTicks: _effectiveHubPersistentRetryMaxFailedTicks,
-        effectiveHubPersistentRetryInterval: _effectiveHubPersistentRetryInterval,
+        effectiveHubPersistentRetryMaxFailedTicks: () => _effectiveHubPersistentRetryMaxFailedTicks,
+        effectiveHubPersistentUnreachableMaxFailedTicks: () =>
+            _effectiveHubPersistentUnreachableMaxFailedTicks,
+        effectiveHubPersistentRetryInterval: () => _effectiveHubPersistentRetryInterval,
         effectiveHubHardReloginCooldown: _effectiveHubHardReloginCooldown,
         hasAuthBridge: hubRecoveryAuthBridge != null,
         random: random,
@@ -167,6 +171,7 @@ final class HubConnectionCoordinator {
   final bool _enableHardReloginRecoveryOverride;
   final Duration? _hubPersistentRetryIntervalOverride;
   final int? _hubPersistentRetryMaxFailedTicksOverride;
+  final int? _hubPersistentUnreachableMaxFailedTicksOverride;
   final Duration? _hubHardReloginCooldownOverride;
 
   Duration get _effectiveHubPersistentRetryInterval =>
@@ -178,6 +183,11 @@ final class HubConnectionCoordinator {
       _hubPersistentRetryMaxFailedTicksOverride ??
       _hubResilience?.maxFailedTicks ??
       ConnectionConstants.hubPersistentRetryMaxFailedTicks;
+
+  int get _effectiveHubPersistentUnreachableMaxFailedTicks =>
+      _hubPersistentUnreachableMaxFailedTicksOverride ??
+      _hubResilience?.maxUnreachableFailedTicks ??
+      ConnectionConstants.hubPersistentUnreachableMaxFailedTicks;
 
   Duration get _effectiveHubHardReloginCooldown =>
       _hubHardReloginCooldownOverride ?? ConnectionConstants.hubHardReloginCooldown;
@@ -243,6 +253,7 @@ final class HubConnectionCoordinator {
       consecutiveReconnectFailures: _hubRecoveryOrchestrator.consecutiveReconnectFailures,
       persistentRetryTickCount: _hubRecoveryOrchestrator.persistentRetryTickCount,
       persistentFailureCount: _hubRecoveryOrchestrator.persistentFailureCount,
+      persistentUnreachableFailureCount: _hubRecoveryOrchestrator.persistentUnreachableFailureCount,
       hardReloginAttemptedInCycle: _hubRecoveryOrchestrator.hardReloginAttemptedInCycle,
       lastError: _displayState.error,
     );

@@ -62,7 +62,7 @@ class HardReloginResult {
 class HubResilienceEnvironment {
   const HubResilienceEnvironment({
     required this.isDisconnectRequested,
-    required this.isReconnecting,
+    required this.isBurstRecoveryInFlight,
     required this.hasPersistentRetryTimer,
     required this.persistentRetryInFlight,
     required this.isNegotiating,
@@ -75,7 +75,9 @@ class HubResilienceEnvironment {
   });
 
   final bool Function() isDisconnectRequested;
-  final bool Function() isReconnecting;
+
+  /// True only while app burst recovery is running — not while waiting for Socket.IO L0.
+  final bool Function() isBurstRecoveryInFlight;
   final bool Function() hasPersistentRetryTimer;
   final bool Function() persistentRetryInFlight;
   final bool Function() isNegotiating;
@@ -185,7 +187,7 @@ class HubResilienceCoordinator {
       handler: _environment.handleReconnectionNeeded,
       shouldAbort: _environment.isDisconnectRequested,
       shouldSkipAfterLock: () =>
-          _environment.isReconnecting() ||
+          _environment.isBurstRecoveryInFlight() ||
           _environment.hasPersistentRetryTimer() ||
           _environment.persistentRetryInFlight(),
       onCoalesced: () {
@@ -197,7 +199,7 @@ class HubResilienceCoordinator {
       onSkippedAfterLock: () {
         AppLogger.debug(
           'resilience: ${resilienceLogPrefix()}reconnect event=recovery_skipped '
-          'reason=already_recovering reconnecting=${_environment.isReconnecting()} '
+          'reason=already_recovering burst_in_flight=${_environment.isBurstRecoveryInFlight()} '
           'persistent_timer=${_environment.hasPersistentRetryTimer()}',
         );
       },
@@ -208,7 +210,7 @@ class HubResilienceCoordinator {
     if (_environment.isDisconnectRequested()) {
       return;
     }
-    if (_environment.isReconnecting()) {
+    if (_environment.isBurstRecoveryInFlight()) {
       AppLogger.debug(
         'resilience: ${resilienceLogPrefix()}hub_transport event=recovery_skipped '
         'trigger=$trigger reason=burst_in_flight',

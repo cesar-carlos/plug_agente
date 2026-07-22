@@ -35,6 +35,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
   var _dependenciesInitialized = false;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _hubMaxTicksController = TextEditingController();
+  final TextEditingController _hubUnreachableMaxTicksController = TextEditingController();
   final TextEditingController _hubIntervalSecondsController = TextEditingController();
   final TextEditingController _hubHardReloginThresholdController = TextEditingController();
 
@@ -54,6 +55,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
 
   void _reloadHubReconnectFields() {
     _hubMaxTicksController.text = '${_hubResilience.maxFailedTicks}';
+    _hubUnreachableMaxTicksController.text = '${_hubResilience.maxUnreachableFailedTicks}';
     _hubIntervalSecondsController.text = '${_hubResilience.persistentRetryInterval.inSeconds}';
     _hubHardReloginThresholdController.text = '${_flags.hubHardReloginFailureThreshold}';
   }
@@ -62,6 +64,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
   void dispose() {
     _scrollController.dispose();
     _hubMaxTicksController.dispose();
+    _hubUnreachableMaxTicksController.dispose();
     _hubIntervalSecondsController.dispose();
     _hubHardReloginThresholdController.dispose();
     super.dispose();
@@ -100,6 +103,15 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
       );
       return;
     }
+    final unreachableMaxTicks = int.tryParse(_hubUnreachableMaxTicksController.text.trim());
+    if (unreachableMaxTicks == null || unreachableMaxTicks < 0) {
+      await SettingsFeedback.showError(
+        context: context,
+        title: l10n.modalTitleError,
+        message: l10n.diagnosticsHubReconnectInvalidMaxTicks,
+      );
+      return;
+    }
     final intervalSec = int.tryParse(_hubIntervalSecondsController.text.trim());
     if (intervalSec == null || intervalSec < 5 || intervalSec > 86400) {
       await SettingsFeedback.showError(
@@ -122,6 +134,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
     }
     try {
       await _flags.setHubPersistentRetryMaxFailedTicksOverride(maxTicks);
+      await _flags.setHubPersistentUnreachableMaxFailedTicksOverride(unreachableMaxTicks);
       await _flags.setHubPersistentRetryIntervalSecondsOverride(intervalSec);
       await _flags.setEnableHubHardReloginRecovery(_enableHardReloginRecovery);
       await _flags.setHubHardReloginFailureThreshold(hardReloginThreshold);
@@ -225,6 +238,13 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                     label: l10n.diagnosticsHubReconnectMaxTicksLabel,
                     hint: l10n.diagnosticsHubReconnectMaxTicksHint,
                     controller: _hubMaxTicksController,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: l10n.diagnosticsHubReconnectUnreachableMaxTicksLabel,
+                    hint: l10n.diagnosticsHubReconnectUnreachableMaxTicksHint,
+                    controller: _hubUnreachableMaxTicksController,
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -341,6 +361,10 @@ class _HubRecoveryDiagnosticsCard extends StatelessWidget {
             row(l10n.diagnosticsHubRecoveryConsecutiveFailures, '${snapshot.consecutiveReconnectFailures}'),
             row(l10n.diagnosticsHubRecoveryPersistentTick, '${snapshot.persistentRetryTickCount}'),
             row(l10n.diagnosticsHubRecoveryPersistentFailures, '${snapshot.persistentFailureCount}'),
+            row(
+              l10n.diagnosticsHubRecoveryPersistentUnreachableFailures,
+              '${snapshot.persistentUnreachableFailureCount}',
+            ),
             row(l10n.diagnosticsHubRecoveryHardReloginAttempted, '${snapshot.hardReloginAttemptedInCycle}'),
             row(l10n.diagnosticsHubRecoveryLastError, snapshot.lastError),
           ],

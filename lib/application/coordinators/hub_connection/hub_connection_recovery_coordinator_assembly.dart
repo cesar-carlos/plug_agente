@@ -28,7 +28,7 @@ void assembleHubConnectionRecoveryCoordinators({
   scratch.resilienceCoordinator = HubResilienceCoordinator(
     environment: HubResilienceEnvironment(
       isDisconnectRequested: input.isDisconnectRequested,
-      isReconnecting: () => input.displayState.isReconnecting,
+      isBurstRecoveryInFlight: () => input.displayState.isBurstRecoveryInFlight,
       hasPersistentRetryTimer: () => scratch.persistentRetryCoordinator.hasActiveTimer,
       persistentRetryInFlight: () => scratch.persistentRetryCoordinator.retryInFlight,
       isNegotiating: () => input.displayState.status == ConnectionStatus.negotiating,
@@ -57,7 +57,7 @@ void assembleHubConnectionRecoveryCoordinators({
       resilienceLogPrefix: logResiliencePrefix,
       isDisconnectRequested: input.isDisconnectRequested,
       isReconnectingUiState: () =>
-          input.displayState.status == ConnectionStatus.reconnecting || input.displayState.isReconnecting,
+          input.displayState.status == ConnectionStatus.reconnecting || input.displayState.isBurstRecoveryInFlight,
       cancelPersistentRetryTimer: cancelPersistentRetryTimer,
       onTransportReconnectSuccess: ({required serverUrl, required agentId, authToken}) {
         input.connectionTrackingState.sessionAuthInvalid = false;
@@ -160,7 +160,7 @@ void assembleHubConnectionRecoveryCoordinators({
       resilienceCoordinator: scratch.resilienceCoordinator,
       resilienceLogPrefix: logResiliencePrefix,
       isDisconnectRequested: input.isDisconnectRequested,
-      isInternalReconnecting: () => input.displayState.isReconnecting,
+      isInternalReconnecting: () => input.displayState.isBurstRecoveryInFlight,
       resolveConnectionContext: input.contextSource.resolveConnectionContext,
       recoverConnection: (context, {bool proactiveHardReloginBeforeSocket = false}) =>
           scratch.hubRecoveryOrchestrator.runBurstRecovery(
@@ -175,13 +175,13 @@ void assembleHubConnectionRecoveryCoordinators({
           ),
       startPersistentRetry: startPersistentRetry,
       beginManualReconnection: () {
-        input.displayState.isReconnecting = true;
+        input.displayState.isBurstRecoveryInFlight = true;
         scratch.hubRecoveryOrchestrator.resetHardReloginCycle();
         input.displayState.status = ConnectionStatus.reconnecting;
         input.displayState.error = '';
       },
       endManualReconnection: () {
-        input.displayState.isReconnecting = false;
+        input.displayState.isBurstRecoveryInFlight = false;
       },
       onMissingConnectionContextForReconnection: () {
         input.displayState.status = ConnectionStatus.error;

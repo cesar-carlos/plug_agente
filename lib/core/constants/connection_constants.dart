@@ -25,6 +25,8 @@ abstract final class ConnectionConstants {
   static const Duration hubPersistentRetryInterval = HubResilienceConstants.hubPersistentRetryInterval;
   static const Duration hubHardReloginCooldown = HubResilienceConstants.hubHardReloginCooldown;
   static const int hubPersistentRetryMaxFailedTicks = HubResilienceConstants.hubPersistentRetryMaxFailedTicks;
+  static const int hubPersistentUnreachableMaxFailedTicks =
+      HubResilienceConstants.hubPersistentUnreachableMaxFailedTicks;
   static const String hubPersistentRetryExhaustedMessage = HubResilienceConstants.hubPersistentRetryExhaustedMessage;
   static const int defaultMaxReconnectAttempts = HubResilienceConstants.defaultMaxReconnectAttempts;
   static const Duration hubTokenRefreshMinInterval = HubResilienceConstants.hubTokenRefreshMinInterval;

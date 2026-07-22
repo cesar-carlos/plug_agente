@@ -296,7 +296,7 @@ void main() {
     });
 
     test(
-      'HubTransportDisconnected starts burst recovery when hub context exists',
+      'client_or_network HubTransportDisconnected does not start burst recovery',
       () async {
         var connectCalls = 0;
         when(
@@ -323,7 +323,84 @@ void main() {
         transport.triggerProtocolReady();
         expect(connectCalls, 1);
 
-        transport.onHubLifecycle?.call(const HubTransportDisconnected());
+        transport.onHubLifecycle?.call(const HubTransportDisconnected(reason: 'transport close'));
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        expect(provider.status, ConnectionStatus.reconnecting);
+        expect(connectCalls, 1);
+
+        await provider.disconnect();
+      },
+    );
+
+    test(
+      'onReconnectionNeeded starts burst recovery when hub context exists',
+      () async {
+        var connectCalls = 0;
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          connectCalls++;
+          return const Success(unit);
+        });
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          checkHubAvailabilityUseCase: checkHubAvailability,
+          configProvider: configProvider,
+          transportClient: transport,
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          maxReconnectAttempts: 2,
+          hubTokenRefreshMinInterval: Duration.zero,
+        );
+
+        await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        transport.triggerProtocolReady();
+        expect(connectCalls, 1);
+
+        transport.onReconnectionNeeded?.call();
+
+        await _waitForStatus(provider, ConnectionStatus.negotiating);
+        expect(connectCalls, greaterThan(1));
+
+        await provider.disconnect();
+      },
+    );
+
+    test(
+      'io server disconnect HubTransportDisconnected starts burst recovery',
+      () async {
+        var connectCalls = 0;
+        when(
+          () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
+        ).thenAnswer((_) async {
+          connectCalls++;
+          return const Success(unit);
+        });
+
+        final provider = ConnectionProvider(
+          connectToHub,
+          testDb,
+          checkDriver,
+          checkHubAvailabilityUseCase: checkHubAvailability,
+          configProvider: configProvider,
+          transportClient: transport,
+          initialReconnectDelay: Duration.zero,
+          maxReconnectDelay: Duration.zero,
+          maxReconnectAttempts: 2,
+          hubTokenRefreshMinInterval: Duration.zero,
+        );
+
+        await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
+        transport.triggerProtocolReady();
+        expect(connectCalls, 1);
+
+        transport.onHubLifecycle?.call(
+          const HubTransportDisconnected(reason: 'io server disconnect'),
+        );
 
         await _waitForStatus(provider, ConnectionStatus.negotiating);
         expect(connectCalls, greaterThan(1));
@@ -1364,7 +1441,7 @@ void main() {
       },
     );
 
-    test('persistent retry counts unreachable hub towards exhaustion cap', () async {
+    test('persistent retry counts unreachable hub towards unreachable exhaustion cap', () async {
       when(
         () => connectToHub(any(), any(), authToken: any(named: 'authToken')),
       ).thenAnswer((_) async => const Success(unit));
@@ -1380,7 +1457,8 @@ void main() {
         initialReconnectDelay: const Duration(milliseconds: 2),
         maxReconnectDelay: const Duration(milliseconds: 4),
         hubPersistentRetryInterval: const Duration(milliseconds: 25),
-        hubPersistentRetryMaxFailedTicks: 5,
+        hubPersistentRetryMaxFailedTicks: 0,
+        hubPersistentUnreachableMaxFailedTicks: 5,
         enableHardReloginRecovery: false,
       );
 
@@ -1411,6 +1489,7 @@ void main() {
       expect(snapshot.consecutiveReconnectFailures, 0);
       expect(snapshot.persistentRetryTickCount, 0);
       expect(snapshot.persistentFailureCount, 0);
+      expect(snapshot.persistentUnreachableFailureCount, 0);
       expect(snapshot.hardReloginAttemptedInCycle, isFalse);
       expect(snapshot.lastError, isEmpty);
     });

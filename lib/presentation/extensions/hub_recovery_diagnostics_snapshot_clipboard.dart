@@ -12,6 +12,7 @@ extension HubRecoveryDiagnosticsSnapshotClipboard on HubRecoveryDiagnosticsSnaps
       line(l10n.diagnosticsHubRecoveryConsecutiveFailures, '$consecutiveReconnectFailures'),
       line(l10n.diagnosticsHubRecoveryPersistentTick, '$persistentRetryTickCount'),
       line(l10n.diagnosticsHubRecoveryPersistentFailures, '$persistentFailureCount'),
+      line(l10n.diagnosticsHubRecoveryPersistentUnreachableFailures, '$persistentUnreachableFailureCount'),
       line(l10n.diagnosticsHubRecoveryHardReloginAttempted, '$hardReloginAttemptedInCycle'),
       line(l10n.diagnosticsHubRecoveryLastError, lastError),
     ].join('\n');

@@ -32,6 +32,23 @@ void main() {
       ).called(1);
     });
 
+    test('strips /agents namespace before appending probe path', () async {
+      when(() => dio.get<void>(any())).thenAnswer(
+        (_) async => Response<void>(
+          requestOptions: RequestOptions(path: '/health'),
+          statusCode: 200,
+        ),
+      );
+
+      final reachable = await probe.isServerReachable('https://hub.test/agents');
+
+      expect(reachable, isTrue);
+      verify(
+        () => dio.get<void>('https://hub.test${AppConstants.defaultHubAvailabilityProbePath}'),
+      ).called(1);
+      verifyNever(() => dio.get<void>('https://hub.test/agents${AppConstants.defaultHubAvailabilityProbePath}'));
+    });
+
     test('returns true when DioException includes an HTTP response', () async {
       when(() => dio.get<void>(any())).thenThrow(
         DioException(

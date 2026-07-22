@@ -14,7 +14,13 @@ final class HubConnectionDisplayState {
   ConnectionStatus status = ConnectionStatus.disconnected;
   String error = '';
   bool isDbConnected = false;
-  bool isReconnecting = false;
+
+  /// True while app **burst** recovery owns reconnect (`beginManualReconnection`).
+  ///
+  /// Distinct from [status] == [ConnectionStatus.reconnecting], which is also set
+  /// when waiting for Socket.IO L0. Kick/exclusive-recovery gates must use this
+  /// flag — not [isReconnectingEffective] — or L0 wait would skip `io_server` kick.
+  bool isBurstRecoveryInFlight = false;
   bool isCheckingDriver = false;
   HubRecoveryUiHint hubRecoveryUiHint = HubRecoveryUiHint.none;
 
@@ -22,5 +28,5 @@ final class HubConnectionDisplayState {
 
   bool get isConnectingOrNegotiating => status == ConnectionStatus.connecting || status == ConnectionStatus.negotiating;
 
-  bool get isReconnectingEffective => isReconnecting || status == ConnectionStatus.reconnecting;
+  bool get isReconnectingEffective => isBurstRecoveryInFlight || status == ConnectionStatus.reconnecting;
 }

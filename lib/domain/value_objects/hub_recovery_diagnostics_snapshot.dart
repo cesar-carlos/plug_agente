@@ -7,6 +7,7 @@ class HubRecoveryDiagnosticsSnapshot {
     required this.consecutiveReconnectFailures,
     required this.persistentRetryTickCount,
     required this.persistentFailureCount,
+    required this.persistentUnreachableFailureCount,
     required this.hardReloginAttemptedInCycle,
     required this.lastError,
   });
@@ -17,6 +18,7 @@ class HubRecoveryDiagnosticsSnapshot {
   final int consecutiveReconnectFailures;
   final int persistentRetryTickCount;
   final int persistentFailureCount;
+  final int persistentUnreachableFailureCount;
   final bool hardReloginAttemptedInCycle;
   final String lastError;
 }

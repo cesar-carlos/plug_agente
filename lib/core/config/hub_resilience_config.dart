@@ -10,11 +10,12 @@ class HubResilienceConfig {
   final FeatureFlags _flags;
 
   static const String envMaxFailedTicksKey = 'HUB_PERSISTENT_RETRY_MAX_FAILED_TICKS';
+  static const String envUnreachableMaxFailedTicksKey = 'HUB_PERSISTENT_UNREACHABLE_MAX_FAILED_TICKS';
   static const String envIntervalSecondsKey = 'HUB_PERSISTENT_RETRY_INTERVAL_SECONDS';
 
   static const int _maxFailedTicksUpperBound = 1 << 22;
 
-  /// Effective max failed persistent reconnect ticks (`0` = unlimited).
+  /// Effective max failed **socket** reconnect ticks (`0` = unlimited).
   int get maxFailedTicks {
     final fromFlag = _flags.hubPersistentRetryMaxFailedTicksOverride;
     if (fromFlag != null) {
@@ -25,6 +26,19 @@ class HubResilienceConfig {
       return fromEnv.clamp(0, _maxFailedTicksUpperBound);
     }
     return ConnectionConstants.hubPersistentRetryMaxFailedTicks;
+  }
+
+  /// Effective max failed **hub-unreachable** ticks (`0` = unlimited).
+  int get maxUnreachableFailedTicks {
+    final fromFlag = _flags.hubPersistentUnreachableMaxFailedTicksOverride;
+    if (fromFlag != null) {
+      return fromFlag.clamp(0, _maxFailedTicksUpperBound);
+    }
+    final fromEnv = _readOptionalNonNegativeIntEnv(envUnreachableMaxFailedTicksKey);
+    if (fromEnv != null) {
+      return fromEnv.clamp(0, _maxFailedTicksUpperBound);
+    }
+    return ConnectionConstants.hubPersistentUnreachableMaxFailedTicks;
   }
 
   Duration get persistentRetryInterval {
