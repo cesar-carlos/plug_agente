@@ -35,18 +35,25 @@ caller waits for task completion without a queue-level deadline.
 
 When a queue-wait timeout races with worker start, the caller receives a
 queue-timeout failure but ODBC work may already be running — a **ghost query**.
-The queue cannot abort arbitrary ODBC tasks from the timeout path alone:
 
-- **Streaming** paths may pass an optional `CancellationToken`
-  (`cooperativeCancellationToken`). On queue-wait timeout after worker start,
-  the queue signals `cooperativeCancellationToken.cancel()` so the task can
-  cooperatively stop.
-- **Materialized** `sql.execute` routes through `QueuedDatabaseGateway`, which
-  passes the same optional `CancellationToken` as cooperative
-  `cooperativeCancellationToken` on queue submit. On queue-wait timeout after
-  worker start, the token is signalled so ODBC execution can stop
-  cooperatively; ODBC execution timeouts remain the fallback when cancel does
+Mitigations on that path:
+
+- **Start-signal deferral**: the worker marks `hasStarted` and only then runs the
+  task body, so timeout after start is observable and metricated separately from
+  pure queue-wait timeouts.
+- **Cooperative cancel**: streaming and materialized `sql.execute` may pass an
+  optional `CancellationToken` (`cooperativeCancellationToken`). On queue-wait
+  timeout after worker start, the queue signals
+  `cooperativeCancellationToken.cancel()` so ODBC execution can stop
+  cooperatively; per-request ODBC timeouts remain the fallback when cancel does
   not propagate in time.
+- **In-flight abort port**: after worker start, the ghost-query policy calls
+  `ISqlInFlightExecutionAbortPort.abortInFlightExecution(..., armIfMissing: true)`.
+  That arms a **pending abort** only for the ghost path so a later
+  register/bind of the ODBC handle fulfills native cancel. Unknown `sql.cancel`
+  misses must **not** arm pending (avoids poison-pill cancels). When a handle is
+  registered early without a native cancel target yet, abort keeps pending until
+  `bindStatement` / `bindAsyncRequest`. Orphan pending aborts expire via TTL.
 
 Health exposes `sql_queue.timeouts_after_worker_started_total` (metric
 `sql_queue_timeout_after_worker_started_count`) when this race occurs. Failure

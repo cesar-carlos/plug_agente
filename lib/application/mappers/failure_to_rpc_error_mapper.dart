@@ -82,6 +82,12 @@ class FailureToRpcErrorMapper {
       if (failure.code == AgentActionFailureCode.queueTimeout) {
         return RpcErrorCode.timeout;
       }
+      if (failure.code == AgentActionFailureCode.queueDisposed) {
+        return RpcErrorCode.agentActionsTemporarilyUnavailable;
+      }
+      if (failure.code == AgentActionFailureCode.queueCancelled) {
+        return RpcErrorCode.executionCancelled;
+      }
       if (failure.code == AgentActionFailureCode.queueConcurrencyRejected ||
           failure.code == AgentActionFailureCode.queueIgnored) {
         return RpcErrorCode.invalidParams;

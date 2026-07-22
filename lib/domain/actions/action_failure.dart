@@ -129,6 +129,7 @@ abstract final class AgentActionFailureCode {
   static const processNotActive = 'ACTION_PROCESS_NOT_ACTIVE';
   static const queueCancelled = 'ACTION_QUEUE_CANCELLED';
   static const queueConcurrencyRejected = 'ACTION_QUEUE_CONCURRENCY_REJECTED';
+  static const queueDisposed = 'ACTION_QUEUE_DISPOSED';
   static const queueFull = 'ACTION_QUEUE_FULL';
   static const queueIgnored = 'ACTION_QUEUE_IGNORED';
   static const queueItemNotFound = 'ACTION_QUEUE_ITEM_NOT_FOUND';

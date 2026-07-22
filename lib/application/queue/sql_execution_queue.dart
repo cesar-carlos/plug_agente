@@ -29,11 +29,10 @@ export 'package:plug_agente/application/queue/sql_execution_kind.dart';
 /// caller waits for task completion without a queue-level deadline.
 ///
 /// When a queue-wait timeout races with worker start, the caller receives a
-/// queue-timeout failure but ODBC work may already be running ("ghost query").
-/// The queue cannot safely abort arbitrary ODBC tasks from here:
-/// cancellation requires cooperative cancellation-token wiring in the task
-/// (materialized sql.execute and streaming) or ODBC-layer execution timeouts
-/// when no token is observed cooperatively.
+/// queue-timeout failure. The queue defers the start signal until after a
+/// cancel check so timed-out waiters usually never invoke the task. If ODBC
+/// work did start, cooperative cancellation plus [ISqlInFlightExecutionAbortPort]
+/// (including pending abort before handle registration) mitigate ghost queries.
 /// See ConnectionConstants.sqlQueueEnqueueTimeout for the timeout policy.
 ///
 /// Usage:
@@ -336,11 +335,11 @@ class SqlExecutionQueue {
       if (request.isCancelled || request.completer.isCompleted) {
         continue;
       }
-      request.hasStarted = true;
+      // Reserve the worker slot before signalling start. The start completer is
+      // completed inside _executeTask only after a final cancel check so a
+      // queue-wait timeout can still prevent task invocation without leaving a
+      // running ghost query.
       request.startedAt = DateTime.now();
-      if (!request.startedCompleter.isCompleted) {
-        request.startedCompleter.complete();
-      }
       _laneCapacity.onWorkerStarted(request, metricsCollector: _metricsCollector);
 
       unawaited(_executeTask(request));
@@ -348,6 +347,20 @@ class SqlExecutionQueue {
   }
 
   Future<void> _executeTask<T extends Object>(SqlExecutionQueuedRequest<T> request) async {
+    if (request.isCancelled) {
+      if (!request.startedCompleter.isCompleted) {
+        request.startedCompleter.complete();
+      }
+      return;
+    }
+
+    request.hasStarted = true;
+    if (!request.startedCompleter.isCompleted) {
+      request.startedCompleter.complete();
+    }
+
+    // Re-check after signalling start: timeout handlers scheduled in the same
+    // event turn may have cancelled between the checks above and task invoke.
     if (request.isCancelled) {
       return;
     }

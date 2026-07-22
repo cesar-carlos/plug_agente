@@ -134,6 +134,7 @@ class AgentActionFailureDiagnosticsResolver {
       case AgentActionFailureCode.queueConcurrencyRejected:
       case AgentActionFailureCode.queueIgnored:
       case AgentActionFailureCode.queueCancelled:
+      case AgentActionFailureCode.queueDisposed:
       case AgentActionFailureCode.queueItemNotFound:
         return AgentActionCorrectiveActionKind.reviewQueue;
       case AgentActionFailureCode.queueTimeout:

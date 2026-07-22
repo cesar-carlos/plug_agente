@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:get_it/get_it.dart';
+import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/bootstrap/app_shutdown_coordinator.dart';
 import 'package:plug_agente/application/bootstrap/hub_connection_shutdown_registry.dart';
@@ -33,6 +34,26 @@ class OdbcRuntimeReloadTeardownService implements IOdbcRuntimeReloadTeardownPort
       return;
     }
     _getIt<AgentActionRuntimeStateGuard>().markReady();
+  }
+
+  @override
+  Future<void> disposeActionExecutionQueue() async {
+    if (!_getIt.isRegistered<ActionExecutionQueue>()) {
+      return;
+    }
+
+    final disposeResult = await _getIt<ActionExecutionQueue>().disposeGracefully();
+    disposeResult.fold(
+      (_) {},
+      (failure) {
+        developer.log(
+          'Action execution queue dispose timed out before ODBC reload; proceeding',
+          name: 'odbc_runtime_reload_teardown',
+          level: 900,
+          error: failure,
+        );
+      },
+    );
   }
 
   @override

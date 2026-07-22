@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/bootstrap/app_shutdown_coordinator.dart';
 import 'package:plug_agente/application/bootstrap/hub_connection_shutdown_registry.dart';
@@ -56,6 +57,7 @@ void main() {
     late HubConnectionShutdownRegistry hubShutdownRegistry;
     late AppShutdownCoordinator shutdownCoordinator;
     late AgentActionRuntimeStateGuard agentActionGuard;
+    late ActionExecutionQueue actionQueue;
     late List<String> teardownEvents;
     late OdbcRuntimeReloader reloader;
 
@@ -69,6 +71,7 @@ void main() {
       transportClient = _MockTransportClient();
       hubShutdownRegistry = HubConnectionShutdownRegistry();
       agentActionGuard = AgentActionRuntimeStateGuard();
+      actionQueue = ActionExecutionQueue();
       teardownEvents = <String>[];
 
       shutdownCoordinator = AppShutdownCoordinator(
@@ -78,6 +81,7 @@ void main() {
 
       getIt
         ..registerSingleton<AgentActionRuntimeStateGuard>(agentActionGuard)
+        ..registerSingleton<ActionExecutionQueue>(actionQueue)
         ..registerSingleton<IDatabaseGateway>(queuedGateway)
         ..registerSingleton<IOdbcStreamingSessionCache>(streamingCache)
         ..registerSingleton<IConnectionPool>(connectionPool)
@@ -86,6 +90,11 @@ void main() {
         ..registerSingleton<ITransportClient>(transportClient);
 
       when(() => queuedGateway.disposeGracefully()).thenAnswer((_) async {
+        expect(
+          actionQueue.isDisposed,
+          isTrue,
+          reason: 'action queue must be disposed before SQL queue on reload',
+        );
         teardownEvents.add('dispose_sql_queue');
         return const Success(unit);
       });
@@ -116,7 +125,7 @@ void main() {
       await getIt.reset();
     });
 
-    test('drains SQL queue and streaming cache before hub disconnect and pool close', () async {
+    test('disposes action queue then SQL queue before hub disconnect and pool close', () async {
       hubShutdownRegistry.bind(
         _FakeHubShutdownPort(() async {
           teardownEvents.add('hub_disconnect');
@@ -126,6 +135,7 @@ void main() {
       final result = await reloader.reload();
 
       expect(result, isFalse);
+      expect(actionQueue.isDisposed, isTrue);
       expect(
         teardownEvents.take(5),
         <String>[
@@ -157,6 +167,7 @@ void main() {
         agentActionGuard.snapshot.reason,
         isNot(AgentActionRuntimeStateConstants.odbcRuntimeReloadReason),
       );
+      expect(actionQueue.isDisposed, isTrue);
       expect(teardownEvents, contains('dispose_sql_queue'));
     });
   });

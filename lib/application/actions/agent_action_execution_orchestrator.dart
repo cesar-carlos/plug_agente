@@ -325,6 +325,7 @@ class AgentActionExecutionOrchestrator {
   AgentActionExecutionStatus _queuedFailureStatus(ActionFailure actionFailure) {
     return switch (actionFailure.code) {
       AgentActionFailureCode.queueCancelled => AgentActionExecutionStatus.cancelled,
+      AgentActionFailureCode.queueDisposed => AgentActionExecutionStatus.cancelled,
       AgentActionFailureCode.queueIgnored => AgentActionExecutionStatus.skipped,
       _ => AgentActionExecutionStatus.failed,
     };

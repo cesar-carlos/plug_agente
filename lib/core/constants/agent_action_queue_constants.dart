@@ -11,4 +11,6 @@ abstract final class AgentActionQueueConstants {
   static const String queueTimeoutReason = 'queue_timeout';
 
   static const String queueCancelledReason = 'queue_cancelled';
+
+  static const String queueDisposedReason = 'queue_disposed';
 }

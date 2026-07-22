@@ -33,14 +33,34 @@ class ActionExecutionQueue {
   final Map<String, Queue<_PendingActionTask<Object>>> _pendingByActionId =
       <String, Queue<_PendingActionTask<Object>>>{};
   final Map<String, Future<Result<Object>>> _idempotentResults = <String, Future<Result<Object>>>{};
+  final List<Completer<void>> _idleWaiters = <Completer<void>>[];
+
+  bool _disposed = false;
+  Completer<void>? _drainedCompleter;
 
   int get runningCount => _runningByActionId.values.fold(0, (total, count) => total + count);
 
   int get queuedCount => _pendingByActionId.values.fold(0, (total, queue) => total + queue.length);
 
+  bool get isDisposed => _disposed;
+
   Result<AgentActionCancellationResult> cancelQueued({
     required String executionId,
   }) {
+    if (_disposed) {
+      return Failure(
+        ActionQueueFailure.withContext(
+          message: 'Action execution queue is disposed.',
+          code: AgentActionFailureCode.queueDisposed,
+          context: {
+            'execution_id': executionId.trim(),
+            'reason': AgentActionQueueConstants.queueDisposedReason,
+            'user_message': 'The action queue was shut down and no longer accepts cancellations.',
+          },
+        ),
+      );
+    }
+
     final trimmedExecutionId = executionId.trim();
     for (final entry in _pendingByActionId.entries.toList(growable: false)) {
       final pending = entry.value.where((task) => task.request.executionId == trimmedExecutionId).firstOrNull;
@@ -84,6 +104,11 @@ class ActionExecutionQueue {
     required String actionId,
     required AgentActionDefinitionPolicies policies,
   }) {
+    final disposed = _disposedFailure(actionId: actionId);
+    if (disposed != null) {
+      return Failure(disposed);
+    }
+
     final queuePolicy = policies.queue;
     if (queuePolicy.concurrencyBehavior == AgentActionConcurrencyBehavior.allowParallel ||
         _canRunNow(actionId, queuePolicy)) {
@@ -150,6 +175,11 @@ class ActionExecutionQueue {
   Future<Result<T>> enqueue<T extends Object>(
     AgentActionQueueRequest<T> request,
   ) {
+    final disposed = _disposedFailure(actionId: request.actionId);
+    if (disposed != null) {
+      return Future<Result<T>>.value(Failure(disposed));
+    }
+
     final idempotencyKey = _idempotencyKeyFor(
       actionId: request.actionId,
       idempotencyKey: request.idempotencyKey,
@@ -226,6 +256,10 @@ class ActionExecutionQueue {
   Future<Result<T>> _enqueuePending<T extends Object>(
     AgentActionQueueRequest<T> request,
   ) {
+    if (_disposed) {
+      return Future<Result<T>>.value(Failure(_disposedFailure(actionId: request.actionId)!));
+    }
+
     final queue = _pendingByActionId.putIfAbsent(request.actionId, Queue<_PendingActionTask<Object>>.new);
     if (queue.length >= request.policies.queue.maxQueued) {
       _metrics?.recordQueueDepthFull();
@@ -270,6 +304,10 @@ class ActionExecutionQueue {
   Future<Result<T>> _runNow<T extends Object>(
     AgentActionQueueRequest<T> request,
   ) async {
+    if (_disposed) {
+      return Failure(_disposedFailure(actionId: request.actionId)!);
+    }
+
     _metrics?.recordRunStarted();
     _runningByActionId[request.actionId] = (_runningByActionId[request.actionId] ?? 0) + 1;
     try {
@@ -281,11 +319,19 @@ class ActionExecutionQueue {
       } else {
         _runningByActionId[request.actionId] = current;
       }
-      _drain(request.actionId);
+      _completeIdleWaitersIfNeeded();
+      _completeDrainedIfIdle();
+      if (!_disposed) {
+        _drain(request.actionId);
+      }
     }
   }
 
   void _drain(String actionId) {
+    if (_disposed) {
+      return;
+    }
+
     final queue = _pendingByActionId[actionId];
     if (queue == null || queue.isEmpty) {
       return;
@@ -313,7 +359,11 @@ class ActionExecutionQueue {
           } else {
             _runningByActionId[actionId] = current;
           }
-          _drain(actionId);
+          _completeIdleWaitersIfNeeded();
+          _completeDrainedIfIdle();
+          if (!_disposed) {
+            _drain(actionId);
+          }
         }),
       );
 
@@ -342,6 +392,137 @@ class ActionExecutionQueue {
     }
 
     return '$actionId:$trimmed';
+  }
+
+  ActionQueueFailure? _disposedFailure({required String actionId}) {
+    if (!_disposed) {
+      return null;
+    }
+
+    return ActionQueueFailure.withContext(
+      message: 'Action execution queue is disposed.',
+      code: AgentActionFailureCode.queueDisposed,
+      context: {
+        'action_id': actionId,
+        'reason': AgentActionQueueConstants.queueDisposedReason,
+        'user_message': 'The action queue was shut down and no longer accepts new executions.',
+      },
+    );
+  }
+
+  /// Disposes the queue and rejects new enqueues.
+  ///
+  /// Pending queued items are failed immediately with [AgentActionFailureCode.queueDisposed].
+  /// In-flight executions continue until their tasks finish.
+  void dispose() {
+    if (_disposed) {
+      _completeDrainedIfIdle();
+      return;
+    }
+
+    _disposed = true;
+    final pendingQueues = _pendingByActionId.values.toList(growable: false);
+    _pendingByActionId.clear();
+    for (final queue in pendingQueues) {
+      while (queue.isNotEmpty) {
+        queue.removeFirst().failDisposed();
+      }
+    }
+    _completeIdleWaitersIfNeeded();
+    _completeDrainedIfIdle();
+  }
+
+  /// Prevents new enqueues and waits for in-flight executions to finish.
+  ///
+  /// Pending items are failed immediately (same semantics as [dispose]).
+  Future<Result<void>> disposeGracefully({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final completer = _drainedCompleter ??= Completer<void>();
+    dispose();
+    if (completer.isCompleted) {
+      return const Success(unit);
+    }
+
+    try {
+      await completer.future.timeout(timeout);
+      return const Success(unit);
+    } on TimeoutException catch (error) {
+      return Failure(
+        ActionQueueFailure.withContext(
+          message: 'Action execution queue did not drain within ${timeout.inSeconds}s',
+          code: AgentActionFailureCode.queueDisposed,
+          cause: error,
+          context: {
+            'reason': AgentActionQueueConstants.queueDisposedReason,
+            'timeout': true,
+            'timeout_stage': 'shutdown',
+            'timeout_seconds': timeout.inSeconds,
+            'running_count': runningCount,
+            'queued_count': queuedCount,
+            'user_message': 'The action queue shut down before all running executions finished.',
+          },
+        ),
+      );
+    }
+  }
+
+  /// Waits until in-flight executions reach zero without disposing the queue.
+  Future<Result<void>> waitForActiveWorkers({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    if (runningCount == 0) {
+      return const Success(unit);
+    }
+
+    final completer = Completer<void>();
+    _idleWaiters.add(completer);
+    try {
+      await completer.future.timeout(timeout);
+      return const Success(unit);
+    } on TimeoutException catch (error) {
+      return Failure(
+        ActionQueueFailure.withContext(
+          message: 'Action execution queue did not become idle within ${timeout.inSeconds}s',
+          code: AgentActionFailureCode.queueTimeout,
+          cause: error,
+          context: {
+            'reason': AgentActionQueueConstants.queueTimeoutReason,
+            'timeout': true,
+            'timeout_stage': 'idle_wait',
+            'timeout_seconds': timeout.inSeconds,
+            'running_count': runningCount,
+            'queued_count': queuedCount,
+            'user_message': 'Running action executions did not finish in time.',
+          },
+        ),
+      );
+    } finally {
+      _idleWaiters.remove(completer);
+    }
+  }
+
+  void _completeIdleWaitersIfNeeded() {
+    if (runningCount > 0) {
+      return;
+    }
+
+    final waiters = List<Completer<void>>.from(_idleWaiters);
+    for (final waiter in waiters) {
+      if (!waiter.isCompleted) {
+        waiter.complete();
+      }
+    }
+  }
+
+  void _completeDrainedIfIdle() {
+    final pending = _drainedCompleter;
+    if (pending == null || pending.isCompleted) {
+      return;
+    }
+    if (runningCount == 0 && queuedCount == 0) {
+      pending.complete();
+    }
   }
 }
 
@@ -421,6 +602,28 @@ class _PendingActionTask<T extends Object> {
             'execution_id': request.executionId,
             'reason': AgentActionQueueConstants.queueCancelledReason,
             'user_message': 'Execution cancelled before starting.',
+          },
+        ),
+      ),
+    );
+  }
+
+  void failDisposed() {
+    if (_completer.isCompleted) {
+      return;
+    }
+    _timeoutTimer.cancel();
+    metrics?.recordPendingCancelled();
+    _completer.complete(
+      Failure(
+        ActionQueueFailure.withContext(
+          message: 'Action execution queue disposed before execution could start.',
+          code: AgentActionFailureCode.queueDisposed,
+          context: {
+            'action_id': request.actionId,
+            'execution_id': request.executionId,
+            'reason': AgentActionQueueConstants.queueDisposedReason,
+            'user_message': 'The action queue was shut down before this execution could start.',
           },
         ),
       ),

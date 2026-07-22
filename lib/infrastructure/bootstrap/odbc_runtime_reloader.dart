@@ -54,6 +54,8 @@ final class OdbcRuntimeReloader implements IOdbcRuntimeReloader {
         _getIt<ISqlInvestigationCollector>().clear();
       }
 
+      // Action queue first so in-flight actions do not hit a disposed SQL queue/pool.
+      await _teardownPort.disposeActionExecutionQueue();
       await _teardownPort.disposeSqlExecutionQueue();
       await _teardownPort.drainStreamingSessionCache();
       await _teardownPort.disconnectHubTransport();

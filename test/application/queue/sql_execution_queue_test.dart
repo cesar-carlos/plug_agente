@@ -505,7 +505,12 @@ void main() {
 
     test('should request native abort port when queue wait times out after worker started', () async {
       final abortPort = _MockInFlightAbortPort();
-      when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const res.Success(true));
+      when(
+        () => abortPort.abortInFlightExecution(
+          any(),
+          armIfMissing: any(named: 'armIfMissing'),
+        ),
+      ).thenAnswer((_) async => const res.Success(true));
       final queue = SqlExecutionQueue(
         maxQueueSize: 4,
         maxConcurrentWorkers: 1,
@@ -519,7 +524,45 @@ void main() {
 
       expect(failure.context['ghost_query_risk'], isTrue);
       await Future<void>.delayed(Duration.zero);
-      verify(() => abortPort.abortInFlightExecution('ghost-race')).called(1);
+      verify(
+        () => abortPort.abortInFlightExecution('ghost-race', armIfMissing: true),
+      ).called(1);
+    });
+
+    test('should not invoke task when cancel wins before start signal', () async {
+      final queue = SqlExecutionQueue(
+        maxQueueSize: 4,
+        maxConcurrentWorkers: 1,
+      );
+      final firstStarted = Completer<void>();
+      final firstBlocker = Completer<void>();
+      var secondTaskInvoked = false;
+
+      unawaited(
+        queue.submit<int>(() async {
+          firstStarted.complete();
+          await firstBlocker.future;
+          return const res.Success(1);
+        }),
+      );
+      await firstStarted.future;
+
+      final second = queue.submit<int>(
+        () async {
+          secondTaskInvoked = true;
+          return const res.Success(2);
+        },
+        enqueueTimeout: const Duration(milliseconds: 25),
+        requestId: 'cancel-before-start',
+      );
+
+      final secondResult = await second;
+      expect(secondResult.isError(), isTrue);
+      expect(secondTaskInvoked, isFalse);
+
+      firstBlocker.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(secondTaskInvoked, isFalse);
     });
 
     test('should record after-worker-started timeout metric and cooperative cancel', () {

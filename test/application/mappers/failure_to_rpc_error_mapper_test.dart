@@ -405,5 +405,31 @@ void main() {
       expect(FailureToRpcErrorMapper.map(cancelled).code, RpcErrorCode.executionCancelled);
       expect(FailureToRpcErrorMapper.map(killed).code, RpcErrorCode.executionCancelled);
     });
+
+    test('maps queueDisposed to agentActionsTemporarilyUnavailable (-32015)', () {
+      final failure = ActionQueueFailure.withContext(
+        message: 'Action execution queue disposed before execution could start.',
+        code: AgentActionFailureCode.queueDisposed,
+        context: {'reason': AgentActionQueueConstants.queueDisposedReason},
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+
+      expect(rpcError.code, RpcErrorCode.agentActionsTemporarilyUnavailable);
+      expect(rpcError.code, -32015);
+    });
+
+    test('maps queueCancelled to executionCancelled RPC code', () {
+      final failure = ActionQueueFailure.withContext(
+        message: 'Action execution was cancelled while waiting in queue.',
+        code: AgentActionFailureCode.queueCancelled,
+        context: {'reason': AgentActionQueueConstants.queueCancelledReason},
+      );
+
+      expect(
+        FailureToRpcErrorMapper.map(failure).code,
+        RpcErrorCode.executionCancelled,
+      );
+    });
   });
 }

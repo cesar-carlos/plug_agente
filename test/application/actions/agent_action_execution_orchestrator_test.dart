@@ -1,6 +1,8 @@
+import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_execution_gate_chain.dart';
 import 'package:plug_agente/application/actions/agent_action_execution_orchestrator.dart';
 import 'package:plug_agente/application/actions/agent_action_prepared_execution_cache.dart';
+import 'package:plug_agente/domain/actions/action_failure.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_prepare_execution_resolver.dart';
 
 import '../../helpers/agent_action_use_case_test_support.dart';
@@ -408,6 +410,48 @@ void main() {
         expect(rejectedExecution.failureCode, AgentActionFailureCode.subsystemDraining);
       },
     );
+
+    test('maps queueDisposed enqueue failure to cancelled execution status', () async {
+      repository.definitions['action-1'] = const AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+      final disposedQueue = ActionExecutionQueue();
+      await disposedQueue.disposeGracefully();
+      final runner = ControlledAgentActionLocalRunner();
+      final orchestrator = AgentActionExecutionOrchestrator(
+        repository,
+        const Uuid(),
+        executionQueue: disposedQueue,
+        now: () => DateTime(2026, 5, 15, 9),
+      );
+
+      final result = await orchestrator.run(
+        gatedContext: AgentActionGatedExecutionContext(
+          definition: repository.definitions['action-1']!,
+          runner: runner,
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      expect(
+        (result.exceptionOrNull()! as ActionFailure).code,
+        AgentActionFailureCode.queueDisposed,
+      );
+      expect(repository.savedExecutions, isNotEmpty);
+      expect(repository.savedExecutions.last.status, AgentActionExecutionStatus.cancelled);
+      expect(
+        repository.savedExecutions.last.failureCode,
+        AgentActionFailureCode.queueDisposed,
+      );
+      expect(runner.startedCount, 0);
+    });
   });
 }
 

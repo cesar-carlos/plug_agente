@@ -56,7 +56,14 @@ final class SqlExecutionGhostQueryPolicy {
         request: request,
       );
       if (abortTargetId != null) {
-        unawaited(_inFlightAbortPort?.abortInFlightExecution(abortTargetId));
+        // Ghost path: arm pending so register/bind fulfills abort if the handle
+        // is not registered yet (timeout raced ahead of worker start).
+        unawaited(
+          _inFlightAbortPort?.abortInFlightExecution(
+            abortTargetId,
+            armIfMissing: true,
+          ),
+        );
       }
       developer.log(
         'SQL request queue wait timed out after worker started; native ODBC abort requested when in-flight handle is registered',

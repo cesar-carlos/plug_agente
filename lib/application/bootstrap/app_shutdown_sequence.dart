@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:get_it/get_it.dart';
+import 'package:plug_agente/application/actions/action_execution_queue.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/services/agent_action_captured_output_periodic_purge.dart';
@@ -35,6 +36,7 @@ final class AppShutdownSequence {
     await dispatchAppCloseAgentActions();
     await applyOnAppExitPolicies();
     await runEarlyShutdownCoordinator();
+    await _disposeActionExecutionQueue();
     await _disposeSqlExecutionQueue();
     await _drainStreamingSessionCache();
     await _closeConnectionPool();
@@ -89,6 +91,27 @@ final class AppShutdownSequence {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  Future<void> _disposeActionExecutionQueue() async {
+    if (!_getIt.isRegistered<ActionExecutionQueue>()) {
+      return;
+    }
+
+    final disposeResult = await _getIt<ActionExecutionQueue>().disposeGracefully();
+    disposeResult.fold(
+      (_) => developer.log(
+        'Action execution queue disposed',
+        name: 'app_shutdown_sequence',
+        level: 800,
+      ),
+      (failure) => developer.log(
+        'Action execution queue dispose timed out; proceeding to SQL queue dispose',
+        name: 'app_shutdown_sequence',
+        level: 900,
+        error: failure,
+      ),
+    );
   }
 
   Future<void> _disposeSqlExecutionQueue() async {
