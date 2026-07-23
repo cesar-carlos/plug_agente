@@ -112,6 +112,7 @@ void main() {
         timestamp: DateTime.now(),
       ),
     );
+    registerFallbackValue(SqlHandlingMode.managed);
   });
 
   group('SocketIOTransportClientV2', () {
@@ -2419,8 +2420,11 @@ void main() {
             () => mockNormalizer.normalize(any()),
           ).thenAnswer((_) => queryResponse);
           when(
-            () => mockNormalizer.normalizeAsync(any()),
-          ).thenAnswer((_) async => queryResponse);
+            () => mockNormalizer.normalizeAsync(
+              any(),
+              sqlHandlingMode: any(named: 'sqlHandlingMode'),
+            ),
+          ).thenAnswer((invocation) async => queryResponse);
 
           final realDispatcher = RpcMethodDispatcher(
             databaseGateway: mockGateway,
