@@ -170,7 +170,7 @@ class OdbcStreamingGateway
     String connectionString,
     Future<void> Function(List<Map<String, dynamic>> chunk) onChunk, {
     int fetchSize = 1000,
-    int chunkSizeBytes = 1024 * 1024,
+    int chunkSizeBytes = OdbcStreamingNativeOptions.hubStreamingChunkSizeBytes,
     String? executionId,
     Duration? queryTimeout,
     CancellationToken? cancellationToken,
@@ -458,9 +458,24 @@ class OdbcStreamingGateway
       );
     }
 
+    final hintedBufferBytes = _adaptiveBufferCache.lookup(
+      connectionString: connectionString,
+      sql: query,
+    );
+    final nativeStreamingOptions = OdbcStreamingNativeOptions.resolve(
+      fetchSize: OdbcStreamingNativeOptions.odbcFastDefaultFetchSize,
+      chunkSizeBytes: OdbcStreamingNativeOptions.hubStreamingChunkSizeBytes,
+      settingsMaxResultBufferMb: OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(
+        _settings,
+      ),
+      hintedBufferBytes: hintedBufferBytes,
+    );
     final streamingOptions = _connectionOptionsBuilder.build(
-      ConnectionConstants.defaultStreamingChunkSizeKb * 1024,
+      nativeStreamingOptions.nativeChunkSizeBytes,
+      hintedBufferBytes: hintedBufferBytes,
       queryTimeout: queryTimeout,
+      maxResultBufferBytes: nativeStreamingOptions.maxResultBufferBytes,
+      lazyStrings: connectionStringBenefitsFromLazyStrings(connectionString),
     );
     final connResult = await _connectPhase.connectStreaming(
       connectionString: connectionString,
@@ -486,7 +501,12 @@ class OdbcStreamingGateway
     try {
       var resultSetIndex = 0;
       var itemIndex = 0;
-      await for (final itemResult in _service.streamQueryMulti(connection.id, query)) {
+      await for (final itemResult in _service.streamQueryMulti(
+        connection.id,
+        query,
+        fetchSize: nativeStreamingOptions.fetchSize,
+        chunkSize: nativeStreamingOptions.nativeChunkSizeBytes,
+      )) {
         if ((cancellationToken?.isCancelled ?? false) && !activeStream.isCancelRequested) {
           activeStream.isCancelRequested = true;
           activeStream.cancelReason = cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect;
@@ -534,6 +554,18 @@ class OdbcStreamingGateway
       streamCompletedSuccessfully = true;
       return const Success(unit);
     } on Object catch (e) {
+      if (OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(
+        e.toString(),
+      )) {
+        _adaptiveBufferCache.rememberExpandedBuffer(
+          connectionString: connectionString,
+          sql: query,
+          currentBufferBytes:
+              streamingOptions.maxResultBufferBytes ??
+              (OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb(_settings) * 1024 * 1024),
+          errorMessage: e.toString(),
+        );
+      }
       return Failure(
         OdbcFailureMapper.mapStreamingError(
           e,

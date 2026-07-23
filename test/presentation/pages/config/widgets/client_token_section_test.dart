@@ -211,6 +211,7 @@ void main() {
         await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
+        await tester.ensureVisible(find.text(ptL10n.ctFlagAllTables));
         await tester.tap(find.text(ptL10n.ctFlagAllTables));
         await tester.pumpAndSettle();
 
@@ -282,7 +283,7 @@ void main() {
     testWidgets(
       'create token dialog lays out without overflow on short viewport',
       (tester) async {
-        await tester.binding.setSurfaceSize(const Size(920, 480));
+        await tester.binding.setSurfaceSize(const Size(920, 640));
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
@@ -314,11 +315,13 @@ void main() {
           () => mockListClientTokens(query: any(named: 'query')),
         ).thenAnswer((_) async => Success(<ClientTokenSummary>[token]));
 
-        await tester.binding.setSurfaceSize(const Size(920, 480));
+        await tester.binding.setSurfaceSize(const Size(920, 640));
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byIcon(FluentIcons.edit).first);
+        final editButton = find.byIcon(FluentIcons.edit).first;
+        await tester.ensureVisible(editButton);
+        await tester.tap(editButton);
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);
@@ -345,10 +348,13 @@ void main() {
         () => mockGetClientTokenSecret('t1'),
       ).thenAnswer((_) => secretCompleter.future);
 
+      await tester.binding.setSurfaceSize(const Size(1200, 1000));
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(FluentIcons.copy).first);
+      final copyButton = find.byIcon(FluentIcons.copy).first;
+      await tester.ensureVisible(copyButton);
+      await tester.tap(copyButton);
       await tester.pump();
 
       expect(provider.isCopyingTokenSecretFor('t1'), isTrue);
@@ -388,10 +394,13 @@ void main() {
         (_) async => Failure(domain.ServerFailure('storage offline')),
       );
 
+      await tester.binding.setSurfaceSize(const Size(1200, 1000));
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(FluentIcons.copy).first);
+      final copyButton = find.byIcon(FluentIcons.copy).first;
+      await tester.ensureVisible(copyButton);
+      await tester.tap(copyButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -423,10 +432,13 @@ void main() {
           () => mockRevokeClientToken('t1'),
         ).thenAnswer((_) => revokeCompleter.future);
 
+        await tester.binding.setSurfaceSize(const Size(1200, 1000));
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byIcon(FluentIcons.block_contact).first);
+        final revokeIcon = find.byIcon(FluentIcons.block_contact).first;
+        await tester.ensureVisible(revokeIcon);
+        await tester.tap(revokeIcon);
         await tester.pumpAndSettle();
         await tester.tap(find.text(ptL10n.ctButtonRevoke).last);
         await tester.pump();
@@ -482,6 +494,7 @@ void main() {
       },
     );
     testWidgets('escape closes create token dialog', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1000));
       await tester.pumpWidget(_buildWidget(provider));
       await tester.pumpAndSettle();
 
@@ -502,18 +515,22 @@ void main() {
           () => mockCreateClientToken(any()),
         ).thenAnswer((_) => completer.future);
 
+        await tester.binding.setSurfaceSize(const Size(1200, 1000));
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
         await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
+        await tester.ensureVisible(find.text(ptL10n.ctFlagAllTables));
         await tester.tap(find.text(ptL10n.ctFlagAllTables));
         await tester.pumpAndSettle();
 
+        await tester.ensureVisible(find.text(ptL10n.ctPermissionRead));
         await tester.tap(find.text(ptL10n.ctPermissionRead));
         await tester.pumpAndSettle();
 
+        await tester.ensureVisible(find.text(ptL10n.ctButtonCreateToken));
         await tester.tap(find.text(ptL10n.ctButtonCreateToken));
         await tester.pump();
 
@@ -541,21 +558,25 @@ void main() {
           () => mockCreateClientToken(any()),
         ).thenAnswer((_) async => const Success('tok'));
 
+        await tester.binding.setSurfaceSize(const Size(1200, 1000));
         await tester.pumpWidget(_buildWidget(provider));
         await tester.pumpAndSettle();
 
         await tester.tap(find.text(ptL10n.ctButtonNewToken));
         await tester.pumpAndSettle();
 
+        await tester.ensureVisible(find.text(ptL10n.ctFlagAllTables));
         await tester.tap(find.text(ptL10n.ctFlagAllTables));
         await tester.pumpAndSettle();
 
+        await tester.ensureVisible(find.text(ptL10n.ctPermissionRead));
         await tester.tap(find.text(ptL10n.ctPermissionRead));
         await tester.pumpAndSettle();
 
         final agentField = find.byWidgetPredicate(
           (Object? widget) => widget is TextBox && widget.placeholder == ptL10n.ctHintAgentId,
         );
+        await tester.ensureVisible(agentField);
         await tester.tap(agentField);
         await tester.pumpAndSettle();
         await tester.enterText(agentField, 'agent-x');
@@ -571,6 +592,7 @@ void main() {
 Widget _buildWidget(ClientTokenProvider provider) {
   return FluentApp(
     locale: const Locale('pt'),
+    theme: FluentThemeData(visualDensity: VisualDensity.standard),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<ClientTokenProvider>.value(

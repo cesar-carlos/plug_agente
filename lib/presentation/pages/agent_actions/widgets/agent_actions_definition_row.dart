@@ -28,10 +28,21 @@ class AgentActionDefinitionNameCell extends StatelessWidget {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(definition.name, overflow: TextOverflow.ellipsis),
-              Text(definition.id, style: context.captionText, overflow: TextOverflow.ellipsis),
+              Text(
+                definition.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(height: 1.15),
+              ),
+              Text(
+                definition.id,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.captionText.copyWith(height: 1.1),
+              ),
             ],
           ),
         ),

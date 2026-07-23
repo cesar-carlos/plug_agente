@@ -64,6 +64,12 @@ class StreamEmitterRegistry {
       timer.cancel();
     }
     _idleTimers.clear();
+    // Fault producers before clearing so they are not left with
+    // `_registered == true` after soft reconnect frees the slots.
+    final emitters = List<BackpressureStreamEmitter>.of(_emitters.values);
+    for (final emitter in emitters) {
+      emitter.onTransportLoss();
+    }
     _emitters.clear();
   }
 

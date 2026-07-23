@@ -412,6 +412,8 @@ void main() {
           () => mockService.streamQueryMulti(
             pooledConnectionId,
             any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
           ),
         ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
         when(
@@ -430,6 +432,8 @@ void main() {
           () => mockService.streamQueryMulti(
             directConnectionId,
             any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
           ),
         ).thenAnswer((_) {
           return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
@@ -475,10 +479,10 @@ void main() {
         expect(response.resultSets, hasLength(2));
         expect(response.data.single['a'], 1);
         verify(
-          () => mockService.streamQueryMulti(pooledConnectionId, sql),
+          () => mockService.streamQueryMulti(pooledConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
         ).called(1);
         verify(
-          () => mockService.streamQueryMulti(directConnectionId, sql),
+          () => mockService.streamQueryMulti(directConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         expect(metrics.multiResultPoolVacuousFallbackCount, 1);

@@ -35,4 +35,9 @@ class DeliveryGuaranteeConfig {
 
   static const int maxResponseRetries = 3;
   static const Duration responseAckTimeout = Duration(seconds: 10);
+
+  /// How often pending `rpc:response` ACK waits check connect generation /
+  /// active socket so hard reconnect aborts promptly instead of waiting the
+  /// full [responseAckTimeout].
+  static const Duration responseAckGenerationPollInterval = Duration(milliseconds: 50);
 }

@@ -37,9 +37,11 @@ void main() {
     String? releaseNotesUrl,
     bool settle = true,
   }) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 1200));
     await tester.pumpWidget(
       FluentApp(
         locale: locale,
+        theme: FluentThemeData(visualDensity: VisualDensity.standard),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: NavigationView(
@@ -282,7 +284,9 @@ void main() {
       var tapped = false;
       await pumpSection(tester, onCheckAutomaticUpdates: () => tapped = true);
 
-      await tester.tap(find.byKey(const ValueKey('automatic_updates_check_now_button')));
+      final button = find.byKey(const ValueKey('automatic_updates_check_now_button'));
+      await tester.ensureVisible(button);
+      await tester.tap(button);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -296,7 +300,9 @@ void main() {
         onCopyUpdateDiagnostics: () => copied = true,
       );
 
-      await tester.tap(find.byKey(const ValueKey('updates_copy_diagnostics_button')));
+      final button = find.byKey(const ValueKey('updates_copy_diagnostics_button'));
+      await tester.ensureVisible(button);
+      await tester.tap(button);
       await tester.pumpAndSettle();
 
       expect(copied, isTrue);

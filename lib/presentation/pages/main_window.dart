@@ -49,9 +49,9 @@ class _MainWindowState extends State<MainWindow> {
     final paneSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
 
     return NavigationView(
-      appBar: const NavigationAppBar(
+      titleBar: const TitleBar(
         title: Text(AppConstants.appName),
-        automaticallyImplyLeading: false,
+        isBackButtonVisible: false,
       ),
       pane: NavigationPane(
         selected: paneSelectedIndex,

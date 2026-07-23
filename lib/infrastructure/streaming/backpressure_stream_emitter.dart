@@ -50,6 +50,17 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   /// previous emit threw. Exposed for diagnostics and tests.
   bool get isFaulted => _isFaulted;
 
+  /// Marks this emitter dead after soft transport loss so producers stop
+  /// flushing and do not believe they are still registered.
+  ///
+  /// Does not call onUnregister: the registry owns map cleanup on dispose.
+  void onTransportLoss() {
+    _isFaulted = true;
+    _chunkQueue.clear();
+    _pendingComplete = null;
+    _registered = false;
+  }
+
   void releaseChunks(int windowSize) {
     if (windowSize <= 0 || _isFaulted) return;
     _sendCredit += windowSize;

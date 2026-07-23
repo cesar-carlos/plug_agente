@@ -7,8 +7,9 @@ abstract class IOdbcBatchedStreamingQuerySource {
   Stream<Result<TypedColumnarResult>> streamColumnarQuery(
     int nativeConnectionId,
     String sql,
-    OdbcStreamingNativeOptions options,
-  );
+    OdbcStreamingNativeOptions options, {
+    Map<String, Object?>? namedParameters,
+  });
 
   /// Row-major batched streaming with an explicit wire encoding override.
   ///
@@ -19,5 +20,6 @@ abstract class IOdbcBatchedStreamingQuerySource {
     String sql,
     OdbcStreamingNativeOptions options, {
     bool lazyStrings = false,
+    Map<String, Object?>? namedParameters,
   });
 }

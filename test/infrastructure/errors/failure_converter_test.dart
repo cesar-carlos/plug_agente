@@ -257,6 +257,24 @@ void main() {
         expect(failure.context['dio_type'], 'connectionTimeout');
       });
 
+      test('should convert DioException transformTimeout to NetworkFailure', () {
+        final exception = DioException(
+          requestOptions: RequestOptions(path: '/auth/refresh'),
+          type: DioExceptionType.transformTimeout,
+        );
+
+        final failure = FailureConverter.convert(
+          exception,
+          StackTrace.current,
+          operation: 'refreshToken',
+        );
+
+        expect(failure, isA<NetworkFailure>());
+        expect(failure.isTransient, isTrue);
+        expect(failure.message, 'The request timed out.');
+        expect(failure.context['dio_type'], 'transformTimeout');
+      });
+
       test('should convert DioException badResponse 503 to NetworkFailure', () {
         final exception = DioException(
           requestOptions: RequestOptions(path: '/x'),

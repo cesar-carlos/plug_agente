@@ -15,9 +15,10 @@ import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// ODBC pool backed by `odbc_fast` native pooling with app-level
-/// [PoolOptions] on `poolCreate`. Per-checkout [ConnectionOptions] require
-/// `odbc_fast` newer than 4.3.3 (`connectionOptions` / `poolGetConnection`
-/// `options`); published 4.3.3 uses pool defaults only at checkout.
+/// [PoolOptions] on `poolCreate`. Per-checkout [ConnectionOptions] require a
+/// future `odbc_fast` that applies options on the native FFI checkout path;
+/// through 4.4.0 the Dart API may accept `options` on `poolGetConnection`, but
+/// the native checkout still uses pool defaults only.
 class OdbcNativeConnectionPool
     implements
         IConnectionPool,

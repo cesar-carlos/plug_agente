@@ -117,6 +117,21 @@ class OdbcFailureMapperQuery {
       );
     }
 
+    if (error is UnsupportedFeatureError) {
+      return QueryExecutionFailure.withContext(
+        message: detail,
+        cause: error,
+        context: {
+          ...baseContext,
+          'reason': OdbcContextConstants.unsupportedOdbcFeatureReason,
+          'retryable': false,
+          'user_message':
+              'The requested ODBC feature is not supported by the loaded native engine. '
+              'Disable the feature or update the ODBC runtime.',
+        },
+      );
+    }
+
     if (_isBufferTooSmall(detail)) {
       return QueryExecutionFailure.withContext(
         message: detail,

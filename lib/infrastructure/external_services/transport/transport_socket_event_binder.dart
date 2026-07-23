@@ -33,6 +33,7 @@ class TransportSocketEventBinder {
     required void Function(dynamic error, Completer<Result<void>> completer) onConnectError,
     required void Function(dynamic error) onSocketError,
     required void Function(dynamic reason) onDisconnect,
+    required void Function() onReleaseStreamStateAfterTransportLoss,
     required void Function(dynamic data) onCapabilitiesEnvelope,
     required void Function(dynamic data) onHeartbeatAck,
     required void Function()? onReconnectionNeeded,
@@ -56,6 +57,7 @@ class TransportSocketEventBinder {
        _onConnectError = onConnectError,
        _onSocketError = onSocketError,
        _onDisconnect = onDisconnect,
+       _onReleaseStreamStateAfterTransportLoss = onReleaseStreamStateAfterTransportLoss,
        _onCapabilitiesEnvelope = onCapabilitiesEnvelope,
        _onHeartbeatAck = onHeartbeatAck,
        _onReconnectionNeeded = onReconnectionNeeded,
@@ -80,6 +82,7 @@ class TransportSocketEventBinder {
   final void Function(dynamic error, Completer<Result<void>> completer) _onConnectError;
   final void Function(dynamic error) _onSocketError;
   final void Function(dynamic reason) _onDisconnect;
+  final void Function() _onReleaseStreamStateAfterTransportLoss;
   final void Function(dynamic data) _onCapabilitiesEnvelope;
   final void Function(dynamic data) _onHeartbeatAck;
   final void Function()? _onReconnectionNeeded;
@@ -261,6 +264,11 @@ class TransportSocketEventBinder {
       );
       return;
     }
+    // Belt-and-suspenders with handleDisconnect: cancel SQL streams and free
+    // emitter slots immediately so a post-reconnect sql.execute stream is not
+    // blocked when negotiated max_concurrent_streams is 1. Safe if disconnect
+    // already ran (cancel + registry dispose are idempotent).
+    _onReleaseStreamStateAfterTransportLoss();
     _onHeartbeatResetTransient();
     try {
       await _sendReRegisterAfterReconnect();

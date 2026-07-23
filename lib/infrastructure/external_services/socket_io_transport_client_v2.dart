@@ -157,6 +157,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
         onConnectError: _handleConnectionError,
         onSocketError: _handleSocketError,
         onDisconnect: (reason) => _lifecycle.handleDisconnect(reason),
+        onReleaseStreamStateAfterTransportLoss: () => _lifecycle.releaseStreamStateAfterTransportLoss(),
         onCapabilitiesEnvelope: _handleCapabilitiesNegotiation,
         onHeartbeatAck: (data) => _heartbeatBridge.handleHeartbeatAck(data),
         healthService: options.healthService,

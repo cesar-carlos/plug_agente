@@ -14,23 +14,32 @@ void main() {
     queries = _MockQueryService();
   });
 
-  test('forEachStreamQueryMulti streams items without pre-collecting', () async {
-    when(() => queries.streamQueryMulti('c1', 'EXEC batch')).thenAnswer(
-      (_) => Stream<rd.Result<QueryResultMultiItem>>.fromIterable([
-        const rd.Success(
-          QueryResultMultiItem.resultSet(
-            QueryResult(
-              columns: ['v'],
-              rows: [
-                [1],
-              ],
-              rowCount: 1,
-            ),
+  Stream<rd.Result<QueryResultMultiItem>> multiItemsStream() {
+    return Stream<rd.Result<QueryResultMultiItem>>.fromIterable([
+      const rd.Success(
+        QueryResultMultiItem.resultSet(
+          QueryResult(
+            columns: ['v'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
           ),
         ),
-        const rd.Success(QueryResultMultiItem.rowCount(3)),
-      ]),
-    );
+      ),
+      const rd.Success(QueryResultMultiItem.rowCount(3)),
+    ]);
+  }
+
+  test('forEachStreamQueryMulti streams items without pre-collecting', () async {
+    when(
+      () => queries.streamQueryMulti(
+        'c1',
+        'EXEC batch',
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
+    ).thenAnswer((_) => multiItemsStream());
 
     final seen = <QueryResultMultiItem>[];
     final result = await forEachStreamQueryMulti(
@@ -44,25 +53,53 @@ void main() {
 
     expect(result.isSuccess(), isTrue);
     expect(seen.length, 2);
+    verify(
+      () => queries.streamQueryMulti(
+        'c1',
+        'EXEC batch',
+      ),
+    ).called(1);
+  });
+
+  test('forEachStreamQueryMulti forwards custom fetchSize and chunkSize', () async {
+    when(
+      () => queries.streamQueryMulti(
+        'c1',
+        'EXEC batch',
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
+    ).thenAnswer((_) => multiItemsStream());
+
+    final result = await forEachStreamQueryMulti(
+      queries,
+      'c1',
+      'EXEC batch',
+      (_) async {},
+      fetchSize: 250,
+      chunkSize: 128 * 1024,
+    );
+
+    expect(result.isSuccess(), isTrue);
+    verify(
+      () => queries.streamQueryMulti(
+        'c1',
+        'EXEC batch',
+        fetchSize: 250,
+        chunkSize: 128 * 1024,
+      ),
+    ).called(1);
   });
 
   test('collectStreamQueryMulti aggregates streamed items', () async {
-    when(() => queries.streamQueryMulti('c1', 'EXEC batch')).thenAnswer(
-      (_) => Stream<rd.Result<QueryResultMultiItem>>.fromIterable([
-        const rd.Success(
-          QueryResultMultiItem.resultSet(
-            QueryResult(
-              columns: ['v'],
-              rows: [
-                [1],
-              ],
-              rowCount: 1,
-            ),
-          ),
-        ),
-        const rd.Success(QueryResultMultiItem.rowCount(3)),
-      ]),
-    );
+    when(
+      () => queries.streamQueryMulti(
+        'c1',
+        'EXEC batch',
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
+    ).thenAnswer((_) => multiItemsStream());
 
     final result = await collectStreamQueryMulti(queries, 'c1', 'EXEC batch');
 
@@ -73,7 +110,14 @@ void main() {
   });
 
   test('forEachStreamQueryMulti maps stream errors to typed failures', () async {
-    when(() => queries.streamQueryMulti('c1', 'EXEC batch')).thenAnswer(
+    when(
+      () => queries.streamQueryMulti(
+        'c1',
+        'EXEC batch',
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
+    ).thenAnswer(
       (_) => Stream<rd.Result<QueryResultMultiItem>>.fromIterable([
         rd.Failure(Exception('SQL syntax error near SELECT')),
       ]),
@@ -94,7 +138,14 @@ void main() {
   });
 
   test('forEachStreamQueryMulti maps handler errors to typed failures', () async {
-    when(() => queries.streamQueryMulti('c1', 'EXEC batch')).thenAnswer(
+    when(
+      () => queries.streamQueryMulti(
+        'c1',
+        'EXEC batch',
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
+    ).thenAnswer(
       (_) => Stream<rd.Result<QueryResultMultiItem>>.fromIterable([
         const rd.Success(
           QueryResultMultiItem.resultSet(

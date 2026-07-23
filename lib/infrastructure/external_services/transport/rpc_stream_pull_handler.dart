@@ -25,6 +25,7 @@ class RpcStreamPullHandler {
   }) : _featureFlags = featureFlags,
        _frameCodec = frameCodec,
        _contractValidator = contractValidator,
+       _protocolProvider = protocolProvider,
        _emitEventAsync = emitEventAsync,
        _logMessage = logMessage,
        _metricsCollector = metricsCollector,
@@ -37,6 +38,7 @@ class RpcStreamPullHandler {
   final FeatureFlags _featureFlags;
   final PayloadFrameCodec _frameCodec;
   final RpcContractValidator _contractValidator;
+  final ProtocolConfig Function() _protocolProvider;
   final Future<bool> Function(String event, dynamic logicalPayload) _emitEventAsync;
   final void Function(String direction, String event, dynamic data) _logMessage;
   final MetricsCollector? _metricsCollector;
@@ -53,10 +55,13 @@ class RpcStreamPullHandler {
       onRegister: (streamId, emitter) {
         final accepted = _streamEmitters.tryRegister(streamId, emitter);
         if (!accepted) {
+          final negotiated = _protocolProvider().effectiveLimits.maxConcurrentStreams;
           AppLogger.warning(
             'rpc stream emitter rejected: cap (effective='
             '${_streamEmitters.effectiveCap}, hard_ceiling='
-            '${ConnectionConstants.maxConcurrentRpcStreams}) reached. '
+            '${ConnectionConstants.maxConcurrentRpcStreams}, '
+            'active=${_streamEmitters.activeCount}, '
+            'negotiated_max_concurrent_streams=$negotiated) reached. '
             'stream_id=$streamId',
           );
         }

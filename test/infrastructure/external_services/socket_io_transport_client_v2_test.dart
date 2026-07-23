@@ -452,23 +452,6 @@ void main() {
       expect(reconnectRequests, 1);
     });
 
-    test('should NOT call cancelActiveStreamOnDisconnect inside _handleDisconnect (H3)', () async {
-      // After removing the duplicate cancel in _handleDisconnect, a transport
-      // disconnect event alone must NOT call cancelActiveStreamOnDisconnect;
-      // only _closeSocket (called from connect/disconnect) owns that call.
-      final connectFuture = client.connect('https://hub.test', 'agent-1');
-      emitEvent('connect');
-      await connectFuture;
-
-      // Reset interactions so the call from connect()._closeSocket is not counted.
-      clearInteractions(mockDispatcher);
-
-      emitEvent('disconnect', 'transport close');
-      await Future<void>.delayed(Duration.zero);
-
-      verifyNever(() => mockDispatcher.cancelActiveStreamOnDisconnect());
-    });
-
     test('should include startedAt in rpc:response when sendResponse provides it (H1)', () async {
       final finishedAt = DateTime.utc(2026, 5, 1, 12);
       final startedAt = DateTime.utc(2026, 5, 1, 11, 59, 55);
@@ -616,17 +599,21 @@ void main() {
 
     test('should stop rpc:response ACK retries after socket generation changes', () async {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
 
       final ackAttemptStarted = Completer<void>();
-      final releaseAckAttempt = Completer<void>();
       var ackAttempts = 0;
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(
+        () => mockSocket.emitWithAck(
+          'rpc:response',
+          any<dynamic>(),
+          ack: any(named: 'ack'),
+        ),
+      ).thenAnswer((_) {
         ackAttempts++;
         if (ackAttempts == 1) {
           ackAttemptStarted.complete();
-          await releaseAckAttempt.future;
-          throw Exception('ack timeout');
+          // Leave ACK pending; disconnect bumps connect generation and aborts wait.
+          return;
         }
         throw StateError('stale socket retry should not happen');
       });
@@ -650,13 +637,11 @@ void main() {
       await ackAttemptStarted.future.timeout(const Duration(seconds: 1));
 
       await client.disconnect();
-      releaseAckAttempt.complete();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
 
       expect(ackAttempts, 1);
       expect(emitted.where((item) => item.event == 'rpc:response'), isEmpty);
-      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 1);
+      expect(rpcMetricsCollector.rpcResponseAckRetryCount, 0);
       expect(rpcMetricsCollector.rpcResponseAckAbortedConnectionChangeCount, 1);
       expect(rpcMetricsCollector.rpcResponseAckFallbackWithoutAckCount, 0);
       expect(rpcMetricsCollector.rpcResponseAckDeliveredCount, 0);
@@ -664,9 +649,17 @@ void main() {
 
     test('should record rpc:response ACK success outcome', () async {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
       final ackDelivered = Completer<void>();
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(
+        () => mockSocket.emitWithAck(
+          'rpc:response',
+          any<dynamic>(),
+          ack: any(named: 'ack'),
+        ),
+      ).thenAnswer((invocation) {
+        final ack = invocation.namedArguments[#ack] as Function?;
+        // Empty hub ACK arity (data: []).
+        Function.apply(ack!, []);
         if (!ackDelivered.isCompleted) {
           ackDelivered.complete();
         }
@@ -700,8 +693,7 @@ void main() {
 
     test('should record rpc:response ACK fallback outcome when retries exhaust', () async {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenThrow(Exception('ack timeout'));
+      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenThrow(Exception('ack timeout'));
 
       final connectFuture = client.connect('https://hub.test', 'agent-1');
       emitEvent('connect');
@@ -731,8 +723,7 @@ void main() {
     test('should emit sql.execute rpc response without Socket.IO ACK when delivery guarantees are enabled', () async {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
       var ackAttempts = 0;
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
         ackAttempts++;
         throw StateError('sql.execute response should not wait for Socket.IO ACK');
       });
@@ -796,8 +787,7 @@ void main() {
     test('should emit SQL concurrency-limit error without Socket.IO ACK', () async {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
       var ackAttempts = 0;
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
         ackAttempts++;
         throw StateError('sql.execute concurrency error should not wait for Socket.IO ACK');
       });
@@ -870,8 +860,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
       when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
       var ackAttempts = 0;
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
         ackAttempts++;
         throw StateError('invalid sql.execute response should not wait for Socket.IO ACK');
       });
@@ -938,8 +927,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
       when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
       var ackAttempts = 0;
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
         ackAttempts++;
         throw StateError('valid sql.execute response should not wait for Socket.IO ACK');
       });
@@ -1035,8 +1023,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
       when(() => mockFeatureFlags.enableSocketSchemaValidation).thenReturn(true);
       var ackAttempts = 0;
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
         ackAttempts++;
         throw StateError('invalid sql.execute response should not wait for Socket.IO ACK');
       });
@@ -1090,8 +1077,7 @@ void main() {
       () async {
         when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
         var ackAttempts = 0;
-        when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-        when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+        when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
           ackAttempts++;
           throw StateError('sql.executeBatch response should not wait for Socket.IO ACK');
         });
@@ -1179,8 +1165,7 @@ void main() {
     test('should return replay error without Socket.IO ACK when sql.execute id is duplicated', () async {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
       var ackAttempts = 0;
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
         ackAttempts++;
         throw StateError('duplicate sql.execute response should not wait for Socket.IO ACK');
       });
@@ -1258,8 +1243,7 @@ void main() {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
       when(() => mockFeatureFlags.enableSocketBatchStrictValidation).thenReturn(true);
       var ackAttempts = 0;
-      when(() => mockSocket.timeout(any<int>())).thenReturn(mockSocket);
-      when(() => mockSocket.emitWithAckAsync('rpc:response', any<dynamic>())).thenAnswer((_) async {
+      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
         ackAttempts++;
         throw StateError('duplicate batch sql.execute response should not wait for Socket.IO ACK');
       });
@@ -1391,6 +1375,34 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(notifications.whereType<HubTransportAutoReconnectSucceeded>(), hasLength(1));
+    });
+
+    test('should cancel active streams on soft transport disconnect without disposing socket', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      clearInteractions(mockDispatcher);
+
+      emitEvent('disconnect', 'transport close');
+      await Future<void>.delayed(Duration.zero);
+
+      verify(() => mockDispatcher.cancelActiveStreamOnDisconnect()).called(1);
+      verifyNever(() => mockSocket.dispose());
+    });
+
+    test('should cancel active streams again on manager reconnect without disposing socket', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      await negotiateProtocol();
+      clearInteractions(mockDispatcher);
+
+      emitManagerEvent('reconnect', 2);
+      await Future<void>.delayed(Duration.zero);
+
+      verify(() => mockDispatcher.cancelActiveStreamOnDisconnect()).called(1);
+      verifyNever(() => mockSocket.dispose());
     });
 
     test('should request application recovery when post-reconnect register throws', () async {

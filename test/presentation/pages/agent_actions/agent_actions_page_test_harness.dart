@@ -430,6 +430,7 @@ class AgentActionsPageHarness {
 
     return FluentApp(
       locale: const Locale('pt'),
+      theme: FluentThemeData(visualDensity: VisualDensity.standard),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: ChangeNotifierProvider<AgentActionsProvider>.value(

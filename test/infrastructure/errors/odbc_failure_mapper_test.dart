@@ -278,6 +278,33 @@ void main() {
       expect(failure.context['retryable'], isTrue);
     });
 
+    test('maps UnsupportedFeatureError to non-retryable typed failure', () {
+      final failure = OdbcFailureMapper.mapQueryError(
+        const UnsupportedFeatureError(
+          message: 'columnar encoding requires native symbol',
+          sqlState: '0A000',
+        ),
+        operation: 'execute_query',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], OdbcContextConstants.unsupportedOdbcFeatureReason);
+      expect(failure.context['retryable'], isFalse);
+      expect(failure.context['user_message'], contains('not supported'));
+    });
+
+    test('maps UnsupportedFeatureError for streaming through streaming mapper', () {
+      final failure = OdbcFailureMapper.mapStreamingError(
+        const UnsupportedFeatureError(message: 'lockTimeout unsupported'),
+        operation: 'streamQuery',
+      );
+
+      expect(failure, isA<QueryExecutionFailure>());
+      expect(failure.context['reason'], OdbcContextConstants.unsupportedOdbcFeatureReason);
+      expect(failure.context['streaming'], isTrue);
+      expect(failure.context['retryable'], isFalse);
+    });
+
     test('maps malformed payload to protocol query failure', () {
       final failure = OdbcFailureMapper.mapQueryError(
         const MalformedPayloadError(message: 'truncated payload'),

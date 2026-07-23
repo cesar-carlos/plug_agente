@@ -21,10 +21,12 @@ import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart
 ///   because some SQL Anywhere ODBC drivers return invalid handles under the
 ///   native pool and cause worker timeouts under concurrent load.
 /// - Queries that supply [ConnectionAcquireOptions] (buffer, timeouts) use the
-///   lease pool because published `odbc_fast` 4.3.3 cannot apply per-checkout
-///   options on `poolGetConnection`. The native pool is used for optionless
-///   acquires and via [INativeCompatibleConnectionPoolAcquire] (native first,
-///   lease fallback with full options).
+///   lease pool because `odbc_fast` through 4.4.0 still does not apply
+///   per-checkout [ConnectionOptions] on the native FFI `poolGetConnection`
+///   path (Dart may store options for later reads, but checkout itself uses
+///   pool defaults). The native pool is used for optionless acquires and via
+///   [INativeCompatibleConnectionPoolAcquire] (native first, lease fallback
+///   with full options).
 ///
 /// When the feature flag is disabled, [OdbcConnectionPool] (lease-based) is
 /// always used: every query calls `connect`/`disconnect`, paying the full

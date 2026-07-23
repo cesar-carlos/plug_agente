@@ -65,6 +65,8 @@ abstract final class OdbcContextConstants {
 
   static const String transientQueryFailureReason = 'transient_query_failure';
 
+  static const String unsupportedOdbcFeatureReason = 'unsupported_odbc_feature';
+
   static const String odbcWorkerRecoveryInvalidationReason = 'odbc_worker_recovery_invalidation';
 
   static const String materializedResultUseDbStreamingRecommendation =

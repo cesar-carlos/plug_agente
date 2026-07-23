@@ -180,7 +180,8 @@ class FailureConverter {
     return switch (exception.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout => 'The request timed out.',
+      DioExceptionType.receiveTimeout ||
+      DioExceptionType.transformTimeout => 'The request timed out.',
       DioExceptionType.connectionError => 'Unable to reach the remote endpoint.',
       DioExceptionType.badCertificate => 'The secure connection could not be established.',
       DioExceptionType.cancel => 'The request was cancelled.',
@@ -211,6 +212,7 @@ class FailureConverter {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
+      case DioExceptionType.transformTimeout:
       case DioExceptionType.connectionError:
       case DioExceptionType.badCertificate:
         return NetworkFailure.withContext(

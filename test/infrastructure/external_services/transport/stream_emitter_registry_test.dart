@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/stream_emitter_registry.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
 
@@ -106,6 +107,63 @@ void main() {
 
       registry.dispose();
       expect(registry.activeCount, 0);
+    });
+
+    test('dispose faults registered emitters before clearing slots', () async {
+      final registry = StreamEmitterRegistry(
+        hardCeiling: 64,
+        idleTtl: const Duration(minutes: 5),
+        capProvider: () => 1,
+      );
+      final emitter = _emitter();
+      expect(registry.tryRegister('stuck-pre-reconnect', emitter), isTrue);
+
+      // Register path also marks the emitter registered via emitChunk.
+      await emitter.emitChunk(
+        RpcStreamChunk(
+          streamId: 'stuck-pre-reconnect',
+          requestId: 'req-1',
+          chunkIndex: 0,
+          rows: const [
+            {'id': 1},
+          ],
+        ),
+      );
+      expect(emitter.isFaulted, isFalse);
+
+      registry.dispose();
+      expect(registry.activeCount, 0);
+      expect(emitter.isFaulted, isTrue);
+      expect(
+        await emitter.emitChunk(
+          RpcStreamChunk(
+            streamId: 'stuck-pre-reconnect',
+            requestId: 'req-1',
+            chunkIndex: 1,
+            rows: const [
+              {'id': 2},
+            ],
+          ),
+        ),
+        isFalse,
+      );
+      expect(registry.tryRegister('post-reconnect', _emitter()), isTrue);
+    });
+
+    test('dispose frees slots so a new stream can register after soft reconnect cleanup', () {
+      final registry = StreamEmitterRegistry(
+        hardCeiling: 64,
+        idleTtl: const Duration(minutes: 5),
+        capProvider: () => 1,
+      );
+
+      expect(registry.tryRegister('stuck-pre-reconnect', _emitter()), isTrue);
+      expect(registry.tryRegister('blocked', _emitter()), isFalse);
+
+      // Soft reconnect / transport loss clears the registry without waiting for TTL.
+      registry.dispose();
+      expect(registry.activeCount, 0);
+      expect(registry.tryRegister('post-reconnect', _emitter()), isTrue);
     });
 
     test('cap can grow dynamically when negotiated value increases', () {

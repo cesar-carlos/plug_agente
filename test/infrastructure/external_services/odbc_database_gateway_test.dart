@@ -1713,9 +1713,11 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       });
       when(
         () => mockService.streamQueryMulti(
-          pooledConnectionId,
-          any(),
-        ),
+            pooledConnectionId,
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
       ).thenAnswer((_) {
         return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
           Success(
@@ -1762,9 +1764,11 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       ]);
       verify(
         () => mockService.streamQueryMulti(
-          pooledConnectionId,
-          request.query,
-        ),
+            pooledConnectionId,
+            request.query,
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
       ).called(1);
     });
 
@@ -1799,6 +1803,8 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           () => mockService.streamQueryMulti(
             pooledConnectionId,
             any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
           ),
         ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
         when(
@@ -1817,6 +1823,8 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           () => mockService.streamQueryMulti(
             directConnectionId,
             any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
           ),
         ).thenAnswer((_) {
           return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
@@ -1862,10 +1870,10 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         expect(response.resultSets, hasLength(2));
         expect(response.data.single['a'], 1);
         verify(
-          () => mockService.streamQueryMulti(pooledConnectionId, sql),
+          () => mockService.streamQueryMulti(pooledConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
         ).called(1);
         verify(
-          () => mockService.streamQueryMulti(directConnectionId, sql),
+          () => mockService.streamQueryMulti(directConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         expect(metrics.multiResultPoolVacuousFallbackCount, 1);
@@ -1904,6 +1912,8 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           () => mockService.streamQueryMulti(
             pooledConnectionId,
             any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
           ),
         ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
         when(
@@ -1922,6 +1932,8 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           () => mockService.streamQueryMulti(
             directConnectionId,
             any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
           ),
         ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
         when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((

@@ -20,25 +20,26 @@ final class OdbcStreamingQueryStreamOpener {
     required OdbcStreamingNativeOptions nativeStreamingOptions,
     Map<String, dynamic>? parameters,
   }) {
-    if (parameters != null && parameters.isNotEmpty) {
-      return _service.streamQueryNamed(connectionId, query, parameters).map((result) => result.map(toTypedColumnar));
-    }
-
+    final namedParameters = _namedParametersOrNull(parameters);
     final batchedSource = _batchedQuerySource;
-    if (batchedSource == null) {
-      return _service.streamQueryColumnar(connectionId, query);
-    }
-
     final nativeConnectionId = int.tryParse(connectionId);
-    if (nativeConnectionId == null || nativeConnectionId <= 0) {
-      return _service.streamQueryColumnar(connectionId, query);
+    final canUseBatched =
+        batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0;
+
+    if (canUseBatched) {
+      return batchedSource.streamColumnarQuery(
+        nativeConnectionId,
+        query,
+        nativeStreamingOptions,
+        namedParameters: namedParameters,
+      );
     }
 
-    return batchedSource.streamColumnarQuery(
-      nativeConnectionId,
-      query,
-      nativeStreamingOptions,
-    );
+    if (namedParameters != null) {
+      return _service.streamQueryNamed(connectionId, query, namedParameters).map((result) => result.map(toTypedColumnar));
+    }
+
+    return _service.streamQueryColumnar(connectionId, query);
   }
 
   Stream<Result<QueryResult>> openRowMajor({
@@ -48,21 +49,33 @@ final class OdbcStreamingQueryStreamOpener {
     Map<String, dynamic>? parameters,
     bool lazyStrings = false,
   }) {
-    if (parameters != null && parameters.isNotEmpty) {
-      return _service.streamQueryNamed(connectionId, query, parameters);
-    }
-
+    final namedParameters = _namedParametersOrNull(parameters);
     final batchedSource = _batchedQuerySource;
     final nativeConnectionId = int.tryParse(connectionId);
-    if (batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0) {
+    final canUseBatched =
+        batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0;
+
+    if (canUseBatched) {
       return batchedSource.streamRowMajorQuery(
         nativeConnectionId,
         query,
         nativeStreamingOptions,
         lazyStrings: lazyStrings,
+        namedParameters: namedParameters,
       );
     }
 
+    if (namedParameters != null) {
+      return _service.streamQueryNamed(connectionId, query, namedParameters);
+    }
+
     return _service.streamQuery(connectionId, query);
+  }
+
+  Map<String, Object?>? _namedParametersOrNull(Map<String, dynamic>? parameters) {
+    if (parameters == null || parameters.isEmpty) {
+      return null;
+    }
+    return Map<String, Object?>.from(parameters);
   }
 }

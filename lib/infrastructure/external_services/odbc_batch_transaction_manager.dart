@@ -53,14 +53,24 @@ final class OdbcBatchTransactionManager {
     );
     if (beginResult.isError()) {
       final error = beginResult.exceptionOrNull()!;
+      final isUnsupportedFeature = error is UnsupportedFeatureError;
       return Failure(
         domain.QueryExecutionFailure.withContext(
-          message: 'Failed to start transaction',
+          message: isUnsupportedFeature
+              ? 'Transaction options are not supported by the ODBC runtime'
+              : 'Failed to start transaction',
           cause: error,
           context: {
-            'reason': OdbcContextConstants.transactionFailedReason,
+            'reason': isUnsupportedFeature
+                ? OdbcContextConstants.unsupportedOdbcFeatureReason
+                : OdbcContextConstants.transactionFailedReason,
             'operation': 'transaction_begin',
             'error': OdbcErrorInspector.message(error),
+            'retryable': false,
+            if (isUnsupportedFeature)
+              'user_message':
+                  'The database transaction options (access mode or lock timeout) '
+                  'are not supported by the loaded ODBC runtime.',
           },
         ),
       );

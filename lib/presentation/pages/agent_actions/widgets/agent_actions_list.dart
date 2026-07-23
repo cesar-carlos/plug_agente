@@ -101,7 +101,7 @@ class AgentActionsList extends StatelessWidget {
                 AppGridColumn(label: l10n.ctGridColumnActions, flex: 5, alignment: Alignment.centerRight),
               ],
               rows: visibleDefinitions,
-              rowHeight: 52,
+              rowHeight: 56,
               emptyMessage: l10n.agentActionsListFilterEmpty,
               rowKey: (definition) => ValueKey<String>('agent_action_definition_row_${definition.id}'),
               isRowSelected: (definition) => provider.selectedDefinition?.id == definition.id,

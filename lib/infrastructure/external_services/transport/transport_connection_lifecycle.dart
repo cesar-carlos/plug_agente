@@ -198,6 +198,10 @@ final class TransportConnectionLifecycle {
 
   void handleDisconnect(dynamic reason) {
     _heartbeatStop();
+    // Soft reconnect keeps the Socket.IO manager socket; without this, active
+    // stream emitters retain slots until idle TTL / closeSocket and block new
+    // streams when negotiated max_concurrent_streams is low (often 1).
+    releaseStreamStateAfterTransportLoss();
     final asString = reason is String ? reason : reason?.toString();
     final serverInitiated = isHubIoServerInitiatedDisconnect(asString);
     final disconnectLine =
@@ -216,12 +220,10 @@ final class TransportConnectionLifecycle {
     }
   }
 
-  void closeSocket() {
-    _socketEventBinder.clearSubscriptions();
-    _capabilitiesNegotiator.reset();
-    _pipelineCache.reset();
-    _localCapabilitiesBuilder.invalidateCache();
-    _requestGuard.clearReplayCache();
+  /// Cancels in-flight SQL streams and clears the stream emitter registry.
+  ///
+  /// Safe to call repeatedly (soft disconnect, soft reconnect, closeSocket).
+  void releaseStreamStateAfterTransportLoss() {
     unawaited(
       _rpcDispatcher.cancelActiveStreamOnDisconnect().catchError((Object error, StackTrace stackTrace) {
         AppLogger.warning(
@@ -231,9 +233,18 @@ final class TransportConnectionLifecycle {
         );
       }),
     );
+    _streamPullHandler.dispose();
+  }
+
+  void closeSocket() {
+    _socketEventBinder.clearSubscriptions();
+    _capabilitiesNegotiator.reset();
+    _pipelineCache.reset();
+    _localCapabilitiesBuilder.invalidateCache();
+    _requestGuard.clearReplayCache();
+    releaseStreamStateAfterTransportLoss();
     final activeSocket = socket;
     socket = null;
-    _streamPullHandler.dispose();
     _inboundHandler.resetAckBuffer();
     if (activeSocket == null) {
       return;

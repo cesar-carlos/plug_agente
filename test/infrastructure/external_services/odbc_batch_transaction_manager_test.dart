@@ -115,6 +115,35 @@ void main() {
       expect(failure.context['operation'], 'transaction_begin');
       expect(failure.context['reason'], OdbcContextConstants.transactionFailedReason);
     });
+
+    test('maps UnsupportedFeatureError begin failure to unsupported_odbc_feature', () async {
+      when(
+        () => service.beginTransaction(
+          any(),
+          savepointDialect: any(named: 'savepointDialect'),
+          accessMode: any(named: 'accessMode'),
+          lockTimeout: any(named: 'lockTimeout'),
+        ),
+      ).thenAnswer(
+        (_) async => const Failure(
+          UnsupportedFeatureError(message: 'lockTimeout not supported'),
+        ),
+      );
+
+      final result = await manager.beginIfNeeded(
+        connectionId: 'c1',
+        transactionEnabled: true,
+        lockTimeout: const Duration(seconds: 5),
+        accessMode: TransactionAccessMode.readOnly,
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      expect(failure.context['operation'], 'transaction_begin');
+      expect(failure.context['reason'], OdbcContextConstants.unsupportedOdbcFeatureReason);
+      expect(failure.context['retryable'], isFalse);
+      expect(failure.message, contains('not supported'));
+    });
   });
 
   group('commit', () {

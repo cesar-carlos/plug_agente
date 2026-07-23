@@ -52,7 +52,7 @@ class AppThemeColors extends ThemeExtension<AppThemeColors> {
     required Color cardColor,
   }) {
     final brand = accentColor.normal;
-    final selectedFillOpacity = brightness.isDark ? 0.22 : 0.12;
+    final selectedFillOpacity = brightness == Brightness.dark ? 0.22 : 0.12;
 
     return AppThemeColors(
       brand: brand,
@@ -92,8 +92,8 @@ class AppThemeColors extends ThemeExtension<AppThemeColors> {
       AppFeedbackTone.warning => warning,
       AppFeedbackTone.error => error,
     };
-    final backgroundOpacity = brightness.isDark ? 0.18 : 0.08;
-    final borderOpacity = brightness.isDark ? 0.4 : 0.25;
+    final backgroundOpacity = brightness == Brightness.dark ? 0.18 : 0.08;
+    final borderOpacity = brightness == Brightness.dark ? 0.4 : 0.25;
 
     return AppFeedbackColors(
       accent: accent,

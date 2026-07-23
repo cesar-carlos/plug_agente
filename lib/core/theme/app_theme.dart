@@ -34,7 +34,9 @@ class AppTheme {
   static FluentThemeData _buildTheme({
     required Brightness brightness,
   }) {
-    final resources = brightness.isLight ? const ResourceDictionary.light() : const ResourceDictionary.dark();
+    final resources = brightness == Brightness.light
+        ? const ResourceDictionary.light()
+        : const ResourceDictionary.dark();
     final tokens = AppThemeColors.fromTheme(
       brightness: brightness,
       accentColor: accentColor,
@@ -44,6 +46,9 @@ class AppTheme {
 
     return FluentThemeData(
       brightness: brightness,
+      // Keep standard density so ComboBox/picker heights stay compatible with
+      // body text metrics. fluent_ui 4.15+ applies adaptive (compact on desktop).
+      visualDensity: VisualDensity.standard,
       fontFamily: fontFamily,
       accentColor: accentColor,
       resources: resources,

@@ -223,6 +223,7 @@ void main() {
       startupService: startupService,
     );
 
+    await tester.binding.setSurfaceSize(const Size(1200, 1400));
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -246,11 +247,12 @@ void main() {
             ),
           ),
         ],
-        child: const FluentApp(
-          locale: Locale('pt'),
+        child: FluentApp(
+          locale: const Locale('pt'),
+          theme: FluentThemeData(visualDensity: VisualDensity.standard),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: NavigationView(
+          home: const NavigationView(
             content: ConfigPage(),
           ),
         ),
@@ -540,7 +542,9 @@ void main() {
 
     expect(find.text(ptL10n.configAutomaticSilentUpdatesCheckNow), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('automatic_updates_check_now_button')));
+    final checkNow = find.byKey(const ValueKey('automatic_updates_check_now_button'));
+    await tester.ensureVisible(checkNow);
+    await tester.tap(checkNow);
     await tester.pumpAndSettle();
 
     expect(orchestrator.silentCheckCount, 1);

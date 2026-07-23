@@ -25,6 +25,7 @@ final class RpcResponseDeliveryCoordinator {
     required MetricsCollector? metricsCollector,
     required Future<void> Function(dynamic requestId) emitInternalErrorResponse,
     void Function({required String event, required dynamic logicalPayload})? onValidatedPayload,
+    Duration? responseAckTimeout,
   }) : _responsePreparer = responsePreparer,
        _prepareOutgoingPayload = prepareOutgoingPayload,
        _logMessage = logMessage,
@@ -33,7 +34,8 @@ final class RpcResponseDeliveryCoordinator {
        _connectGeneration = connectGeneration,
        _metricsCollector = metricsCollector,
        _emitInternalErrorResponse = emitInternalErrorResponse,
-       _onValidatedPayload = onValidatedPayload;
+       _onValidatedPayload = onValidatedPayload,
+       _responseAckTimeout = responseAckTimeout ?? DeliveryGuaranteeConfig.responseAckTimeout;
 
   final RpcResponsePreparer _responsePreparer;
   final Future<Result<dynamic>> Function(String event, dynamic logicalPayload) _prepareOutgoingPayload;
@@ -44,6 +46,7 @@ final class RpcResponseDeliveryCoordinator {
   final MetricsCollector? _metricsCollector;
   final Future<void> Function(dynamic requestId) _emitInternalErrorResponse;
   final void Function({required String event, required dynamic logicalPayload})? _onValidatedPayload;
+  final Duration _responseAckTimeout;
 
   Future<void> emit(
     dynamic responseData, {
@@ -158,11 +161,10 @@ final class RpcResponseDeliveryCoordinator {
     required int connectGeneration,
   }) async {
     const maxRetries = DeliveryGuaranteeConfig.maxResponseRetries;
-    final timeoutMs = DeliveryGuaranteeConfig.responseAckTimeout.inMilliseconds;
     const totalAttempts = maxRetries + 1;
 
     for (var attempt = 0; attempt < totalAttempts; attempt++) {
-      if (_activeSocket() != socket || _connectGeneration() != connectGeneration) {
+      if (!_isDeliveryCurrent(socket: socket, connectGeneration: connectGeneration)) {
         _metricsCollector?.recordRpcResponseAckAbortedConnectionChange();
         AppLogger.info(
           'rpc:response ack delivery aborted due connection generation change',
@@ -170,10 +172,27 @@ final class RpcResponseDeliveryCoordinator {
         return;
       }
       try {
-        await socket.timeout(timeoutMs).emitWithAckAsync('rpc:response', outgoingPayload);
+        await _emitWithTolerantAck(
+          socket,
+          outgoingPayload,
+          connectGeneration: connectGeneration,
+        );
         _metricsCollector?.recordRpcResponseAckDelivered();
         return;
+      } on _AckDeliveryAborted {
+        _metricsCollector?.recordRpcResponseAckAbortedConnectionChange();
+        AppLogger.info(
+          'rpc:response ack delivery aborted due connection generation change',
+        );
+        return;
       } on Object catch (error, stackTrace) {
+        if (!_isDeliveryCurrent(socket: socket, connectGeneration: connectGeneration)) {
+          _metricsCollector?.recordRpcResponseAckAbortedConnectionChange();
+          AppLogger.info(
+            'rpc:response ack delivery aborted due connection generation change',
+          );
+          return;
+        }
         final remaining = totalAttempts - attempt - 1;
         if (remaining > 0) {
           _metricsCollector?.recordRpcResponseAckRetry();
@@ -183,22 +202,85 @@ final class RpcResponseDeliveryCoordinator {
             stackTrace,
           );
         } else {
-          if (_activeSocket() == socket && _connectGeneration() == connectGeneration) {
-            _metricsCollector?.recordRpcResponseAckFallbackWithoutAck();
-            AppLogger.warning(
-              'rpc:response ack failed after $maxRetries retries, sending without ack',
-              error,
-              stackTrace,
-            );
-            socket.emit('rpc:response', outgoingPayload);
-          } else {
-            _metricsCollector?.recordRpcResponseAckAbortedConnectionChange();
-            AppLogger.info(
-              'rpc:response fallback without ack aborted due connection generation change',
-            );
-          }
+          _metricsCollector?.recordRpcResponseAckFallbackWithoutAck();
+          AppLogger.warning(
+            'rpc:response ack failed after $maxRetries retries, sending without ack',
+            error,
+            stackTrace,
+          );
+          socket.emit('rpc:response', outgoingPayload);
         }
       }
     }
   }
+
+  bool _isDeliveryCurrent({
+    required io.Socket socket,
+    required int connectGeneration,
+  }) {
+    return _activeSocket() == socket && _connectGeneration() == connectGeneration;
+  }
+
+  /// Own timeout + [io.Socket.emitWithAck] with a 0-arg-tolerant callback.
+  ///
+  /// Avoids `socket.timeout(...).emitWithAckAsync(...)`: socket_io_client 3.1.4
+  /// wraps timed acks as `(args)` and `onack` does `Function.apply(ack, [])` for
+  /// empty hub ACKs (`data: []`), which throws and leaves the Completer hanging.
+  Future<void> _emitWithTolerantAck(
+    io.Socket socket,
+    dynamic outgoingPayload, {
+    required int connectGeneration,
+  }) async {
+    final completer = Completer<void>();
+    Timer? timeoutTimer;
+    Timer? generationPoll;
+
+    void completeOnce(void Function() complete) {
+      if (completer.isCompleted) {
+        return;
+      }
+      timeoutTimer?.cancel();
+      generationPoll?.cancel();
+      complete();
+    }
+
+    // Optional positional so empty hub ACK (`Function.apply(ack, [])`) succeeds.
+    void onAck([dynamic _]) {
+      completeOnce(completer.complete);
+    }
+
+    timeoutTimer = Timer(_responseAckTimeout, () {
+      completeOnce(
+        () => completer.completeError(
+          TimeoutException(
+            'rpc:response Socket.IO ACK timed out',
+            _responseAckTimeout,
+          ),
+        ),
+      );
+    });
+
+    generationPoll = Timer.periodic(DeliveryGuaranteeConfig.responseAckGenerationPollInterval, (_) {
+      if (!_isDeliveryCurrent(socket: socket, connectGeneration: connectGeneration)) {
+        completeOnce(
+          () => completer.completeError(const _AckDeliveryAborted()),
+        );
+      }
+    });
+
+    try {
+      socket.emitWithAck('rpc:response', outgoingPayload, ack: onAck);
+    } on Object catch (error, stackTrace) {
+      timeoutTimer.cancel();
+      generationPoll.cancel();
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    await completer.future;
+  }
+}
+
+/// Internal signal that ACK wait was cancelled because the socket generation changed.
+final class _AckDeliveryAborted implements Exception {
+  const _AckDeliveryAborted();
 }

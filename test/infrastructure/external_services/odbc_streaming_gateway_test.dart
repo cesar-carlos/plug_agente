@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
@@ -143,6 +144,7 @@ void main() {
           any(),
           any(),
           lazyStrings: any(named: 'lazyStrings'),
+          namedParameters: any(named: 'namedParameters'),
         ),
       ).thenAnswer((_) => controller.stream);
       when(
@@ -188,6 +190,7 @@ void main() {
           'SELECT * FROM Cliente',
           any(),
           lazyStrings: true,
+          namedParameters: any(named: 'namedParameters'),
         ),
       ).called(1);
     });
@@ -958,6 +961,7 @@ void main() {
           42,
           any(),
           any(),
+          namedParameters: any(named: 'namedParameters'),
         ),
       ).thenAnswer((_) => controller.stream);
       when(
@@ -979,6 +983,7 @@ void main() {
           42,
           captureAny(),
           captureAny(),
+          namedParameters: any(named: 'namedParameters'),
         ),
       ).captured;
       final nativeOptions = captured.last as OdbcStreamingNativeOptions;
@@ -1200,6 +1205,148 @@ void main() {
 
       expect(sessionCache.entryCount, 0);
       expect(disconnectCount, 1);
+    });
+
+    test('executeMultiResultQueryStream forwards native fetchSize and chunkSize', () async {
+      when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'conn-multi',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(
+        () => mockService.streamQueryMulti(
+          'conn-multi',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
+      ).thenAnswer(
+        (_) => Stream<Result<QueryResultMultiItem>>.fromIterable(const [
+          Success(
+            QueryResultMultiItem.resultSet(
+              QueryResult(
+                columns: ['id'],
+                rows: [
+                  [1],
+                ],
+                rowCount: 1,
+              ),
+            ),
+          ),
+          Success(QueryResultMultiItem.rowCount(1)),
+        ]),
+      );
+      when(
+        () => mockService.disconnect('conn-multi'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final chunks = <Object?>[];
+      final result = await gateway.executeMultiResultQueryStream(
+        'SELECT 1; UPDATE t SET a = 1;',
+        'DSN=Test',
+        (chunk) async {
+          chunks.add(chunk.rowCountOnly ?? chunk.rows.length);
+        },
+      );
+
+      expect(result.isSuccess(), isTrue);
+      expect(chunks, [1, 1]);
+      verify(
+        () => mockService.streamQueryMulti(
+          'conn-multi',
+          'SELECT 1; UPDATE t SET a = 1;',
+          chunkSize: OdbcStreamingNativeOptions.hubStreamingChunkSizeBytes,
+        ),
+      ).called(1);
+    });
+
+    test('executeMultiResultQueryStream applies lazyStrings and remembers buffer expansion', () async {
+      when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+      ConnectionOptions? capturedOptions;
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer((invocation) async {
+        capturedOptions = invocation.namedArguments[#options] as ConnectionOptions?;
+        return Success(
+          Connection(
+            id: 'conn-multi-buf',
+            connectionString: 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(
+        () => mockService.streamQueryMulti(
+          'conn-multi-buf',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
+      ).thenAnswer(
+        (_) => Stream<Result<QueryResultMultiItem>>.error(
+          Exception('ODBC result buffer too small for query'),
+        ),
+      );
+      when(
+        () => mockService.disconnect('conn-multi-buf'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final first = await gateway.executeMultiResultQueryStream(
+        'SELECT * FROM big_table; SELECT 1;',
+        'Driver={ODBC Driver 18 for SQL Server};Server=localhost;',
+        (_) async {},
+      );
+      expect(first.isError(), isTrue);
+      expect(capturedOptions?.lazyStrings, isTrue);
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer((invocation) async {
+        capturedOptions = invocation.namedArguments[#options] as ConnectionOptions?;
+        return Success(
+          Connection(
+            id: 'conn-multi-buf-2',
+            connectionString: 'Driver={ODBC Driver 18 for SQL Server};Server=localhost;',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(
+        () => mockService.streamQueryMulti(
+          'conn-multi-buf-2',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
+      ).thenAnswer(
+        (_) => Stream<Result<QueryResultMultiItem>>.fromIterable(const [
+          Success(QueryResultMultiItem.rowCount(0)),
+        ]),
+      );
+      when(
+        () => mockService.disconnect('conn-multi-buf-2'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final second = await gateway.executeMultiResultQueryStream(
+        'SELECT * FROM big_table; SELECT 1;',
+        'Driver={ODBC Driver 18 for SQL Server};Server=localhost;',
+        (_) async {},
+      );
+      expect(second.isSuccess(), isTrue);
+      expect(
+        capturedOptions?.maxResultBufferBytes,
+        greaterThan(ConnectionConstants.defaultInitialResultBufferBytes),
+      );
     });
   });
 }

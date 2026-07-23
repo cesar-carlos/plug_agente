@@ -77,6 +77,7 @@ final class TransportRpcPipelineAssemblyDeps {
     required this.onConnectError,
     required this.onSocketError,
     required this.onDisconnect,
+    required this.onReleaseStreamStateAfterTransportLoss,
     required this.onCapabilitiesEnvelope,
     required this.onHeartbeatAck,
     this.healthService,
@@ -133,6 +134,7 @@ final class TransportRpcPipelineAssemblyDeps {
   final void Function(dynamic error, Completer<Result<void>> completer) onConnectError;
   final void Function(dynamic error) onSocketError;
   final void Function(dynamic reason) onDisconnect;
+  final void Function() onReleaseStreamStateAfterTransportLoss;
   final void Function(dynamic data) onCapabilitiesEnvelope;
   final void Function(dynamic data) onHeartbeatAck;
   final IAgentHealthStatusProvider? healthService;
@@ -276,6 +278,7 @@ final class TransportRpcPipelineAssembler {
       onConnectError: deps.onConnectError,
       onSocketError: deps.onSocketError,
       onDisconnect: deps.onDisconnect,
+      onReleaseStreamStateAfterTransportLoss: deps.onReleaseStreamStateAfterTransportLoss,
       onCapabilitiesEnvelope: deps.onCapabilitiesEnvelope,
       onHeartbeatAck: deps.onHeartbeatAck,
       onReconnectionNeeded: deps.onReconnectionNeeded,
