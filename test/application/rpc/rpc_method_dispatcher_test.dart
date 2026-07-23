@@ -140,6 +140,7 @@ void main() {
         ),
       );
       registerFallbackValue(const SqlExecutionOptions());
+      registerFallbackValue(SqlHandlingMode.managed);
       registerFallbackValue(
         const BulkInsertRequest(
           table: 'users',
@@ -231,7 +232,12 @@ void main() {
       when(() => mockNormalizer.normalize(any())).thenAnswer(
         (invocation) => invocation.positionalArguments[0] as QueryResponse,
       );
-      when(() => mockNormalizer.normalizeAsync(any())).thenAnswer(
+      when(
+        () => mockNormalizer.normalizeAsync(
+          any(),
+          sqlHandlingMode: any(named: 'sqlHandlingMode'),
+        ),
+      ).thenAnswer(
         (invocation) async => invocation.positionalArguments[0] as QueryResponse,
       );
       when(
