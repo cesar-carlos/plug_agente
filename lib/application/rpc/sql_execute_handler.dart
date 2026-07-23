@@ -292,9 +292,10 @@ class SqlExecuteHandler {
 
         return result.fold<Future<RpcResponse>>(
           (QueryResponse queryResponse) async {
-            final normalized = queryRequest.sqlHandlingMode == SqlHandlingMode.preserve
-                ? queryResponse
-                : await _normalizerService.normalizeAsync(queryResponse);
+            final normalized = await _normalizerService.normalizeAsync(
+              queryResponse,
+              sqlHandlingMode: queryRequest.sqlHandlingMode,
+            );
 
             final hasMultiResultSets = normalized.resultSets.isNotEmpty;
             var truncatedMulti = normalized;

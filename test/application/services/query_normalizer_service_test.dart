@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/validation/query_normalizer.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -41,6 +45,46 @@ void main() {
 
       expect(normalized.data.length, rows.length);
       expect(normalized.data.first.keys.first, startsWith('col_'));
+    });
+
+    test('should materialize LazyString values in managed mode', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final lazy = LazyString(Uint8List.fromList(utf8.encode('Cliente A')));
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: <Map<String, dynamic>>[
+          <String, dynamic>{'Nome': lazy},
+        ],
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(response);
+
+      expect(normalized.data.first['nome'], 'Cliente A');
+    });
+
+    test('should materialize LazyString values in preserve mode without renaming columns', () async {
+      final service = QueryNormalizerService(QueryNormalizer());
+      final lazy = LazyString(Uint8List.fromList(utf8.encode('Cliente A')));
+      final response = QueryResponse(
+        id: 'r1',
+        requestId: 'req',
+        agentId: 'agent',
+        data: <Map<String, dynamic>>[
+          <String, dynamic>{'Nome': lazy},
+        ],
+        timestamp: DateTime.utc(2026),
+      );
+
+      final normalized = await service.normalizeAsync(
+        response,
+        sqlHandlingMode: SqlHandlingMode.preserve,
+      );
+
+      expect(normalized.data.first.containsKey('Nome'), isTrue);
+      expect(normalized.data.first['Nome'], 'Cliente A');
     });
 
     test('should skip normalization in preserve mode', () async {

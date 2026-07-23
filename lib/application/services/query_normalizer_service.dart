@@ -1,6 +1,7 @@
 import 'dart:isolate';
 
 import 'package:plug_agente/application/validation/query_normalizer.dart';
+import 'package:plug_agente/core/utils/odbc_wire_cell_normalizer.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/protocol/protocol_capabilities.dart';
@@ -36,6 +37,12 @@ class QueryNormalizerService {
     QueryResponse response, {
     SqlHandlingMode sqlHandlingMode = SqlHandlingMode.managed,
   }) async {
+    if (sqlHandlingMode == SqlHandlingMode.preserve) {
+      if (totalRowCount(response) < normalizeIsolateRowThreshold) {
+        return materializeResponseCells(response);
+      }
+      return Isolate.run(() => materializeQueryResponseCellsInIsolate(response));
+    }
     if (_shouldSkipNormalization(response, sqlHandlingMode: sqlHandlingMode)) {
       return response;
     }
@@ -129,9 +136,6 @@ class QueryNormalizerService {
     QueryResponse response, {
     required SqlHandlingMode sqlHandlingMode,
   }) {
-    if (sqlHandlingMode == SqlHandlingMode.preserve) {
-      return true;
-    }
     final rowCount = totalRowCount(response);
     if (rowCount < skipRowRewriteRowThreshold) {
       return false;
@@ -188,18 +192,68 @@ class QueryNormalizerService {
   }
 
   dynamic _normalizeValue(dynamic value) {
-    if (value == null) return null;
-
-    if (value is String) {
-      return value.trim();
+    final materialized = normalizeOdbcWireCell(value);
+    if (materialized is String) {
+      return materialized.trim();
     }
-
-    if (value is DateTime) {
-      return value.toIso8601String();
-    }
-
-    return value;
+    return materialized;
   }
+
+  QueryResponse materializeResponseCells(QueryResponse response) {
+    final materializedData = _materializeRows(response.data);
+    final materializedResultSets = response.resultSets
+        .map(
+          (resultSet) => resultSet.copyWith(
+            rows: _materializeRows(resultSet.rows),
+          ),
+        )
+        .toList(growable: false);
+    final resultSetByIndex = {
+      for (final resultSet in materializedResultSets) resultSet.index: resultSet,
+    };
+    final materializedItems = response.items
+        .map((item) {
+          if (item.resultSet == null) {
+            return item;
+          }
+          return QueryResponseItem.resultSet(
+            index: item.index,
+            resultSet: resultSetByIndex[item.resultSet!.index],
+          );
+        })
+        .toList(growable: false);
+
+    return QueryResponse(
+      id: response.id,
+      requestId: response.requestId,
+      agentId: response.agentId,
+      data: materializedData,
+      affectedRows: response.affectedRows,
+      startedAt: response.startedAt,
+      wasTruncated: response.wasTruncated,
+      timestamp: response.timestamp,
+      error: response.error,
+      columnMetadata: response.columnMetadata,
+      pagination: response.pagination,
+      resultSets: materializedResultSets,
+      items: materializedItems,
+    );
+  }
+
+  List<Map<String, dynamic>> _materializeRows(List<Map<String, dynamic>> rows) {
+    return rows
+        .map(
+          (row) => <String, dynamic>{
+            for (final entry in row.entries) entry.key: normalizeOdbcWireCell(entry.value),
+          },
+        )
+        .toList(growable: false);
+  }
+}
+
+/// Top-level entry for `Isolate.run` when materializing ODBC cells off the UI isolate.
+QueryResponse materializeQueryResponseCellsInIsolate(QueryResponse response) {
+  return QueryNormalizerService(QueryNormalizer()).materializeResponseCells(response);
 }
 
 /// Top-level entry for `Isolate.run` when normalizing large result sets off the UI isolate.
