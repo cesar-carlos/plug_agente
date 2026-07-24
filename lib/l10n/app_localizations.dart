@@ -6635,8 +6635,14 @@ abstract class AppLocalizations {
   /// No description provided for @gsToggleStartWithWindowsAdminHint.
   ///
   /// In en, this message translates to:
-  /// **'May request administrator privileges.'**
+  /// **'If the app does not start with Windows, also check Windows Startup apps.'**
   String get gsToggleStartWithWindowsAdminHint;
+
+  /// No description provided for @gsToggleStartWithWindowsOpenStartupAppsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Make sure Plug Agente is enabled in Windows Startup apps.'**
+  String get gsToggleStartWithWindowsOpenStartupAppsHint;
 
   /// No description provided for @gsToggleMinimizeToTray.
   ///

@@ -8,6 +8,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
+import 'package:plug_agente/infrastructure/services/windows_startup_approved_store.dart';
 import 'package:plug_agente/infrastructure/services/windows_startup_run_value_reader.dart';
 import 'package:plug_agente/infrastructure/services/windows_startup_run_value_writer.dart';
 
@@ -41,6 +42,29 @@ class _FakeRegistryReader implements IStartupRunValueRegistryReader {
       _readsInSnapshot = 0;
     }
     return _activeSnapshot[scope] ?? const StartupRunValueReadResult.notFound();
+  }
+}
+
+class _FakeStartupApprovedStore implements IStartupApprovedStore {
+  _FakeStartupApprovedStore({
+    this.readResult = const StartupApprovedReadResult.notPresent(),
+    this.writeResult = const StartupApprovedWriteResult.success(),
+  });
+
+  StartupApprovedReadResult readResult;
+  StartupApprovedWriteResult writeResult;
+  var writeEnabledCallCount = 0;
+
+  @override
+  StartupApprovedReadResult read({required String valueName}) => readResult;
+
+  @override
+  StartupApprovedWriteResult writeEnabled({required String valueName}) {
+    writeEnabledCallCount += 1;
+    if (writeResult.status == StartupApprovedWriteStatus.success) {
+      readResult = const StartupApprovedReadResult.enabled();
+    }
+    return writeResult;
   }
 }
 
@@ -769,6 +793,77 @@ void main() {
       );
     });
 
+    test('should report disabled when StartupApproved blocks a healthy Run entry', () async {
+      final service = _makeService(
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+        startupApprovedStore: _FakeStartupApprovedStore(
+          readResult: const StartupApprovedReadResult.disabled(),
+        ),
+      );
+
+      final result = await service.isEnabled();
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (enabled) => check(enabled).isFalse(),
+        (_) => fail('Expected success'),
+      );
+    });
+
+    test('should enable StartupApproved when enabling auto-start', () async {
+      final approved = _FakeStartupApprovedStore(
+        readResult: const StartupApprovedReadResult.disabled(),
+      );
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(),
+        ]),
+        startupApprovedStore: approved,
+      );
+
+      final result = await service.enable();
+
+      check(result.isSuccess()).isTrue();
+      check(writer.setCalls).length.equals(1);
+      check(approved.writeEnabledCallCount).equals(1);
+      check(approved.readResult.status).equals(StartupApprovedStatus.enabled);
+    });
+
+    test('should repair StartupApproved when Run entry is healthy but blocked', () async {
+      final approved = _FakeStartupApprovedStore(
+        readResult: const StartupApprovedReadResult.disabled(),
+      );
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+        startupApprovedStore: approved,
+      );
+
+      final result = await service.ensureLaunchConfiguration(allowElevation: false);
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.repaired),
+        (_) => fail('Expected success'),
+      );
+      check(writer.setCalls).isEmpty();
+      check(approved.writeEnabledCallCount).equals(1);
+    });
+
     test('should report disabled when registry entry exists but is unhealthy', () async {
       final service = _makeService(
         registrySnapshots: Queue.from([
@@ -804,15 +899,11 @@ void main() {
       );
     });
 
-    test('should report legacy status when HKCU is healthy but HKLM read is denied without elevation', () async {
+    test('should leave healthy HKCU unchanged when HKLM read is denied without elevation', () async {
       final writer = _FakeRegistryWriter();
       final service = _makeService(
         registryWriter: writer,
         registrySnapshots: Queue.from([
-          _registrySnapshot(
-            hkcu: _found(_startupValue(_currentExecutable)),
-            hklm: _accessDenied(),
-          ),
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
             hklm: _accessDenied(),
@@ -824,32 +915,25 @@ void main() {
 
       check(result.isSuccess()).isTrue();
       result.fold(
-        (status) => check(status).equals(StartupLaunchConfigurationStatus.repairedWithLegacyMachineEntry),
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.unchanged),
         (_) => fail('Expected success'),
       );
       check(writer.setCalls).isEmpty();
+      check(writer.deleteCalls).isEmpty();
     });
 
-    test('should attempt elevated cleanup when HKLM read is denied and elevation is allowed', () async {
+    test('should not elevate for unreadable HKLM when HKCU is already healthy', () async {
       final writer = _FakeRegistryWriter(
         deleteResult: const StartupRunValueWriteResult.accessDenied(5),
       );
       final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 1, '', 'ERROR: Access is denied.'),
-        ProcessResult(2, 0, '', ''),
-      ]);
       final service = _makeService(
         calls: calls,
-        results: results,
         registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
             hkcu: _found(_startupValue(_currentExecutable)),
             hklm: _accessDenied(),
-          ),
-          _registrySnapshot(
-            hkcu: _found(_startupValue(_currentExecutable)),
           ),
         ]),
       );
@@ -857,8 +941,12 @@ void main() {
       final result = await service.ensureLaunchConfiguration();
 
       check(result.isSuccess()).isTrue();
-      check(writer.deleteCalls.any((call) => call.scope == StartupRegistryScope.localMachine)).isTrue();
-      check(calls.any((call) => call.executable == 'powershell')).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.unchanged),
+        (_) => fail('Expected success'),
+      );
+      check(writer.deleteCalls).isEmpty();
+      check(calls.any((call) => call.executable == 'powershell')).isFalse();
     });
 
     test('should not create missing HKCU entry when createIfMissing is false', () async {
@@ -883,7 +971,7 @@ void main() {
       check(writer.setCalls).isEmpty();
     });
 
-    test('should build startup diagnostic report with scope details and unreadable machine scopes', () async {
+    test('should build startup diagnostic report with scope details and StartupApproved state', () async {
       final service = _makeService(
         registrySnapshots: Queue.from([
           _registrySnapshot(
@@ -892,6 +980,9 @@ void main() {
             wow6432: _found(_startupValue(_oldExecutable)),
           ),
         ]),
+        startupApprovedStore: _FakeStartupApprovedStore(
+          readResult: const StartupApprovedReadResult.disabled(),
+        ),
       );
       final result = await service.buildStartupDiagnosticReport();
 
@@ -901,6 +992,8 @@ void main() {
           check(report).contains('HKCU');
           check(report).contains('HKLM');
           check(report).contains('Read denied');
+          check(report).contains('StartupApproved (HKCU): disabled');
+          check(report).contains('StartupApproved blocked by Startup Apps: true');
           check(report).contains('Needs repair: true');
         },
         (_) => fail('Expected success'),
@@ -914,6 +1007,7 @@ AutoStartService _makeService({
   Queue<ProcessResult>? results,
   Queue<Map<StartupRegistryScope, StartupRunValueReadResult>>? registrySnapshots,
   IStartupRunValueRegistryWriter? registryWriter,
+  IStartupApprovedStore? startupApprovedStore,
 }) {
   return AutoStartService(
     isWindows: () => true,
@@ -925,6 +1019,7 @@ AutoStartService _makeService({
           ),
     ),
     registryWriter: registryWriter ?? _FakeRegistryWriter(),
+    startupApprovedStore: startupApprovedStore ?? _FakeStartupApprovedStore(),
     processRunner: (String executable, List<String> arguments) async {
       calls?.add(
         _ProcessInvocation(

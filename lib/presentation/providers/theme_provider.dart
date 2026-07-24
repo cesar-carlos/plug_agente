@@ -43,9 +43,8 @@ class ThemeProvider extends ChangeNotifier {
         error: error,
         stackTrace: stackTrace,
       );
-      _persistenceError = SystemSettingsErrorState(
+      _persistenceError = const SystemSettingsErrorState(
         code: SystemSettingsErrorCode.settingsPersistenceFailed,
-        detail: error.toString(),
       );
       notifyListeners();
       return;

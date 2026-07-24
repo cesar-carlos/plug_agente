@@ -118,6 +118,15 @@ class PreferencesConfigSection extends StatelessWidget {
                     : null,
                 onSecondaryAction: _showsDiagnosticAction(startupNotice!.code) ? onCopyStartupDiagnostic : null,
               ),
+            ] else if (startupSupported && startWithWindows) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _SystemSettingsFeedbackMessage(
+                message: l10n.gsToggleStartWithWindowsOpenStartupAppsHint,
+                tone: AppFeedbackTone.info,
+                icon: FluentIcons.info,
+                actionLabel: l10n.gsButtonOpenSettings,
+                onAction: onOpenStartupSettings,
+              ),
             ],
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(

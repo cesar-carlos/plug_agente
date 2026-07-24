@@ -231,10 +231,30 @@ void main() {
   });
 
   group('PreferencesConfigSection - typed startup error rendering', () {
-    testWidgets('does not render error block when startupError is null', (tester) async {
+    testWidgets('does not render error block when startupError is null and startup is off', (tester) async {
       await pumpSection(tester);
       expect(find.byIcon(FluentIcons.error_badge), findsNothing);
       expect(find.text(ptL10n.gsButtonOpenSettings), findsNothing);
+      expect(find.text(ptL10n.gsToggleStartWithWindowsOpenStartupAppsHint), findsNothing);
+    });
+
+    testWidgets('shows Startup Apps hint and open settings when start with Windows is on', (tester) async {
+      var openedSettings = false;
+      await pumpSection(
+        tester,
+        startWithWindows: true,
+        onOpenStartupSettings: () => openedSettings = true,
+      );
+
+      expect(find.text(ptL10n.gsToggleStartWithWindowsAdminHint), findsOneWidget);
+      expect(find.text(ptL10n.gsToggleStartWithWindowsOpenStartupAppsHint), findsOneWidget);
+      expect(find.text(ptL10n.gsButtonOpenSettings), findsOneWidget);
+      expect(find.byIcon(FluentIcons.info), findsOneWidget);
+
+      await tester.tap(find.text(ptL10n.gsButtonOpenSettings));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(openedSettings, isTrue);
     });
 
     testWidgets('translates startupToggleFailed without detail', (tester) async {
@@ -290,20 +310,16 @@ void main() {
       expect(find.text(expected), findsOneWidget);
     });
 
-    testWidgets('translates settingsPersistenceFailed', (tester) async {
+    testWidgets('translates settingsPersistenceFailed without technical detail', (tester) async {
       await pumpSection(
         tester,
         preferenceError: const SystemSettingsErrorState(
           code: SystemSettingsErrorCode.settingsPersistenceFailed,
-          detail: 'settings.json denied',
         ),
       );
 
-      final expected = ptL10n.gsErrorWithDetail(
-        ptL10n.gsErrorSettingsPersistenceFailed,
-        'settings.json denied',
-      );
-      expect(find.text(expected), findsOneWidget);
+      expect(find.text(ptL10n.gsErrorSettingsPersistenceFailed), findsOneWidget);
+      expect(find.textContaining('settings.json'), findsNothing);
     });
 
     testWidgets('renders theme persistence error in the appearance section', (tester) async {
@@ -311,15 +327,10 @@ void main() {
         tester,
         themeError: const SystemSettingsErrorState(
           code: SystemSettingsErrorCode.settingsPersistenceFailed,
-          detail: 'theme write denied',
         ),
       );
 
-      final expected = ptL10n.gsErrorWithDetail(
-        ptL10n.gsErrorSettingsPersistenceFailed,
-        'theme write denied',
-      );
-      expect(find.text(expected), findsOneWidget);
+      expect(find.text(ptL10n.gsErrorSettingsPersistenceFailed), findsOneWidget);
       expect(find.byIcon(FluentIcons.error_badge), findsOneWidget);
     });
 

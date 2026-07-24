@@ -64,6 +64,9 @@ Future<void> main(List<String> args) async {
           ),
   );
 
+  final startupApproved = await _readStartupApprovedStatus();
+  checks.add(startupApproved);
+
   final expectedExecutablePath = _argValue(args, '--expected-exe');
   if (expectedExecutablePath != null) {
     final matchingEntries = registryEntries
@@ -177,7 +180,62 @@ void _printManualChecklist() {
     ..writeln('3. Run this script and confirm every readiness check is OK.')
     ..writeln('4. Sign out and sign in again, or restart Windows.')
     ..writeln('5. Confirm Plug Database appears in the tray without flashing or opening the main window.')
-    ..writeln('6. Open it from the tray menu and confirm the window restores normally.');
+    ..writeln('6. Open it from the tray menu and confirm the window restores normally.')
+    ..writeln('7. If registry checks pass but the app still does not start, open Windows Startup apps and enable Plug Agente.');
+}
+
+Future<_CheckResult> _readStartupApprovedStatus() async {
+  const valueName = _runValueName;
+  const keyPath = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';
+  final result = await Process.run('reg', <String>[
+    'query',
+    keyPath,
+    '/v',
+    valueName,
+  ]);
+
+  if (result.exitCode != 0) {
+    final output = '${result.stdout}\n${result.stderr}'.toLowerCase();
+    if (output.contains('unable to find') ||
+        output.contains('nao e possivel localizar') ||
+        output.contains('não é possível localizar') ||
+        output.contains('cannot find')) {
+      return const _CheckResult.pass(
+        'StartupApproved',
+        'Not present (Windows allows the Run entry by default).',
+      );
+    }
+    return _CheckResult.fail(
+      'StartupApproved',
+      'Could not read StartupApproved\\Run: ${result.stderr}'.trim(),
+    );
+  }
+
+  final output = '${result.stdout}';
+  final hexMatch = RegExp(r'REG_BINARY\s+([0-9A-Fa-f]+)').firstMatch(output);
+  if (hexMatch == null) {
+    return const _CheckResult.fail('StartupApproved', 'Could not parse StartupApproved binary value.');
+  }
+
+  final hex = hexMatch.group(1)!;
+  if (hex.length < 8) {
+    return const _CheckResult.fail('StartupApproved', 'StartupApproved binary value is too short.');
+  }
+
+  final statusByte = int.parse(hex.substring(0, 2), radix: 16);
+  if (statusByte == 0x02 || statusByte == 0x06) {
+    return _CheckResult.pass('StartupApproved', 'Enabled (status 0x${statusByte.toRadixString(16)}).');
+  }
+  if (statusByte == 0x03) {
+    return const _CheckResult.fail(
+      'StartupApproved',
+      'Disabled in Windows Startup apps (status 0x03). Re-enable Plug Agente there or toggle Start with Windows in the app.',
+    );
+  }
+  return _CheckResult.fail(
+    'StartupApproved',
+    'Unexpected StartupApproved status 0x${statusByte.toRadixString(16)}; treat as blocked until confirmed enabled.',
+  );
 }
 
 class _CheckResult {

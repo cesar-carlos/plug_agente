@@ -3573,7 +3573,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gsToggleStartMinimizedRequiresStartup => 'Requer \"Iniciar com o Windows\" ativado.';
 
   @override
-  String get gsToggleStartWithWindowsAdminHint => 'Pode solicitar privilégios de administrador.';
+  String get gsToggleStartWithWindowsAdminHint =>
+      'Se o app não iniciar com o Windows, verifique também em Aplicativos de Inicialização do Windows.';
+
+  @override
+  String get gsToggleStartWithWindowsOpenStartupAppsHint =>
+      'Confira se o Plug Agente está ativado em Inicialização do Windows.';
 
   @override
   String get gsToggleMinimizeToTray => 'Minimizar para bandeja';

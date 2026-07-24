@@ -26,10 +26,23 @@ class SystemSettingsFailureMapper {
   }
 
   static SystemSettingsErrorState preferenceFailure(Object failure) {
-    final detail = failure is domain.Failure && failure.cause != null ? failure.cause.toString() : failure.toString();
-    return SystemSettingsErrorState(
+    if (failure is domain.Failure) {
+      developer.log(
+        failure.message,
+        name: 'system_settings_failure_mapper',
+        level: 900,
+        error: failure.cause,
+      );
+    } else {
+      developer.log(
+        'Preference persistence failed: $failure',
+        name: 'system_settings_failure_mapper',
+        level: 900,
+        error: failure,
+      );
+    }
+    return const SystemSettingsErrorState(
       code: SystemSettingsErrorCode.settingsPersistenceFailed,
-      detail: detail,
     );
   }
 
