@@ -48,12 +48,10 @@ class _FakeRegistryReader implements IStartupRunValueRegistryReader {
 class _FakeStartupApprovedStore implements IStartupApprovedStore {
   _FakeStartupApprovedStore({
     this.readResult = const StartupApprovedReadResult.notPresent(),
-    this.writeResult = const StartupApprovedWriteResult.success(),
   });
 
   StartupApprovedReadResult readResult;
-  StartupApprovedWriteResult writeResult;
-  var writeEnabledCallCount = 0;
+  int writeEnabledCallCount = 0;
 
   @override
   StartupApprovedReadResult read({required String valueName}) => readResult;
@@ -61,10 +59,8 @@ class _FakeStartupApprovedStore implements IStartupApprovedStore {
   @override
   StartupApprovedWriteResult writeEnabled({required String valueName}) {
     writeEnabledCallCount += 1;
-    if (writeResult.status == StartupApprovedWriteStatus.success) {
-      readResult = const StartupApprovedReadResult.enabled();
-    }
-    return writeResult;
+    readResult = const StartupApprovedReadResult.enabled();
+    return const StartupApprovedWriteResult.success();
   }
 }
 
