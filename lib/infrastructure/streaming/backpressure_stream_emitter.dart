@@ -113,12 +113,18 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
     final complete = _pendingComplete!;
     _pendingComplete = null;
     final payload = complete.toJson();
-    final emitted = await _emit('rpc:complete', payload);
-    if (!emitted) {
-      throw StateError('rpc stream complete emit returned false');
-    }
-    if (_streamId != null) {
-      _onUnregister(_streamId!);
+    try {
+      final emitted = await _emit('rpc:complete', payload);
+      if (!emitted) {
+        throw StateError('rpc stream complete emit returned false');
+      }
+    } finally {
+      // Always free the registry slot. Negotiated max_concurrent_streams can
+      // be 1 (hub advertisement); a leaked emitter blocks the next streaming
+      // RPC until idle TTL (300s) — matching Colmeia E2E tag timeouts.
+      if (_streamId != null) {
+        _onUnregister(_streamId!);
+      }
     }
   }
 

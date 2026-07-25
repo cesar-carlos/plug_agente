@@ -271,6 +271,11 @@ class SqlRpcDbStreamingExecutor {
         final effectiveRowCount = (useWireOnly || (useColumnarWire && columnar != null))
             ? (columnar?['row_count'] as int? ?? 0)
             : chunk.length;
+        // Skip zero-row frames so empty queries never register a stream
+        // emitter (avoids complete-before-response slot leaks on the hub).
+        if (effectiveRowCount <= 0) {
+          return;
+        }
         totalRows += effectiveRowCount;
         final currentChunkIndex = chunkIndex++;
         final skipRowMaps = useWireOnly || (useColumnarWire && columnar != null);
@@ -363,6 +368,33 @@ class SqlRpcDbStreamingExecutor {
       final executionFinishedAtUtc = DateTime.now().toUtc();
       final startedAtIso = SqlExecuteResultMapper.executionTimestampUtcIso(executionStartedAtUtc);
       final finishedAtIso = SqlExecuteResultMapper.executionTimestampUtcIso(executionFinishedAtUtc);
+      // Empty streams must not emit rpc:complete before rpc:response: the hub
+      // only opens the stream route on response, so an early complete is
+      // dropped and the subsequent stream_id response leaks a slot under
+      // max_concurrent_streams=1 until idle TTL (~30s) — starving the next
+      // streaming RPC (Colmeia E2E: 2nd/3rd sequential empty stream times out).
+      // Use totalRows only: ODBC may still deliver an empty chunk frame
+      // (chunkIndex > 0) for zero-row results.
+      if (totalRows == 0) {
+        _dispatchMetrics?.recordSqlExecuteStreamingFromDbResponse();
+        return SqlDbStreamingTryResult(
+          response: RpcResponse.success(
+            id: request.id,
+            result: {
+              'execution_id': executionId,
+              'started_at': startedAtIso,
+              'finished_at': finishedAtIso,
+              'sql_handling_mode': queryRequest.sqlHandlingMode.name,
+              'max_rows_handling': 'response_truncation',
+              'effective_max_rows': effectiveMaxRows,
+              'rows': <Map<String, dynamic>>[],
+              'row_count': 0,
+              'affected_rows': 0,
+              ...?(columnMetadata != null ? {'column_metadata': columnMetadata} : null),
+            },
+          ),
+        );
+      }
       await streamEmitter.emitComplete(
         RpcStreamComplete(
           streamId: streamId,

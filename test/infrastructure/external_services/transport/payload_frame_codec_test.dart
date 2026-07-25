@@ -155,6 +155,59 @@ void main() {
     });
   });
 
+  group('PayloadFrameCodec._extractRequestId via prepareOutgoing', () {
+    late PayloadFrameCodec codec;
+
+    setUp(() {
+      codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'gzip',
+        ),
+      );
+    });
+
+    test('prefers meta.request_id over body.id (Option A / clientRequestIdEcho)', () async {
+      final wire = (await codec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: <String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'client-X',
+          'result': {'ok': true},
+          'meta': <String, dynamic>{'request_id': 'hub-Y'},
+        },
+      )).getOrThrow();
+
+      expect(wire['requestId'], 'hub-Y');
+    });
+
+    test('falls back to body.id when meta.request_id is absent (Option B)', () async {
+      final wire = (await codec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: <String, dynamic>{
+          'jsonrpc': '2.0',
+          'id': 'hub-Y',
+          'result': {'ok': true},
+        },
+      )).getOrThrow();
+
+      expect(wire['requestId'], 'hub-Y');
+    });
+
+    test('omits requestId when neither body.id nor meta.request_id is present', () async {
+      final wire = (await codec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: <String, dynamic>{
+          'jsonrpc': '2.0',
+          'result': {'ok': true},
+        },
+      )).getOrThrow();
+
+      expect(wire.containsKey('requestId'), isFalse);
+    });
+  });
+
   group('PayloadFrameCodec.decodeIncoming - validation', () {
     test('returns failure when payload is not a frame', () {
       final codec = buildCodec(

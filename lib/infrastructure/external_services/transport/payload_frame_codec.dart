@@ -479,10 +479,9 @@ class PayloadFrameCodec {
 
   String? _extractRequestId(dynamic payload) {
     if (payload is! Map<String, dynamic>) return null;
-    final requestId = payload['id'] ?? payload['request_id'];
-    if (requestId != null) {
-      return requestId.toString();
-    }
+    // Prefer meta.request_id: it carries the hub wire correlator (hubRequestId)
+    // required for relay route lookup. body.id differs from hubRequestId when
+    // clientRequestIdEcho is negotiated (Option A).
     final meta = payload['meta'];
     if (meta is Map<String, dynamic>) {
       final metaRequestId = meta['request_id'];
@@ -490,6 +489,7 @@ class PayloadFrameCodec {
         return metaRequestId.toString();
       }
     }
-    return null;
+    final requestId = payload['id'] ?? payload['request_id'];
+    return requestId?.toString();
   }
 }
