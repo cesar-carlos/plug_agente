@@ -375,8 +375,30 @@ class SqlRpcDbStreamingExecutor {
       // streaming RPC (Colmeia E2E: 2nd/3rd sequential empty stream times out).
       // Use totalRows only: ODBC may still deliver an empty chunk frame
       // (chunkIndex > 0) for zero-row results.
-      if (totalRows == 0) {
+      void recordDbStreamingSuccessMetrics() {
+        if (autoStreaming && !_featureFlags.enableSocketStreamingChunks) {
+          switch (autoStreamingReason) {
+            case DbStreamingAutoReason.prefer:
+              _dispatchMetrics?.recordSqlExecutePreferDbStreamingResponse();
+            case DbStreamingAutoReason.largeMaxRows:
+              _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
+            case DbStreamingAutoReason.allowlist:
+              _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
+              _dispatchMetrics?.recordSqlExecuteAllowlistDbStreamingResponse();
+            case DbStreamingAutoReason.sqlLength:
+            case DbStreamingAutoReason.sqlSignal:
+              _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
+            case DbStreamingAutoReason.none:
+              break;
+          }
+        }
         _dispatchMetrics?.recordSqlExecuteStreamingFromDbResponse();
+      }
+
+      if (totalRows == 0) {
+        // Unary success (no stream_id): still count as a DB-streaming path
+        // win so allowlist/auto metrics match non-empty stream outcomes.
+        recordDbStreamingSuccessMetrics();
         return SqlDbStreamingTryResult(
           response: RpcResponse.success(
             id: request.id,
@@ -422,23 +444,7 @@ class SqlRpcDbStreamingExecutor {
           ...?(columnMetadata != null ? {'column_metadata': columnMetadata} : null),
         },
       );
-      if (autoStreaming && !_featureFlags.enableSocketStreamingChunks) {
-        switch (autoStreamingReason) {
-          case DbStreamingAutoReason.prefer:
-            _dispatchMetrics?.recordSqlExecutePreferDbStreamingResponse();
-          case DbStreamingAutoReason.largeMaxRows:
-            _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
-          case DbStreamingAutoReason.allowlist:
-            _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
-            _dispatchMetrics?.recordSqlExecuteAllowlistDbStreamingResponse();
-          case DbStreamingAutoReason.sqlLength:
-          case DbStreamingAutoReason.sqlSignal:
-            _dispatchMetrics?.recordSqlExecuteAutoStreamingFromDbResponse();
-          case DbStreamingAutoReason.none:
-            break;
-        }
-      }
-      _dispatchMetrics?.recordSqlExecuteStreamingFromDbResponse();
+      recordDbStreamingSuccessMetrics();
       return SqlDbStreamingTryResult(response: dbStreamResponse);
     } finally {
       _sqlStreamingCoordinator.markFinished(activeStreamExecution);
