@@ -73,7 +73,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-1', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-1',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-1'),
@@ -216,7 +221,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQuery('conn-sa', any()),
+        () => mockService.streamQuery(
+          'conn-sa',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-sa'),
@@ -276,7 +286,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-setup', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-setup',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-setup'),
@@ -334,7 +349,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-cancel', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-cancel',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect(any()),
@@ -430,7 +450,12 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQueryColumnar('conn-cap', any()),
+          () => mockService.streamQueryColumnar(
+          'conn-cap',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect(any()),
@@ -501,7 +526,12 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQueryColumnar('conn-disconnect', any()),
+          () => mockService.streamQueryColumnar(
+          'conn-disconnect',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect(any()),
@@ -595,10 +625,20 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQueryColumnar('conn-1', any()),
+          () => mockService.streamQueryColumnar(
+          'conn-1',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
         ).thenAnswer((_) => controller.stream);
         when(
-          () => mockService.streamQueryColumnar('conn-2', any()),
+          () => mockService.streamQueryColumnar(
+          'conn-2',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
         ).thenAnswer(
           (_) => Stream<Result<TypedColumnarResult>>.fromIterable([
             _columnarSuccess(
@@ -689,7 +729,12 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQueryColumnar('conn-cancel-timeout', any()),
+          () => mockService.streamQueryColumnar(
+          'conn-cancel-timeout',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect('conn-cancel-timeout'),
@@ -744,7 +789,12 @@ void main() {
           (_) async => const Success(unit),
         );
         when(
-          () => mockService.streamQueryColumnar('conn-invalid-id', any()),
+          () => mockService.streamQueryColumnar(
+          'conn-invalid-id',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect('conn-invalid-id'),
@@ -801,7 +851,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-error', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-error',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect(any()),
@@ -842,7 +897,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-dup', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-dup',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect(any()),
@@ -898,7 +958,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-single', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-single',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-single'),
@@ -1026,7 +1091,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-multi', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-multi',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) => controller.stream);
       when(
         () => mockService.disconnect('conn-multi'),
@@ -1104,7 +1174,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-reuse', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-reuse',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) async* {
         yield _columnarSuccess(
           const QueryResult(
@@ -1176,7 +1251,12 @@ void main() {
         (_) async => const Success(unit),
       );
       when(
-        () => mockService.streamQueryColumnar('conn-shutdown', any()),
+        () => mockService.streamQueryColumnar(
+          'conn-shutdown',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) async* {
         yield _columnarSuccess(
           const QueryResult(

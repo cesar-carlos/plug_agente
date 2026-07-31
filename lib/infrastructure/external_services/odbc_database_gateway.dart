@@ -303,7 +303,8 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
         () async {
           final connResult = await _service.connect(
             connectionString,
-            options: _optionsResolver.defaultOptions.toOdbcConnectionOptions(),
+            options: _optionsResolver.defaultOptions
+                .toOdbcConnectionOptionsForConnectionString(connectionString),
           );
 
           return connResult.fold(

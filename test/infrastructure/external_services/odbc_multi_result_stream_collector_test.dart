@@ -57,6 +57,8 @@ void main() {
       () => queries.streamQueryMulti(
         'c1',
         'EXEC batch',
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
       ),
     ).called(1);
   });

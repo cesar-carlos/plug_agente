@@ -140,10 +140,12 @@ final class AdaptiveOdbcConnectionPool
       driverInfo: driverInfo,
     );
     _lastCircuitKey = circuitKey;
-    final canTryNativeWithoutOptions = allowNativeWithoutOptions || options == null;
-    if (_shouldUseNativePool(databaseType) && !_isNativeCircuitOpen(circuitKey) && canTryNativeWithoutOptions) {
+    final canTryNative =
+        _shouldUseNativePool(databaseType) && !_isNativeCircuitOpen(circuitKey);
+    if (canTryNative) {
       final nativeAcquire = await _nativePool.acquireWithin(
         connectionString,
+        options: options ?? leaseFallbackOptions,
         acquireTimeout: acquireTimeout,
       );
       if (nativeAcquire.isSuccess()) {
@@ -170,10 +172,10 @@ final class AdaptiveOdbcConnectionPool
     }
 
     if (_shouldUseNativePool(databaseType)) {
-      if (!canTryNativeWithoutOptions) {
-        _lastNativeSkipReason = OdbcContextConstants.nativePoolCustomOptionsUnsupportedReason;
-      } else if (allowNativeWithoutOptions) {
+      if (allowNativeWithoutOptions) {
         _lastNativeSkipReason ??= _isNativeCircuitOpen(circuitKey) ? 'native_circuit_open' : 'native_fallback_to_lease';
+      } else if (_isNativeCircuitOpen(circuitKey)) {
+        _lastNativeSkipReason = 'native_circuit_open';
       }
     }
 

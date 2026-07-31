@@ -9,7 +9,12 @@ import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_
 import 'package:result_dart/result_dart.dart';
 
 /// Executes a single (non multi-result) ODBC query, choosing between the
-/// default row-major call and the configured columnar/encoded path.
+/// default row-major call and the configured columnar path.
+///
+/// When effective encoding is columnar, uses `executeQueryColumnarFromObjects`
+/// (typed columnar wire) and converts to [QueryResult] via [fromTypedColumnar].
+/// Passing `resultEncoding` into QueryResult APIs is avoided because
+/// `odbc_fast` clamps those requests to row-major via `forQueryResultWire`.
 ///
 /// Extracted from `OdbcDatabaseGateway` so the result-encoding selection (env
 /// driven) and the named→positional parameter handling live behind a focused,
@@ -41,7 +46,7 @@ final class OdbcResultEncodingExecutor {
 
     return resultEncoding == ResultEncoding.rowMajor
         ? _executeRowMajor(connectionId, preparedExecution)
-        : _executeWithEncoding(connectionId, preparedExecution, resultEncoding);
+        : _executeWithEncoding(connectionId, preparedExecution);
   }
 
   Future<Result<QueryResult>> _executeRowMajor(
@@ -63,19 +68,20 @@ final class OdbcResultEncodingExecutor {
     );
   }
 
+  /// Uses typed columnar execute so native wire stays columnar; QueryResult
+  /// APIs would clamp [ResultEncoding.columnar] via `forQueryResultWire`.
   Future<Result<QueryResult>> _executeWithEncoding(
     String connectionId,
     OdbcPreparedQueryExecution preparedExecution,
-    ResultEncoding resultEncoding,
-  ) {
+  ) async {
     final parameters = preparedExecution.parameters;
     if (parameters == null || parameters.isEmpty) {
-      return _queries.executeQueryParamValuesFromObjects(
+      final columnar = await _queries.executeQueryColumnarFromObjects(
         connectionId,
         preparedExecution.sql,
-        const <Object?>[],
-        resultEncoding: resultEncoding,
+        params: const <Object?>[],
       );
+      return columnar.map(fromTypedColumnar);
     }
 
     final parsed = NamedParameterParser.extract(preparedExecution.sql);
@@ -83,12 +89,12 @@ final class OdbcResultEncodingExecutor {
       namedParams: Map<String, Object?>.from(parameters),
       paramNames: parsed.paramNames,
     );
-    return _queries.executeQueryParamValuesFromObjects(
+    final columnar = await _queries.executeQueryColumnarFromObjects(
       connectionId,
       parsed.cleanedSql,
-      positionalParams,
-      resultEncoding: resultEncoding,
+      params: positionalParams,
     );
+    return columnar.map(fromTypedColumnar);
   }
 
   void _logResultEncodingIfNeeded(ResultEncoding resultEncoding) {

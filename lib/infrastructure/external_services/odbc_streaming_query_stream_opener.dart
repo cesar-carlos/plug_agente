@@ -36,10 +36,25 @@ final class OdbcStreamingQueryStreamOpener {
     }
 
     if (namedParameters != null) {
-      return _service.streamQueryNamed(connectionId, query, namedParameters).map((result) => result.map(toTypedColumnar));
+      // Fallbacks inherit lazyStrings from ConnectionOptions; convert to typed
+      // columnar after row-major streamQueryNamed.
+      return _service
+          .streamQueryNamed(
+            connectionId,
+            query,
+            namedParameters,
+            fetchSize: nativeStreamingOptions.fetchSize,
+            chunkSize: nativeStreamingOptions.nativeChunkSizeBytes,
+          )
+          .map((result) => result.map(toTypedColumnar));
     }
 
-    return _service.streamQueryColumnar(connectionId, query);
+    return _service.streamQueryColumnar(
+      connectionId,
+      query,
+      fetchSize: nativeStreamingOptions.fetchSize,
+      chunkSize: nativeStreamingOptions.nativeChunkSizeBytes,
+    );
   }
 
   Stream<Result<QueryResult>> openRowMajor({
@@ -65,11 +80,24 @@ final class OdbcStreamingQueryStreamOpener {
       );
     }
 
+    // Fallbacks inherit lazyStrings from ConnectionOptions on the connection;
+    // streamQuery / streamQueryNamed do not take an explicit flag.
     if (namedParameters != null) {
-      return _service.streamQueryNamed(connectionId, query, namedParameters);
+      return _service.streamQueryNamed(
+        connectionId,
+        query,
+        namedParameters,
+        fetchSize: nativeStreamingOptions.fetchSize,
+        chunkSize: nativeStreamingOptions.nativeChunkSizeBytes,
+      );
     }
 
-    return _service.streamQuery(connectionId, query);
+    return _service.streamQuery(
+      connectionId,
+      query,
+      fetchSize: nativeStreamingOptions.fetchSize,
+      chunkSize: nativeStreamingOptions.nativeChunkSizeBytes,
+    );
   }
 
   Map<String, Object?>? _namedParametersOrNull(Map<String, dynamic>? parameters) {

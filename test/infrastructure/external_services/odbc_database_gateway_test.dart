@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -777,7 +779,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       ).called(1);
     });
 
-    test('should route opt-in result encoding through parameter buffer execution', () async {
+    test('should route opt-in result encoding through typed columnar execution', () async {
       dotenv.loadFromString(envString: 'ODBC_RESULT_ENCODING=columnarCompressed');
       const pooledConnectionId = 'pool-columnar-named';
       const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -808,18 +810,20 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         return const Success(pooledConnectionId);
       });
       when(
-        () => mockService.executeQueryParamValues(
+        () => mockService.executeQueryColumnarParamValues(
           pooledConnectionId,
           any(),
-          any(),
-          resultEncoding: ResultEncoding.columnarCompressed,
+          params: any(named: 'params'),
         ),
       ).thenAnswer((_) async {
-        return const Success(
-          QueryResult(
-            columns: ['id'],
-            rows: [
-              [42],
+        return Success(
+          TypedColumnarResult(
+            columns: [
+              TypedColumnInt32(
+                name: 'id',
+                values: Int32List.fromList([42]),
+                nullBitmap: Uint8List(1),
+              ),
             ],
             rowCount: 1,
           ),
@@ -833,19 +837,19 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
 
       expect(result.isSuccess(), isTrue);
       final captured = verify(
-        () => mockService.executeQueryParamValues(
+        () => mockService.executeQueryColumnarParamValues(
           pooledConnectionId,
           captureAny(),
-          captureAny(),
-          resultEncoding: ResultEncoding.columnarCompressed,
+          params: captureAny(named: 'params'),
         ),
       ).captured;
       expect(
         captured[0],
         contains('WHERE id = ? OR parent_id = ? OR label = ? OR alias = ?'),
       );
-      final params = captured[1] as List<ParamValue>;
-      expect(params.length, 4);
+      final params = captured[1] as List<ParamValue>?;
+      expect(params, isNotNull);
+      expect(params!.length, 4);
       expect(params[0], isA<ParamValueInt32>());
       expect((params[0] as ParamValueInt32).value, 42);
       expect(params[1], isA<ParamValueInt32>());
@@ -859,6 +863,14 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           any(),
           any(),
           any(),
+        ),
+      );
+      verifyNever(
+        () => mockService.executeQueryParamValues(
+          any(),
+          any(),
+          any(),
+          resultEncoding: any(named: 'resultEncoding'),
         ),
       );
     });

@@ -41,6 +41,9 @@ final class OdbcRecommendedOptionsMerger {
       maxReconnectAttempts: plugOptions.maxReconnectAttempts ?? recommended.maxReconnectAttempts,
       reconnectBackoff: plugOptions.reconnectBackoff ?? recommended.reconnectBackoff,
       slowQueryThreshold: recommended.slowQueryThreshold,
+      streamChunkSizeBytes: recommended.streamChunkSizeBytes,
+      blockFetchBatchSize: recommended.blockFetchBatchSize,
+      sqlPointerCacheMaxSize: recommended.sqlPointerCacheMaxSize,
       lazyStrings: lazyStrings,
     );
   }
@@ -56,6 +59,8 @@ final class OdbcRecommendedOptionsMerger {
       idleTimeout: plugOverrides.idleTimeout ?? recommended.idleTimeout,
       maxLifetime: plugOverrides.maxLifetime ?? recommended.maxLifetime,
       connectionTimeout: plugOverrides.connectionTimeout ?? recommended.connectionTimeout,
+      sessionResetOnCheckout:
+          plugOverrides.sessionResetOnCheckout ?? recommended.sessionResetOnCheckout,
     );
   }
 }

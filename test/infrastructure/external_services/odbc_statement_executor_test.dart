@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
@@ -152,7 +153,14 @@ void main() {
 
   group('executePreparedStatementWithTimeout', () {
     test('returns the result when no timeout is set', () async {
-      when(() => service.executePreparedParamValuesFromObjects('c1', 3, const [], null)).thenAnswer(
+      when(
+        () => service.executePreparedParamValues(
+          'c1',
+          3,
+          any(),
+          any(),
+        ),
+      ).thenAnswer(
         (_) async => const Success(
           QueryResult(
             columns: ['v'],
@@ -172,6 +180,59 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
       expect(discarded, isEmpty);
+      final options =
+          verify(
+                () => service.executePreparedParamValues(
+                  'c1',
+                  3,
+                  any(),
+                  captureAny(),
+                ),
+              ).captured.single
+              as StatementOptions;
+      expect(options.timeout, isNull);
+      expect(
+        options.initialBufferSize,
+        ConnectionConstants.defaultInitialResultBufferBytes,
+      );
+    });
+
+    test('seeds StatementOptions with timeout and initialBufferSize', () async {
+      when(
+        () => service.executePreparedParamValues(
+          any(),
+          any(),
+          any(),
+          any(),
+        ),
+      ).thenAnswer(
+        (_) async => const Success(
+          QueryResult(columns: ['v'], rows: [], rowCount: 0),
+        ),
+      );
+
+      await executor.executePreparedStatementWithTimeout(
+        connectionId: 'c1',
+        preparedExecution: prepared('SELECT 1'),
+        statementId: 9,
+        timeout: const Duration(seconds: 12),
+      );
+
+      final options =
+          verify(
+                () => service.executePreparedParamValues(
+                  'c1',
+                  9,
+                  any(),
+                  captureAny(),
+                ),
+              ).captured.single
+              as StatementOptions;
+      expect(options.timeout, const Duration(seconds: 12));
+      expect(
+        options.initialBufferSize,
+        ConnectionConstants.defaultInitialResultBufferBytes,
+      );
     });
 
     test('marks discard and cancels the statement on timeout', () async {
@@ -182,7 +243,7 @@ void main() {
         }
       });
       when(
-        () => service.executePreparedParamValuesFromObjects(any(), any(), any(), any()),
+        () => service.executePreparedParamValues(any(), any(), any(), any()),
       ).thenAnswer((_) => never.future);
       when(() => service.cancelStatement('c1', 4)).thenAnswer((_) async => const Success(unit));
 

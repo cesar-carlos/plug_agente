@@ -314,7 +314,7 @@ class OdbcNonQueryExecutionOrchestrator {
             .forTimeout(
               OdbcExecutionDeadline.remainingFromDeadline(effectiveDeadline) ?? timeout,
             )
-            .toOdbcConnectionOptions(),
+            .toOdbcConnectionOptionsForConnectionString(connectionString),
       );
       return await connectResult.fold(
         (connection) async {

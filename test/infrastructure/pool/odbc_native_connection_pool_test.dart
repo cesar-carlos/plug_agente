@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/odbc_native_connection_pool.dart';
 import 'package:result_dart/result_dart.dart';
@@ -39,6 +40,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(88));
 
@@ -59,6 +61,7 @@ void main() {
             any(),
             any(),
             options: any(named: 'options'),
+            connectionOptions: any(named: 'connectionOptions'),
           ),
         ).thenAnswer((_) async {
           createdPools++;
@@ -91,6 +94,7 @@ void main() {
             'DSN=Test;PoolTestOnCheckout=true',
             any(),
             options: any(named: 'options'),
+            connectionOptions: any(named: 'connectionOptions'),
           ),
         ).called(1);
         verify(() => mockService.poolGetConnection(77)).called(12);
@@ -104,6 +108,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(55));
       when(
@@ -127,6 +132,7 @@ void main() {
           'DSN=Bench;PoolTestOnCheckout=false',
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).called(1);
     });
@@ -137,6 +143,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(81));
       when(
@@ -161,6 +168,7 @@ void main() {
                   'DSN=Options;PoolTestOnCheckout=true',
                   any(),
                   options: captureAny(named: 'options'),
+                  connectionOptions: any(named: 'connectionOptions'),
                 ),
               ).captured.single
               as PoolOptions;
@@ -175,6 +183,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(3));
       when(
@@ -208,6 +217,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer(
         (_) async => const Failure(
@@ -223,6 +233,7 @@ void main() {
           'DSN=Bad;PoolTestOnCheckout=true',
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).called(1);
       verifyNever(() => mockService.poolGetConnection(any()));
@@ -234,6 +245,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(9));
       when(
@@ -312,6 +324,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(5));
       when(
@@ -349,6 +362,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(11));
       when(
@@ -383,6 +397,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(21));
       when(
@@ -416,6 +431,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((invocation) async {
         final connectionString = invocation.positionalArguments.first as String;
@@ -466,6 +482,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(22));
       when(
@@ -496,6 +513,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(31));
       when(
@@ -535,6 +553,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(41));
       when(
@@ -572,6 +591,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(61));
       var counter = 0;
@@ -604,6 +624,7 @@ void main() {
           any(),
           any(),
           options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
         ),
       ).thenAnswer((_) async => const Success(71));
       when(
@@ -643,6 +664,66 @@ void main() {
       expect(diagnostics['effective_strategy'], 'native');
       expect(diagnostics['native_circuit_open'], isFalse);
       expect(diagnostics['native_skip_reason'], isNull);
+    });
+
+    test('poolCreate receives connectionOptions and checkout forwards acquire options', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(99));
+      when(
+        () => mockService.poolGetConnection(
+          99,
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'c99',
+            connectionString: 'DSN=Options',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+
+      const acquireOptions = ConnectionAcquireOptions(
+        queryTimeout: Duration(seconds: 15),
+        maxResultBufferBytes: 4 * 1024 * 1024,
+      );
+      final acquired = await pool.acquire(
+        'DSN=Options',
+        options: acquireOptions,
+      );
+
+      expect(acquired.getOrNull(), 'c99');
+      final createOptions =
+          verify(
+                () => mockService.poolCreate(
+                  any(),
+                  any(),
+                  options: any(named: 'options'),
+                  connectionOptions: captureAny(named: 'connectionOptions'),
+                ),
+              ).captured.single
+              as ConnectionOptions;
+      expect(createOptions.loginTimeout, isNotNull);
+      expect(createOptions.initialResultBufferBytes, isNotNull);
+
+      final checkoutOptions =
+          verify(
+                () => mockService.poolGetConnection(
+                  99,
+                  options: captureAny(named: 'options'),
+                ),
+              ).captured.single
+              as ConnectionOptions;
+      expect(checkoutOptions.queryTimeout, acquireOptions.queryTimeout);
+      expect(checkoutOptions.maxResultBufferBytes, acquireOptions.maxResultBufferBytes);
     });
   });
 }

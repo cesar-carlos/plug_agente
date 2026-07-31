@@ -12,13 +12,17 @@ import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merge
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
+import 'package:plug_agente/infrastructure/pool/odbc_connection_options_builder.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// ODBC pool backed by `odbc_fast` native pooling with app-level
-/// [PoolOptions] on `poolCreate`. Per-checkout [ConnectionOptions] require a
-/// future `odbc_fast` that applies options on the native FFI checkout path;
-/// through 4.4.0 the Dart API may accept `options` on `poolGetConnection`, but
-/// the native checkout still uses pool defaults only.
+/// [PoolOptions] and default [ConnectionOptions] on `poolCreate`.
+///
+/// Per-checkout [ConnectionOptions] are stored by `odbc_fast` on the Dart
+/// connection state via `poolGetConnection(options:)` (query timeouts, buffers,
+/// lazyStrings). The native FFI checkout itself still returns an existing
+/// pooled handle; options do not re-run ODBC login.
 class OdbcNativeConnectionPool
     implements
         IConnectionPool,
@@ -72,6 +76,30 @@ class OdbcNativeConnectionPool
     return OdbcRecommendedOptionsMerger.mergePoolOptions(
       recommended: recommended,
       plugOverrides: plugDefaults,
+    );
+  }
+
+  ConnectionOptions _defaultConnectionOptions(String connectionString) {
+    return OdbcConnectionOptionsBuilder.forQueryExecution(_settings).toOdbcConnectionOptions(
+      recommendedProfile: _recommendedOptions?.connection,
+      lazyStrings: OdbcRecommendedOptionsMerger.lazyStringsForConnectionString(
+        connectionString,
+      ),
+    );
+  }
+
+  ConnectionOptions? _checkoutConnectionOptions(
+    String connectionString,
+    ConnectionAcquireOptions? options,
+  ) {
+    if (options == null) {
+      return null;
+    }
+    return options.toOdbcConnectionOptions(
+      recommendedProfile: _recommendedOptions?.connection,
+      lazyStrings: OdbcRecommendedOptionsMerger.lazyStringsForConnectionString(
+        connectionString,
+      ),
     );
   }
 
@@ -179,6 +207,7 @@ class OdbcNativeConnectionPool
         _poolConnectionString(connectionString),
         _settings.poolSize,
         options: _poolOptions,
+        connectionOptions: _defaultConnectionOptions(connectionString),
       );
     } finally {
       _nativeHandshakeSemaphore.release();
@@ -252,7 +281,16 @@ class OdbcNativeConnectionPool
 
         late Result<Connection> connResult;
         try {
-          connResult = await _service.poolGetConnection(poolId);
+          final checkoutOptions = _checkoutConnectionOptions(
+            connectionString,
+            options,
+          );
+          connResult = checkoutOptions == null
+              ? await _service.poolGetConnection(poolId)
+              : await _service.poolGetConnection(
+                  poolId,
+                  options: checkoutOptions,
+                );
         } finally {
           _nativeHandshakeSemaphore.release();
         }

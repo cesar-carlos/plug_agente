@@ -144,7 +144,6 @@ class OdbcQueryExecutionOrchestrator {
         databaseType: databaseConfig.databaseType,
         request: request,
         preparedExecution: preparedExecution,
-        acquireOptions: null,
         timeout: timeout,
         defaultQueryTimeout: ConnectionConstants.defaultQueryTimeout,
         connectionString: connectionString,

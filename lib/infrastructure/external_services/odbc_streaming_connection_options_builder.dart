@@ -63,6 +63,7 @@ final class OdbcStreamingConnectionOptionsBuilder {
       queryTimeout: plugAcquireOptions.queryTimeout,
       maxResultBufferBytes: plugAcquireOptions.maxResultBufferBytes,
       initialResultBufferBytes: plugAcquireOptions.initialResultBufferBytes,
+      streamChunkSizeBytes: normalizedChunkSize,
       autoReconnectOnConnectionLost: plugAcquireOptions.autoReconnectOnConnectionLost ?? true,
       maxReconnectAttempts: plugAcquireOptions.maxReconnectAttempts,
       reconnectBackoff: plugAcquireOptions.reconnectBackoff,

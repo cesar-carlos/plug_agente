@@ -1,4 +1,5 @@
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 
@@ -13,6 +14,7 @@ extension ConnectionAcquireOptionsMapper on ConnectionAcquireOptions {
         queryTimeout: queryTimeout,
         maxResultBufferBytes: maxResultBufferBytes,
         initialResultBufferBytes: initialResultBufferBytes,
+        streamChunkSizeBytes: ConnectionConstants.defaultStreamingChunkSizeKb * 1024,
         autoReconnectOnConnectionLost: autoReconnectOnConnectionLost ?? false,
         maxReconnectAttempts: maxReconnectAttempts,
         reconnectBackoff: reconnectBackoff,
@@ -24,6 +26,18 @@ extension ConnectionAcquireOptionsMapper on ConnectionAcquireOptions {
       plugOptions: this,
       recommended: recommendedProfile,
       lazyStrings: lazyStrings,
+    );
+  }
+
+  odbc.ConnectionOptions toOdbcConnectionOptionsForConnectionString(
+    String connectionString, {
+    odbc.ConnectionOptions? recommendedProfile,
+  }) {
+    return toOdbcConnectionOptions(
+      recommendedProfile: recommendedProfile,
+      lazyStrings: OdbcRecommendedOptionsMerger.lazyStringsForConnectionString(
+        connectionString,
+      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
@@ -131,7 +132,10 @@ final class OdbcStatementExecutor {
       inFlightRegistry.bindStatement(inFlightRequestId, statementId);
     }
 
-    final statementOptions = timeout == null ? null : StatementOptions(timeout: timeout);
+    final statementOptions = StatementOptions(
+      timeout: timeout,
+      initialBufferSize: ConnectionConstants.defaultInitialResultBufferBytes,
+    );
     final execution = _executePreparedStatement(
       connectionId: connectionId,
       preparedExecution: preparedExecution,

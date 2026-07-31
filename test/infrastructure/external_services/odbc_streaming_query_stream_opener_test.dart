@@ -85,12 +85,26 @@ void main() {
         namedParameters: {'id': 42},
       ),
     ).called(1);
-    verifyNever(() => service.streamQueryNamed(any(), any(), any()));
+    verifyNever(
+      () => service.streamQueryNamed(
+        any(),
+        any(),
+        any(),
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
+    );
   });
 
   test('openRowMajor with params falls back to streamQueryNamed without native id', () async {
     when(
-      () => service.streamQueryNamed(any(), any(), any()),
+      () => service.streamQueryNamed(
+        any(),
+        any(),
+        any(),
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
     ).thenAnswer(
       (_) => Stream<Result<QueryResult>>.fromIterable([
         const Success(
@@ -107,7 +121,57 @@ void main() {
     );
 
     await stream.first;
-    verify(() => service.streamQueryNamed('pool-abc', any(), {'id': 1})).called(1);
+    verify(
+      () => service.streamQueryNamed(
+        'pool-abc',
+        any(),
+        {'id': 1},
+        fetchSize: options.fetchSize,
+        chunkSize: options.nativeChunkSizeBytes,
+      ),
+    ).called(1);
+    verifyNever(
+      () => batched.streamRowMajorQuery(
+        any(),
+        any(),
+        any(),
+        lazyStrings: any(named: 'lazyStrings'),
+        namedParameters: any(named: 'namedParameters'),
+      ),
+    );
+  });
+
+  test('openRowMajor without params falls back to streamQuery forwarding knobs', () async {
+    when(
+      () => service.streamQuery(
+        any(),
+        any(),
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
+    ).thenAnswer(
+      (_) => Stream<Result<QueryResult>>.fromIterable([
+        const Success(
+          QueryResult(columns: ['id'], rows: [], rowCount: 0),
+        ),
+      ]),
+    );
+
+    final stream = opener.openRowMajor(
+      connectionId: 'pool-abc',
+      query: 'SELECT 1 AS id',
+      nativeStreamingOptions: options,
+    );
+
+    await stream.first;
+    verify(
+      () => service.streamQuery(
+        'pool-abc',
+        'SELECT 1 AS id',
+        fetchSize: options.fetchSize,
+        chunkSize: options.nativeChunkSizeBytes,
+      ),
+    ).called(1);
     verifyNever(
       () => batched.streamRowMajorQuery(
         any(),
@@ -149,5 +213,44 @@ void main() {
         namedParameters: {'v': 1},
       ),
     ).called(1);
+  });
+
+  test('openColumnar without params falls back to streamQueryColumnar forwarding knobs', () async {
+    when(
+      () => service.streamQueryColumnar(
+        any(),
+        any(),
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
+      ),
+    ).thenAnswer(
+      (_) => Stream<Result<TypedColumnarResult>>.fromIterable([
+        Success(toTypedColumnar(const QueryResult(columns: ['v'], rows: [], rowCount: 0))),
+      ]),
+    );
+
+    final stream = opener.openColumnar(
+      connectionId: 'pool-abc',
+      query: 'SELECT 1 AS v',
+      nativeStreamingOptions: options,
+    );
+
+    await stream.first;
+    verify(
+      () => service.streamQueryColumnar(
+        'pool-abc',
+        'SELECT 1 AS v',
+        fetchSize: options.fetchSize,
+        chunkSize: options.nativeChunkSizeBytes,
+      ),
+    ).called(1);
+    verifyNever(
+      () => batched.streamColumnarQuery(
+        any(),
+        any(),
+        any(),
+        namedParameters: any(named: 'namedParameters'),
+      ),
+    );
   });
 }

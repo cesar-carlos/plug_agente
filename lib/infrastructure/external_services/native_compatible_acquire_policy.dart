@@ -4,7 +4,6 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
-import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/config/odbc_usage_profile_config.dart';
@@ -13,6 +12,9 @@ import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_
 
 /// Decides whether a query/batch can use the experimental native-compatible
 /// pooled acquire path instead of the default lease path.
+///
+/// Shape/timeout heuristics only: connection acquire options are applied at
+/// checkout by the adaptive/native pool and do not gate this decision.
 ///
 /// Extracted from `OdbcDatabaseGateway` to isolate the SQL-shape heuristics and
 /// the env-driven allowlist (with its TTL cache) behind a focused, testable
@@ -66,7 +68,6 @@ final class NativeCompatibleAcquirePolicy {
     required DatabaseType databaseType,
     required QueryRequest request,
     required OdbcPreparedQueryExecution preparedExecution,
-    required ConnectionAcquireOptions? acquireOptions,
     required Duration? timeout,
     Duration? defaultQueryTimeout,
     String? connectionString,
@@ -74,7 +75,7 @@ final class NativeCompatibleAcquirePolicy {
     if (!_adaptivePoolingEnabled) {
       return false;
     }
-    if (acquireOptions != null || request.expectMultipleResults) {
+    if (request.expectMultipleResults) {
       return false;
     }
     if (_hasNamedParameters(preparedExecution) && !_isSafeParameterizedNativeSelect(databaseType, preparedExecution)) {

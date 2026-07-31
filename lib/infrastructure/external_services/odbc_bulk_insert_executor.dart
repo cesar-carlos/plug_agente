@@ -162,7 +162,7 @@ final class OdbcBulkInsertExecutor {
             .forTimeout(
               OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
             )
-            .toOdbcConnectionOptions(),
+            .toOdbcConnectionOptionsForConnectionString(connectionString),
       );
       return await connectResult.fold(
         (connection) async {

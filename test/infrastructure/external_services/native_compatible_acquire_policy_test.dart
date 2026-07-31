@@ -58,7 +58,19 @@ void main() {
           databaseType: DatabaseType.sqlServer,
           request: _request('SELECT 1'),
           preparedExecution: _prepared('SELECT 1'),
-          acquireOptions: null,
+          timeout: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('returns false when expectMultipleResults is set', () async {
+      final policy = NativeCompatibleAcquirePolicy(featureFlags: await _flags(enabled: true));
+      expect(
+        policy.shouldUseAcquire(
+          databaseType: DatabaseType.sqlServer,
+          request: _request('SELECT 1', expectMultipleResults: true),
+          preparedExecution: _prepared('SELECT 1'),
           timeout: null,
         ),
         isFalse,
@@ -72,7 +84,6 @@ void main() {
           databaseType: DatabaseType.sqlServer,
           request: _request('SELECT 1'),
           preparedExecution: _prepared('SELECT 1'),
-          acquireOptions: null,
           timeout: null,
         ),
         isTrue,
@@ -86,7 +97,6 @@ void main() {
           databaseType: DatabaseType.sybaseAnywhere,
           request: _request('SELECT 1'),
           preparedExecution: _prepared('SELECT 1'),
-          acquireOptions: null,
           timeout: null,
         ),
         isFalse,
@@ -100,7 +110,6 @@ void main() {
           databaseType: DatabaseType.sqlServer,
           request: _request('SELECT 1'),
           preparedExecution: _prepared('SELECT 1'),
-          acquireOptions: null,
           timeout: const Duration(seconds: 5),
           defaultQueryTimeout: const Duration(seconds: 60),
           connectionString: 'Driver={ODBC Driver};Server=localhost;',
@@ -116,7 +125,6 @@ void main() {
           databaseType: DatabaseType.sqlServer,
           request: _request('SELECT 1'),
           preparedExecution: _prepared('SELECT 1'),
-          acquireOptions: null,
           timeout: const Duration(seconds: 60),
           defaultQueryTimeout: const Duration(seconds: 60),
           connectionString: 'Driver={ODBC Driver};Server=localhost;',
@@ -132,7 +140,6 @@ void main() {
           databaseType: DatabaseType.postgresql,
           request: _request('SELECT COUNT(*) FROM users'),
           preparedExecution: _prepared('SELECT COUNT(*) FROM users'),
-          acquireOptions: null,
           timeout: null,
         ),
         isTrue,
@@ -146,7 +153,6 @@ void main() {
           databaseType: DatabaseType.sqlServer,
           request: _request('SELECT * FROM users'),
           preparedExecution: _prepared('SELECT * FROM users'),
-          acquireOptions: null,
           timeout: null,
         ),
         isFalse,
@@ -163,7 +169,6 @@ void main() {
             pagination: const QueryPaginationRequest(page: 1, pageSize: 10),
           ),
           preparedExecution: _prepared('SELECT id FROM users'),
-          acquireOptions: null,
           timeout: null,
         ),
         isTrue,
@@ -180,7 +185,6 @@ void main() {
             'SELECT TOP 10 id FROM users WHERE id = ?',
             parameters: const {'id': 1},
           ),
-          acquireOptions: null,
           timeout: null,
         ),
         isTrue,
@@ -194,7 +198,6 @@ void main() {
           databaseType: DatabaseType.postgresql,
           request: _request('SELECT id FROM users LIMIT 100'),
           preparedExecution: _prepared('SELECT id FROM users LIMIT 100'),
-          acquireOptions: null,
           timeout: null,
         ),
         isTrue,
@@ -209,7 +212,6 @@ void main() {
           databaseType: DatabaseType.sqlServer,
           request: _request('SELECT id FROM users'),
           preparedExecution: _prepared('SELECT id FROM users'),
-          acquireOptions: null,
           timeout: null,
         ),
         isTrue,
@@ -386,13 +388,18 @@ Future<FeatureFlags> _flags({required bool enabled}) async {
   return flags;
 }
 
-QueryRequest _request(String sql, {QueryPaginationRequest? pagination}) {
+QueryRequest _request(
+  String sql, {
+  QueryPaginationRequest? pagination,
+  bool expectMultipleResults = false,
+}) {
   return QueryRequest(
     id: 'req-test',
     agentId: 'agent-test',
     query: sql,
     timestamp: DateTime(2024, 2, 3),
     pagination: pagination,
+    expectMultipleResults: expectMultipleResults,
   );
 }
 

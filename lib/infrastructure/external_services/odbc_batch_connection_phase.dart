@@ -123,8 +123,12 @@ final class OdbcBatchConnectionPhase {
       final connectResult = await _connectionManager.connectSafely(
         connectionString,
         options: isTransactional
-            ? _optionsResolver.transactionalForTimeout(remainingTimeout).toOdbcConnectionOptions()
-            : _optionsResolver.forTimeout(remainingTimeout).toOdbcConnectionOptions(),
+            ? _optionsResolver
+                  .transactionalForTimeout(remainingTimeout)
+                  .toOdbcConnectionOptionsForConnectionString(connectionString)
+            : _optionsResolver
+                  .forTimeout(remainingTimeout)
+                  .toOdbcConnectionOptionsForConnectionString(connectionString),
       );
       return connectResult.fold(
         (connection) {
