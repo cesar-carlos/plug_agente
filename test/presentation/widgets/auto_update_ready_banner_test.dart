@@ -134,6 +134,7 @@ UpdateCheckDiagnostics _diag({
   required UpdateCheckCompletionSource source,
   required bool updateAvailable,
   String? pendingVersion,
+  bool? elevatedCancelled,
 }) {
   return UpdateCheckDiagnostics(
     checkedAt: DateTime(2026, 5, 1, 12),
@@ -142,6 +143,7 @@ UpdateCheckDiagnostics _diag({
     completionSource: source,
     updateAvailable: updateAvailable,
     pendingVersion: pendingVersion,
+    elevatedCancelled: elevatedCancelled,
   );
 }
 
@@ -227,6 +229,28 @@ void main() {
     await _pumpBanner(tester, orchestrator: orchestrator);
 
     expect(find.byIcon(FluentIcons.download), findsOneWidget);
+    expect(find.text('Install now'), findsOneWidget);
+  });
+
+  testWidgets('renders UAC-cancelled copy when elevation was dismissed', (tester) async {
+    final orchestrator = _FakeOrchestrator(
+      hasPendingDownloadedUpdate: true,
+      diagnostics: _diag(
+        source: UpdateCheckCompletionSource.automaticInstallReady,
+        updateAvailable: true,
+        pendingVersion: '99.0.0+1',
+        elevatedCancelled: true,
+      ),
+    );
+    await _pumpBanner(tester, orchestrator: orchestrator);
+
+    expect(find.text('Administrator approval was cancelled'), findsOneWidget);
+    expect(
+      find.text(
+        'Version 99.0.0+1 is still downloaded. Approve the Windows prompt when you install again, or try later.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Install now'), findsOneWidget);
   });
 

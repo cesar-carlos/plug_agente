@@ -107,6 +107,19 @@ void main() {
     });
   });
 
+  group('isAllowedAutoUpdateTransport', () {
+    test('accepts HTTPS and loopback HTTP', () {
+      expect(isAllowedAutoUpdateTransport(Uri.parse('https://example.com/file.exe')), isTrue);
+      expect(isAllowedAutoUpdateTransport(Uri.parse('http://127.0.0.1/file.exe')), isTrue);
+      expect(isAllowedAutoUpdateTransport(Uri.parse('http://localhost/file.exe')), isTrue);
+    });
+
+    test('rejects external HTTP even after a redirect-like host change', () {
+      expect(isAllowedAutoUpdateTransport(Uri.parse('http://example.com/file.exe')), isFalse);
+      expect(isAllowedAutoUpdateTransport(Uri.parse('ftp://example.com/file.exe')), isFalse);
+    });
+  });
+
   group('isOfficialAutoUpdateFeedUrl', () {
     test('accepts official feed URL with cache-busting query', () {
       expect(
@@ -233,6 +246,32 @@ void main() {
       );
 
       expect(result, 600);
+    });
+  });
+
+  group('resolveAutoUpdateWaitPidTimeoutSeconds', () {
+    test('covers default pre-close delay plus exit grace and shutdown buffer', () {
+      expect(
+        resolveAutoUpdateWaitPidTimeoutSeconds(environment: const {}),
+        30 + autoUpdateSilentExitGraceSeconds + autoUpdateWaitPidShutdownBufferSeconds,
+      );
+    });
+
+    test('grows with a longer pre-close delay and stays below the max cap', () {
+      expect(
+        resolveAutoUpdateWaitPidTimeoutSeconds(
+          environment: const {'AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS': '120'},
+        ),
+        120 + autoUpdateSilentExitGraceSeconds + autoUpdateWaitPidShutdownBufferSeconds,
+      );
+    });
+
+    test('stays above pre-close delay when pre-close is disabled', () {
+      final wait = resolveAutoUpdateWaitPidTimeoutSeconds(
+        environment: const {'AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS': '0'},
+      );
+      expect(wait, greaterThanOrEqualTo(autoUpdateSilentExitGraceSeconds));
+      expect(wait, 70);
     });
   });
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' show Locale, PlatformDispatcher;
 
 import 'package:get_it/get_it.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
@@ -321,6 +322,7 @@ import 'package:plug_agente/infrastructure/stores/noop_token_secret_store.dart';
 import 'package:plug_agente/infrastructure/stores/odbc_credential_store.dart';
 import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart';
 import 'package:plug_agente/l10n/agent_action_notification_messages_factory.dart';
+import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:uuid/uuid.dart';
 
 part 'bootstrap_dependency_registrar_actions_infra.dart';
@@ -398,13 +400,14 @@ Duration _autoUpdateBootJitter() {
 /// (which already runs [shutdownApp]), then falls back to a hard exit if the
 /// process is still alive after [_silentUpdateExitGraceWindow].
 ///
-/// Invoked only from `IAutoUpdateOrchestrator.applyPendingSilentUpdate` ÔÇö
+/// Invoked only from `IAutoUpdateOrchestrator.applyPendingSilentUpdate` --
 /// never from the silent download path, which leaves the agent online.
 /// When [INotificationService] is supported, posts a localized "closing in
 /// Ns" toast and waits up to [resolveAutoUpdatePreCloseDelaySeconds] before
 /// proceeding. [noticeTitle] / [noticeBody] are passed in by the caller
-/// (the UI) so the toast text honors the active locale; defaults are kept
-/// for callers without a localization context (e.g. shutdown handler).
+/// (the UI) so the toast text honors the active locale; defaults come from
+/// [lookupAppLocalizations] for callers without a localization context
+/// (e.g. automatic apply).
 Future<void> _closeApplicationForSilentUpdate({
   String? noticeTitle,
   String? noticeBody,
@@ -429,12 +432,16 @@ Future<void> _emitPreCloseNotice({String? title, String? body}) async {
   );
   if (delaySeconds <= 0) return;
 
+  late final l10n = _silentUpdateLocalizations();
+  final resolvedTitle = title ?? l10n.configAutoUpdateClosingTitle;
+  final resolvedBody = body ?? l10n.configAutoUpdateClosingBody(delaySeconds);
+
   if (getIt.isRegistered<INotificationService>()) {
     final notificationService = getIt<INotificationService>();
     try {
       final result = await notificationService.show(
-        title: title ?? 'Plug Agente: update ready',
-        body: body ?? 'Closing in ${delaySeconds}s to install the update.',
+        title: resolvedTitle,
+        body: resolvedBody,
       );
       result.fold(
         (_) {},
@@ -472,7 +479,17 @@ IPoolDiscardInflightDiagnostics? _resolvePoolDiscardInflightDiagnostics(
   return null;
 }
 
-const Duration _silentUpdateExitGraceWindow = Duration(seconds: 5);
+const Duration _silentUpdateExitGraceWindow = Duration(
+  seconds: autoUpdateSilentExitGraceSeconds,
+);
+
+AppLocalizations _silentUpdateLocalizations() {
+  try {
+    return lookupAppLocalizations(PlatformDispatcher.instance.locale);
+  } on Object {
+    return lookupAppLocalizations(const Locale('en'));
+  }
+}
 
 Future<void> _scheduleSilentUpdateHardExitFallback() async {
   await Future<void>.delayed(_silentUpdateExitGraceWindow);

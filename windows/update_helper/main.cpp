@@ -13,7 +13,7 @@
 
 namespace {
 
-constexpr DWORD kDefaultWaitPidTimeoutSeconds = 45;
+constexpr DWORD kDefaultWaitPidTimeoutSeconds = 70;
 constexpr wchar_t kStateStarted[] = L"started";
 constexpr wchar_t kStateWaitingForAppExit[] = L"waitingForAppExit";
 constexpr wchar_t kStateNonAdminStarted[] = L"nonAdminStarted";
@@ -733,7 +733,8 @@ std::vector<std::wstring> build_base_setup_args(const Options& options) {
       L"/SUPPRESSMSGBOXES",
       L"/NORESTART",
       L"/CLOSEAPPLICATIONS",
-      L"/RESTARTAPPLICATIONS",
+      // Do not ask Inno to restart closed apps. [Run] already relaunches via
+      // /LAUNCHAFTERUPDATE=1; both together can start two app instances.
       L"/LAUNCHAFTERUPDATE=1",
       L"/MERGETASKS=\"!desktopicon,!startup\"",
       L"/DIR=\"" + options.installDirectory + L"\"",

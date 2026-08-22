@@ -13,6 +13,10 @@ void main() {
         'bad__name.exe',
       );
       expect(SilentUpdateInstallerFileOps.sanitizeFileName('   '), 'PlugAgente-Setup.exe');
+      expect(
+        SilentUpdateInstallerFileOps.sanitizeFileName(r'..\..\evil.exe'),
+        '____evil.exe',
+      );
     });
 
     test('sha256OfStreaming matches digest of file contents', () async {

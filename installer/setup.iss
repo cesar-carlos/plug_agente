@@ -32,17 +32,29 @@ PrivilegesRequiredOverridesAllowed=commandline
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
 MinVersion=10.0
+; Prevent two Setup.exe instances (manual + silent helper) from racing.
+; AppMutex is intentionally omitted: silent updates wait for the app PID
+; first; an AppMutex check would abort /VERYSILENT if the process is still
+; in its pre-close grace window.
+SetupMutex=PlugAgenteSetup
 CloseApplications=yes
 CloseApplicationsFilter=plug_agente.exe
+ForceCloseApplications=yes
 SetupLogging=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
+[CustomMessages]
+english.StartWithWindows=Start with Windows
+brazilianportuguese.StartWithWindows=Iniciar com o Windows
+english.StartupOptionsGroup=Startup options
+brazilianportuguese.StartupOptionsGroup=Op#$00E7#$00F5es de Inicializa#$00E7#$00E3o
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"
+Name: "startup"; Description: "{cm:StartWithWindows}"; GroupDescription: "{cm:StartupOptionsGroup}"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Excludes: "*.pdb,*.ilk,*.exp,*.lib,*.log"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -69,6 +81,7 @@ Filename: "{sys}\reg.exe"; Parameters: "{code:GetLoggedOnUserAutostartRegParams}
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
 
 [UninstallDelete]
+Type: filesandordirs; Name: "{commonappdata}\PlugAgente\updates"
 Type: files; Name: "{commonappdata}\PlugAgente\{#AutostartRequestMarker}"
 Type: dirifempty; Name: "{commonappdata}\PlugAgente"
 
@@ -108,6 +121,10 @@ begin
     ewWaitUntilTerminated,
     ResultCode
   );
+  if ResultCode <> 0 then
+    Log('icacls on shared ProgramData failed with exit code ' + IntToStr(ResultCode))
+  else
+    Log('icacls on shared ProgramData succeeded');
 end;
 
 procedure WriteAutostartRequestMarker;

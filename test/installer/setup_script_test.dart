@@ -64,5 +64,36 @@ void main() {
         ),
       );
     });
+
+    test('silent-update contract keeps MERGETASKS startup skip and launches via LAUNCHAFTERUPDATE', () {
+      final setupScript = File('installer/setup.iss').readAsStringSync();
+      final helperSource = File('windows/update_helper/main.cpp').readAsStringSync();
+
+      expect(setupScript, contains('ShouldLaunchAfterSilentUpdate'));
+      expect(setupScript, contains("ExpandConstant('{param:LAUNCHAFTERUPDATE|0}') = '1'"));
+      expect(setupScript, contains('/MERGETASKS="!desktopicon,!startup"'));
+      expect(helperSource, contains(r'/MERGETASKS=\"!desktopicon,!startup\"'));
+      expect(helperSource, contains('/LAUNCHAFTERUPDATE=1'));
+      expect(helperSource, isNot(contains('/RESTARTAPPLICATIONS')));
+    });
+
+    test('prevents concurrent setup and force-closes the running app during file replace', () {
+      final setupScript = File('installer/setup.iss').readAsStringSync();
+
+      expect(setupScript, contains('SetupMutex=PlugAgenteSetup'));
+      expect(setupScript, contains('CloseApplications=yes'));
+      expect(setupScript, contains('CloseApplicationsFilter=plug_agente.exe'));
+      expect(setupScript, contains('ForceCloseApplications=yes'));
+    });
+
+    test('localizes startup task copy and removes staged update artifacts on uninstall', () {
+      final setupScript = File('installer/setup.iss').readAsStringSync();
+
+      expect(setupScript, contains('{cm:StartWithWindows}'));
+      expect(setupScript, contains('{cm:StartupOptionsGroup}'));
+      expect(setupScript, contains('english.StartWithWindows=Start with Windows'));
+      expect(setupScript, contains(r'{commonappdata}\PlugAgente\updates'));
+      expect(setupScript, contains('{#AutostartRequestMarker}'));
+    });
   });
 }

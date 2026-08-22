@@ -424,6 +424,36 @@ void main() {
         expect(resolution, isA<PendingDownloadedInFlight>());
       });
 
+      test('returns Ready after UAC cancel instead of concluding the launch', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 10),
+        );
+        pendingStore.pending = pending;
+        launcherStatusReader.existingPaths
+          ..add(pending.installerPath)
+          ..add(pending.launcherPath);
+
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          launcherStatusReader: _TerminalLauncherStatusReader(
+            pending: pending,
+            state: 'elevatedCancelled',
+            lastUpdatedAt: DateTime.utc(2026, 6, 10, 10),
+            elevatedCancelled: true,
+          ),
+          automaticFailureBreaker: breaker,
+          clock: () => DateTime.utc(2026, 6, 10, 12),
+        );
+
+        final resolution = await service.resolvePersistedDownloadedPending();
+
+        expect(resolution, isA<PendingDownloadedReady>());
+        expect(pendingStore.pending, isNotNull);
+        expect(breaker.failureCount, 0);
+        expect(await service.hasPendingDownloadedUpdate(), isTrue);
+      });
+
       test('returns inFlight when launchedAt is recent even without status file', () async {
         final pending = _downloadedPending().copyWith(
           launchedAt: DateTime.utc(2026, 6, 10, 11, 50),
@@ -769,6 +799,31 @@ void main() {
         expect(installer.cleanupCount, 1);
       });
 
+      test('apply after UAC cancel relaunches helper without clearing pending', () async {
+        final pending = _downloadedPending().copyWith(
+          launchedAt: DateTime.utc(2026, 6, 10, 10),
+        );
+        pendingStore.pending = pending;
+        service = _makeService(
+          installer: installer,
+          pendingStore: pendingStore,
+          launcherStatusReader: _TerminalLauncherStatusReader(
+            pending: pending,
+            state: 'elevatedCancelled',
+            lastUpdatedAt: DateTime.utc(2026, 6, 10, 10),
+            elevatedCancelled: true,
+          ),
+          automaticFailureBreaker: breaker,
+        );
+
+        final result = await apply(triggerAppClose: false);
+
+        expect(result.isSuccess(), isTrue);
+        expect(installer.launchHelperCount, 1);
+        expect(pendingStore.pending, isNotNull);
+        expect(breaker.failureCount, 0);
+      });
+
       test('apply with terminal helper success is idempotent Success without second launch', () async {
         final pending = _downloadedPending().copyWith(
           launchedAt: DateTime.utc(2026, 6, 10, 10),
@@ -952,11 +1007,13 @@ class _TerminalLauncherStatusReader implements ISilentUpdateLauncherStatusReader
     required this.pending,
     required this.state,
     required this.lastUpdatedAt,
+    this.elevatedCancelled,
   });
 
   final PendingSilentUpdateDownloaded pending;
   final String state;
   final DateTime lastUpdatedAt;
+  final bool? elevatedCancelled;
 
   @override
   Future<bool> fileExists(String? path) async {
@@ -985,7 +1042,7 @@ class _TerminalLauncherStatusReader implements ISilentUpdateLauncherStatusReader
       actualSha256: null,
       hashValidationStatus: null,
       installDirectoryWritable: true,
-      elevatedCancelled: null,
+      elevatedCancelled: elevatedCancelled,
       errorMessage: null,
       lastUpdatedAt: lastUpdatedAt,
     );

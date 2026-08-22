@@ -3340,6 +3340,14 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get autoUpdateReadyBannerUacCancelledTitle => 'A aprovação de administrador foi cancelada';
+
+  @override
+  String autoUpdateReadyBannerUacCancelledBody(String version) {
+    return 'A versão $version continua baixada. Ao instalar de novo, aprove o aviso do Windows ou tente mais tarde.';
+  }
+
+  @override
   String get autoUpdateReadyBannerInstallNow => 'Instalar agora';
 
   @override

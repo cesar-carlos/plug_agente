@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:path/path.dart' as p;
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/security/helper_signature_probe.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -84,7 +85,6 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
   static const int diskSpaceBudgetMultiplier = 2;
 
   static final RegExp _sha256Pattern = RegExp(r'^[0-9a-f]{64}$');
-  static const int _waitPidTimeoutSeconds = 45;
   static const Duration _defaultDownloadTimeout = Duration(minutes: 5);
 
   static Dio _createPlainDio(Duration timeout) {
@@ -264,7 +264,7 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       final installedHelperFile = File(installedHelperPath);
       if (!installedHelperFile.existsSync()) {
         return Failure<SilentUpdateInstallResult, Exception>(
-          domain.ServerFailure.withContext(
+          domain.ConfigurationFailure.withContext(
             message: 'Silent update helper is not available',
             context: <String, dynamic>{
               'operation': 'silentUpdateInstall',
@@ -282,9 +282,7 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       if (request.requireValidSignature && helperSignatureStatus != HelperSignatureStatus.valid) {
         return Failure<SilentUpdateInstallResult, Exception>(
           domain.ValidationFailure.withContext(
-            message:
-                'Silent update helper signature is required but reported '
-                '${helperSignatureStatus.name}. Refusing to launch.',
+            message: _helperSignatureRequiredMessage(helperSignatureStatus),
             context: <String, dynamic>{
               'operation': 'silentUpdateInstall',
               'version': request.version,
@@ -337,10 +335,38 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
           helperSignatureStatus: helperSignatureStatus.name,
         ),
       );
+    } on FileSystemException catch (error) {
+      return Failure<SilentUpdateInstallResult, Exception>(
+        domain.ConfigurationFailure.withContext(
+          message: 'Failed to prepare the silent update installer on disk',
+          cause: error,
+          context: <String, dynamic>{
+            'operation': 'silentUpdateInstall',
+            'version': request.version,
+            'asset_url': request.assetUrl,
+            'installer_path': installerPath,
+            'launcher_path': launcherPath,
+          },
+        ),
+      );
+    } on ProcessException catch (error) {
+      return Failure<SilentUpdateInstallResult, Exception>(
+        domain.ConfigurationFailure.withContext(
+          message: 'Failed to start silent update helper',
+          cause: error,
+          context: <String, dynamic>{
+            'operation': 'silentUpdateInstall',
+            'version': request.version,
+            'asset_url': request.assetUrl,
+            'installer_path': installerPath,
+            'launcher_path': launcherPath,
+          },
+        ),
+      );
     } on Exception catch (error) {
       return Failure<SilentUpdateInstallResult, Exception>(
-        domain.ServerFailure.withContext(
-          message: 'Failed to start silent update installer',
+        domain.ConfigurationFailure.withContext(
+          message: 'Failed to prepare the silent update installer',
           cause: error,
           context: <String, dynamic>{
             'operation': 'silentUpdateInstall',
@@ -384,9 +410,7 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       if (launcherSignatureStatus != HelperSignatureStatus.valid) {
         return Failure(
           domain.ValidationFailure.withContext(
-            message:
-                'Prepared silent update helper signature is required but reported '
-                '${launcherSignatureStatus.name}. Refusing to launch.',
+            message: _helperSignatureRequiredMessage(launcherSignatureStatus),
             context: <String, dynamic>{
               'operation': 'silentUpdateLaunchHelper',
               'version': request.version,
@@ -414,9 +438,21 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
         version: request.version,
       );
       return const Success(unit);
+    } on ProcessException catch (error) {
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Failed to launch silent update helper',
+          cause: error,
+          context: <String, dynamic>{
+            'operation': 'silentUpdateLaunchHelper',
+            'version': request.version,
+            'launcher_path': request.launcherPath,
+          },
+        ),
+      );
     } on Exception catch (error) {
       return Failure(
-        domain.ServerFailure.withContext(
+        domain.ConfigurationFailure.withContext(
           message: 'Failed to launch silent update helper',
           cause: error,
           context: <String, dynamic>{
@@ -464,7 +500,9 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
         '--try-current-user-first=$installDirectoryWritable',
         '--require-valid-signature=$requireValidSignature',
         '--wait-pid-timeout-seconds',
-        _waitPidTimeoutSeconds.toString(),
+        resolveAutoUpdateWaitPidTimeoutSeconds(
+          environment: AppEnvironment.snapshot(),
+        ).toString(),
       ],
       mode: ProcessStartMode.detached,
     );
@@ -511,7 +549,7 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       return const Success(unit);
     } on Exception catch (error) {
       return Failure(
-        domain.ServerFailure.withContext(
+        domain.ConfigurationFailure.withContext(
           message: 'Failed to clean obsolete silent update artifacts',
           cause: error,
           context: <String, dynamic>{'operation': 'silentUpdateCleanup'},
@@ -519,6 +557,19 @@ class DioSilentUpdateInstaller implements ISilentUpdateInstaller {
       );
     }
   }
+}
+
+String _helperSignatureRequiredMessage(HelperSignatureStatus status) {
+  return switch (status) {
+    HelperSignatureStatus.unsigned =>
+      'Silent update helper signature is required but the binary is unsigned. Refusing to launch.',
+    HelperSignatureStatus.invalid =>
+      'Silent update helper signature is required but Authenticode verification failed. Refusing to launch.',
+    HelperSignatureStatus.unknown =>
+      'Silent update helper signature is required but could not be verified. Refusing to launch.',
+    HelperSignatureStatus.valid =>
+      'Silent update helper signature is required but was not valid. Refusing to launch.',
+  };
 }
 
 /// Backward-compatible alias kept for existing tests and imports.

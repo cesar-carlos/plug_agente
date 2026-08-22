@@ -8,7 +8,9 @@ final class SilentUpdateInstallerFileOps {
   const SilentUpdateInstallerFileOps._();
 
   static String sanitizeFileName(String raw) {
-    final sanitized = raw.trim().replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_');
+    var sanitized = raw.trim().replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_');
+    sanitized = sanitized.replaceAll('..', '_');
+    sanitized = sanitized.replaceAll(RegExp(r'[. ]+$'), '');
     if (sanitized.isEmpty) {
       return 'PlugAgente-Setup.exe';
     }

@@ -1342,6 +1342,13 @@
       "version": {"type": "String"}
     }
   },
+  "autoUpdateReadyBannerUacCancelledTitle": "Administrator approval was cancelled",
+  "autoUpdateReadyBannerUacCancelledBody": "Version {version} is still downloaded. Approve the Windows prompt when you install again, or try later.",
+  "@autoUpdateReadyBannerUacCancelledBody": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
   "autoUpdateReadyBannerInstallNow": "Install now",
   "autoUpdateReadyBannerDefer": "Later",
   "autoUpdateReadyDialogTitle": "Install update now?",

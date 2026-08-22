@@ -6194,6 +6194,18 @@ abstract class AppLocalizations {
   /// **'Version {version} has been downloaded. The agent stays online; install it whenever you want to finish the update.'**
   String autoUpdateReadyBannerBody(String version);
 
+  /// No description provided for @autoUpdateReadyBannerUacCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Administrator approval was cancelled'**
+  String get autoUpdateReadyBannerUacCancelledTitle;
+
+  /// No description provided for @autoUpdateReadyBannerUacCancelledBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is still downloaded. Approve the Windows prompt when you install again, or try later.'**
+  String autoUpdateReadyBannerUacCancelledBody(String version);
+
   /// No description provided for @autoUpdateReadyBannerInstallNow.
   ///
   /// In en, this message translates to:

@@ -56,10 +56,12 @@ bool _isAllowedAutoUpdateUrl(
     return false;
   }
 
-  return _usesAllowedAutoUpdateTransport(uri);
+  return isAllowedAutoUpdateTransport(uri);
 }
 
-bool _usesAllowedAutoUpdateTransport(Uri uri) {
+/// HTTPS anywhere, or HTTP only to loopback. Used for the appcast/installer
+/// URL and again on the final URI after HTTP redirects.
+bool isAllowedAutoUpdateTransport(Uri uri) {
   final scheme = uri.scheme.toLowerCase();
   if (scheme == 'https') {
     return true;
@@ -215,6 +217,20 @@ bool resolveAutoUpdateRequireFeedSignature({
 const int _defaultPreCloseDelaySeconds = 30;
 const int _maxPreCloseDelaySeconds = 120;
 
+/// Seconds the silent-update close path waits after requesting shutdown
+/// before forcing `exit(0)`. Kept in sync with
+/// [resolveAutoUpdateWaitPidTimeoutSeconds] so Inno does not start while
+/// the process is still in its pre-close delay or ODBC drain.
+const int autoUpdateSilentExitGraceSeconds = 25;
+
+/// Extra seconds added on top of pre-close + exit grace so a slow
+/// `shutdownApp` (hub disconnect, ODBC pool close) still exits before the
+/// helper gives up waiting and relies on `/CLOSEAPPLICATIONS`.
+const int autoUpdateWaitPidShutdownBufferSeconds = 15;
+
+const int _minimumWaitPidTimeoutSeconds = 70;
+const int _maximumWaitPidTimeoutSeconds = 180;
+
 /// Delay (in seconds) between the moment the silent flow decides to close
 /// the app and the actual close. Used to display a "app fechando para
 /// instalar atualizacao" notice. Default 30s, capped between 0 and 120.
@@ -228,6 +244,24 @@ int resolveAutoUpdatePreCloseDelaySeconds({
     return _defaultPreCloseDelaySeconds;
   }
   return parsed;
+}
+
+/// How long `plug_update_helper` waits for this process to exit before
+/// running Inno with `/CLOSEAPPLICATIONS`. Always greater than the
+/// configured pre-close delay plus [autoUpdateSilentExitGraceSeconds].
+int resolveAutoUpdateWaitPidTimeoutSeconds({
+  required Map<String, String> environment,
+}) {
+  final preClose = resolveAutoUpdatePreCloseDelaySeconds(environment: environment);
+  final computed =
+      preClose + autoUpdateSilentExitGraceSeconds + autoUpdateWaitPidShutdownBufferSeconds;
+  if (computed < _minimumWaitPidTimeoutSeconds) {
+    return _minimumWaitPidTimeoutSeconds;
+  }
+  if (computed > _maximumWaitPidTimeoutSeconds) {
+    return _maximumWaitPidTimeoutSeconds;
+  }
+  return computed;
 }
 
 /// Parses an `HH:MM` string into minutes since midnight (`0..1439`).

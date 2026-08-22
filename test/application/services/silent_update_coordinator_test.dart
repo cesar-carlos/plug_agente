@@ -87,6 +87,7 @@ SilentUpdateLauncherStatus _launcherStatus({
   required String state,
   required DateTime lastUpdatedAt,
   String? errorMessage,
+  bool? elevatedCancelled,
 }) {
   return SilentUpdateLauncherStatus(
     state: state,
@@ -107,7 +108,7 @@ SilentUpdateLauncherStatus _launcherStatus({
     actualSha256: null,
     hashValidationStatus: null,
     installDirectoryWritable: true,
-    elevatedCancelled: null,
+    elevatedCancelled: elevatedCancelled,
     errorMessage: errorMessage,
     lastUpdatedAt: lastUpdatedAt,
   );
@@ -215,6 +216,32 @@ void main() {
           store.getString('auto_update.pending_silent_update'),
           isNotNull,
           reason: 'preference-off must keep Ready for manual apply',
+        );
+      });
+
+      test('maps unexpected probe exceptions to ConfigurationFailure', () async {
+        final probe = FakeAppcastProbeService()..probeError = Exception('feed exploded');
+        final coordinator = _makeCoordinator(
+          probe: probe,
+          autoApplyEnabled: false,
+        );
+
+        final result = await coordinator.checkSilently();
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (error) {
+            expect(error, isA<domain.ConfigurationFailure>());
+            expect(
+              (error as domain.ConfigurationFailure).message,
+              'Silent update check failed unexpectedly',
+            );
+          },
+        );
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallFailure,
         );
       });
 
@@ -530,6 +557,39 @@ void main() {
         );
       });
 
+      test('userInitiated bypasses automatic failure cooldown', () async {
+        final probe = FakeAppcastProbeService()
+          ..result = const AppcastProbeResult(
+            requestUrl: 'https://example.com/appcast.xml',
+            errorMessage: 'network error',
+          );
+        final store = InMemoryAppSettingsStore();
+        final coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: probe,
+          silentUpdateInstaller: FakeSilentUpdateInstaller(),
+          settingsStore: store,
+          automaticFailureCooldownThreshold: 2,
+          automaticFailureCooldown: const Duration(hours: 1),
+        );
+
+        await coordinator.checkSilently();
+        await coordinator.checkSilently();
+        expect(probe.callCount, 2);
+
+        final automaticResult = await coordinator.checkSilently();
+        automaticResult.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.cooldownActive),
+          (_) => fail('Expected cooldown for unattended check'),
+        );
+        expect(probe.callCount, 2);
+
+        final userResult = await coordinator.checkSilently(userInitiated: true);
+        expect(probe.callCount, 3, reason: 'explicit retry must probe even during cooldown');
+        expect(userResult.isError(), isTrue);
+      });
+
       test('rollout bucket is consistent within a single check', () async {
         final store = InMemoryAppSettingsStore();
         final probe = FakeAppcastProbeService()
@@ -629,6 +689,37 @@ void main() {
         expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isFalse);
       });
 
+      test('userInitiated probes during quiet hours instead of skipping', () async {
+        dotenv.clean();
+        dotenv.loadFromString(
+          envString:
+              'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
+              'AUTO_UPDATE_CHECK_INTERVAL_SECONDS=3600\n'
+              'AUTO_UPDATE_QUIET_HOURS_START=22:00\n'
+              'AUTO_UPDATE_QUIET_HOURS_END=06:00',
+        );
+        final probe = FakeAppcastProbeService();
+        final installer = FakeSilentUpdateInstaller();
+        final coordinator = SilentUpdateCoordinator(
+          RuntimeCapabilities.full(),
+          () => 'https://example.com/appcast.xml',
+          appcastProbeService: probe,
+          silentUpdateInstaller: installer,
+          settingsStore: InMemoryAppSettingsStore(),
+          clock: () => DateTime(2026, 6, 10, 3, 30),
+        );
+
+        final result = await coordinator.checkSilently(userInitiated: true);
+
+        expect(probe.callCount, 1);
+        expect(installer.installCount, 1);
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
+          (_) => fail('Expected success'),
+        );
+      });
+
       test('auto-applies staged pending during quiet hours instead of skipping', () async {
         dotenv.clean();
         dotenv.loadFromString(
@@ -706,6 +797,40 @@ void main() {
           coordinator.lastAutomaticDiagnostics?.completionSource,
           UpdateCheckCompletionSource.automaticInstallReady,
         );
+      });
+
+      test('does not auto-apply staged pending after UAC cancellation', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: now)),
+        );
+        final installer = FakeSilentUpdateInstaller();
+        final coordinator = _makeCoordinator(
+          store: store,
+          installer: installer,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(
+            status: _launcherStatus(
+              state: 'elevatedCancelled',
+              lastUpdatedAt: now,
+              elevatedCancelled: true,
+            ),
+          ),
+        );
+
+        final result = await coordinator.checkSilently();
+
+        expect(installer.launchHelperCount, 0);
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
+          (_) => fail('Expected installerReady so the banner can retry'),
+        );
+        expect(store.getString('auto_update.pending_silent_update'), isNotNull);
+        expect(coordinator.lastAutomaticDiagnostics?.elevatedCancelled, isTrue);
+        expect(store.getInt('auto_update.automatic_failure_count'), isNull);
       });
 
       test('userInitiated runs full download and auto-applies when enabled', () async {
@@ -1102,6 +1227,70 @@ void main() {
         expect(
           coordinator.lastAutomaticDiagnostics?.errorMessage,
           'Installer exited with code 1',
+        );
+      });
+
+      test('keeps pending after UAC cancel without tripping the failure breaker', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final startedAt = now.subtract(const Duration(minutes: 5));
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
+        );
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(
+            status: _launcherStatus(
+              state: 'elevatedCancelled',
+              lastUpdatedAt: startedAt,
+              elevatedCancelled: true,
+            ),
+          ),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNotNull);
+        expect(store.getInt('auto_update.automatic_failure_count'), isNull);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticInstallReady,
+        );
+        expect(coordinator.lastAutomaticDiagnostics?.elevatedCancelled, isTrue);
+        expect(coordinator.lastAutomaticDiagnostics?.updateAvailable, isTrue);
+      });
+
+      test('clears elevatedFailed pending and increments automatic failure count', () async {
+        final store = InMemoryAppSettingsStore();
+        final now = DateTime(2026, 6, 10, 12);
+        final startedAt = now.subtract(const Duration(minutes: 5));
+        await store.setString(
+          'auto_update.pending_silent_update',
+          jsonEncode(_downloadedPendingJson(version: '99.0.0+1', startedAt: startedAt)),
+        );
+
+        final coordinator = _makeCoordinator(
+          store: store,
+          clock: () => now,
+          launcherStatusReader: _FakeLauncherStatusReader(
+            status: _launcherStatus(
+              state: 'elevatedFailed',
+              lastUpdatedAt: startedAt,
+              errorMessage: 'Elevation failed',
+            ),
+          ),
+        );
+
+        await coordinator.reconcilePendingAndSchedule();
+
+        expect(store.getString('auto_update.pending_silent_update'), isNull);
+        expect(store.getInt('auto_update.automatic_failure_count'), 1);
+        expect(
+          coordinator.lastAutomaticDiagnostics?.completionSource,
+          UpdateCheckCompletionSource.automaticPendingFailed,
         );
       });
 

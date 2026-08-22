@@ -111,6 +111,33 @@ class PendingSilentUpdateReconciler {
       return;
     }
 
+    // Operator cancelled the UAC prompt. Keep the staged installer Ready so
+    // the banner can offer a retry instead of failing + cooling down.
+    if (!completed &&
+        downloaded != null &&
+        SilentUpdateHelperLaunchState.isUserCancelledElevation(launcherStatus)) {
+      developer.log(
+        'Keeping staged silent update after UAC cancellation: version=${pending.version}',
+        name: 'silent_update_coordinator',
+        level: 800,
+      );
+      request.onDiagnosticsUpdated(
+        diagnosticsForPending(
+          pending: pending,
+          launcherStatus: launcherStatus,
+          feedUrl: feedUrl,
+          now: now,
+          checkId: checkId,
+          completionSource: UpdateCheckCompletionSource.automaticInstallReady,
+          updateAvailable: true,
+          errorMessage: 'Windows administrator approval was cancelled. You can install again.',
+        ),
+      );
+      await request.persistDiagnostics();
+      request.pushDiagnostics();
+      return;
+    }
+
     // Staged download without launch evidence must stay Ready for banner /
     // shutdown / auto-apply, unless past the staged TTL ops bound.
     if (!completed &&
@@ -237,7 +264,9 @@ class PendingSilentUpdateReconciler {
       actualSha256: launcherStatus?.actualSha256,
       hashValidationStatus: launcherStatus?.hashValidationStatus,
       installDirectoryWritable: launcherStatus?.installDirectoryWritable,
-      elevatedCancelled: launcherStatus?.elevatedCancelled,
+      elevatedCancelled: SilentUpdateHelperLaunchState.isUserCancelledElevation(launcherStatus)
+          ? true
+          : launcherStatus?.elevatedCancelled,
       automaticFailureCount: automaticFailureCount,
       automaticCooldownUntil: automaticCooldownUntil,
       errorMessage: errorMessage,

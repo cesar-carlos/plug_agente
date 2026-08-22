@@ -5,6 +5,8 @@ import 'dart:developer' as developer;
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/application/services/user_initiated_apply_failure.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -128,12 +130,12 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     if (!mounted || !confirmed) return;
 
     // The notification service does not get a localizations context, so
-    // we materialize the body using the resolved delay from the orchestrator
-    // (the default 30s is baked into the message when the resolver is
-    // missing). Keep the parametrized version aligned with the toast
-    // grace period defined in `resolveAutoUpdatePreCloseDelaySeconds`.
+    // we materialize the body using the resolved delay from
+    // [resolveAutoUpdatePreCloseDelaySeconds] (including env overrides).
     final noticeTitle = l10n.configAutoUpdateClosingTitle;
-    final noticeBody = l10n.configAutoUpdateClosingBody(_preCloseDelaySeconds);
+    final noticeBody = l10n.configAutoUpdateClosingBody(
+      resolveAutoUpdatePreCloseDelaySeconds(environment: AppEnvironment.snapshot()),
+    );
 
     setState(() {
       // Pending-downloaded skips the download phase (already on disk);
@@ -284,12 +286,18 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     final colors = context.appColors;
     final tone = mode == _BannerMode.pendingDownloaded ? AppFeedbackTone.info : AppFeedbackTone.warning;
     final feedback = colors.feedback(tone);
-    final title = mode == _BannerMode.pendingDownloaded
-        ? l10n.autoUpdateReadyBannerTitle
-        : l10n.autoUpdateConsentBannerTitle;
-    final body = mode == _BannerMode.pendingDownloaded
-        ? l10n.autoUpdateReadyBannerBody(version)
-        : l10n.autoUpdateConsentBannerBody(version);
+    final elevatedCancelled = orchestrator.lastAutomaticDiagnostics?.elevatedCancelled ?? false;
+    final title = switch (mode) {
+      _BannerMode.pendingDownloaded when elevatedCancelled => l10n.autoUpdateReadyBannerUacCancelledTitle,
+      _BannerMode.pendingDownloaded => l10n.autoUpdateReadyBannerTitle,
+      _BannerMode.awaitingUserConsent => l10n.autoUpdateConsentBannerTitle,
+    };
+    final body = switch (mode) {
+      _BannerMode.pendingDownloaded when elevatedCancelled =>
+        l10n.autoUpdateReadyBannerUacCancelledBody(version),
+      _BannerMode.pendingDownloaded => l10n.autoUpdateReadyBannerBody(version),
+      _BannerMode.awaitingUserConsent => l10n.autoUpdateConsentBannerBody(version),
+    };
     final primaryLabel = mode == _BannerMode.pendingDownloaded
         ? l10n.autoUpdateReadyBannerInstallNow
         : l10n.autoUpdateConsentBannerInstall;
@@ -374,11 +382,3 @@ class _AutoUpdateReadyBannerState extends State<AutoUpdateReadyBanner> {
     };
   }
 }
-
-/// Default pre-close delay used by the banner when calling the orchestrator.
-/// Matches `_defaultPreCloseDelaySeconds` in
-/// `lib/core/config/auto_update_feed_config.dart`. Duplicated here to avoid
-/// pulling the config module into the widget; the resolver in the registrar
-/// will still honor `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` overrides for the
-/// actual delay between the toast and the close.
-const int _preCloseDelaySeconds = 30;

@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/application/services/silent_update_failure.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/security/helper_signature_probe.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/services/dio_silent_update_installer.dart';
@@ -100,7 +102,9 @@ void main() {
           '--try-current-user-first=true',
           '--require-valid-signature=false',
           '--wait-pid-timeout-seconds',
-          '45',
+          resolveAutoUpdateWaitPidTimeoutSeconds(
+            environment: AppEnvironment.snapshot(),
+          ).toString(),
         ],
       );
     });
@@ -738,7 +742,7 @@ void main() {
       expect(result.isError(), isTrue);
       result.fold(
         (_) => fail('Expected failure'),
-        (failure) => expect(failure, isA<domain.ServerFailure>()),
+        (failure) => expect(failure, isA<domain.ConfigurationFailure>()),
       );
     });
 
@@ -772,7 +776,7 @@ void main() {
       expect(processStarted, isFalse);
       result.fold(
         (_) => fail('Expected failure'),
-        (failure) => expect(failure, isA<domain.ServerFailure>()),
+        (failure) => expect(failure, isA<domain.ConfigurationFailure>()),
       );
     });
 

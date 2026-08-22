@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:ui' show VoidCallback;
 
 import 'package:plug_agente/application/observability/i_auto_update_diagnostics_gateway.dart';
@@ -8,12 +9,14 @@ import 'package:plug_agente/application/observability/update_check_id_recorder.d
 import 'package:plug_agente/application/repositories/i_update_preferences_repository.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
 import 'package:plug_agente/application/services/auto_update_defaults.dart';
+import 'package:plug_agente/application/services/auto_update_failure_messages.dart';
 import 'package:plug_agente/application/services/i_pending_silent_update_store.dart';
 import 'package:plug_agente/application/services/pending_silent_update.dart';
 import 'package:plug_agente/application/services/pending_silent_update_reconciler.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_collaborators.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_diagnostics_store.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_download_apply_service.dart';
+import 'package:plug_agente/application/services/silent_update/silent_update_helper_launch_state.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_probe_pipeline.dart';
 import 'package:plug_agente/application/services/silent_update/silent_update_scheduler.dart';
 import 'package:plug_agente/application/services/silent_update_installer.dart';
@@ -155,9 +158,6 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     hydratePersistedDiagnostics();
   }
 
-  static const String _defaultAutoApplyNoticeTitle = 'Plug Agente: update ready';
-  static const String _defaultAutoApplyNoticeBody = 'Closing to install the update.';
-
   final RuntimeCapabilities _capabilities;
   final String? Function() _feedUrlResolver;
   final ISilentUpdateInstaller? _silentUpdateInstaller;
@@ -246,7 +246,12 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           // Evaluate staged pending / auto-apply before quiet-hours skip and
           // before preference-off early exit so a downloaded update can still
           // surface Ready (manual banner/apply) when automatic updates are off.
-          if (_shouldAutoApply() && !_cancelRequested) {
+          // Do not auto-apply after a UAC cancel: the operator already refused
+          // elevation and should retry from the banner, not get another prompt.
+          final readyStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
+          if (_shouldAutoApply() &&
+              !_cancelRequested &&
+              !SilentUpdateHelperLaunchState.isUserCancelledElevation(readyStatus)) {
             return await _autoApplyStagedUpdate(feedUrl: feedUrl);
           }
           return await _returnInstallerReady(feedUrl: feedUrl, pending: pending);
@@ -264,7 +269,10 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
         );
       }
 
-      if (_collaborators.scheduler.isWithinQuietHours()) {
+      // Quiet hours and the automatic-failure cooldown only gate unattended
+      // probes. An explicit operator action (banner / Settings "install")
+      // must still be allowed to download and apply.
+      if (!userInitiated && _collaborators.scheduler.isWithinQuietHours()) {
         return await _completeEarlyCheck(
           feedUrl: feedUrl,
           outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.skippedByQuietHours),
@@ -296,15 +304,17 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       }
 
       await _collaborators.downloadApplyService.cleanupArtifacts(installer);
-      final cooldownResult = await _collaborators.scheduler.buildCooldownResult(
-        feedUrl: feedUrl,
-        checkId: _currentCheckId,
-        onDiagnostics: (diagnostics) => _lastAutomaticDiagnostics = diagnostics,
-        persistDiagnostics: _persistLastAutomaticDiagnostics,
-      );
-      if (cooldownResult != null) {
-        _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
-        return cooldownResult;
+      if (!userInitiated) {
+        final cooldownResult = await _collaborators.scheduler.buildCooldownResult(
+          feedUrl: feedUrl,
+          checkId: _currentCheckId,
+          onDiagnostics: (diagnostics) => _lastAutomaticDiagnostics = diagnostics,
+          persistDiagnostics: _persistLastAutomaticDiagnostics,
+        );
+        if (cooldownResult != null) {
+          _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+          return cooldownResult;
+        }
       }
 
       final startedAt = _collaborators.clock();
@@ -397,6 +407,32 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       return Failure<SilentUpdateOutcome, Exception>(
         domain.ValidationFailure.withContext(
           message: error.message,
+          cause: error,
+          context: <String, dynamic>{'operation': 'checkSilently'},
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Silent update check failed unexpectedly',
+        name: 'silent_update_coordinator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      final now = _collaborators.clock();
+      final failureState = await _collaborators.automaticFailureBreaker.recordFailure();
+      _lastAutomaticDiagnostics = _lastAutomaticDiagnostics?.copyWith(
+        completedAt: now,
+        completionSource: UpdateCheckCompletionSource.automaticInstallFailure,
+        automaticFailureCount: failureState.failureCount,
+        automaticCooldownUntil: failureState.cooldownUntil,
+        errorMessage: extractAutoUpdateFailureMessage(error),
+      );
+      await _persistLastAutomaticDiagnostics();
+      _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
+      return Failure<SilentUpdateOutcome, Exception>(
+        domain.ConfigurationFailure.withContext(
+          message: 'Silent update check failed unexpectedly',
           cause: error,
           context: <String, dynamic>{'operation': 'checkSilently'},
         ),
@@ -503,6 +539,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
   }) async {
     final now = _collaborators.clock();
     final launcherStatus = await _collaborators.launcherStatusReader.read(pending.launcherStatusPath);
+    final elevatedCancelled = SilentUpdateHelperLaunchState.isUserCancelledElevation(launcherStatus);
     _lastAutomaticDiagnostics = PendingSilentUpdateReconciler.diagnosticsForPending(
       pending: pending,
       launcherStatus: launcherStatus,
@@ -511,6 +548,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       checkId: _currentCheckId,
       completionSource: UpdateCheckCompletionSource.automaticInstallReady,
       updateAvailable: true,
+      errorMessage: elevatedCancelled
+          ? 'Windows administrator approval was cancelled. You can install again.'
+          : null,
     );
     await _persistLastAutomaticDiagnostics();
     _collaborators.diagnosticsNotifier.notifyChanged();
@@ -523,10 +563,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
     }
 
-    final applyResult = await applyPendingDownloadedUpdate(
-      noticeTitle: _defaultAutoApplyNoticeTitle,
-      noticeBody: _defaultAutoApplyNoticeBody,
-    );
+    final applyResult = await applyPendingDownloadedUpdate();
     Exception? applyError;
     applyResult.fold(
       (_) {},

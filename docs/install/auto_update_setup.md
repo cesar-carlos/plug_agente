@@ -258,8 +258,12 @@ O helper usa politica conservadora:
 Todos os updates automaticos passam:
 
 ```text
-/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /LAUNCHAFTERUPDATE=1 /MERGETASKS="!desktopicon,!startup" /DIR="<pasta atual>"
+/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /LAUNCHAFTERUPDATE=1 /MERGETASKS="!desktopicon,!startup" /DIR="<pasta atual>"
 ```
+
+O relaunch pos-update fica so no `[Run]` com `/LAUNCHAFTERUPDATE=1`. Nao use
+`/RESTARTAPPLICATIONS` junto: se o helper precisar do `/CLOSEAPPLICATIONS`
+(app ainda aberto), os dois caminhos lancariam duas instancias.
 
 Em instalacoes sob `Program Files`, UAC continua esperado. O objetivo desta
 etapa e reduzir UAC para instalacoes em diretorios gravaveis pelo usuario, nao

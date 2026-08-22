@@ -210,10 +210,7 @@ class SilentUpdateProbePipeline {
       final now = _clock();
       final failureState = await _automaticFailureBreaker.recordFailure();
       final code = 'feed_signature_${signatureStatus.name}';
-      final message =
-          'Silent update appcast signature is required but '
-          '${signatureStatus.name} (operator must publish a signed item or '
-          'set AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=false to bypass)';
+      final message = _feedSignatureRequiredMessage(signatureStatus);
       await publish(
         diagnostics.copyWith(
           completedAt: now,
@@ -438,4 +435,22 @@ _SilentProbeValidationError? _requireValidRolloutPercentage(AppcastProbeResult r
     );
   }
   return null;
+}
+
+String _feedSignatureRequiredMessage(AppcastSignatureVerificationStatus status) {
+  return switch (status) {
+    AppcastSignatureVerificationStatus.missing =>
+      'Silent update appcast signature is required but missing. '
+      'Publish a signed item or set AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=false.',
+    AppcastSignatureVerificationStatus.publicKeyUnavailable =>
+      'Silent update appcast signature is required but the public key is not configured. '
+      'Set AUTO_UPDATE_FEED_PUBLIC_KEY or disable AUTO_UPDATE_REQUIRE_FEED_SIGNATURE.',
+    AppcastSignatureVerificationStatus.malformed =>
+      'Silent update appcast signature is required but the signature or public key is malformed.',
+    AppcastSignatureVerificationStatus.invalid =>
+      'Silent update appcast signature is required but verification failed. '
+      'The feed item may have been tampered with or signed with a different key.',
+    AppcastSignatureVerificationStatus.valid =>
+      'Silent update appcast signature is required but was not valid.',
+  };
 }

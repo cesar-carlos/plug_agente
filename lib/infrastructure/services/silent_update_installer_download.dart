@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/errors/silent_install_failure.dart';
 import 'package:plug_agente/infrastructure/services/silent_update_installer_types.dart';
@@ -130,6 +131,19 @@ final class SilentUpdateInstallerDownload {
               'operation': 'silentUpdateDownload',
               'status_code': statusCode,
               'asset_url': assetUri.toString(),
+            },
+          ),
+        );
+      }
+
+      if (!isAllowedAutoUpdateTransport(response.realUri)) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Silent update download redirected to a disallowed URL',
+            context: <String, dynamic>{
+              'operation': 'silentUpdateDownload',
+              'asset_url': assetUri.toString(),
+              'final_url': response.realUri.toString(),
             },
           ),
         );

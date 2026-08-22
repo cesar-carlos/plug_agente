@@ -76,6 +76,7 @@ class FakeAppcastProbeService implements IAppcastProbeService {
   );
   String? lastProbeUrl;
   int callCount = 0;
+  Exception? probeError;
 
   @override
   Future<AppcastProbeResult> probeLatest({
@@ -84,6 +85,10 @@ class FakeAppcastProbeService implements IAppcastProbeService {
   }) async {
     callCount++;
     lastProbeUrl = feedUrl;
+    final error = probeError;
+    if (error != null) {
+      throw error;
+    }
     return AppcastProbeResult(
       requestUrl: feedUrl,
       latestVersion: result.latestVersion,

@@ -1342,6 +1342,13 @@
       "version": {"type": "String"}
     }
   },
+  "autoUpdateReadyBannerUacCancelledTitle": "A aprovação de administrador foi cancelada",
+  "autoUpdateReadyBannerUacCancelledBody": "A versão {version} continua baixada. Ao instalar de novo, aprove o aviso do Windows ou tente mais tarde.",
+  "@autoUpdateReadyBannerUacCancelledBody": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
   "autoUpdateReadyBannerInstallNow": "Instalar agora",
   "autoUpdateReadyBannerDefer": "Adiar",
   "autoUpdateReadyDialogTitle": "Instalar atualização agora?",

@@ -272,7 +272,41 @@ void main() {
       expect(latestDiagnostics?.validationErrorCode, 'feed_signature_invalid');
       terminal.outcome.fold(
         (_) => fail('Expected failure'),
-        (failure) => expect(failure, isA<domain.ValidationFailure>()),
+        (failure) {
+          expect(failure, isA<domain.ValidationFailure>());
+          expect(
+            (failure as domain.ValidationFailure).message,
+            contains('verification failed'),
+          );
+        },
+      );
+    });
+
+    test('rejects feed when signature is required but missing', () async {
+      dotenv.clean();
+      dotenv.loadFromString(
+        envString:
+            'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
+            'AUTO_UPDATE_CHANNEL=stable\n'
+            'AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true\n'
+            'AUTO_UPDATE_FEED_PUBLIC_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      );
+      signatureVerifier.status = AppcastSignatureVerificationStatus.missing;
+
+      final result = await pipeline.run(request());
+
+      expect(result, isA<SilentUpdateProbeTerminal>());
+      final terminal = result as SilentUpdateProbeTerminal;
+      expect(latestDiagnostics?.validationErrorCode, 'feed_signature_missing');
+      terminal.outcome.fold(
+        (_) => fail('Expected failure'),
+        (failure) {
+          expect(failure, isA<domain.ValidationFailure>());
+          expect(
+            (failure as domain.ValidationFailure).message,
+            contains('missing'),
+          );
+        },
       );
     });
   });

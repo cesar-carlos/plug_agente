@@ -3331,6 +3331,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get autoUpdateReadyBannerUacCancelledTitle => 'Administrator approval was cancelled';
+
+  @override
+  String autoUpdateReadyBannerUacCancelledBody(String version) {
+    return 'Version $version is still downloaded. Approve the Windows prompt when you install again, or try later.';
+  }
+
+  @override
   String get autoUpdateReadyBannerInstallNow => 'Install now';
 
   @override

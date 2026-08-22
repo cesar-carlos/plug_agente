@@ -24,6 +24,16 @@ abstract final class SilentUpdateHelperLaunchState {
   static const Set<String> terminalFailureStates = <String>{
     'failed',
     'cancelled',
+    'elevatedFailed',
+    'launcherFailed',
+    'nonAdminFailed',
+  };
+
+  /// Helper reached the UAC prompt and the operator cancelled it. The
+  /// staged installer is still on disk and must stay Ready for an explicit
+  /// retry — this is not an automatic-failure / cooldown event.
+  static const Set<String> userCancelledElevationStates = <String>{
+    'elevatedCancelled',
   };
 
   static const Set<String> terminalSuccessStates = <String>{
@@ -64,16 +74,29 @@ abstract final class SilentUpdateHelperLaunchState {
     return now.difference(activityAt) <= helperWaitDuration;
   }
 
+  /// True when the helper reported that the operator cancelled the UAC
+  /// elevation prompt. Artifacts stay valid for a later apply.
+  static bool isUserCancelledElevation(SilentUpdateLauncherStatus? launcherStatus) {
+    if (launcherStatus == null) return false;
+    if (launcherStatus.elevatedCancelled ?? false) return true;
+    final state = launcherStatus.state;
+    return state != null && userCancelledElevationStates.contains(state);
+  }
+
   /// Launch evidence exists but the helper is no longer in-flight (wait window
   /// elapsed or terminal status). Reconcile and resolve share this gate so both
   /// refuse Ready/retry and clear the pending record (fail + cooldown policy)
   /// instead of one path clearing and the other offering Install again.
+  ///
+  /// UAC cancellation is excluded: the operator can retry the same staged
+  /// installer without waiting out the automatic failure cooldown.
   static bool isLaunchConcludedOrTimedOut({
     required DateTime? launchedAt,
     required SilentUpdateLauncherStatus? launcherStatus,
     required DateTime now,
     required Duration helperWaitDuration,
   }) {
+    if (isUserCancelledElevation(launcherStatus)) return false;
     return hasLaunchEvidence(launchedAt: launchedAt, launcherStatus: launcherStatus) &&
         !isInFlight(
           launchedAt: launchedAt,
