@@ -199,6 +199,7 @@ Parametros atuais recomendados:
 Benchmark local recomendado antes de alterar esses valores:
 
 ```bash
+python tool/benchmarks/run_benchmark_suite.py --only transport_pipeline
 dart run tool/benchmarks/benchmark_transport_pipeline.dart --iterations 20 --path sync
 flutter test test/infrastructure/codecs/transport_pipeline_benchmark_test.dart --tags perf
 dart run tool/benchmarks/benchmark_transport_pipeline.dart --iterations 20 --path async

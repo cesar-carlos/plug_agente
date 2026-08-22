@@ -203,7 +203,7 @@ Use ao revisar PR que toca os componentes abaixo:
 
 - [ ] `lib/application/services/silent_update_coordinator.dart`: novo path
   altera state machine? testes do ciclo silent atualizados?
-- [ ] `lib/infrastructure/services/http_silent_update_installer.dart`:
+- [ ] `lib/infrastructure/services/dio_silent_update_installer.dart`:
   novo argumento ao helper? configs de Inno Setup atualizadas?
 - [ ] `windows/update_helper/main.cpp`: mudanca no comportamento de
   validacao do installer? schema do `status.json` atualizado?

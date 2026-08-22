@@ -56,7 +56,7 @@ quais contratos ele honra.
 | --- | --- | --- |
 | `sql.execute` | Sim | Query parametrizada, paginacao por page/cursor |
 | `sql.executeBatch` | Sim | Multiplos comandos, opcionalmente transacional |
-| `sql.bulkInsert` | Sim | Bulk insert nativo do `odbc_fast` |
+| `sql.bulkInsert` | Sim | Bulk insert nativo do `odbc_fast` (chunked `executeDirect` atomico; parallel/BCP recusado quando atomicidade e exigida) |
 | `sql.cancel` | Sim | Cancela request em execucao (feature flag) |
 | `agent.getProfile` | Nao | Profile do agente |
 | `agent.getHealth` | Nao | Pool, fila, runtime tuning, scheduler, retention |

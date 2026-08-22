@@ -5,6 +5,51 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Added
+
+- Installer handshake marker so an elevated setup can register HKCU auto-start
+  for the interactive user on first launch (`autostart-requested`).
+- ODBC transaction-control benchmark and streaming disconnect tracker for
+  timed-out native `disconnect` (handle is discarded, never returned to cache).
+
+### Changed
+
+- Windows login with `--autostart` stays in the tray; the unused
+  “start minimized” preference was removed from Settings.
+- User-initiated silent install (`Instalar agora`) no longer waits on quiet
+  hours or automatic failure cooldown.
+- Inno silent updates wait for the app pre-close budget (helper PID wait ≥ 70s)
+  and relaunch only via `[Run]` (`/LAUNCHAFTERUPDATE=1`), not
+  `/RESTARTAPPLICATIONS`.
+- Direct dependencies bumped to latest resolvable majors (`odbc_fast` 4.5.1,
+  `drift`/`sqlite3` 3.x, `get_it` 9, `win32` 6, `file_picker` 12,
+  `flutter_secure_storage` 11, Syncfusion 34, and related packages).
+  `sqlite3_flutter_libs` was removed (EOL; native SQLite comes from `sqlite3`
+  3.x Dart hooks).
+- Streaming/lease ODBC connections now send `blockFetchBatchSize: 256` when no
+  profile overrides it. Transactional bulk uses one connection (sequential
+  chunks); parallel/BCP is refused when atomicity is required.
+
+### Fixed
+
+- Windows auto-start: rollback failed Run/StartupApproved writes, heal HKCU
+  from the installer marker, honor Task Manager disable without self-heal,
+  and keep debug/`flutter run` executables out of the Run key.
+- Silent update: cancelled UAC leaves the download Ready (localized retry
+  banner) instead of treating apply as success; local helper/IO failures map
+  to `ConfigurationFailure` rather than generic `ServerFailure`; HTTPS
+  downloads reject non-HTTPS redirects (except loopback).
+- ODBC: rollback transactional batch before returning a connection to the
+  pool; chunked `executeDirect` bulk is atomic; streaming session cache
+  disconnects evicted sessions; cancel on the last chunk does not reuse a
+  dirty session; parallel/BCP failures are `Failure` (possible partial
+  writes called out). SQL Anywhere / SQL Server streaming still does not
+  reuse sessions (`odbc_fast` 4.5.1 does not document that as safe).
+- Empty DB streams no longer leak streaming slots; `LazyString` ODBC cells
+  are materialized before `rpc:response` encoding.
+- Hub reconnect ownership, offline retry budgets, Socket.IO/RPC signing,
+  cancel, and idempotency hardening after 1.8.6.
+
 ## 1.8.6 - 2026-07-07
 
 ### Added

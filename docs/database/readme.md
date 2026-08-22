@@ -35,5 +35,9 @@ O pool adaptativo do `odbc_fast` fica habilitado por default para drivers
 elegiveis (SQL Server, PostgreSQL). SQL Anywhere permanece no caminho
 lease/direct.
 
-Para desligar manualmente como opt-out operacional, persista
+Reuse de sessao de streaming: **PostgreSQL pode reutilizar** conexoes
+idle (TTL curto). **SQL Server e SQL Anywhere nao** — `odbc_fast` 4.5.1
+nao documenta reuse apos um stream como seguro.
+
+Para desligar o pool adaptativo como opt-out operacional, persista
 `feature_enable_odbc_experimental_driver_adaptive_pooling=false`.

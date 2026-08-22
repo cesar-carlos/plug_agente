@@ -58,6 +58,7 @@ O instalador pode mostrar opções para:
 
 - **Criar ícone na área de trabalho**: Marque se desejar um atalho na área de trabalho
 - **Iniciar com o Windows**: Marque se desejar que o aplicativo inicie automaticamente
+  no login (`--autostart`, na bandeja). Não há opção de "iniciar minimizado".
 
 Selecione as opções desejadas e clique em **"Avançar"**
 
@@ -123,7 +124,10 @@ desinstalar o aplicativo principal.
 
 - Arquivos do aplicativo
 - Atalhos e ícones
-- **NÃO remove**: Logs e configurações salvas (ficam em `C:\ProgramData\PlugAgente\`)
+- Cache de updates em `C:\ProgramData\PlugAgente\updates`
+- Marker de auto-start `C:\ProgramData\PlugAgente\autostart-requested`
+
+**NÃO remove**: Logs e demais configurações (permanecem em `C:\ProgramData\PlugAgente\`)
 
 ---
 

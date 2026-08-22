@@ -22,7 +22,10 @@ timestampada e versionada por execucao em `artifacts/odbc_validation/`.
 - O pool adaptativo esta usando o caminho nativo somente em drivers elegiveis
   (SQL Server, PostgreSQL)?
 - `service.streamQuery` continua usando o caminho batched-first do
-  `odbc_fast` sem regressao no workload local?
+  `odbc_fast` sem regressao no workload local? SQL Server/Anywhere em
+  row-major; PostgreSQL pode reutilizar sessao de streaming.
+- Chunked bulk `executeDirect` permanece atomico? Parallel/BCP continua
+  recusado quando atomicidade e exigida?
 - O runtime local do `odbc_fast` expoe os simbolos necessarios para
   `columnarCompressed`?
 - Ha sinais de gargalo no banco/driver em vez do app?
@@ -47,8 +50,8 @@ contendo:
 | `preflight.log` | Resultado de `tool/e2e/check_e2e_env.dart` |
 | `smoke.log` | Smoke ODBC (`odbc_queued_gateway_smoke_live_e2e_test.dart`) |
 | `burst.log` | Burst da fila SQL (`sql_queue_burst_test.dart`, opt-in `RUN_ODBC_BURST_TESTS=true`) |
-| `benchmark.log` | `async_concurrency_benchmark.dart` |
-| `streaming_benchmark.log` | `streaming_performance_benchmark.dart` |
+| `benchmark.log` | Eixo async da suite / `odbc_async_benchmark.py` |
+| `streaming_benchmark.log` | Eixo streaming da suite / `odbc_streaming_benchmark.py` |
 | `driver_matrix_*.log` | Benchmark async + streaming por driver configurado |
 | `health_burst_*_before/after.json` | Snapshots reais de `agent.getHealth` antes/depois do burst |
 
@@ -84,23 +87,23 @@ etapas rodar.
    flutter test test/integration/sql_queue_burst_test.dart
    ```
 
-6. Benchmark async ODBC:
+6. Benchmark suite (recomendado; carrega `.env`):
+
+   ```powershell
+   python tool/benchmarks/run_benchmark_suite.py
+   ```
+
+   Eixos isolados:
 
    ```powershell
    python tool/benchmarks/odbc_async_benchmark.py
-   ```
-
-7. Benchmark streaming:
-
-   ```powershell
    python tool/benchmarks/odbc_streaming_benchmark.py
-   ```
-
-8. Driver matrix (se houver mais de um DSN configurado):
-
-   ```powershell
    python tool/benchmarks/odbc_driver_matrix_benchmark.py
    ```
+
+   Transaction control: `test/tool/odbc_transaction_control_benchmark_test.dart`.
+   Pool modes: `ODBC_BENCH_CONNECTION_STRING`. Gateway encoding:
+   `BENCHMARK_GATEWAY_ENCODING=1` via a suite, nao `flutter test` cru.
 
 ## Como ler o snapshot de health
 

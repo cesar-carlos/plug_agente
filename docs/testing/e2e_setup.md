@@ -106,9 +106,15 @@ explicativa.
   com `dart run` (sem `dart:ui`) e usa um parser de linhas equivalente ao
   caso comum `chave=valor` (primeiro `=` separa chave e valor). Para
   entradas exoticas, a fonte de verdade nos testes e o `E2EEnv`.
-- **Benchmarks (fora do `E2EEnv`):** variaveis como `ODBC_E2E_BENCHMARK_*`,
-  `SOCKET_TRANSPORT_BENCHMARK_*`, `PAYLOAD_FRAME_BENCHMARK_*`, etc., sao
-  usadas por testes de performance/regressao (`test/live/`, ficheiros
-  `*benchmark*`). Nao entram no `E2EEnv` nem no `check_e2e_env.dart`; o
-  contrato fica no proprio teste. Podem viver no `.env` local com lista
-  longa; o `.env.example` cobre o conjunto E2E/integracao.
+- **Benchmarks:** o runner canonico e
+  `python tool/benchmarks/run_benchmark_suite.py` (carrega `.env` no
+  processo). Variaveis como `ODBC_E2E_BENCHMARK_*`,
+  `ODBC_BENCH_CONNECTION_STRING` (pool modes),
+  `BENCHMARK_GATEWAY_ENCODING`, `SOCKET_TRANSPORT_BENCHMARK_*`,
+  `PAYLOAD_FRAME_BENCHMARK_*` nao entram no `E2EEnv` nem no
+  `check_e2e_env.dart`. Gateway encoding precisa da suite — `flutter test`
+  cru no teste de encoding le `Platform.environment` antes do `.env`.
+  Transaction control: `test/tool/odbc_transaction_control_benchmark_test.dart`.
+  O contrato fica no proprio teste / `tool/benchmarks/run_benchmark_suite.py`.
+  Podem viver no `.env` local com lista longa; o `.env.example` cobre o
+  conjunto E2E/integracao.

@@ -41,12 +41,12 @@ installer/dist/PlugAgente-Setup-{versao}.exe
 
 - [installation_guide.md](installation_guide.md): instalacao, desinstalacao e
   validacao basica no Windows
-- [requirements.md](requirements.md): pre-requisitos, compatibilidade e notas
-  opcionais de ODBC/PATH
+- [requirements.md](requirements.md): pre-requisitos, compatibilidade, auto-start
+  (HKCU, `--autostart`, Startup Apps) e notas opcionais de ODBC/PATH
 - [release_guide.md](release_guide.md): versionamento, build, tag, release e
   pos-release
-- [auto_update_setup.md](auto_update_setup.md): feed oficial, appcast, smoke
-  checks, diagnostico e testes
+- [auto_update_setup.md](auto_update_setup.md): feed oficial, appcast, helper
+  silencioso (PID wait, Inno flags, UAC cancelado, cooldown) e testes
 
 ## Scripts uteis
 

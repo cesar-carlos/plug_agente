@@ -31,6 +31,14 @@ DRIVER={SQL Anywhere 16};UID=dba;PWD=sql;DBN=VL;HOST=localhost:2650
 - **2638** – SQL Anywhere default port
 - **2650** – Common alternative
 
+## Pool
+
+SQL Anywhere stays on the **lease/direct** path. It is not eligible for
+the native adaptive pool.
+
+Streaming sessions are **not** reused. `odbc_fast` 4.5.1 does not
+document SQL Anywhere connect reuse after a finished stream as safe.
+
 ## Troubleshooting
 
 ### "Database server not found" (08001, -100)

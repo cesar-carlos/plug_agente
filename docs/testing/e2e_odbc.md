@@ -47,6 +47,11 @@ O pool adaptativo ODBC fica habilitado por default para drivers elegiveis
 persistido `feature_enable_odbc_experimental_driver_adaptive_pooling=false`
 funciona como opt-out operacional.
 
+Streaming session reuse: PostgreSQL pode reutilizar conexoes idle; SQL
+Server e SQL Anywhere **nao** (`odbc_fast` 4.5.1). Cancel no ultimo chunk
+nao reutiliza sessao dirty. `blockFetchBatchSize` default **256** em lease
+e streaming connect sem profile.
+
 ### Smoke do runtime (sem DSN)
 
 ```powershell
@@ -56,27 +61,36 @@ dart run tool/odbc/check_odbc_fast_runtime.dart --require-columnar-compressed
 Inicializa o worker async e verifica exports nativos usados pelo modo
 `columnarCompressed`. Faz parte do fluxo operacional consolidado.
 
-### Benchmarks manuais
+### Benchmarks
+
+Canonical runner (injects `.env` into the process):
 
 ```powershell
-# Async concurrency
-dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
-python tool/benchmarks/odbc_async_benchmark.py
-
-# Streaming legado vs batched
-dart run D:\Developer\dart_odbc_fast\example\streaming_performance_benchmark.dart
-python tool/benchmarks/odbc_streaming_benchmark.py
+python tool/benchmarks/run_benchmark_suite.py
 ```
 
-`odbc_streaming_benchmark.py` usa `ODBC_STREAM_BENCH_QUERY` quando
-definido; caso contrario, reaproveita a query longa do driver
-(`ODBC_INTEGRATION_LONG_QUERY_*` ou `ODBC_INTEGRATION_LONG_QUERY`). Isso
-evita benchmark acidental com `SELECT 1`.
+Opt-in / extra env:
 
-### Driver matrix
+| Variavel | Quando |
+| -------- | ------ |
+| `BENCHMARK_GATEWAY_ENCODING=1` | Inclui encoding ODBC na suite. Nao rode `flutter test test/tool/odbc_gateway_encoding_benchmark_test.dart` cru: o skip le `Platform.environment` antes do `.env`. |
+| `ODBC_BENCH_CONNECTION_STRING` | Pool-mode smoke (`test/tool/odbc_pool_modes_benchmark_test.dart`). |
+| `ODBC_TEST_DSN` / `ODBC_DSN` | Transaction control (`test/tool/odbc_transaction_control_benchmark_test.dart`) e eixos ODBC da suite. |
+| `ODBC_STREAM_BENCH_QUERY` | Query do wrapper de streaming; senao reaproveita `ODBC_INTEGRATION_LONG_QUERY_*`. Evita `SELECT 1` acidental. |
+
+Eixos isolados (ainda validos):
 
 ```powershell
+python tool/benchmarks/odbc_async_benchmark.py
+python tool/benchmarks/odbc_streaming_benchmark.py
 python tool/benchmarks/odbc_driver_matrix_benchmark.py
+```
+
+Exemplos do pacote `odbc_fast` (quando `DART_ODBC_FAST_ROOT` aponta para o clone):
+
+```powershell
+dart run $env:DART_ODBC_FAST_ROOT/example/async_concurrency_benchmark.dart
+dart run $env:DART_ODBC_FAST_ROOT/example/streaming_performance_benchmark.dart
 ```
 
 ### Fluxo operacional completo
@@ -112,11 +126,12 @@ execucao numa **conexao direta** e incrementa o contador de metricas
 vier vazio, registra `multi_result_direct_still_vacuous`. Os contadores de
 evento sao chaves estaveis para exportacao (ex.: OpenTelemetry).
 
-**Batch transacional:** `executeBatch` com `transaction: true` usa fast path
-pooled/native-compatible para DML-only em SQL Server/PostgreSQL quando
-elegivel e continua em conexao direta para SQL Anywhere, batches com
-leitura/`RETURNING`/`OUTPUT`, options incompativeis ou fallback. Os
-contadores estaveis sao `transactional_batch_native_pool_path`,
+**Batch transacional:** `executeBatch` com `transaction: true` usa o
+caminho pooled/native-compatible para DML-only em SQL Server/PostgreSQL
+quando elegivel e continua em conexao direta para SQL Anywhere, batches
+com leitura/`RETURNING`/`OUTPUT`, options incompativeis ou fallback.
+Rollback corre **antes** de devolver a conexao ao pool. Os contadores
+estaveis sao `transactional_batch_native_pool_path`,
 `transactional_batch_native_pool_fallback` e
 `transactional_batch_direct_path`. O 3.o teste E2E continua **opcional** via
 `ODBC_E2E_TRANSACTIONAL_BATCH` (desligado por omissao no `.env.example` para
@@ -144,8 +159,11 @@ estavel); sem eles o teste so verifica sucesso e registra tempos no log
 ## ODBC DML bulk load (`odbc_dml_bulk_load_live_e2e_test.dart`)
 
 Cria tabela, insere muitas linhas (default **50 000**) via `sql.bulkInsert`
-(bulk insert nativo do `odbc_fast`), depois: `SELECT COUNT(*)`; **UPDATE**
-em todas as linhas; **DELETE** de todas; **DROP** da tabela. **Opt-in.**
+(bulk insert nativo do `odbc_fast`). Chunked `executeDirect` e **atomico**
+(begin/commit). Parallel/BCP nao e usado quando atomicidade e exigida;
+falha paralela e `Failure` e pode deixar writes parciais. Depois:
+`SELECT COUNT(*)`; **UPDATE** em todas as linhas; **DELETE** de todas;
+**DROP** da tabela. **Opt-in.**
 
 | Variavel | Obrigatoria | Descricao |
 | -------- | ----------- | --------- |

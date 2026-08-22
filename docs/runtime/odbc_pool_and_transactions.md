@@ -1,20 +1,28 @@
 # ODBC Pool, Transactions and Runtime Tuning
 
-This document is the source of truth for how `plug_agente` uses the
-[`odbc_fast`](https://pub.dev/packages/odbc_fast) package at runtime. It
+This document is the source of truth for how `plug_agente` uses
+[`odbc_fast`](https://pub.dev/packages/odbc_fast) **4.5.1** at runtime. It
 covers pool sizing and lifecycle, transaction control, async backpressure,
-lock-safety, and observability hooks. Defaults, decisions and trade-offs
-are documented here so the runtime behavior of the agent stays consistent
-across releases.
+lock-safety, streaming session reuse, bulk insert atomicity, and
+observability hooks. Defaults, decisions and trade-offs are documented
+here so the runtime behavior of the agent stays consistent across
+releases.
 
 Cross-references:
 
 - `lib/core/di/service_locator.dart` — boot/reload/shutdown wiring.
-- `lib/core/constants/connection_constants.dart` — numeric defaults.
+- `lib/core/constants/odbc_connection_constants.dart` — numeric defaults
+  (re-exported via `connection_constants.dart`).
 - `lib/infrastructure/pool/odbc_native_connection_pool.dart` — native
   pool wrapper.
-- `lib/infrastructure/external_services/odbc_database_gateway.dart` —
-  transactional batch + DBMS detection.
+- `lib/infrastructure/external_services/odbc_batch_execution_orchestrator.dart`
+  — transactional batch orchestration.
+- `lib/infrastructure/external_services/odbc_batch_transaction_manager.dart`
+  — begin/commit/rollback.
+- `lib/infrastructure/external_services/odbc_batch_routing_phases.dart` —
+  bulk-insert auto-route and read-only parallel batch.
+- `lib/infrastructure/config/odbc_driver_database_type_mapper.dart` —
+  DBMS / dialect detection.
 - `lib/infrastructure/metrics/odbc_event_bridge.dart` — runtime event
   bus listener.
 - `.cursor/rules/project_specifics.mdc` — repository-wide ODBC
@@ -123,14 +131,18 @@ caller:
   package rolls back leftover local work before returning the slot).
 - `discard(connectionId)` → also calls `poolReleaseConnection`. Direct
   `disconnect()` for pool-owned connections returns
-  `ValidationError` since `odbc_fast 3.9.0` — pool connections must
-  always go back through the pool API.
+  `ValidationError` since `odbc_fast 3.9.0` (still true in 4.5.1) —
+  pool connections must always go back through the pool API.
 
 ## Transaction control
 
-Only one call site exists for `_service.beginTransaction` in the entire
-codebase: `OdbcDatabaseGateway._beginBatchTransactionIfNeeded`. Every
-transactional batch flows through it.
+Production `beginTransaction` call sites:
+
+- `OdbcBatchTransactionManager.beginIfNeeded` — every transactional
+  `sql.executeBatch` (and transactional bulk auto-route) goes through
+  this manager.
+- `OdbcBulkInsertExecutor` — chunked `executeDirect` wraps sequential
+  chunks in a local transaction when atomicity is required.
 
 ```dart
 await _service.beginTransaction(
@@ -154,8 +166,8 @@ await _service.beginTransaction(
 
 ### Read-only inference (lock-safety)
 
-`OdbcDatabaseGateway._inferBatchAccessMode(List<SqlCommand>)` walks
-every command in the batch. When **all** commands pass
+`OdbcBatchTransactionSupport.inferBatchAccessMode(List<SqlCommand>)`
+walks every command in the batch. When **all** commands pass
 `SqlValidator.validateSelectQuery` (i.e. start with `SELECT` / `WITH`
 and contain no top-level dangerous patterns), the batch is started with
 `TransactionAccessMode.readOnly`. Otherwise it stays
@@ -179,25 +191,29 @@ that is still useful information.
 
 ### Rollback discipline
 
-`_BatchTransactionGuard` ensures every transaction is closed exactly once:
+`BatchTransactionGuard` ensures every transaction is closed exactly once.
+**Rollback always completes before the connection is returned to the
+pool** (`OdbcBatchConnectionPhase.releaseBatchConnection` runs in
+`finally`, after command/commit/rollback paths).
 
 | Trigger | Cleanup |
 |---|---|
-| Command failure mid-batch | rollback before returning failure |
-| Validation failure | rollback + structured failure context |
-| Commit failure | rollback (engine-side) + best-effort cleanup |
-| Unexpected exception | rollback inside `catch` |
-| Deadline already vencido at rollback time | `_rollbackTimeoutFromDeadline` applies a floor so cleanup is not cut mid-flight |
-| Native-compatible pool fallback to direct | `recycleAfterRelease` triggers `poolReleaseConnection`, which rolls back leftover work automatically |
+| Command failure mid-batch | rollback, then release to pool |
+| Validation failure | rollback + structured failure context, then release |
+| Commit failure | rollback (engine-side) + best-effort cleanup, then release |
+| Unexpected exception | rollback inside `catch`, then release in `finally` |
+| Deadline already elapsed at rollback time | `rollbackTimeoutFromDeadline` applies a floor so cleanup is not cut mid-flight |
+| Unconfirmed rollback | connection marked for discard; slot is not reused as a live txn |
+| Native-compatible pool fallback to direct | `recycleAfterRelease` triggers `poolReleaseConnection` after rollback |
 
 The guard is idempotent (`_closed = true` after first call), so repeated
 rollback attempts across nested error paths cannot double-execute.
 
 ### Deadline near-stall warning
 
-`_maybeRecordTransactionalBatchDeadlineNearStall` runs immediately before
-commit. When the batch has already consumed at least 80% of its active
-deadline, two things happen:
+`OdbcBatchTransactionSupport.maybeRecordTransactionalBatchDeadlineNearStall`
+runs immediately before commit. When the batch has already consumed at
+least 80% of its active deadline, two things happen:
 
 - the counter `transactional_batch_deadline_near_stall` increments;
 - a `developer.log` at level `900` reports `consumed_ratio`,
@@ -210,8 +226,9 @@ race to clean up engine-side locks if the deadline runs out mid-rollback.
 
 ## DBMS detection
 
-`OdbcDatabaseGateway._mapDriverNameToDatabaseType(String driverName)`
-maps the persisted `Config.driverName` to the local `DatabaseType` enum
+`mapOdbcDriverNameToDatabaseType` in
+`lib/infrastructure/config/odbc_driver_database_type_mapper.dart` maps
+the persisted driver name to the local `DatabaseType` enum
 (`sqlServer`, `postgresql`, `sybaseAnywhere`) used by SQL builders.
 
 1. Exact match on the three legacy strings `'SQL Server'`,
@@ -232,29 +249,34 @@ dialects in `OdbcPaginatedSqlBuilder` and friends, but silent fallback to
 SQL Server SQL on an Oracle connection would produce broken statements.
 Loud fallback keeps the misconfiguration visible to operators.
 
-`@visibleForTesting mapDriverNameToDatabaseTypeForTesting` exposes the
-method for unit tests in
+Unit coverage lives in
 `test/infrastructure/external_services/odbc_database_gateway_test.dart`.
 
 ## Connection options per call path
 
 Every call path that opens a connection uses
-`OdbcConnectionOptionsBuilder` to build a `ConnectionAcquireOptions` and
-then maps it to `odbc.ConnectionOptions` via
-`ConnectionAcquireOptionsMapper`:
+`OdbcConnectionOptionsBuilder` (or
+`OdbcStreamingConnectionOptionsBuilder` on the streaming path) to build
+a `ConnectionAcquireOptions` and then maps it to `odbc.ConnectionOptions`
+via `ConnectionAcquireOptionsMapper`:
 
 | Path | Builder method | `autoReconnect` | `queryTimeout` |
 |---|---|---|---|
 | Standard pooled query | `forQueryExecution` / `forQueryExecutionWithTimeout` | `true` | `defaultQueryTimeout` = 60 s, or caller-provided |
 | Transactional batch | `forTransactionalBatch` | `false` (intentional) | `defaultTransactionalBatchTimeout` = 60 s |
-| Streaming | `OdbcStreamingGateway._buildStreamingConnectionOptions` | `true` | `defaultStreamingQueryTimeout` = 5 min |
+| Streaming | `OdbcStreamingConnectionOptionsBuilder.build` | `true` | `defaultStreamingQueryTimeout` = 5 min |
+
+When no ODBC profile overrides options, lease checkout and streaming
+connect set `blockFetchBatchSize` to
+`OdbcConnectionConstants.defaultBlockFetchBatchSize` (**256**), matching
+the `odbc_fast` native default (`ODBC_FAST_BLOCK_FETCH_BATCH`).
 
 `autoReconnectOnConnectionLost: false` for transactional batches is the
 correct choice: if the connection drops mid-transaction, a silent
 auto-reconnect would leave the caller with a stale `transactionId`
 referring to a transaction that no longer exists on the server.
 
-`maxResultBufferBytes` is clamped between 8 MB and 128 MB by
+`maxResultBufferBytes` is clamped between 8 MB and **256 MB** by
 `OdbcConnectionOptionsBuilder.clampedMaxResultBufferMb` so neither
 under-configuration (0 MB) nor pathological values from the UI corrupt
 ODBC fetch behavior.
@@ -323,38 +345,74 @@ once per saturation episode to avoid log spam.
 
 ## Streaming
 
-`OdbcStreamingGateway` uses `_service.streamQuery(connectionId, sql)`.
-The streaming path is single-purpose:
+`OdbcStreamingGateway` streams through
+`OdbcBatchedStreamingQuerySource` (native `streamQueryBatched` /
+`streamQueryColumnarBatched`) and falls back to high-level
+`streamQuery` / `streamQueryMulti` where needed. SQL Server and SQL
+Anywhere prefer **row-major** streaming; PostgreSQL may use columnar
+batched decode.
 
-- non-parameterized SQL only (parameterized queries go through
-  `executeQueryNamed` and are materialized);
-- the streaming chunk size is set by the caller; the gateway clamps
-  `initialResultBufferBytes` and `maxResultBufferBytes` to safe values;
-- streaming connections explicitly opt into `autoReconnectOnConnectionLost`
-  with bounded retry attempts because streaming queries are
-  idempotent reads.
+Shared policy:
 
-The package's `streamQueryBatched` is the low-level
-`NativeOdbcConnection`/`PreparedStatement` form and is intentionally not
-used through the high-level service.
+- parameterized streaming uses the native batched path with a params
+  buffer (columnar batched has no params API);
+- chunk size is set by the caller; the gateway clamps
+  `initialResultBufferBytes` and `maxResultBufferBytes`;
+- streaming connections opt into `autoReconnectOnConnectionLost` with
+  bounded retry because streaming queries are idempotent reads;
+- connect/lease without a profile uses `blockFetchBatchSize: 256`.
+
+### Session cache (`OdbcStreamingSessionCache`)
+
+Idle streaming connections may be cached briefly for the same connection
+string when reuse is enabled (`ODBC_STREAMING_CONNECT_REUSE_*`, default
+on). **SQL Anywhere and SQL Server do not reuse streaming sessions** —
+`odbc_fast` 4.5.1 does not document that as safe after a finished
+stream. **PostgreSQL may reuse** (columnar streaming family).
+
+Lifecycle:
+
+- evicted sessions are **disconnected**;
+- `offer` and `drainCachedSessions` **await**
+  `OdbcStreamingDisconnectTracker`;
+- checkout eviction (`tryTake` on TTL expiry) disconnects in the
+  **background** so checkout stays synchronous;
+- a disconnect that times out stays tracked until the native call
+  completes and the handle is **discarded — never reused**;
+- cancel on the last chunk does **not** reuse a dirty session
+  (`reuseEligible` requires a successful complete and no cancel).
+
+`odbc_fast` 4.5.1 exposes `disconnect(connectionId)` and
+`cancelStream(streamId)` only. High-level `streamQuery*` APIs do not
+return a stream id, and disconnect has no force-close argument. A Dart
+`.timeout()` must not abandon the native future; the tracker keeps it.
 
 ## Bulk insert
 
-`OdbcBulkInsertExecutor` routes small loads through sequential
-`_service.bulkInsert` on a dedicated direct connection. Large SQL Server
-loads (row count above `ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD`, default
-50k) may use `bulkInsertParallel` on the adaptive pool's native
-`poolId` when `ODBC_BULK_INSERT_PARALLEL_ENABLED=true` (default).
+`OdbcBulkInsertExecutor` runs sequential `_service.bulkInsert` on a
+dedicated direct connection. Chunked `executeDirect` is **atomic**:
+chunks above `ODBC_BULK_INSERT_CHUNK_ROWS` (default 10k) run inside
+begin/commit. `requireAtomic` forces that sequential transactional path
+and **refuses parallel/BCP**.
+
+Large SQL Server loads (row count above
+`ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD`, default 50k) may use
+`bulkInsertParallel` on the adaptive pool `poolId` when
+`ODBC_BULK_INSERT_PARALLEL_ENABLED=true` (default) **and atomicity is
+not required**. Parallel/BCP failure is a typed `Failure` with
+`partial_writes: true` — some rows may already have been committed and
+are not rolled back as a single transaction.
 
 Homogeneous `INSERT` batches above
 `ODBC_BATCH_BULK_INSERT_ROUTE_THRESHOLD` (default 50) may auto-route to
-the native bulk path on SQL Server and PostgreSQL; SQL Anywhere stays on
-the sequential path.
+the native bulk path on SQL Server and PostgreSQL
+(`OdbcBatchRoutingPhases`). Transactional auto-route uses
+`executeOnConnection` inside the outer batch transaction (BCP off). SQL
+Anywhere stays sequential.
 
-`_bulkInsertRecommendationCommandThreshold = 50` still promotes the
-`bulk_insert` shape over `INSERT` loops when the caller submits more
-than 50 homogeneous `INSERT` commands in a single batch without
-auto-routing.
+`ODBC_BATCH_BULK_INSERT_RECOMMEND_THRESHOLD` (default 50) still promotes
+the `bulk_insert` shape over `INSERT` loops when the caller submits more
+than 50 homogeneous `INSERT` commands without auto-routing.
 
 ## Counters and metric keys
 
@@ -393,12 +451,38 @@ ODBC are:
   batch flow.** The batch needs deadline-aware rollback timeouts,
   partial command-result reporting and native-pool fallback that the
   helper does not model.
-- **Defer `executeQueryColumnar` / `TypedColumnarResult` adoption.**
-  Would require changing the JSON-RPC schema and the dashboard
-  contract; no profiling pointing at boxed-row decoding as a hot path.
-- **Gate `bulkInsertParallel` on row threshold and SQL Server only.**
-  Parallel fan-out uses half the pool size; disable via
-  `ODBC_BULK_INSERT_PARALLEL_ENABLED=false` when profiling shows
-  regressions on a specific driver build.
+- **Keep boxed-row JSON-RPC results.** Streaming already uses native
+  columnar batched internally (`OdbcBatchedStreamingQuerySource`) and
+  maps to Hub row-maps. Changing the JSON-RPC schema/dashboard contract
+  to expose `TypedColumnarResult` is still deferred.
+- **Gate `bulkInsertParallel` on row threshold and SQL Server only, and
+  refuse it when atomicity is required.** Parallel fan-out uses half the
+  pool size; disable via `ODBC_BULK_INSERT_PARALLEL_ENABLED=false` when
+  profiling shows regressions on a specific driver build. Parallel
+  failure is a `Failure` that may leave partial writes.
+- **Rollback transactional batches before pool release.** Do not return
+  a connection with an open or unconfirmed transaction to the pool.
+- **Do not reuse SQL Anywhere / SQL Server streaming sessions.**
+  `odbc_fast` 4.5.1 does not document that as safe. PostgreSQL may reuse
+  idle streaming connections; cancel/timeout/evict always disconnect.
 - **Defer cancellation tokens on batches.** No evidence that abandoned
   RPC clients are a frequent cause of stuck locks today.
+
+## Benchmarks
+
+Canonical runner (loads `.env` into the process):
+
+```powershell
+python tool/benchmarks/run_benchmark_suite.py
+```
+
+- Transaction control: `test/tool/odbc_transaction_control_benchmark_test.dart`
+  (DSN via `ODBC_TEST_DSN` / `ODBC_DSN`).
+- Pool modes: set `ODBC_BENCH_CONNECTION_STRING` (see
+  `test/tool/odbc_pool_modes_benchmark_test.dart`).
+- Gateway encoding: opt-in with `BENCHMARK_GATEWAY_ENCODING=1` **through
+  the suite**. Raw `flutter test` does not inject `.env` into
+  `Platform.environment` before skip checks.
+- Operational wrappers
+  (`odbc_async_benchmark.py`, `odbc_streaming_benchmark.py`,
+  `odbc_driver_matrix_benchmark.py`) remain valid for a single axis.

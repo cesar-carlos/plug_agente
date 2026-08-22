@@ -38,8 +38,18 @@ Playground SQL devem continuar funcionando quando o runtime permitir.
 
 ## Inicialização com o Windows
 
-- Instalações novas gravam a entrada de auto-start em **HKCU** (por usuário),
-  alinhado ao aplicativo.
+- Instalações novas com a task **Iniciar com o Windows** selecionada gravam
+  HKCU Run para o usuário interativo via `runasoriginaluser` e deixam o
+  marker `{commonappdata}\PlugAgente\autostart-requested`. No primeiro
+  lançamento o app registra HKCU para o usuário logado e limpa o marker.
+- Updates silenciosos passam `/MERGETASKS="!desktopicon,!startup"` e **não**
+  re-solicitam auto-start.
+- Login com `--autostart` permanece na bandeja (tray) quando o tray está
+  disponível. Não há toggle de "iniciar minimizado" em Configurações;
+  lançamentos manuais abrem a janela.
+- Se o usuário desligar o app em **Gerenciador de Tarefas > Aplicativos de
+  inicialização**, o agente persiste `startWithWindows=false` e **não**
+  repara a entrada sozinho.
 - Upgrades de instalações antigas podem deixar uma entrada legada em **HKLM** ou
   **WOW6432Node**; o app oferece reparo nas preferências e pode solicitar UAC
   **uma vez** para remover a duplicata.
@@ -67,7 +77,7 @@ uma ferramenta de banco precisar ser chamada por linha de comando, como
 - Acesso ao hub remoto quando Socket.IO estiver configurado.
 - Acesso ao feed oficial se o auto-update estiver habilitado.
 - Regras de proxy/firewall devem permitir HTTPS para GitHub Releases e GitHub
-  Raw quando updates automáticos forem usados.
+  Pages quando updates automáticos forem usados.
 
 ## Verificação Pós-Instalação
 

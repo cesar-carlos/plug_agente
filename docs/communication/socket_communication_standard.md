@@ -927,6 +927,10 @@ apos normalizacao simples (`trim` + case-insensitive).
 
 - Usa o bulk insert nativo do `odbc_fast`, indicado para cargas grandes que
   seriam ineficientes como milhares de comandos em `sql.executeBatch`.
+- Chunked `executeDirect` is **atomic** (begin/commit). Parallel/BCP are
+  **not** used when atomicity is required. A parallel/BCP failure is a
+  `Failure` and may leave partial writes; callers should inspect the table
+  before retrying.
 - `table` e `columns[*].name` aceitam caminhos simples de identificador
   (`tabela` ou `schema.tabela`); nomes com quoting especial devem continuar no
   caminho SQL tradicional ate haver contrato explicito para quoting.

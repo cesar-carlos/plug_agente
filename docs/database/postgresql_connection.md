@@ -43,6 +43,11 @@ aumentar concorrencia em producao, valide cancelamento, lock timeout e
 streaming com benchmark representativo (ver
 `docs/architecture/odbc_worker_evaluation_criteria.md`).
 
+PostgreSQL **may reuse** idle streaming connections (short TTL cache in
+`OdbcStreamingSessionCache`). Evicted sessions are disconnected; a
+timeout disconnect is discarded and never reused. Cancel on the last
+chunk does not reuse a dirty session.
+
 ## Troubleshooting
 
 ### "Connection refused" / "could not translate host name"

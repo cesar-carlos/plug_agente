@@ -1,8 +1,9 @@
 # Performance and Reliability Improvements
 
 Estado atual das melhorias de performance/confiabilidade do caminho ODBC
-(`odbc_fast 3.8.1`). **Comportamento runtime** (pool, failFast, workers,
-transacoes): [`docs/runtime/odbc_pool_and_transactions.md`](../runtime/odbc_pool_and_transactions.md).
+(`odbc_fast` **4.5.1**). **Comportamento runtime** (pool, failFast, workers,
+transacoes, streaming cache, bulk atomico):
+[`docs/runtime/odbc_pool_and_transactions.md`](../runtime/odbc_pool_and_transactions.md).
 **Tuning operacional**: [`QUICKSTART.md`](QUICKSTART.md).
 
 ## Status
@@ -14,8 +15,8 @@ transacoes): [`docs/runtime/odbc_pool_and_transactions.md`](../runtime/odbc_pool
 | Pool warm-up | Implementado | Respeita estrategia adaptativo/lease. |
 | Circuit breaker | Implementado | Evita timeouts completos em falhas repetidas. |
 | Retry com backoff exponencial | Implementado | `RetryManager`. |
-| Bulk insert | Implementado | `sql.bulkInsert` nativo quando aplicavel. |
-| Streaming | Implementado | `streamQuery` → `streamQueryBatched` com fallback. |
+| Bulk insert | Implementado | Chunked `executeDirect` e atomico (begin/commit). Parallel/BCP so quando atomicidade nao e exigida; falha paralela e `Failure` (writes parciais possiveis). |
+| Streaming | Implementado | Batched nativo (`streamQueryBatched` / columnar) com row-major em SQL Server/Anywhere. Cache de sessao so para PostgreSQL. |
 | Worker pool assincrono `odbc_fast` | Implementado | Default `min(poolSize, CPU cores)`. |
 | Adaptive/native pool | Implementado | Default on para SQL Server/PostgreSQL; SQL Anywhere fora. |
 | Result encoding columnar | Opt-in | Default `rowMajor`; columnar exige flag + benchmark. |
@@ -61,11 +62,16 @@ flutter analyze
 Benchmarks / runbook:
 
 ```powershell
-python tool/benchmarks/odbc_async_benchmark.py
-python tool/benchmarks/odbc_streaming_benchmark.py
-python tool/benchmarks/odbc_driver_matrix_benchmark.py
+python tool/benchmarks/run_benchmark_suite.py
 python tool/odbc/run_odbc_operational_validation.py --all
 ```
+
+A suite carrega `.env` no processo. Opt-in: `BENCHMARK_GATEWAY_ENCODING=1`
+(encoding via suite, nao `flutter test` cru). Pool modes:
+`ODBC_BENCH_CONNECTION_STRING`. Transaction control:
+`test/tool/odbc_transaction_control_benchmark_test.dart`. Wrappers individuais
+(`odbc_async_benchmark.py`, `odbc_streaming_benchmark.py`,
+`odbc_driver_matrix_benchmark.py`) continuam validos para um so eixo.
 
 Registrar resultados em
 [`odbc_operational_validation_runbook.md`](odbc_operational_validation_runbook.md).

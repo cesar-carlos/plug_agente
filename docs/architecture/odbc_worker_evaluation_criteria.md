@@ -2,8 +2,9 @@
 
 Este documento separa dois assuntos que nao devem ser misturados:
 
-- **Worker pool interno do `odbc_fast`**: suporte oficial do pacote 3.8.1.
-  Agora e o default do app, configurado por `ODBC_ASYNC_WORKER_COUNT` e
+- **Worker pool interno do `odbc_fast`**: suporte oficial do pacote
+  **4.5.1** (async workers desde 3.8.x). Agora e o default do app,
+  configurado por `ODBC_ASYNC_WORKER_COUNT` e
   `ODBC_ASYNC_MAX_PENDING_REQUESTS`.
 - **Arquitetura customizada multi-`ServiceLocator`/multi-pool**: continuamos
   fora de escopo. Ela cria roteamento, cancelamento, lifecycle e metricas por
@@ -79,33 +80,35 @@ latencia p95/p99 e rejeicoes antes de aumentar limites.
 
 | Driver family | Recomendacao |
 | --- | --- |
-| SQL Anywhere | Lease-based pool como default. Nao usar native pool global. Validar qualquer aumento de concorrencia com burst e soak test. |
-| SQL Server | Bom candidato para benchmarks de throughput, mantendo rollback por env/config. |
-| PostgreSQL | Validar streaming, paginacao, lock timeout e cancelamento antes de aumentar agressivamente. |
+| SQL Anywhere | Lease-based pool como default. Nao usar native pool global. Sem reuse de sessao de streaming (`odbc_fast` 4.5.1). Validar qualquer aumento de concorrencia com burst e soak test. |
+| SQL Server | Bom candidato para benchmarks de throughput, mantendo rollback por env/config. Sem reuse de sessao de streaming. |
+| PostgreSQL | Validar streaming, paginacao, lock timeout e cancelamento antes de aumentar agressivamente. Pode reutilizar sessoes de streaming idle (TTL curto). |
 
 ## Benchmark
 
-Use DSN representativo e compare baseline/candidato:
+Canonical runner (loads `.env`):
 
 ```powershell
-dart run D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart
+python tool/benchmarks/run_benchmark_suite.py
 ```
 
-Ou use o wrapper do repo:
+Transaction control: `flutter test test/tool/odbc_transaction_control_benchmark_test.dart --tags perf`
+(DSN `ODBC_TEST_DSN` / `ODBC_DSN`). Pool modes:
+`ODBC_BENCH_CONNECTION_STRING`. Gateway encoding:
+`BENCHMARK_GATEWAY_ENCODING=1` via the suite, not raw `flutter test`.
+
+Use a representative DSN and compare baseline/candidato. Package examples
+need `DART_ODBC_FAST_ROOT` (do not hard-code a local clone path):
+
+```powershell
+dart run $env:DART_ODBC_FAST_ROOT/example/async_concurrency_benchmark.dart
+```
+
+Single-axis wrappers:
 
 ```powershell
 python tool/benchmarks/odbc_async_benchmark.py
-```
-
-Para comparar streaming legado e batched streaming:
-
-```powershell
 python tool/benchmarks/odbc_streaming_benchmark.py
-```
-
-Para comparar SQL Anywhere, SQL Server e PostgreSQL configurados:
-
-```powershell
 python tool/benchmarks/odbc_driver_matrix_benchmark.py
 ```
 

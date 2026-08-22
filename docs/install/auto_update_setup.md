@@ -61,8 +61,8 @@ AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 | --- | --- | --- |
 | `AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS` | `300` | minimo 60. Timeout do `HttpClient` durante o download do instalador. |
 | `AUTO_UPDATE_DOWNLOAD_RESUME` | `true` | quando `false` desliga `HTTP Range`; use apenas em proxies que nao honram `Range`. |
-| `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` | `30` | 0 desliga o aviso pre-fechamento; max 120. Tempo de espera apos a notificacao "fechando para atualizar" antes do `exit`. |
-| `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela onde **novos** downloads automaticos retornam `skippedByQuietHours`. Pending ja *staged* ainda pode auto-aplicar / permanecer Ready. Suporta janelas que cruzam meia-noite. |
+| `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` | `30` | 0 desliga o aviso pre-fechamento; max 120. Tempo de espera apos a notificacao "fechando para atualizar" antes do `exit`. O helper espera o PID do app por no minimo **70 s** (`resolveAutoUpdateWaitPidTimeoutSeconds` = pre-close + 25 s de grace de exit + 15 s de buffer, teto 180 s), alinhado a essa janela. |
+| `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela onde **novos** downloads automaticos (boot/timer) retornam `skippedByQuietHours`. Pending ja *staged* ainda pode auto-aplicar / permanecer Ready. `Instalar agora` (user-initiated) nao espera essa janela. Suporta janelas que cruzam meia-noite. |
 | `AUTO_UPDATE_HELPER_WAIT_MINUTES` | `30` | min 5, max 120. Tempo maximo que o reconcile aguarda um helper **ja lancado** (status / `launchedAt`) antes de marcar falha e limpar. Download apenas staged nao usa este timeout para clear+fail. |
 | `AUTO_UPDATE_AUTO_APPLY` | `true` | quando `false`/`0`, o fluxo silencioso faz apenas download e *staging*; o apply exige banner ou shutdown. Opt-out por deploy. |
 | `AUTO_UPDATE_FEED_PUBLIC_KEY` | nao definido | CSV base64 de chaves Ed25519 (ver secao de assinatura). |
@@ -71,7 +71,7 @@ AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 O default seguro em `resolveAutoUpdateRequireValidSignature` e `true` e essa
 e a configuracao do `.env.example`. Quando ligado, o gate atua em dois pontos:
 
-- Lado Dart (`HttpSilentUpdateInstaller`): bloqueia antes de spawnar o helper
+- Lado Dart (`DioSilentUpdateInstaller`): bloqueia antes de spawnar o helper
   se `plug_update_helper.exe` nao retornar Authenticode `valid` no
   `IHelperSignatureProbe` (`helperSignatureStatus`).
 - Helper nativo (`windows/update_helper/main.cpp`): bloqueia antes de executar
@@ -237,8 +237,11 @@ Em instalacoes sob `Program Files`, o Windows ainda pode exibir prompt UAC
 download automatico.
 
 O helper recebe argumentos explicitos, incluindo versao, instalador,
-diretorio atual de instalacao, log, status JSON, PID do app e estrategia de
-permissao.
+diretorio atual de instalacao, log, status JSON, PID do app, estrategia de
+permissao e `--wait-pid-timeout-seconds` (piso 70, mesmo default do helper
+em `kDefaultWaitPidTimeoutSeconds`). A espera do PID precisa cobrir o
+pre-close; um timeout menor (por exemplo 45 s) deixaria o Inno iniciar
+enquanto o app ainda esta no aviso de fechamento.
 
 ## Retry Sem Admin e Fallback Elevado
 
@@ -265,9 +268,25 @@ O relaunch pos-update fica so no `[Run]` com `/LAUNCHAFTERUPDATE=1`. Nao use
 `/RESTARTAPPLICATIONS` junto: se o helper precisar do `/CLOSEAPPLICATIONS`
 (app ainda aberto), os dois caminhos lancariam duas instancias.
 
+`/MERGETASKS="!desktopicon,!startup"` impede o update silencioso de
+re-selecionar o atalho da area de trabalho e a task **Iniciar com o
+Windows**. Auto-start de instalacao elevada (nao de update) usa
+`runasoriginaluser` mais o marker
+`{commonappdata}\PlugAgente\autostart-requested`; veja
+[requirements.md](requirements.md).
+
+O `installer/setup.iss` usa `SetupMutex=PlugAgenteSetup` para impedir duas
+instancias do Setup (manual + helper silencioso). `AppMutex` e omitido de
+proposito: o helper espera o PID primeiro; um AppMutex abortaria
+`/VERYSILENT` durante a janela de pre-close. `ForceCloseApplications=yes`
+com filtro `plug_agente.exe` fecha o processo se ele ainda estiver vivo
+apos essa espera. A desinstalacao remove `{commonappdata}\PlugAgente\updates`.
+
 Em instalacoes sob `Program Files`, UAC continua esperado. O objetivo desta
 etapa e reduzir UAC para instalacoes em diretorios gravaveis pelo usuario, nao
-criar um servico privilegiado permanente.
+criar um servico privilegiado permanente. Se o operador cancelar o UAC, o
+pending permanece **Ready** (nao sucesso e nao fail+cooldown); o banner
+oferece retry.
 
 ## Pending Update, Cooldown e Diagnosticos
 
@@ -290,12 +309,20 @@ No proximo boot (reconcile):
 - falha/clear apos evidencia de launch + timeout do helper, ou status
   terminal de falha do helper — **reconcile e resolve** compartilham a mesma
   politica fail+cooldown (nunca Ready/retry apos launch concluido/expirado);
+- cancelamento do UAC (`elevatedCancelled` / estado `elevatedCancelled`) e
+  a excecao: o instalador staged permanece Ready para retry no banner, com
+  mensagem localizada; nao conta como sucesso e nao incrementa o cooldown;
 - `launchedAt` e persistido **antes** do spawn do helper (e flushed) para que
   um kill entre `Process.start` e a escrita antiga nao deixe Ready sem
   evidencia de launch;
 - o contador de falhas automaticas entra em cooldown depois de 3 falhas por 6
   horas;
-- durante cooldown, o fluxo automatico nao baixa nem inicia instalador;
+- durante cooldown, o fluxo **automatico** (boot/timer) nao baixa nem inicia
+  instalador;
+- o apply explicito do usuario (`Instalar agora` / `applyAvailableUpdate` com
+  `userInitiated: true`) ignora quiet hours e o cooldown de falhas
+  automaticas; SHA-256, rollout e a preferencia para *novos* downloads
+  continuam valendo;
 - se a preferencia automatica for desligada **depois** de um stage bem-sucedido,
   o pending Ready e **mantido** para apply manual (banner/shutdown); so o
   download em voo e cancelado.
@@ -326,8 +353,10 @@ A tela **Atualizacoes/Sobre** mostra diagnosticos copiaveis com:
     o silent flow falha com `validation_code=feed_signature_*`.
 
 O botao **Tentar atualizacao automatica agora** dispara o mesmo
-`checkSilently()` usado pelo boot/intervalo. Ele nao ignora SHA-256, rollout,
-cooldown, pending update ou a preferencia do usuario.
+`checkSilently()` unattended usado pelo boot/intervalo. Ele nao ignora
+SHA-256, rollout, cooldown, quiet hours, pending update ou a preferencia
+do usuario. O botao **Instalar agora** e user-initiated e ignora cooldown
+e quiet hours, como descrito acima.
 
 ## Fonte de Verdade do Appcast
 
@@ -435,8 +464,12 @@ PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
    - com auto-apply desligado: download e staging concluem; o banner oferece
      apply manual;
    - em `Program Files`, UAC pode aparecer **na instalacao**, nao no download;
+   - se o UAC for cancelado: o pending permanece Ready para retry; a UI nao
+     trata o apply como sucesso;
+   - **Instalar agora** funciona mesmo em cooldown ou quiet hours;
    - sem versao nova: a UI informa que nao ha atualizacao;
-   - em cooldown: a UI registra `automaticCooldown`;
+   - em cooldown (fluxo automatico / **Tentar atualizacao automatica agora**):
+     a UI registra `automaticCooldown`;
    - com falha: a UI mostra detalhes tecnicos copiaveis.
 
 Validacao manual recomendada:

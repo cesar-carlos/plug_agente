@@ -279,6 +279,13 @@ Para executar smoke, burst e benchmark em sequencia:
 python tool/odbc/run_odbc_operational_validation.py --all
 ```
 
+Suite de benchmarks (carrega `.env`; encoding ODBC via
+`BENCHMARK_GATEWAY_ENCODING=1`, nao `flutter test` cru):
+
+```powershell
+python tool/benchmarks/run_benchmark_suite.py
+```
+
 ## Troubleshooting
 
 ### Problema: "Circuit breaker open" mas banco está UP

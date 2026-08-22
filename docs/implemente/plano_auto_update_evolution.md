@@ -34,9 +34,9 @@ Resumo executivo. Detalhes na secao de cada fase mais abaixo.
 | P0 | 1D | `release_preflight.py` valida pubkey embutida no binario | nao | `tool/release/release_preflight.py` |
 | P0 | 1E.1 | Configurar `APPCAST_SIGNING_PRIVATE_KEY` no GH Secrets + publicar release assinada | Decisao chave | operacional |
 | P0 | 1E.2 | Ativar `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true` apos 2 releases verde | observacao em campo | `.env.example`, build CI |
-| P0 | 2A | `IHelperSignatureProbe` + PowerShell Authenticode gate pre-launch | Decisao Authenticode | `lib/infrastructure/services/http_silent_update_installer.dart` |
+| P0 | 2A | `IHelperSignatureProbe` + PowerShell Authenticode gate pre-launch | Decisao Authenticode | `lib/infrastructure/services/dio_silent_update_installer.dart` |
 | P0 | 2B | Threat model documentado | nao | `docs/security/auto_update_threat_model.md` |
-| P1 | 3A | Pre-flight de espaco em disco | nao | `lib/infrastructure/services/http_silent_update_installer.dart` |
+| P1 | 3A | Pre-flight de espaco em disco | nao | `lib/infrastructure/services/dio_silent_update_installer.dart` |
 | P1 | 3B | Download resumivel HTTP Range com flag opt-out | nao | idem |
 | P1 | 4A | Correlation ID UUIDv7 nas diagnostics | nao | `lib/core/services/update_check_diagnostics.dart` |
 | P1 | 4B | Histogramas de duracao no `MetricsCollector` | nao | `lib/infrastructure/metrics/metrics_collector.dart` |
@@ -181,7 +181,7 @@ Goal: cadeia de confianca nao depende mais so de filesystem ACL.
   '-Command', "(Get-AuthenticodeSignature '<path>').Status"])` com
   timeout 5s.
 - [x] Cache do resultado por sessao.
-- [x] `HttpSilentUpdateInstaller` recusa launch se
+- [x] `DioSilentUpdateInstaller` recusa launch se
   `requireValidSignature=true` e status != `Valid`.
 - [x] Tests cobrem 3 status (Valid -> ok, Invalid + REQUIRE=true ->
   ValidationFailure, timeout -> best-effort).
@@ -273,8 +273,10 @@ Goal: usuario nao e surpreendido pelo fechamento do app.
 - [x] Novo `SilentUpdateOutcome.skippedByQuietHours`.
 - [x] Env `AUTO_UPDATE_QUIET_HOURS_START=22:00` e `_END=06:00`.
 - [x] Settings UI editavel.
-- [x] Coordinator pula `checkSilently()` durante janela, mantem pending.
-- [x] Sem incremento de cooldown.
+- [x] Coordinator pula `checkSilently()` **unattended** durante janela, mantem pending.
+- [x] Apply explicito (`Instalar agora`, `userInitiated: true`) ignora quiet
+  hours e o cooldown de falhas automaticas.
+- [x] Sem incremento de cooldown no skip unattended.
 - [x] Tests cobrem dentro/fora da janela.
 
 #### Criterio de aceite da Fase 5
