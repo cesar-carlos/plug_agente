@@ -101,6 +101,7 @@ jobs:
             tool.tests.test_benchmark_migrate \
             tool.tests.test_promote_benchmark_baseline \
             tool.tests.test_benchmark_evolution_report \
+            tool.tests.test_script_utils \
             -v
 
   windows-helper-smoke:

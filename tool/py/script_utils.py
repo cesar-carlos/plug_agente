@@ -70,6 +70,33 @@ class Console:
         cls._emit(cls.GRAY, f"  [hint] {message}")
 
 
+def canonical_windows_executable(path: str) -> str:
+    resolved = Path(path)
+    if resolved.suffix.lower() == ".exe" and resolved.suffix != ".exe":
+        return str(resolved.with_suffix(".exe"))
+    return path
+
+
+def resolve_dart_sdk_executable() -> str:
+    flutter = shutil.which("flutter")
+    if flutter:
+        flutter_path = Path(flutter)
+        if flutter_path.suffix.lower() in {".bat", ".cmd"}:
+            sdk_dart = (
+                flutter_path.resolve().parent
+                / "cache"
+                / "dart-sdk"
+                / "bin"
+                / "dart.exe"
+            )
+            if sdk_dart.is_file():
+                return str(sdk_dart)
+    which_dart = shutil.which("dart")
+    if which_dart:
+        return canonical_windows_executable(which_dart)
+    return "dart"
+
+
 def resolve_command(cmd: Sequence[str]) -> list[str]:
     args = list(cmd)
     if not args:
@@ -79,7 +106,7 @@ def resolve_command(cmd: Sequence[str]) -> list[str]:
     resolved = shutil.which(executable) or executable
     if Path(resolved).suffix.lower() in {".bat", ".cmd"}:
         return ["cmd.exe", "/d", "/c", resolved, *args[1:]]
-    return [resolved, *args[1:]]
+    return [canonical_windows_executable(resolved), *args[1:]]
 
 
 def run(

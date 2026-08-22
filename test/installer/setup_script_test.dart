@@ -41,8 +41,9 @@ void main() {
     test('elevated runner build uses dart build cli for sqlite3 native hooks', () {
       final buildScript = File('tool/elevated/build_elevated_runner.py').readAsStringSync();
 
+      expect(buildScript, contains('resolve_dart_sdk_executable'));
+      expect(buildScript, contains('"build"'));
       expect(buildScript, contains('"cli"'));
-      expect(RegExp(r'"dart",\s*"build",\s*"cli"').hasMatch(buildScript), isTrue);
     });
 
     test('installer build injects auto update channel and signature defines', () {

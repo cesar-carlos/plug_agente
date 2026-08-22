@@ -14,7 +14,7 @@ for _entry in (str(_ROOT), str(_TOOL_DIR)):
 import shutil
 import subprocess
 
-from py.script_utils import PROJECT_ROOT, Console, run
+from py.script_utils import PROJECT_ROOT, Console, resolve_dart_sdk_executable, run
 
 PACKAGE_DIR = PROJECT_ROOT / "tool" / "plug_agente_elevated_runner"
 OUTPUT_DIR = PROJECT_ROOT / "build" / "elevated_runner"
@@ -41,7 +41,8 @@ def _built_executable(bundle_bin: Path) -> Path:
 
 
 def main() -> int:
-    run(["dart", "pub", "get"], cwd=PACKAGE_DIR)
+    dart = resolve_dart_sdk_executable()
+    run([dart, "pub", "get"], cwd=PACKAGE_DIR)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     if CLI_BUILD_DIR.exists():
         shutil.rmtree(CLI_BUILD_DIR)
@@ -49,7 +50,7 @@ def main() -> int:
     # run those hooks (`use 'dart build' instead`).
     run(
         [
-            "dart",
+            dart,
             "build",
             "cli",
             "-t",
