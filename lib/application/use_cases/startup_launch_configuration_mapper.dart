@@ -18,7 +18,7 @@ class StartupLaunchConfigurationMapper {
         allowElevation: allowElevation,
         createIfMissing: createIfMissing,
       );
-      return result.fold(
+      return await result.fold(
         fromStatus,
         fromFailure,
       );

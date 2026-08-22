@@ -63,6 +63,13 @@ analyzer:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
     - "tool/plug_agente_elevated_runner/**"
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
   plugins:
     - drift_dev
 

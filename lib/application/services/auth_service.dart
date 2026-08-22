@@ -34,7 +34,7 @@ class AuthService {
         configId,
         token,
       );
-      return saveResult.fold(
+      return await saveResult.fold(
         (_) => const Success(unit),
         Failure.new,
       );

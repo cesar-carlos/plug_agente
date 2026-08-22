@@ -76,7 +76,7 @@ final class OdbcStreamingCancelCoordinator {
     stream.isDisconnectStarted = true;
     try {
       final result = await _service.disconnect(stream.connectionId).timeout(_cancelDisconnectTimeout);
-      return result.fold(
+      return await result.fold(
         (_) => const Success(unit),
         (error) {
           if (OdbcErrorInspector.isInvalidConnectionId(error)) {

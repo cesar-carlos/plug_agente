@@ -21,6 +21,14 @@ void registerPlugStartupServices(
     ),
   );
 
+  if (getIt.isRegistered<GlobalStorageContext>()) {
+    getIt.registerLazySingleton<IInstallerAutostartRequestStore>(
+      () => FileInstallerAutostartRequestStore(
+        directoryPath: getIt<GlobalStorageContext>().appDirectoryPath,
+      ),
+    );
+  }
+
   getIt
     ..registerLazySingleton(StartupConfigurationSessionState.new)
     ..registerLazySingleton(
@@ -34,6 +42,9 @@ void registerPlugStartupServices(
       () => EnsureStartupLaunchConfigurationAtBoot(
         getIt<IStartupPreferencesRepository>(),
         sessionState: getIt<StartupConfigurationSessionState>(),
+        installerAutostartRequestStore: getIt.isRegistered<IInstallerAutostartRequestStore>()
+            ? getIt<IInstallerAutostartRequestStore>()
+            : null,
       ),
     )
     ..registerLazySingleton(

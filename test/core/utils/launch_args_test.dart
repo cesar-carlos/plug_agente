@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/autostart_install_request_constants.dart';
 import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/utils/launch_args.dart';
 
@@ -14,6 +15,17 @@ void main() {
           LaunchArgsConstants.autostartArg,
           equals(canonical),
           reason: 'launch_args_constants must match constants/autostart_arg.txt',
+        );
+      }
+    });
+
+    test('should match constants/autostart_request_marker.txt when file exists', () {
+      final file = File('constants/autostart_request_marker.txt');
+      if (file.existsSync()) {
+        expect(
+          AutostartInstallRequestConstants.markerFileName,
+          equals(file.readAsStringSync().trim()),
+          reason: 'autostart install marker must match constants/autostart_request_marker.txt',
         );
       }
     });

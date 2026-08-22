@@ -126,7 +126,7 @@ class PlaygroundQueryController {
       );
       stopwatch.stop();
 
-      return result.fold(
+      return await result.fold(
         (response) {
           if (response.error != null) {
             final failure = failureFromQueryResponseError(response.error!);
@@ -195,7 +195,7 @@ class PlaygroundQueryController {
       );
 
       stopwatch.stop();
-      return result.fold(
+      return await result.fold(
         (_) => PlaygroundStreamingExecuteOutcome(
           duration: stopwatch.elapsed,
           completed: true,

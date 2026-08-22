@@ -36,7 +36,6 @@ class ConfigPage extends StatelessWidget {
     final systemSettings = context.select<SystemSettingsProvider, _ConfigSystemSettingsViewState>(
       (provider) => _ConfigSystemSettingsViewState(
         startWithWindows: provider.startWithWindows,
-        startMinimized: provider.startMinimized,
         minimizeToTray: provider.minimizeToTray,
         closeToTray: provider.closeToTray,
         startupError: provider.startupError,
@@ -61,11 +60,9 @@ class ConfigPage extends StatelessWidget {
           child: _ConfigTabbedContent(
             isDarkThemeEnabled: isDarkThemeEnabled,
             startWithWindows: systemSettings.startWithWindows,
-            startMinimized: systemSettings.startMinimized,
             minimizeToTray: supportsTray && systemSettings.minimizeToTray,
             closeToTray: supportsTray && systemSettings.closeToTray,
             startupSupported: startupSupported,
-            startMinimizedSupported: supportsTray,
             trayBehaviorSupported: supportsTray,
             startupError: systemSettings.startupError,
             preferenceError: systemSettings.preferenceError,
@@ -77,7 +74,6 @@ class ConfigPage extends StatelessWidget {
               systemSettingsProvider,
               value,
             ),
-            onStartMinimizedChanged: systemSettingsProvider.setStartMinimized,
             onMinimizeToTrayChanged: systemSettingsProvider.setMinimizeToTray,
             onCloseToTrayChanged: systemSettingsProvider.setCloseToTray,
             onOpenStartupSettings: systemSettingsProvider.openStartupSettings,
@@ -146,11 +142,9 @@ class _ConfigTabbedContent extends StatefulWidget {
   const _ConfigTabbedContent({
     required this.isDarkThemeEnabled,
     required this.startWithWindows,
-    required this.startMinimized,
     required this.minimizeToTray,
     required this.closeToTray,
     required this.startupSupported,
-    required this.startMinimizedSupported,
     required this.trayBehaviorSupported,
     required this.startupError,
     required this.preferenceError,
@@ -158,7 +152,6 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.startupNotice,
     required this.onDarkThemeChanged,
     required this.onStartWithWindowsChanged,
-    required this.onStartMinimizedChanged,
     required this.onMinimizeToTrayChanged,
     required this.onCloseToTrayChanged,
     required this.onOpenStartupSettings,
@@ -168,11 +161,9 @@ class _ConfigTabbedContent extends StatefulWidget {
 
   final bool isDarkThemeEnabled;
   final bool startWithWindows;
-  final bool startMinimized;
   final bool minimizeToTray;
   final bool closeToTray;
   final bool startupSupported;
-  final bool startMinimizedSupported;
   final bool trayBehaviorSupported;
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
@@ -180,7 +171,6 @@ class _ConfigTabbedContent extends StatefulWidget {
   final SystemSettingsNoticeState? startupNotice;
   final ValueChanged<bool> onDarkThemeChanged;
   final ValueChanged<bool> onStartWithWindowsChanged;
-  final ValueChanged<bool> onStartMinimizedChanged;
   final ValueChanged<bool> onMinimizeToTrayChanged;
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onOpenStartupSettings;
@@ -213,11 +203,9 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
           body: PreferencesConfigSection(
             isDarkThemeEnabled: widget.isDarkThemeEnabled,
             startWithWindows: widget.startWithWindows,
-            startMinimized: widget.startMinimized,
             minimizeToTray: widget.minimizeToTray,
             closeToTray: widget.closeToTray,
             startupSupported: widget.startupSupported,
-            startMinimizedSupported: widget.startMinimizedSupported,
             trayBehaviorSupported: widget.trayBehaviorSupported,
             startupError: widget.startupError,
             preferenceError: widget.preferenceError,
@@ -225,7 +213,6 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             startupNotice: widget.startupNotice,
             onDarkThemeChanged: widget.onDarkThemeChanged,
             onStartWithWindowsChanged: widget.onStartWithWindowsChanged,
-            onStartMinimizedChanged: widget.onStartMinimizedChanged,
             onMinimizeToTrayChanged: widget.onMinimizeToTrayChanged,
             onCloseToTrayChanged: widget.onCloseToTrayChanged,
             onOpenStartupSettings: widget.onOpenStartupSettings,
@@ -299,7 +286,6 @@ class _ConfigUpdatesTab extends StatelessWidget {
 class _ConfigSystemSettingsViewState {
   const _ConfigSystemSettingsViewState({
     required this.startWithWindows,
-    required this.startMinimized,
     required this.minimizeToTray,
     required this.closeToTray,
     required this.startupError,
@@ -308,7 +294,6 @@ class _ConfigSystemSettingsViewState {
   });
 
   final bool startWithWindows;
-  final bool startMinimized;
   final bool minimizeToTray;
   final bool closeToTray;
   final SystemSettingsErrorState? startupError;
@@ -320,7 +305,6 @@ class _ConfigSystemSettingsViewState {
     return identical(this, other) ||
         other is _ConfigSystemSettingsViewState &&
             startWithWindows == other.startWithWindows &&
-            startMinimized == other.startMinimized &&
             minimizeToTray == other.minimizeToTray &&
             closeToTray == other.closeToTray &&
             startupError == other.startupError &&
@@ -331,7 +315,6 @@ class _ConfigSystemSettingsViewState {
   @override
   int get hashCode => Object.hash(
     startWithWindows,
-    startMinimized,
     minimizeToTray,
     closeToTray,
     startupError,

@@ -17,6 +17,9 @@ void main() {
   setUp(() {
     repository = _MockStartupPreferencesRepository();
     useCase = SyncStartupStatus(repository);
+    when(() => repository.readStartupDisabledByUser()).thenAnswer(
+      (_) async => const Success(false),
+    );
   });
 
   test('skips sync when startup service is unavailable', () async {
@@ -115,6 +118,50 @@ void main() {
     verify(() => repository.persistStartWithWindows(false)).called(1);
   });
 
+  test('returns failure when reconciled preference cannot be persisted', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(false);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(true),
+    );
+    when(() => repository.persistStartWithWindows(true)).thenAnswer(
+      (_) async => Failure(
+        StartupServiceFailure(message: 'Failed to persist setting'),
+      ),
+    );
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
+    );
+
+    final result = await useCase();
+
+    expect(result.isError(), isTrue);
+    expect(result.exceptionOrNull(), isA<StartupServiceFailure>());
+    verify(() => repository.persistStartWithWindows(true)).called(1);
+  });
+
+  test('skips reconcile persist when caller aborts after a user mutation', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(false);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(true),
+    );
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
+    );
+
+    final result = await useCase(shouldAbort: () => true);
+
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull()?.reconciledStartWithWindows, isNull);
+    verifyNever(() => repository.persistStartWithWindows(any()));
+    verifyNever(() => repository.ensureLaunchConfiguration(allowElevation: false));
+  });
+
   test('keeps stored preference when ensure repairs HKCU during sync', () async {
     when(() => repository.isStartupServiceAvailable).thenReturn(true);
     when(() => repository.startWithWindows).thenReturn(true);
@@ -158,5 +205,57 @@ void main() {
     );
     verifyNever(() => repository.ensureLaunchConfiguration(allowElevation: false));
     verifyNever(() => repository.ensureLaunchConfiguration());
+  });
+
+  test('persists disabled and skips repair when Startup Apps disabled the entry', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(true);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(false),
+    );
+    when(() => repository.readStartupDisabledByUser()).thenAnswer(
+      (_) async => const Success(true),
+    );
+    when(() => repository.persistStartWithWindows(false)).thenAnswer(
+      (_) async => const Success(unit),
+    );
+
+    final result = await useCase();
+
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull()?.reconciledStartWithWindows, isFalse);
+    verify(() => repository.persistStartWithWindows(false)).called(1);
+    verifyNever(() => repository.ensureLaunchConfiguration(allowElevation: false));
+    verifyNever(() => repository.enableSystemStartup());
+  });
+
+  test('does not treat Startup Apps read failure as a user disable', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(true);
+    when(() => repository.readSystemStartupEnabled()).thenAnswer(
+      (_) async => const Success(false),
+    );
+    when(() => repository.readStartupDisabledByUser()).thenAnswer(
+      (_) async => Failure(
+        StartupServiceFailure(
+          message: 'Permission denied',
+          startupCode: StartupServiceFailureCode.accessDenied,
+        ),
+      ),
+    );
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.needsRepair),
+    );
+
+    final result = await useCase();
+
+    expect(result.isSuccess(), isTrue);
+    expect(result.getOrNull()?.reconciledStartWithWindows, isNull);
+    verify(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).called(1);
+    verifyNever(() => repository.persistStartWithWindows(false));
   });
 }

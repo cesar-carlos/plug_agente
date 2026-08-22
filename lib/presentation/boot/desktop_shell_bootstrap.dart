@@ -39,7 +39,6 @@ StartupWindowPreferences resolveStartupWindowPreferences(
     startMinimized: AppPreferencesPolicy.shouldStartMinimizedAtLaunch(
       supportsTray: canStartMinimized,
       isAutostartLaunch: isAutostartLaunch,
-      startMinimizedPreference: settingsStore.getBool(AppSettingsKeys.startMinimized) ?? false,
     ),
     minimizeToTray: settingsStore.getBool(AppSettingsKeys.minimizeToTray) ?? true,
     closeToTray: settingsStore.getBool(AppSettingsKeys.closeToTray) ?? true,
@@ -83,6 +82,7 @@ class DesktopShellBootstrap {
       );
     }
 
+    await _revealWindowAfterAutostartIfNeeded(windowManagerService);
     await _initializeNotifications();
   }
 
@@ -100,11 +100,14 @@ class DesktopShellBootstrap {
         canStartMinimized: capabilities.supportsTray,
         isAutostartLaunch: isAutostartLaunch,
       );
-
       await windowManagerService.initialize(
         size: initialSize,
         minimumSize: minSize,
-        startMinimized: preferences.startMinimized,
+        startMinimized:
+            AppPreferencesPolicy.shouldHideWindowDuringAutostartBootstrap(
+              isAutostartLaunch: isAutostartLaunch,
+            ) ||
+            preferences.startMinimized,
       );
 
       developer.log(
@@ -209,6 +212,31 @@ class DesktopShellBootstrap {
         stackTrace: stackTrace,
       );
       await _restoreWindowAfterTrayFailure(windowManagerService);
+    }
+  }
+
+  Future<void> _revealWindowAfterAutostartIfNeeded(
+    WindowManagerService? windowManagerService,
+  ) async {
+    if (windowManagerService == null) {
+      return;
+    }
+    if (!AppPreferencesPolicy.shouldRevealWindowAfterAutostartBootstrap(
+      isAutostartLaunch: isAutostartLaunch,
+    )) {
+      return;
+    }
+
+    try {
+      await windowManagerService.show();
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Failed to reveal window after autostart bootstrap',
+        name: 'desktop_shell_bootstrap',
+        level: 900,
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 

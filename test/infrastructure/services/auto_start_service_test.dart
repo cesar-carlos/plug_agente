@@ -48,10 +48,17 @@ class _FakeRegistryReader implements IStartupRunValueRegistryReader {
 class _FakeStartupApprovedStore implements IStartupApprovedStore {
   _FakeStartupApprovedStore({
     this.readResult = const StartupApprovedReadResult.notPresent(),
+    this.writeResult = const StartupApprovedWriteResult.success(),
+    this.deleteResult = const StartupApprovedWriteResult.success(),
+    this.applyWriteToReadResult = true,
   });
 
   StartupApprovedReadResult readResult;
+  StartupApprovedWriteResult writeResult;
+  StartupApprovedWriteResult deleteResult;
+  bool applyWriteToReadResult;
   int writeEnabledCallCount = 0;
+  int deleteCallCount = 0;
 
   @override
   StartupApprovedReadResult read({required String valueName}) => readResult;
@@ -59,8 +66,19 @@ class _FakeStartupApprovedStore implements IStartupApprovedStore {
   @override
   StartupApprovedWriteResult writeEnabled({required String valueName}) {
     writeEnabledCallCount += 1;
-    readResult = const StartupApprovedReadResult.enabled();
-    return const StartupApprovedWriteResult.success();
+    if (writeResult.status == StartupApprovedWriteStatus.success && applyWriteToReadResult) {
+      readResult = const StartupApprovedReadResult.enabled();
+    }
+    return writeResult;
+  }
+
+  @override
+  StartupApprovedWriteResult delete({required String valueName}) {
+    deleteCallCount += 1;
+    if (deleteResult.status == StartupApprovedWriteStatus.success) {
+      readResult = const StartupApprovedReadResult.notPresent();
+    }
+    return deleteResult;
   }
 }
 
@@ -225,6 +243,10 @@ void main() {
           _registrySnapshot(
             hklm: _found(_startupValue(_currentExecutable)),
           ),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+            hklm: _found(_startupValue(_currentExecutable)),
+          ),
         ]),
       );
 
@@ -290,6 +312,9 @@ void main() {
         registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
         ]),
       );
 
@@ -514,12 +539,8 @@ void main() {
         machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
       );
       final calls = <_ProcessInvocation>[];
-      final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 0, '', 'ERROR: The system was unable to find the specified registry key or value.'),
-      ]);
       final service = _makeService(
         calls: calls,
-        results: results,
         registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(
@@ -531,8 +552,8 @@ void main() {
       final result = await service.disable();
 
       check(result.isSuccess()).isTrue();
-      check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.localMachine);
-      check(calls.where((call) => call.arguments.contains('delete')).length).equals(1);
+      check(writer.deleteCalls).isEmpty();
+      check(calls).isEmpty();
     });
 
     test('should classify UAC cancellation by exit code', () async {
@@ -662,6 +683,9 @@ void main() {
         registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
         ]),
       );
       final result = await service.enable();
@@ -819,6 +843,9 @@ void main() {
         registryWriter: writer,
         registrySnapshots: Queue.from([
           _registrySnapshot(),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
         ]),
         startupApprovedStore: approved,
       );
@@ -828,6 +855,136 @@ void main() {
       check(result.isSuccess()).isTrue();
       check(writer.setCalls).length.equals(1);
       check(approved.writeEnabledCallCount).equals(1);
+      check(approved.readResult.status).equals(StartupApprovedStatus.enabled);
+    });
+
+    test('should roll back HKCU when StartupApproved cannot be enabled', () async {
+      final approved = _FakeStartupApprovedStore(
+        writeResult: const StartupApprovedWriteResult.accessDenied(5),
+      );
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(),
+        ]),
+        startupApprovedStore: approved,
+      );
+
+      final result = await service.enable();
+
+      check(result.isError()).isTrue();
+      result.fold(
+        (_) => fail('Expected failure when StartupApproved cannot be enabled'),
+        (failure) {
+          check(failure).isA<StartupServiceFailure>();
+          check((failure as StartupServiceFailure).startupCode).equals(StartupServiceFailureCode.accessDenied);
+        },
+      );
+      check(writer.setCalls).length.equals(1);
+      check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.currentUser);
+    });
+
+    test('should fail enable when StartupApproved write does not stick on read-back', () async {
+      final approved = _FakeStartupApprovedStore(
+        readResult: const StartupApprovedReadResult.disabled(),
+        applyWriteToReadResult: false,
+      );
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(),
+        ]),
+        startupApprovedStore: approved,
+      );
+
+      final result = await service.enable();
+
+      check(result.isError()).isTrue();
+      result.fold(
+        (_) => fail('Expected failure when StartupApproved read-back stays blocked'),
+        (failure) {
+          check(failure).isA<StartupServiceFailure>();
+          check((failure as StartupServiceFailure).startupCode).equals(
+            StartupServiceFailureCode.registryWriteFailed,
+          );
+        },
+      );
+      check(approved.writeEnabledCallCount).equals(1);
+      check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.currentUser);
+    });
+
+    test('should fail enable when written HKCU entry cannot be verified', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(),
+          _registrySnapshot(),
+        ]),
+      );
+
+      final result = await service.enable();
+
+      check(result.isError()).isTrue();
+      result.fold(
+        (_) => fail('Expected failure when enable cannot be verified'),
+        (failure) {
+          check(failure).isA<StartupServiceFailure>();
+          check((failure as StartupServiceFailure).startupCode).equals(
+            StartupServiceFailureCode.registryWriteFailed,
+          );
+        },
+      );
+      check(writer.setCalls).length.equals(1);
+      check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.currentUser);
+    });
+
+    test('should remove StartupApproved overlay when disabling auto-start', () async {
+      final approved = _FakeStartupApprovedStore(
+        readResult: const StartupApprovedReadResult.enabled(),
+      );
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+        startupApprovedStore: approved,
+      );
+
+      final result = await service.disable();
+
+      check(result.isSuccess()).isTrue();
+      check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.currentUser);
+      check(approved.deleteCallCount).equals(1);
+      check(approved.readResult.status).equals(StartupApprovedStatus.notPresent);
+    });
+
+    test('should still disable Run key when StartupApproved overlay delete fails', () async {
+      final approved = _FakeStartupApprovedStore(
+        readResult: const StartupApprovedReadResult.enabled(),
+        deleteResult: const StartupApprovedWriteResult.accessDenied(5),
+      );
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+        startupApprovedStore: approved,
+      );
+
+      final result = await service.disable();
+
+      check(result.isSuccess()).isTrue();
+      check(writer.deleteCalls.single.scope).equals(StartupRegistryScope.currentUser);
+      check(approved.deleteCallCount).equals(1);
       check(approved.readResult.status).equals(StartupApprovedStatus.enabled);
     });
 
@@ -995,6 +1152,140 @@ void main() {
         (_) => fail('Expected success'),
       );
     });
+
+    test('should refuse to enable auto-start for a Flutter debug executable', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        executablePath: r'D:\proj\build\windows\x64\runner\Debug\plug_agente.exe',
+        registrySnapshots: Queue.from([
+          _registrySnapshot(),
+        ]),
+      );
+
+      final result = await service.enable();
+
+      check(result.isError()).isTrue();
+      result.fold(
+        (_) => fail('Expected failure for a debug executable'),
+        (failure) {
+          check(failure).isA<StartupServiceFailure>();
+          check((failure as StartupServiceFailure).startupCode).equals(
+            StartupServiceFailureCode.nonProductionExecutable,
+          );
+        },
+      );
+      check(writer.setCalls).isEmpty();
+    });
+
+    test('should not repair auto-start to a Flutter debug executable path', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        executablePath: r'D:\proj\build\windows\x64\runner\Debug\plug_agente.exe',
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+      );
+
+      final result = await service.ensureLaunchConfiguration(allowElevation: false);
+
+      check(result.isSuccess()).isTrue();
+      result.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.unchanged),
+        (_) => fail('Expected success'),
+      );
+      check(writer.setCalls).isEmpty();
+    });
+
+    test('should report Startup Apps user-disable only for a clear disabled overlay', () async {
+      final disabledService = _makeService(
+        startupApprovedStore: _FakeStartupApprovedStore(
+          readResult: const StartupApprovedReadResult.disabled(),
+        ),
+      );
+      final accessDeniedService = _makeService(
+        startupApprovedStore: _FakeStartupApprovedStore(
+          readResult: const StartupApprovedReadResult.accessDenied(5),
+        ),
+      );
+      final unknownService = _makeService(
+        startupApprovedStore: _FakeStartupApprovedStore(
+          readResult: const StartupApprovedReadResult.unknown(),
+        ),
+      );
+
+      final disabled = await disabledService.isDisabledByStartupApps();
+      final accessDenied = await accessDeniedService.isDisabledByStartupApps();
+      final unknown = await unknownService.isDisabledByStartupApps();
+
+      check(disabled.getOrThrow()).isTrue();
+      check(accessDenied.getOrThrow()).isFalse();
+      check(unknown.getOrThrow()).isFalse();
+    });
+
+    test('should refuse to enable auto-start for a Flutter release build-tree executable', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        executablePath: r'D:\proj\build\windows\x64\runner\Release\plug_agente.exe',
+        registrySnapshots: Queue.from([
+          _registrySnapshot(),
+        ]),
+      );
+
+      final result = await service.enable();
+
+      check(result.isError()).isTrue();
+      result.fold(
+        (_) => fail('Expected failure for a build-tree executable'),
+        (failure) {
+          check(failure).isA<StartupServiceFailure>();
+          check((failure as StartupServiceFailure).startupCode).equals(
+            StartupServiceFailureCode.nonProductionExecutable,
+          );
+        },
+      );
+      check(writer.setCalls).isEmpty();
+    });
+
+    test('should not overwrite an installed Run key from a non-installed executable', () async {
+      final writer = _FakeRegistryWriter();
+      final service = _makeService(
+        registryWriter: writer,
+        executablePath: r'D:\Downloads\plug_agente.exe',
+        registrySnapshots: Queue.from([
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+          _registrySnapshot(
+            hkcu: _found(_startupValue(_currentExecutable)),
+          ),
+        ]),
+      );
+
+      final enableResult = await service.enable();
+      final ensureResult = await service.ensureLaunchConfiguration(allowElevation: false);
+
+      check(enableResult.isError()).isTrue();
+      enableResult.fold(
+        (_) => fail('Expected failure when overwriting an installed Run key'),
+        (failure) {
+          check(failure).isA<StartupServiceFailure>();
+          check((failure as StartupServiceFailure).startupCode).equals(
+            StartupServiceFailureCode.nonProductionExecutable,
+          );
+        },
+      );
+      check(ensureResult.isSuccess()).isTrue();
+      ensureResult.fold(
+        (status) => check(status).equals(StartupLaunchConfigurationStatus.unchanged),
+        (_) => fail('Expected success'),
+      );
+      check(writer.setCalls).isEmpty();
+    });
   });
 }
 
@@ -1004,10 +1295,11 @@ AutoStartService _makeService({
   Queue<Map<StartupRegistryScope, StartupRunValueReadResult>>? registrySnapshots,
   IStartupRunValueRegistryWriter? registryWriter,
   IStartupApprovedStore? startupApprovedStore,
+  String executablePath = _currentExecutable,
 }) {
   return AutoStartService(
     isWindows: () => true,
-    executablePathProvider: () => _currentExecutable,
+    executablePathProvider: () => executablePath,
     registryReader: _FakeRegistryReader(
       registrySnapshots ??
           Queue<Map<StartupRegistryScope, StartupRunValueReadResult>>.from(

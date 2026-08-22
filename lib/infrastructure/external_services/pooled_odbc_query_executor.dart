@@ -169,7 +169,7 @@ final class PooledOdbcQueryExecutor {
             name: 'database_gateway',
             level: 900,
           );
-          return _directExecutor.execute(
+          return await _directExecutor.execute(
             request,
             connectionString,
             stopwatch,
@@ -207,7 +207,7 @@ final class PooledOdbcQueryExecutor {
           );
           await _connectionManager.releaseConnectionSafely(connId);
           releasedConnectionEarly = true;
-          return execute(
+          return await execute(
             request,
             connectionString,
             stopwatch,
@@ -271,7 +271,7 @@ final class PooledOdbcQueryExecutor {
         _metrics.recordDirectConnectionFallback();
         await _connectionManager.releaseConnectionSafely(connId);
         releasedConnectionEarly = true;
-        return _directExecutor.execute(
+        return await _directExecutor.execute(
           request,
           connectionString,
           stopwatch,

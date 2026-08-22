@@ -3560,17 +3560,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gsToggleStartWithWindows => 'Iniciar com o Windows';
 
   @override
-  String get gsToggleStartMinimized => 'Iniciar minimizado';
-
-  @override
-  String get gsToggleStartMinimizedNextLaunchHint =>
-      'Aplicado quando o Windows inicia o app automaticamente (não ao abrir manualmente).';
-
-  @override
   String get gsToggleStartMinimizedRequiresTray => 'Requer suporte à bandeja neste ambiente.';
-
-  @override
-  String get gsToggleStartMinimizedRequiresStartup => 'Requer \"Iniciar com o Windows\" ativado.';
 
   @override
   String get gsToggleStartWithWindowsAdminHint =>
@@ -3578,7 +3568,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gsToggleStartWithWindowsOpenStartupAppsHint =>
-      'Confira se o Plug Agente está ativado em Inicialização do Windows.';
+      'Confira se o Plug Agente está ativado em Inicialização do Windows. No login, o app inicia na bandeja.';
 
   @override
   String get gsToggleMinimizeToTray => 'Minimizar para bandeja';
@@ -3640,6 +3630,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gsStartupFailureRegistryRead => 'Não foi possível ler a entrada de inicialização.';
+
+  @override
+  String get gsStartupFailureRollbackFailed =>
+      'Não foi possível salvar a preferência e o Windows não pôde ser revertido. Use Reparar para restaurar um estado consistente.';
 
   @override
   String get gsStartupFailureDuplicateEntryHint => 'Pode existir uma entrada antiga do instalador duplicada.';

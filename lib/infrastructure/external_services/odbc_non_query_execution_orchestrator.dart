@@ -132,7 +132,7 @@ class OdbcNonQueryExecutionOrchestrator {
             name: 'database_gateway',
             level: 900,
           );
-          return _executeNonQueryWithoutPool(
+          return await _executeNonQueryWithoutPool(
             query,
             parameters,
             connectionString,
@@ -144,7 +144,7 @@ class OdbcNonQueryExecutionOrchestrator {
         }
       }
 
-      return result.fold(
+      return await result.fold(
         (queryResult) => Success(queryResult.rowCount),
         (error) => Failure(
           OdbcFailureMapper.mapQueryError(
@@ -331,7 +331,7 @@ class OdbcNonQueryExecutionOrchestrator {
               cancellationToken: cancellationToken,
             );
 
-            return result.fold(
+            return await result.fold(
               (queryResult) => Success(queryResult.rowCount),
               (error) => Failure(
                 OdbcFailureMapper.mapQueryError(

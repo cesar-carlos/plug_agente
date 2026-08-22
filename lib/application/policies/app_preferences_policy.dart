@@ -15,24 +15,31 @@ abstract final class AppPreferencesPolicy {
     return updateNotificationsEnabled;
   }
 
-  /// Whether the "start minimized" toggle is interactive in Settings.
-  static bool canConfigureStartMinimized({
-    required bool supportsTray,
-    required bool startWithWindows,
-  }) {
-    return supportsTray && startWithWindows;
-  }
-
-  /// Whether the main window should open minimized at launch.
+  /// Whether the main window should stay hidden after desktop shell bootstrap.
   ///
-  /// Requires tray support, an autostart launch (`--autostart`), and the
-  /// persisted preference enabled.
+  /// Login launches (`--autostart`) stay in the tray whenever tray is available.
+  /// Manual launches always show the window.
   static bool shouldStartMinimizedAtLaunch({
     required bool supportsTray,
     required bool isAutostartLaunch,
-    required bool startMinimizedPreference,
   }) {
-    return supportsTray && isAutostartLaunch && startMinimizedPreference;
+    return supportsTray && isAutostartLaunch;
+  }
+
+  /// Autostart keeps the window hidden while tray/window managers initialize
+  /// so login never flashes a frame before Dart decides visibility.
+  static bool shouldHideWindowDuringAutostartBootstrap({
+    required bool isAutostartLaunch,
+  }) {
+    return isAutostartLaunch;
+  }
+
+  /// Login launches stay in the tray after bootstrap. Manual launches never
+  /// use this reveal path.
+  static bool shouldRevealWindowAfterAutostartBootstrap({
+    required bool isAutostartLaunch,
+  }) {
+    return !isAutostartLaunch && isAutostartLaunch;
   }
 
   /// Whether WinSparkle background checks should run (non-silent path).

@@ -8,6 +8,8 @@ enum StartupServiceFailureCode {
   registryWriteFailed,
   registryReadFailed,
   unsupportedPlatform,
+  nonProductionExecutable,
+  rollbackFailed,
 }
 
 class StartupServiceFailure extends ConfigurationFailure {

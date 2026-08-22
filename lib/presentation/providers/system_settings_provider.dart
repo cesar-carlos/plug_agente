@@ -27,7 +27,6 @@ class SystemSettingsProvider extends ChangeNotifier {
        _setStartWithWindows = setStartWithWindows ?? SetStartWithWindows(repository),
        _setTrayBehaviorPreference = setTrayBehaviorPreference ?? SetTrayBehaviorPreference(repository) {
     _startWithWindows = repository.startWithWindows;
-    _startMinimized = repository.startMinimized;
     _minimizeToTray = repository.minimizeToTray;
     _closeToTray = repository.closeToTray;
 
@@ -50,10 +49,10 @@ class SystemSettingsProvider extends ChangeNotifier {
   final SetTrayBehaviorPreference _setTrayBehaviorPreference;
 
   late bool _startWithWindows;
-  late bool _startMinimized;
   late bool _minimizeToTray;
   late bool _closeToTray;
   bool _isDisposed = false;
+  int _startupUserMutations = 0;
 
   SystemSettingsErrorState? _startupError;
   SystemSettingsErrorState? _preferenceError;
@@ -65,7 +64,6 @@ class SystemSettingsProvider extends ChangeNotifier {
   SystemSettingsNoticeState? get startupNotice => _startupNotice;
 
   bool get startWithWindows => _startWithWindows;
-  bool get startMinimized => _startMinimized;
   bool get minimizeToTray => _minimizeToTray;
   bool get closeToTray => _closeToTray;
 
@@ -94,8 +92,11 @@ class SystemSettingsProvider extends ChangeNotifier {
   }
 
   Future<void> _initializeAsync() async {
-    final result = await _syncStartupStatus();
-    if (_isDisposed) {
+    final mutationsAtStart = _startupUserMutations;
+    final result = await _syncStartupStatus(
+      shouldAbort: () => _isDisposed || _startupUserMutations != mutationsAtStart,
+    );
+    if (_isDisposed || _startupUserMutations != mutationsAtStart) {
       return;
     }
 
@@ -121,6 +122,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       return null;
     }
 
+    _startupUserMutations++;
     clearStartupFeedback();
 
     final result = await _setStartWithWindows(value);
@@ -139,7 +141,6 @@ class SystemSettingsProvider extends ChangeNotifier {
         if (failure is StartupServiceFailure) {
           _startupError = SystemSettingsFailureMapper.startupFailure(failure);
         } else if (failure is domain.Failure) {
-          _startWithWindows = value;
           _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
         } else {
           _startupError = SystemSettingsFailureMapper.startupFailure(failure);
@@ -151,6 +152,7 @@ class SystemSettingsProvider extends ChangeNotifier {
   }
 
   Future<void> repairStartupLaunchConfiguration() async {
+    _startupUserMutations++;
     clearStartupFeedback();
 
     if (!_repository.isStartupServiceAvailable) {
@@ -220,30 +222,6 @@ class SystemSettingsProvider extends ChangeNotifier {
             level: 900,
           );
         }
-        _notifyIfActive();
-      },
-    );
-  }
-
-  Future<void> setStartMinimized(bool value) async {
-    if (_startMinimized == value) {
-      return;
-    }
-
-    clearPreferenceError();
-
-    final result = await _repository.persistStartMinimized(value);
-    if (_isDisposed) {
-      return;
-    }
-
-    result.fold(
-      (_) {
-        _startMinimized = value;
-        _notifyIfActive();
-      },
-      (failure) {
-        _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
         _notifyIfActive();
       },
     );

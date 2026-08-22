@@ -78,6 +78,9 @@ void main() {
     when(() => repository.enableSystemStartup()).thenAnswer(
       (_) async => const Success(unit),
     );
+    when(() => repository.disableSystemStartup()).thenAnswer(
+      (_) async => const Success(unit),
+    );
     when(() => repository.ensureLaunchConfiguration(allowElevation: false)).thenAnswer(
       (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
     );
@@ -92,5 +95,58 @@ void main() {
     expect(result.isError(), isTrue);
     verify(() => repository.enableSystemStartup()).called(1);
     verify(() => repository.persistStartWithWindows(true)).called(1);
+    verify(() => repository.disableSystemStartup()).called(1);
+  });
+
+  test('rolls back enable when preference persistence fails after disabling startup', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.disableSystemStartup()).thenAnswer(
+      (_) async => const Success(unit),
+    );
+    when(() => repository.enableSystemStartup()).thenAnswer(
+      (_) async => const Success(unit),
+    );
+    when(() => repository.persistStartWithWindows(false)).thenAnswer(
+      (_) async => Failure(
+        domain.ConfigurationFailure('Failed to persist setting'),
+      ),
+    );
+
+    final result = await useCase(false);
+
+    expect(result.isError(), isTrue);
+    verify(() => repository.disableSystemStartup()).called(1);
+    verify(() => repository.persistStartWithWindows(false)).called(1);
+    verify(() => repository.enableSystemStartup()).called(1);
+  });
+
+  test('returns rollbackFailed when persist and OS rollback both fail', () async {
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.enableSystemStartup()).thenAnswer(
+      (_) async => const Success(unit),
+    );
+    when(() => repository.ensureLaunchConfiguration(allowElevation: false)).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
+    );
+    when(() => repository.persistStartWithWindows(true)).thenAnswer(
+      (_) async => Failure(
+        domain.ConfigurationFailure('Failed to persist setting'),
+      ),
+    );
+    when(() => repository.disableSystemStartup()).thenAnswer(
+      (_) async => Failure(
+        StartupServiceFailure(message: 'Could not revert registry'),
+      ),
+    );
+
+    final result = await useCase(true);
+
+    expect(result.isError(), isTrue);
+    expect(result.exceptionOrNull(), isA<StartupServiceFailure>());
+    expect(
+      (result.exceptionOrNull()! as StartupServiceFailure).startupCode,
+      StartupServiceFailureCode.rollbackFailed,
+    );
+    verify(() => repository.disableSystemStartup()).called(1);
   });
 }

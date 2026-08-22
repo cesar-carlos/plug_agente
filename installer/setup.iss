@@ -55,6 +55,9 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldLaunchAfterSilentUpdate
+; Write HKCU Run for the logged-on user (not the elevated admin token).
+; Silent updates pass /MERGETASKS="!startup", so this Task is skipped.
+Filename: "{sys}\reg.exe"; Parameters: "{code:GetLoggedOnUserAutostartRegParams}"; Flags: runasoriginaluser runhidden; Tasks: startup
 
 ; Grant standard users Modify on shared ProgramData so the agent works without
 ; requiring "Run as administrator" after install (matches GlobalStorageAclConstants).
@@ -66,12 +69,22 @@ Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldL
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
 
 [UninstallDelete]
+Type: files; Name: "{commonappdata}\PlugAgente\{#AutostartRequestMarker}"
 Type: dirifempty; Name: "{commonappdata}\PlugAgente"
 
 [Code]
 function GetAutostartValue(Param: String): String;
 begin
   Result := AddQuotes(ExpandConstant('{app}\{#MyAppExeName}')) + ' ' + AddQuotes('{#AutostartArg}');
+end;
+
+function GetLoggedOnUserAutostartRegParams(Param: String): String;
+var
+  ValueData: String;
+begin
+  ValueData := GetAutostartValue('');
+  StringChangeEx(ValueData, '"', '\"', True);
+  Result := 'add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "{#MyAppName}" /t REG_SZ /d "' + ValueData + '" /f';
 end;
 
 function ShouldLaunchAfterSilentUpdate(): Boolean;
@@ -97,10 +110,44 @@ begin
   );
 end;
 
+procedure WriteAutostartRequestMarker;
+var
+  MarkerPath: String;
+begin
+  MarkerPath := ExpandConstant('{commonappdata}\PlugAgente\{#AutostartRequestMarker}');
+  SaveStringToFile(MarkerPath, '1', False);
+end;
+
+procedure WriteLoggedOnUserAutostartRunKey;
+var
+  ResultCode: Integer;
+begin
+  if not ExecAsOriginalUser(
+    ExpandConstant('{sys}\reg.exe'),
+    GetLoggedOnUserAutostartRegParams(''),
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+    Log('ExecAsOriginalUser for HKCU Run key failed to start')
+  else
+    Log('Logged-on user HKCU Run key write exit code: ' + IntToStr(ResultCode));
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
+  begin
     ConfigureSharedProgramDataPermissions;
+    // Silent updates pass /MERGETASKS="!startup", so this does not re-request
+    // auto-start. The app then writes HKCU for the interactive user.
+    if IsTaskSelected('startup') then
+    begin
+      WriteAutostartRequestMarker;
+      WriteLoggedOnUserAutostartRunKey;
+    end;
+  end;
 end;
 
 function IsVCRedistInstalled(): Boolean;

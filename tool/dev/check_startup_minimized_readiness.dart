@@ -34,7 +34,6 @@ Future<void> main(List<String> args) async {
   final settings = settingsFile.existsSync() ? _readSettings(settingsFile) : <String, Object?>{};
   checks
     ..add(_expectBool(settings, AppSettingsKeys.startWithWindows, true))
-    ..add(_expectBool(settings, AppSettingsKeys.startMinimized, true))
     ..add(_expectBool(settings, AppSettingsKeys.minimizeToTray, true));
 
   final registryEntries = await _readStartupRegistryEntries();
@@ -164,7 +163,7 @@ Future<List<_StartupRegistryRead>> _readStartupRegistryEntries() async {
 }
 
 void _printResults(List<_CheckResult> checks) {
-  stdout.writeln('Startup minimized readiness');
+  stdout.writeln('Startup readiness');
   for (final check in checks) {
     final marker = check.passed ? '[OK]' : '[FAIL]';
     stdout.writeln('$marker ${check.name}: ${check.detail}');
@@ -176,7 +175,7 @@ void _printManualChecklist() {
     ..writeln()
     ..writeln('Manual E2E checklist')
     ..writeln('1. Install or run the Release build that contains the startup fix.')
-    ..writeln('2. In Settings > Preferences, enable Start with Windows, Start minimized, and Minimize to tray.')
+    ..writeln('2. In Settings > Preferences, enable Start with Windows and Minimize to tray.')
     ..writeln('3. Run this script and confirm every readiness check is OK.')
     ..writeln('4. Sign out and sign in again, or restart Windows.')
     ..writeln('5. Confirm Plug Database appears in the tray without flashing or opening the main window.')

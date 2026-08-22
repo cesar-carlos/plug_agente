@@ -30,7 +30,7 @@ class ElevatedActionDirectoryAclHardener {
     try {
       await _ensureDirectoriesExist(appDirectoryPath);
       final elevatedRoot = p.join(appDirectoryPath, AgentActionElevatedConstants.elevatedSubdirectoryName);
-      return _secureDirectory(elevatedRoot);
+      return await _secureDirectory(elevatedRoot);
     } on Object catch (error, stackTrace) {
       developer.log(
         'Unable to prepare elevated directories for ACL hardening',

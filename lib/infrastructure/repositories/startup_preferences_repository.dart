@@ -18,9 +18,6 @@ class StartupPreferencesRepository implements IStartupPreferencesRepository {
   bool get startWithWindows => _settings.getBool(AppSettingsKeys.startWithWindows) ?? false;
 
   @override
-  bool get startMinimized => _settings.getBool(AppSettingsKeys.startMinimized) ?? false;
-
-  @override
   bool get minimizeToTray => _settings.getBool(AppSettingsKeys.minimizeToTray) ?? true;
 
   @override
@@ -31,9 +28,6 @@ class StartupPreferencesRepository implements IStartupPreferencesRepository {
 
   @override
   Future<Result<Unit>> persistStartWithWindows(bool value) => _persistBool(AppSettingsKeys.startWithWindows, value);
-
-  @override
-  Future<Result<Unit>> persistStartMinimized(bool value) => _persistBool(AppSettingsKeys.startMinimized, value);
 
   @override
   Future<Result<Unit>> persistMinimizeToTray(bool value) => _persistBool(AppSettingsKeys.minimizeToTray, value);
@@ -52,6 +46,15 @@ class StartupPreferencesRepository implements IStartupPreferencesRepository {
       );
     }
     return startupService.isEnabled();
+  }
+
+  @override
+  Future<Result<bool>> readStartupDisabledByUser() {
+    final startupService = _startupService;
+    if (startupService == null) {
+      return Future.value(const Success(false));
+    }
+    return startupService.isDisabledByStartupApps();
   }
 
   @override

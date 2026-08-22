@@ -81,6 +81,8 @@ abstract interface class IStartupApprovedStore {
   StartupApprovedReadResult read({required String valueName});
 
   StartupApprovedWriteResult writeEnabled({required String valueName});
+
+  StartupApprovedWriteResult delete({required String valueName});
 }
 
 /// Classifies StartupApproved REG_BINARY payloads (locale-independent).
@@ -187,6 +189,47 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
           return _writeResultFromStatus(status);
         } finally {
           calloc.free(dataPtr);
+          calloc.free(valueNamePtr);
+        }
+      } finally {
+        RegCloseKey(hKey);
+      }
+    } finally {
+      calloc.free(hKeyOut);
+      calloc.free(subKeyPtr);
+    }
+  }
+
+  @override
+  StartupApprovedWriteResult delete({required String valueName}) {
+    final subKeyPtr = _subKeyPath.toNativeUtf16();
+    final hKeyOut = calloc<IntPtr>();
+    try {
+      final openStatus = RegOpenKeyEx(
+        HKEY_CURRENT_USER,
+        subKeyPtr,
+        0,
+        KEY_SET_VALUE,
+        hKeyOut,
+      );
+      if (openStatus == ERROR_FILE_NOT_FOUND || openStatus == ERROR_PATH_NOT_FOUND) {
+        return const StartupApprovedWriteResult.success();
+      }
+      if (openStatus != ERROR_SUCCESS) {
+        return _writeResultFromStatus(openStatus);
+      }
+      final hKey = hKeyOut.value;
+      try {
+        final valueNamePtr = valueName.toNativeUtf16();
+        try {
+          final status = RegDeleteValue(hKey, valueNamePtr);
+          if (status == ERROR_SUCCESS ||
+              status == ERROR_FILE_NOT_FOUND ||
+              status == ERROR_PATH_NOT_FOUND) {
+            return const StartupApprovedWriteResult.success();
+          }
+          return _writeResultFromStatus(status);
+        } finally {
           calloc.free(valueNamePtr);
         }
       } finally {

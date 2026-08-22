@@ -47,7 +47,7 @@ class FileSilentUpdateLauncherStatusReader implements ISilentUpdateLauncherStatu
     try {
       // See `read` for why the async API is preferred here.
       // ignore: avoid_slow_async_io
-      return File(path).exists();
+      return await File(path).exists();
     } on Exception {
       return false;
     }

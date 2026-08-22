@@ -188,7 +188,17 @@ void main() {
   });
 
   group('resolveStartupWindowPreferences', () {
-    test('should not start minimized on manual launch even when preference is enabled', () async {
+    test('should not start minimized on manual launch', () async {
+      final settingsStore = InMemoryAppSettingsStore();
+
+      final preferences = resolveStartupWindowPreferences(
+        settingsStore,
+      );
+
+      expect(preferences.startMinimized, isFalse);
+    });
+
+    test('should ignore leftover startMinimized settings on manual launch', () async {
       final settingsStore = InMemoryAppSettingsStore({
         AppSettingsKeys.startMinimized: true,
       });
@@ -200,10 +210,8 @@ void main() {
       expect(preferences.startMinimized, isFalse);
     });
 
-    test('should start minimized only on autostart launch with tray support', () async {
-      final settingsStore = InMemoryAppSettingsStore({
-        AppSettingsKeys.startMinimized: true,
-      });
+    test('should start minimized on autostart launch with tray support', () async {
+      final settingsStore = InMemoryAppSettingsStore();
 
       final preferences = resolveStartupWindowPreferences(
         settingsStore,
@@ -214,9 +222,7 @@ void main() {
     });
 
     test('should not start minimized on autostart launch without tray support', () async {
-      final settingsStore = InMemoryAppSettingsStore({
-        AppSettingsKeys.startMinimized: true,
-      });
+      final settingsStore = InMemoryAppSettingsStore();
 
       final preferences = resolveStartupWindowPreferences(
         settingsStore,

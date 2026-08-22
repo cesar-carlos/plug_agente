@@ -6608,29 +6608,11 @@ abstract class AppLocalizations {
   /// **'Start with Windows'**
   String get gsToggleStartWithWindows;
 
-  /// No description provided for @gsToggleStartMinimized.
-  ///
-  /// In en, this message translates to:
-  /// **'Start minimized'**
-  String get gsToggleStartMinimized;
-
-  /// No description provided for @gsToggleStartMinimizedNextLaunchHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Applies when Windows starts the app automatically (not when opened manually).'**
-  String get gsToggleStartMinimizedNextLaunchHint;
-
   /// No description provided for @gsToggleStartMinimizedRequiresTray.
   ///
   /// In en, this message translates to:
   /// **'Requires tray support in this environment.'**
   String get gsToggleStartMinimizedRequiresTray;
-
-  /// No description provided for @gsToggleStartMinimizedRequiresStartup.
-  ///
-  /// In en, this message translates to:
-  /// **'Requires \"Start with Windows\" enabled.'**
-  String get gsToggleStartMinimizedRequiresStartup;
 
   /// No description provided for @gsToggleStartWithWindowsAdminHint.
   ///
@@ -6641,7 +6623,7 @@ abstract class AppLocalizations {
   /// No description provided for @gsToggleStartWithWindowsOpenStartupAppsHint.
   ///
   /// In en, this message translates to:
-  /// **'Make sure Plug Agente is enabled in Windows Startup apps.'**
+  /// **'Make sure Plug Agente is enabled in Windows Startup apps. Windows login starts the app in the tray.'**
   String get gsToggleStartWithWindowsOpenStartupAppsHint;
 
   /// No description provided for @gsToggleMinimizeToTray.
@@ -6763,6 +6745,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read the startup entry.'**
   String get gsStartupFailureRegistryRead;
+
+  /// No description provided for @gsStartupFailureRollbackFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The preference could not be saved, and Windows startup could not be reverted. Use Repair to restore a consistent state.'**
+  String get gsStartupFailureRollbackFailed;
 
   /// No description provided for @gsStartupFailureDuplicateEntryHint.
   ///

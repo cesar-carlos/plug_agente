@@ -337,7 +337,7 @@ class HubResilienceCoordinator {
         context.agentId,
         configId: context.configId,
       );
-      return reloginResult.fold(
+      return await reloginResult.fold(
         (token) {
           bridge.restoreToken(token, configId: context.configId, silent: true);
           return HardReloginResult(

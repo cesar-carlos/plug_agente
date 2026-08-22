@@ -703,6 +703,7 @@ void main() {
   testWidgets('shows SettingsFeedback success modal when startup diagnostic is copied', (tester) async {
     final mockStartup = MockStartupService();
     when(mockStartup.isEnabled).thenAnswer((_) async => const Success(false));
+    when(mockStartup.isDisabledByStartupApps).thenAnswer((_) async => const Success(false));
     when(
       mockStartup.ensureLaunchConfiguration,
     ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.needsRepair));
@@ -759,6 +760,7 @@ void main() {
   testWidgets('shows error feedback when startup diagnostic copy fails', (tester) async {
     final mockStartup = MockStartupService();
     when(mockStartup.isEnabled).thenAnswer((_) async => const Success(false));
+    when(mockStartup.isDisabledByStartupApps).thenAnswer((_) async => const Success(false));
     when(
       mockStartup.ensureLaunchConfiguration,
     ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.needsRepair));

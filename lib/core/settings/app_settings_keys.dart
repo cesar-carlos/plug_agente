@@ -3,7 +3,11 @@ class AppSettingsKeys {
 
   static const String isDarkModeEnabled = 'settings.is_dark_mode_enabled';
   static const String startWithWindows = 'settings.start_with_windows';
+
+  /// Leftover `settings.json` key from the removed "start minimized" toggle.
+  /// Boot and UI ignore it. Do not wipe on upgrade.
   static const String startMinimized = 'settings.start_minimized';
+
   static const String minimizeToTray = 'settings.minimize_to_tray';
   static const String closeToTray = 'settings.close_to_tray';
   static const String automaticSilentUpdatesEnabled = 'settings.automatic_silent_updates_enabled';

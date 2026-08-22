@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:plug_agente/core/constants/launch_args_constants.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
+import 'package:plug_agente/infrastructure/services/startup_executable_eligibility.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
 import 'package:plug_agente/infrastructure/services/windows_elevated_registry_executor.dart';
 import 'package:plug_agente/infrastructure/services/windows_startup_approved_store.dart';
@@ -106,6 +107,41 @@ class AutoStartService implements IStartupService {
   }
 
   @override
+  Future<Result<bool>> isDisabledByStartupApps() async {
+    if (!_isWindows()) {
+      return const Success(false);
+    }
+
+    try {
+      final approved = _readStartupApproved();
+      return Success(approved.status == StartupApprovedStatus.disabled);
+    } on StartupServiceFailure catch (error, stackTrace) {
+      developer.log(
+        'Failed to query Startup Apps disable state',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(error);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to query Startup Apps disable state',
+        name: 'startup_service',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        StartupServiceFailure(
+          message: 'Failed to query Startup Apps disable state',
+          cause: error,
+        ),
+      );
+    }
+  }
+
+  @override
   Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration({
     bool allowElevation = true,
     bool createIfMissing = true,
@@ -149,7 +185,30 @@ class AutoStartService implements IStartupService {
     required bool allowElevation,
     required bool createIfMissing,
   }) async {
+    final currentExecutable = _executablePathProvider();
+    if (isNonProductionStartupExecutable(currentExecutable)) {
+      developer.log(
+        'Skipping auto-start repair because the current executable is a debug/profile build.',
+        name: 'startup_service',
+        level: 800,
+      );
+      return const Success(StartupLaunchConfigurationStatus.unchanged);
+    }
+
     final queryResults = await _queryStartupRegistry();
+    final existingExecutable = _currentUserRunExecutablePath(queryResults);
+    if (!canPersistStartupExecutable(
+      currentExecutable,
+      existingHealthyExecutablePath: existingExecutable,
+    )) {
+      developer.log(
+        'Skipping auto-start repair because the current executable must not overwrite an installed Run key.',
+        name: 'startup_service',
+        level: 800,
+      );
+      return const Success(StartupLaunchConfigurationStatus.unchanged);
+    }
+
     final approved = _readStartupApproved();
     if (!_needsRepair(queryResults, approved: approved)) {
       return const Success(StartupLaunchConfigurationStatus.unchanged);
@@ -157,8 +216,7 @@ class AutoStartService implements IStartupService {
 
     final existingEntries = queryResults.where((result) => result.exists).toList();
     final hasMachineEntry = existingEntries.any((result) => result.scope.isMachineScope);
-    final onlyMissingHkcu =
-        existingEntries.isEmpty && !hasMachineEntry && !approved.isEffectivelyDisabled;
+    final onlyMissingHkcu = existingEntries.isEmpty && !hasMachineEntry && !approved.isEffectivelyDisabled;
     if (onlyMissingHkcu && !createIfMissing) {
       return const Success(StartupLaunchConfigurationStatus.unchanged);
     }
@@ -191,13 +249,30 @@ class AutoStartService implements IStartupService {
     }
 
     try {
+      final currentExecutable = _executablePathProvider();
+      final nonProductionRefusal = isNonProductionStartupExecutable(currentExecutable)
+          ? _refuseUnsafeStartupPersist()
+          : null;
+      if (nonProductionRefusal != null) {
+        return nonProductionRefusal;
+      }
+
       final queryResults = await _queryStartupRegistry();
+      final persistRefusal = _refuseUnsafeStartupPersist(
+        existingExecutablePath: _currentUserRunExecutablePath(queryResults),
+      );
+      if (persistRefusal != null) {
+        return persistRefusal;
+      }
+
       final hasHealthyRunEntry = _hasHealthyCurrentUserEntry(queryResults);
+      var wroteRunEntry = false;
       if (!hasHealthyRunEntry) {
         final writeResult = await _writeStartupEntry(StartupRegistryScope.currentUser);
         if (writeResult.isError()) {
           return writeResult;
         }
+        wroteRunEntry = true;
       } else {
         developer.log(
           'Auto-start already has a healthy HKCU registry entry',
@@ -206,7 +281,23 @@ class AutoStartService implements IStartupService {
         );
       }
 
-      return _ensureStartupApprovedEnabled(forceWrite: true);
+      final approvedResult = await _ensureStartupApprovedEnabled(forceWrite: true);
+      if (approvedResult.isError()) {
+        if (wroteRunEntry) {
+          await _rollbackCurrentUserRunEntry();
+        }
+        return approvedResult;
+      }
+
+      final verified = await _confirmEnabled();
+      if (verified.isError()) {
+        if (wroteRunEntry) {
+          await _rollbackCurrentUserRunEntry();
+        }
+        return verified;
+      }
+
+      return const Success(unit);
     } on StartupServiceFailure catch (error, stackTrace) {
       developer.log(
         'Failed to enable auto-start',
@@ -243,7 +334,7 @@ class AutoStartService implements IStartupService {
       final queryResults = await _queryStartupRegistry();
       final scopesToDelete = <StartupRegistryScope>{
         for (final result in queryResults)
-          if (result.exists || result.isMachineScopeUnreadable) result.scope,
+          if (result.exists) result.scope,
       };
 
       for (final scope in scopesToDelete) {
@@ -251,6 +342,13 @@ class AutoStartService implements IStartupService {
         if (deleteResult.isError()) {
           return deleteResult;
         }
+      }
+
+      _deleteStartupApprovedBestEffort();
+
+      final verified = await _confirmDisabled();
+      if (verified.isError()) {
+        return verified;
       }
 
       developer.log(
@@ -491,9 +589,7 @@ class AutoStartService implements IStartupService {
       return true;
     }
 
-    final hkcuEntries = existingEntries
-        .where((result) => result.scope == StartupRegistryScope.currentUser)
-        .toList();
+    final hkcuEntries = existingEntries.where((result) => result.scope == StartupRegistryScope.currentUser).toList();
     if (hkcuEntries.length != 1) {
       return true;
     }
@@ -532,12 +628,24 @@ class AutoStartService implements IStartupService {
 
     final writeResult = _startupApprovedStore.writeEnabled(valueName: runValueName);
     if (writeResult.status == StartupApprovedWriteStatus.success) {
-      developer.log(
-        'StartupApproved enabled for $runValueName',
-        name: 'startup_service',
-        level: 800,
+      final verified = _readStartupApproved();
+      if (verified.isEffectivelyEnabled) {
+        developer.log(
+          'StartupApproved enabled for $runValueName',
+          name: 'startup_service',
+          level: 800,
+        );
+        return const Success(unit);
+      }
+
+      return Failure(
+        StartupServiceFailure(
+          message: 'Startup Apps approval write succeeded but read-back is still blocked.',
+          startupCode: StartupServiceFailureCode.registryWriteFailed,
+          registryScopeLabel: 'StartupApproved',
+          nativeStatus: verified.nativeStatus,
+        ),
       );
-      return const Success(unit);
     }
 
     final code = writeResult.status == StartupApprovedWriteStatus.accessDenied
@@ -574,6 +682,9 @@ class AutoStartService implements IStartupService {
         forceWrite: wroteRunEntry || approved.isEffectivelyDisabled,
       );
       if (approvedResult.isError()) {
+        if (wroteRunEntry) {
+          await _rollbackCurrentUserRunEntry();
+        }
         return Failure(approvedResult.exceptionOrNull()! as StartupServiceFailure);
       }
     }
@@ -627,6 +738,75 @@ class AutoStartService implements IStartupService {
     return _hasHealthyCurrentUserEntry(queryResults);
   }
 
+  Future<Result<Unit>> _confirmEnabled() async {
+    final queryResults = await _queryStartupRegistry();
+    final approved = _readStartupApproved();
+    if (_hasHealthyCurrentUserEntry(queryResults) && !approved.isEffectivelyDisabled) {
+      return const Success(unit);
+    }
+
+    return Failure(
+      StartupServiceFailure(
+        message: 'Auto-start entry could not be verified after writing the registry.',
+        startupCode: StartupServiceFailureCode.registryWriteFailed,
+      ),
+    );
+  }
+
+  Future<Result<Unit>> _confirmDisabled() async {
+    final queryResults = await _queryStartupRegistry();
+    if (!_hasHealthyCurrentUserEntry(queryResults)) {
+      return const Success(unit);
+    }
+
+    return Failure(
+      StartupServiceFailure(
+        message: 'Auto-start entry is still present after disable.',
+        startupCode: StartupServiceFailureCode.registryDeleteFailed,
+        registryScopeLabel: StartupRegistryScope.currentUser.label,
+      ),
+    );
+  }
+
+  Future<void> _rollbackCurrentUserRunEntry() async {
+    final deleteResult = await _deleteStartupEntry(StartupRegistryScope.currentUser);
+    deleteResult.fold(
+      (_) {
+        developer.log(
+          'Rolled back HKCU auto-start entry after a failed enable',
+          name: 'startup_service',
+          level: 800,
+        );
+      },
+      (failure) {
+        developer.log(
+          'Failed to roll back HKCU auto-start entry after a failed enable: $failure',
+          name: 'startup_service',
+          level: 900,
+        );
+      },
+    );
+  }
+
+  void _deleteStartupApprovedBestEffort() {
+    final deleteResult = _startupApprovedStore.delete(valueName: runValueName);
+    if (deleteResult.status == StartupApprovedWriteStatus.success) {
+      developer.log(
+        'StartupApproved overlay removed for $runValueName',
+        name: 'startup_service',
+        level: 800,
+      );
+      return;
+    }
+
+    developer.log(
+      'Failed to remove StartupApproved overlay for $runValueName '
+      '(status: ${deleteResult.status.name}, native: ${deleteResult.nativeStatus})',
+      name: 'startup_service',
+      level: 900,
+    );
+  }
+
   Future<Result<StartupLaunchConfigurationStatus>> _resolveStatusAfterRepair({
     required bool legacyMachineEntryRemains,
   }) async {
@@ -653,7 +833,42 @@ class AutoStartService implements IStartupService {
     }
   }
 
+  Result<Unit>? _refuseUnsafeStartupPersist({String? existingExecutablePath}) {
+    final executablePath = _executablePathProvider();
+    if (canPersistStartupExecutable(
+      executablePath,
+      existingHealthyExecutablePath: existingExecutablePath,
+    )) {
+      return null;
+    }
+
+    return Failure(
+      StartupServiceFailure(
+        message: 'Auto-start cannot persist this executable as the Windows startup command.',
+        startupCode: StartupServiceFailureCode.nonProductionExecutable,
+      ),
+    );
+  }
+
+  String? _currentUserRunExecutablePath(List<_StartupRegistryQueryResult> queryResults) {
+    for (final result in queryResults) {
+      if (result.scope != StartupRegistryScope.currentUser) {
+        continue;
+      }
+      final path = result.entry?.executablePath.trim();
+      if (path != null && path.isNotEmpty) {
+        return path;
+      }
+    }
+    return null;
+  }
+
   Future<Result<Unit>> _writeStartupEntry(StartupRegistryScope scope) async {
+    final persistRefusal = _refuseUnsafeStartupPersist();
+    if (persistRefusal != null) {
+      return persistRefusal;
+    }
+
     final valueData =
         '"${_executablePathProvider()}" '
         '"${LaunchArgsConstants.autostartArg}"';
@@ -905,8 +1120,7 @@ class _StartupRegistryQueryResult {
   final StartupRunValueReadResult readResult;
   final StartupRegistryEntry? entry;
 
-  bool get exists =>
-      readResult.status == StartupRunValueReadStatus.found && (readResult.value?.isNotEmpty ?? false);
+  bool get exists => readResult.status == StartupRunValueReadStatus.found && (readResult.value?.isNotEmpty ?? false);
 
   bool get isMachineScopeUnreadable =>
       scope.isMachineScope &&

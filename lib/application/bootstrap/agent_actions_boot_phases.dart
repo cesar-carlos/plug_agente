@@ -232,7 +232,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
     final scheduler = _deps.agentActionTriggerScheduler;
     try {
       final startResult = await scheduler.start();
-      return startResult.fold(
+      return await startResult.fold(
         (snapshot) {
           developer.log(
             'Agent action scheduler started '

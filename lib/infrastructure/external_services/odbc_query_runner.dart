@@ -243,7 +243,7 @@ final class OdbcQueryRunner {
         inFlightRegistry: _inFlightRegistry,
         inFlightRequestId: trackingId,
       );
-      return result.fold(
+      return await result.fold(
         (queryResult) => QueryExecutionOutcome.success(
           OdbcQueryResponseFactory.fromSingleResult(request, queryResult, startedAt: startedAt),
         ),
@@ -293,7 +293,7 @@ final class OdbcQueryRunner {
         inFlightRegistry: _inFlightRegistry,
         inFlightRequestId: trackingId,
       );
-      return result.fold(
+      return await result.fold(
         (queryResult) => QueryExecutionOutcome.success(
           OdbcQueryResponseFactory.fromSingleResult(request, queryResult, startedAt: startedAt),
         ),

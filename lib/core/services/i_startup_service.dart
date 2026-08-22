@@ -10,6 +10,11 @@ enum StartupLaunchConfigurationStatus {
 abstract interface class IStartupService {
   Future<Result<bool>> isEnabled();
 
+  /// True only when Startup Apps has a clear user-disabled overlay.
+  ///
+  /// Must not treat `accessDenied`, `unknown`, or `failed` as disabled.
+  Future<Result<bool>> isDisabledByStartupApps();
+
   Future<Result<StartupLaunchConfigurationStatus>> ensureLaunchConfiguration({
     bool allowElevation = true,
     bool createIfMissing = true,

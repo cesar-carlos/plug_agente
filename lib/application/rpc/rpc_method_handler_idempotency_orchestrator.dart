@@ -124,7 +124,7 @@ class RpcMethodHandlerIdempotencyOrchestrator {
 
     try {
       if (timeout == null) {
-        return _authorizeSqlOperation(
+        return await _authorizeSqlOperation(
           token: token,
           sql: sql,
           requestDatabase: requestDatabase,

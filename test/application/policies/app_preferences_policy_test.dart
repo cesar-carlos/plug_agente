@@ -49,39 +49,12 @@ void main() {
       });
     });
 
-    group('canConfigureStartMinimized', () {
-      test('should require tray support and start with Windows', () {
-        expect(
-          AppPreferencesPolicy.canConfigureStartMinimized(
-            supportsTray: true,
-            startWithWindows: true,
-          ),
-          isTrue,
-        );
-        expect(
-          AppPreferencesPolicy.canConfigureStartMinimized(
-            supportsTray: false,
-            startWithWindows: true,
-          ),
-          isFalse,
-        );
-        expect(
-          AppPreferencesPolicy.canConfigureStartMinimized(
-            supportsTray: true,
-            startWithWindows: false,
-          ),
-          isFalse,
-        );
-      });
-    });
-
     group('shouldStartMinimizedAtLaunch', () {
-      test('should require tray, autostart launch, and preference', () {
+      test('should stay in tray on autostart when tray is available', () {
         expect(
           AppPreferencesPolicy.shouldStartMinimizedAtLaunch(
             supportsTray: true,
             isAutostartLaunch: true,
-            startMinimizedPreference: true,
           ),
           isTrue,
         );
@@ -89,7 +62,6 @@ void main() {
           AppPreferencesPolicy.shouldStartMinimizedAtLaunch(
             supportsTray: true,
             isAutostartLaunch: false,
-            startMinimizedPreference: true,
           ),
           isFalse,
         );
@@ -97,15 +69,35 @@ void main() {
           AppPreferencesPolicy.shouldStartMinimizedAtLaunch(
             supportsTray: false,
             isAutostartLaunch: true,
-            startMinimizedPreference: true,
+          ),
+          isFalse,
+        );
+      });
+    });
+
+    group('autostart window bootstrap', () {
+      test('should hide during autostart bootstrap and never reveal on login', () {
+        expect(
+          AppPreferencesPolicy.shouldHideWindowDuringAutostartBootstrap(
+            isAutostartLaunch: true,
+          ),
+          isTrue,
+        );
+        expect(
+          AppPreferencesPolicy.shouldHideWindowDuringAutostartBootstrap(
+            isAutostartLaunch: false,
           ),
           isFalse,
         );
         expect(
-          AppPreferencesPolicy.shouldStartMinimizedAtLaunch(
-            supportsTray: true,
+          AppPreferencesPolicy.shouldRevealWindowAfterAutostartBootstrap(
             isAutostartLaunch: true,
-            startMinimizedPreference: false,
+          ),
+          isFalse,
+        );
+        expect(
+          AppPreferencesPolicy.shouldRevealWindowAfterAutostartBootstrap(
+            isAutostartLaunch: false,
           ),
           isFalse,
         );

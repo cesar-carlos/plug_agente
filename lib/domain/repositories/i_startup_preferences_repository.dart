@@ -4,8 +4,6 @@ import 'package:result_dart/result_dart.dart';
 abstract interface class IStartupPreferencesRepository {
   bool get startWithWindows;
 
-  bool get startMinimized;
-
   bool get minimizeToTray;
 
   bool get closeToTray;
@@ -14,13 +12,14 @@ abstract interface class IStartupPreferencesRepository {
 
   Future<Result<Unit>> persistStartWithWindows(bool value);
 
-  Future<Result<Unit>> persistStartMinimized(bool value);
-
   Future<Result<Unit>> persistMinimizeToTray(bool value);
 
   Future<Result<Unit>> persistCloseToTray(bool value);
 
   Future<Result<bool>> readSystemStartupEnabled();
+
+  /// True only when Windows Startup Apps shows a clear user-disabled overlay.
+  Future<Result<bool>> readStartupDisabledByUser();
 
   Future<Result<Unit>> enableSystemStartup();
 

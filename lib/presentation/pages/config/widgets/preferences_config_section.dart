@@ -1,5 +1,4 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -11,19 +10,16 @@ class PreferencesConfigSection extends StatelessWidget {
   const PreferencesConfigSection({
     required this.isDarkThemeEnabled,
     required this.startWithWindows,
-    required this.startMinimized,
     required this.minimizeToTray,
     required this.closeToTray,
     required this.onDarkThemeChanged,
     required this.onStartWithWindowsChanged,
-    required this.onStartMinimizedChanged,
     required this.onMinimizeToTrayChanged,
     required this.onCloseToTrayChanged,
     required this.onOpenStartupSettings,
     required this.onRepairStartupLaunchConfiguration,
     required this.onCopyStartupDiagnostic,
     this.startupSupported = true,
-    this.startMinimizedSupported = true,
     this.trayBehaviorSupported = true,
     this.startupError,
     this.preferenceError,
@@ -34,19 +30,16 @@ class PreferencesConfigSection extends StatelessWidget {
 
   final bool isDarkThemeEnabled;
   final bool startWithWindows;
-  final bool startMinimized;
   final bool minimizeToTray;
   final bool closeToTray;
   final ValueChanged<bool> onDarkThemeChanged;
   final ValueChanged<bool> onStartWithWindowsChanged;
-  final ValueChanged<bool> onStartMinimizedChanged;
   final ValueChanged<bool> onMinimizeToTrayChanged;
   final ValueChanged<bool> onCloseToTrayChanged;
   final VoidCallback onOpenStartupSettings;
   final VoidCallback onRepairStartupLaunchConfiguration;
   final VoidCallback onCopyStartupDiagnostic;
   final bool startupSupported;
-  final bool startMinimizedSupported;
   final bool trayBehaviorSupported;
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
@@ -56,15 +49,6 @@ class PreferencesConfigSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final startMinimizedEnabled = AppPreferencesPolicy.canConfigureStartMinimized(
-      supportsTray: startMinimizedSupported,
-      startWithWindows: startWithWindows,
-    );
-    final startMinimizedDescription = !startMinimizedSupported
-        ? l10n.gsToggleStartMinimizedRequiresTray
-        : !startWithWindows
-        ? l10n.gsToggleStartMinimizedRequiresStartup
-        : l10n.gsToggleStartMinimizedNextLaunchHint;
     return SingleChildScrollView(
       child: SettingsSurface(
         child: Column(
@@ -102,8 +86,18 @@ class PreferencesConfigSection extends StatelessWidget {
                 message: _translateError(l10n, startupError!),
                 tone: AppFeedbackTone.error,
                 icon: FluentIcons.error_badge,
-                actionLabel: l10n.gsButtonOpenSettings,
-                onAction: onOpenStartupSettings,
+                actionLabel: _showsRepairOnStartupError(startupError!)
+                    ? l10n.gsButtonRepairStartup
+                    : l10n.gsButtonOpenSettings,
+                onAction: _showsRepairOnStartupError(startupError!)
+                    ? onRepairStartupLaunchConfiguration
+                    : onOpenStartupSettings,
+                secondaryActionLabel: _showsRepairOnStartupError(startupError!)
+                    ? l10n.gsButtonOpenSettings
+                    : null,
+                onSecondaryAction: _showsRepairOnStartupError(startupError!)
+                    ? onOpenStartupSettings
+                    : null,
               ),
             ] else if (startupNotice != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -128,13 +122,6 @@ class PreferencesConfigSection extends StatelessWidget {
                 onAction: onOpenStartupSettings,
               ),
             ],
-            const SizedBox(height: AppSpacing.md),
-            SettingsToggleTile(
-              label: l10n.gsToggleStartMinimized,
-              description: startMinimizedDescription,
-              value: startMinimized,
-              onChanged: startMinimizedEnabled ? onStartMinimizedChanged : null,
-            ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
               label: l10n.gsToggleMinimizeToTray,
@@ -241,6 +228,10 @@ class _SystemSettingsFeedbackMessage extends StatelessWidget {
   }
 }
 
+bool _showsRepairOnStartupError(SystemSettingsErrorState error) {
+  return error.startupFailureCode == StartupServiceFailureCode.rollbackFailed;
+}
+
 bool _showsRepairAction(SystemSettingsNoticeCode code) {
   return code == SystemSettingsNoticeCode.startupLaunchConfigurationNeedsRepair ||
       code == SystemSettingsNoticeCode.startupLaunchConfigurationRepairFailed ||
@@ -306,7 +297,11 @@ String? _startupFailureHint(AppLocalizations l10n, StartupServiceFailureCode? co
     StartupServiceFailureCode.registryDeleteFailed => l10n.gsStartupFailureRegistryDelete,
     StartupServiceFailureCode.registryWriteFailed => l10n.gsStartupFailureRegistryWrite,
     StartupServiceFailureCode.registryReadFailed => l10n.gsStartupFailureRegistryRead,
-    StartupServiceFailureCode.unknown || StartupServiceFailureCode.unsupportedPlatform || null => null,
+    StartupServiceFailureCode.rollbackFailed => l10n.gsStartupFailureRollbackFailed,
+    StartupServiceFailureCode.unknown ||
+    StartupServiceFailureCode.unsupportedPlatform ||
+    StartupServiceFailureCode.nonProductionExecutable ||
+    null => null,
   };
 }
 

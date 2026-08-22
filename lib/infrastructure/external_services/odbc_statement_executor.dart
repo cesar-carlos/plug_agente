@@ -214,7 +214,7 @@ final class OdbcStatementExecutor {
         switch (status) {
           case _asyncRequestReadyStatus:
             final result = await _service.asyncGetResult(requestId);
-            return result.fold(Success.new, Failure.new);
+            return await result.fold(Success.new, Failure.new);
           case _asyncRequestPendingStatus:
             final remaining = deadline.difference(DateTime.now());
             if (remaining <= Duration.zero) {

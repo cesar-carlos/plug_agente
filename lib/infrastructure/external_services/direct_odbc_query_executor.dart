@@ -160,7 +160,7 @@ final class DirectOdbcQueryExecutor {
                     level: 900,
                     error: error,
                   );
-                  return execute(
+                  return await execute(
                     request,
                     connectionString,
                     stopwatch,

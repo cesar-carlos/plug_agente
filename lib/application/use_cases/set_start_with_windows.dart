@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
 import 'package:plug_agente/application/use_cases/startup_launch_configuration_mapper.dart';
+import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -49,21 +50,62 @@ class SetStartWithWindows {
     }
 
     final persistResult = await _repository.persistStartWithWindows(value);
-    return persistResult.fold(
-      (_) => Success(
+    if (persistResult.isSuccess()) {
+      return Success(
         SetStartWithWindowsOutcome(
           change: value ? StartupChangeOutcome.enabled : StartupChangeOutcome.disabled,
           launchConfiguration: launchConfiguration,
         ),
-      ),
-      (failure) {
+      );
+    }
+
+    final failure = persistResult.exceptionOrNull()!;
+    developer.log(
+      'Failed to persist startWithWindows after system toggle: $failure',
+      name: 'set_start_with_windows',
+      level: 900,
+    );
+    if (_repository.isStartupServiceAvailable) {
+      final rollbackResult = await _rollbackSystemStartup(enabled: value);
+      if (rollbackResult.isError()) {
+        final rollbackFailure = rollbackResult.exceptionOrNull();
         developer.log(
-          'Failed to persist startWithWindows after system toggle: $failure',
+          'Failed to roll back system startup after persist failure: $rollbackFailure',
           name: 'set_start_with_windows',
           level: 900,
         );
-        return Failure(failure);
+        return Failure(
+          StartupServiceFailure(
+            message: 'Could not save the startup preference, and Windows startup could not be reverted.',
+            startupCode: StartupServiceFailureCode.rollbackFailed,
+            cause: failure,
+          ),
+        );
+      }
+    }
+    return Failure(failure);
+  }
+
+  Future<Result<Unit>> _rollbackSystemStartup({required bool enabled}) async {
+    final rollbackResult = enabled
+        ? await _repository.disableSystemStartup()
+        : await _repository.enableSystemStartup();
+    rollbackResult.fold(
+      (_) {
+        developer.log(
+          'Rolled back system startup after persist failure (reverted enable=$enabled)',
+          name: 'set_start_with_windows',
+          level: 800,
+        );
+      },
+      (rollbackFailure) {
+        developer.log(
+          'Failed to roll back system startup after persist failure: $rollbackFailure',
+          name: 'set_start_with_windows',
+          level: 900,
+        );
       },
     );
+    return rollbackResult;
   }
 }

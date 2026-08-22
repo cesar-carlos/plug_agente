@@ -654,7 +654,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
         'operation=readDbForExport outcome=checkpoint_ok',
         name: 'local_app_data_backup',
       );
-      return dbFile.readAsBytes();
+      return await dbFile.readAsBytes();
     } on Object catch (e, st) {
       developer.log(
         'operation=readDbForExport outcome=checkpoint_failed_try_vacuum',

@@ -18,11 +18,9 @@ void main() {
     WidgetTester tester, {
     bool isDarkThemeEnabled = true,
     bool startWithWindows = false,
-    bool startMinimized = false,
     bool minimizeToTray = true,
     bool closeToTray = true,
     bool startupSupported = true,
-    bool startMinimizedSupported = true,
     bool trayBehaviorSupported = true,
     SystemSettingsErrorState? startupError,
     SystemSettingsErrorState? preferenceError,
@@ -31,7 +29,6 @@ void main() {
     Locale locale = const Locale('pt'),
     void Function(bool)? onDarkThemeChanged,
     void Function(bool)? onStartWithWindowsChanged,
-    void Function(bool)? onStartMinimizedChanged,
     void Function(bool)? onMinimizeToTrayChanged,
     void Function(bool)? onCloseToTrayChanged,
     VoidCallback? onOpenStartupSettings,
@@ -49,11 +46,9 @@ void main() {
             content: PreferencesConfigSection(
               isDarkThemeEnabled: isDarkThemeEnabled,
               startWithWindows: startWithWindows,
-              startMinimized: startMinimized,
               minimizeToTray: minimizeToTray,
               closeToTray: closeToTray,
               startupSupported: startupSupported,
-              startMinimizedSupported: startMinimizedSupported,
               trayBehaviorSupported: trayBehaviorSupported,
               startupError: startupError,
               preferenceError: preferenceError,
@@ -61,7 +56,6 @@ void main() {
               startupNotice: startupNotice,
               onDarkThemeChanged: onDarkThemeChanged ?? (_) {},
               onStartWithWindowsChanged: onStartWithWindowsChanged ?? (_) {},
-              onStartMinimizedChanged: onStartMinimizedChanged ?? (_) {},
               onMinimizeToTrayChanged: onMinimizeToTrayChanged ?? (_) {},
               onCloseToTrayChanged: onCloseToTrayChanged ?? (_) {},
               onOpenStartupSettings: onOpenStartupSettings ?? () {},
@@ -134,43 +128,14 @@ void main() {
       },
     );
 
-    testWidgets('startMinimized shows next launch hint when supported and startup enabled', (tester) async {
+    testWidgets('does not render a start-minimized toggle', (tester) async {
       await pumpSection(tester, startWithWindows: true);
 
-      expect(find.text(ptL10n.gsToggleStartMinimizedNextLaunchHint), findsOneWidget);
+      expect(find.text(ptL10n.gsToggleStartWithWindows), findsOneWidget);
+      expect(find.text(ptL10n.gsToggleMinimizeToTray), findsOneWidget);
+      expect(find.text('Iniciar minimizado'), findsNothing);
+      expect(find.text('Start minimized'), findsNothing);
     });
-
-    testWidgets(
-      'startMinimized is disabled with requires-startup hint when start with Windows is off',
-      (tester) async {
-        await pumpSection(tester);
-
-        final toggle = tester.widget<ToggleSwitch>(
-          findToggleFor(ptL10n.gsToggleStartMinimized),
-        );
-        expect(toggle.onChanged, isNull);
-        expect(find.text(ptL10n.gsToggleStartMinimizedRequiresStartup), findsOneWidget);
-      },
-    );
-
-    testWidgets(
-      'startMinimized is enabled when tray supported and start with Windows is on',
-      (tester) async {
-        bool? captured;
-        await pumpSection(
-          tester,
-          startWithWindows: true,
-          onStartMinimizedChanged: (v) => captured = v,
-        );
-
-        final toggle = tester.widget<ToggleSwitch>(
-          findToggleFor(ptL10n.gsToggleStartMinimized),
-        );
-        expect(toggle.onChanged, isNotNull);
-        toggle.onChanged!(true);
-        expect(captured, isTrue);
-      },
-    );
 
     testWidgets('startWithWindows shows admin hint when supported', (tester) async {
       await pumpSection(tester);
@@ -183,19 +148,6 @@ void main() {
 
       expect(find.text(ptL10n.gsToggleStartWithWindowsAdminHint), findsNothing);
     });
-
-    testWidgets(
-      'startMinimized toggle is disabled when tray support is unavailable',
-      (tester) async {
-        await pumpSection(tester, startMinimizedSupported: false);
-
-        final toggle = tester.widget<ToggleSwitch>(
-          findToggleFor(ptL10n.gsToggleStartMinimized),
-        );
-        expect(toggle.onChanged, isNull);
-        expect(find.text(ptL10n.gsToggleStartMinimizedRequiresTray), findsOneWidget);
-      },
-    );
 
     testWidgets(
       'minimizeToTray toggle is disabled when tray support is unavailable',
@@ -387,6 +339,35 @@ void main() {
       expect(find.text(ptL10n.gsStartupLaunchConfigurationRepairedWithLegacyEntry), findsOneWidget);
       expect(find.byIcon(FluentIcons.info), findsOneWidget);
       expect(find.text(ptL10n.gsButtonRepairStartup), findsOneWidget);
+    });
+
+    testWidgets('offers Repair when persist and OS rollback both fail', (tester) async {
+      var repairTapped = false;
+      var settingsTapped = false;
+      await pumpSection(
+        tester,
+        startupError: const SystemSettingsErrorState(
+          code: SystemSettingsErrorCode.startupToggleFailed,
+          startupFailureCode: StartupServiceFailureCode.rollbackFailed,
+        ),
+        onRepairStartupLaunchConfiguration: () => repairTapped = true,
+        onOpenStartupSettings: () => settingsTapped = true,
+      );
+
+      expect(find.textContaining(ptL10n.gsErrorStartupToggleFailed), findsOneWidget);
+      expect(find.textContaining(ptL10n.gsStartupFailureRollbackFailed), findsOneWidget);
+      expect(find.text(ptL10n.gsButtonRepairStartup), findsOneWidget);
+      expect(find.text(ptL10n.gsButtonOpenSettings), findsOneWidget);
+
+      await tester.tap(find.text(ptL10n.gsButtonRepairStartup));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(repairTapped, isTrue);
+
+      await tester.tap(find.text(ptL10n.gsButtonOpenSettings));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(settingsTapped, isTrue);
     });
 
     testWidgets('open settings button triggers callback', (tester) async {

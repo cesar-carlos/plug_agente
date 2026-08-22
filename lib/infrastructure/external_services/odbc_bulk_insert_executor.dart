@@ -303,7 +303,7 @@ final class OdbcBulkInsertExecutor {
     final remaining = OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout;
     try {
       final result = remaining == null ? await operation : await operation.timeout(remaining);
-      return result.fold(
+      return await result.fold(
         Success.new,
         (error) => Failure(
           OdbcFailureMapper.mapQueryError(

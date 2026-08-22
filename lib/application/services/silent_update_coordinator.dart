@@ -247,9 +247,9 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           // before preference-off early exit so a downloaded update can still
           // surface Ready (manual banner/apply) when automatic updates are off.
           if (_shouldAutoApply() && !_cancelRequested) {
-            return _autoApplyStagedUpdate(feedUrl: feedUrl);
+            return await _autoApplyStagedUpdate(feedUrl: feedUrl);
           }
-          return _returnInstallerReady(feedUrl: feedUrl, pending: pending);
+          return await _returnInstallerReady(feedUrl: feedUrl, pending: pending);
         case PendingDownloadedNone():
         case PendingDownloadedStaleCleared():
           break;
@@ -257,7 +257,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
 
       // Preference off blocks *new* downloads only; Ready was handled above.
       if (!automaticSilentUpdatesEnabled) {
-        return _completeEarlyCheck(
+        return await _completeEarlyCheck(
           feedUrl: feedUrl,
           outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.silentDisabled),
           completionSource: UpdateCheckCompletionSource.automaticDisabled,
@@ -265,7 +265,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       }
 
       if (_collaborators.scheduler.isWithinQuietHours()) {
-        return _completeEarlyCheck(
+        return await _completeEarlyCheck(
           feedUrl: feedUrl,
           outcome: const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.skippedByQuietHours),
           completionSource: UpdateCheckCompletionSource.automaticQuietHours,
@@ -378,7 +378,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           _collaborators.diagnosticsNotifier.notifyChanged();
           _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           if (_shouldAutoApply() && !_cancelRequested) {
-            return _autoApplyStagedUpdate(feedUrl: feedUrl);
+            return await _autoApplyStagedUpdate(feedUrl: feedUrl);
           }
           return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
       }

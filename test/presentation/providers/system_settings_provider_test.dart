@@ -61,6 +61,9 @@ void main() {
       () => mockStartupService.isEnabled(),
     ).thenAnswer((_) async => const Success(false));
     when(
+      () => mockStartupService.isDisabledByStartupApps(),
+    ).thenAnswer((_) async => const Success(false));
+    when(
       () => mockStartupService.openSystemSettings(),
     ).thenAnswer((_) async => const Success(unit));
     when(
@@ -82,21 +85,18 @@ void main() {
       final provider = createSystemSettingsProvider(prefs: prefs);
 
       check(provider.startWithWindows).equals(false);
-      check(provider.startMinimized).equals(false);
       check(provider.minimizeToTray).equals(true);
       check(provider.closeToTray).equals(true);
     });
 
     test('should load saved values from settings store', () async {
       await prefs.setBool(AppSettingsKeys.startWithWindows, true);
-      await prefs.setBool(AppSettingsKeys.startMinimized, true);
       await prefs.setBool(AppSettingsKeys.minimizeToTray, false);
       await prefs.setBool(AppSettingsKeys.closeToTray, false);
 
       final provider = createSystemSettingsProvider(prefs: prefs);
 
       check(provider.startWithWindows).equals(true);
-      check(provider.startMinimized).equals(true);
       check(provider.minimizeToTray).equals(false);
       check(provider.closeToTray).equals(false);
     });
@@ -175,10 +175,13 @@ void main() {
       check(prefs.getBool(AppSettingsKeys.startWithWindows)).isNull();
     });
 
-    test('should keep Windows startup truth when preference persistence fails after enabling', () async {
+    test('should roll back Windows startup and keep UI off when preference persistence fails after enabling', () async {
       final failingPrefs = FailingAppSettingsStore();
       when(
         () => mockStartupService.enable(),
+      ).thenAnswer((_) async => const Success(unit));
+      when(
+        () => mockStartupService.disable(),
       ).thenAnswer((_) async => const Success(unit));
 
       final provider = createSystemSettingsProvider(
@@ -189,22 +192,44 @@ void main() {
       final outcome = await provider.setStartWithWindows(true);
 
       check(outcome).isNull();
-      check(provider.startWithWindows).equals(true);
+      check(provider.startWithWindows).equals(false);
       check(provider.preferenceError).isNotNull();
       check(provider.preferenceError!.code).equals(SystemSettingsErrorCode.settingsPersistenceFailed);
+      verify(() => mockStartupService.enable()).called(1);
+      verify(() => mockStartupService.disable()).called(1);
     });
 
-    test(
-      'should update startMinimized and persist to settings store',
-      () async {
-        final provider = createSystemSettingsProvider(prefs: prefs);
+    test('should keep toggle unchanged and expose rollbackFailed when persist and OS rollback both fail', () async {
+      final failingPrefs = FailingAppSettingsStore();
+      when(
+        () => mockStartupService.enable(),
+      ).thenAnswer((_) async => const Success(unit));
+      when(
+        () => mockStartupService.disable(),
+      ).thenAnswer(
+        (_) async => Failure(
+          StartupServiceFailure(
+            message: 'Could not revert registry',
+            startupCode: StartupServiceFailureCode.registryDeleteFailed,
+          ),
+        ),
+      );
 
-        await provider.setStartMinimized(true);
+      final provider = createSystemSettingsProvider(
+        prefs: failingPrefs,
+        startupService: mockStartupService,
+      );
 
-        check(provider.startMinimized).equals(true);
-        check(prefs.getBool(AppSettingsKeys.startMinimized)).equals(true);
-      },
-    );
+      final outcome = await provider.setStartWithWindows(true);
+
+      check(outcome).isNull();
+      check(provider.startWithWindows).equals(false);
+      check(provider.startupError).isNotNull();
+      check(provider.startupError!.code).equals(SystemSettingsErrorCode.startupToggleFailed);
+      check(provider.startupError!.startupFailureCode).equals(
+        StartupServiceFailureCode.rollbackFailed,
+      );
+    });
 
     test(
       'should update minimizeToTray and apply to WindowManagerService',
@@ -523,17 +548,6 @@ void main() {
       await provider.repairStartupLaunchConfiguration();
 
       check(provider.startupNotice).isNull();
-    });
-
-    test('should keep startMinimized unchanged when persistence fails', () async {
-      final failingPrefs = FailingAppSettingsStore();
-      final provider = createSystemSettingsProvider(prefs: failingPrefs);
-
-      await provider.setStartMinimized(true);
-
-      check(provider.startMinimized).equals(false);
-      check(provider.preferenceError).isNotNull();
-      check(provider.preferenceError!.code).equals(SystemSettingsErrorCode.settingsPersistenceFailed);
     });
 
     test('should not apply minimizeToTray runtime change when persistence fails', () async {

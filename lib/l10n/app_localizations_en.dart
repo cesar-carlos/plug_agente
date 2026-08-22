@@ -3549,24 +3549,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gsToggleStartWithWindows => 'Start with Windows';
 
   @override
-  String get gsToggleStartMinimized => 'Start minimized';
-
-  @override
-  String get gsToggleStartMinimizedNextLaunchHint =>
-      'Applies when Windows starts the app automatically (not when opened manually).';
-
-  @override
   String get gsToggleStartMinimizedRequiresTray => 'Requires tray support in this environment.';
-
-  @override
-  String get gsToggleStartMinimizedRequiresStartup => 'Requires \"Start with Windows\" enabled.';
 
   @override
   String get gsToggleStartWithWindowsAdminHint =>
       'If the app does not start with Windows, also check Windows Startup apps.';
 
   @override
-  String get gsToggleStartWithWindowsOpenStartupAppsHint => 'Make sure Plug Agente is enabled in Windows Startup apps.';
+  String get gsToggleStartWithWindowsOpenStartupAppsHint =>
+      'Make sure Plug Agente is enabled in Windows Startup apps. Windows login starts the app in the tray.';
 
   @override
   String get gsToggleMinimizeToTray => 'Minimize to tray';
@@ -3628,6 +3619,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gsStartupFailureRegistryRead => 'Could not read the startup entry.';
+
+  @override
+  String get gsStartupFailureRollbackFailed =>
+      'The preference could not be saved, and Windows startup could not be reverted. Use Repair to restore a consistent state.';
 
   @override
   String get gsStartupFailureDuplicateEntryHint => 'A duplicate legacy installer entry may exist.';

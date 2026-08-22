@@ -3,7 +3,15 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('startup minimized readiness tool', () {
+  group('startup readiness tool', () {
+    test('does not require the removed start-minimized preference', () {
+      final script = File('tool/dev/check_startup_minimized_readiness.dart').readAsStringSync();
+
+      expect(script, contains('AppSettingsKeys.startWithWindows'));
+      expect(script, isNot(contains('AppSettingsKeys.startMinimized')));
+      expect(script, isNot(contains('Start minimized')));
+    });
+
     test('checks both user and machine startup registry scopes', () {
       final script = File('tool/dev/check_startup_minimized_readiness.dart').readAsStringSync();
       final registryHelper = File('lib/infrastructure/services/startup_registry_entry.dart').readAsStringSync();

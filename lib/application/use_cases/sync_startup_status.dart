@@ -15,7 +15,9 @@ class SyncStartupStatus {
   final IStartupPreferencesRepository _repository;
   final StartupConfigurationSessionState? _sessionState;
 
-  Future<Result<SyncStartupStatusOutcome>> call() async {
+  Future<Result<SyncStartupStatusOutcome>> call({
+    bool Function()? shouldAbort,
+  }) async {
     if (!_repository.isStartupServiceAvailable) {
       return const Success(SyncStartupStatusOutcome());
     }
@@ -23,8 +25,20 @@ class SyncStartupStatus {
     final enabledResult = await _repository.readSystemStartupEnabled();
     return enabledResult.fold(
       (isEnabled) async {
+        if (shouldAbort?.call() ?? false) {
+          return const Success(SyncStartupStatusOutcome());
+        }
+
         final stored = _repository.startWithWindows;
         StartupLaunchConfigurationOutcome? launchConfiguration;
+
+        final userDisabled = await _readUserDisabledStartup();
+        if (userDisabled) {
+          if (shouldAbort?.call() ?? false) {
+            return const Success(SyncStartupStatusOutcome());
+          }
+          return _reconcileUserDisabledStartup(stored: stored);
+        }
 
         final bootCache = _sessionState?.takeBootLaunchConfiguration();
         if (bootCache != null && bootCache.present) {
@@ -55,6 +69,9 @@ class SyncStartupStatus {
                 launchConfigurationType == StartupLaunchConfigurationOutcomeType.repairFailed);
         bool? reconciled;
         if (effectiveSystemEnabled != stored && !hasRepairableStoredEntry) {
+          if (shouldAbort?.call() ?? false) {
+            return const Success(SyncStartupStatusOutcome());
+          }
           developer.log(
             'Startup status out of sync (system: $effectiveSystemEnabled, settings: $stored), updating settings',
             name: 'sync_startup_status',
@@ -62,16 +79,18 @@ class SyncStartupStatus {
           );
           reconciled = effectiveSystemEnabled;
           final persistResult = await _repository.persistStartWithWindows(effectiveSystemEnabled);
-          persistResult.fold(
-            (_) {},
-            (failure) {
-              developer.log(
-                'Failed to persist reconciled startup status: $failure',
-                name: 'sync_startup_status',
-                level: 900,
-              );
-            },
+          final persistFailure = persistResult.fold(
+            (_) => null,
+            (failure) => failure,
           );
+          if (persistFailure != null) {
+            developer.log(
+              'Failed to persist reconciled startup status: $persistFailure',
+              name: 'sync_startup_status',
+              level: 900,
+            );
+            return Failure(persistFailure);
+          }
         } else if (hasRepairableStoredEntry) {
           developer.log(
             'Startup entry needs repair; preserving stored startup preference until repair completes',
@@ -88,6 +107,52 @@ class SyncStartupStatus {
         );
       },
       Failure.new,
+    );
+  }
+
+  Future<bool> _readUserDisabledStartup() async {
+    final result = await _repository.readStartupDisabledByUser();
+    return result.fold(
+      (disabled) => disabled,
+      (failure) {
+        developer.log(
+          'Failed to read Startup Apps disable state during sync: $failure',
+          name: 'sync_startup_status',
+          level: 900,
+        );
+        return false;
+      },
+    );
+  }
+
+  Future<Result<SyncStartupStatusOutcome>> _reconcileUserDisabledStartup({
+    required bool stored,
+  }) async {
+    if (!stored) {
+      return const Success(SyncStartupStatusOutcome());
+    }
+
+    developer.log(
+      'Startup Apps disabled the entry; persisting startWithWindows=false without repairing',
+      name: 'sync_startup_status',
+      level: 800,
+    );
+    final persistResult = await _repository.persistStartWithWindows(false);
+    final persistFailure = persistResult.fold(
+      (_) => null,
+      (failure) => failure,
+    );
+    if (persistFailure != null) {
+      developer.log(
+        'Failed to persist startWithWindows=false after Startup Apps disable: $persistFailure',
+        name: 'sync_startup_status',
+        level: 900,
+      );
+      return Failure(persistFailure);
+    }
+
+    return const Success(
+      SyncStartupStatusOutcome(reconciledStartWithWindows: false),
     );
   }
 }
