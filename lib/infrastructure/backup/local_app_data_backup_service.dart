@@ -203,21 +203,6 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
         secureStorageSecretsBytes: secureStorageSecretsBytes,
         payloadBytes: payloadBytes,
       );
-      if (zipBytes == null) {
-        developer.log(
-          'operation=exportBackupZip outcome=failure backupError=${LocalBackupErrorCodes.exportZip}',
-          name: 'local_app_data_backup',
-        );
-        return Failure(
-          domain.DatabaseFailure.withContext(
-            message: 'Failed to build backup archive',
-            context: {
-              'operation': 'exportBackupZip',
-              ..._backupErr(LocalBackupErrorCodes.exportZip),
-            },
-          ),
-        );
-      }
 
       final parent = out.parent;
       if (!parent.existsSync()) {
@@ -335,21 +320,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
           continue;
         }
         final targetPath = p.join(root, base);
-        final data = file.content;
-        final List<int> raw;
-        if (data is List<int>) {
-          raw = data;
-        } else if (data is Uint8List) {
-          raw = data.toList();
-        } else {
-          _deleteDirIfExists(root);
-          return Failure(
-            domain.ValidationFailure.withContext(
-              message: 'Invalid archive entry',
-              context: _backupErr(LocalBackupErrorCodes.invalidEntry),
-            ),
-          );
-        }
+        final raw = file.content;
         await File(targetPath).writeAsBytes(raw, flush: true);
       }
 
@@ -772,7 +743,7 @@ class LocalAppDataBackupService implements ILocalAppDataBackupService {
     return legacyFlag is bool && legacyFlag;
   }
 
-  Future<Uint8List?> _encodeZipPayload({
+  Future<Uint8List> _encodeZipPayload({
     required Uint8List manifestBytes,
     required Uint8List dbBytes,
     required Uint8List? settingsBytes,

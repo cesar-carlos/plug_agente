@@ -1308,7 +1308,7 @@ AutoStartService _makeService({
     ),
     registryWriter: registryWriter ?? _FakeRegistryWriter(),
     startupApprovedStore: startupApprovedStore ?? _FakeStartupApprovedStore(),
-    processRunner: (String executable, List<String> arguments) async {
+    processRunner: (executable, arguments) async {
       calls?.add(
         _ProcessInvocation(
           executable: executable,

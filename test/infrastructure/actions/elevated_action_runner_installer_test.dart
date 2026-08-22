@@ -29,7 +29,7 @@ void main() {
       recordedCommands.clear();
       installer = ElevatedActionRunnerInstaller(
         storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
-        processRunner: (String executable, List<String> arguments) async {
+        processRunner: (executable, arguments) async {
           recordedCommands.add(<String>[executable, ...arguments]);
           if (executable == 'schtasks' && arguments.contains('/Create')) {
             return ProcessResult(0, 0, '', '');
@@ -78,7 +78,7 @@ void main() {
       );
       expect(
         recordedCommands.any(
-          (List<String> command) => command.contains('/Create') && command.contains('/TN'),
+          (command) => command.contains('/Create') && command.contains('/TN'),
         ),
         isTrue,
       );
@@ -94,7 +94,7 @@ void main() {
       // /TR pointing to a different exe path (post-update scenario).
       installer = ElevatedActionRunnerInstaller(
         storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
-        processRunner: (String executable, List<String> arguments) async {
+        processRunner: (executable, arguments) async {
           if (executable == 'schtasks' && arguments.contains('/Query')) {
             return ProcessResult(
               0,

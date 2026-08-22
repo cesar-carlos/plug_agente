@@ -7,7 +7,7 @@
 /// SQL Server `GO` batch separators.
 List<String> splitSqlStatements(String sql) {
   final out = <String>[];
-  _scanTopLevelSqlStatements(sql, (String trimmed) {
+  _scanTopLevelSqlStatements(sql, (trimmed) {
     out.add(trimmed);
     return false;
   });

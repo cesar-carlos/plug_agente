@@ -253,7 +253,7 @@ void main() {
           final coordinator = _makeCoordinator(
             installer: installer,
             autoApplyEnabled: false,
-            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+            closeApp: ({noticeTitle, noticeBody}) async {
               closeCalled = true;
             },
           );
@@ -299,7 +299,7 @@ void main() {
           var closeCalled = false;
           final coordinator = _makeCoordinator(
             installer: installer,
-            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+            closeApp: ({noticeTitle, noticeBody}) async {
               closeCalled = true;
             },
           );
@@ -376,7 +376,7 @@ void main() {
           final coordinator = _makeCoordinator(
             installer: installer,
             autoApplyEnabled: false,
-            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+            closeApp: ({noticeTitle, noticeBody}) async {
               closeCalled = true;
               capturedTitle = noticeTitle;
               capturedBody = noticeBody;
@@ -418,7 +418,7 @@ void main() {
           final coordinator = _makeCoordinator(
             installer: installer,
             autoApplyEnabled: false,
-            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+            closeApp: ({noticeTitle, noticeBody}) async {
               closeCalled = true;
             },
           );
@@ -455,7 +455,7 @@ void main() {
           final coordinator = _makeCoordinator(
             installer: installer,
             autoApplyEnabled: false,
-            closeApp: ({String? noticeTitle, String? noticeBody}) async {
+            closeApp: ({noticeTitle, noticeBody}) async {
               closeCount++;
             },
           );
@@ -630,7 +630,7 @@ void main() {
             },
           ),
           settingsStore: store,
-          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+          closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
             closeCalled = true;
           },
         );
@@ -759,7 +759,7 @@ void main() {
           settingsStore: store,
           clock: () => now,
           launcherStatusReader: _FakeLauncherStatusReader(),
-          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+          closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
             closeCalled = true;
           },
         );
@@ -840,7 +840,7 @@ void main() {
         final coordinator = _makeCoordinator(
           installer: installer,
           uacDetector: uacDetector,
-          closeApp: ({String? noticeTitle, String? noticeBody}) async {
+          closeApp: ({noticeTitle, noticeBody}) async {
             closeCalled = true;
           },
         );
@@ -918,7 +918,7 @@ void main() {
           appcastProbeService: FakeAppcastProbeService(),
           silentUpdateInstaller: cancellableInstaller,
           settingsStore: store,
-          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+          closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
             closeCalled = true;
           },
         );

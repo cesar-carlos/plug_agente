@@ -47,7 +47,7 @@ class AppFluentTabView extends StatelessWidget {
       minTabWidth: 180,
       tabs: items
           .map(
-            (AppFluentTabItem item) => Tab(
+            (item) => Tab(
               icon: Icon(item.icon),
               text: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),

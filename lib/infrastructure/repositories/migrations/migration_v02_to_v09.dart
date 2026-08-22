@@ -31,7 +31,6 @@ Future<void> migrateAgentConfigDatabaseV02ToV09(
   }
   if (from < 5) {
     await m.alterTable(
-      // ignore: experimental_member_use - TableMigration is Drift's API for column defaults
       TableMigration(
         db.configTable,
         columnTransformer: {db.configTable.odbcDriverName: const Constant('')},

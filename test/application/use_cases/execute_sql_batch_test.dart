@@ -35,7 +35,7 @@ void main() {
 
       final wideData = List<Map<String, dynamic>>.generate(
         5,
-        (int i) => {'n': i},
+        (i) => {'n': i},
       );
 
       when(
@@ -87,7 +87,7 @@ void main() {
           'agent',
           any(
             that: isA<List<SqlCommand>>().having(
-              (List<SqlCommand> c) => c.length,
+              (c) => c.length,
               'length',
               1,
             ),
@@ -146,7 +146,7 @@ void main() {
           'agent',
           any(
             that: isA<List<SqlCommand>>().having(
-              (List<SqlCommand> c) => c.length,
+              (c) => c.length,
               'length',
               1,
             ),
@@ -154,7 +154,7 @@ void main() {
           options: any(
             named: 'options',
             that: isA<SqlExecutionOptions>().having(
-              (SqlExecutionOptions o) => o.transaction,
+              (o) => o.transaction,
               'transaction',
               isTrue,
             ),
@@ -198,7 +198,7 @@ void main() {
             'agent',
             any(
               that: isA<List<SqlCommand>>().having(
-                (List<SqlCommand> c) => c.length,
+                (c) => c.length,
                 'length',
                 2,
               ),

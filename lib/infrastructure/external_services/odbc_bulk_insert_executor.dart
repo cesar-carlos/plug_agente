@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
@@ -97,6 +98,7 @@ final class OdbcBulkInsertExecutor {
       deadline: deadline ?? OdbcExecutionDeadline.deadlineFor(timeout),
       timeout: timeout,
       databaseType: databaseType,
+      allowNativeBcp: false,
     );
   }
 
@@ -105,6 +107,8 @@ final class OdbcBulkInsertExecutor {
   ///
   /// When [databaseType] is SQL Server and the row count exceeds the parallel
   /// threshold, routes to `bulkInsertParallel` on the native pool instead.
+  /// [requireAtomic] forces sequential bulk on one connection (with a local
+  /// transaction for chunked inserts) and refuses parallel/BCP.
   Future<Result<int>> executeDirect(
     BulkInsertRequest request,
     String connectionString, {
@@ -112,6 +116,7 @@ final class OdbcBulkInsertExecutor {
     DatabaseType? databaseType,
     CancellationToken? cancellationToken,
     String? sourceRpcRequestId,
+    bool requireAtomic = false,
   }) async {
     if (cancellationToken?.isCancelled ?? false) {
       return Failure(
@@ -128,6 +133,7 @@ final class OdbcBulkInsertExecutor {
           requestRowCount: request.rowCount,
           poolSize: _settings.poolSize,
           parallelPoolAvailable: _parallelPool != null,
+          requireAtomic: requireAtomic,
         )) {
       return _executeParallelDirect(
         request,
@@ -169,12 +175,14 @@ final class OdbcBulkInsertExecutor {
           final inFlightRequestId = _inFlightTrackingKey(sourceRpcRequestId);
           try {
             _registerInFlightExecution(inFlightRequestId, connection.id);
-            final inserted = await _executeChunkedBulkInsert(
+            final inserted = await _executeSequentialBulkInsert(
               connectionId: connection.id,
               request: request,
               deadline: deadline,
               timeout: timeout,
               databaseType: databaseType,
+              wrapChunksInTransaction: true,
+              allowNativeBcp: !requireAtomic,
             );
             if (inserted.isError()) {
               return Failure(inserted.exceptionOrNull()!);
@@ -277,7 +285,12 @@ final class OdbcBulkInsertExecutor {
         timeout: timeout,
       );
       if (chunkResult.isError()) {
-        return Failure(chunkResult.exceptionOrNull()!);
+        return Failure(
+          _parallelBulkFailure(
+            chunkResult.exceptionOrNull()!,
+            rowsInsertedBeforeFailure: totalInserted,
+          ),
+        );
       }
       totalInserted += chunkResult.getOrThrow();
     }
@@ -306,26 +319,133 @@ final class OdbcBulkInsertExecutor {
       return await result.fold(
         Success.new,
         (error) => Failure(
-          OdbcFailureMapper.mapQueryError(
-            error,
-            operation: 'bulk_insert_parallel',
+          _parallelBulkFailure(
+            OdbcFailureMapper.mapQueryError(
+              error,
+              operation: 'bulk_insert_parallel',
+            ),
           ),
         ),
       );
     } on TimeoutException catch (error) {
       return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'Bulk insert parallel execution timeout',
-          cause: error,
-          context: {
-            'timeout': true,
-            'timeout_stage': 'sql',
-            'stage': 'bulk_insert_parallel',
-            'reason': RpcSqlBudgetConstants.queryTimeoutReason,
-            if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
-          },
+        _parallelBulkFailure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'Bulk insert parallel execution timeout',
+            cause: error,
+            context: {
+              'timeout': true,
+              'timeout_stage': 'sql',
+              'stage': 'bulk_insert_parallel',
+              'reason': RpcSqlBudgetConstants.queryTimeoutReason,
+              if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
+            },
+          ),
         ),
       );
+    }
+  }
+
+  Future<Result<int>> _executeSequentialBulkInsert({
+    required String connectionId,
+    required BulkInsertRequest request,
+    required DateTime? deadline,
+    required Duration? timeout,
+    required DatabaseType? databaseType,
+    required bool wrapChunksInTransaction,
+    required bool allowNativeBcp,
+  }) {
+    final chunkSize = ConnectionConstants.bulkInsertChunkRowCount;
+    final shouldWrap =
+        wrapChunksInTransaction &&
+        request.rows.length > chunkSize &&
+        !(allowNativeBcp && shouldAttemptNativeBcpBulkInsert(databaseType: databaseType));
+    if (!shouldWrap) {
+      return _executeChunkedBulkInsert(
+        connectionId: connectionId,
+        request: request,
+        deadline: deadline,
+        timeout: timeout,
+        databaseType: databaseType,
+        allowNativeBcp: allowNativeBcp,
+      );
+    }
+
+    return _executeChunkedBulkInsertInTransaction(
+      connectionId: connectionId,
+      request: request,
+      deadline: deadline,
+      timeout: timeout,
+      databaseType: databaseType,
+    );
+  }
+
+  Future<Result<int>> _executeChunkedBulkInsertInTransaction({
+    required String connectionId,
+    required BulkInsertRequest request,
+    required DateTime? deadline,
+    required Duration? timeout,
+    required DatabaseType? databaseType,
+  }) async {
+    final remaining = OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout;
+    final beginResult = await _service.beginTransaction(
+      connectionId,
+      savepointDialect: SavepointDialect.auto,
+      accessMode: TransactionAccessMode.readWrite,
+      lockTimeout: remaining,
+    );
+    if (beginResult.isError()) {
+      return Failure(
+        OdbcFailureMapper.mapQueryError(
+          beginResult.exceptionOrNull()!,
+          operation: 'bulk_insert_transaction_begin',
+        ),
+      );
+    }
+
+    final transactionId = beginResult.getOrThrow();
+    try {
+      final inserted = await _executeChunkedBulkInsert(
+        connectionId: connectionId,
+        request: request,
+        deadline: deadline,
+        timeout: timeout,
+        databaseType: databaseType,
+        allowNativeBcp: false,
+      );
+      if (inserted.isError()) {
+        await _rollbackBulkTransaction(connectionId, transactionId);
+        return inserted;
+      }
+
+      final commitResult = await _service.commitTransaction(connectionId, transactionId);
+      if (commitResult.isError()) {
+        await _rollbackBulkTransaction(connectionId, transactionId);
+        return Failure(
+          OdbcFailureMapper.mapQueryError(
+            commitResult.exceptionOrNull()!,
+            operation: 'bulk_insert_transaction_commit',
+          ),
+        );
+      }
+      return inserted;
+    } on TimeoutException {
+      await _rollbackBulkTransaction(connectionId, transactionId);
+      rethrow;
+    } on Object {
+      await _rollbackBulkTransaction(connectionId, transactionId);
+      rethrow;
+    }
+  }
+
+  Future<void> _rollbackBulkTransaction(String connectionId, int transactionId) async {
+    try {
+      final rollback = await _service.rollbackTransaction(connectionId, transactionId);
+      if (rollback.isError()) {
+        _connectionManager.markConnectionForDiscard(connectionId);
+      }
+    } on Object {
+      _connectionManager.markConnectionForDiscard(connectionId);
     }
   }
 
@@ -335,6 +455,7 @@ final class OdbcBulkInsertExecutor {
     required DateTime? deadline,
     required Duration? timeout,
     DatabaseType? databaseType,
+    bool allowNativeBcp = true,
   }) async {
     final chunkSize = ConnectionConstants.bulkInsertChunkRowCount;
     if (request.rows.length <= chunkSize) {
@@ -344,6 +465,7 @@ final class OdbcBulkInsertExecutor {
         deadline: deadline,
         timeout: timeout,
         databaseType: databaseType,
+        allowNativeBcp: allowNativeBcp,
       );
     }
 
@@ -362,6 +484,7 @@ final class OdbcBulkInsertExecutor {
         deadline: deadline,
         timeout: timeout,
         databaseType: databaseType,
+        allowNativeBcp: allowNativeBcp,
       );
       if (chunkResult.isError()) {
         return Failure(chunkResult.exceptionOrNull()!);
@@ -377,8 +500,9 @@ final class OdbcBulkInsertExecutor {
     required DateTime? deadline,
     required Duration? timeout,
     DatabaseType? databaseType,
+    bool allowNativeBcp = true,
   }) async {
-    final pilotEnabled = shouldAttemptNativeBcpBulkInsert(databaseType: databaseType);
+    final pilotEnabled = allowNativeBcp && shouldAttemptNativeBcpBulkInsert(databaseType: databaseType);
     if (pilotEnabled) {
       _metrics.recordDiagnosticReason(
         category: 'bulk_insert',
@@ -417,16 +541,49 @@ final class OdbcBulkInsertExecutor {
         if (pilotEnabled) {
           return Failure(
             domain.QueryExecutionFailure.withContext(
-              message: mapped.message,
+              message:
+                  '${mapped.message} Native BCP may have committed some rows; '
+                  'they were not rolled back as a single transaction.',
               cause: mapped.cause ?? error,
               context: {
                 ...mapped.context,
                 'reason': odbcNativeBcpFailedReason,
+                'partial_writes': true,
+                'user_message':
+                    'A carga nativa BCP falhou. Parte das linhas pode já ter sido gravada. '
+                    'Verifique a tabela antes de repetir a operação.',
               },
             ),
           );
         }
         return Failure(mapped);
+      },
+    );
+  }
+
+  domain.Failure _parallelBulkFailure(
+    Object error, {
+    int rowsInsertedBeforeFailure = 0,
+  }) {
+    final mapped = error is domain.Failure
+        ? error
+        : OdbcFailureMapper.mapQueryError(
+            error,
+            operation: 'bulk_insert_parallel',
+          );
+    return domain.QueryExecutionFailure.withContext(
+      message:
+          '${mapped.message} Parallel bulk insert is not atomic across connections; '
+          'some rows may already have been committed and were not rolled back.',
+      cause: mapped.cause ?? error,
+      context: {
+        ...mapped.context,
+        'reason': OdbcContextConstants.bulkInsertPartialWritesReason,
+        'partial_writes': true,
+        'rows_inserted_before_failure': rowsInsertedBeforeFailure,
+        'user_message':
+            'A carga paralela falhou. Parte das linhas pode já ter sido gravada '
+            'e não foi revertida em conjunto. Verifique a tabela antes de repetir a operação.',
       },
     );
   }

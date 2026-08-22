@@ -752,7 +752,7 @@ void main() {
     );
 
     await provider.load();
-    expect(provider.executions.any((AgentActionExecution e) => e.id == 'old-exec'), isFalse);
+    expect(provider.executions.any((e) => e.id == 'old-exec'), isFalse);
 
     final record = AgentActionRemoteAuditRecord(
       id: 'audit-old',
@@ -767,7 +767,7 @@ void main() {
 
     expect(result, AgentActionRemoteAuditFocusResult.succeeded);
     expect(provider.auditCorrelationExecutionId, 'old-exec');
-    expect(provider.executions.any((AgentActionExecution e) => e.id == 'old-exec'), isTrue);
+    expect(provider.executions.any((e) => e.id == 'old-exec'), isTrue);
   });
 
   test('focusExecutionFromRemoteAudit should fail when runtime instance mismatches execution', () async {
@@ -828,7 +828,7 @@ void main() {
     );
 
     await provider.load();
-    expect(provider.executions.any((AgentActionExecution e) => e.id == 'execution-remote'), isFalse);
+    expect(provider.executions.any((e) => e.id == 'execution-remote'), isFalse);
 
     final record = AgentActionRemoteAuditRecord(
       id: 'audit-fetch-mismatch',
@@ -845,7 +845,7 @@ void main() {
 
     expect(result, AgentActionRemoteAuditFocusResult.runtimeInstanceMismatch);
     expect(provider.auditCorrelationExecutionId, isNull);
-    expect(provider.executions.any((AgentActionExecution e) => e.id == 'execution-remote'), isFalse);
+    expect(provider.executions.any((e) => e.id == 'execution-remote'), isFalse);
   });
 
   test('sliceCapturedOutput should return utf8 window from chunked store', () async {
@@ -895,7 +895,7 @@ void main() {
     );
 
     await provider.load();
-    expect(provider.executions.any((AgentActionExecution e) => e.id == 'old-chunk-exec'), isFalse);
+    expect(provider.executions.any((e) => e.id == 'old-chunk-exec'), isFalse);
 
     final record = AgentActionRemoteAuditRecord(
       id: 'audit-chunk',
@@ -910,7 +910,7 @@ void main() {
 
     expect(result, AgentActionRemoteAuditFocusResult.succeeded);
     expect(repository.lastGetExecutionHydrateCapturedOutput, isFalse);
-    final merged = provider.executions.singleWhere((AgentActionExecution e) => e.id == 'old-chunk-exec');
+    final merged = provider.executions.singleWhere((e) => e.id == 'old-chunk-exec');
     expect(merged.stdoutStoredInChunks, isTrue);
     expect(merged.stdoutText, isNull);
   });
@@ -1715,7 +1715,7 @@ class _FakeAgentActionRepository implements IAgentActionRepository {
   @override
   Future<Result<void>> deleteDefinition(String id) async {
     definitions.remove(id);
-    triggers.removeWhere((_, AgentActionTrigger trigger) => trigger.actionId == id);
+    triggers.removeWhere((_, trigger) => trigger.actionId == id);
     return const Success(unit);
   }
 

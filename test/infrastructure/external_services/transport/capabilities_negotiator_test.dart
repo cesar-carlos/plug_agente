@@ -292,7 +292,7 @@ void main() {
         localCapabilitiesProvider: ProtocolCapabilities.defaultCapabilities,
         agentIdProvider: () => 'agent-1',
         emit: (event, payload) async => false,
-        decodeIncoming: (payload, {String? sourceEvent}) =>
+        decodeIncoming: (payload, {sourceEvent}) =>
             Success<Object, Exception>(payload as Object) as Result<dynamic>,
         onTimeoutReconnect: () => reconnectCalls++,
       );
@@ -474,7 +474,7 @@ void main() {
           emitted.add((event: event, payload: payload));
           return true;
         },
-        decodeIncoming: (payload, {String? sourceEvent}) {
+        decodeIncoming: (payload, {sourceEvent}) {
           return Success<Object, Exception>(payload as Object) as Result<dynamic>;
         },
         onTimeoutReconnect: () => reconnectCalls++,

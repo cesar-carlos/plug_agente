@@ -124,7 +124,7 @@ void _registerActionsUseCases(GetIt getIt) {
     )
     ..registerLazySingleton(
       () => RpcIdempotencyCachePeriodicPurge(
-        ({DateTime? referenceTime}) => getIt<CleanupExpiredRpcIdempotencyCache>()(referenceTime: referenceTime),
+        ({referenceTime}) => getIt<CleanupExpiredRpcIdempotencyCache>()(referenceTime: referenceTime),
       ),
     )
     ..registerLazySingleton(
@@ -136,7 +136,7 @@ void _registerActionsUseCases(GetIt getIt) {
     )
     ..registerLazySingleton(
       () => AgentActionRemoteAuditPeriodicPurge(
-        ({DateTime? referenceTime}) => getIt<CleanupExpiredAgentActionRemoteAudit>()(referenceTime: referenceTime),
+        ({referenceTime}) => getIt<CleanupExpiredAgentActionRemoteAudit>()(referenceTime: referenceTime),
       ),
     )
     ..registerLazySingleton(
@@ -147,7 +147,7 @@ void _registerActionsUseCases(GetIt getIt) {
     )
     ..registerLazySingleton(
       () => ElevatedBridgeArtifactsPeriodicPurge(
-        ({DateTime? referenceTime}) => getIt<CleanupExpiredElevatedBridgeArtifacts>()(referenceTime: referenceTime),
+        ({referenceTime}) => getIt<CleanupExpiredElevatedBridgeArtifacts>()(referenceTime: referenceTime),
       ),
     )
     ..registerLazySingleton(
@@ -159,7 +159,7 @@ void _registerActionsUseCases(GetIt getIt) {
     )
     ..registerLazySingleton(
       () => AgentActionCapturedOutputPeriodicPurge(
-        ({DateTime? now}) => getIt<CleanupAgentActionCapturedOutput>()(now: now),
+        ({now}) => getIt<CleanupAgentActionCapturedOutput>()(now: now),
       ),
     )
     ..registerLazySingleton(
@@ -171,7 +171,7 @@ void _registerActionsUseCases(GetIt getIt) {
     )
     ..registerLazySingleton(
       () => AgentActionExecutionPeriodicPurge(
-        ({DateTime? referenceTime}) => getIt<CleanupAgentActionExecutions>()(now: referenceTime),
+        ({referenceTime}) => getIt<CleanupAgentActionExecutions>()(now: referenceTime),
       ),
     )
     ..registerLazySingleton<IAgentActionOrphanProcessTerminator>(

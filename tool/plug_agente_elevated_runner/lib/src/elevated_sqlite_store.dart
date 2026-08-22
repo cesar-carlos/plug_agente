@@ -62,10 +62,10 @@ LIMIT 1
           policies: _decodeObject(row['policies_json'] as String),
         );
       } finally {
-        statement.dispose();
+        statement.close();
       }
     } finally {
-      database.dispose();
+      database.close();
     }
   }
 

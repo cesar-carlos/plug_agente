@@ -69,7 +69,7 @@ class AgentActionExecutionDiagnosticsState extends State<AgentActionExecutionDia
     }
     displayInfoBar(
       context,
-      builder: (BuildContext closeContext, void Function() close) => InfoBar(
+      builder: (closeContext, void Function() close) => InfoBar(
         title: Text(widget.l10n.agentActionsDiagnosticsCopiedToast),
         severity: InfoBarSeverity.success,
         onClose: close,
@@ -270,7 +270,7 @@ class AgentActionExecutionDiagnosticsState extends State<AgentActionExecutionDia
               storageTruncated: execution.stdoutTruncated,
               l10n: l10n,
               onSlice: execution.stdoutStoredInChunks
-                  ? (int offsetUtf8, int maxBytes) => widget.onSliceCapturedOutput(
+                  ? (offsetUtf8, maxBytes) => widget.onSliceCapturedOutput(
                       executionId: execution.id,
                       stream: AgentActionCapturedOutputConstants.stdoutStream,
                       offsetUtf8: offsetUtf8,
@@ -289,7 +289,7 @@ class AgentActionExecutionDiagnosticsState extends State<AgentActionExecutionDia
               storageTruncated: execution.stderrTruncated,
               l10n: l10n,
               onSlice: execution.stderrStoredInChunks
-                  ? (int offsetUtf8, int maxBytes) => widget.onSliceCapturedOutput(
+                  ? (offsetUtf8, maxBytes) => widget.onSliceCapturedOutput(
                       executionId: execution.id,
                       stream: AgentActionCapturedOutputConstants.stderrStream,
                       offsetUtf8: offsetUtf8,

@@ -105,10 +105,10 @@ class ClientTokenSectionCoordinator {
 
     try {
       final picked = await controller.pickRulesImportFile();
-      if (picked == null || picked.files.isEmpty) {
+      if (picked == null) {
         return;
       }
-      final filePath = picked.files.single.path;
+      final filePath = picked.path;
       if (filePath == null) {
         return;
       }
@@ -183,11 +183,10 @@ class ClientTokenSectionCoordinator {
         : l10n.ctExportRulesDefaultFileName;
 
     try {
-      final savePath = await controller.pickRulesExportPath(defaultFileName);
-      if (savePath == null) {
+      final saved = await controller.pickRulesExportPath(defaultFileName);
+      if (saved == null) {
         return;
       }
-      await controller.exportRulesToPath(savePath);
     } on Exception catch (e, st) {
       developer.log(
         'Failed to export rules',

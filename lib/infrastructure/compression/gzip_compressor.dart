@@ -15,12 +15,7 @@ const int _kMaxDecompressedBytes = 50 * 1024 * 1024;
 List<Map<String, dynamic>> _compressInIsolate(List<Map<String, dynamic>> data) {
   final jsonString = jsonEncode(data);
   final bytes = utf8.encode(jsonString);
-  final compressedBytes = GZipEncoder().encode(bytes);
-
-  if (compressedBytes == null) {
-    throw StateError('GZipEncoder returned null');
-  }
-
+  final compressedBytes = const GZipEncoder().encode(bytes);
   final base64String = base64.encode(compressedBytes);
   return [
     {
@@ -48,7 +43,7 @@ List<Map<String, dynamic>> _decompressInIsolate(
 
   final base64String = data.first['compressed_data'] as String;
   final compressedBytes = base64.decode(base64String);
-  final decompressedBytes = GZipDecoder().decodeBytes(compressedBytes);
+  final decompressedBytes = const GZipDecoder().decodeBytes(compressedBytes);
 
   // Validate actual size even if metadata was absent or falsified.
   if (decompressedBytes.length > _kMaxDecompressedBytes) {
@@ -85,8 +80,7 @@ class GzipCompressor implements ICompressor {
       final result = await compute(_compressInIsolate, data);
       return Success(result);
     } on Object catch (error) {
-      // StateError (from GZipEncoder returning null) is an Error, not an
-      // Exception — catch Object to handle both.
+      // Isolate/compute failures (and other Errors) still map to CompressionFailure.
       return Failure(
         _buildFailure(
           'Failed to compress data',
@@ -105,8 +99,7 @@ class GzipCompressor implements ICompressor {
       final result = await compute(_decompressInIsolate, data);
       return Success(result);
     } on Object catch (error) {
-      // StateError (from size cap or encoder returning null) is an Error, not
-      // an Exception — catch Object to ensure CompressionFailure is returned.
+      // Isolate/compute failures (and other Errors) still map to CompressionFailure.
       return Failure(
         _buildFailure(
           'Failed to decompress data',

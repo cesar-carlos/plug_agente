@@ -7,7 +7,7 @@ void main() {
   group('RpcIdempotencyCachePeriodicPurge', () {
     test('should invoke purge when purgeNow completes', () async {
       var calls = 0;
-      final sut = RpcIdempotencyCachePeriodicPurge(({DateTime? referenceTime}) async {
+      final sut = RpcIdempotencyCachePeriodicPurge(({referenceTime}) async {
         expect(referenceTime, isNull);
         calls++;
         return const Success(3);
@@ -20,7 +20,7 @@ void main() {
 
     test('should complete when purge returns Failure', () async {
       final sut = RpcIdempotencyCachePeriodicPurge(
-        ({DateTime? referenceTime}) async => Failure(ServerFailure('db down')),
+        ({referenceTime}) async => Failure(ServerFailure('db down')),
       );
 
       await expectLater(sut.purgeNow(), completes);
@@ -28,7 +28,7 @@ void main() {
 
     test('should keep a single periodic timer when start is called twice', () {
       final sut = RpcIdempotencyCachePeriodicPurge(
-        ({DateTime? referenceTime}) async => const Success(0),
+        ({referenceTime}) async => const Success(0),
         interval: const Duration(days: 365),
       );
 
@@ -42,7 +42,7 @@ void main() {
 
     test('should allow stop before start', () {
       final sut = RpcIdempotencyCachePeriodicPurge(
-        ({DateTime? referenceTime}) async => const Success(0),
+        ({referenceTime}) async => const Success(0),
       );
 
       sut.stop();

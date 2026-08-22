@@ -486,7 +486,7 @@ void main() {
     test('should omit materialized rpc:response rows from socket log callback', () async {
       final logged = <({String direction, String event, dynamic data})>[];
       client.setMessageCallback(
-        (String direction, String event, dynamic data) {
+        (direction, event, dynamic data) {
           logged.add((direction: direction, event: event, data: data));
         },
       );
@@ -526,7 +526,7 @@ void main() {
     test('should omit sql.executeBatch item rows from socket log callback', () async {
       final logged = <({String direction, String event, dynamic data})>[];
       client.setMessageCallback(
-        (String direction, String event, dynamic data) {
+        (direction, event, dynamic data) {
           logged.add((direction: direction, event: event, data: data));
         },
       );

@@ -8,9 +8,9 @@ import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
-import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_active_connection.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_streaming_disconnect_tracker.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -20,13 +20,18 @@ final class OdbcStreamingCancelCoordinator {
     required OdbcService service,
     MetricsCollector? metricsCollector,
     Duration cancelDisconnectTimeout = const Duration(seconds: 8),
+    OdbcStreamingDisconnectTracker? disconnectTracker,
   }) : _service = service,
        _metrics = metricsCollector,
-       _cancelDisconnectTimeout = cancelDisconnectTimeout;
+       _cancelDisconnectTimeout = cancelDisconnectTimeout,
+       _disconnectTracker =
+           disconnectTracker ??
+           OdbcStreamingDisconnectTracker(observedTimeout: cancelDisconnectTimeout);
 
   final OdbcService _service;
   final MetricsCollector? _metrics;
   final Duration _cancelDisconnectTimeout;
+  final OdbcStreamingDisconnectTracker _disconnectTracker;
 
   Future<Result<void>> cancelActiveStreams({
     required Iterable<OdbcStreamingActiveConnection> streams,
@@ -57,12 +62,18 @@ final class OdbcStreamingCancelCoordinator {
   }
 
   Future<void> safeDisconnect(String connectionId) async {
-    try {
-      await _service.disconnect(connectionId).timeout(_cancelDisconnectTimeout);
-    } on TimeoutException {
-      _metrics?.recordStreamCancelDisconnectTimeout();
-    } on Object {
-      // Best-effort cleanup path; caller already decided to abort.
+    final result = await _disconnectTracker.run(
+      connectionId: connectionId,
+      disconnect: _service.disconnect,
+      timeout: _cancelDisconnectTimeout,
+      onTimeout: _metrics?.recordStreamCancelDisconnectTimeout,
+      onFailure: _metrics?.recordStreamCancelDisconnectFailure,
+    );
+    if (result.isError()) {
+      app_log.AppLogger.warning(
+        'safeDisconnect: streaming disconnect did not confirm immediately '
+        '(handle stays discarded and tracked): ${result.exceptionOrNull()}',
+      );
     }
   }
 
@@ -74,47 +85,54 @@ final class OdbcStreamingCancelCoordinator {
     }
 
     stream.isDisconnectStarted = true;
-    try {
-      final result = await _service.disconnect(stream.connectionId).timeout(_cancelDisconnectTimeout);
-      return await result.fold(
-        (_) => const Success(unit),
-        (error) {
-          if (OdbcErrorInspector.isInvalidConnectionId(error)) {
-            return const Success(unit);
-          }
-          _metrics?.recordStreamCancelDisconnectFailure();
+    final result = await _disconnectTracker.run(
+      connectionId: stream.connectionId,
+      disconnect: _service.disconnect,
+      timeout: _cancelDisconnectTimeout,
+      onTimeout: _metrics?.recordStreamCancelDisconnectTimeout,
+      onFailure: _metrics?.recordStreamCancelDisconnectFailure,
+    );
+    return result.fold(
+      (_) => const Success(unit),
+      (error) {
+        if (error is domain.Failure &&
+            error.context['reason'] == OdbcContextConstants.streamCancelDisconnectTimeoutReason) {
           return Failure(
             OdbcFailureMapper.mapConnectionError(
-              error,
+              error.cause ?? error,
               operation: 'cancel_streaming_disconnect',
               context: {
-                'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
+                'reason': OdbcContextConstants.streamCancelDisconnectTimeoutReason,
                 'executionId': stream.executionId,
+                'timeout_ms': _cancelDisconnectTimeout.inMilliseconds,
+                'discarded': true,
                 'user_message':
                     'A consulta foi marcada para cancelamento, mas a desconexão '
-                    'do streaming não foi confirmada imediatamente.',
+                    'do streaming não foi confirmada dentro do tempo esperado.',
               },
             ),
           );
-        },
-      );
-    } on TimeoutException catch (error) {
-      _metrics?.recordStreamCancelDisconnectTimeout();
-      return Failure(
-        OdbcFailureMapper.mapConnectionError(
-          error,
-          operation: 'cancel_streaming_disconnect',
-          context: {
-            'reason': OdbcContextConstants.streamCancelDisconnectTimeoutReason,
-            'executionId': stream.executionId,
-            'timeout_ms': _cancelDisconnectTimeout.inMilliseconds,
-            'user_message':
-                'A consulta foi marcada para cancelamento, mas a desconexão '
-                'do streaming não foi confirmada dentro do tempo esperado.',
-          },
-        ),
-      );
-    }
+        }
+        return Failure(
+          OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'cancel_streaming_disconnect',
+            context: {
+              'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
+              'executionId': stream.executionId,
+              'discarded': true,
+              'user_message':
+                  'A consulta foi marcada para cancelamento, mas a desconexão '
+                  'do streaming não foi confirmada imediatamente.',
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> drainTrackedDisconnects({Duration? timeout}) {
+    return _disconnectTracker.drain(timeout: timeout);
   }
 
   domain.Failure streamCancelledFailure({

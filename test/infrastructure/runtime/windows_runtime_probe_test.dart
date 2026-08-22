@@ -9,7 +9,7 @@ void main() {
   group('WindowsRuntimeProbe', () {
     test('uses RtlGetVersion diagnostics when native detection succeeds', () async {
       final probe = WindowsRuntimeProbe(
-        rtlGetVersionInvoker: (Pointer<OSVERSIONINFOEX> versionInfo) {
+        rtlGetVersionInvoker: (versionInfo) {
           versionInfo.ref
             ..dwMajorVersion = 10
             ..dwMinorVersion = 0

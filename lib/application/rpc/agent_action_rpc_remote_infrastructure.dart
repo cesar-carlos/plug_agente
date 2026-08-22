@@ -125,7 +125,7 @@ class AgentActionRpcRemoteInfrastructure {
   ) {
     return Map<String, dynamic>.fromEntries(
       params.entries.where(
-        (MapEntry<String, dynamic> entry) =>
+        (entry) =>
             !AgentActionRpcConstants.agentActionRpcCorrelationOnlyParamKeys.contains(entry.key),
       ),
     );
@@ -174,7 +174,7 @@ class AgentActionRpcRemoteInfrastructure {
       requestedBy: resolvedRemoteAgentActionRequestedBy(request),
     );
     return result.fold(
-      (AgentActionExecution updated) => updated,
+      (updated) => updated,
       (_) => execution,
     );
   }

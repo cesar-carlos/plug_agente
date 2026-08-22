@@ -48,7 +48,7 @@ class PeriodicPurgeRunner {
     try {
       final result = await _purge();
       result.fold(
-        (int count) {
+        (count) {
           if (count > 0) {
             developer.log(
               _successLogMessage(count),
@@ -57,7 +57,7 @@ class PeriodicPurgeRunner {
             );
           }
         },
-        (Object failure) {
+        (failure) {
           developer.log(
             _failureLogMessage,
             name: _logName,

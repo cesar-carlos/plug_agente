@@ -7,7 +7,7 @@ void main() {
   group('AgentActionCapturedOutputPeriodicPurge', () {
     test('should invoke purge when purgeNow completes', () async {
       var calls = 0;
-      final sut = AgentActionCapturedOutputPeriodicPurge(({DateTime? now}) async {
+      final sut = AgentActionCapturedOutputPeriodicPurge(({now}) async {
         expect(now, isNull);
         calls++;
         return const Success(2);
@@ -20,7 +20,7 @@ void main() {
 
     test('should complete when purge returns Failure', () async {
       final sut = AgentActionCapturedOutputPeriodicPurge(
-        ({DateTime? now}) async => Failure(ServerFailure('db down')),
+        ({now}) async => Failure(ServerFailure('db down')),
       );
 
       await expectLater(sut.purgeNow(), completes);
@@ -28,7 +28,7 @@ void main() {
 
     test('should keep a single periodic timer when start is called twice', () {
       final sut = AgentActionCapturedOutputPeriodicPurge(
-        ({DateTime? now}) async => const Success(0),
+        ({now}) async => const Success(0),
         interval: const Duration(days: 365),
       );
 

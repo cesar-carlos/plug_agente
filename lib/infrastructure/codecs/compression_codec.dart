@@ -26,17 +26,7 @@ class GzipCompressionCodec implements ICompressionCodec {
   @override
   Result<Uint8List> compress(Uint8List data) {
     try {
-      final compressedBytes = GZipEncoder().encode(data);
-
-      if (compressedBytes == null) {
-        return Failure(
-          domain.CompressionFailure.withContext(
-            message: 'GZIP encoder returned null',
-            context: {'operation': 'compress', 'algorithm': 'gzip'},
-          ),
-        );
-      }
-
+      final compressedBytes = const GZipEncoder().encode(data);
       return Success(Uint8List.fromList(compressedBytes));
     } on Exception catch (error) {
       return Failure(
@@ -52,7 +42,7 @@ class GzipCompressionCodec implements ICompressionCodec {
   @override
   Result<Uint8List> decompress(Uint8List data) {
     try {
-      final decompressedBytes = GZipDecoder().decodeBytes(data);
+      final decompressedBytes = const GZipDecoder().decodeBytes(data);
       return Success(Uint8List.fromList(decompressedBytes));
     } on Exception catch (error) {
       return Failure(

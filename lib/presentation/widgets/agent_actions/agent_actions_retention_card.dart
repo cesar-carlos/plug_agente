@@ -70,7 +70,7 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
 
     displayInfoBar(
       context,
-      builder: (BuildContext closeContext, void Function() close) => InfoBar(
+      builder: (closeContext, void Function() close) => InfoBar(
         title: Text(l10n.agentActionsRetentionClearedTitle),
         content: Text(l10n.agentActionsRetentionClearedMessage),
         severity: InfoBarSeverity.success,
@@ -113,7 +113,7 @@ class _AgentActionsRetentionCardState extends State<AgentActionsRetentionCard> {
 
     displayInfoBar(
       context,
-      builder: (BuildContext closeContext, void Function() close) => InfoBar(
+      builder: (closeContext, void Function() close) => InfoBar(
         title: Text(l10n.agentActionsRetentionSavedTitle),
         content: Text(l10n.agentActionsRetentionSavedMessage),
         severity: InfoBarSeverity.success,

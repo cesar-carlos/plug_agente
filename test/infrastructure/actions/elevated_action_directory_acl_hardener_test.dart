@@ -32,7 +32,7 @@ void main() {
       String? capturedExecutable;
       List<String>? capturedArguments;
       final hardener = ElevatedActionDirectoryAclHardener(
-        processRunner: (String executable, List<String> arguments) async {
+        processRunner: (executable, arguments) async {
           capturedExecutable = executable;
           capturedArguments = arguments;
           return ProcessResult(0, 0, '', '');

@@ -22,7 +22,7 @@ abstract final class AgentActionDraftParsers {
     if (input.trim().isEmpty) {
       return const <String>{};
     }
-    return input.split(',').map((String part) => part.trim()).where((String part) => part.isNotEmpty).toSet();
+    return input.split(',').map((part) => part.trim()).where((part) => part.isNotEmpty).toSet();
   }
 
   /// Parses `NAME=value` lines into a map. Blank and `#`-prefixed lines are
@@ -57,7 +57,7 @@ abstract final class AgentActionDraftParsers {
       return '';
     }
     final names = variables.keys.toList()..sort();
-    return names.map((String name) => '$name=${variables[name]}').join('\n');
+    return names.map((name) => '$name=${variables[name]}').join('\n');
   }
 
   /// Parses accepted exit codes. Empty input defaults to `{0}`; returns `null`
@@ -111,8 +111,8 @@ abstract final class AgentActionDraftParsers {
   static List<String> structuredArguments(String raw) {
     return raw
         .split(RegExp(r'\r?\n'))
-        .map((String line) => line.trim())
-        .where((String line) => line.isNotEmpty)
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
         .toList(growable: false);
   }
 

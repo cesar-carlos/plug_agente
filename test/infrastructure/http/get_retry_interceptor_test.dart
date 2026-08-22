@@ -19,7 +19,7 @@ void main() {
       );
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          onRequest: (options, handler) {
             attempts++;
             if (attempts == 1) {
               handler.reject(
@@ -60,7 +60,7 @@ void main() {
       );
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          onRequest: (options, handler) {
             attempts++;
             handler.reject(
               DioException(
@@ -92,7 +92,7 @@ void main() {
       );
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          onRequest: (options, handler) {
             handler.reject(
               DioException(
                 requestOptions: options,
@@ -127,7 +127,7 @@ void main() {
       );
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          onRequest: (options, handler) {
             attempts++;
             if (attempts == 1) {
               handler.reject(

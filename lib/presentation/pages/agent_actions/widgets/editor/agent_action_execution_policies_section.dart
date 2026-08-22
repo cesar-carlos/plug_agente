@@ -87,7 +87,7 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
                 value: maxAttempts,
                 items: List<ComboBoxItem<int>>.generate(
                   5,
-                  (int index) {
+                  (index) {
                     final attempts = index + 1;
                     return ComboBoxItem<int>(
                       value: attempts,
@@ -97,7 +97,7 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
                   growable: false,
                 ),
                 onChanged: enabled
-                    ? (int? value) {
+                    ? (value) {
                         if (value == null) {
                           return;
                         }
@@ -129,7 +129,7 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
           children: [
             Checkbox(
               checked: killMainProcessOnTimeout,
-              onChanged: enabled ? (bool? value) => callbacks.onKillOnTimeoutChanged(value ?? true) : null,
+              onChanged: enabled ? (value) => callbacks.onKillOnTimeoutChanged(value ?? true) : null,
               content: AgentActionEditorHelpCheckboxLabel(
                 label: l10n.agentActionsFormKillOnTimeout,
                 helpTitle: l10n.agentActionsHelpKillOnTimeoutTitle,
@@ -138,7 +138,7 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
             ),
             Checkbox(
               checked: allowRemoteRetry,
-              onChanged: enabled ? (bool? value) => callbacks.onAllowRemoteRetryChanged(value ?? false) : null,
+              onChanged: enabled ? (value) => callbacks.onAllowRemoteRetryChanged(value ?? false) : null,
               content: AgentActionEditorHelpCheckboxLabel(
                 label: l10n.agentActionsFormAllowRemoteRetry,
                 helpTitle: l10n.agentActionsHelpRemoteRetryTitle,
@@ -149,7 +149,7 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
               Checkbox(
                 checked: runElevated,
                 onChanged: enabled && elevatedRunnerReady
-                    ? (bool? value) => callbacks.onRunElevatedChanged(value ?? false)
+                    ? (value) => callbacks.onRunElevatedChanged(value ?? false)
                     : null,
                 content: AgentActionEditorHelpCheckboxLabel(
                   label: l10n.agentActionsFormRunElevated,
@@ -191,7 +191,7 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
             ),
           ],
           onChanged: enabled
-              ? (AgentActionContextInjectionMode? value) {
+              ? (value) {
                   if (value == null) {
                     return;
                   }
@@ -220,7 +220,7 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
             ),
           ],
           onChanged: enabled
-              ? (AgentActionPathChangePolicy? value) {
+              ? (value) {
                   if (value == null) {
                     return;
                   }

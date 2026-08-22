@@ -55,6 +55,18 @@ void main() {
       );
     });
 
+    test('shouldUseParallel refuses parallel when requireAtomic is true', () {
+      expect(
+        BulkInsertParallelPolicy.shouldUseParallel(
+          databaseType: DatabaseType.sqlServer,
+          requestRowCount: 100000,
+          poolSize: 8,
+          requireAtomic: true,
+        ),
+        isFalse,
+      );
+    });
+
     test('shouldUseParallel respects ODBC_BULK_INSERT_PARALLEL_ENABLED=false', () {
       dotenv.loadFromString(envString: 'ODBC_BULK_INSERT_PARALLEL_ENABLED=false');
       expect(

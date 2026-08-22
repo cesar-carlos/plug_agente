@@ -1,7 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
 
-import 'package:ffi/ffi.dart';
 import 'package:plug_agente/core/constants/agent_action_path_context_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/utils/path_extension.dart';
@@ -49,19 +48,20 @@ abstract final class WindowsExecutableLaunchAccessChecker {
     }
 
     final ioPath = WindowsActionPathNormalizer.forLocalIo(path);
-    final pathPtr = ioPath.toNativeUtf16();
+    final pathPtr = ioPath.toPcwstr();
     try {
-      final handle = CreateFile(
+      final created = CreateFile(
         pathPtr,
         GENERIC_READ | GENERIC_EXECUTE,
         FILE_SHARE_READ,
         nullptr,
         OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL,
-        NULL,
+        null,
       );
-      if (handle == INVALID_HANDLE_VALUE) {
-        final errorCode = GetLastError();
+      final handle = created.value;
+      if (!handle.isValid) {
+        final errorCode = created.error;
         if (errorCode == ERROR_ACCESS_DENIED) {
           return ActionValidationFailure.withContext(
             message: 'Executable file cannot be launched with current permissions.',
@@ -96,7 +96,7 @@ abstract final class WindowsExecutableLaunchAccessChecker {
       CloseHandle(handle);
       return null;
     } finally {
-      calloc.free(pathPtr);
+      free(pathPtr);
     }
   }
 }

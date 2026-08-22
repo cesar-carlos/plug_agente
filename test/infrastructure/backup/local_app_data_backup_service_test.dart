@@ -305,7 +305,7 @@ void main() {
         ..addFile(ArchiveFile('manifest.json', manifest.length, manifest))
         ..addFile(ArchiveFile('nested/agent_config.db', dbBytes.length, dbBytes));
       final zipPath = p.join(tempRoot.path, 'slip.zip');
-      await File(zipPath).writeAsBytes(Uint8List.fromList(ZipEncoder().encode(archive)!));
+      await File(zipPath).writeAsBytes(Uint8List.fromList(ZipEncoder().encode(archive)));
 
       final result = await service.stageRestoreFromZip(zipPath);
 
@@ -482,7 +482,7 @@ void main() {
         final row = reopened.select('PRAGMA user_version').first;
         expect(row.values.first, 8);
       } finally {
-        reopened.dispose();
+        reopened.close();
       }
 
       expect(jsonDecode(await File(p.join(tempRoot.path, 'settings.json')).readAsString()), {'restored': true});
@@ -694,7 +694,7 @@ Future<void> _writeZip(
       ),
     );
   }
-  await File(zipPath).writeAsBytes(Uint8List.fromList(ZipEncoder().encode(archive)!));
+  await File(zipPath).writeAsBytes(Uint8List.fromList(ZipEncoder().encode(archive)));
 }
 
 AppDatabase _openFileDatabase(String path) {
@@ -774,9 +774,9 @@ CREATE TABLE config_table (
         password,
         1,
       ]);
-      stmt.dispose();
+      stmt.close();
     }
   } finally {
-    db.dispose();
+    db.close();
   }
 }

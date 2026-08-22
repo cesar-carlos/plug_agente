@@ -53,7 +53,7 @@ void main() {
         var storeBuilds = 0;
         final verifier = JwtJwksVerifier(
           () async => const JwksConfig(jwksUrl: 'https://example.com/jwks.json'),
-          createKeyStore: (Uri u) {
+          createKeyStore: (u) {
             storeBuilds++;
             return JsonWebKeyStore()..addKeySetUrl(u);
           },

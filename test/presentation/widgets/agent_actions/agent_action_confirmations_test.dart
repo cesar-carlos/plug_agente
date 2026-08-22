@@ -18,7 +18,7 @@ Future<bool?> _runConfirmAndTap({
       supportedLocales: AppLocalizations.supportedLocales,
       home: ScaffoldPage(
         content: Builder(
-          builder: (BuildContext context) {
+          builder: (context) {
             return FilledButton(
               onPressed: () async {
                 confirmed = await open(
@@ -55,7 +55,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ScaffoldPage(
           content: Builder(
-            builder: (BuildContext context) {
+            builder: (context) {
               return FilledButton(
                 onPressed: () async {
                   confirmed = await confirmEnableElevatedAgentAction(
@@ -93,7 +93,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ScaffoldPage(
           content: Builder(
-            builder: (BuildContext context) {
+            builder: (context) {
               return FilledButton(
                 onPressed: () async {
                   confirmed = await confirmEnableElevatedAgentAction(
@@ -129,7 +129,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ScaffoldPage(
           content: Builder(
-            builder: (BuildContext context) {
+            builder: (context) {
               return FilledButton(
                 onPressed: () async {
                   confirmed = await confirmDangerousCommandRun(
@@ -169,7 +169,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ScaffoldPage(
           content: Builder(
-            builder: (BuildContext context) {
+            builder: (context) {
               return FilledButton(
                 onPressed: () async {
                   confirmed = await confirmDangerousCommandRun(
@@ -227,7 +227,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ScaffoldPage(
           content: Builder(
-            builder: (BuildContext context) {
+            builder: (context) {
               return FilledButton(
                 onPressed: () async {
                   confirmed = await confirmEnableRemoteAdHocAgentAction(
@@ -275,7 +275,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ScaffoldPage(
           content: Builder(
-            builder: (BuildContext context) {
+            builder: (context) {
               return FilledButton(
                 onPressed: () async {
                   confirmed = await confirmReapproveRemoteAgentAction(
@@ -323,7 +323,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ScaffoldPage(
           content: Builder(
-            builder: (BuildContext context) {
+            builder: (context) {
               return FilledButton(
                 onPressed: () async {
                   confirmed = await confirmAppCloseTrigger(

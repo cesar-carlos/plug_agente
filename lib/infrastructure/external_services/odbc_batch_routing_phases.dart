@@ -216,6 +216,11 @@ final class OdbcBatchRoutingPhases {
           );
           if (bulkResult.isError()) {
             final bulkFailure = bulkResult.exceptionOrNull()!;
+            await _rollbackActiveTransaction(
+              transaction: transaction,
+              connectionId: connectionState.connectionId,
+              deadline: context.deadline,
+            );
             if (_failureMapper.shouldFallbackTransactionalNativePoolToDirect(
               context: context,
               error: bulkFailure,
@@ -248,19 +253,10 @@ final class OdbcBatchRoutingPhases {
           return Success(_syntheticBulkInsertBatchResults(commands));
         }
       } on Object catch (error, stackTrace) {
-        final activeConnectionId = connectionState.connectionId;
-        final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
-        await transaction?.rollback(
-          (transactionId) async {
-            if (activeConnectionId == null) {
-              return;
-            }
-            await _txManager.rollbackIfNeeded(
-              activeConnectionId,
-              transactionId,
-              timeout: rollbackTimeout,
-            );
-          },
+        await _rollbackActiveTransaction(
+          transaction: transaction,
+          connectionId: connectionState.connectionId,
+          deadline: context.deadline,
         );
         developer.log(
           'Unexpected failure during bulk-insert batch execution',
@@ -276,7 +272,7 @@ final class OdbcBatchRoutingPhases {
         )) {
           _failureMapper.recordTransactionalNativePoolFallback(
             context: context,
-            connectionId: activeConnectionId,
+            connectionId: connectionState.connectionId,
             error: error,
             stage: 'transaction_unexpected_error',
           );
@@ -501,5 +497,23 @@ final class OdbcBatchRoutingPhases {
       throw TimeoutException('Execution deadline exceeded');
     }
     return remaining;
+  }
+
+  Future<void> _rollbackActiveTransaction({
+    required BatchTransactionGuard? transaction,
+    required String? connectionId,
+    required DateTime? deadline,
+  }) async {
+    if (transaction == null || connectionId == null) {
+      return;
+    }
+    final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(deadline);
+    await transaction.rollback(
+      (transactionId) => _txManager.rollbackIfNeeded(
+        connectionId,
+        transactionId,
+        timeout: rollbackTimeout,
+      ),
+    );
   }
 }

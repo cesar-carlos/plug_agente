@@ -847,7 +847,7 @@ class FakeAgentActionRepository implements IAgentActionRepository {
   @override
   Future<Result<void>> deleteDefinition(String id) async {
     definitions.remove(id);
-    triggers.removeWhere((_, AgentActionTrigger trigger) => trigger.actionId == id);
+    triggers.removeWhere((_, trigger) => trigger.actionId == id);
     return const Success(unit);
   }
 

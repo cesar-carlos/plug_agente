@@ -89,7 +89,7 @@ class _NotificationCheckbox extends StatelessWidget {
     final handler = onChanged;
     return Checkbox(
       checked: checked,
-      onChanged: handler == null ? null : (bool? value) => handler(value ?? false),
+      onChanged: handler == null ? null : (value) => handler(value ?? false),
       content: AgentActionEditorHelpCheckboxLabel(
         label: label,
         helpTitle: l10n.agentActionsHelpNotificationsTitle,

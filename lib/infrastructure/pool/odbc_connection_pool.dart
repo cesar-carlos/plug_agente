@@ -143,7 +143,7 @@ class OdbcConnectionPool
     }
 
     return connectResult.fold(
-      (Connection connection) {
+      (connection) {
         _leasedIdsByConnectionString.putIfAbsent(connectionString, () => <String>{}).add(connection.id);
         _leasedIds.add(connection.id);
         developer.log(

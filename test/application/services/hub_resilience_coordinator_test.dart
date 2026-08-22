@@ -199,7 +199,7 @@ void main() {
       final coordinator = HubResilienceCoordinator(
         environment: _environment(
           isNegotiating: () => true,
-          onNegotiatingWatchdogTimeoutWithoutContext: ({required int timeoutMs}) {
+          onNegotiatingWatchdogTimeoutWithoutContext: ({required timeoutMs}) {
             capturedTimeoutMs = timeoutMs;
           },
         ),

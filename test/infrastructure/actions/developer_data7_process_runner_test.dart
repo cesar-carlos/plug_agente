@@ -29,13 +29,13 @@ void main() {
         adapterRegistry: _adapterRegistryForCatalog(),
         processStarter:
             (
-              String command,
-              List<String> args, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              command,
+              args, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               executable = command;
               arguments = args;
@@ -109,13 +109,13 @@ void main() {
         adapterRegistry: _adapterRegistryForCatalog(),
         processStarter:
             (
-              String executable,
-              List<String> arguments, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              executable,
+              arguments, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               throw const ProcessException(
                 r'C:\Data7\bin\Executor.exe',
@@ -152,13 +152,13 @@ void main() {
         operationalProfileResolver: const _FixedProfileResolver('prod'),
         processStarter:
             (
-              String command,
-              List<String> args, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              command,
+              args, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               capturedIncludeParentEnvironment = includeParentEnvironment;
               return _FakeProcess(
@@ -191,13 +191,13 @@ void main() {
         adapterRegistry: _adapterRegistryForCatalog(),
         processStarter:
             (
-              String executable,
-              List<String> arguments, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              executable,
+              arguments, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               scheduleMicrotask(() {
                 if (!processRegistered.isCompleted) {

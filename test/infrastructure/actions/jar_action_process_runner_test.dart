@@ -126,13 +126,13 @@ void main() {
         adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
-              String executable,
-              List<String> arguments, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              executable,
+              arguments, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               processStarterCalled = true;
               return _FakeProcess(pid: 0, exitCode: 0);
@@ -240,13 +240,13 @@ void main() {
         adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
-              String executable,
-              List<String> arguments, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              executable,
+              arguments, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               capturedExecutable = executable;
               capturedArguments = arguments;
@@ -288,10 +288,10 @@ ActionPathValidator _acceptingPathValidator() {
     readText: (_) async => '{}',
     launchAccessValidator:
         ({
-          required String actionId,
-          required String field,
-          required String path,
-          required String phase,
+          required actionId,
+          required field,
+          required path,
+          required phase,
         }) => null,
   );
 }

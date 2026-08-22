@@ -163,8 +163,8 @@ void main() {
         request: request,
         adapterPrepareCheck:
             ({
-              required AgentActionDefinition definition,
-              required AgentActionExecutionRequest request,
+              required definition,
+              required request,
             }) {
               return gateChain.evaluateAdapterPrepare(
                 definition: definition,
@@ -298,8 +298,8 @@ void main() {
         request: request,
         adapterPrepareCheck:
             ({
-              required AgentActionDefinition definition,
-              required AgentActionExecutionRequest request,
+              required definition,
+              required request,
             }) {
               return gateChain.evaluateAdapterPrepare(
                 definition: definition,

@@ -97,6 +97,21 @@ mixin _AppDatabaseMigrationHelpers on _$AppDatabase {
     return {for (final row in rows) row.read<String>('name')};
   }
 
+  Future<Set<String>> readSqliteTableColumnNames(String tableName) async {
+    final rows = await customSelect('PRAGMA table_info("$tableName")').get();
+    return {for (final row in rows) row.read<String>('name')};
+  }
+
+  Future<List<GeneratedColumn<Object>>> missingColumnsForTable(
+    TableInfo<Table, Object?> table,
+  ) async {
+    final existing = await readSqliteTableColumnNames(table.actualTableName);
+    return [
+      for (final column in table.$columns)
+        if (!existing.contains(column.name)) column,
+    ];
+  }
+
   Future<void> addClientTokenNameColumnIfMissing(Migrator m) async {
     final existing = await readClientTokenTableColumnNames();
     final sqlName = clientTokenCacheTable.name.name;

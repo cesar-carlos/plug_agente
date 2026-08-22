@@ -27,7 +27,7 @@ const Map<String, String> agentActionThreatModelSummaryByType = <String, String>
 
 /// Resolves action types from CLI [args] or returns all MVP types when empty.
 List<String> resolveSecurityGateActionTypes(List<String> args) {
-  final requested = args.where((String a) => a.isNotEmpty && !a.startsWith('-')).toList();
+  final requested = args.where((a) => a.isNotEmpty && !a.startsWith('-')).toList();
   return requested.isEmpty ? agentActionSecurityGateMvpTypes : requested;
 }
 

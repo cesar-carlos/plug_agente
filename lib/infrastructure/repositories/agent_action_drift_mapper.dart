@@ -640,7 +640,7 @@ class AgentActionDriftMapper {
 
     return Map<String, String>.unmodifiable(
       value.map(
-        (Object? entryKey, Object? entryValue) {
+        (entryKey, entryValue) {
           if (entryKey is! String) {
             throw FormatException('Expected "$key" keys to be strings.');
           }

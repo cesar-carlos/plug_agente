@@ -121,7 +121,7 @@ class SqlExecuteResultMapper {
     }
 
     final newItems = response.items
-        .map((QueryResponseItem item) {
+        .map((item) {
           if (item.resultSet == null) {
             return item;
           }

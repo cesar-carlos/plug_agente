@@ -101,7 +101,7 @@ void main() {
           uiSink: _RecordingUiSink(),
           statusName: () => status,
           isDisconnectRequested: () => true,
-          enterReconnecting: ({required bool clearError}) => status = 'reconnecting',
+          enterReconnecting: ({required clearError}) => status = 'reconnecting',
         ),
       );
 
@@ -122,8 +122,8 @@ void main() {
           uiSink: _RecordingUiSink(),
           statusName: () => status,
           isDisconnectRequested: () => false,
-          enterReconnecting: ({required bool clearError}) => status = 'reconnecting',
-          kickHubTransportRecovery: ({required String trigger}) => kickedTriggers.add(trigger),
+          enterReconnecting: ({required clearError}) => status = 'reconnecting',
+          kickHubTransportRecovery: ({required trigger}) => kickedTriggers.add(trigger),
         ),
       );
 
@@ -145,8 +145,8 @@ void main() {
           uiSink: _RecordingUiSink(),
           statusName: () => status,
           isDisconnectRequested: () => false,
-          enterReconnecting: ({required bool clearError}) => status = 'reconnecting',
-          kickHubTransportRecovery: ({required String trigger}) => kickedTriggers.add(trigger),
+          enterReconnecting: ({required clearError}) => status = 'reconnecting',
+          kickHubTransportRecovery: ({required trigger}) => kickedTriggers.add(trigger),
         ),
       );
 

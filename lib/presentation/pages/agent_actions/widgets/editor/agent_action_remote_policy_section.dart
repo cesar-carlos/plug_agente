@@ -67,7 +67,7 @@ class AgentActionRemotePolicySection extends StatelessWidget {
           children: [
             Checkbox(
               checked: remoteEnabled,
-              onChanged: !enabled ? null : (bool? value) => onRemoteEnabledChanged(value ?? false),
+              onChanged: !enabled ? null : (value) => onRemoteEnabledChanged(value ?? false),
               content: AgentActionEditorHelpCheckboxLabel(
                 label: l10n.agentActionsFormRemoteExecutionEnabled,
                 helpTitle: l10n.agentActionsHelpRemoteExecutionTitle,
@@ -78,7 +78,7 @@ class AgentActionRemotePolicySection extends StatelessWidget {
               checked: remoteAdHoc,
               onChanged: !enabled || !remoteEnabled || !remoteAdHocFeatureEnabled
                   ? null
-                  : (bool? value) => onRemoteAdHocChanged(value ?? false),
+                  : (value) => onRemoteAdHocChanged(value ?? false),
               content: AgentActionEditorHelpCheckboxLabel(
                 label: l10n.agentActionsFormRemoteAdHocEnabled,
                 helpTitle: l10n.agentActionsHelpRemoteAdHocTitle,

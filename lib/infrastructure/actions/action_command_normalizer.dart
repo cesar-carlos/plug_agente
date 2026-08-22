@@ -151,7 +151,7 @@ class ActionCommandNormalizer {
           ),
           normalizedCommandLength: invocationArguments.fold<int>(
             0,
-            (int total, String argument) => total + argument.length,
+            (total, argument) => total + argument.length,
           ),
         ),
       );
@@ -169,7 +169,7 @@ class ActionCommandNormalizer {
         ),
         normalizedCommandLength: normalizedArguments.fold<int>(
           0,
-          (int total, String argument) => total + argument.length,
+          (total, argument) => total + argument.length,
         ),
       ),
     );
@@ -273,7 +273,7 @@ class ActionCommandNormalizer {
         ),
         normalizedCommandLength: resolvedArguments.fold<int>(
           0,
-          (int total, String argument) => total + argument.length,
+          (total, argument) => total + argument.length,
         ),
       ),
     );

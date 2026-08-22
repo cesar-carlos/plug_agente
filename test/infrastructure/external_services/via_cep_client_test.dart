@@ -18,7 +18,7 @@ void main() {
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          onRequest: (options, handler) {
             handler.resolve(
               Response<Map<String, dynamic>>(
                 requestOptions: options,
@@ -53,7 +53,7 @@ void main() {
       final dio = Dio();
       dio.interceptors.add(
         InterceptorsWrapper(
-          onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          onRequest: (options, handler) {
             handler.resolve(
               Response<Map<String, dynamic>>(
                 requestOptions: options,
@@ -86,7 +86,7 @@ void main() {
         final dio = Dio();
         dio.interceptors.add(
           InterceptorsWrapper(
-            onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+            onRequest: (options, handler) {
               handler.resolve(
                 Response<Map<String, dynamic>>(
                   requestOptions: options,

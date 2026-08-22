@@ -52,7 +52,7 @@ class InMemoryAuthorizationDecisionCache implements IAuthorizationDecisionCache 
   @override
   void invalidateForCredentialHash(String credentialHash) {
     final prefix = '$credentialHash|';
-    final toRemove = _entries.keys.where((String k) => k.startsWith(prefix)).toList();
+    final toRemove = _entries.keys.where((k) => k.startsWith(prefix)).toList();
     toRemove.forEach(_entries.remove);
   }
 

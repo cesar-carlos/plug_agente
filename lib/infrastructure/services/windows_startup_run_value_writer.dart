@@ -57,7 +57,7 @@ class Win32StartupRunValueRegistryWriter implements IStartupRunValueRegistryWrit
       scope: scope,
       access: KEY_SET_VALUE,
       action: (hKey) {
-        final valueNamePtr = valueName.toNativeUtf16();
+        final valueNamePtr = valueName.toPcwstr();
         final encoded = Uint16List.fromList([...rawValueData.codeUnits, 0]);
         final dataPtr = calloc<Uint16>(encoded.length);
         try {
@@ -65,7 +65,6 @@ class Win32StartupRunValueRegistryWriter implements IStartupRunValueRegistryWrit
           final status = RegSetValueEx(
             hKey,
             valueNamePtr,
-            0,
             REG_SZ,
             dataPtr.cast<Uint8>(),
             encoded.length * 2,
@@ -73,7 +72,7 @@ class Win32StartupRunValueRegistryWriter implements IStartupRunValueRegistryWrit
           return _resultFromErrorStatus(status);
         } finally {
           calloc.free(dataPtr);
-          calloc.free(valueNamePtr);
+          free(valueNamePtr);
         }
       },
     );
@@ -88,7 +87,7 @@ class Win32StartupRunValueRegistryWriter implements IStartupRunValueRegistryWrit
       scope: scope,
       access: KEY_SET_VALUE,
       action: (hKey) {
-        final valueNamePtr = valueName.toNativeUtf16();
+        final valueNamePtr = valueName.toPcwstr();
         try {
           final status = RegDeleteValue(hKey, valueNamePtr);
           if (status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND) {
@@ -96,7 +95,7 @@ class Win32StartupRunValueRegistryWriter implements IStartupRunValueRegistryWrit
           }
           return _resultFromErrorStatus(status);
         } finally {
-          calloc.free(valueNamePtr);
+          free(valueNamePtr);
         }
       },
     );
@@ -104,30 +103,30 @@ class Win32StartupRunValueRegistryWriter implements IStartupRunValueRegistryWrit
 
   StartupRunValueWriteResult _withRunKey({
     required StartupRegistryScope scope,
-    required int access,
-    required StartupRunValueWriteResult Function(int hKey) action,
+    required REG_SAM_FLAGS access,
+    required StartupRunValueWriteResult Function(HKEY hKey) action,
   }) {
     final rootKey = scope == StartupRegistryScope.currentUser ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE;
-    final wowFlag = switch (scope) {
-      StartupRegistryScope.currentUser => 0,
-      StartupRegistryScope.localMachine => KEY_WOW64_64KEY,
-      StartupRegistryScope.localMachineWow6432 => KEY_WOW64_32KEY,
+    final samDesired = switch (scope) {
+      StartupRegistryScope.currentUser => access,
+      StartupRegistryScope.localMachine => REG_SAM_FLAGS(access | KEY_WOW64_64KEY),
+      StartupRegistryScope.localMachineWow6432 => REG_SAM_FLAGS(access | KEY_WOW64_32KEY),
     };
 
-    final subKeyPtr = _runSubKeyPath.toNativeUtf16();
-    final hKeyOut = calloc<IntPtr>();
+    final subKeyPtr = _runSubKeyPath.toPcwstr();
+    final hKeyOut = calloc<Pointer>();
     try {
       final openStatus = RegOpenKeyEx(
         rootKey,
         subKeyPtr,
         0,
-        access | wowFlag,
+        samDesired,
         hKeyOut,
       );
       if (openStatus != ERROR_SUCCESS) {
         return _resultFromErrorStatus(openStatus);
       }
-      final hKey = hKeyOut.value;
+      final hKey = HKEY(hKeyOut.value);
       try {
         return action(hKey);
       } finally {
@@ -135,7 +134,7 @@ class Win32StartupRunValueRegistryWriter implements IStartupRunValueRegistryWrit
       }
     } finally {
       calloc.free(hKeyOut);
-      calloc.free(subKeyPtr);
+      free(subKeyPtr);
     }
   }
 

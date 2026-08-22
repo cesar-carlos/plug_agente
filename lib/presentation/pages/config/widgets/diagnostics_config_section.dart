@@ -213,7 +213,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                   SettingsToggleTile(
                     label: l10n.diagnosticsOdbcPaginatedSqlLogLabel,
                     value: _odbcPaginatedSqlLog,
-                    onChanged: (bool value) {
+                    onChanged: (value) {
                       unawaited(_setOdbcPaginatedSqlLog(value));
                     },
                   ),
@@ -263,7 +263,7 @@ class _DiagnosticsConfigSectionState extends State<DiagnosticsConfigSection> {
                   SettingsToggleTile(
                     label: l10n.diagnosticsHubHardReloginEnabledLabel,
                     value: _enableHardReloginRecovery,
-                    onChanged: (bool value) {
+                    onChanged: (value) {
                       setState(() => _enableHardReloginRecovery = value);
                     },
                   ),
@@ -385,7 +385,7 @@ Future<void> _copyHubRecoveryDiagnostics(
   }
   displayInfoBar(
     context,
-    builder: (BuildContext context, void Function() close) => InfoBar(
+    builder: (context, void Function() close) => InfoBar(
       title: Text(l10n.diagnosticsHubRecoveryCopiedToast),
       severity: InfoBarSeverity.success,
       onClose: close,

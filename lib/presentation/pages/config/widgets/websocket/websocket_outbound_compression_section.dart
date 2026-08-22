@@ -91,7 +91,7 @@ class _WebSocketOutboundCompressionSectionState extends State<WebSocketOutboundC
               ],
               onChanged: _isPersisting
                   ? null
-                  : (OutboundCompressionMode? value) {
+                  : (value) {
                       if (value != null) {
                         unawaited(_onModeChanged(value));
                       }

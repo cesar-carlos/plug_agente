@@ -29,7 +29,7 @@ final class OdbcStatementExecutor {
   final MetricsCollector _metrics;
   final void Function(String connectionId) _markConnectionForDiscard;
 
-  static const int _maxPreparedStatementsPerConnection = 64;
+  static const int maxPreparedStatementsPerConnection = 64;
   static const int _asyncRequestPendingStatus = 0;
   static const int _asyncRequestReadyStatus = 1;
   static const int _asyncRequestErrorStatus = -1;
@@ -75,22 +75,22 @@ final class OdbcStatementExecutor {
     prepareStopwatch.stop();
     _metrics.recordPreparedPrepareTime(prepareStopwatch.elapsed);
 
-    return prepareResult.fold(
-      (stmtId) {
-        if (cachePolicy.dartLruEnabled) {
-          if (preparedStatements.length >= _maxPreparedStatementsPerConnection) {
-            final oldestKey = preparedStatements.keys.first;
-            final oldestStmtId = preparedStatements.remove(oldestKey);
-            if (oldestStmtId != null) {
-              unawaited(closePreparedStatements(connectionId, <int>[oldestStmtId]));
-            }
-          }
-          preparedStatements[statementKey] = stmtId;
+    if (prepareResult.isError()) {
+      return Failure(prepareResult.exceptionOrNull()!);
+    }
+
+    final stmtId = prepareResult.getOrThrow();
+    if (cachePolicy.dartLruEnabled) {
+      if (preparedStatements.length >= maxPreparedStatementsPerConnection) {
+        final oldestKey = preparedStatements.keys.first;
+        final oldestStmtId = preparedStatements.remove(oldestKey);
+        if (oldestStmtId != null) {
+          await closePreparedStatements(connectionId, <int>[oldestStmtId]);
         }
-        return Success(stmtId);
-      },
-      Failure.new,
-    );
+      }
+      preparedStatements[statementKey] = stmtId;
+    }
+    return Success(stmtId);
   }
 
   Future<Result<QueryResult>> _executePreparedStatement({

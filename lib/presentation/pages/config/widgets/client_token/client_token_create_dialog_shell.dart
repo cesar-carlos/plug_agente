@@ -53,7 +53,7 @@ class _ClientTokenCreateDialogShellState extends State<ClientTokenCreateDialogSh
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final isCreating = context.select<ClientTokenProvider, bool>(
-      (ClientTokenProvider p) => p.isCreating,
+      (p) => p.isCreating,
     );
     return PopScope(
       canPop: !isCreating,

@@ -72,7 +72,7 @@ class _WebSocketClientTokenPolicySectionState extends State<WebSocketClientToken
           children: [
             ToggleSwitch(
               checked: _introspectionEnabled,
-              onChanged: _isPersisting ? null : (bool value) => unawaited(_onChanged(value)),
+              onChanged: _isPersisting ? null : (value) => unawaited(_onChanged(value)),
               content: Text(l10n.wsFieldClientTokenPolicyIntrospection),
             ),
             const SizedBox(height: AppSpacing.sm),

@@ -117,7 +117,7 @@ void main() {
       Map<String, String>? receivedHeaders;
       final server = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => server.close(force: true));
-      server.listen((HttpRequest request) async {
+      server.listen((request) async {
         receivedHeaders = <String, String>{};
         request.headers.forEach((name, values) {
           receivedHeaders![name] = values.join(',');
@@ -180,7 +180,7 @@ void main() {
 
       final server = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => server.close(force: true));
-      server.listen((HttpRequest request) async {
+      server.listen((request) async {
         // Pretend the server does not implement Range.
         final body = utf8.encode('hello');
         request.response
@@ -227,7 +227,7 @@ void main() {
       String? rangeHeader;
       final server = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => server.close(force: true));
-      server.listen((HttpRequest request) async {
+      server.listen((request) async {
         rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
         final body = utf8.encode('hello');
         request.response
@@ -829,7 +829,7 @@ void main() {
       final body = utf8.encode('hello');
       final server = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => server.close(force: true));
-      server.listen((HttpRequest request) async {
+      server.listen((request) async {
         request.response.contentLength = body.length;
         request.response.add(body.sublist(0, 2));
         await request.response.flush();
@@ -894,7 +894,7 @@ void main() {
 
       final server = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => server.close(force: true));
-      server.listen((HttpRequest request) async {
+      server.listen((request) async {
         // Flaky edge: respond 503 so the installer maps it to a transient
         // NetworkFailure without ever touching the partial bytes.
         request.response.statusCode = HttpStatus.serviceUnavailable;
@@ -939,7 +939,7 @@ void main() {
 
       final server = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => server.close(force: true));
-      server.listen((HttpRequest request) async {
+      server.listen((request) async {
         request.response.statusCode = HttpStatus.serviceUnavailable;
         await request.response.close();
       });

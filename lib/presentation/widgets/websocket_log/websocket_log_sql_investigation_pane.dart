@@ -43,7 +43,7 @@ class WebSocketLogSqlInvestigationPane extends StatelessWidget {
                 )
               : ListView.builder(
                   itemCount: sqlProvider.events.length,
-                  itemBuilder: (BuildContext context, int index) {
+                  itemBuilder: (context, index) {
                     return WebSocketLogSqlInvestigationItem(
                       event: sqlProvider.events[index],
                       l10n: l10n,

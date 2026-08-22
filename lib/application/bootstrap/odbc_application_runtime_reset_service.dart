@@ -13,12 +13,12 @@ final class OdbcApplicationRuntimeResetService implements IOdbcApplicationRuntim
 
   @override
   Future<void> resetForOdbcRuntimeReload() async {
-    _invalidateActiveConfigCaches();
+    await _invalidateActiveConfigCaches();
     await _resetLazySingletonIfRegistered<RpcMethodDispatcher>();
     await _resetLazySingletonIfRegistered<SqlExecutionQueue>();
   }
 
-  void _invalidateActiveConfigCaches() {
+  Future<void> _invalidateActiveConfigCaches() async {
     if (_getIt.isRegistered<ActiveConfigMetadataCache>()) {
       _getIt<ActiveConfigMetadataCache>().invalidate();
     }
@@ -26,7 +26,7 @@ final class OdbcApplicationRuntimeResetService implements IOdbcApplicationRuntim
       _getIt<SqlStreamingConnectionStringCache>().invalidate();
     }
     if (_getIt.isRegistered<IOdbcStreamingSessionCache>()) {
-      _getIt<IOdbcStreamingSessionCache>().invalidate();
+      await _getIt<IOdbcStreamingSessionCache>().drainCachedSessions();
     }
   }
 

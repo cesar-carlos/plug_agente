@@ -101,10 +101,10 @@ class WindowsUacDetector implements IUacDetector {
   /// `OpenProcessToken` + `GetTokenInformation(TokenElevationType)`.
   /// Falls back to [UacElevationType.unknown] on any FFI error.
   UacElevationType _resolveElevationType() {
-    final hTokenOut = calloc<IntPtr>();
+    final hTokenOut = calloc<Pointer>();
     try {
       final opened = OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, hTokenOut);
-      if (opened == 0) {
+      if (!opened.value) {
         developer.log(
           'OpenProcessToken failed; cannot determine elevation type',
           name: _logName,
@@ -112,18 +112,18 @@ class WindowsUacDetector implements IUacDetector {
         );
         return UacElevationType.unknown;
       }
-      final hToken = hTokenOut.value;
+      final hToken = HANDLE(hTokenOut.value);
       final elevationTypeOut = calloc<Uint32>();
       final returnedLength = calloc<Uint32>();
       try {
         final ok = GetTokenInformation(
           hToken,
-          _tokenElevationTypeInfoClass,
+          TokenElevationType,
           elevationTypeOut,
           sizeOf<Uint32>(),
           returnedLength,
         );
-        if (ok == 0) {
+        if (!ok.value) {
           developer.log(
             'GetTokenInformation(TokenElevationType) failed',
             name: _logName,
@@ -156,15 +156,15 @@ class WindowsUacDetector implements IUacDetector {
   /// Returns `true` when the value is `1`, `false` when `0`, and
   /// `null` when the value cannot be read.
   bool? _readEnableLua() {
-    final subKeyPtr = _uacPolicyPath.toNativeUtf16();
-    final valueNamePtr = _uacValueName.toNativeUtf16();
-    final hKeyOut = calloc<IntPtr>();
+    final subKeyPtr = _uacPolicyPath.toPcwstr();
+    final valueNamePtr = _uacValueName.toPcwstr();
+    final hKeyOut = calloc<Pointer>();
     try {
       final openStatus = RegOpenKeyEx(
         HKEY_LOCAL_MACHINE,
         subKeyPtr,
         0,
-        KEY_QUERY_VALUE | KEY_WOW64_64KEY,
+        REG_SAM_FLAGS(KEY_QUERY_VALUE | KEY_WOW64_64KEY),
         hKeyOut,
       );
       if (openStatus != ERROR_SUCCESS) {
@@ -175,14 +175,13 @@ class WindowsUacDetector implements IUacDetector {
         );
         return null;
       }
-      final hKey = hKeyOut.value;
+      final hKey = HKEY(hKeyOut.value);
       final dataOut = calloc<Uint8>(sizeOf<Uint32>());
       final dataSizeOut = calloc<Uint32>()..value = sizeOf<Uint32>();
       try {
         final queryStatus = RegQueryValueEx(
           hKey,
           valueNamePtr,
-          nullptr,
           nullptr,
           dataOut,
           dataSizeOut,
@@ -204,13 +203,8 @@ class WindowsUacDetector implements IUacDetector {
       }
     } finally {
       calloc.free(hKeyOut);
-      calloc.free(valueNamePtr);
-      calloc.free(subKeyPtr);
+      free(valueNamePtr);
+      free(subKeyPtr);
     }
   }
-
-  /// `TokenElevationType` constant from the `TOKEN_INFORMATION_CLASS`
-  /// enum (== 18). Hard-coded next to its layout so the FFI call is
-  /// self-contained.
-  static const int _tokenElevationTypeInfoClass = 18;
 }

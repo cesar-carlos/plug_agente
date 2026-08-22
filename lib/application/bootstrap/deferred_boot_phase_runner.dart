@@ -104,7 +104,7 @@ class DeferredBootPhaseRunner {
             final warmUpResult = await warmUpPool.warmUp(connectionString);
             warmUpResult.fold(
               (_) {},
-              (Object failure) {
+              (failure) {
                 developer.log(
                   'Pool warm-up cleanup failed (continuing without)',
                   name: 'deferred_boot_phase_runner',

@@ -278,7 +278,7 @@ void main() {
 
       expect(events.contains('logout'), isFalse);
       expect(events.contains('login'), isFalse);
-      expect(events.where((String e) => e.startsWith('connect_')).length, greaterThanOrEqualTo(2));
+      expect(events.where((e) => e.startsWith('connect_')).length, greaterThanOrEqualTo(2));
 
       await provider.disconnect();
     });

@@ -108,7 +108,7 @@ List<AgentActionRiskDescriptor> collectAgentActionRiskDescriptors({
     );
   }
   if (triggers.any(
-    (AgentActionTrigger trigger) => trigger.type == AgentActionTriggerType.appClose && trigger.isEnabled,
+    (trigger) => trigger.type == AgentActionTriggerType.appClose && trigger.isEnabled,
   )) {
     descriptors.add(
       AgentActionRiskDescriptor(
@@ -156,7 +156,7 @@ class AgentActionRiskChips extends StatelessWidget {
       runSpacing: AppSpacing.xs,
       children: descriptors
           .map(
-            (AgentActionRiskDescriptor descriptor) => _AgentActionRiskChip(descriptor: descriptor),
+            (descriptor) => _AgentActionRiskChip(descriptor: descriptor),
           )
           .toList(growable: false),
     );

@@ -255,7 +255,7 @@ class AgentActionDeveloperFields extends StatelessWidget {
           value: selectorValue,
           items: connectionOptions
               .map(
-                (AgentActionDeveloperConnectionOption option) => ComboBoxItem<String>(
+                (option) => ComboBoxItem<String>(
                   value: option.id,
                   child: Text(option.label),
                 ),

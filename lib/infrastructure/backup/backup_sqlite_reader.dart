@@ -36,7 +36,7 @@ class BackupSqliteReader {
     } on Object {
       return null;
     } finally {
-      db?.dispose();
+      db?.close();
     }
   }
 
@@ -60,7 +60,7 @@ class BackupSqliteReader {
     } on Object {
       return null;
     } finally {
-      db?.dispose();
+      db?.close();
     }
   }
 }

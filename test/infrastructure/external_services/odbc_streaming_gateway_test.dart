@@ -1216,6 +1216,222 @@ void main() {
       expect(sessionCache.entryCount, 1);
     });
 
+    test('does not reuse SQL Anywhere or SQL Server streaming sessions', () async {
+      Future<void> expectNoReuse(String connectionString) async {
+        final sessionCache = OdbcStreamingSessionCache(ttl: const Duration(seconds: 30));
+        gateway = OdbcStreamingGateway(
+          mockService,
+          mockSettings,
+          metricsCollector: metrics,
+          cancelDisconnectTimeout: const Duration(milliseconds: 20),
+          streamingSessionCache: sessionCache,
+        );
+        var connectCount = 0;
+        when(
+          () => mockService.connect(any(), options: any(named: 'options')),
+        ).thenAnswer(
+          (_) async {
+            connectCount++;
+            return Success(
+              Connection(
+                id: 'conn-$connectCount',
+                connectionString: connectionString,
+                createdAt: DateTime.now(),
+                isActive: true,
+              ),
+            );
+          },
+        );
+        when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+        when(
+          () => mockService.streamQuery(
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
+        ).thenAnswer((_) async* {
+          yield const Success(
+            QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(
+          () => mockService.streamQueryColumnar(
+            any(),
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
+        ).thenAnswer((_) async* {
+          yield _columnarSuccess(
+            const QueryResult(
+              columns: ['id'],
+              rows: [
+                [1],
+              ],
+              rowCount: 1,
+            ),
+          );
+        });
+        when(() => mockService.disconnect(any())).thenAnswer((_) async => const Success(unit));
+
+        final first = await gateway.executeQueryStream('SELECT 1', connectionString, (_) async {});
+        final second = await gateway.executeQueryStream('SELECT 2', connectionString, (_) async {});
+
+        expect(first.isSuccess(), isTrue);
+        expect(second.isSuccess(), isTrue);
+        expect(connectCount, 2);
+        expect(sessionCache.entryCount, 0);
+      }
+
+      await expectNoReuse('Driver={SQL Anywhere 17};dbf=C:/data.db;');
+      await expectNoReuse('Driver={ODBC Driver 18 for SQL Server};Server=localhost;');
+    });
+
+    test('cancelled last chunk does not offer the streaming session for reuse', () async {
+      final sessionCache = OdbcStreamingSessionCache(
+        ttl: const Duration(seconds: 30),
+      );
+      gateway = OdbcStreamingGateway(
+        mockService,
+        mockSettings,
+        metricsCollector: metrics,
+        cancelDisconnectTimeout: const Duration(milliseconds: 20),
+        streamingSessionCache: sessionCache,
+      );
+
+      const connectionString = 'Driver={PostgreSQL};Server=localhost;';
+      var connectCount = 0;
+      var disconnectCount = 0;
+
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer(
+        (_) async {
+          connectCount++;
+          return Success(
+            Connection(
+              id: 'conn-cancel-reuse',
+              connectionString: connectionString,
+              createdAt: DateTime.now(),
+              isActive: true,
+            ),
+          );
+        },
+      );
+      when(() => mockService.initialize()).thenAnswer(
+        (_) async => const Success(unit),
+      );
+      when(
+        () => mockService.streamQueryColumnar(
+          'conn-cancel-reuse',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
+      ).thenAnswer((_) async* {
+        yield _columnarSuccess(
+          const QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(
+        () => mockService.disconnect('conn-cancel-reuse'),
+      ).thenAnswer((_) async {
+        disconnectCount++;
+        return const Success(unit);
+      });
+
+      final first = await gateway.executeQueryStream(
+        'SELECT 1',
+        connectionString,
+        (_) async {
+          await gateway.cancelActiveStream();
+        },
+      );
+      final second = await gateway.executeQueryStream(
+        'SELECT 2',
+        connectionString,
+        (_) async {},
+      );
+
+      expect(first.isError(), isTrue);
+      expect(second.isSuccess(), isTrue);
+      expect(sessionCache.entryCount, 1);
+      expect(connectCount, 2);
+      expect(disconnectCount, 1);
+    });
+
+    test('streaming connect applies blockFetchBatchSize and stream chunk size', () async {
+      ConnectionOptions? capturedOptions;
+      when(() => mockService.initialize()).thenAnswer((_) async => const Success(unit));
+      when(
+        () => mockService.connect(any(), options: any(named: 'options')),
+      ).thenAnswer((invocation) async {
+        capturedOptions = invocation.namedArguments[#options] as ConnectionOptions?;
+        return Success(
+          Connection(
+            id: 'conn-knobs',
+            connectionString: 'DSN=Test',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(
+        () => mockService.streamQueryColumnar(
+          'conn-knobs',
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
+      ).thenAnswer((_) async* {
+        yield _columnarSuccess(
+          const QueryResult(
+            columns: ['id'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        );
+      });
+      when(
+        () => mockService.disconnect('conn-knobs'),
+      ).thenAnswer((_) async => const Success(unit));
+
+      final result = await gateway.executeQueryStream(
+        'SELECT 1',
+        'DSN=Test',
+        (_) async {},
+        fetchSize: 250,
+        chunkSizeBytes: 256 * 1024,
+      );
+
+      expect(result.isSuccess(), isTrue);
+      expect(capturedOptions?.blockFetchBatchSize, ConnectionConstants.defaultBlockFetchBatchSize);
+      expect(capturedOptions?.streamChunkSizeBytes, 256 * 1024);
+      verify(
+        () => mockService.streamQueryColumnar(
+          'conn-knobs',
+          'SELECT 1',
+          fetchSize: 250,
+          chunkSize: 256 * 1024,
+        ),
+      ).called(1);
+    });
+
     test('invalidateAfterWorkerRecovery drains cached streaming sessions without leaking handles', () async {
       var disconnectCount = 0;
       final sessionCache = OdbcStreamingSessionCache(

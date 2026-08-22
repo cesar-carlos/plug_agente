@@ -209,9 +209,9 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
   Future<void> _handleImportFile() async {
     final l10n = AppLocalizations.of(context)!;
 
-    FilePickerResult? picked;
+    PlatformFile? picked;
     try {
-      picked = await FilePicker.platform.pickFiles(
+      picked = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['txt'],
       );
@@ -220,9 +220,9 @@ class _ClientTokenRuleOverlayState extends State<_ClientTokenRuleOverlay> {
       return;
     }
 
-    if (picked == null || picked.files.isEmpty) return;
+    if (picked == null) return;
 
-    final filePath = picked.files.single.path;
+    final filePath = picked.path;
     if (filePath == null) {
       if (mounted) setState(() => _formError = l10n.ctRuleImportErrorNoValidLines);
       return;

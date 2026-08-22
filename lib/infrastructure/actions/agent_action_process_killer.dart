@@ -83,13 +83,14 @@ abstract final class AgentActionProcessKiller {
   }
 
   static bool _windowsTerminateProcess(int pid) {
-    final handle = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
-    if (handle == 0 || handle == INVALID_HANDLE_VALUE) {
+    final opened = OpenProcess(PROCESS_TERMINATE, false, pid);
+    final handle = opened.value;
+    if (!handle.isValid) {
       return false;
     }
 
     try {
-      return TerminateProcess(handle, 1) != 0;
+      return TerminateProcess(handle, 1).value;
     } finally {
       CloseHandle(handle);
     }
@@ -100,13 +101,14 @@ abstract final class AgentActionProcessKiller {
       return null;
     }
 
-    final handle = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
-    if (handle != 0 && handle != INVALID_HANDLE_VALUE) {
+    final opened = OpenProcess(PROCESS_TERMINATE, false, pid);
+    final handle = opened.value;
+    if (handle.isValid) {
       CloseHandle(handle);
       return null;
     }
 
-    return GetLastError();
+    return opened.error;
   }
 
   static ActionFailure _killPermissionDenied({

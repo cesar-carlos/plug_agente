@@ -19,7 +19,6 @@ import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
-import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_deprecation_metrics_collector.dart';
@@ -291,7 +290,7 @@ class SqlExecuteHandler {
         );
 
         return result.fold<Future<RpcResponse>>(
-          (QueryResponse queryResponse) async {
+          (queryResponse) async {
             final normalized = await _normalizerService.normalizeAsync(
               queryResponse,
               sqlHandlingMode: queryRequest.sqlHandlingMode,
@@ -386,7 +385,7 @@ class SqlExecuteHandler {
             _dispatchMetrics?.recordSqlExecuteMaterializedResponse();
             return rpcResponse;
           },
-          (Exception failure) async {
+          (failure) async {
             final domainFailure = failure as domain.Failure;
             if (domainFailure.context['reason'] == RpcSqlBudgetConstants.materializedResultTooLargeReason) {
               _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('materialized_result_too_large');

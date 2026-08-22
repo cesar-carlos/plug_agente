@@ -36,18 +36,18 @@ final class SilentUpdateInstallerPlatform {
   /// distinct from `0` so a real "no space" answer can still block.
   static Future<int?> resolveDefaultDiskFreeSpace(String directoryPath) async {
     if (!Platform.isWindows) return null;
-    final pathPtr = directoryPath.toNativeUtf16();
+    final pathPtr = directoryPath.toPcwstr();
     final freeBytesAvailable = calloc<Uint64>();
     final totalNumberOfBytes = calloc<Uint64>();
     final totalNumberOfFreeBytes = calloc<Uint64>();
     try {
       final ok = win32.GetDiskFreeSpaceEx(
         pathPtr,
-        freeBytesAvailable.cast(),
-        totalNumberOfBytes.cast(),
-        totalNumberOfFreeBytes.cast(),
+        freeBytesAvailable,
+        totalNumberOfBytes,
+        totalNumberOfFreeBytes,
       );
-      if (ok == 0) return null;
+      if (!ok.value) return null;
       final available = freeBytesAvailable.value;
       if (available > 0) return available;
       final totalFree = totalNumberOfFreeBytes.value;

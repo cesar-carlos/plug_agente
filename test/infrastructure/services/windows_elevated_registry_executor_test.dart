@@ -22,7 +22,7 @@ void main() {
       ]);
 
       final executor = WindowsElevatedRegistryExecutor(
-        processRunner: (String executable, List<String> arguments) async {
+        processRunner: (executable, arguments) async {
           calls.add(arguments);
           return results.removeFirst();
         },

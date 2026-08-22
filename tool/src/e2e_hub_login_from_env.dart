@@ -27,7 +27,7 @@ String hubHttpLoginServerUrl(String hubUrl) {
   }
   final parsedUri = Uri.tryParse(normalized);
   if (parsedUri != null && parsedUri.hasScheme) {
-    final segments = parsedUri.pathSegments.where((String s) => s.isNotEmpty).toList();
+    final segments = parsedUri.pathSegments.where((s) => s.isNotEmpty).toList();
     if (segments.isNotEmpty && segments.last.toLowerCase() == 'agents') {
       segments.removeLast();
       return parsedUri.replace(pathSegments: segments).toString();

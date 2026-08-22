@@ -31,7 +31,7 @@ void main() {
       final service = QueryNormalizerService(QueryNormalizer());
       final rows = List<Map<String, dynamic>>.generate(
         QueryNormalizerService.normalizeIsolateRowThreshold,
-        (int index) => <String, dynamic>{'Col $index': 'v$index'},
+        (index) => <String, dynamic>{'Col $index': 'v$index'},
       );
       final response = QueryResponse(
         id: 'r1',
@@ -112,7 +112,7 @@ void main() {
       final service = QueryNormalizerService(QueryNormalizer());
       final rows = List<Map<String, dynamic>>.generate(
         QueryNormalizerService.skipRowRewriteRowThreshold,
-        (int index) => <String, dynamic>{'col_$index': 'value$index'},
+        (index) => <String, dynamic>{'col_$index': 'value$index'},
       );
       final response = QueryResponse(
         id: 'r1',

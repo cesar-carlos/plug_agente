@@ -104,7 +104,7 @@ void main() {
           )
           ..execute('PRAGMA user_version = 29');
       } finally {
-        sqliteDb.dispose();
+        sqliteDb.close();
       }
 
       final secretStore = _FakeOdbcCredentialSecretStore();

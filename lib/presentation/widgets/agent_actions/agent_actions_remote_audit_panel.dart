@@ -40,7 +40,7 @@ class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPa
   AgentActionsProvider get provider => widget.provider;
 
   List<AgentActionRemoteAuditRecord> get _visibleEntries => provider.remoteAuditEntries
-      .where((AgentActionRemoteAuditRecord record) => matchesAgentActionRemoteAuditViewFilter(_filter, record.outcome))
+      .where((record) => matchesAgentActionRemoteAuditViewFilter(_filter, record.outcome))
       .toList(growable: false);
 
   @override
@@ -111,8 +111,8 @@ class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPa
               height: 220,
               child: ListView.separated(
                 itemCount: visibleEntries.length,
-                separatorBuilder: (BuildContext context, int index) => const Divider(),
-                itemBuilder: (BuildContext context, int index) {
+                separatorBuilder: (context, index) => const Divider(),
+                itemBuilder: (context, index) {
                   final record = visibleEntries[index];
                   final when = _occurredFormat.format(record.occurredAtUtc.toLocal());
                   final outcomeLabel = agentActionRemoteAuditOutcomeLabel(l10n, record.outcome);
@@ -154,7 +154,7 @@ class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPa
 
   List<Widget> _filterButtons() {
     return AgentActionRemoteAuditViewFilter.values
-        .map((AgentActionRemoteAuditViewFilter value) {
+        .map((value) {
           final label = switch (value) {
             AgentActionRemoteAuditViewFilter.all => l10n.agentActionsRemoteAuditFilterAll,
             AgentActionRemoteAuditViewFilter.rpc => l10n.agentActionsRemoteAuditFilterRpc,
@@ -206,7 +206,7 @@ class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPa
 
     displayInfoBar(
       context,
-      builder: (BuildContext closeContext, void Function() close) => InfoBar(
+      builder: (closeContext, void Function() close) => InfoBar(
         key: const ValueKey<String>('agent_actions_remote_audit_focus_warning'),
         title: title,
         severity: InfoBarSeverity.warning,
@@ -224,7 +224,7 @@ class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPa
     }
     displayInfoBar(
       context,
-      builder: (BuildContext closeContext, void Function() close) => InfoBar(
+      builder: (closeContext, void Function() close) => InfoBar(
         title: Text(l10n.agentActionsRemoteAuditCopiedToast),
         severity: InfoBarSeverity.success,
         onClose: close,

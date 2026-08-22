@@ -191,7 +191,7 @@ class PayloadFrameCodec {
     return _decodeIncoming(
       payload,
       sourceEvent: sourceEvent,
-      process: (PayloadFrame frame, ProtocolConfig protocol) => _pipelineCache
+      process: (frame, protocol) => _pipelineCache
           .receive(frame)
           .receiveProcess(
             frame,

@@ -52,7 +52,7 @@ class AgentActionTriggersSection extends StatelessWidget {
             child: ListView.separated(
               itemCount: provider.triggers.length,
               separatorBuilder: (_, _) => const Divider(),
-              itemBuilder: (BuildContext context, int index) {
+              itemBuilder: (context, index) {
                 final trigger = provider.triggers[index];
                 return AgentActionTriggerRow(
                   trigger: trigger,

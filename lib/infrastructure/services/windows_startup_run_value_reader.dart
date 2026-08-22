@@ -59,28 +59,26 @@ class Win32StartupRunValueRegistryReader implements IStartupRunValueRegistryRead
     required String valueName,
   }) {
     final rootKey = scope == StartupRegistryScope.currentUser ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE;
-    // WOW64 access flags replace the literal WOW6432Node path used by
-    // reg.exe: the OS resolves the correct hive view for us.
-    final wowFlag = switch (scope) {
-      StartupRegistryScope.currentUser => 0,
-      StartupRegistryScope.localMachine => KEY_WOW64_64KEY,
-      StartupRegistryScope.localMachineWow6432 => KEY_WOW64_32KEY,
+    final samDesired = switch (scope) {
+      StartupRegistryScope.currentUser => KEY_QUERY_VALUE,
+      StartupRegistryScope.localMachine => REG_SAM_FLAGS(KEY_QUERY_VALUE | KEY_WOW64_64KEY),
+      StartupRegistryScope.localMachineWow6432 => REG_SAM_FLAGS(KEY_QUERY_VALUE | KEY_WOW64_32KEY),
     };
 
-    final subKeyPtr = _runSubKeyPath.toNativeUtf16();
-    final hKeyOut = calloc<IntPtr>();
+    final subKeyPtr = _runSubKeyPath.toPcwstr();
+    final hKeyOut = calloc<Pointer>();
     try {
       final openStatus = RegOpenKeyEx(
         rootKey,
         subKeyPtr,
         0,
-        KEY_QUERY_VALUE | wowFlag,
+        samDesired,
         hKeyOut,
       );
       if (openStatus != ERROR_SUCCESS) {
         return _resultFromErrorStatus(openStatus);
       }
-      final hKey = hKeyOut.value;
+      final hKey = HKEY(hKeyOut.value);
       try {
         return _readValue(hKey, valueName);
       } finally {
@@ -88,15 +86,15 @@ class Win32StartupRunValueRegistryReader implements IStartupRunValueRegistryRead
       }
     } finally {
       calloc.free(hKeyOut);
-      calloc.free(subKeyPtr);
+      free(subKeyPtr);
     }
   }
 
-  StartupRunValueReadResult _readValue(int hKey, String valueName) {
-    final valueNamePtr = valueName.toNativeUtf16();
+  StartupRunValueReadResult _readValue(HKEY hKey, String valueName) {
+    final valueNamePtr = valueName.toPcwstr();
     final dataSizeOut = calloc<Uint32>();
     try {
-      final sizeStatus = RegQueryValueEx(hKey, valueNamePtr, nullptr, nullptr, nullptr, dataSizeOut);
+      final sizeStatus = RegQueryValueEx(hKey, valueNamePtr, nullptr, nullptr, dataSizeOut);
       if (sizeStatus != ERROR_SUCCESS) {
         return _resultFromErrorStatus(sizeStatus);
       }
@@ -111,7 +109,7 @@ class Win32StartupRunValueRegistryReader implements IStartupRunValueRegistryRead
       final dataOut = calloc<Uint8>(dataSize + 2);
       try {
         dataSizeOut.value = dataSize;
-        final readStatus = RegQueryValueEx(hKey, valueNamePtr, nullptr, typeOut, dataOut, dataSizeOut);
+        final readStatus = RegQueryValueEx(hKey, valueNamePtr, typeOut, dataOut, dataSizeOut);
         if (readStatus != ERROR_SUCCESS) {
           return _resultFromErrorStatus(readStatus);
         }
@@ -131,7 +129,7 @@ class Win32StartupRunValueRegistryReader implements IStartupRunValueRegistryRead
       }
     } finally {
       calloc.free(dataSizeOut);
-      calloc.free(valueNamePtr);
+      free(valueNamePtr);
     }
   }
 

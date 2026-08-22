@@ -22,7 +22,7 @@ class AgentActionSecretReferenceFingerprinter {
 
     if (!_secretStore.isAvailable) {
       return Map<String, String>.fromEntries(
-        names.map((String name) => MapEntry<String, String>(name, missingFingerprint)),
+        names.map((name) => MapEntry<String, String>(name, missingFingerprint)),
       );
     }
 

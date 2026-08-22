@@ -400,13 +400,13 @@ class _AgentProfilePageState extends State<AgentProfilePage> {
           title: l10n.agentProfileHubSavePartialTitle,
           message: l10n.agentProfileHubSavePartialMessage(detail),
         );
-      case AgentProfileSaveHubCatalogPersistFailure(message: final message):
+      case AgentProfileSaveHubCatalogPersistFailure(: final message):
         await SettingsFeedback.showWarning(
           context: context,
           title: l10n.agentProfileHubCatalogPersistFailedTitle,
           message: l10n.agentProfileHubCatalogPersistFailedMessage(message),
         );
-      case AgentProfileSaveReloadedFromHub(profile: final profile):
+      case AgentProfileSaveReloadedFromHub(: final profile):
         _formController.applyValidatedProfile(profile);
         await SettingsFeedback.showSuccess(
           context: context,

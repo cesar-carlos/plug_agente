@@ -74,14 +74,14 @@ class AgentActionPagedCapturedOutputState extends State<AgentActionPagedCaptured
     }
 
     result.fold(
-      (CapturedOutputUtf8Window window) {
+      (window) {
         setState(() {
           _assignFromWindow(window, append: append);
           _isLoading = false;
           _isLoadingMore = false;
         });
       },
-      (Exception failure) {
+      (failure) {
         setState(() {
           _loadError = failure is domain_errors.Failure
               ? failure.message

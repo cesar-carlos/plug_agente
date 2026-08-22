@@ -87,7 +87,7 @@ return const <RegisteredComObjectInvocation>[
       );
 
       expect(result.isSuccess, isFalse);
-      expect(result.failures.any((String s) => s.contains('e2e-dev')), isTrue);
+      expect(result.failures.any((s) => s.contains('e2e-dev')), isTrue);
     });
 
     test('should warn but not fail static preflight when live RPC enabled and JWT is expired', () {
@@ -111,7 +111,7 @@ return const <RegisteredComObjectInvocation>[
 
       expect(result.isSuccess, isTrue);
       expect(result.failures, isEmpty);
-      expect(result.warnings.any((String w) => w.contains('JWT is expired')), isTrue);
+      expect(result.warnings.any((w) => w.contains('JWT is expired')), isTrue);
     });
   });
 }

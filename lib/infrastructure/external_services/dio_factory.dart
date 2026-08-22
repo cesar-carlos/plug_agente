@@ -91,7 +91,7 @@ class DioFactory {
       createHttpClient: () {
         final client = HttpClient()..autoUncompress = true;
         if (shouldAccept) {
-          client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+          client.badCertificateCallback = (cert, host, port) => true;
         }
         return client;
       },

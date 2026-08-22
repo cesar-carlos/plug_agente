@@ -17,7 +17,11 @@ final class BulkInsertParallelPolicy {
     required int requestRowCount,
     required int poolSize,
     bool parallelPoolAvailable = true,
+    bool requireAtomic = false,
   }) {
+    if (requireAtomic) {
+      return false;
+    }
     if (!parallelPoolAvailable) {
       return false;
     }

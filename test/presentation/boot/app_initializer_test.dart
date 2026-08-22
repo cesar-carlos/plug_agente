@@ -61,8 +61,8 @@ void main() {
       ),
       setupDependenciesOverride:
           ({
-            required RuntimeCapabilities capabilities,
-            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+            required capabilities,
+            runtimeDetectionDiagnostics,
           }) async {
             capturedCapabilities = capabilities;
             capturedDiagnostics = runtimeDetectionDiagnostics;
@@ -101,8 +101,8 @@ void main() {
       ),
       setupDependenciesOverride:
           ({
-            required RuntimeCapabilities capabilities,
-            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+            required capabilities,
+            runtimeDetectionDiagnostics,
           }) async {
             capturedCapabilities = capabilities;
             capturedDiagnostics = runtimeDetectionDiagnostics;
@@ -136,8 +136,8 @@ void main() {
       ),
       setupDependenciesOverride:
           ({
-            required RuntimeCapabilities capabilities,
-            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+            required capabilities,
+            runtimeDetectionDiagnostics,
           }) async {
             getIt.registerSingleton<IAppSettingsStore>(InMemoryAppSettingsStore());
             getIt.registerSingleton<INotificationService>(_FakeNotificationService());
@@ -170,8 +170,8 @@ void main() {
       ),
       setupDependenciesOverride:
           ({
-            required RuntimeCapabilities capabilities,
-            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+            required capabilities,
+            runtimeDetectionDiagnostics,
           }) async {
             getIt.registerSingleton<IAppSettingsStore>(InMemoryAppSettingsStore());
             getIt.registerSingleton<INotificationService>(_FakeNotificationService());
@@ -238,7 +238,7 @@ void main() {
     const channel = MethodChannel('plug_agente/runtime');
     MethodCall? capturedCall;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
-      MethodCall call,
+      call,
     ) async {
       capturedCall = call;
       return null;
@@ -270,8 +270,8 @@ void main() {
       ),
       setupDependenciesOverride:
           ({
-            required RuntimeCapabilities capabilities,
-            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+            required capabilities,
+            runtimeDetectionDiagnostics,
           }) async {},
       bootstrapPhasesOverride: () async {},
       ensureStartupLaunchConfigurationOverride: (args) async {
@@ -345,8 +345,8 @@ void main() {
       ),
       setupDependenciesOverride:
           ({
-            required RuntimeCapabilities capabilities,
-            RuntimeDetectionDiagnostics? runtimeDetectionDiagnostics,
+            required capabilities,
+            runtimeDetectionDiagnostics,
           }) async {},
       initializeDesktopFeaturesOverride: (capabilities, isAutostartLaunch) async {},
       agentActionsBootPhases: _RecordingAgentActionsBootPhases(

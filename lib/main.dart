@@ -71,7 +71,7 @@ Future<void> main(List<String> args) async {
 
 void _installGlobalErrorHandlers() {
   final previousFlutterOnError = FlutterError.onError;
-  FlutterError.onError = (FlutterErrorDetails details) {
+  FlutterError.onError = (details) {
     ErrorTracker.captureException(
       details.exception,
       details.stack ?? StackTrace.empty,
@@ -85,7 +85,7 @@ void _installGlobalErrorHandlers() {
   };
 
   final previousPlatformOnError = PlatformDispatcher.instance.onError;
-  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+  PlatformDispatcher.instance.onError = (error, stack) {
     ErrorTracker.captureException(
       error,
       stack,

@@ -152,7 +152,7 @@ class AgentProfileSaveCoordinator {
     switch (syncResult) {
       case AgentProfileHubSyncSkipped():
         return const AgentProfileSaveLocalOnly();
-      case AgentProfileHubSyncPushFailed(failure: final failure):
+      case AgentProfileHubSyncPushFailed(: final failure):
         _surfaceHubAuthFailureIfNeeded(failure, localizations);
         return AgentProfileSaveHubPartialFailure(
           hubErrorMessage: _hubErrorMessage(failure, localizations),

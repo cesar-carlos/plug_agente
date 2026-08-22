@@ -10,7 +10,7 @@ void main() {
       final cache = JwksKeyStoreCache(
         jwksCacheTtl: const Duration(minutes: 5),
         now: () => now,
-        createKeyStore: (Uri u) {
+        createKeyStore: (u) {
           factoryCalls++;
           return JsonWebKeyStore()..addKeySetUrl(u);
         },
@@ -31,7 +31,7 @@ void main() {
       final cache = JwksKeyStoreCache(
         jwksCacheTtl: const Duration(minutes: 5),
         now: () => clock[0],
-        createKeyStore: (Uri u) {
+        createKeyStore: (u) {
           factoryCalls++;
           return JsonWebKeyStore()..addKeySetUrl(u);
         },
@@ -53,7 +53,7 @@ void main() {
       final cache = JwksKeyStoreCache(
         jwksCacheTtl: const Duration(minutes: 5),
         now: () => now,
-        createKeyStore: (Uri u) {
+        createKeyStore: (u) {
           factoryCalls++;
           return JsonWebKeyStore()..addKeySetUrl(u);
         },

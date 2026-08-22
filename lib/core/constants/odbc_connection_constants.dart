@@ -21,6 +21,9 @@ abstract final class OdbcConnectionConstants {
   static const int defaultSqlExecuteMaterializedEstimatedBytesPerRow = 512;
   static const int defaultInitialResultBufferBytes = 256 * 1024;
   static const int defaultStreamingChunkSizeKb = 1024;
+
+  /// Matches `odbc_fast` native default (`ODBC_FAST_BLOCK_FETCH_BATCH`).
+  static const int defaultBlockFetchBatchSize = 256;
   static const Duration defaultStreamingConnectReuseTtl = Duration(seconds: 30);
   static const int defaultStreamingConnectReuseMaxEntries = 8;
   static const bool defaultStreamingConnectReuseEnabled = true;

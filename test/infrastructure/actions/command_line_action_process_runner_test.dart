@@ -31,13 +31,13 @@ void main() {
         adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
-              String command,
-              List<String> args, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              command,
+              args, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               executable = command;
               arguments = args;
@@ -231,13 +231,13 @@ void main() {
         adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
-              String executable,
-              List<String> arguments, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              executable,
+              arguments, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               throw const ProcessException('cmd.exe', <String>['/C', 'missing']);
             },
@@ -471,13 +471,13 @@ void main() {
         adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
         processStarter:
             (
-              String executable,
-              List<String> arguments, {
-              String? workingDirectory,
-              Map<String, String>? environment,
-              bool includeParentEnvironment = true,
-              bool runInShell = false,
-              ProcessStartMode mode = ProcessStartMode.normal,
+              executable,
+              arguments, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
             }) async {
               capturedIncludeParentEnvironment = includeParentEnvironment;
               return _FakeProcess(pid: 1234, exitCode: 0);

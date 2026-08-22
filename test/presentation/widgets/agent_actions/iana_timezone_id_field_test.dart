@@ -13,7 +13,7 @@ void main() {
     l10n = await AppLocalizations.delegate.load(const Locale('en'));
   });
 
-  testWidgets('should fill controller when a list row is tapped', (WidgetTester tester) async {
+  testWidgets('should fill controller when a list row is tapped', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
 
@@ -49,7 +49,7 @@ void main() {
     expect(controller.text.trim(), 'Europe/London');
   });
 
-  testWidgets('should show no-matches hint when filter matches nothing', (WidgetTester tester) async {
+  testWidgets('should show no-matches hint when filter matches nothing', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
 

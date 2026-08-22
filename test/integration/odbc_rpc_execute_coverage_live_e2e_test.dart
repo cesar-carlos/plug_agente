@@ -391,7 +391,7 @@ void main() async {
         expect(lowerKeys, contains('code'));
         expect(lowerKeys, contains('amt'));
         expect(
-          lowerKeys.any((String k) => k.contains('birth')),
+          lowerKeys.any((k) => k.contains('birth')),
           isTrue,
           reason: 'expected a birth_* date column, got $lowerKeys',
         );

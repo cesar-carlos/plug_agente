@@ -1618,7 +1618,7 @@ void main() {
           ConnectionConstants.agentActionRpcIdempotencyEntryTtl,
           requestFingerprint: any(named: 'requestFingerprint'),
         ),
-      ).thenAnswer((Invocation invocation) async {
+      ).thenAnswer((invocation) async {
         storedSuccess = invocation.positionalArguments[1] as RpcResponse;
       });
 
@@ -1908,7 +1908,7 @@ void main() {
           ConnectionConstants.agentActionRpcIdempotencyEntryTtl,
           requestFingerprint: any(named: 'requestFingerprint'),
         ),
-      ).thenAnswer((Invocation invocation) async {
+      ).thenAnswer((invocation) async {
         storedSuccess = invocation.positionalArguments[1] as RpcResponse;
       });
 

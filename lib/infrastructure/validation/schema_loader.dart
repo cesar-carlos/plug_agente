@@ -139,7 +139,7 @@ class TransportSchemaLoader {
         AppLogger.warning('Failed to read JSON Schema $id: $e', e, stack);
       }
     }
-    final refProvider = RefProvider.sync((String ref) {
+    final refProvider = RefProvider.sync((ref) {
       final segment = Uri.tryParse(ref)?.pathSegments.lastOrNull;
       if (segment == null) return null;
       final raw = rawById[segment];

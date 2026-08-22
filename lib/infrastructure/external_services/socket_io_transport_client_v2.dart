@@ -144,7 +144,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
         onReconnectionNeeded: () => _onReconnectionNeeded?.call(),
         onHubLifecycle: (notification) => _onHubLifecycle?.call(notification),
         hasMessageCallback: () => _onMessage != null,
-        setHubSqlDashboardCapturePaused: (bool paused) => _hubSqlDashboardCapturePauseHandler?.call(paused),
+        setHubSqlDashboardCapturePaused: (paused) => _hubSqlDashboardCapturePauseHandler?.call(paused),
         commitProtocol: (protocol) => _lifecycle.currentProtocol = protocol,
         supportsProtocolReadyAck: _supportsProtocolReadyAck,
         emitAgentReady: _emitAgentReady,

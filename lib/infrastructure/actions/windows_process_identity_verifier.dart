@@ -32,12 +32,13 @@ abstract final class WindowsProcessIdentityVerifier {
       return null;
     }
 
-    final handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (handle == 0 || handle == INVALID_HANDLE_VALUE) {
+    final opened = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+    final handle = opened.value;
+    if (!handle.isValid) {
       return _identityUnavailable(
         executionId: executionId,
         pid: pid,
-        osErrorCode: GetLastError(),
+        osErrorCode: opened.error,
       );
     }
 
@@ -119,12 +120,12 @@ abstract final class WindowsProcessIdentityVerifier {
     return expected.toUtc().difference(actual.toUtc()).abs() <= tolerance;
   }
 
-  static String? _queryImagePath(int handle) {
+  static String? _queryImagePath(HANDLE handle) {
     final buffer = wsalloc(_maxImagePathChars);
     final size = calloc<Uint32>()..value = _maxImagePathChars;
     try {
-      final ok = QueryFullProcessImageName(handle, 0, buffer, size) != 0;
-      if (!ok) {
+      final ok = QueryFullProcessImageName(handle, PROCESS_NAME_WIN32, buffer, size);
+      if (!ok.value) {
         return null;
       }
       return buffer.toDartString();
@@ -134,14 +135,14 @@ abstract final class WindowsProcessIdentityVerifier {
     }
   }
 
-  static DateTime? _queryCreationTimeUtc(int handle) {
+  static DateTime? _queryCreationTimeUtc(HANDLE handle) {
     final creation = calloc<FILETIME>();
     final exit = calloc<FILETIME>();
     final kernel = calloc<FILETIME>();
     final user = calloc<FILETIME>();
     try {
-      final ok = GetProcessTimes(handle, creation, exit, kernel, user) != 0;
-      if (!ok) {
+      final ok = GetProcessTimes(handle, creation, exit, kernel, user);
+      if (!ok.value) {
         return null;
       }
       return _fileTimeToUtcDateTime(creation.ref);

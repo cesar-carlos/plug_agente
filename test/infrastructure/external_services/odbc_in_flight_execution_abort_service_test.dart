@@ -46,6 +46,22 @@ void main() {
 
     expect(result.getOrNull(), isTrue);
     verify(() => service.cancelStatement('conn-1', 7)).called(1);
+    expect(discarded, isEmpty);
+  });
+
+  test('abort marks the connection for discard when native cancel fails', () async {
+    registry.register(
+      'req-1',
+      const OdbcInFlightExecutionHandle(connectionId: 'conn-1', statementId: 7),
+    );
+    when(() => service.cancelStatement('conn-1', 7)).thenAnswer(
+      (_) async => Failure(Exception('cancel failed')),
+    );
+
+    final result = await abortService.abortInFlightExecution('req-1');
+
+    expect(result.getOrNull(), isTrue);
+    expect(discarded, contains('conn-1'));
   });
 
   test('abort miss without armIfMissing does not arm pending poison pill', () async {

@@ -220,7 +220,7 @@ class ActionEnvironmentResolver implements IActionEnvironmentResolver {
     const redactor = AgentActionRedactor();
     return Map<String, String>.unmodifiable(
       environment.map(
-        (String key, String value) => MapEntry(key, redactor.redactText(value)),
+        (key, value) => MapEntry(key, redactor.redactText(value)),
       ),
     );
   }

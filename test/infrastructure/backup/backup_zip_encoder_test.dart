@@ -14,7 +14,7 @@ void main() {
         secureStorageSecretsBytes: Uint8List.fromList([9, 10]),
         secureStorageSecretsFileName: 'secure_storage_secrets.enc',
       ),
-    )!;
+    );
 
     final decoded = ZipDecoder().decodeBytes(zip);
     final names = decoded.files.where((f) => f.isFile).map((f) => f.name).toSet();

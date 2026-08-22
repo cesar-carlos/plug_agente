@@ -25,7 +25,11 @@ class WindowsProcessLifetimeChecker {
   final WindowsProcessRunningPredicate? _processRunningPredicate;
 
   static int _defaultOpenProcessForPid(int pid) {
-    return OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    final opened = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+    if (!opened.value.isValid) {
+      return 0;
+    }
+    return opened.value.address;
   }
 
   Future<bool> isProcessRunning(int pid) async {
@@ -38,8 +42,8 @@ class WindowsProcessLifetimeChecker {
       return false;
     }
 
-    final handle = _openProcessForPid(pid);
-    if (handle == 0 || handle == INVALID_HANDLE_VALUE) {
+    final handle = HANDLE(Pointer.fromAddress(_openProcessForPid(pid)));
+    if (!handle.isValid) {
       final errorCode = GetLastError();
       if (errorCode == ERROR_INVALID_PARAMETER || errorCode == ERROR_ACCESS_DENIED) {
         return false;
@@ -57,7 +61,7 @@ class WindowsProcessLifetimeChecker {
     final exitCode = calloc<Uint32>();
     try {
       final ok = GetExitCodeProcess(handle, exitCode);
-      if (ok == 0) {
+      if (!ok.value) {
         developer.log(
           'GetExitCodeProcess failed; assuming process is running',
           name: _logName,

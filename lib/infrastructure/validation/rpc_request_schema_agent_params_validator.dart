@@ -19,7 +19,7 @@ final class RpcRequestSchemaAgentParamsValidator {
     }
     const allowedKeys = {'client_token', 'clientToken', 'auth'};
     final extraKeys = params.keys.where(
-      (String key) => !allowedKeys.contains(key),
+      (key) => !allowedKeys.contains(key),
     );
     if (extraKeys.isNotEmpty) {
       return RpcRequestSchemaValidationSupport.invalidParams(
@@ -46,7 +46,7 @@ final class RpcRequestSchemaAgentParamsValidator {
       'include_diagnostics',
     };
     final extraKeys = params.keys.where(
-      (String key) => !allowedKeys.contains(key),
+      (key) => !allowedKeys.contains(key),
     );
     if (extraKeys.isNotEmpty) {
       return RpcRequestSchemaValidationSupport.invalidParams(
@@ -88,7 +88,7 @@ final class RpcRequestSchemaAgentParamsValidator {
       'auth',
     };
     final extraKeys = params.keys.where(
-      (String key) => !allowedKeys.contains(key),
+      (key) => !allowedKeys.contains(key),
     );
     if (extraKeys.isNotEmpty) {
       return RpcRequestSchemaValidationSupport.invalidParams(
@@ -175,7 +175,7 @@ final class RpcRequestSchemaAgentParamsValidator {
       'auth',
     };
     final extraKeys = params.keys.where(
-      (String key) => !allowedKeys.contains(key),
+      (key) => !allowedKeys.contains(key),
     );
     if (extraKeys.isNotEmpty) {
       return RpcRequestSchemaValidationSupport.invalidParams(
@@ -220,7 +220,7 @@ final class RpcRequestSchemaAgentParamsValidator {
       'clientToken',
       'auth',
     };
-    final extraKeys = params.keys.where((String key) => !allowedKeys.contains(key)).toList();
+    final extraKeys = params.keys.where((key) => !allowedKeys.contains(key)).toList();
     if (extraKeys.isNotEmpty) {
       final contextKey = extraKeys.where(AgentActionRpcConstants.remoteContextRpcParamKeys.contains).firstOrNull;
       if (contextKey != null) {

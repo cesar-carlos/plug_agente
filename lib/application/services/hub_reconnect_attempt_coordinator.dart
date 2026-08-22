@@ -48,7 +48,7 @@ final class HubReconnectAttemptCoordinator {
             _deps.clearHubRecoveryUiHint();
             return true;
           },
-          (Object failure) {
+          (failure) {
             _deps.onTransportConnectFailureDuringRecovery();
             _deps.onTransportReconnectFailure(
               message: recordErrorMessage ? failure.toDisplayMessage() : '',

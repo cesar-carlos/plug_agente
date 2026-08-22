@@ -288,7 +288,7 @@ class HubResilienceCoordinator {
         final normalizedToken = token.token.trim();
         return TokenRefreshResult.refreshed(normalizedToken);
       },
-      (Object failure) {
+      (failure) {
         if (failure is domain_errors.Failure && failure.isTransient) {
           AppLogger.warning(
             'resilience: ${resilienceLogPrefix()}token_refresh event=transient_failure '
@@ -345,7 +345,7 @@ class HubResilienceCoordinator {
             token: token.token.trim(),
           );
         },
-        (Object failure) {
+        (failure) {
           final isTransient = failure is domain_errors.Failure && failure.isTransient;
           if (isTransient) {
             AppLogger.warning(

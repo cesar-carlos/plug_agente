@@ -382,7 +382,7 @@ final class OdbcBatchExecutionOrchestrator {
     if (commands.isEmpty) {
       return '';
     }
-    final joined = commands.map((SqlCommand c) => c.sql).join('\n---\n');
+    final joined = commands.map((c) => c.sql).join('\n---\n');
     if (joined.length <= _batchSqlInvestigationPreviewMaxChars) {
       return joined;
     }

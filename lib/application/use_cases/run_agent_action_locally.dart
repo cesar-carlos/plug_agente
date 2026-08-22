@@ -129,8 +129,8 @@ class RunAgentActionLocally {
       adapterPrepareCheck: adapterRegistry == null
           ? null
           : ({
-              required AgentActionDefinition definition,
-              required AgentActionExecutionRequest request,
+              required definition,
+              required request,
             }) {
               return _executionGateChain.evaluateAdapterPrepare(
                 definition: definition,

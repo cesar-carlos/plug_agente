@@ -70,7 +70,7 @@ class AgentActionsTriggersController {
       (_) {
         ok = true;
       },
-      (Exception failure) {
+      (failure) {
         triggerErrorMessage = _messageFor(failure);
       },
     );
@@ -141,7 +141,7 @@ class AgentActionsTriggersController {
     }
 
     final loaded = result.getOrThrow().toList(growable: false);
-    loaded.sort((AgentActionTrigger left, AgentActionTrigger right) {
+    loaded.sort((left, right) {
       final leftName = (left.name ?? '').trim();
       final rightName = (right.name ?? '').trim();
       final nameCompare = leftName.toLowerCase().compareTo(rightName.toLowerCase());

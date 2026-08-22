@@ -15,6 +15,7 @@ extension ConnectionAcquireOptionsMapper on ConnectionAcquireOptions {
         maxResultBufferBytes: maxResultBufferBytes,
         initialResultBufferBytes: initialResultBufferBytes,
         streamChunkSizeBytes: ConnectionConstants.defaultStreamingChunkSizeKb * 1024,
+        blockFetchBatchSize: ConnectionConstants.defaultBlockFetchBatchSize,
         autoReconnectOnConnectionLost: autoReconnectOnConnectionLost ?? false,
         maxReconnectAttempts: maxReconnectAttempts,
         reconnectBackoff: reconnectBackoff,

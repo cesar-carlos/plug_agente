@@ -92,6 +92,6 @@ void main() {
     expect(outcome.exitCode, 1);
     expect(outcome.missing, isEmpty);
     expect(outcome.blocking, isNotEmpty);
-    expect(outcome.blocking.any((String b) => b.contains('JWT is expired')), isTrue);
+    expect(outcome.blocking.any((b) => b.contains('JWT is expired')), isTrue);
   });
 }

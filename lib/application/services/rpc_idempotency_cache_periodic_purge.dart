@@ -16,7 +16,7 @@ class RpcIdempotencyCachePeriodicPurge {
          purge: () => purge(),
          interval: interval,
          logName: 'rpc_idempotency_cache_periodic_purge',
-         successLogMessage: (int count) => 'Purged $count expired RPC idempotency cache row(s) (periodic)',
+         successLogMessage: (count) => 'Purged $count expired RPC idempotency cache row(s) (periodic)',
          failureLogMessage: 'Periodic RPC idempotency cache purge failed (continuing)',
        );
 

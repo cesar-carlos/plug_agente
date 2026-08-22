@@ -28,7 +28,7 @@ Future<void> showAgentActionTriggerSaveDialog({
 }) {
   return showDialog<void>(
     context: context,
-    builder: (BuildContext context) {
+    builder: (context) {
       return AgentActionTriggerSaveDialog(
         provider: provider,
         l10n: l10n,
@@ -196,7 +196,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
         checked: _formState.isEnabled,
         onChanged: provider.isSavingTrigger
             ? null
-            : (bool? value) {
+            : (value) {
                 setState(() => _formState.setEnabled(value ?? false));
               },
         content: Text(l10n.agentActionsTriggerEnabled),
@@ -217,7 +217,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
         value: _formState.type,
         items: AgentActionTriggerType.values
             .map(
-              (AgentActionTriggerType value) => ComboBoxItem<AgentActionTriggerType>(
+              (value) => ComboBoxItem<AgentActionTriggerType>(
                 value: value,
                 child: Text(_triggerTypeLabel(value, l10n)),
               ),
@@ -225,7 +225,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
             .toList(growable: false),
         onChanged: provider.isSavingTrigger
             ? null
-            : (AgentActionTriggerType? value) {
+            : (value) {
                 if (value == null) {
                   return;
                 }
@@ -247,7 +247,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
           checked: _formState.ignoreMissedRuns,
           onChanged: provider.isSavingTrigger
               ? null
-              : (bool? value) {
+              : (value) {
                   if (value == null) {
                     return;
                   }
@@ -466,7 +466,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
                 checked: _formState.weekdays.contains(day),
                 onChanged: provider.isSavingTrigger
                     ? null
-                    : (bool? checked) {
+                    : (checked) {
                         setState(() => _formState.toggleWeekday(day, checked ?? false));
                       },
                 content: Text(_weekdayLabel(day, l10n)),
@@ -523,7 +523,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
 
     return ListenableBuilder(
       listenable: provider,
-      builder: (BuildContext context, Widget? child) {
+      builder: (context, child) {
         final remoteError = provider.triggerErrorMessage;
 
         return ContentDialog(

@@ -3514,7 +3514,7 @@ void main() {
             requestId: any(named: 'requestId'),
             method: any(named: 'method'),
           ),
-        ).thenAnswer((Invocation inv) async {
+        ).thenAnswer((inv) async {
           capturedSql.add(inv.namedArguments[#sql]! as String);
           return const Success(unit);
         });
@@ -3584,7 +3584,7 @@ void main() {
             requestId: any(named: 'requestId'),
             method: any(named: 'method'),
           ),
-        ).thenAnswer((Invocation inv) async {
+        ).thenAnswer((inv) async {
           final s = inv.namedArguments[#sql]! as String;
           if (s.contains('dbo.denied')) {
             return Failure(

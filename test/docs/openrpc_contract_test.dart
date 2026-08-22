@@ -119,7 +119,7 @@ void main() {
       final names = methods.map((dynamic m) => (m as Map<String, dynamic>)['name'] as String).toSet();
 
       final agentActionNames = names
-          .where((String n) => n.startsWith(AgentActionRpcConstants.remoteAgentActionMethodPrefix))
+          .where((n) => n.startsWith(AgentActionRpcConstants.remoteAgentActionMethodPrefix))
           .toSet();
       expect(agentActionNames, AgentActionRpcConstants.remotePublishedRpcMethodNames);
     });
@@ -143,8 +143,8 @@ void main() {
       _collectLocalRefs(decoded, refs);
 
       final referencedSchemaFiles = refs
-          .where((String ref) => ref.startsWith('./schemas/rpc.'))
-          .map((String ref) => ref.substring('./schemas/'.length))
+          .where((ref) => ref.startsWith('./schemas/rpc.'))
+          .map((ref) => ref.substring('./schemas/'.length))
           .where(_publishedAgentActionSchemaFiles.contains)
           .toSet();
 
@@ -181,7 +181,7 @@ void main() {
         expect(methods, isNotNull, reason: 'OpenRPC document should list methods');
         final names = methods!.map((dynamic m) => (m as Map<String, dynamic>)['name'] as String).toSet();
         final agentActionNames = names
-            .where((String n) => n.startsWith(AgentActionRpcConstants.remoteAgentActionMethodPrefix))
+            .where((n) => n.startsWith(AgentActionRpcConstants.remoteAgentActionMethodPrefix))
             .toSet();
         expect(agentActionNames, AgentActionRpcConstants.remotePublishedRpcMethodNames);
 

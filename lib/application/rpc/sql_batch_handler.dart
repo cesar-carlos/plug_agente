@@ -181,7 +181,7 @@ class SqlBatchHandler {
     final authDenied = await _clientTokenGate.enforce(
       request: request,
       clientToken: clientToken,
-      sqlStatements: commands.map((SqlCommand command) => command.sql),
+      sqlStatements: commands.map((command) => command.sql),
       investigationSqlOnDeny: _sqlPreviewForBatch(commands),
       requestDatabase: database,
       deadline: deadline,
@@ -232,7 +232,7 @@ class SqlBatchHandler {
         final batchFinishedAt = DateTime.now().toUtc();
         final items =
             commandResults
-                .map((SqlCommandResult batchResult) {
+                .map((batchResult) {
                   if (batchResult.index < 0 || batchResult.index >= commandPlans.length) {
                     return batchResult;
                   }
@@ -332,7 +332,7 @@ class SqlBatchHandler {
   }
 
   String _sqlPreviewForBatch(List<SqlCommand> commands) {
-    final joined = commands.map((SqlCommand c) => c.sql).join('\n---\n');
+    final joined = commands.map((c) => c.sql).join('\n---\n');
     if (joined.length <= _sqlInvestigationBatchPreviewMaxChars) {
       return joined;
     }

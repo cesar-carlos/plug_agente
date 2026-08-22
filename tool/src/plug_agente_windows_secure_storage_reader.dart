@@ -44,21 +44,20 @@ Map<String, String> _loadEncryptedJsonFile(File file) {
     encryptedTextBlob.ref.pbData = pEncryptedText;
 
     final plainTextBlob = alloc.allocate<CRYPT_INTEGER_BLOB>(sizeOf<CRYPT_INTEGER_BLOB>());
-    if (CryptUnprotectData(
-          encryptedTextBlob,
-          nullptr,
-          nullptr,
-          nullptr,
-          nullptr,
-          0,
-          plainTextBlob,
-        ) ==
-        0) {
-      throw WindowsException(GetLastError(), message: 'CryptUnprotectData failed');
+    final unprotected = CryptUnprotectData(
+      encryptedTextBlob,
+      null,
+      null,
+      null,
+      0,
+      plainTextBlob,
+    );
+    if (!unprotected.value) {
+      throw WindowsException(GetLastError().toHRESULT(), message: 'CryptUnprotectData failed');
     }
 
     if (plainTextBlob.ref.pbData.address == NULL) {
-      throw WindowsException(ERROR_OUTOFMEMORY, message: 'CryptUnprotectData returned null');
+      throw WindowsException(ERROR_OUTOFMEMORY.toHRESULT(), message: 'CryptUnprotectData returned null');
     }
 
     try {
@@ -67,7 +66,7 @@ Map<String, String> _loadEncryptedJsonFile(File file) {
       );
     } finally {
       if (plainTextBlob.ref.pbData.address != NULL) {
-        LocalFree(plainTextBlob.ref.pbData);
+        LocalFree(HLOCAL(plainTextBlob.ref.pbData));
       }
     }
   });

@@ -71,7 +71,7 @@ abstract final class ClientTokenPolicyAgentActionAuthorization {
       final map = Map<String, dynamic>.from(nested);
       _addScopes(out, map['scopes']);
     }
-    return out.map((String s) => s.toLowerCase()).toSet();
+    return out.map((s) => s.toLowerCase()).toSet();
   }
 
   static void _addScopes(Set<String> target, Object? raw) {
@@ -101,7 +101,7 @@ abstract final class ClientTokenPolicyAgentActionAuthorization {
 
   static Set<String> _parseStringSet(Object? raw) {
     if (raw is Iterable) {
-      return raw.whereType<String>().map((String s) => s.trim()).where((String s) => s.isNotEmpty).toSet();
+      return raw.whereType<String>().map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
     }
     return <String>{};
   }

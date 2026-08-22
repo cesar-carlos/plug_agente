@@ -9,7 +9,6 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/entities/config.dart';
-import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
@@ -21,7 +20,6 @@ import 'package:plug_agente/infrastructure/external_services/odbc_bulk_insert_ex
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_string_rewriter.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
-import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_query_runner.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_read_only_batch_parallel_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_result_encoding_executor.dart';
@@ -46,6 +44,8 @@ void main() {
     registerFallbackValue(const ConnectionAcquireOptions());
     registerFallbackValue(Duration.zero);
     registerFallbackValue(<Object?>[]);
+    registerFallbackValue(SavepointDialect.auto);
+    registerFallbackValue(TransactionAccessMode.readWrite);
   });
 
   group('OdbcBatchExecutionOrchestrator', () {
@@ -140,11 +140,11 @@ void main() {
             ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
         recordExecutionFailure:
             ({
-              required QueryRequest request,
-              required OdbcPreparedQueryExecution preparedExecution,
-              required String errorMessage,
-              required bool executedInDb,
-              String method = 'sql.execute',
+              required request,
+              required preparedExecution,
+              required errorMessage,
+              required executedInDb,
+              method = 'sql.execute',
             }) {},
       );
 
@@ -447,6 +447,55 @@ void main() {
         expect(metrics.batchBulkInsertRoutedCount, 1);
         verify(() => mockService.bulkInsert(any(), any(), any(), any(), any())).called(1);
         verifyNever(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options')));
+      },
+    );
+
+    test(
+      'should roll back transactional bulk insert when native insert fails',
+      () async {
+        const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+        const directConnectionId = 'bulk-tx-direct-1';
+        final config = _buildConfig(connectionString);
+        resolveActiveConfigFn = () async => Success(config);
+        final commands = List<SqlCommand>.generate(
+          50,
+          (index) => SqlCommand(sql: 'INSERT INTO customers (id) VALUES ($index)'),
+        );
+
+        when(() => mockService.connect(any(), options: any(named: 'options'))).thenAnswer(
+          (_) async => Success(
+            Connection(
+              id: directConnectionId,
+              connectionString: connectionString,
+              createdAt: DateTime(2024, 2, 3),
+              isActive: true,
+            ),
+          ),
+        );
+        when(
+          () => mockService.beginTransaction(
+            directConnectionId,
+            savepointDialect: any(named: 'savepointDialect'),
+            accessMode: any(named: 'accessMode'),
+            lockTimeout: any(named: 'lockTimeout'),
+          ),
+        ).thenAnswer((_) async => const Success(11));
+        when(() => mockService.bulkInsert(any(), any(), any(), any(), any())).thenAnswer((_) async {
+          return Failure(Exception('bulk failed'));
+        });
+        when(() => mockService.disconnect(directConnectionId)).thenAnswer((_) async {
+          return const Success(unit);
+        });
+
+        final result = await orchestrator.execute(
+          agentId: config.agentId,
+          commands: commands,
+          options: const SqlExecutionOptions(transaction: true),
+        );
+
+        expect(result.isError(), isTrue);
+        verify(() => mockService.rollbackTransaction(directConnectionId, 11)).called(1);
+        verifyNever(() => mockService.commitTransaction(any(), any()));
       },
     );
 
@@ -828,11 +877,11 @@ OdbcBatchExecutionOrchestrator _createOrchestratorWithPool({
         ({required originalSql, required errorMessage, rpcRequestId, method = 'sql.executeBatch'}) {},
     recordExecutionFailure:
         ({
-          required QueryRequest request,
-          required OdbcPreparedQueryExecution preparedExecution,
-          required String errorMessage,
-          required bool executedInDb,
-          String method = 'sql.execute',
+          required request,
+          required preparedExecution,
+          required errorMessage,
+          required executedInDb,
+          method = 'sql.execute',
         }) {},
   );
 }

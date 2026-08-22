@@ -15,11 +15,11 @@ class AgentActionFilePicker {
     required String dialogTitle,
     required List<String> allowedExtensions,
   }) async {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: allowedExtensions,
       dialogTitle: dialogTitle,
     );
-    return picked?.files.singleOrNull?.path;
+    return picked?.path;
   }
 }

@@ -25,7 +25,7 @@ final class ConnectionDbDiagnosticsCoordinator {
     final result = await _testDbConnectionUseCase(connectionString);
 
     result.fold(
-      (bool isConnected) {
+      (isConnected) {
         setDbConnectionIndicator(isConnected);
         if (isConnected) {
           AppLogger.info('Database connection test successful');
@@ -33,7 +33,7 @@ final class ConnectionDbDiagnosticsCoordinator {
           AppLogger.warning('Database connection test failed');
         }
       },
-      (Object failure) {
+      (failure) {
         setDbConnectionIndicator(false);
         if (recordGlobalError) {
           setGlobalError(failure.toDisplayMessage());

@@ -79,41 +79,50 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
 
   Future<void> _export() async {
     final l10n = AppLocalizations.of(context)!;
+    final service = _backupService;
+    if (service == null) {
+      return;
+    }
+    File? tmpZip;
     try {
-      final path = await FilePicker.platform.saveFile(
-        dialogTitle: l10n.configBackupButtonExport,
-        fileName: 'plug_agente_backup.zip',
-        type: FileType.custom,
-        allowedExtensions: ['zip'],
-      );
-      if (path == null || !mounted) {
-        return;
-      }
-
       await _setBusy(value: true, semanticsLabel: l10n.configBackupExporting);
       if (!mounted) {
         return;
       }
-      final service = _backupService;
-      if (service == null) {
-        return;
-      }
+      tmpZip = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}plug_agente_backup_${DateTime.now().microsecondsSinceEpoch}.zip',
+      );
       final result = await service.exportBackupZip(
-        path,
+        tmpZip.path,
         includeSecureStorageSecrets: _includeSecureStorageSecrets,
       );
-      await _setBusy(value: false);
-
-      if (!mounted) {
-        return;
-      }
-
       if (result.isError()) {
+        await _setBusy(value: false);
+        if (!mounted) {
+          return;
+        }
         await SettingsFeedback.showError(
           context: context,
           title: l10n.configBackupExportFailedTitle,
           message: _failureMessage(result.exceptionOrNull()!, l10n),
         );
+        return;
+      }
+
+      final bytes = await tmpZip.readAsBytes();
+      await _setBusy(value: false);
+      if (!mounted) {
+        return;
+      }
+
+      final saved = await FilePicker.saveFile(
+        dialogTitle: l10n.configBackupButtonExport,
+        fileName: 'plug_agente_backup.zip',
+        bytes: bytes,
+        type: FileType.custom,
+        allowedExtensions: ['zip'],
+      );
+      if (saved == null || !mounted) {
         return;
       }
 
@@ -133,6 +142,10 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
           message: l10n.configBackupErrExportGeneric,
         );
       }
+    } finally {
+      if (tmpZip != null && tmpZip.existsSync()) {
+        await tmpZip.delete();
+      }
     }
   }
 
@@ -143,9 +156,9 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
       return;
     }
 
-    FilePickerResult? picked;
+    PlatformFile? picked;
     try {
-      picked = await FilePicker.platform.pickFiles(
+      picked = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['zip'],
         dialogTitle: l10n.configBackupButtonRestore,
@@ -162,7 +175,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
       return;
     }
 
-    final path = picked?.files.single.path;
+    final path = picked?.path;
     if (path == null || !mounted) {
       return;
     }
@@ -189,7 +202,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return _RestoreConfirmDialog(
           staging: staging,
           l10n: l10n,
@@ -296,7 +309,7 @@ class _BackupConfigSectionState extends State<BackupConfigSection> {
             Checkbox(
               key: const ValueKey('backup_include_secure_storage_secrets_checkbox'),
               checked: _includeSecureStorageSecrets,
-              onChanged: _busy ? null : (bool? value) => setState(() => _includeSecureStorageSecrets = value ?? false),
+              onChanged: _busy ? null : (value) => setState(() => _includeSecureStorageSecrets = value ?? false),
               content: Text(l10n.configBackupIncludeSecureStorageSecretsLabel),
             ),
             if (_includeSecureStorageSecrets) ...[
@@ -429,7 +442,7 @@ class _RestoreConfirmDialogState extends State<_RestoreConfirmDialog> {
                 Text(l10n.configBackupRestoreDuplicateWarning, style: context.captionText),
                 Checkbox(
                   checked: _ackDuplicate,
-                  onChanged: (bool? v) => setState(() => _ackDuplicate = v ?? false),
+                  onChanged: (v) => setState(() => _ackDuplicate = v ?? false),
                   content: Text(l10n.configBackupCheckboxAcknowledgeDuplicate),
                 ),
               ],
@@ -437,7 +450,7 @@ class _RestoreConfirmDialogState extends State<_RestoreConfirmDialog> {
                 Text(l10n.configBackupRestoreVerifyWarning, style: context.captionText),
                 Checkbox(
                   checked: _ackUncertain,
-                  onChanged: (bool? v) => setState(() => _ackUncertain = v ?? false),
+                  onChanged: (v) => setState(() => _ackUncertain = v ?? false),
                   content: Text(l10n.configBackupCheckboxAcknowledgeUncertain),
                 ),
               ],

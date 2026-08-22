@@ -64,6 +64,7 @@ final class OdbcStreamingConnectionOptionsBuilder {
       maxResultBufferBytes: plugAcquireOptions.maxResultBufferBytes,
       initialResultBufferBytes: plugAcquireOptions.initialResultBufferBytes,
       streamChunkSizeBytes: normalizedChunkSize,
+      blockFetchBatchSize: ConnectionConstants.defaultBlockFetchBatchSize,
       autoReconnectOnConnectionLost: plugAcquireOptions.autoReconnectOnConnectionLost ?? true,
       maxReconnectAttempts: plugAcquireOptions.maxReconnectAttempts,
       reconnectBackoff: plugAcquireOptions.reconnectBackoff,

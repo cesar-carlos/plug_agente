@@ -190,14 +190,14 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
           value: concurrencyBehavior,
           items: AgentActionConcurrencyBehavior.values
               .map(
-                (AgentActionConcurrencyBehavior behavior) => ComboBoxItem<AgentActionConcurrencyBehavior>(
+                (behavior) => ComboBoxItem<AgentActionConcurrencyBehavior>(
                   value: behavior,
                   child: Text(agentActionEditorConcurrencyBehaviorLabel(behavior, l10n)),
                 ),
               )
               .toList(growable: false),
           onChanged: enabled
-              ? (AgentActionConcurrencyBehavior? value) {
+              ? (value) {
                   if (value == null) {
                     return;
                   }
@@ -250,14 +250,14 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
             value: processWindowMode,
             items: AgentActionProcessWindowMode.values
                 .map(
-                  (AgentActionProcessWindowMode mode) => ComboBoxItem<AgentActionProcessWindowMode>(
+                  (mode) => ComboBoxItem<AgentActionProcessWindowMode>(
                     value: mode,
                     child: Text(agentActionEditorProcessWindowModeLabel(mode, l10n)),
                   ),
                 )
                 .toList(growable: false),
             onChanged: enabled
-                ? (AgentActionProcessWindowMode? value) {
+                ? (value) {
                     if (value == null) {
                       return;
                     }
@@ -278,7 +278,7 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
             children: [
               Checkbox(
                 checked: captureStdout,
-                onChanged: enabled ? (bool? value) => callbacks.onCaptureStdoutChanged(value ?? true) : null,
+                onChanged: enabled ? (value) => callbacks.onCaptureStdoutChanged(value ?? true) : null,
                 content: AgentActionEditorHelpCheckboxLabel(
                   label: l10n.agentActionsFormCaptureStdout,
                   helpTitle: l10n.agentActionsHelpCaptureTitle,
@@ -287,7 +287,7 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
               ),
               Checkbox(
                 checked: captureStderr,
-                onChanged: enabled ? (bool? value) => callbacks.onCaptureStderrChanged(value ?? true) : null,
+                onChanged: enabled ? (value) => callbacks.onCaptureStderrChanged(value ?? true) : null,
                 content: AgentActionEditorHelpCheckboxLabel(
                   label: l10n.agentActionsFormCaptureStderr,
                   helpTitle: l10n.agentActionsHelpCaptureTitle,
@@ -296,7 +296,7 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
               ),
               Checkbox(
                 checked: redactBeforePersisting,
-                onChanged: enabled ? (bool? value) => callbacks.onRedactBeforePersistingChanged(value ?? true) : null,
+                onChanged: enabled ? (value) => callbacks.onRedactBeforePersistingChanged(value ?? true) : null,
                 content: AgentActionEditorHelpCheckboxLabel(
                   label: l10n.agentActionsFormRedactBeforePersisting,
                   helpTitle: l10n.agentActionsHelpCaptureTitle,
@@ -322,14 +322,14 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
                   value: stdoutEncodingMode,
                   items: AgentActionOutputEncodingMode.values
                       .map(
-                        (AgentActionOutputEncodingMode mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
+                        (mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
                           value: mode,
                           child: Text(agentActionEditorOutputEncodingModeLabel(mode, l10n)),
                         ),
                       )
                       .toList(growable: false),
                   onChanged: enabled
-                      ? (AgentActionOutputEncodingMode? value) {
+                      ? (value) {
                           if (value == null) {
                             return;
                           }
@@ -347,14 +347,14 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
                   value: stderrEncodingMode,
                   items: AgentActionOutputEncodingMode.values
                       .map(
-                        (AgentActionOutputEncodingMode mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
+                        (mode) => ComboBoxItem<AgentActionOutputEncodingMode>(
                           value: mode,
                           child: Text(agentActionEditorOutputEncodingModeLabel(mode, l10n)),
                         ),
                       )
                       .toList(growable: false),
                   onChanged: enabled
-                      ? (AgentActionOutputEncodingMode? value) {
+                      ? (value) {
                           if (value == null) {
                             return;
                           }
@@ -387,14 +387,14 @@ class AgentActionRuntimePoliciesSection extends StatelessWidget {
               value: onAppExit,
               items: AgentActionOnAppExitBehavior.values
                   .map(
-                    (AgentActionOnAppExitBehavior behavior) => ComboBoxItem<AgentActionOnAppExitBehavior>(
+                    (behavior) => ComboBoxItem<AgentActionOnAppExitBehavior>(
                       value: behavior,
                       child: Text(agentActionEditorOnAppExitLabel(behavior, l10n)),
                     ),
                   )
                   .toList(growable: false),
               onChanged: enabled
-                  ? (AgentActionOnAppExitBehavior? value) {
+                  ? (value) {
                       if (value == null) {
                         return;
                       }

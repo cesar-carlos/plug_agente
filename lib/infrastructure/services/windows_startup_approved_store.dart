@@ -127,8 +127,8 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
 
   @override
   StartupApprovedReadResult read({required String valueName}) {
-    final subKeyPtr = _subKeyPath.toNativeUtf16();
-    final hKeyOut = calloc<IntPtr>();
+    final subKeyPtr = _subKeyPath.toPcwstr();
+    final hKeyOut = calloc<Pointer>();
     try {
       final openStatus = RegOpenKeyEx(
         HKEY_CURRENT_USER,
@@ -140,7 +140,7 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
       if (openStatus != ERROR_SUCCESS) {
         return _readResultFromOpenStatus(openStatus);
       }
-      final hKey = hKeyOut.value;
+      final hKey = HKEY(hKeyOut.value);
       try {
         return _readValue(hKey, valueName);
       } finally {
@@ -148,32 +148,31 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
       }
     } finally {
       calloc.free(hKeyOut);
-      calloc.free(subKeyPtr);
+      free(subKeyPtr);
     }
   }
 
   @override
   StartupApprovedWriteResult writeEnabled({required String valueName}) {
-    final subKeyPtr = _subKeyPath.toNativeUtf16();
-    final hKeyOut = calloc<IntPtr>();
+    final subKeyPtr = _subKeyPath.toPcwstr();
+    final hKeyOut = calloc<Pointer>();
     try {
       final openStatus = RegCreateKeyEx(
         HKEY_CURRENT_USER,
         subKeyPtr,
-        0,
-        nullptr,
+        null,
         REG_OPTION_NON_VOLATILE,
         KEY_SET_VALUE,
-        nullptr,
+        null,
         hKeyOut,
-        nullptr,
+        null,
       );
       if (openStatus != ERROR_SUCCESS) {
         return _writeResultFromStatus(openStatus);
       }
-      final hKey = hKeyOut.value;
+      final hKey = HKEY(hKeyOut.value);
       try {
-        final valueNamePtr = valueName.toNativeUtf16();
+        final valueNamePtr = valueName.toPcwstr();
         final payload = StartupApprovedBinary.enabledPayload;
         final dataPtr = calloc<Uint8>(payload.length);
         try {
@@ -181,7 +180,6 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
           final status = RegSetValueEx(
             hKey,
             valueNamePtr,
-            0,
             REG_BINARY,
             dataPtr,
             payload.length,
@@ -189,21 +187,21 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
           return _writeResultFromStatus(status);
         } finally {
           calloc.free(dataPtr);
-          calloc.free(valueNamePtr);
+          free(valueNamePtr);
         }
       } finally {
         RegCloseKey(hKey);
       }
     } finally {
       calloc.free(hKeyOut);
-      calloc.free(subKeyPtr);
+      free(subKeyPtr);
     }
   }
 
   @override
   StartupApprovedWriteResult delete({required String valueName}) {
-    final subKeyPtr = _subKeyPath.toNativeUtf16();
-    final hKeyOut = calloc<IntPtr>();
+    final subKeyPtr = _subKeyPath.toPcwstr();
+    final hKeyOut = calloc<Pointer>();
     try {
       final openStatus = RegOpenKeyEx(
         HKEY_CURRENT_USER,
@@ -218,9 +216,9 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
       if (openStatus != ERROR_SUCCESS) {
         return _writeResultFromStatus(openStatus);
       }
-      final hKey = hKeyOut.value;
+      final hKey = HKEY(hKeyOut.value);
       try {
-        final valueNamePtr = valueName.toNativeUtf16();
+        final valueNamePtr = valueName.toPcwstr();
         try {
           final status = RegDeleteValue(hKey, valueNamePtr);
           if (status == ERROR_SUCCESS ||
@@ -230,22 +228,22 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
           }
           return _writeResultFromStatus(status);
         } finally {
-          calloc.free(valueNamePtr);
+          free(valueNamePtr);
         }
       } finally {
         RegCloseKey(hKey);
       }
     } finally {
       calloc.free(hKeyOut);
-      calloc.free(subKeyPtr);
+      free(subKeyPtr);
     }
   }
 
-  StartupApprovedReadResult _readValue(int hKey, String valueName) {
-    final valueNamePtr = valueName.toNativeUtf16();
+  StartupApprovedReadResult _readValue(HKEY hKey, String valueName) {
+    final valueNamePtr = valueName.toPcwstr();
     final dataSizeOut = calloc<Uint32>();
     try {
-      final sizeStatus = RegQueryValueEx(hKey, valueNamePtr, nullptr, nullptr, nullptr, dataSizeOut);
+      final sizeStatus = RegQueryValueEx(hKey, valueNamePtr, nullptr, nullptr, dataSizeOut);
       if (sizeStatus != ERROR_SUCCESS) {
         return _readResultFromQueryStatus(sizeStatus);
       }
@@ -259,7 +257,7 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
       final dataOut = calloc<Uint8>(dataSize);
       try {
         dataSizeOut.value = dataSize;
-        final readStatus = RegQueryValueEx(hKey, valueNamePtr, nullptr, typeOut, dataOut, dataSizeOut);
+        final readStatus = RegQueryValueEx(hKey, valueNamePtr, typeOut, dataOut, dataSizeOut);
         if (readStatus != ERROR_SUCCESS) {
           return _readResultFromQueryStatus(readStatus);
         }
@@ -278,7 +276,7 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
       }
     } finally {
       calloc.free(dataSizeOut);
-      calloc.free(valueNamePtr);
+      free(valueNamePtr);
     }
   }
 

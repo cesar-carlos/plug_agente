@@ -57,6 +57,10 @@ abstract final class OdbcContextConstants {
 
   static const String streamCancelDisconnectTimeoutReason = 'stream_cancel_disconnect_timeout';
 
+  static const String streamDisconnectStillInFlightReason = 'stream_disconnect_still_in_flight';
+
+  static const String bulkInsertPartialWritesReason = 'bulk_insert_partial_writes';
+
   static const String streamDuplicateExecutionIdReason = 'stream_duplicate_execution_id';
 
   static const String transactionFailedReason = 'transaction_failed';

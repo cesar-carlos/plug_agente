@@ -79,7 +79,7 @@ class WebSocketLogProvider extends ChangeNotifier {
   int get maxMessages => _maxMessages;
 
   void attachTransport(ITransportClient transportClient) {
-    transportClient.setMessageCallback((String direction, String event, dynamic data) {
+    transportClient.setMessageCallback((direction, event, dynamic data) {
       if (_isEnabled && !_isDisposed) {
         addMessage(direction, event, data);
       }

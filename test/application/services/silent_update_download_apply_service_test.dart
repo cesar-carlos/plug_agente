@@ -616,7 +616,7 @@ void main() {
           installer: installer,
           pendingStore: pendingStore,
           automaticFailureBreaker: breaker,
-          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+          closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
             closeCalled = true;
             capturedTitle = noticeTitle;
             capturedBody = noticeBody;
@@ -647,7 +647,7 @@ void main() {
           installer: installer,
           pendingStore: pendingStore,
           automaticFailureBreaker: breaker,
-          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+          closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
             closeCalled = true;
           },
         );
@@ -758,7 +758,7 @@ void main() {
           pendingStore: pendingStore,
           launcherStatusReader: launcherStatusReader,
           automaticFailureBreaker: breaker,
-          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+          closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
             closeCount++;
           },
         );
@@ -858,7 +858,7 @@ void main() {
           installer: installer,
           pendingStore: pendingStore,
           automaticFailureBreaker: breaker,
-          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+          closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
             closeCount++;
           },
         );
@@ -908,7 +908,7 @@ void main() {
           pendingStore: pendingStore,
           launcherStatusReader: launcherStatusReader,
           automaticFailureBreaker: breaker,
-          closeApplicationForSilentUpdate: ({String? noticeTitle, String? noticeBody}) async {
+          closeApplicationForSilentUpdate: ({noticeTitle, noticeBody}) async {
             throw StateError('window manager refused to close');
           },
         );

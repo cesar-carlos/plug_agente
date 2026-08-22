@@ -117,7 +117,7 @@ class _WebSocketLogTabbedPaneState extends State<WebSocketLogTabbedPane> {
       });
     }
     return Consumer<SqlInvestigationProvider>(
-      builder: (BuildContext context, SqlInvestigationProvider sqlProvider, Widget? _) {
+      builder: (context, sqlProvider, _) {
         final items = <AppFluentTabItem>[
           AppFluentTabItem(
             icon: FluentIcons.plug_connected,
@@ -141,7 +141,7 @@ class _WebSocketLogTabbedPaneState extends State<WebSocketLogTabbedPane> {
         ];
         return AppFluentTabView(
           currentIndex: _tabIndex.clamp(0, items.length - 1),
-          onChanged: (int index) {
+          onChanged: (index) {
             if (index == _tabIndex) {
               return;
             }

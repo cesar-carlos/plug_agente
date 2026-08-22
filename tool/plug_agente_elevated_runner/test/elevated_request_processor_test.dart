@@ -318,6 +318,6 @@ INSERT INTO agent_action_execution_table (
       ],
     );
   } finally {
-    database.dispose();
+    database.close();
   }
 }

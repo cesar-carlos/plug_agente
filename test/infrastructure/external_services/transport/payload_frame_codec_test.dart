@@ -583,14 +583,14 @@ void main() {
 
       expect(decoded, {'id': 'req-1', 'result': true});
       expect(
-        collector.metrics.map((ProtocolMetrics metric) => metric.direction),
+        collector.metrics.map((metric) => metric.direction),
         containsAll(<String>['sign', 'verify']),
       );
       final signMetric = collector.metrics.firstWhere(
-        (ProtocolMetrics metric) => metric.direction == 'sign',
+        (metric) => metric.direction == 'sign',
       );
       final verifyMetric = collector.metrics.firstWhere(
-        (ProtocolMetrics metric) => metric.direction == 'verify',
+        (metric) => metric.direction == 'verify',
       );
       expect(signMetric.signDurationUs, isNotNull);
       expect(signMetric.canonicalizeDurationUs, isNotNull);

@@ -89,7 +89,7 @@ class SensitiveMapRedactor {
 
   static Map<String, dynamic> redactForRpc(Map<String, dynamic> source) {
     return Map<String, dynamic>.fromEntries(
-      source.entries.map((MapEntry<String, dynamic> e) {
+      source.entries.map((e) {
         if (isSensitiveKey(e.key)) {
           return MapEntry<String, dynamic>(e.key, '[REDACTED]');
         }
@@ -112,7 +112,7 @@ class SensitiveMapRedactor {
   }
 
   static List<dynamic> _redactList(List<dynamic> list) {
-    return list.map((Object? item) {
+    return list.map((item) {
       if (item is Map<String, dynamic>) {
         return redactForRpc(item);
       }

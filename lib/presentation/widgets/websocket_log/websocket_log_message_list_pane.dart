@@ -38,8 +38,8 @@ class WebSocketLogMessageListPane extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Selector<WebSocketLogProvider, bool>(
-                selector: (_, WebSocketLogProvider provider) => provider.isEnabled,
-                builder: (BuildContext context, bool isEnabled, Widget? child) {
+                selector: (_, provider) => provider.isEnabled,
+                builder: (context, isEnabled, child) {
                   return Tooltip(
                     message: l10n.wsLogToggleEnabledTooltip,
                     child: ToggleSwitch(
@@ -88,7 +88,7 @@ class WebSocketLogMessageListPane extends StatelessWidget {
         Expanded(
           child: ListenableBuilder(
             listenable: logProvider,
-            builder: (BuildContext context, Widget? child) {
+            builder: (context, child) {
               final messages = logProvider.messages;
               if (messages.isEmpty) {
                 return Center(
@@ -104,7 +104,7 @@ class WebSocketLogMessageListPane extends StatelessWidget {
               );
               return ListView.builder(
                 itemCount: visibleCount,
-                itemBuilder: (BuildContext context, int index) {
+                itemBuilder: (context, index) {
                   return RepaintBoundary(
                     child: WebSocketLogMessageItem(message: messages[index]),
                   );

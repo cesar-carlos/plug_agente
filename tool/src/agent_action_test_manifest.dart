@@ -39,8 +39,8 @@ List<String> readAgentActionTestManifest(
   }
   return file
       .readAsLinesSync()
-      .map((String line) => line.trim())
-      .where((String line) => line.isNotEmpty && !line.startsWith('#'))
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty && !line.startsWith('#'))
       .toList(growable: false);
 }
 

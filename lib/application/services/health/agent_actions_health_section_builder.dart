@@ -52,7 +52,7 @@ final class AgentActionsHealthSectionBuilder {
     final snapshot = _agentActionRuntimeStateGuard?.snapshot;
     final supportedTypes = _supportedTypeNames();
     final unavailableTypes =
-        snapshot?.unavailableActionTypes.map((AgentActionType type) => type.name).toList(growable: false) ??
+        snapshot?.unavailableActionTypes.map((type) => type.name).toList(growable: false) ??
         const <String>[];
     final String statusName;
     if (!enabled) {
@@ -233,7 +233,7 @@ final class AgentActionsHealthSectionBuilder {
     if (registry == null) {
       return const <String>['commandLine'];
     }
-    final names = registry.supportedTypes.map((AgentActionType type) => type.name).toList(growable: false);
+    final names = registry.supportedTypes.map((type) => type.name).toList(growable: false);
     return names.isEmpty ? const <String>['commandLine'] : names;
   }
 }

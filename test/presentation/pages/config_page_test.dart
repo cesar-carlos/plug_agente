@@ -646,7 +646,7 @@ void main() {
     String? clipboardPayload;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
-      (MethodCall methodCall) async {
+      (methodCall) async {
         if (methodCall.method == 'Clipboard.setData') {
           final args = methodCall.arguments as Map<dynamic, dynamic>;
           clipboardPayload = args['text'] as String?;
@@ -714,7 +714,7 @@ void main() {
     String? clipboardPayload;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
-      (MethodCall methodCall) async {
+      (methodCall) async {
         if (methodCall.method == 'Clipboard.setData') {
           final args = methodCall.arguments as Map<dynamic, dynamic>;
           clipboardPayload = args['text'] as String?;

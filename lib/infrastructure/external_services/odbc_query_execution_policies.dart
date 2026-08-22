@@ -47,9 +47,9 @@ abstract final class OdbcQueryExecutionPolicies {
       return false;
     }
     final hasRows =
-        response.data.isNotEmpty || response.resultSets.any((QueryResultSet resultSet) => resultSet.rows.isNotEmpty);
+        response.data.isNotEmpty || response.resultSets.any((resultSet) => resultSet.rows.isNotEmpty);
     final hasNonZeroRowCount = response.items.any(
-      (QueryResponseItem item) => item.isRowCount && (item.rowCount ?? 0) > 0,
+      (item) => item.isRowCount && (item.rowCount ?? 0) > 0,
     );
     return !hasRows && !hasNonZeroRowCount;
   }

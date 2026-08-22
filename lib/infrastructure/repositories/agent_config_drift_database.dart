@@ -70,7 +70,7 @@ class AppDatabase extends _$AppDatabase with _AppDatabaseMigrationHelpers implem
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (Migrator m) async {
+    onCreate: (m) async {
       await m.createAll();
       await createClientTokenIndexes();
       await createAgentActionIndexes();
@@ -78,7 +78,7 @@ class AppDatabase extends _$AppDatabase with _AppDatabaseMigrationHelpers implem
       await createAgentActionRemoteAuditIndexes();
       await createAgentActionCapturedOutputChunkIndexes();
     },
-    onUpgrade: (Migrator m, int from, int to) async {
+    onUpgrade: (m, from, to) async {
       await runAgentConfigDatabaseUpgrade(this, m, from, to);
     },
     beforeOpen: (details) async {
@@ -237,7 +237,7 @@ Future<void> _checkpointLegacySqliteIfPossible(File legacyDb) async {
     try {
       database.execute('PRAGMA wal_checkpoint(TRUNCATE);');
     } finally {
-      database.dispose();
+      database.close();
     }
   } on Object catch (error, stackTrace) {
     developer.log(

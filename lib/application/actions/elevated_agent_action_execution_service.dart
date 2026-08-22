@@ -115,7 +115,7 @@ class ElevatedAgentActionExecutionService {
             processStartedAt: processStartedAt,
             timeout: timeout,
           )
-          .then((Result<AgentActionProcessResult> result) {
+          .then((result) {
             if (!completer.isCompleted) {
               completer.complete(result);
             }

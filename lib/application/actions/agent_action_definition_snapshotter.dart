@@ -84,7 +84,7 @@ class AgentActionDefinitionSnapshotter {
     };
     if (secretReferenceFingerprints != null && secretReferenceFingerprints.isNotEmpty) {
       final sortedEntries = secretReferenceFingerprints.entries.toList()
-        ..sort((MapEntry<String, String> a, MapEntry<String, String> b) => a.key.compareTo(b.key));
+        ..sort((a, b) => a.key.compareTo(b.key));
       snapshot['secretReferenceFingerprints'] = Map<String, String>.fromEntries(sortedEntries);
     }
     return snapshot;

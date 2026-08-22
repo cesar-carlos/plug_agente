@@ -433,7 +433,7 @@ void _createLegacyV27Database(String dbPath) {
       )
       ..execute('PRAGMA user_version = 27');
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -521,7 +521,7 @@ void _createLegacyV16Database(String dbPath) {
       ''')
       ..execute('PRAGMA user_version = 16');
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -612,7 +612,7 @@ void _createLegacyV17Database(String dbPath) {
       ''')
       ..execute('PRAGMA user_version = 17');
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -688,6 +688,6 @@ Future<void> _seedLegacyV29DatabaseWithPassword(
       )
       ..execute('PRAGMA user_version = 29');
   } finally {
-    db.dispose();
+    db.close();
   }
 }

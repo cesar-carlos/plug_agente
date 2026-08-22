@@ -19,14 +19,11 @@ Uint8List jsonUtf8EncodePayloadInIsolate(Object? data) {
 }
 
 Uint8List compressGzipInIsolate(Uint8List data) {
-  final compressedBytes = GZipEncoder().encode(data);
-  if (compressedBytes == null) {
-    throw StateError('GZipEncoder returned null');
-  }
+  final compressedBytes = const GZipEncoder().encode(data);
   return Uint8List.fromList(compressedBytes);
 }
 
 Uint8List decompressGzipInIsolate(Uint8List compressed) {
-  final decompressedBytes = GZipDecoder().decodeBytes(compressed);
+  final decompressedBytes = const GZipDecoder().decodeBytes(compressed);
   return Uint8List.fromList(decompressedBytes);
 }

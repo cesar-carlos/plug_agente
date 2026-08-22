@@ -16,6 +16,5 @@ Future<void> migrateAgentConfigDatabaseToV30(
 
   await db.migrateRemainingOdbcPasswordsBeforeColumnDrop();
 
-  // ignore: experimental_member_use
   await m.alterTable(TableMigration(db.configTable));
 }

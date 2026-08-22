@@ -31,6 +31,10 @@ bool connectionStringBenefitsFromLazyStrings(String connectionString) {
 
 /// Drivers whose columnar decode path is unreliable and should use row-major
 /// streaming with lazy string materialization instead.
+///
+/// Streaming session reuse stays off for these families: odbc_fast 4.5.1
+/// CHANGELOG / PERFORMANCE.md do not document SQL Anywhere or SQL Server
+/// connect reuse as safe after a finished stream.
 bool connectionStringPrefersRowMajorStreaming(String connectionString) {
   return connectionStringLooksLikeSqlAnywhere(connectionString) || connectionStringLooksLikeSqlServer(connectionString);
 }

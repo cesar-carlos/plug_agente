@@ -141,6 +141,9 @@ class OdbcStreamingGateway
       _activeStreams.clear();
     }
     await _connectPhase.sessionCache.drainCachedSessions();
+    await _cancelCoordinator.drainTrackedDisconnects(
+      timeout: const Duration(seconds: 8),
+    );
     _runtimeLifecycle.invalidateAfterWorkerRecovery();
   }
 
@@ -364,6 +367,16 @@ class OdbcStreamingGateway
         }
       }
 
+      if (activeStream.isCancelRequested) {
+        return await _cancelCoordinator.handleStreamingChunkCancellation(
+              activeStream: activeStream,
+              connectionId: connection.id,
+              cancellationToken: cancellationToken,
+              cancellationReasonProvider: cancellationReasonProvider,
+            ) ??
+            const Success(unit);
+      }
+
       streamCompletedSuccessfully = true;
       return const Success(unit);
     } on Object catch (e) {
@@ -551,6 +564,16 @@ class OdbcStreamingGateway
         );
       }
 
+      if (activeStream.isCancelRequested) {
+        return Failure(
+          _cancelCoordinator.streamCancelledFailure(
+            executionId: streamExecutionId,
+            connectionId: connection.id,
+            reason: activeStream.cancelReason,
+          ),
+        );
+      }
+
       streamCompletedSuccessfully = true;
       return const Success(unit);
     } on Object catch (e) {
@@ -642,11 +665,15 @@ class OdbcStreamingGateway
     required String connectionString,
     required bool reuseEligible,
   }) async {
-    if (reuseEligible &&
-        _connectPhase.offerSessionForReuse(
+    final canReuse =
+        reuseEligible &&
+        !activeStream.isCancelRequested &&
+        !activeStream.isDisconnectStarted &&
+        await _connectPhase.offerSessionForReuse(
           connectionString: connectionString,
           connectionId: activeStream.connectionId,
-        )) {
+        );
+    if (canReuse) {
       return;
     }
     await _cancelCoordinator.disconnectActiveStream(activeStream);

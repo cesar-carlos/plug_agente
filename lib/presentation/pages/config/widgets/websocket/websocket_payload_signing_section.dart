@@ -191,13 +191,13 @@ class _WebSocketPayloadSigningSectionState extends State<WebSocketPayloadSigning
             const SizedBox(height: AppSpacing.md),
             ToggleSwitch(
               checked: _outgoingSigningEnabled,
-              onChanged: _isPersistingOutgoing ? null : (bool value) => unawaited(_setOutgoingSigning(value)),
+              onChanged: _isPersistingOutgoing ? null : (value) => unawaited(_setOutgoingSigning(value)),
               content: Text(l10n.wsPayloadSigningToggleOutgoing),
             ),
             const SizedBox(height: AppSpacing.sm),
             ToggleSwitch(
               checked: _incomingSignatureRequired,
-              onChanged: _isPersistingIncoming ? null : (bool value) => unawaited(_setIncomingSignatureRequired(value)),
+              onChanged: _isPersistingIncoming ? null : (value) => unawaited(_setIncomingSignatureRequired(value)),
               content: Text(l10n.wsPayloadSigningToggleIncoming),
             ),
             const SizedBox(height: AppSpacing.sm),

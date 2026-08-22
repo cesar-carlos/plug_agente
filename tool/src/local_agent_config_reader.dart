@@ -202,6 +202,6 @@ LIMIT 1
       authPassword: row['auth_password'] as String?,
     );
   } finally {
-    db.dispose();
+    db.close();
   }
 }

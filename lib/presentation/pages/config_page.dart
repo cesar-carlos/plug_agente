@@ -69,7 +69,7 @@ class ConfigPage extends StatelessWidget {
             themeError: themeError,
             startupNotice: systemSettings.startupNotice,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
-            onStartWithWindowsChanged: (bool value) => _onStartWithWindowsChanged(
+            onStartWithWindowsChanged: (value) => _onStartWithWindowsChanged(
               context,
               systemSettingsProvider,
               value,
@@ -189,7 +189,7 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
     final l10n = AppLocalizations.of(context)!;
     return AppFluentTabView(
       currentIndex: _selectedTabIndex,
-      onChanged: (int index) {
+      onChanged: (index) {
         if (index == _selectedTabIndex) {
           return;
         }

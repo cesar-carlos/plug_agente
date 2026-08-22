@@ -13,47 +13,47 @@ abstract final class AppFieldSpecs {
 
   static FieldSpec email(AppLocalizations l) => FieldSpec(
     keyboardType: TextInputType.emailAddress,
-    validator: (String? value) => _validateEmail(value, l),
+    validator: (value) => _validateEmail(value, l),
   );
 
   static FieldSpec url(AppLocalizations l) => FieldSpec(
     keyboardType: TextInputType.url,
-    validator: (String? value) => _validateHttpUrl(value, l),
+    validator: (value) => _validateHttpUrl(value, l),
   );
 
   static FieldSpec cep(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.postalCode,
     keyboardType: TextInputType.number,
     hint: l.formHintCep,
-    validator: (String? value) => _validateCep(value, l),
+    validator: (value) => _validateCep(value, l),
   );
 
   static FieldSpec phone(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.phone,
     keyboardType: TextInputType.phone,
     hint: l.formHintPhone,
-    validator: (String? value) => _validatePhone(value, l),
+    validator: (value) => _validatePhone(value, l),
   );
 
   static FieldSpec mobile(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.phone,
     keyboardType: TextInputType.phone,
     hint: l.formHintMobile,
-    validator: (String? value) => _validateMobile(value, l),
+    validator: (value) => _validateMobile(value, l),
   );
 
   static FieldSpec document(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.document,
     keyboardType: TextInputType.number,
     hint: l.formHintDocument,
-    validator: (String? value) => _validateDocument(value, l),
+    validator: (value) => _validateDocument(value, l),
   );
 
   static FieldSpec state(AppLocalizations l) => FieldSpec(
     formatters: BrazilianFieldFormatters.state,
     keyboardType: TextInputType.text,
     hint: l.formHintState,
-    validator: (String? value) => _validateState(value, l),
+    validator: (value) => _validateState(value, l),
   );
 
   static final RegExp _emailPattern = RegExp(

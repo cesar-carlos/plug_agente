@@ -98,8 +98,8 @@ HubConnectionSessionRuntimeDependencies _runtimeDeps({
     resetSessionAuthInvalid: () {},
     clearTrackedAuthToken: () {},
     beginConnecting: () {},
-    enterDisconnected: ({bool clearError = false}) {},
-    enterReconnecting: ({required bool clearError}) {},
+    enterDisconnected: ({clearError = false}) {},
+    enterReconnecting: ({required clearError}) {},
     onConnectFailure: onConnectFailure ?? (_) {},
     isRecoveryAlreadyInProgress: () => recoveryInProgress,
   );

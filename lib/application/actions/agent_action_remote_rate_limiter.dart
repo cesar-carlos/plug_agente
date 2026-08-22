@@ -92,7 +92,7 @@ class AgentActionRemoteRateLimiter {
     if (_maxScopeEntries <= 0 || _windows.length < _maxScopeEntries) {
       return;
     }
-    _windows.removeWhere((_, _WindowCount value) => value.windowId < currentWindowId - 2);
+    _windows.removeWhere((_, value) => value.windowId < currentWindowId - 2);
     while (_maxScopeEntries > 0 && _windows.length >= _maxScopeEntries && _windows.isNotEmpty) {
       final keys = _windows.keys.toList(growable: false);
       _windows.remove(keys[_random.nextInt(keys.length)]);
@@ -103,7 +103,7 @@ class AgentActionRemoteRateLimiter {
     if (_windows.length <= 4096) {
       return;
     }
-    _windows.removeWhere((_, _WindowCount value) => value.windowId < currentWindowId - 2);
+    _windows.removeWhere((_, value) => value.windowId < currentWindowId - 2);
   }
 
   int _windowId(DateTime now) => now.millisecondsSinceEpoch ~/ 60000;

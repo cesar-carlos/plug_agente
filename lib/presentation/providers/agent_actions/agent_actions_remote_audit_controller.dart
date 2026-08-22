@@ -204,7 +204,7 @@ class AgentActionsRemoteAuditController {
           historyController: historyController,
           now: now,
         )
-        .where((AgentActionExecution e) => e.id == executionId)
+        .where((e) => e.id == executionId)
         .toList(growable: false);
     if (visible.isNotEmpty) {
       if (!_auditRuntimeMatchesExecution(record, visible.single)) {
@@ -244,7 +244,7 @@ class AgentActionsRemoteAuditController {
           historyController: historyController,
           now: now,
         )
-        .any((AgentActionExecution e) => e.id == executionId)) {
+        .any((e) => e.id == executionId)) {
       auditCorrelationExecutionId = null;
       _onStateChanged();
       return AgentActionRemoteAuditFocusResult.executionNotResolvable;
@@ -273,9 +273,9 @@ class AgentActionsRemoteAuditController {
     AgentActionExecution execution,
   ) {
     final merged = <AgentActionExecution>[
-      ...executionsController.executions.where((AgentActionExecution e) => e.id != execution.id),
+      ...executionsController.executions.where((e) => e.id != execution.id),
       execution,
-    ]..sort((AgentActionExecution a, AgentActionExecution b) => b.requestedAt.compareTo(a.requestedAt));
+    ]..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
     executionsController.executions = merged;
     executionsController.invalidateCaches();
     invalidateCaches();

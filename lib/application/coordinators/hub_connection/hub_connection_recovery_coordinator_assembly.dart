@@ -162,17 +162,16 @@ void assembleHubConnectionRecoveryCoordinators({
       isDisconnectRequested: input.isDisconnectRequested,
       isInternalReconnecting: () => input.displayState.isBurstRecoveryInFlight,
       resolveConnectionContext: input.contextSource.resolveConnectionContext,
-      recoverConnection: (context, {bool proactiveHardReloginBeforeSocket = false}) =>
-          scratch.hubRecoveryOrchestrator.runBurstRecovery(
-            context,
-            proactiveHardReloginBeforeSocket: proactiveHardReloginBeforeSocket,
-            effectiveHardReloginRecoveryEnabled: input.effectiveHardReloginRecoveryEnabled,
-            hasAuthBridge: input.hasAuthBridge,
-            maxReconnectAttempts: input.maxReconnectAttempts,
-            tokenRefreshIntervalAttempts: input.tokenRefreshIntervalAttempts,
-            recoveryEnabled: input.effectiveHardReloginRecoveryEnabled,
-            hardReloginFailureThreshold: input.effectiveHardReloginFailureThreshold,
-          ),
+      recoverConnection: (context) => scratch.hubRecoveryOrchestrator.runBurstRecovery(
+        context,
+        proactiveHardReloginBeforeSocket: false,
+        effectiveHardReloginRecoveryEnabled: input.effectiveHardReloginRecoveryEnabled,
+        hasAuthBridge: input.hasAuthBridge,
+        maxReconnectAttempts: input.maxReconnectAttempts,
+        tokenRefreshIntervalAttempts: input.tokenRefreshIntervalAttempts,
+        recoveryEnabled: input.effectiveHardReloginRecoveryEnabled,
+        hardReloginFailureThreshold: input.effectiveHardReloginFailureThreshold,
+      ),
       startPersistentRetry: startPersistentRetry,
       beginManualReconnection: () {
         input.displayState.isBurstRecoveryInFlight = true;

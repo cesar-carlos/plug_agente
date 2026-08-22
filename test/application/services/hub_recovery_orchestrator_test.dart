@@ -54,12 +54,12 @@ HubRecoveryRuntimeDependencies _minimalRuntimeDeps() {
     resilienceLogPrefix: () => '',
     isDisconnectRequested: () => false,
     tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
-    attemptReconnect: (String serverUrl, String agentId, {String? authToken, bool recordErrorMessage = true}) async =>
+    attemptReconnect: (serverUrl, agentId, {authToken, recordErrorMessage = true}) async =>
         false,
     disconnectTransportForRecovery: () async {},
     executeHardRelogin:
-        (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async => null,
-    bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {},
+        (context, {required logSummary, ignoreCooldown = false}) async => null,
+    bumpPersistentReconnectFailure: (context, {required reason}) {},
     isStatusError: () => false,
     cancelPersistentRetryTimer: () {},
   );
@@ -155,18 +155,18 @@ void main() {
         isDisconnectRequested: () => false,
         tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
         attemptReconnect:
-            (String serverUrl, String agentId, {String? authToken, bool recordErrorMessage = true}) async {
+            (serverUrl, agentId, {authToken, recordErrorMessage = true}) async {
               reconnectInvocations++;
               orchestrator.noteTransportConnectFailureDuringRecovery();
               return false;
             },
         disconnectTransportForRecovery: () async {},
         executeHardRelogin:
-            (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async {
+            (context, {required logSummary, ignoreCooldown = false}) async {
               hardReloginInvocations++;
               return null;
             },
-        bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {},
+        bumpPersistentReconnectFailure: (context, {required reason}) {},
         isStatusError: () => false,
         cancelPersistentRetryTimer: () {},
       );
@@ -205,18 +205,18 @@ void main() {
         isDisconnectRequested: () => false,
         tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
         attemptReconnect:
-            (String serverUrl, String agentId, {String? authToken, bool recordErrorMessage = true}) async {
+            (serverUrl, agentId, {authToken, recordErrorMessage = true}) async {
               reconnectInvocations++;
               orchestrator.noteTransportConnectFailureDuringRecovery();
               return false;
             },
         disconnectTransportForRecovery: () async {},
         executeHardRelogin:
-            (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async {
+            (context, {required logSummary, ignoreCooldown = false}) async {
               hardReloginInvocations++;
               return null;
             },
-        bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {},
+        bumpPersistentReconnectFailure: (context, {required reason}) {},
         isStatusError: () => false,
         cancelPersistentRetryTimer: () {},
       );
@@ -257,14 +257,14 @@ void main() {
           isDisconnectRequested: () => false,
           tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
           attemptReconnect:
-              (String serverUrl, String agentId, {String? authToken, bool recordErrorMessage = true}) async {
+              (serverUrl, agentId, {authToken, recordErrorMessage = true}) async {
                 orchestrator.noteTransportConnectFailureDuringRecovery();
                 return false;
               },
           disconnectTransportForRecovery: () async {},
           executeHardRelogin:
-              (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async => null,
-          bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {
+              (context, {required logSummary, ignoreCooldown = false}) async => null,
+          bumpPersistentReconnectFailure: (context, {required reason}) {
             bumpFailureCalls++;
             bumpReason = reason;
           },
@@ -303,14 +303,14 @@ void main() {
           isDisconnectRequested: () => false,
           tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
           attemptReconnect:
-              (String serverUrl, String agentId, {String? authToken, bool recordErrorMessage = true}) async {
+              (serverUrl, agentId, {authToken, recordErrorMessage = true}) async {
                 orchestrator.noteTransportConnectFailureDuringRecovery();
                 return false;
               },
           disconnectTransportForRecovery: () async {},
           executeHardRelogin:
-              (HubConnectionContext context, {required String logSummary, bool ignoreCooldown = false}) async => null,
-          bumpPersistentReconnectFailure: (HubConnectionContext context, {required String reason}) {
+              (context, {required logSummary, ignoreCooldown = false}) async => null,
+          bumpPersistentReconnectFailure: (context, {required reason}) {
             bumpFailureCalls++;
           },
           isStatusError: () => true,

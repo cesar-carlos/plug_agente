@@ -61,7 +61,7 @@ HubConnectionCoordinatorAssemblyInput _assemblyInput({
     resetReconnectQuietFailureLogCount: () {},
     bumpReconnectQuietFailureLogCount: () => 0,
     notifyStateChanged: () {},
-    onNegotiatingWatchdogTimeoutWithoutContext: ({required int timeoutMs}) {},
+    onNegotiatingWatchdogTimeoutWithoutContext: ({required timeoutMs}) {},
     onNegotiatingWatchdogTimeoutWithContext: () {},
     resolveProactiveRefreshAccessToken: () => null,
     resolveAuthProviderError: () => null,

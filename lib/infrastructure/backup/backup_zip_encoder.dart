@@ -19,8 +19,8 @@ class BackupZipEncodeParts {
   final String? secureStorageSecretsFileName;
 }
 
-/// Top-level ZIP builder for backup export; returns null if encoding fails.
-Uint8List? encodeBackupZipBytes(BackupZipEncodeParts parts) {
+/// Top-level ZIP builder for backup export.
+Uint8List encodeBackupZipBytes(BackupZipEncodeParts parts) {
   final archive = Archive()
     ..addFile(ArchiveFile('manifest.json', parts.manifestBytes.length, parts.manifestBytes))
     ..addFile(ArchiveFile('agent_config.db', parts.dbBytes.length, parts.dbBytes));
@@ -34,9 +34,5 @@ Uint8List? encodeBackupZipBytes(BackupZipEncodeParts parts) {
       ArchiveFile(parts.secureStorageSecretsFileName!, secrets.length, secrets),
     );
   }
-  final encoded = ZipEncoder().encode(archive);
-  if (encoded == null) {
-    return null;
-  }
-  return Uint8List.fromList(encoded);
+  return Uint8List.fromList(ZipEncoder().encode(archive));
 }

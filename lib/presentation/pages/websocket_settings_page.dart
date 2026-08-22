@@ -229,7 +229,7 @@ class _WebSocketSettingsTabbedContentState extends State<_WebSocketSettingsTabbe
     final l10n = AppLocalizations.of(context)!;
     return AppFluentTabView(
       currentIndex: _selectedTabIndex,
-      onChanged: (int index) {
+      onChanged: (index) {
         if (index == _selectedTabIndex) {
           return;
         }

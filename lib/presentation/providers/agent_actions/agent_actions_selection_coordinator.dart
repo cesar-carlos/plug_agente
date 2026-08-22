@@ -97,6 +97,21 @@ final class AgentActionsSelectionCoordinator {
     }
   }
 
+  Future<({bool succeeded, String? payload, String? errorMessage})> exportBundlePayload({
+    required AppLocalizations l10n,
+  }) async {
+    _setErrorMessage(null);
+    final outcome = await _bundleTransferController.exportPayload(
+      l10n: l10n,
+      canTransfer: _canTransferBundle(),
+    );
+    if (outcome.errorMessage != null) {
+      _setErrorMessage(outcome.errorMessage);
+      _notifyStateChanged();
+    }
+    return outcome;
+  }
+
   Future<bool> exportBundleToFile(String filePath, {required AppLocalizations l10n}) async {
     _setErrorMessage(null);
     final outcome = await _bundleTransferController.exportToFile(

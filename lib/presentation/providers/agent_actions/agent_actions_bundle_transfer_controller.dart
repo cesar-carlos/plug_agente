@@ -26,6 +26,30 @@ class AgentActionsBundleTransferController {
 
   bool isTransferring = false;
 
+  Future<({bool succeeded, String? payload, String? errorMessage})> exportPayload({
+    required AppLocalizations l10n,
+    required bool canTransfer,
+  }) async {
+    if (!canTransfer) {
+      return (succeeded: false, payload: null, errorMessage: null);
+    }
+
+    isTransferring = true;
+    _onStateChanged();
+
+    final result = await _exportBundle();
+    if (result.isError()) {
+      isTransferring = false;
+      final errorMessage = _messageFor(result.exceptionOrNull()!);
+      _onStateChanged();
+      return (succeeded: false, payload: null, errorMessage: errorMessage);
+    }
+
+    isTransferring = false;
+    _onStateChanged();
+    return (succeeded: true, payload: result.getOrThrow(), errorMessage: null);
+  }
+
   Future<({bool succeeded, String? errorMessage})> exportToFile({
     required String filePath,
     required AppLocalizations l10n,

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -192,23 +194,13 @@ class AgentActionsToolbarCard extends StatelessWidget {
 
   Future<void> _exportBundle(BuildContext context) async {
     try {
-      final path = await FilePicker.platform.saveFile(
-        dialogTitle: l10n.agentActionsExportBundle,
-        fileName: l10n.agentActionsExportBundleDefaultFileName,
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-      );
-      if (path == null || !context.mounted) {
-        return;
-      }
-
-      final ok = await provider.exportBundleToFile(path, l10n: l10n);
+      final outcome = await provider.exportBundlePayload(l10n: l10n);
       if (!context.mounted) {
         return;
       }
-
-      if (!ok) {
-        final message = provider.errorMessage;
+      final payload = outcome.payload;
+      if (payload == null) {
+        final message = outcome.errorMessage ?? provider.errorMessage;
         if (message != null && message.isNotEmpty) {
           await SettingsFeedback.showError(
             context: context,
@@ -216,6 +208,17 @@ class AgentActionsToolbarCard extends StatelessWidget {
             message: message,
           );
         }
+        return;
+      }
+
+      final saved = await FilePicker.saveFile(
+        dialogTitle: l10n.agentActionsExportBundle,
+        fileName: l10n.agentActionsExportBundleDefaultFileName,
+        bytes: Uint8List.fromList(utf8.encode(payload)),
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (saved == null || !context.mounted) {
         return;
       }
 
@@ -248,23 +251,15 @@ class AgentActionsToolbarCard extends StatelessWidget {
     }
 
     try {
-      final picked = await FilePicker.platform.pickFiles(
+      final picked = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['json'],
         dialogTitle: l10n.agentActionsImportBundle,
       );
-      if (picked == null || picked.files.isEmpty || !context.mounted) {
+      if (picked == null || !context.mounted) {
         return;
       }
-      if (picked.files.length > 1) {
-        await SettingsFeedback.showError(
-          context: context,
-          title: l10n.agentActionsBundleTransferFailedTitle,
-          message: l10n.agentActionsBundlePickerError,
-        );
-        return;
-      }
-      final path = picked.files.single.path;
+      final path = picked.path;
       if (path == null || !context.mounted) {
         return;
       }

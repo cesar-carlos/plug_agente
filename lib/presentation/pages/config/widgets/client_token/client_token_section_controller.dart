@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -207,8 +208,8 @@ class ClientTokenSectionController {
     notifyCreateTokenDialogChanged();
   }
 
-  Future<FilePickerResult?> pickRulesImportFile() {
-    return FilePicker.platform.pickFiles(
+  Future<PlatformFile?> pickRulesImportFile() {
+    return FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['txt'],
     );
@@ -218,10 +219,12 @@ class ClientTokenSectionController {
     return _ruleFileService.importFromFile(filePath);
   }
 
-  Future<String?> pickRulesExportPath(String defaultFileName) {
-    return FilePicker.platform.saveFile(
+  Future<Uri?> pickRulesExportPath(String defaultFileName) {
+    final bytes = Uint8List.fromList(utf8.encode(_ruleFileService.serializeRules(rules)));
+    return FilePicker.saveFile(
       dialogTitle: defaultFileName,
       fileName: defaultFileName,
+      bytes: bytes,
       type: FileType.custom,
       allowedExtensions: ['txt'],
     );

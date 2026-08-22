@@ -28,8 +28,25 @@ Future<void> migrateAgentConfigDatabaseToV28(
     WHERE execution_id NOT IN (SELECT id FROM agent_action_execution_table)
     ''',
   );
-  // ignore: experimental_member_use - TableMigration is Drift's API for table recreation
-  await m.alterTable(TableMigration(db.agentActionTriggerTable));
-  // ignore: experimental_member_use
-  await m.alterTable(TableMigration(db.agentActionCapturedOutputChunkTable));
+  // Drift 2.34 copies every current Dart column in TableMigration. Trigger
+  // columns added in Dart after v15 never had ADD COLUMN steps, so they must
+  // be marked new when absent or INSERT...SELECT fails on older databases.
+  final triggerNewColumns = await db.missingColumnsForTable(
+    db.agentActionTriggerTable,
+  );
+  final chunkNewColumns = await db.missingColumnsForTable(
+    db.agentActionCapturedOutputChunkTable,
+  );
+  await m.alterTable(
+    TableMigration(
+      db.agentActionTriggerTable,
+      newColumns: triggerNewColumns,
+    ),
+  );
+  await m.alterTable(
+    TableMigration(
+      db.agentActionCapturedOutputChunkTable,
+      newColumns: chunkNewColumns,
+    ),
+  );
 }

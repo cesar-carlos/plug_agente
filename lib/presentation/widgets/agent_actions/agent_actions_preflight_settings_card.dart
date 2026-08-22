@@ -121,7 +121,7 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
     });
     displayInfoBar(
       context,
-      builder: (BuildContext closeContext, void Function() close) => InfoBar(
+      builder: (closeContext, void Function() close) => InfoBar(
         title: Text(l10n.agentActionsPreflightSettingsSavedTitle),
         content: Text(l10n.agentActionsPreflightSettingsSavedMessage),
         severity: InfoBarSeverity.success,
@@ -152,7 +152,7 @@ class _AgentActionsPreflightSettingsCardState extends State<AgentActionsPrefligh
     });
     displayInfoBar(
       context,
-      builder: (BuildContext closeContext, void Function() close) => InfoBar(
+      builder: (closeContext, void Function() close) => InfoBar(
         title: Text(l10n.agentActionsPreflightSettingsClearedTitle),
         content: Text(l10n.agentActionsPreflightSettingsClearedMessage),
         severity: InfoBarSeverity.success,

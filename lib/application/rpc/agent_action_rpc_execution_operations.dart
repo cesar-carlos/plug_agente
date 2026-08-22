@@ -151,14 +151,14 @@ class AgentActionRpcExecutionOperations {
                     traceId: traceId,
                   );
                   return result.fold<Future<RpcResponse>>(
-                    (AgentActionExecution execution) async => RpcResponse.success(
+                    (execution) async => RpcResponse.success(
                       id: request.id,
                       result: agentActionExecutionToGetExecutionResult(
                         execution,
                         sanitizeForRemoteHub: true,
                       ),
                     ),
-                    (Exception failure) async => RpcResponse.error(
+                    (failure) async => RpcResponse.error(
                       id: request.id,
                       error: FailureToRpcErrorMapper.map(
                         failure as domain.Failure,
@@ -269,11 +269,11 @@ class AgentActionRpcExecutionOperations {
               ),
             );
             response = await result.fold<Future<RpcResponse>>(
-              (AgentActionValidateRunSummary summary) async => RpcResponse.success(
+              (summary) async => RpcResponse.success(
                 id: request.id,
                 result: summary.toRpcResultJson(),
               ),
-              (Exception failure) async => RpcResponse.error(
+              (failure) async => RpcResponse.error(
                 id: request.id,
                 error: FailureToRpcErrorMapper.map(
                   failure as domain.Failure,
@@ -361,8 +361,8 @@ class AgentActionRpcExecutionOperations {
           } else {
             final prefetchResult = await lookup(executionId);
             prefetchResult.fold(
-              (AgentActionExecution execution) => executionActionIdForPolicy = execution.actionId,
-              (Exception failure) => prefetchFailureResponse = RpcResponse.error(
+              (execution) => executionActionIdForPolicy = execution.actionId,
+              (failure) => prefetchFailureResponse = RpcResponse.error(
                 id: request.id,
                 error: FailureToRpcErrorMapper.map(
                   failure as domain.Failure,
@@ -399,14 +399,14 @@ class AgentActionRpcExecutionOperations {
             } else {
               final result = await cancel(executionId);
               response = await result.fold(
-                (AgentActionExecution execution) async {
+                (execution) async {
                   final correlated = await _infrastructure.withRpcCorrelationBackfill(execution, request);
                   return RpcResponse.success(
                     id: request.id,
                     result: agentActionCancelToRpcResult(correlated, cancelled: true),
                   );
                 },
-                (Exception failure) async => RpcResponse.error(
+                (failure) async => RpcResponse.error(
                   id: request.id,
                   error: FailureToRpcErrorMapper.map(
                     failure as domain.Failure,
@@ -543,8 +543,8 @@ class AgentActionRpcExecutionOperations {
             hydrateCapturedOutput: false,
           );
           prefetchResult.fold(
-            (AgentActionExecution execution) => cachedExecution = execution,
-            (Exception failure) => prefetchFailureResponse = RpcResponse.error(
+            (execution) => cachedExecution = execution,
+            (failure) => prefetchFailureResponse = RpcResponse.error(
               id: request.id,
               error: FailureToRpcErrorMapper.map(
                 failure as domain.Failure,
@@ -586,11 +586,11 @@ class AgentActionRpcExecutionOperations {
                   params: params,
                 );
                 response = resultMap.fold(
-                  (Map<String, dynamic> result) => RpcResponse.success(
+                  (result) => RpcResponse.success(
                     id: request.id,
                     result: result,
                   ),
-                  (Exception failure) => RpcResponse.error(
+                  (failure) => RpcResponse.error(
                     id: request.id,
                     error: FailureToRpcErrorMapper.map(
                       failure as domain.Failure,
@@ -605,18 +605,18 @@ class AgentActionRpcExecutionOperations {
                   hydrateCapturedOutput: false,
                 );
                 response = await result.fold(
-                  (AgentActionExecution execution) async {
+                  (execution) async {
                     final correlated = await _infrastructure.withRpcCorrelationBackfill(execution, request);
                     final resultMap = await agentActionGetExecutionRpcResult(
                       execution: correlated,
                       params: params,
                     );
                     return resultMap.fold(
-                      (Map<String, dynamic> mapped) => RpcResponse.success(
+                      (mapped) => RpcResponse.success(
                         id: request.id,
                         result: mapped,
                       ),
-                      (Exception failure) => RpcResponse.error(
+                      (failure) => RpcResponse.error(
                         id: request.id,
                         error: FailureToRpcErrorMapper.map(
                           failure as domain.Failure,
@@ -626,7 +626,7 @@ class AgentActionRpcExecutionOperations {
                       ),
                     );
                   },
-                  (Exception failure) async => RpcResponse.error(
+                  (failure) async => RpcResponse.error(
                     id: request.id,
                     error: FailureToRpcErrorMapper.map(
                       failure as domain.Failure,

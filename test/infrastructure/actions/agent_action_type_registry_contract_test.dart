@@ -164,7 +164,7 @@ void main() {
 
     test('security gate checklist should cover every MVP registry type', () {
       final registries = buildMvp5AgentActionRegistries();
-      final registryTypeNames = registries.adapters.supportedTypes.map((AgentActionType type) => type.name).toList()
+      final registryTypeNames = registries.adapters.supportedTypes.map((type) => type.name).toList()
         ..sort();
       final gateTypes = List<String>.from(agentActionSecurityGateMvpTypes)..sort();
 

@@ -191,7 +191,7 @@ class InputValidators {
         .string()
         .trim()
         .refine(
-          (String raw) {
+          (raw) {
             final digits = _digitsOnly(raw);
             return digits.length == 8 && _digitsOnlyRegex.hasMatch(digits);
           },
@@ -210,7 +210,7 @@ class InputValidators {
         .string()
         .trim()
         .refine(
-          (String raw) {
+          (raw) {
             final digits = _digitsOnly(raw);
             return digits.length == 10 && _digitsOnlyRegex.hasMatch(digits);
           },
@@ -228,7 +228,7 @@ class InputValidators {
     final schema = z
         .string()
         .trim()
-        .refine((String raw) {
+        .refine((raw) {
           final digits = _digitsOnly(raw);
           final hasValidLength = digits.length == 11 && _digitsOnlyRegex.hasMatch(digits);
           final startsWithNine = digits.length == 11 && digits.length > 2 && digits[2] == '9';

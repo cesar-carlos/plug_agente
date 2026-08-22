@@ -10,7 +10,6 @@ import 'package:plug_agente/application/validation/agent_profile_schema.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
-import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -269,14 +268,14 @@ class AgentMetadataRpcMethodHandlerOperations {
 
     final policyResult = await _getClientTokenPolicy.call(clientToken);
     return policyResult.fold(
-      (ClientTokenPolicy policy) {
+      (policy) {
         _dispatchMetrics?.recordClientTokenGetPolicySuccess();
         return RpcResponse.success(
           id: request.id,
           result: policy.toRpcResultJson(),
         );
       },
-      (Object failure) {
+      (failure) {
         final domainFailure = failure is domain.Failure
             ? failure
             : domain.ServerFailure.withContext(
@@ -289,7 +288,7 @@ class AgentMetadataRpcMethodHandlerOperations {
             'client_token.getPolicy unexpected failure type',
             name: 'rpc_method_dispatcher',
             level: 500,
-            error: failure is Exception ? failure : null,
+            error: failure,
           );
         }
         final rpcError = FailureToRpcErrorMapper.map(

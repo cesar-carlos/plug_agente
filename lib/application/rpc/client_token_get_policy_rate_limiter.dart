@@ -49,7 +49,7 @@ class ClientTokenGetPolicyRateLimiter {
     if (_maxScopeEntries <= 0 || _windows.length < _maxScopeEntries) {
       return;
     }
-    _windows.removeWhere((_, _WindowCount value) => value.windowId < _currentWindowId() - 2);
+    _windows.removeWhere((_, value) => value.windowId < _currentWindowId() - 2);
     while (_maxScopeEntries > 0 && _windows.length >= _maxScopeEntries && _windows.isNotEmpty) {
       final keys = _windows.keys.toList();
       _windows.remove(keys[_random.nextInt(keys.length)]);
@@ -60,7 +60,7 @@ class ClientTokenGetPolicyRateLimiter {
     if (_windows.length <= 4096) {
       return;
     }
-    _windows.removeWhere((_, _WindowCount value) => value.windowId < _currentWindowId() - 2);
+    _windows.removeWhere((_, value) => value.windowId < _currentWindowId() - 2);
   }
 
   int _currentWindowId() => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 60000;

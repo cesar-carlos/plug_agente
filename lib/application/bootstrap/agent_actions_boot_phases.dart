@@ -50,7 +50,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
     try {
       final result = await purge();
       result.fold(
-        (int count) {
+        (count) {
           if (count > 0) {
             developer.log(
               successLogBuilder?.call(count) ?? 'Purged $count $successLogSuffix',
@@ -59,7 +59,7 @@ class AgentActionsBootPhases implements AgentActionsBootPhasesContract {
             );
           }
         },
-        (Object failure) {
+        (failure) {
           developer.log(
             failureLogMessage,
             name: 'agent_actions_boot_phases',

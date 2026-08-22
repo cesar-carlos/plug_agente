@@ -57,7 +57,7 @@ final class OdbcStreamingConnectPhase {
     );
   }
 
-  bool offerSessionForReuse({
+  Future<bool> offerSessionForReuse({
     required String connectionString,
     required String connectionId,
   }) {

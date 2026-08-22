@@ -66,7 +66,7 @@ class PlaygroundUiStrings {
         'Last run: managed pagination — SQL may have been rewritten for your database dialect.',
     queryPlaygroundHintLastRunManaged: 'Last run: managed mode — agent limits and adjustments may apply to the SQL.',
     queryPlaygroundHintLastRunStreaming: 'Last run: streaming mode — results received as a continuous stream.',
-    streamingRowCapHint: (int max) =>
+    streamingRowCapHint: (max) =>
         'Display limited to $max rows in streaming (memory). The server query was stopped when this limit was reached.',
   );
 }

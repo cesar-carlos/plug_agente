@@ -70,7 +70,7 @@ class AgentActionPowerShellDraftFields extends StatelessWidget {
             value: mode,
             items: PowerShellDraftMode.values
                 .map(
-                  (PowerShellDraftMode item) {
+                  (item) {
                     final unavailable = isModeUnavailable(item);
                     final label = powerShellDraftModeLabel(item, l10n);
                     return ComboBoxItem<PowerShellDraftMode>(
@@ -84,7 +84,7 @@ class AgentActionPowerShellDraftFields extends StatelessWidget {
                 )
                 .toList(growable: false),
             onChanged: enabled
-                ? (PowerShellDraftMode? value) {
+                ? (value) {
                     if (value == null || value == mode || isModeUnavailable(value)) {
                       return;
                     }
@@ -100,14 +100,14 @@ class AgentActionPowerShellDraftFields extends StatelessWidget {
       value: executable,
       items: PowerShellExecutable.values
           .map(
-            (PowerShellExecutable item) => ComboBoxItem<PowerShellExecutable>(
+            (item) => ComboBoxItem<PowerShellExecutable>(
               value: item,
               child: Text(powerShellExecutableLabel(item, l10n)),
             ),
           )
           .toList(growable: false),
       onChanged: enabled
-          ? (PowerShellExecutable? value) {
+          ? (value) {
               if (value == null || value == executable) {
                 return;
               }

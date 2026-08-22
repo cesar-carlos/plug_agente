@@ -98,7 +98,7 @@ void main() {
     }
     print('  See docs/testing/e2e_hub.md (Hub agent.action.*).');
     final onlySigning = outcome.missing.every(
-      (String name) => name.contains('PAYLOAD_SIGNING'),
+      (name) => name.contains('PAYLOAD_SIGNING'),
     );
     if (onlySigning) {
       print('  Hint: same HMAC key id + secret as the Hub (plug_server/.env).');

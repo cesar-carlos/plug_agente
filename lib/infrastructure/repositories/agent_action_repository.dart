@@ -257,7 +257,7 @@ class AgentActionRepository implements IAgentActionRepository {
             'action_id': ?actionId,
             'is_enabled': ?isEnabled,
             'types': ?(types != null && types.isNotEmpty
-                ? types.map((AgentActionTriggerType type) => type.name).toList(growable: false)
+                ? types.map((type) => type.name).toList(growable: false)
                 : null),
           },
         ),
@@ -462,7 +462,7 @@ class AgentActionRepository implements IAgentActionRepository {
             'action_id': ?actionId,
             'idempotency_key': ?idempotencyKey,
             'statuses': ?(statuses != null && statuses.isNotEmpty
-                ? statuses.map((AgentActionExecutionStatus status) => status.name).toList(growable: false)
+                ? statuses.map((status) => status.name).toList(growable: false)
                 : null),
             'requested_after': ?requestedAfter?.toIso8601String(),
           },
@@ -517,8 +517,8 @@ class AgentActionRepository implements IAgentActionRepository {
       await _database.transaction(() async {
         await _capturedOutputChunks.deleteForTerminalExecutionsOlderThan(olderThan);
         final terminalStatusNames = AgentActionExecutionStatus.values
-            .where((AgentActionExecutionStatus status) => status.isTerminal)
-            .map((AgentActionExecutionStatus status) => status.name)
+            .where((status) => status.isTerminal)
+            .map((status) => status.name)
             .toList(growable: false);
         updated =
             await (_database.update(_database.agentActionExecutionTable)..where((table) {

@@ -62,8 +62,8 @@ final class AgentActionCapturedOutputChunkStore {
 
   Future<void> deleteForTerminalExecutionsOlderThan(DateTime olderThan) async {
     final terminalStatusNames = AgentActionExecutionStatus.values
-        .where((AgentActionExecutionStatus status) => status.isTerminal)
-        .map((AgentActionExecutionStatus status) => status.name)
+        .where((status) => status.isTerminal)
+        .map((status) => status.name)
         .toList(growable: false);
     final executionIds = _database.agentActionExecutionTable.id;
     final finishedBefore = _database.agentActionExecutionTable.finishedAt.isSmallerThanValue(olderThan);

@@ -95,7 +95,7 @@ class _FakeAgentActionRepository implements IAgentActionRepository {
     }
 
     definitions.remove(id);
-    triggers.removeWhere((_, AgentActionTrigger trigger) => trigger.actionId == id);
+    triggers.removeWhere((_, trigger) => trigger.actionId == id);
     return const Success(unit);
   }
 
@@ -184,7 +184,7 @@ class _FakeAgentActionRepository implements IAgentActionRepository {
     Set<AgentActionTriggerType>? types,
   }) async {
     final filtered = triggers.values
-        .where((AgentActionTrigger trigger) {
+        .where((trigger) {
           final matchesAction = actionId == null || trigger.actionId == actionId;
           final matchesEnabled = isEnabled == null || trigger.isEnabled == isEnabled;
           final matchesType = types == null || types.isEmpty || types.contains(trigger.type);

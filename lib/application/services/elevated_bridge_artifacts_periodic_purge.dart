@@ -13,7 +13,7 @@ class ElevatedBridgeArtifactsPeriodicPurge {
          purge: () => purge(),
          interval: interval,
          logName: 'elevated_bridge_artifacts_periodic_purge',
-         successLogMessage: (int count) => 'Purged $count stale elevated bridge artifact file(s) (periodic)',
+         successLogMessage: (count) => 'Purged $count stale elevated bridge artifact file(s) (periodic)',
          failureLogMessage: 'Periodic elevated bridge artifact purge failed (continuing)',
        );
 

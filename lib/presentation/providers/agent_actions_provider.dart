@@ -399,6 +399,10 @@ class AgentActionsProvider extends ChangeNotifier {
   void clearDeveloperData7Connections({bool notify = true}) =>
       _definitionsController.clearDeveloperData7Connections(notify: notify);
 
+  Future<({bool succeeded, String? payload, String? errorMessage})> exportBundlePayload({
+    required AppLocalizations l10n,
+  }) => _selectionCoordinator.exportBundlePayload(l10n: l10n);
+
   Future<bool> exportBundleToFile(String filePath, {required AppLocalizations l10n}) =>
       _selectionCoordinator.exportBundleToFile(filePath, l10n: l10n);
 

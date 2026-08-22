@@ -20,7 +20,7 @@ HubProactiveTokenRefreshRunner _proactiveRefreshRunner() {
       tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
       disconnectTransport: () async {},
       attemptReconnect: (_, _, {authToken, recordErrorMessage = true}) async => false,
-      kickHubTransportRecovery: ({required String trigger}) {},
+      kickHubTransportRecovery: ({required trigger}) {},
       onTerminalRefreshFailure: () {},
       rescheduleProactiveRefresh: () {},
     ),

@@ -86,6 +86,30 @@ void main() {
       expect(cache, isEmpty);
       verify(() => service.prepare(any(), any(), timeoutMs: any(named: 'timeoutMs'))).called(2);
     });
+
+    test('awaits close of the oldest statement before preparing when LRU is full', () async {
+      var nextId = 1;
+      when(
+        () => service.prepare(any(), any(), timeoutMs: any(named: 'timeoutMs')),
+      ).thenAnswer((_) async => Success(nextId++));
+      when(() => service.closeStatement(any(), any())).thenAnswer((_) async => const Success(unit));
+
+      final cache = <String, int>{};
+      for (var i = 0; i <= OdbcStatementExecutor.maxPreparedStatementsPerConnection; i++) {
+        final result = await executor.getOrPrepareStatement(
+          connectionId: 'c1',
+          preparedExecution: prepared('SELECT $i'),
+          preparedStatements: cache,
+          statementKey: 'k$i',
+        );
+        expect(result.isSuccess(), isTrue);
+      }
+
+      verify(() => service.closeStatement('c1', 1)).called(1);
+      expect(cache.length, OdbcStatementExecutor.maxPreparedStatementsPerConnection);
+      expect(cache.containsKey('k0'), isFalse);
+      expect(cache.containsKey('k${OdbcStatementExecutor.maxPreparedStatementsPerConnection}'), isTrue);
+    });
   });
 
   group('closePreparedStatements', () {

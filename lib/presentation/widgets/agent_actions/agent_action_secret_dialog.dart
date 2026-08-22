@@ -15,7 +15,7 @@ Future<bool> showAgentActionSecretConfigureDialog({
 }) async {
   final saved = await showDialog<bool>(
     context: context,
-    builder: (BuildContext dialogContext) {
+    builder: (dialogContext) {
       return _AgentActionSecretConfigureDialog(
         l10n: l10n,
         secretName: secretName,

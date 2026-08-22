@@ -186,7 +186,7 @@ class AgentActionTriggerSaveFormState {
           return AgentActionTriggerBuildResult(parseError: parseError);
         }
 
-        if (_weekdays.isEmpty || _weekdays.any((int day) => day < 1 || day > 7)) {
+        if (_weekdays.isEmpty || _weekdays.any((day) => day < 1 || day > 7)) {
           parseError = l10n.agentActionsTriggerValidationWeekdaysRequired;
           return AgentActionTriggerBuildResult(parseError: parseError);
         }

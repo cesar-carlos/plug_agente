@@ -44,7 +44,7 @@ void main() {
 
         final server = await HttpServer.bind('127.0.0.1', 0);
         addTearDown(() => server.close(force: true));
-        server.listen((HttpRequest request) async {
+        server.listen((request) async {
           final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
           var startOffset = 0;
           if (rangeHeader != null) {

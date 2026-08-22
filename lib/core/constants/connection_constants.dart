@@ -55,6 +55,7 @@ abstract final class ConnectionConstants {
       OdbcConnectionConstants.defaultSqlExecuteMaterializedEstimatedBytesPerRow;
   static const int defaultInitialResultBufferBytes = OdbcConnectionConstants.defaultInitialResultBufferBytes;
   static const int defaultStreamingChunkSizeKb = OdbcConnectionConstants.defaultStreamingChunkSizeKb;
+  static const int defaultBlockFetchBatchSize = OdbcConnectionConstants.defaultBlockFetchBatchSize;
   static const Duration defaultStreamingConnectReuseTtl = OdbcConnectionConstants.defaultStreamingConnectReuseTtl;
   static const int defaultStreamingConnectReuseMaxEntries =
       OdbcConnectionConstants.defaultStreamingConnectReuseMaxEntries;

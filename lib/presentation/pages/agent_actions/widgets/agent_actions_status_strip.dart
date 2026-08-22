@@ -234,7 +234,7 @@ Widget? buildAgentActionRuntimeSubsystemInfoBar(AgentActionsProvider provider, A
       title: Text(l10n.agentActionsSubsystemStatusDegradedTitle),
       content: Text(
         l10n.agentActionsSubsystemStatusDegradedMessage(
-          snapshot.unavailableActionTypes.map((AgentActionType type) => type.name).join(', '),
+          snapshot.unavailableActionTypes.map((type) => type.name).join(', '),
         ),
       ),
       severity: InfoBarSeverity.warning,

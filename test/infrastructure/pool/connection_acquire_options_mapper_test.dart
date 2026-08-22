@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
 
@@ -15,6 +16,10 @@ void main() {
       );
       expect(mapped.lazyStrings, isTrue);
       expect(mapped.queryTimeout, options.queryTimeout);
+      expect(mapped.blockFetchBatchSize, ConnectionConstants.defaultBlockFetchBatchSize);
+      expect(mapped.streamChunkSizeBytes, ConnectionConstants.defaultStreamingChunkSizeKb * 1024);
+      expect(mapped.blockFetchBatchSize, ConnectionConstants.defaultBlockFetchBatchSize);
+      expect(mapped.streamChunkSizeBytes, ConnectionConstants.defaultStreamingChunkSizeKb * 1024);
     });
 
     test('enables lazyStrings for PostgreSQL connection strings', () {

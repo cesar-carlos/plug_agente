@@ -122,7 +122,7 @@ class AgentProfile {
         })
         .strict()
         .refine(
-          (Map<String, dynamic> value) => value['document_type'] == _resolveDocumentType(value['document'] as String),
+          (value) => value['document_type'] == _resolveDocumentType(value['document'] as String),
           message: m.documentTypeMismatch,
         );
   }
@@ -279,7 +279,7 @@ class AgentProfile {
         .string()
         .trim()
         .refine(
-          (String value) {
+          (value) {
             final digits = _digitsOnly(value);
             return digits.length == 8 && _digitsOnlyPattern.hasMatch(digits);
           },
@@ -293,7 +293,7 @@ class AgentProfile {
         .string()
         .trim()
         .refine(
-          (String value) {
+          (value) {
             final digits = _digitsOnly(value);
             return digits.length == 10 && _digitsOnlyPattern.hasMatch(digits);
           },
@@ -307,7 +307,7 @@ class AgentProfile {
         .string()
         .trim()
         .refine(
-          (String value) {
+          (value) {
             final digits = _digitsOnly(value);
             final hasValidLength = digits.length == 11 && _digitsOnlyPattern.hasMatch(digits);
             final startsWithNine = digits.length == 11 && digits.length > 2 && digits[2] == '9';
@@ -386,7 +386,7 @@ class AgentProfile {
       return true;
     }
 
-    return digits.split('').every((String digit) => digit == digits[0]);
+    return digits.split('').every((digit) => digit == digits[0]);
   }
 
   static bool _isValidCpf(String cpf) {

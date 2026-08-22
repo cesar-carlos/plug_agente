@@ -68,13 +68,13 @@ void assembleHubConnectionSessionCoordinators({
         input.displayState.status = ConnectionStatus.connecting;
         input.displayState.error = '';
       },
-      enterDisconnected: ({bool clearError = false}) {
+      enterDisconnected: ({clearError = false}) {
         input.displayState.status = ConnectionStatus.disconnected;
         if (clearError) {
           input.displayState.error = '';
         }
       },
-      enterReconnecting: ({required bool clearError}) {
+      enterReconnecting: ({required clearError}) {
         input.displayState.status = ConnectionStatus.reconnecting;
         if (clearError) {
           input.displayState.error = '';
@@ -184,7 +184,7 @@ void assembleHubConnectionSessionCoordinators({
           input.displayState.status == ConnectionStatus.negotiating,
       hasPersistentRetryTimer: () => scratch.persistentRetryCoordinator.hasActiveTimer,
       persistentRetryInFlight: () => scratch.persistentRetryCoordinator.retryInFlight,
-      enterReconnecting: ({required bool clearError}) {
+      enterReconnecting: ({required clearError}) {
         input.displayState.status = ConnectionStatus.reconnecting;
         if (clearError) {
           input.displayState.error = '';
