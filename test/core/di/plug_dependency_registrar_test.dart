@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' as odbc;
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
 import 'package:plug_agente/application/use_cases/connect_to_hub.dart';
@@ -20,6 +21,31 @@ import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
 import 'package:plug_agente/infrastructure/settings/odbc_connection_settings.dart';
 
+/// Avoids `odbc_fast` loading `libodbc_engine` (missing on Linux CI).
+class _MockOdbcService extends Mock implements odbc.OdbcService {}
+
+class _FakeOdbcWorkerLocator implements odbc.ServiceLocator {
+  _FakeOdbcWorkerLocator() : asyncService = _MockOdbcService();
+
+  @override
+  final odbc.OdbcService asyncService;
+
+  @override
+  odbc.ConnectionOptions get recommendedConnectionOptions => const odbc.ConnectionOptions();
+
+  @override
+  odbc.PoolOptions get recommendedPoolOptions => const odbc.PoolOptions();
+
+  @override
+  bool get isAsyncMode => true;
+
+  @override
+  void shutdown() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -30,13 +56,7 @@ void main() {
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('plug_registrar_test_');
     sl = GetIt.asNewInstance();
-    odbcLocator = odbc.ServiceLocator()
-      ..initialize(
-        useAsync: true,
-        asyncWorkerCount: 1,
-        asyncMaxPendingRequests: 4,
-        asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
-      );
+    odbcLocator = _FakeOdbcWorkerLocator();
 
     final storage = GlobalStorageContext(appDirectoryPath: tempDir.path);
     final settings = GlobalAppSettingsStore(filePath: '${tempDir.path}/settings.json');
