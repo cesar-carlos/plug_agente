@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -123,6 +124,25 @@ void main() {
       final snapshot = metrics.getSnapshot();
       expect(snapshot['agent_action_elevated_status_file_terminal'], 1);
       expect(snapshot['agent_action_elevated_status_file_wait_timeout'], 1);
+    });
+
+    test('should stop polling when abort completes', () async {
+      final abort = Completer<void>()..complete();
+      final startedAt = DateTime.now();
+
+      final result = await syncer.waitForTerminalResult(
+        executionId: 'exec-abort',
+        processStartedAt: startedAt,
+        timeout: const Duration(seconds: 30),
+        abort: abort.future,
+      );
+
+      expect(result.isError(), isTrue);
+      expect(
+        (result.exceptionOrNull()! as ActionFailure).code,
+        AgentActionFailureCode.executionCancelled,
+      );
+      expect(DateTime.now().difference(startedAt) < const Duration(seconds: 5), isTrue);
     });
   });
 }

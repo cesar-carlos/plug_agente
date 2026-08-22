@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +23,7 @@ import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_details_dialog.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_remote_audit_panel.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/app_confirm_dialog.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/app_content_dialog.dart';
 import 'package:plug_agente/shared/widgets/common/navigation/app_fluent_tab_view.dart';
@@ -46,7 +48,7 @@ class AgentActionsPage extends StatefulWidget {
 class _AgentActionsPageState extends State<AgentActionsPage> {
   AgentActionsTab _selectedTab = AgentActionsTab.actions;
   bool _restoredUiPreferences = false;
-  bool _isActionEditorDialogPendingOrOpen = false;
+  bool _isExclusiveUiFlowPendingOrOpen = false;
   late final AgentActionsUiPreferences _uiPreferences;
 
   @override
@@ -96,7 +98,13 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
             );
           },
           const widgets.SingleActivator(LogicalKeyboardKey.f5): () {
-            _runPageShortcut(() => unawaited(context.read<AgentActionsProvider>().load()));
+            _runPageShortcut(() {
+              final provider = context.read<AgentActionsProvider>();
+              if (provider.isLoading || provider.hasBlockingLocalOperation) {
+                return;
+              }
+              unawaited(provider.load());
+            });
           },
           const widgets.SingleActivator(LogicalKeyboardKey.keyT, control: true): () {
             _runActionsTabShortcut(() {
@@ -200,12 +208,16 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
           l10n: l10n,
           uiPreferences: _uiPreferences,
           onCreateAction: () => _scheduleActionEditorDialog(context, provider, l10n),
-          onShowDetails: (definition) => _showActionDetailsDialog(
-            context,
-            provider,
-            l10n,
-            definition,
-          ),
+          onShowDetails: (definition) {
+            unawaited(
+              _showActionDetailsDialog(
+                context,
+                provider,
+                l10n,
+                definition,
+              ),
+            );
+          },
           onEditAction: (definition) => _scheduleActionEditorDialog(
             context,
             provider,
@@ -272,7 +284,11 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
   }
 
   void _runPageShortcut(VoidCallback action) {
-    if (_isTextInputFocused() || _isActionEditorDialogPendingOrOpen) {
+    if (_isTextInputFocused() || _isExclusiveUiFlowPendingOrOpen) {
+      return;
+    }
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
       return;
     }
     action();
@@ -294,7 +310,8 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       return false;
     }
     return focusedContext.widget is widgets.EditableText ||
-        focusedContext.findAncestorWidgetOfExactType<widgets.EditableText>() != null;
+        focusedContext.findAncestorWidgetOfExactType<widgets.EditableText>() != null ||
+        focusedContext.findAncestorWidgetOfExactType<TextBox>() != null;
   }
 
   void _editSelectedAction(
@@ -355,19 +372,31 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
     }
   }
 
+  Future<void> _runExclusiveUiFlow(Future<void> Function() flow) async {
+    if (_isExclusiveUiFlowPendingOrOpen) {
+      return;
+    }
+    _isExclusiveUiFlowPendingOrOpen = true;
+    try {
+      await flow();
+    } finally {
+      _isExclusiveUiFlowPendingOrOpen = false;
+    }
+  }
+
   void _scheduleActionEditorDialog(
     BuildContext context,
     AgentActionsProvider provider,
     AppLocalizations l10n, {
     AgentActionDefinition? definition,
   }) {
-    if (_isActionEditorDialogPendingOrOpen) {
+    if (_isExclusiveUiFlowPendingOrOpen) {
       return;
     }
-    _isActionEditorDialogPendingOrOpen = true;
+    _isExclusiveUiFlowPendingOrOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !context.mounted) {
-        _isActionEditorDialogPendingOrOpen = false;
+        _isExclusiveUiFlowPendingOrOpen = false;
         return;
       }
       unawaited(
@@ -377,7 +406,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
           l10n,
           definition: definition,
         ).whenComplete(() {
-          _isActionEditorDialogPendingOrOpen = false;
+          _isExclusiveUiFlowPendingOrOpen = false;
         }),
       );
     });
@@ -390,8 +419,14 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
     AppLocalizations l10n,
     AgentActionDefinition definition,
   ) async {
-    provider.selectAction(definition.id);
-    await provider.refreshTriggersForSelection();
+    if (_isExclusiveUiFlowPendingOrOpen) {
+      return;
+    }
+
+    await _runExclusiveUiFlow(() async {
+      provider.selectAction(definition.id);
+      await provider.refreshTriggersForSelection();
+    });
     if (!context.mounted) {
       return;
     }
@@ -402,9 +437,19 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
         return AgentActionDetailsDialog(
           definition: definition,
           l10n: l10n,
-          content: ListenableBuilder(
+          content: AgentActionsSelectBuilder(
             listenable: provider,
-            builder: (context, _) {
+            selector: () => Object.hashAll([
+              provider.selectedActionId,
+              provider.lastTestCanRun,
+              provider.lastTestedActionId,
+              identityHashCode(provider.triggers),
+              provider.triggers.length,
+              identityHashCode(provider.selectedSecretReport),
+              provider.secretOperationErrorMessage,
+              provider.isActionSecretStoreAvailable,
+            ]),
+            builder: (context) {
               final selected = provider.selectedDefinition;
               if (selected == null) {
                 return Center(
@@ -455,9 +500,33 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
     required this.child,
   });
 
+  static const double _editorMaxContentWidth = 920;
+  static const double _editorMaxContentHeight = 680;
+  static const double _editorMinContentWidth = 360;
+  static const double _editorMinContentHeight = 280;
+  static const double _editorDialogChromeWidth = 48;
+  static const double _editorDialogChromeHeight = 72;
+  static const double _editorDialogMargin = 24;
+
   final AppLocalizations l10n;
   final ValueNotifier<bool> dirtyNotifier;
   final Widget child;
+
+  Size _editorDialogContentSize(BuildContext context) {
+    final media = MediaQuery.sizeOf(context);
+    final maxWidth = math.max(
+      _editorMinContentWidth,
+      media.width - (_editorDialogMargin * 2) - _editorDialogChromeWidth,
+    );
+    final maxHeight = math.max(
+      _editorMinContentHeight,
+      media.height - (_editorDialogMargin * 2) - _editorDialogChromeHeight,
+    );
+    return Size(
+      math.min(_editorMaxContentWidth, maxWidth),
+      math.min(_editorMaxContentHeight, maxHeight),
+    );
+  }
 
   Future<bool> _confirmClose(BuildContext context) async {
     if (!dirtyNotifier.value) {
@@ -472,6 +541,17 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
     );
   }
 
+  Future<void> _tryClose(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final confirmed = await _confirmClose(context);
+    if (!confirmed || !navigator.mounted) {
+      return;
+    }
+    // Clear dirty before pop so PopScope does not show a second confirm.
+    dirtyNotifier.value = false;
+    navigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
@@ -483,27 +563,24 @@ class _AgentActionEditorDialogShell extends StatelessWidget {
             if (didPop) {
               return;
             }
-            final navigator = Navigator.of(context);
-            final confirmed = await _confirmClose(context);
-            if (confirmed && navigator.mounted) {
-              navigator.pop();
-            }
+            await _tryClose(context);
           },
-          child: AppContentDialog(
-            maxWidth: 980,
-            maxHeight: 760,
-            contentWidth: 920,
-            contentHeight: 680,
-            closeTooltip: l10n.btnClose,
-            title: const SizedBox.shrink(),
-            onClose: () async {
-              final navigator = Navigator.of(context);
-              final confirmed = await _confirmClose(context);
-              if (confirmed && navigator.mounted) {
-                navigator.pop();
-              }
+          child: Builder(
+            builder: (dialogContext) {
+              final contentSize = _editorDialogContentSize(dialogContext);
+              return AppContentDialog(
+                constraints: BoxConstraints(
+                  maxWidth: contentSize.width + _editorDialogChromeWidth,
+                  maxHeight: contentSize.height + _editorDialogChromeHeight,
+                ),
+                contentWidth: contentSize.width,
+                contentHeight: contentSize.height,
+                closeTooltip: l10n.btnClose,
+                title: const SizedBox.shrink(),
+                onClose: () => unawaited(_tryClose(dialogContext)),
+                content: child,
+              );
             },
-            content: child,
           ),
         );
       },

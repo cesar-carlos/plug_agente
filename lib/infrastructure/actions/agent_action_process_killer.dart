@@ -24,11 +24,10 @@ abstract final class AgentActionProcessKiller {
       return _killFailed(executionId: executionId, pid: process.pid, cause: error);
     }
 
-    if (_isKillPermissionDeniedOnCurrentPlatform(process.pid)) {
-      return _killPermissionDenied(executionId: executionId, pid: process.pid);
-    }
-
-    return _killFailed(executionId: executionId, pid: process.pid);
+    // Process.kill() returns false when the process has already exited. Do not
+    // follow up with OpenProcess ACCESS_DENIED on a recycled PID — that would
+    // mis-report a finished process as kill-permission-denied.
+    return _processAlreadyExited(executionId: executionId, pid: process.pid);
   }
 
   /// Best-effort kill by [pid] after restart when identity checks pass (or are skipped).
@@ -126,6 +125,22 @@ abstract final class AgentActionProcessKiller {
         'reason': AgentActionProcessConstants.killPermissionDeniedReason,
         'user_message':
             'Sem permissao para finalizar o processo principal. Execute o agente com privilegios adequados ou cancele pela conta que iniciou o processo.',
+      },
+    );
+  }
+
+  static ActionFailure _processAlreadyExited({
+    required String executionId,
+    required int pid,
+  }) {
+    return ActionNotFoundFailure.withContext(
+      message: 'Action execution process is no longer running.',
+      code: AgentActionFailureCode.processNotActive,
+      context: {
+        'execution_id': executionId,
+        'pid': pid,
+        'reason': AgentActionProcessConstants.processNotActiveReason,
+        'user_message': 'O processo principal desta execucao ja havia terminado.',
       },
     );
   }

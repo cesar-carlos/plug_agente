@@ -1392,7 +1392,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsElevatedRunnerPrepare => 'Prepare elevated runner';
 
   @override
-  String get agentActionsElevatedRunnerPreparing => 'Preparing elevated runner...';
+  String get agentActionsElevatedRunnerPreparing => 'Preparing elevated runner…';
 
   @override
   String get agentOperationalReadinessHubConnected => 'Hub: connected';
@@ -1534,7 +1534,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get agentActionsRetentionRemoteAudit => 'Remote agent.action audit';
+  String get agentActionsRetentionRemoteAudit => 'Remote audit history';
 
   @override
   String agentActionsRetentionRemoteAuditValue(int days) {
@@ -1637,7 +1637,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsHistoryPeriodLast3Days => 'Last 3 days';
 
   @override
-  String get agentActionsRemoteAuditTitle => 'Remote agent.action audit';
+  String get agentActionsRemoteAuditTitle => 'Remote audit';
 
   @override
   String get agentActionsRemoteAuditDescription =>

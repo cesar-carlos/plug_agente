@@ -82,6 +82,7 @@ class AgentActionExecutionOrchestrator {
     final runner = gatedContext.runner;
 
     final idempotencyKey = _idempotencyKeyFor(request);
+    Completer<Result<AgentActionExecution>>? reservedCompleter;
     if (idempotencyKey != null) {
       final existing = _idempotentExecutions[idempotencyKey];
       if (existing != null) {
@@ -100,33 +101,70 @@ class AgentActionExecutionOrchestrator {
         }
         return existing;
       }
+
+      reservedCompleter = Completer<Result<AgentActionExecution>>();
+      _idempotentExecutions[idempotencyKey] = reservedCompleter.future;
+      unawaited(
+        reservedCompleter.future.whenComplete(
+          () => _idempotentExecutions.remove(idempotencyKey),
+        ),
+      );
+
       final persistedExecutionResult = await _findPersistedIdempotentExecution(
         actionId: definition.id,
         idempotencyKey: _canonicalOptionalRequestString(request.idempotencyKey)!,
       );
       if (persistedExecutionResult.isError()) {
-        return Failure(persistedExecutionResult.exceptionOrNull()!);
+        final failure = persistedExecutionResult.exceptionOrNull()!;
+        reservedCompleter.complete(Failure(failure));
+        return Failure(failure);
       }
       final persistedExecutions = persistedExecutionResult.getOrThrow();
       if (persistedExecutions.isNotEmpty) {
-        return Success(persistedExecutions.first);
+        final Result<AgentActionExecution> replay = Success(persistedExecutions.first);
+        reservedCompleter.complete(replay);
+        return replay;
       }
     }
 
-    final startResult = await _startExecution(
-      definition: definition,
-      request: request,
-      runner: runner,
-    );
+    final Result<_StartedAgentActionExecution> startResult;
+    try {
+      startResult = await _startExecution(
+        definition: definition,
+        request: request,
+        runner: runner,
+      );
+    } on Exception catch (error) {
+      final failure = _toActionFailure(error);
+      reservedCompleter?.complete(Failure(failure));
+      return Failure(failure);
+    }
     if (startResult.isError()) {
-      return Failure(startResult.exceptionOrNull()!);
+      final failure = startResult.exceptionOrNull()!;
+      reservedCompleter?.complete(Failure(failure));
+      return Failure(failure);
     }
     final startedExecution = startResult.getOrThrow();
-    if (idempotencyKey != null) {
-      _idempotentExecutions[idempotencyKey] = startedExecution.completion;
+    final reserved = reservedCompleter;
+    if (reserved != null) {
       unawaited(
-        startedExecution.completion.whenComplete(
-          () => _idempotentExecutions.remove(idempotencyKey),
+        startedExecution.completion.then<void>(
+          (result) {
+            if (!reserved.isCompleted) {
+              reserved.complete(result);
+            }
+          },
+          onError: (Object error, _) {
+            if (!reserved.isCompleted) {
+              reserved.complete(
+                Failure(
+                  _toActionFailure(
+                    error is Exception ? error : Exception(error.toString()),
+                  ),
+                ),
+              );
+            }
+          },
         ),
       );
     }
@@ -544,7 +582,7 @@ class AgentActionExecutionOrchestrator {
       actionFailure.context,
     );
     return runningExecution.copyWith(
-      status: AgentActionExecutionStatus.failed,
+      status: _statusForFailure(actionFailure),
       finishedAt: _now(),
       redactionApplied: true,
       failureCode: actionFailure.code,
@@ -554,6 +592,19 @@ class AgentActionExecutionOrchestrator {
       processArgumentCount: processMetadata.processArgumentCount ?? runningExecution.processArgumentCount,
       processCommandPreview: processMetadata.processCommandPreview ?? runningExecution.processCommandPreview,
     );
+  }
+
+  AgentActionExecutionStatus _statusForFailure(ActionFailure actionFailure) {
+    return switch (actionFailure.code) {
+      AgentActionFailureCode.executionCancelled ||
+      AgentActionFailureCode.queueCancelled ||
+      AgentActionFailureCode.queueDisposed => AgentActionExecutionStatus.cancelled,
+      AgentActionFailureCode.executionKilled => AgentActionExecutionStatus.killed,
+      AgentActionFailureCode.executionTimedOut => AgentActionExecutionStatus.timedOut,
+      AgentActionFailureCode.queueIgnored => AgentActionExecutionStatus.skipped,
+      AgentActionFailureCode.interruptedOnBootstrap => AgentActionExecutionStatus.interrupted,
+      _ => AgentActionExecutionStatus.failed,
+    };
   }
 
   ActionFailure _toActionFailure(Exception failure) {

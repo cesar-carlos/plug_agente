@@ -10,6 +10,20 @@ import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_filter_bar.dart';
 
+void clearAgentActionDefinitionListFilters({
+  required AgentActionsProvider provider,
+  required AgentActionsUiPreferences uiPreferences,
+}) {
+  provider.clearDefinitionFilters();
+  unawaited(
+    uiPreferences.removeKeys([
+      AgentActionsUiPreferenceKeys.definitionTypeFilter,
+      AgentActionsUiPreferenceKeys.definitionStateFilter,
+      AgentActionsUiPreferenceKeys.definitionSearch,
+    ]),
+  );
+}
+
 class AgentActionsDefinitionFilters extends StatefulWidget {
   const AgentActionsDefinitionFilters({
     required this.provider,
@@ -125,16 +139,10 @@ class AgentActionsDefinitionFiltersState extends State<AgentActionsDefinitionFil
         ),
         Button(
           onPressed: provider.hasDefinitionListFilters
-              ? () {
-                  provider.clearDefinitionFilters();
-                  unawaited(
-                    widget.uiPreferences.removeKeys([
-                      AgentActionsUiPreferenceKeys.definitionTypeFilter,
-                      AgentActionsUiPreferenceKeys.definitionStateFilter,
-                      AgentActionsUiPreferenceKeys.definitionSearch,
-                    ]),
-                  );
-                }
+              ? () => clearAgentActionDefinitionListFilters(
+                    provider: provider,
+                    uiPreferences: widget.uiPreferences,
+                  )
               : null,
           child: Text(l10n.ctButtonClearFilters),
         ),

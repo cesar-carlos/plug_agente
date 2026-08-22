@@ -20,10 +20,10 @@ depende de RA-01 / RA-02 / RA-05.
 
 | Metodo | Side effect | Nota |
 | --- | --- | --- |
-| `agent.action.run` | Sim | `idempotency_key` obrigatorio |
-| `agent.action.validateRun` | Nao | Preflight sem persistir/iniciar |
-| `agent.action.cancel` | Sim | Fila ou processo principal |
-| `agent.action.getExecution` | Nao | Leitura redigida |
+| `agent.action.run` | Sim | `idempotency_key` obrigatorio; gatilho `remote` habilitado antes do rate limit |
+| `agent.action.validateRun` | Nao | Preflight sem persistir/iniciar; mesmo gate de gatilho `remote` |
+| `agent.action.cancel` | Sim | Fila ou processo principal; rate limit / auditoria por `action_id` da execucao |
+| `agent.action.getExecution` | Nao | Leitura redigida; janela UTF-8; prefetch sem hidratar output |
 
 Constantes: `lib/core/constants/agent_action_rpc_constants.dart`.
 Transporte: so `rpc:request` / `rpc:response` em `PayloadFrame`.

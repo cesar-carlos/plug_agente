@@ -39,20 +39,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsMoreActions => 'Mais ações';
 
   @override
-  String get agentActionsTestSelected => 'Testar acao';
+  String get agentActionsTestSelected => 'Testar ação';
 
   @override
-  String get agentActionsCancelExecution => 'Cancelar execucao';
+  String get agentActionsCancelExecution => 'Cancelar execução';
 
   @override
-  String get agentActionsDeleteSelected => 'Excluir acao';
+  String get agentActionsDeleteSelected => 'Excluir ação';
 
   @override
-  String get agentActionsDeleteConfirmTitle => 'Excluir acao';
+  String get agentActionsDeleteConfirmTitle => 'Excluir ação';
 
   @override
   String agentActionsDeleteConfirmMessage(Object actionName) {
-    return 'Excluir \"$actionName\"? O historico de execucao sera preservado, mas esta acao nao podera mais executar.';
+    return 'Excluir \"$actionName\"? O histórico de execução será preservado, mas esta ação não poderá mais executar.';
   }
 
   @override
@@ -62,11 +62,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsDeleteCancel => 'Cancelar';
 
   @override
-  String get agentActionsEditorDiscardConfirmTitle => 'Descartar alteracoes nao salvas?';
+  String get agentActionsEditorDiscardConfirmTitle => 'Descartar alterações não salvas?';
 
   @override
   String get agentActionsEditorDiscardConfirmMessage =>
-      'Existem alteracoes nao salvas nesta acao. Fechar agora vai descarta-las.';
+      'Existem alterações não salvas nesta ação. Fechar agora vai descartá-las.';
 
   @override
   String get agentActionsEditorDiscardConfirm => 'Descartar';
@@ -75,31 +75,31 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsEditorKeepEditing => 'Continuar editando';
 
   @override
-  String get agentActionsExportBundle => 'Exportar acoes…';
+  String get agentActionsExportBundle => 'Exportar ações…';
 
   @override
-  String get agentActionsImportBundle => 'Importar acoes…';
+  String get agentActionsImportBundle => 'Importar ações…';
 
   @override
   String get agentActionsExportBundleDefaultFileName => 'plug_agente_acoes.json';
 
   @override
-  String get agentActionsExportBundleSuccessTitle => 'Acoes exportadas';
+  String get agentActionsExportBundleSuccessTitle => 'Ações exportadas';
 
   @override
   String get agentActionsExportBundleSuccessMessage =>
-      'O pacote sanitizado foi salvo. Valores de segredo nao foram incluidos; configure os placeholders na maquina de destino.';
+      'O pacote sanitizado foi salvo. Valores de segredo não foram incluídos; configure os placeholders na máquina de destino.';
 
   @override
-  String get agentActionsImportBundleSuccessTitle => 'Acoes importadas';
+  String get agentActionsImportBundleSuccessTitle => 'Ações importadas';
 
   @override
   String agentActionsImportBundleSuccessMessage(int definitionCount, int triggerCount) {
     String _temp0 = intl.Intl.pluralLogic(
       definitionCount,
       locale: localeName,
-      other: '$definitionCount acoes',
-      one: '1 acao',
+      other: '$definitionCount ações',
+      one: '1 ação',
     );
     String _temp1 = intl.Intl.pluralLogic(
       triggerCount,
@@ -107,20 +107,20 @@ class AppLocalizationsPt extends AppLocalizations {
       other: '$triggerCount gatilhos',
       one: '1 gatilho',
     );
-    return 'Importadas $_temp0 e $_temp1. Valide as definicoes antes de executar.';
+    return 'Importadas $_temp0 e $_temp1. Valide as definições antes de executar.';
   }
 
   @override
   String agentActionsImportBundleSecretsMessage(Object secretNames) {
-    return 'Configure estes placeholders de segredo nesta maquina: $secretNames.';
+    return 'Configure estes placeholders de segredo nesta máquina: $secretNames.';
   }
 
   @override
-  String get agentActionsConfirmImportBundleTitle => 'Importar acoes';
+  String get agentActionsConfirmImportBundleTitle => 'Importar ações';
 
   @override
   String get agentActionsConfirmImportBundleMessage =>
-      'Importar acoes de um pacote JSON? Acoes existentes com o mesmo id serao atualizadas. Gatilhos entram pausados e execucao remota exige nova aprovacao.';
+      'Importar ações de um pacote JSON? Ações existentes com o mesmo id serão atualizadas. Gatilhos entram pausados e execução remota exige nova aprovação.';
 
   @override
   String get agentActionsConfirmImportBundleConfirm => 'Importar';
@@ -129,30 +129,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsConfirmImportBundleCancel => 'Cancelar';
 
   @override
-  String get agentActionsBundleTransferFailedTitle => 'Falha na transferencia do pacote de acoes';
+  String get agentActionsBundleTransferFailedTitle => 'Falha na transferência do pacote de ações';
 
   @override
-  String get agentActionsBundlePickerError => 'Nao foi possivel abrir o seletor de arquivos.';
+  String get agentActionsBundlePickerError => 'Não foi possível abrir o seletor de arquivos.';
 
   @override
   String get agentActionsGridColumnRisksTriggers => 'Riscos/Gatilhos';
 
   @override
   String get agentActionsBundleExportWriteFailed =>
-      'Nao foi possivel gravar o arquivo de exportacao. Verifique o caminho e as permissoes.';
+      'Não foi possível gravar o arquivo de exportação. Verifique o caminho e as permissões.';
 
   @override
   String get agentActionsBundleImportReadFailed =>
-      'Nao foi possivel ler o arquivo de importacao. Verifique o caminho e as permissoes.';
+      'Não foi possível ler o arquivo de importação. Verifique o caminho e as permissões.';
 
   @override
-  String get agentActionsTestSuccessTitle => 'Teste da acao concluido';
+  String get agentActionsTestSuccessTitle => 'Teste da ação concluído';
 
   @override
-  String get agentActionsTestCanRunMessage => 'A configuracao da acao e valida e a acao pode executar.';
+  String get agentActionsTestCanRunMessage => 'A configuração da ação é válida e a ação pode executar.';
 
   @override
-  String get agentActionsTestValidButInactiveMessage => 'A configuracao da acao e valida, mas a acao nao esta ativa.';
+  String get agentActionsTestValidButInactiveMessage => 'A configuração da ação é válida, mas a ação não está ativa.';
 
   @override
   String get agentActionsTestPreviewTitle => 'Preview redigido do teste';
@@ -161,46 +161,46 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsTestPreviewCommandLabel => 'Comando preparado';
 
   @override
-  String get agentActionsTestPreviewUnavailableTitle => 'Preview indisponivel';
+  String get agentActionsTestPreviewUnavailableTitle => 'Preview indisponível';
 
   @override
   String get agentActionsTestPreviewDiagnosticEngine => 'Engine';
 
   @override
-  String get agentActionsTestPreviewDiagnosticConnectionLabel => 'Conexao';
+  String get agentActionsTestPreviewDiagnosticConnectionLabel => 'Conexão';
 
   @override
-  String get agentActionsTestPreviewDiagnosticCatalogCount => 'Conexoes no catalogo';
+  String get agentActionsTestPreviewDiagnosticCatalogCount => 'Conexões no catálogo';
 
   @override
-  String get agentActionsTestPreviewDiagnosticDefaultConfig => 'Usou config padrao';
+  String get agentActionsTestPreviewDiagnosticDefaultConfig => 'Usou config padrão';
 
   @override
   String get agentActionsTestPreviewDiagnosticYes => 'Sim';
 
   @override
-  String get agentActionsTestPreviewDiagnosticNo => 'Nao';
+  String get agentActionsTestPreviewDiagnosticNo => 'Não';
 
   @override
-  String get agentActionsFormCreateTitle => 'Nova acao de linha de comando';
+  String get agentActionsFormCreateTitle => 'Nova ação de linha de comando';
 
   @override
-  String get agentActionsFormEditTitle => 'Acao de linha de comando';
+  String get agentActionsFormEditTitle => 'Ação de linha de comando';
 
   @override
-  String get agentActionsFormCreateDeveloperTitle => 'Nova acao developer';
+  String get agentActionsFormCreateDeveloperTitle => 'Nova ação developer';
 
   @override
-  String get agentActionsFormEditDeveloperTitle => 'Acao developer';
+  String get agentActionsFormEditDeveloperTitle => 'Ação developer';
 
   @override
-  String get agentActionsFormCreateExecutableTitle => 'Nova acao executavel';
+  String get agentActionsFormCreateExecutableTitle => 'Nova ação executável';
 
   @override
-  String get agentActionsFormEditExecutableTitle => 'Acao executavel';
+  String get agentActionsFormEditExecutableTitle => 'Ação executável';
 
   @override
-  String get agentActionsFormExecutablePath => 'Caminho do executavel';
+  String get agentActionsFormExecutablePath => 'Caminho do executável';
 
   @override
   String get agentActionsFormArguments => 'Argumentos';
@@ -209,13 +209,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormArgumentsHint => 'Informe um argumento por linha.';
 
   @override
-  String get agentActionsFormBrowseExecutablePath => 'Procurar executavel';
+  String get agentActionsFormBrowseExecutablePath => 'Procurar executável';
 
   @override
-  String get agentActionsFormCreateScriptTitle => 'Nova acao de script';
+  String get agentActionsFormCreateScriptTitle => 'Nova ação de script';
 
   @override
-  String get agentActionsFormEditScriptTitle => 'Acao de script';
+  String get agentActionsFormEditScriptTitle => 'Ação de script';
 
   @override
   String get agentActionsFormScriptPath => 'Caminho do script';
@@ -225,7 +225,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsFormInterpreterPathHint =>
-      'Deixe vazio para usar o interpretador padrao da extensao do script.';
+      'Deixe vazio para usar o interpretador padrão da extensão do script.';
 
   @override
   String get agentActionsFormBrowseScriptPath => 'Procurar script';
@@ -234,10 +234,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormBrowseInterpreterPath => 'Procurar interpretador';
 
   @override
-  String get agentActionsFormCreatePowerShellTitle => 'Nova acao PowerShell';
+  String get agentActionsFormCreatePowerShellTitle => 'Nova ação PowerShell';
 
   @override
-  String get agentActionsFormEditPowerShellTitle => 'Acao PowerShell';
+  String get agentActionsFormEditPowerShellTitle => 'Ação PowerShell';
 
   @override
   String get agentActionsFormPowerShellMode => 'Modo PowerShell';
@@ -249,7 +249,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormPowerShellModeScript => 'Script .ps1';
 
   @override
-  String get agentActionsFormPowerShellExecutable => 'Executavel PowerShell';
+  String get agentActionsFormPowerShellExecutable => 'Executável PowerShell';
 
   @override
   String get agentActionsFormPowerShellExecutableWindows => 'Windows PowerShell';
@@ -271,13 +271,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsFormPowerShellModeUnavailable =>
-      'O modo PowerShell selecionado esta indisponivel no runtime atual.';
+      'O modo PowerShell selecionado está indisponível no runtime atual.';
 
   @override
-  String get agentActionsFormCreateJarTitle => 'Nova acao JAR';
+  String get agentActionsFormCreateJarTitle => 'Nova ação JAR';
 
   @override
-  String get agentActionsFormEditJarTitle => 'Acao JAR';
+  String get agentActionsFormEditJarTitle => 'Ação JAR';
 
   @override
   String get agentActionsFormJarPath => 'Caminho do arquivo .jar';
@@ -295,10 +295,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormBrowseJavaExecutablePath => 'Procurar java.exe';
 
   @override
-  String get agentActionsFormCreateEmailTitle => 'Nova acao de e-mail';
+  String get agentActionsFormCreateEmailTitle => 'Nova ação de e-mail';
 
   @override
-  String get agentActionsFormEditEmailTitle => 'Acao de e-mail';
+  String get agentActionsFormEditEmailTitle => 'Ação de e-mail';
 
   @override
   String get agentActionsFormSmtpProfileId => 'Nome do segredo do perfil SMTP';
@@ -310,22 +310,22 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormEmailFrom => 'Remetente';
 
   @override
-  String get agentActionsFormEmailTo => 'Destinatarios (Para)';
+  String get agentActionsFormEmailTo => 'Destinatários (Para)';
 
   @override
-  String get agentActionsFormEmailToHint => 'Um endereco de e-mail por linha.';
+  String get agentActionsFormEmailToHint => 'Um endereço de e-mail por linha.';
 
   @override
-  String get agentActionsFormEmailCc => 'Copia (Cc) opcional';
+  String get agentActionsFormEmailCc => 'Cópia (Cc) opcional';
 
   @override
-  String get agentActionsFormEmailCcHint => 'Um endereco de e-mail por linha.';
+  String get agentActionsFormEmailCcHint => 'Um endereço de e-mail por linha.';
 
   @override
-  String get agentActionsFormEmailBcc => 'Copia oculta (Cco) opcional';
+  String get agentActionsFormEmailBcc => 'Cópia oculta (Cco) opcional';
 
   @override
-  String get agentActionsFormEmailBccHint => 'Um endereco de e-mail por linha.';
+  String get agentActionsFormEmailBccHint => 'Um endereço de e-mail por linha.';
 
   @override
   String get agentActionsFormEmailSubject => 'Modelo do assunto';
@@ -346,13 +346,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsFormEmailAttachmentsHint =>
-      'Um caminho de arquivo por linha. Os tipos permitidos sao validados pela politica da acao.';
+      'Um caminho de arquivo por linha. Os tipos permitidos são validados pela política da ação.';
 
   @override
-  String get agentActionsFormCreateComObjectTitle => 'Nova acao de objeto COM';
+  String get agentActionsFormCreateComObjectTitle => 'Nova ação de objeto COM';
 
   @override
-  String get agentActionsFormEditComObjectTitle => 'Acao de objeto COM';
+  String get agentActionsFormEditComObjectTitle => 'Ação de objeto COM';
 
   @override
   String get agentActionsFormComProgId => 'ProgID COM';
@@ -364,22 +364,22 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormComArguments => 'Argumentos (objeto JSON)';
 
   @override
-  String get agentActionsFormComArgumentsHint => 'Use um objeto JSON simples com valores texto, numero ou booleano.';
+  String get agentActionsFormComArgumentsHint => 'Use um objeto JSON simples com valores texto, número ou booleano.';
 
   @override
-  String get agentActionsFormInvalidComArguments => 'Os argumentos precisam ser um objeto JSON valido.';
+  String get agentActionsFormInvalidComArguments => 'Os argumentos precisam ser um objeto JSON válido.';
 
   @override
   String get agentActionsFormNew => 'Nova';
 
   @override
-  String get agentActionsFormSave => 'Salvar acao';
+  String get agentActionsFormSave => 'Salvar ação';
 
   @override
   String get agentActionsFormName => 'Nome';
 
   @override
-  String get agentActionsFormDescription => 'Descricao';
+  String get agentActionsFormDescription => 'Descrição';
 
   @override
   String get agentActionsFormType => 'Tipo';
@@ -388,7 +388,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormCommand => 'Comando';
 
   @override
-  String get agentActionsFormWorkingDirectory => 'Diretorio de trabalho';
+  String get agentActionsFormWorkingDirectory => 'Diretório de trabalho';
 
   @override
   String get agentActionsFormExecutorPath => 'Caminho do Executor.exe';
@@ -409,68 +409,62 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormBrowseData7ConfigPath => 'Localizar Data7.Config';
 
   @override
-  String get agentActionsFormBrowseFileError => 'Nao foi possivel abrir o seletor de arquivo desta acao.';
+  String get agentActionsFormBrowseFileError => 'Não foi possível abrir o seletor de arquivo desta ação.';
 
   @override
-  String get agentActionsFormUseDefaultExecutorPath => 'Usar Executor padrao';
+  String get agentActionsFormUseDefaultExecutorPath => 'Usar Executor padrão';
 
   @override
-  String get agentActionsFormUseDefaultConfigBinPath => 'Usar config padrao (bin)';
+  String get agentActionsFormUseDefaultConfigBinPath => 'Usar config padrão (bin)';
 
   @override
-  String get agentActionsFormUseDefaultConfigRootPath => 'Usar config padrao (raiz)';
+  String get agentActionsFormUseDefaultConfigRootPath => 'Usar config padrão (raiz)';
 
   @override
-  String get agentActionsFormExecutorPathHintExpectedFileName => 'O caminho do executor deve terminar em Executor.exe.';
+  String get agentActionsFormExecutorPathHintExpectedFileName => 'O caminho deve terminar em Executor.exe.';
 
   @override
-  String get agentActionsFormExecutorPathHintDefault => 'O executor esta apontando para o caminho padrao do Data7.';
+  String get agentActionsFormExecutorPathHintDefault => 'Executor no caminho padrão do Data7.';
 
   @override
-  String get agentActionsFormExecutorPathHintMissing => 'O Executor.exe informado nao foi encontrado neste caminho.';
+  String get agentActionsFormExecutorPathHintMissing => 'Executor.exe não encontrado neste caminho.';
 
   @override
-  String get agentActionsFormExecutorPathHintDirectory =>
-      'O caminho do executor aponta para uma pasta, nao para um arquivo Executor.exe.';
+  String get agentActionsFormExecutorPathHintDirectory => 'Este caminho é uma pasta, não um Executor.exe.';
 
   @override
   String get agentActionsFormProjectPathHintExpectedExtension => 'O projeto deve apontar para um arquivo .7Proj.';
 
   @override
-  String get agentActionsFormProjectPathHintMissing => 'O arquivo .7Proj informado nao foi encontrado neste caminho.';
+  String get agentActionsFormProjectPathHintMissing => 'Arquivo .7Proj não encontrado neste caminho.';
 
   @override
-  String get agentActionsFormProjectPathHintDirectory =>
-      'O caminho do projeto aponta para uma pasta, nao para um arquivo .7Proj.';
+  String get agentActionsFormProjectPathHintDirectory => 'Este caminho é uma pasta, não um arquivo .7Proj.';
 
   @override
-  String get agentActionsFormData7ConfigPathHintExpectedFileName =>
-      'O caminho de configuracao deve terminar em Data7.Config.';
+  String get agentActionsFormData7ConfigPathHintExpectedFileName => 'O caminho deve terminar em Data7.Config.';
 
   @override
-  String get agentActionsFormData7ConfigPathHintDefaultBin =>
-      'O Data7.Config esta apontando para o caminho padrao em C:\\Data7\\bin.';
+  String get agentActionsFormData7ConfigPathHintDefaultBin => 'Data7.Config no padrão C:\\Data7\\bin.';
 
   @override
-  String get agentActionsFormData7ConfigPathHintDefaultRoot =>
-      'O Data7.Config esta apontando para o caminho padrao em C:\\Data7.';
+  String get agentActionsFormData7ConfigPathHintDefaultRoot => 'Data7.Config no padrão C:\\Data7.';
 
   @override
-  String get agentActionsFormData7ConfigPathHintMissing => 'O Data7.Config informado nao foi encontrado neste caminho.';
+  String get agentActionsFormData7ConfigPathHintMissing => 'Data7.Config não encontrado neste caminho.';
 
   @override
-  String get agentActionsFormData7ConfigPathHintDirectory =>
-      'O caminho de configuracao aponta para uma pasta, nao para um arquivo Data7.Config.';
+  String get agentActionsFormData7ConfigPathHintDirectory => 'Este caminho é uma pasta, não um Data7.Config.';
 
   @override
   String get agentActionsFormPathHintInspectionFailed =>
-      'Nao foi possivel inspecionar este caminho local agora. Revise permissao, link ou disponibilidade do disco.';
+      'Não foi possível inspecionar o caminho. Verifique permissão, link ou disco.';
 
   @override
-  String get agentActionsFormReloadConnections => 'Recarregar conexoes';
+  String get agentActionsFormReloadConnections => 'Recarregar conexões';
 
   @override
-  String get agentActionsFormDefaultConfigResolved => 'Usando o Data7.Config encontrado no local padrao.';
+  String get agentActionsFormDefaultConfigResolved => 'Usando o Data7.Config do local padrão.';
 
   @override
   String agentActionsFormResolvedConfigPath(Object path) {
@@ -479,250 +473,250 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String agentActionsFormLoadedConfigPath(Object path) {
-    return 'Conexoes carregadas de: $path';
+    return 'Conexões carregadas de: $path';
   }
 
   @override
-  String get agentActionsFormConnectionId => 'ID da conexao';
+  String get agentActionsFormConnectionId => 'ID da conexão';
 
   @override
-  String get agentActionsFormConnectionSelector => 'Conexao carregada';
+  String get agentActionsFormConnectionSelector => 'Conexão carregada';
 
   @override
-  String get agentActionsFormConnectionSelectorPlaceholder => 'Selecione uma conexao carregada';
+  String get agentActionsFormConnectionSelectorPlaceholder => 'Selecione uma conexão carregada';
 
   @override
-  String get agentActionsFormConnectionSearch => 'Filtrar conexoes carregadas';
+  String get agentActionsFormConnectionSearch => 'Filtrar conexões carregadas';
 
   @override
-  String get agentActionsFormConnectionFilterEmpty => 'Nenhuma conexao carregada corresponde a este filtro.';
+  String get agentActionsFormConnectionFilterEmpty => 'Nenhuma conexão carregada corresponde a este filtro.';
 
   @override
-  String get agentActionsFormConnectionLabel => 'Rotulo seguro da conexao';
+  String get agentActionsFormConnectionLabel => 'Rótulo seguro da conexão';
 
   @override
-  String get agentActionsFormConnectionMissingTitle => 'Conexao salva nao encontrada';
+  String get agentActionsFormConnectionMissingTitle => 'Conexão salva não encontrada';
 
   @override
   String get agentActionsFormConnectionMissingMessage =>
-      'A conexao salva nao existe mais no Data7.Config carregado. Recarregue as conexoes, selecione outra conexao valida e salve a acao novamente.';
+      'A conexão salva não existe mais no Data7.Config carregado. Recarregue as conexões, selecione outra conexão válida e salve a ação novamente.';
 
   @override
-  String get agentActionsFormConnectionUnknownTitle => 'ID de conexao fora do catalogo carregado';
+  String get agentActionsFormConnectionUnknownTitle => 'ID de conexão fora do catálogo carregado';
 
   @override
   String get agentActionsFormConnectionUnknownMessage =>
-      'O ID informado nao pertence ao catalogo carregado agora. Selecione uma conexao valida na lista ou recarregue as conexoes antes de salvar.';
+      'O ID informado não pertence ao catálogo carregado agora. Selecione uma conexão válida na lista ou recarregue as conexões antes de salvar.';
 
   @override
-  String get agentActionsFormConnectionChangedTitle => 'Conexao alterada desde a ultima validacao';
+  String get agentActionsFormConnectionChangedTitle => 'Conexão alterada desde a última validação';
 
   @override
   String get agentActionsFormConnectionChangedMessage =>
-      'A conexao carregada mudou desde o snapshot salvo. Revise a configuracao e salve a acao novamente antes de executar.';
+      'A conexão carregada mudou desde o snapshot salvo. Revise a configuração e salve a ação novamente antes de executar.';
 
   @override
   String get agentActionsFormUnsupportedType =>
-      'O editor visual deste tipo de acao ainda nao esta disponivel nesta tela.';
+      'O editor visual deste tipo de ação ainda não está disponível nesta tela.';
 
   @override
   String get agentActionsFormState => 'Estado';
 
   @override
-  String get agentActionsHelpTypeTitle => 'Tipo da acao';
+  String get agentActionsHelpTypeTitle => 'Tipo da ação';
 
   @override
   String get agentActionsHelpTypeMessage =>
-      'Define o runner e o contrato interno usado para salvar e executar a acao. Depois que a acao e criada, o tipo fica somente leitura para evitar troca acidental de runner.';
+      'Define o runner e o contrato interno usado para salvar e executar a ação. Depois que a ação é criada, o tipo fica somente leitura para evitar troca acidental de runner.';
 
   @override
-  String get agentActionsHelpStateTitle => 'Estado da acao';
+  String get agentActionsHelpStateTitle => 'Estado da ação';
 
   @override
   String get agentActionsHelpStateMessage =>
-      'Controla se a acao pode executar. Acoes que precisam validar aparecem na lista, mas nao devem ser executadas automaticamente ate serem revisadas.';
+      'Controla se a ação pode executar. Ações que precisam validar aparecem na lista, mas não devem ser executadas automaticamente até serem revisadas.';
 
   @override
   String get agentActionsHelpCommandTitle => 'Comando';
 
   @override
   String get agentActionsHelpCommandMessage =>
-      'Linha enviada diretamente ao runner de linha de comando. Inclua o executavel e argumentos como seriam chamados no Windows; placeholders de segredo permanecem em texto para resolucao segura no runtime.';
+      'Linha enviada diretamente ao runner de linha de comando. Inclua o executável e argumentos como seriam chamados no Windows; placeholders de segredo permanecem em texto para resolução segura no runtime.';
 
   @override
   String get agentActionsHelpPowerShellModeTitle => 'Modo PowerShell';
 
   @override
   String get agentActionsHelpPowerShellModeMessage =>
-      'Comando salva um wrapper de PowerShell como linha de comando. Script .ps1 salva como acao de script, reaproveitando o runner de scripts.';
+      'Comando salva um wrapper de PowerShell como linha de comando. Script .ps1 salva como ação de script, reaproveitando o runner de scripts.';
 
   @override
-  String get agentActionsHelpPowerShellExecutableTitle => 'Executavel PowerShell';
+  String get agentActionsHelpPowerShellExecutableTitle => 'Executável PowerShell';
 
   @override
   String get agentActionsHelpPowerShellExecutableMessage =>
-      'Escolha powershell.exe para Windows PowerShell ou pwsh.exe para PowerShell 7. O executavel precisa estar disponivel no PATH ou no ambiente do processo.';
+      'Escolha powershell.exe para Windows PowerShell ou pwsh.exe para PowerShell 7. O executável precisa estar disponível no PATH ou no ambiente do processo.';
 
   @override
   String get agentActionsHelpPowerShellCommandTitle => 'Comando PowerShell';
 
   @override
   String get agentActionsHelpPowerShellCommandMessage =>
-      'Conteudo passado ao PowerShell via -Command. O editor monta o wrapper persistido e preserva placeholders de segredo para o scanner atual.';
+      'Conteúdo passado ao PowerShell via -Command. O editor monta o wrapper persistido e preserva placeholders de segredo para o scanner atual.';
 
   @override
   String get agentActionsHelpPowerShellScriptTitle => 'Script PowerShell';
 
   @override
   String get agentActionsHelpPowerShellScriptMessage =>
-      'Caminho para um arquivo .ps1 local. No modo PowerShell 7, o interpretador pwsh.exe e preenchido automaticamente na configuracao de script.';
+      'Caminho para um arquivo .ps1 local. No modo PowerShell 7, o interpretador pwsh.exe é preenchido automaticamente na configuração de script.';
 
   @override
   String get agentActionsHelpPathTitle => 'Caminho principal';
 
   @override
   String get agentActionsHelpPathMessage =>
-      'Caminho local principal usado pelo runner, como executavel, script ou arquivo de entrada. Prefira caminho absoluto; alteracoes futuras podem bloquear a execucao conforme a politica de mudanca de path.';
+      'Caminho local principal usado pelo runner, como executável, script ou arquivo de entrada. Prefira caminho absoluto; alterações futuras podem bloquear a execução conforme a política de mudança de path.';
 
   @override
   String get agentActionsHelpArgumentsTitle => 'Argumentos';
 
   @override
   String get agentActionsHelpArgumentsMessage =>
-      'Informe um argumento por linha. Cada linha vira um item da lista de argumentos, entao nao misture varias opcoes na mesma linha a menos que o programa espere esse formato.';
+      'Informe um argumento por linha. Cada linha vira um item da lista de argumentos, então não misture várias opções na mesma linha a menos que o programa espere esse formato.';
 
   @override
-  String get agentActionsHelpWorkingDirectoryTitle => 'Diretorio de trabalho';
+  String get agentActionsHelpWorkingDirectoryTitle => 'Diretório de trabalho';
 
   @override
   String get agentActionsHelpWorkingDirectoryMessage =>
-      'Diretorio inicial do processo. Deixe vazio para usar o padrao do runner ou preencha um caminho absoluto permitido pela politica de path.';
+      'Diretório inicial do processo. Deixe vazio para usar o padrão do runner ou preencha um caminho absoluto permitido pela política de path.';
 
   @override
   String get agentActionsHelpInterpreterTitle => 'Interpretador';
 
   @override
   String get agentActionsHelpInterpreterMessage =>
-      'Executavel usado para abrir scripts. Quando vazio, o runner escolhe o interpretador padrao da extensao; preencha para forcar uma versao especifica, como pwsh.exe ou python.exe.';
+      'Executável usado para abrir scripts. Quando vazio, o runner escolhe o interpretador padrão da extensão; preencha para forçar uma versão específica, como pwsh.exe ou python.exe.';
 
   @override
   String get agentActionsHelpJarTitle => 'Arquivo JAR';
 
   @override
   String get agentActionsHelpJarMessage =>
-      'Arquivo .jar que sera executado pelo Java. O caminho e salvo na definicao e participa da politica de mudanca de path.';
+      'Arquivo .jar que será executado pelo Java. O caminho é salvo na definição e participa da política de mudança de path.';
 
   @override
   String get agentActionsHelpEmailTitle => 'Campo de e-mail';
 
   @override
   String get agentActionsHelpEmailMessage =>
-      'Configuracao usada pelo runner de e-mail. Campos de destinatarios e anexos aceitam um item por linha; o perfil SMTP precisa existir na configuracao local.';
+      'Configuração usada pelo runner de e-mail. Campos de destinatários e anexos aceitam um item por linha; o perfil SMTP precisa existir na configuração local.';
 
   @override
   String get agentActionsHelpComTitle => 'Objeto COM';
 
   @override
   String get agentActionsHelpComMessage =>
-      'Identifica o ProgID do objeto COM, o metodo ou propriedade chamada e os argumentos enviados. Use apenas automacoes COM instaladas e testadas no Windows local.';
+      'Identifica o ProgID do objeto COM, o método ou propriedade chamada e os argumentos enviados. Use apenas automações COM instaladas e testadas no Windows local.';
 
   @override
   String get agentActionsHelpDeveloperTitle => 'Developer Data7';
 
   @override
   String get agentActionsHelpDeveloperMessage =>
-      'Configura o Executor.exe, projeto .7Proj, Data7.Config e conexao que serao usados para executar a acao Developer.';
+      'Configura o Executor.exe, projeto .7Proj, Data7.Config e conexão que serão usados para executar a ação Developer.';
 
   @override
-  String get agentActionsHelpMaxAttemptsTitle => 'Maximo de tentativas';
+  String get agentActionsHelpMaxAttemptsTitle => 'Máximo de tentativas';
 
   @override
   String get agentActionsHelpMaxAttemptsMessage =>
-      'Quantidade maxima de tentativas para execucoes locais e gatilhos. Execucoes remotas continuam em uma tentativa, salvo se retry remoto estiver habilitado.';
+      'Quantidade máxima de tentativas para execuções locais e gatilhos. Execuções remotas continuam em uma tentativa, salvo se retry remoto estiver habilitado.';
 
   @override
-  String get agentActionsHelpTimeoutTitle => 'Tempo maximo';
+  String get agentActionsHelpTimeoutTitle => 'Tempo máximo';
 
   @override
   String get agentActionsHelpTimeoutMessage =>
-      'Tempo limite da execucao local em minutos. Ao atingir o limite, a execucao falha por timeout e a politica abaixo decide se o processo principal deve ser encerrado.';
+      'Tempo limite da execução local em minutos. Ao atingir o limite, a execução falha por timeout e a política abaixo decide se o processo principal deve ser encerrado.';
 
   @override
   String get agentActionsHelpKillOnTimeoutTitle => 'Encerrar no timeout';
 
   @override
   String get agentActionsHelpKillOnTimeoutMessage =>
-      'Quando marcado, o runner tenta encerrar o processo principal se a execucao ultrapassar o tempo maximo configurado.';
+      'Quando marcado, o runner tenta encerrar o processo principal se a execução ultrapassar o tempo máximo configurado.';
 
   @override
   String get agentActionsHelpRemoteRetryTitle => 'Retry remoto';
 
   @override
   String get agentActionsHelpRemoteRetryMessage =>
-      'Permite que execucoes iniciadas pelo Hub usem a politica de retry. Use apenas quando repetir a acao for seguro.';
+      'Permite que execuções iniciadas pelo Hub usem a política de retry. Use apenas quando repetir a ação for seguro.';
 
   @override
-  String get agentActionsHelpRunElevatedTitle => 'Execucao elevada';
+  String get agentActionsHelpRunElevatedTitle => 'Execução elevada';
 
   @override
   String get agentActionsHelpRunElevatedMessage =>
-      'Executa por helper elevado quando disponivel. Requer instalacao e configuracao local do helper e da tarefa agendada.';
+      'Executa por helper elevado quando disponível. Requer instalação e configuração local do helper e da tarefa agendada.';
 
   @override
-  String get agentActionsHelpContextInjectionTitle => 'Injecao de contexto';
+  String get agentActionsHelpContextInjectionTitle => 'Injeção de contexto';
 
   @override
   String get agentActionsHelpContextInjectionMessage =>
-      'Define como parametros runtime entram na execucao: argumento, arquivo, variaveis de ambiente ou stdin.';
+      'Define como parâmetros runtime entram na execução: argumento, arquivo, variáveis de ambiente ou stdin.';
 
   @override
-  String get agentActionsHelpPathChangePolicyTitle => 'Mudanca de path';
+  String get agentActionsHelpPathChangePolicyTitle => 'Mudança de path';
 
   @override
   String get agentActionsHelpPathChangePolicyMessage =>
-      'Controla o que acontece quando caminhos ou snapshots de conteudo mudam depois da validacao: falhar, avisar ou permitir.';
+      'Controla o que acontece quando caminhos ou snapshots de conteúdo mudam depois da validação: falhar, avisar ou permitir.';
 
   @override
   String get agentActionsHelpRuntimeSchemaTitle => 'Schema runtime';
 
   @override
   String get agentActionsHelpRuntimeSchemaMessage =>
-      'Objeto JSON Schema usado para validar runtimeParameters antes da execucao. Use quando o Hub ou gatilhos enviarem parametros; deixe vazio para aceitar qualquer objeto.';
+      'Objeto JSON Schema usado para validar runtimeParameters antes da execução. Use quando o Hub ou gatilhos enviarem parâmetros; deixe vazio para aceitar qualquer objeto.';
 
   @override
   String get agentActionsHelpAllowedProfilesTitle => 'Perfis permitidos';
 
   @override
   String get agentActionsHelpAllowedProfilesMessage =>
-      'Limita a acao aos perfis operacionais informados. Campo vazio permite qualquer perfil do agente.';
+      'Limita a ação aos perfis operacionais informados. Campo vazio permite qualquer perfil do agente.';
 
   @override
-  String get agentActionsHelpAllowedEnvironmentVariablesTitle => 'Nomes de variaveis permitidos';
+  String get agentActionsHelpAllowedEnvironmentVariablesTitle => 'Nomes de variáveis permitidos';
 
   @override
   String get agentActionsHelpAllowedEnvironmentVariablesMessage =>
-      'Lista os nomes de variaveis que podem ser injetadas no processo. Use para impedir nomes inesperados vindos de parametros runtime ou edicoes futuras.';
+      'Lista os nomes de variáveis que podem ser injetadas no processo. Use para impedir nomes inesperados vindos de parâmetros runtime ou edições futuras.';
 
   @override
-  String get agentActionsHelpEnvironmentVariablesTitle => 'Variaveis de ambiente';
+  String get agentActionsHelpEnvironmentVariablesTitle => 'Variáveis de ambiente';
 
   @override
   String get agentActionsHelpEnvironmentVariablesMessage =>
-      'Variaveis adicionadas ao processo filho no formato NAME=valor, uma por linha. Placeholders de segredo continuam resolvidos no runtime.';
+      'Variáveis adicionadas ao processo filho no formato NAME=valor, uma por linha. Placeholders de segredo continuam resolvidos no runtime.';
 
   @override
-  String get agentActionsHelpQueueTitle => 'Concorrencia e fila';
+  String get agentActionsHelpQueueTitle => 'Concorrência e fila';
 
   @override
   String get agentActionsHelpQueueMessage =>
-      'Define quantas execucoes desta acao podem rodar ao mesmo tempo, quantas aguardam fila e se novas solicitacoes devem falhar, esperar ou substituir fila cheia.';
+      'Define quantas execuções desta ação podem rodar ao mesmo tempo, quantas aguardam fila e se novas solicitações devem falhar, esperar ou substituir fila cheia.';
 
   @override
-  String get agentActionsHelpPathAllowlistTitle => 'Allowlist de diretorios';
+  String get agentActionsHelpPathAllowlistTitle => 'Allowlist de diretórios';
 
   @override
   String get agentActionsHelpPathAllowlistMessage =>
-      'Restringe diretorios de trabalho e arquivos de contexto permitidos. Use caminhos absolutos, um por linha; campo vazio nao adiciona allowlist local extra. No perfil de producao, acoes de linha de comando, executavel e script exigem allowlist de diretorio de trabalho (motivo de falha: production_path_allowlist_required).';
+      'Restringe diretórios de trabalho e arquivos de contexto permitidos. Use caminhos absolutos, um por linha; campo vazio não adiciona allowlist local extra. No perfil de produção, ações de linha de comando, executável e script exigem allowlist de diretório de trabalho (motivo de falha: production_path_allowlist_required).';
 
   @override
   String get agentActionsHelpProcessWindowTitle => 'Janela do processo';
@@ -732,60 +726,60 @@ class AppLocalizationsPt extends AppLocalizations {
       'Controla a janela do processo iniciado localmente: normal, oculta ou minimizada, conforme suporte do Windows.';
 
   @override
-  String get agentActionsHelpCaptureTitle => 'Captura de saida';
+  String get agentActionsHelpCaptureTitle => 'Captura de saída';
 
   @override
   String get agentActionsHelpCaptureMessage =>
-      'Define se stdout e stderr sao armazenados no historico. A redacao tenta mascarar segredos antes de persistir, mas saida sensivel ainda deve ser evitada.';
+      'Define se stdout e stderr são armazenados no histórico. A redação tenta mascarar segredos antes de persistir, mas saída sensível ainda deve ser evitada.';
 
   @override
-  String get agentActionsHelpEncodingTitle => 'Encoding de saida';
+  String get agentActionsHelpEncodingTitle => 'Encoding de saída';
 
   @override
   String get agentActionsHelpEncodingMessage =>
-      'Define como stdout e stderr capturados serao decodificados, usando UTF-8 ou o console do sistema Windows.';
+      'Define como stdout e stderr capturados serão decodificados, usando UTF-8 ou o console do sistema Windows.';
 
   @override
-  String get agentActionsHelpAcceptedExitCodesTitle => 'Codigos de saida';
+  String get agentActionsHelpAcceptedExitCodesTitle => 'Códigos de saída';
 
   @override
   String get agentActionsHelpAcceptedExitCodesMessage =>
-      'Lista de codigos que contam como sucesso. O padrao e 0; outros valores devem ser separados por virgula.';
+      'Lista de códigos que contam como sucesso. O padrão é 0; outros valores devem ser separados por vírgula.';
 
   @override
   String get agentActionsHelpOnAppExitTitle => 'Ao fechar o agente';
 
   @override
   String get agentActionsHelpOnAppExitMessage =>
-      'Define o que fazer com processos ainda em execucao quando o Plug Agente for fechado: tentar encerrar, deixar continuar ou bloquear conforme suporte do runner.';
+      'Define o que fazer com processos ainda em execução quando o Plug Agente for fechado: tentar encerrar, deixar continuar ou bloquear conforme suporte do runner.';
 
   @override
-  String get agentActionsHelpRemoteExecutionTitle => 'Execucao remota';
+  String get agentActionsHelpRemoteExecutionTitle => 'Execução remota';
 
   @override
   String get agentActionsHelpRemoteExecutionMessage =>
-      'Permite que o Hub execute esta acao salva via Socket.IO JSON-RPC. Exige aprovacao local e deve ficar ativo somente em acoes revisadas.';
+      'Permite que o Hub execute esta ação salva via Socket.IO JSON-RPC. Exige aprovação local e deve ficar ativo somente em ações revisadas.';
 
   @override
   String get agentActionsHelpRemoteAdHocTitle => 'Ad-hoc remoto';
 
   @override
   String get agentActionsHelpRemoteAdHocMessage =>
-      'Permite comandos livres enviados pelo Hub quando a feature global esta habilitada. Mantenha desativado salvo em ambientes controlados, pois amplia bastante a superficie de risco.';
+      'Permite comandos livres enviados pelo Hub quando a feature global está habilitada. Mantenha desativado salvo em ambientes controlados, pois amplia bastante a superfície de risco.';
 
   @override
-  String get agentActionsHelpNotificationsTitle => 'Notificacoes';
+  String get agentActionsHelpNotificationsTitle => 'Notificações';
 
   @override
   String get agentActionsHelpNotificationsMessage =>
-      'Controla notificacoes desktop exibidas quando execucoes locais terminam com sucesso, falha ou timeout.';
+      'Controla notificações desktop exibidas quando execuções locais terminam com sucesso, falha ou timeout.';
 
   @override
-  String get agentActionsFormNotificationsTitle => 'Notificacoes desktop';
+  String get agentActionsFormNotificationsTitle => 'Notificações desktop';
 
   @override
   String get agentActionsFormNotificationsDescription =>
-      'Exibe uma notificacao do Windows quando uma execucao local atinge um estado terminal.';
+      'Exibe uma notificação do Windows quando uma execução local atinge um estado terminal.';
 
   @override
   String get agentActionsFormNotifyOnSuccess => 'Notificar em sucesso';
@@ -806,92 +800,92 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionNotificationFailureFallbackBody => 'Execucao terminou com falha.';
 
   @override
-  String get agentActionsFormExecutionPoliciesTitle => 'Politicas de execucao';
+  String get agentActionsFormExecutionPoliciesTitle => 'Políticas de execução';
 
   @override
   String get agentActionsFormExecutionPoliciesDescription =>
-      'Timeout e retry valem para execucoes locais e gatilhos. Execucoes remotas do Hub permanecem em uma tentativa, salvo se retry remoto estiver habilitado.';
+      'Timeout e retry valem para execuções locais e gatilhos. Execuções remotas do Hub permanecem em uma tentativa, salvo se retry remoto estiver habilitado.';
 
   @override
-  String get agentActionsFormPathChangePolicy => 'Politica de mudanca de path';
+  String get agentActionsFormPathChangePolicy => 'Política de mudança de path';
 
   @override
-  String get agentActionsFormPathChangePolicyFail => 'Falhar se path ou conteudo mudou';
+  String get agentActionsFormPathChangePolicyFail => 'Falhar se path ou conteúdo mudou';
 
   @override
-  String get agentActionsFormPathChangePolicyWarn => 'Avisar se path ou conteudo mudou';
+  String get agentActionsFormPathChangePolicyWarn => 'Avisar se path ou conteúdo mudou';
 
   @override
-  String get agentActionsFormPathChangePolicyAllow => 'Permitir mudancas de path e conteudo';
+  String get agentActionsFormPathChangePolicyAllow => 'Permitir mudanças de path e conteúdo';
 
   @override
-  String get agentActionsFormContextInjectionMode => 'Modo de injecao de contexto';
+  String get agentActionsFormContextInjectionMode => 'Modo de injeção de contexto';
 
   @override
-  String get agentActionsFormContextInjectionArgument => 'Argumento (padrao)';
+  String get agentActionsFormContextInjectionArgument => 'Argumento (padrão)';
 
   @override
-  String get agentActionsFormContextInjectionFile => 'Arquivo de contexto (obrigatorio na execucao)';
+  String get agentActionsFormContextInjectionFile => 'Arquivo de contexto (obrigatório na execução)';
 
   @override
-  String get agentActionsFormContextInjectionEnvironment => 'Variaveis de ambiente';
+  String get agentActionsFormContextInjectionEnvironment => 'Variáveis de ambiente';
 
   @override
-  String get agentActionsFormContextInjectionStdin => 'Entrada padrao (stdin)';
+  String get agentActionsFormContextInjectionStdin => 'Entrada padrão (stdin)';
 
   @override
-  String get agentActionsFormRuntimeParameterSchema => 'Schema JSON de parametros runtime (opcional)';
+  String get agentActionsFormRuntimeParameterSchema => 'Schema JSON de parâmetros runtime (opcional)';
 
   @override
   String get agentActionsFormRuntimeParameterSchemaHint =>
-      'Objeto JSON Schema validado contra runtimeParameters em cada execucao. Deixe vazio para ignorar.';
+      'Objeto JSON Schema validado contra runtimeParameters em cada execução. Deixe vazio para ignorar.';
 
   @override
   String get agentActionsTestPreviewPathSnapshotWarnings => 'Avisos de snapshot de path';
 
   @override
-  String get agentActionsFormMaxRuntimeMinutes => 'Tempo maximo (minutos)';
+  String get agentActionsFormMaxRuntimeMinutes => 'Tempo máximo (minutos)';
 
   @override
   String get agentActionsFormKillOnTimeout => 'Encerrar processo principal no timeout';
 
   @override
-  String get agentActionsFormMaxAttempts => 'Maximo de tentativas';
+  String get agentActionsFormMaxAttempts => 'Máximo de tentativas';
 
   @override
-  String get agentActionsFormAllowRemoteRetry => 'Permitir retry em execucoes remotas do Hub';
+  String get agentActionsFormAllowRemoteRetry => 'Permitir retry em execuções remotas do Hub';
 
   @override
-  String get agentActionsFormRuntimePoliciesTitle => 'Restricoes de runtime';
+  String get agentActionsFormRuntimePoliciesTitle => 'Restrições de runtime';
 
   @override
   String get agentActionsFormRuntimePoliciesDescription =>
-      'Perfil operacional, ambiente do processo filho, codigos de saida aceitos e comportamento ao fechar o Plug Agente. Perfis permitidos vazios significa qualquer perfil.';
+      'Perfil operacional, ambiente do processo filho, códigos de saída aceitos e comportamento ao fechar o Plug Agente. Perfis permitidos vazios significa qualquer perfil.';
 
   @override
   String get agentActionsFormAllowedProfiles => 'Perfis operacionais permitidos';
 
   @override
   String get agentActionsFormAllowedProfilesHint =>
-      'Separados por virgula (ex.: prod, homolog). Deixe vazio para qualquer perfil.';
+      'Separados por vírgula (ex.: prod, homolog). Deixe vazio para qualquer perfil.';
 
   @override
-  String get agentActionsFormAllowedEnvironmentVariableNames => 'Nomes de variaveis de ambiente permitidos';
+  String get agentActionsFormAllowedEnvironmentVariableNames => 'Nomes de variáveis de ambiente permitidos';
 
   @override
   String get agentActionsFormAllowedEnvironmentVariableNamesHint =>
-      'Separados por virgula (ex.: PLUG_API_URL, PLUG_TOKEN). Deixe vazio para permitir qualquer nome usado abaixo ou em runtime.';
+      'Separados por vírgula (ex.: PLUG_API_URL, PLUG_TOKEN). Deixe vazio para permitir qualquer nome usado abaixo ou em runtime.';
 
   @override
-  String get agentActionsFormEnvironmentVariables => 'Variaveis de ambiente do processo';
+  String get agentActionsFormEnvironmentVariables => 'Variáveis de ambiente do processo';
 
   @override
   String get agentActionsFormEnvironmentVariablesHint =>
-      'Uma linha NAME=valor. Referencie segredos da acao com o placeholder documentado na secao de segredos. Aplicadas ao iniciar o processo; o modo de injecao por ambiente adiciona parametros runtime da execucao.';
+      'Uma linha NAME=valor. Referencie segredos da ação com o placeholder documentado na seção de segredos. Aplicadas ao iniciar o processo; o modo de injeção por ambiente adiciona parâmetros runtime da execução.';
 
   @override
   String get agentActionsFormEnvironmentVariablesInvalid =>
-      'Variaveis de ambiente devem usar uma linha NAME=valor por entrada, com nome valido.';
+      'Variáveis de ambiente devem usar uma linha NAME=valor por entrada, com nome válido.';
 
   @override
   String agentActionsFormCurrentOperationalProfile(String profile) {
@@ -900,17 +894,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsFormCurrentOperationalProfileUnset =>
-      'Perfil atual do agente nao definido (AGENT_OPERATIONAL_PROFILE).';
+      'Perfil atual do agente não definido (AGENT_OPERATIONAL_PROFILE).';
 
   @override
-  String get agentActionsFormAcceptedExitCodes => 'Codigos de saida aceitos';
+  String get agentActionsFormAcceptedExitCodes => 'Códigos de saída aceitos';
 
   @override
-  String get agentActionsFormAcceptedExitCodesHint => 'Inteiros separados por virgula (padrao 0).';
+  String get agentActionsFormAcceptedExitCodesHint => 'Inteiros separados por vírgula (padrão 0).';
 
   @override
   String get agentActionsFormInvalidExitCodes =>
-      'Informe inteiros separados por virgula para os codigos de saida (ex.: 0, 1).';
+      'Informe inteiros separados por vírgula para os códigos de saída (ex.: 0, 1).';
 
   @override
   String get agentActionsFormProcessWindowMode => 'Janela do processo';
@@ -922,11 +916,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormProcessWindowModeHidden => 'Oculta (melhor esforco)';
 
   @override
-  String get agentActionsFormProcessWindowModeMinimized => 'Minimizada (inicio normal)';
+  String get agentActionsFormProcessWindowModeMinimized => 'Minimizada (início normal)';
 
   @override
   String get agentActionsFormCapturePolicyDescription =>
-      'Define se a saida do processo sera armazenada e redigida antes da persistencia.';
+      'Define se a saída do processo será armazenada e redigida antes da persistência.';
 
   @override
   String get agentActionsFormCaptureStdout => 'Capturar stdout';
@@ -935,20 +929,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormCaptureStderr => 'Capturar stderr';
 
   @override
-  String get agentActionsFormRedactBeforePersisting => 'Redigir saida antes de salvar';
+  String get agentActionsFormRedactBeforePersisting => 'Redigir saída antes de salvar';
 
   @override
   String get agentActionsFormQueuePolicyDescription =>
-      'Limites de execucao concorrente e comportamento da fila desta definicao.';
+      'Limites de execução concorrente e comportamento da fila desta definição.';
 
   @override
-  String get agentActionsFormMaxConcurrent => 'Maximo de execucoes concorrentes';
+  String get agentActionsFormMaxConcurrent => 'Máximo de execuções concorrentes';
 
   @override
-  String get agentActionsFormMaxQueued => 'Maximo na fila';
+  String get agentActionsFormMaxQueued => 'Máximo na fila';
 
   @override
-  String get agentActionsFormInvalidQueueLimits => 'Informe inteiros positivos para concorrencia maxima e fila maxima.';
+  String get agentActionsFormInvalidQueueLimits => 'Informe inteiros positivos para concorrência máxima e fila máxima.';
 
   @override
   String get agentActionsFormConcurrencyBehavior => 'Quando o limite for atingido';
@@ -960,26 +954,26 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormConcurrencyEnqueue => 'Enfileirar e aguardar';
 
   @override
-  String get agentActionsFormConcurrencyReject => 'Rejeitar novas execucoes';
+  String get agentActionsFormConcurrencyReject => 'Rejeitar novas execuções';
 
   @override
   String get agentActionsFormConcurrencyIgnore => 'Executar mesmo assim (ignorar limite)';
 
   @override
   String get agentActionsFormPathAllowlistDescription =>
-      'Allowlists opcionais de diretorio. Deixe vazio para validar apenas em runtime.';
+      'Allowlists opcionais de diretório. Deixe vazio para validar apenas em runtime.';
 
   @override
-  String get agentActionsFormAllowedWorkingDirectories => 'Diretorios de trabalho permitidos';
+  String get agentActionsFormAllowedWorkingDirectories => 'Diretórios de trabalho permitidos';
 
   @override
-  String get agentActionsFormAllowedContextDirectories => 'Diretorios de contexto permitidos';
+  String get agentActionsFormAllowedContextDirectories => 'Diretórios de contexto permitidos';
 
   @override
-  String get agentActionsFormPathAllowlistHint => 'Caminhos absolutos separados por virgula (ex.: C:\\\\Data7\\\\bin).';
+  String get agentActionsFormPathAllowlistHint => 'Caminhos absolutos separados por vírgula (ex.: C:\\\\Data7\\\\bin).';
 
   @override
-  String get agentActionsFormOutputEncodingDescription => 'Decodificacao de stdout e stderr capturados na execucao.';
+  String get agentActionsFormOutputEncodingDescription => 'Decodificação de stdout e stderr capturados na execução.';
 
   @override
   String get agentActionsFormStdoutEncoding => 'Encoding de stdout';
@@ -1003,40 +997,40 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormOnAppExitWaitThenKill => 'Aguardar e encerrar processo principal';
 
   @override
-  String get agentActionsFormOnAppExitLeaveRunning => 'Manter processo em execucao';
+  String get agentActionsFormOnAppExitLeaveRunning => 'Manter processo em execução';
 
   @override
-  String get agentActionsFormRemotePoliciesTitle => 'Execucao remota';
+  String get agentActionsFormRemotePoliciesTitle => 'Execução remota';
 
   @override
   String get agentActionsFormRemotePoliciesDescription =>
-      'Permite que o Hub execute esta acao salva via Socket.IO JSON-RPC. Exige aprovacao local explicita.';
+      'Permite que o Hub execute esta ação salva via Socket.IO JSON-RPC. Exige aprovação local explícita.';
 
   @override
-  String get agentActionsFormRemoteExecutionEnabled => 'Permitir execucao remota do Hub';
+  String get agentActionsFormRemoteExecutionEnabled => 'Permitir execução remota do Hub';
 
   @override
   String get agentActionsFormRemoteAdHocEnabled => 'Permitir comandos remotos ad-hoc';
 
   @override
-  String get agentActionsFormRemoteApprovedHint => 'Execucao remota aprovada para esta definicao.';
+  String get agentActionsFormRemoteApprovedHint => 'Execução remota aprovada para esta definição.';
 
   @override
-  String get agentActionsFormRemoteApprovalRequired => 'Confirme a execucao remota antes de salvar.';
+  String get agentActionsFormRemoteApprovalRequired => 'Confirme a execução remota antes de salvar.';
 
   @override
-  String get agentActionsFormRemoteReapprovalRequiredTitle => 'Reaprovacao remota necessaria';
+  String get agentActionsFormRemoteReapprovalRequiredTitle => 'Reaprovação remota necessária';
 
   @override
   String get agentActionsFormRemoteReapprovalRequiredMessage =>
-      'Campos de risco mudaram desde a ultima aprovacao remota. Confirme a execucao remota novamente antes de salvar.';
+      'Campos de risco mudaram desde a última aprovação remota. Confirme a execução remota novamente antes de salvar.';
 
   @override
-  String get agentActionsConfirmRemoteReapprovalTitle => 'Reaprovar execucao remota?';
+  String get agentActionsConfirmRemoteReapprovalTitle => 'Reaprovar execução remota?';
 
   @override
   String get agentActionsConfirmRemoteReapprovalMessage =>
-      'Comando, caminhos ou politicas de runtime mudaram. O Hub nao pode executar esta acao remotamente ate voce confirmar de novo.';
+      'Comando, caminhos ou políticas de runtime mudaram. O Hub não pode executar esta ação remotamente até você confirmar de novo.';
 
   @override
   String get agentActionsConfirmRemoteReapprovalConfirm => 'Reaprovar';
@@ -1045,11 +1039,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsConfirmRemoteReapprovalCancel => 'Cancelar';
 
   @override
-  String get agentActionsFormRemoteFeatureDisabledTitle => 'Acoes remotas desativadas';
+  String get agentActionsFormRemoteFeatureDisabledTitle => 'Ações remotas desativadas';
 
   @override
   String get agentActionsFormRemoteFeatureDisabledMessage =>
-      'Ative a feature flag de acoes remotas antes do Hub chamar agent.action.* neste agente.';
+      'Ative a feature flag de ações remotas antes do Hub chamar agent.action.* neste agente.';
 
   @override
   String get agentActionsFormRemoteAdHocFeatureDisabledTitle => 'Ad-hoc remoto desativado';
@@ -1065,19 +1059,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRiskRemoteAdHoc => 'Ad-hoc remoto';
 
   @override
-  String get agentActionsRiskRemoteReapproval => 'Reaprovacao necessaria';
+  String get agentActionsRiskRemoteReapproval => 'Reaprovação necessária';
 
   @override
   String get agentActionsRiskAppCloseTrigger => 'Gatilho ao fechar app';
 
   @override
-  String get agentActionsRiskSensitiveOutput => 'Saida sem redacao';
+  String get agentActionsRiskSensitiveOutput => 'Saída sem redação';
 
   @override
   String get agentActionsRiskLeaveProcessRunning => 'Mantem processo ativo';
 
   @override
-  String get agentActionsRiskUnsupportedType => 'Editor indisponivel';
+  String get agentActionsRiskUnsupportedType => 'Editor indisponível';
 
   @override
   String get agentActionsRiskNeedsValidation => 'Precisa validar';
@@ -1086,104 +1080,104 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRiskSecretPlaceholders => 'Usa segredos';
 
   @override
-  String get agentActionsNeedsValidationTitle => 'Validacao necessaria';
+  String get agentActionsNeedsValidationTitle => 'Validação necessária';
 
   @override
   String get agentActionsNeedsValidationMessage =>
-      'Teste esta acao localmente antes de executar ou habilitar execucao remota.';
+      'Teste esta ação localmente antes de executar ou habilitar execução remota.';
 
   @override
-  String get agentActionsPreflightRequiredTitle => 'Validacao obrigatoria para ativar';
+  String get agentActionsPreflightRequiredTitle => 'Validação obrigatória para ativar';
 
   @override
   String get agentActionsPreflightRequiredForActive =>
-      'Execute \"Testar acao\" com sucesso antes de definir esta acao como Ativa.';
+      'Execute \"Testar ação\" com sucesso antes de definir esta ação como Ativa.';
 
   @override
-  String get agentActionsPreflightExpiredTitle => 'Re-teste de preflight necessario';
+  String get agentActionsPreflightExpiredTitle => 'Re-teste de preflight necessário';
 
   @override
   String get agentActionsPreflightExpiredForActive =>
-      'O ultimo preflight bem-sucedido expirou. Execute \"Testar acao\" novamente antes de definir esta acao como Ativa.';
+      'O último preflight bem-sucedido expirou. Execute \"Testar ação\" novamente antes de definir esta ação como Ativa.';
 
   @override
-  String get agentActionsPreflightValidTitle => 'Preflight valido';
+  String get agentActionsPreflightValidTitle => 'Preflight válido';
 
   @override
   String agentActionsPreflightExpiresAt(String expiresAt) {
-    return 'O preflight permanece valido ate $expiresAt. Execute \"Testar acao\" novamente antes desse horario para manter a ativacao habilitada.';
+    return 'O preflight permanece válido até $expiresAt. Execute \"Testar ação\" novamente antes desse horário para manter a ativação habilitada.';
   }
 
   @override
   String get agentActionsPreflightReadyForActivation =>
-      'Preflight concluido. Defina o estado como Ativa e salve para habilitar a execucao.';
+      'Preflight concluído. Defina o estado como Ativa e salve para habilitar a execução.';
 
   @override
   String get agentActionsPreflightSettingsTitle => 'Validade do preflight';
 
   @override
   String get agentActionsPreflightSettingsDescription =>
-      'Por quanto tempo um \"Testar acao\" bem-sucedido permanece valido para ativar uma acao. Valores salvos substituem a variavel de ambiente AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS nesta instalacao.';
+      'Por quanto tempo um \"Testar ação\" bem-sucedido permanece válido para ativar uma ação. Valores salvos substituem a variável de ambiente AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS nesta instalação.';
 
   @override
   String get agentActionsPreflightSettingsValidityDays => 'Janela de validade (dias)';
 
   @override
   String get agentActionsPreflightSettingsEnvHint =>
-      'Intervalo permitido: 1 a 365 dias. Apos alterar, os timestamps de preflight existentes passam a ser avaliados com a nova janela no proximo salvamento ou atualizacao da UI.';
+      'Intervalo permitido: 1 a 365 dias. Após alterar, os timestamps de preflight existentes passam a ser avaliados com a nova janela no próximo salvamento ou atualização da UI.';
 
   @override
   String get agentActionsPreflightSettingsSave => 'Salvar janela de preflight';
 
   @override
-  String get agentActionsPreflightSettingsDiscard => 'Descartar alteracoes';
+  String get agentActionsPreflightSettingsDiscard => 'Descartar alterações';
 
   @override
-  String get agentActionsPreflightSettingsUseEnvDefaults => 'Usar padrao do ambiente';
+  String get agentActionsPreflightSettingsUseEnvDefaults => 'Usar padrão do ambiente';
 
   @override
-  String get agentActionsPreflightSettingsInvalidTitle => 'Valor invalido';
+  String get agentActionsPreflightSettingsInvalidTitle => 'Valor inválido';
 
   @override
-  String get agentActionsPreflightSettingsInvalidValue => 'Informe um numero inteiro de dias valido (1 a 365).';
+  String get agentActionsPreflightSettingsInvalidValue => 'Informe um número inteiro de dias válido (1 a 365).';
 
   @override
   String get agentActionsPreflightSettingsSavedTitle => 'Janela de preflight salva';
 
   @override
-  String get agentActionsPreflightSettingsSavedMessage => 'A janela de validade foi atualizada para esta instalacao.';
+  String get agentActionsPreflightSettingsSavedMessage => 'A janela de validade foi atualizada para esta instalação.';
 
   @override
   String get agentActionsPreflightSettingsClearedTitle => 'Janela de preflight restaurada';
 
   @override
   String get agentActionsPreflightSettingsClearedMessage =>
-      'O valor customizado foi removido. O agente segue AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS ou o padrao.';
+      'O valor customizado foi removido. O agente segue AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS ou o padrão.';
 
   @override
-  String get agentActionsDangerousCommandWarnModeTitle => 'Modo aviso para comandos perigosos (homologacao)';
+  String get agentActionsDangerousCommandWarnModeTitle => 'Modo aviso para comandos perigosos (homologação)';
 
   @override
   String get agentActionsDangerousCommandWarnModeEnabled =>
-      'Modo aviso LIGADO: padroes de risco na linha de comando exibem confirmacao em vez de bloquear na validacao. Nao use em producao.';
+      'Modo aviso LIGADO: padrões de risco na linha de comando exibem confirmação em vez de bloquear na validação. Não use em produção.';
 
   @override
   String get agentActionsDangerousCommandWarnModeDisabled =>
-      'Modo aviso DESLIGADO: padroes de risco sao bloqueados ate o comando ser alterado. Ative apenas em homologacao via feature flag ou ambiente.';
+      'Modo aviso DESLIGADO: padrões de risco são bloqueados até o comando ser alterado. Ative apenas em homologação via feature flag ou ambiente.';
 
   @override
-  String get agentActionsProductionPathAllowlistRequiredTitle => 'Allowlist de caminhos obrigatoria em producao';
+  String get agentActionsProductionPathAllowlistRequiredTitle => 'Allowlist de caminhos obrigatória em produção';
 
   @override
   String get agentActionsProductionPathAllowlistRequiredMessage =>
-      'O perfil operacional e producao. Acoes de linha de comando, executavel e script devem definir diretorios de trabalho permitidos antes de salvar ou executar (production_path_allowlist_required).';
+      'O perfil operacional é produção. Ações de linha de comando, executável e script devem definir diretórios de trabalho permitidos antes de salvar ou executar (production_path_allowlist_required).';
 
   @override
   String get agentActionsSecretPlaceholdersTitle => 'Placeholders de segredo referenciados';
 
   @override
   String agentActionsSecretPlaceholdersMessage(String secretNames) {
-    return 'Esta acao referencia segredos: $secretNames. Configure-os no armazenamento seguro antes de executar.';
+    return 'Esta ação referencia segredos: $secretNames. Configure-os no armazenamento seguro antes de executar.';
   }
 
   @override
@@ -1191,15 +1185,15 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String agentActionsMissingSecretsMessage(String secretNames) {
-    return 'Estes segredos nao estao disponiveis localmente: $secretNames.';
+    return 'Estes segredos não estão disponíveis localmente: $secretNames.';
   }
 
   @override
-  String get agentActionsSecretsSectionTitle => 'Segredos da acao';
+  String get agentActionsSecretsSectionTitle => 'Segredos da ação';
 
   @override
   String get agentActionsSecretsSectionMessage =>
-      'Configure os valores de cada placeholder de segredo referenciado por esta acao. Os valores ficam apenas no armazenamento seguro local.';
+      'Configure os valores de cada placeholder de segredo referenciado por esta ação. Os valores ficam apenas no armazenamento seguro local.';
 
   @override
   String get agentActionsSecretStatusConfigured => 'Configurado';
@@ -1223,7 +1217,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsSecretConfigureMessage =>
-      'Informe o valor do segredo. Ele nao aparecera na definicao da acao, em logs ou no historico de execucao.';
+      'Informe o valor do segredo. Ele não aparecera na definição da ação, em logs ou no histórico de execução.';
 
   @override
   String get agentActionsSecretConfigureValueLabel => 'Valor do segredo';
@@ -1238,14 +1232,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsSecretConfigureCancel => 'Cancelar';
 
   @override
-  String get agentActionsSecretConfigureErrorTitle => 'Nao foi possivel salvar o segredo';
+  String get agentActionsSecretConfigureErrorTitle => 'Não foi possível salvar o segredo';
 
   @override
   String get agentActionsSecretDeleteTitle => 'Remover segredo?';
 
   @override
   String agentActionsSecretDeleteMessage(String secretName) {
-    return 'Remover o valor local de \"$secretName\"? A acao falhara ate o segredo ser configurado novamente.';
+    return 'Remover o valor local de \"$secretName\"? A ação falhará até o segredo ser configurado novamente.';
   }
 
   @override
@@ -1255,36 +1249,36 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsSecretDeleteCancel => 'Cancelar';
 
   @override
-  String get agentActionsSecretOperationErrorTitle => 'Falha na operacao de segredo';
+  String get agentActionsSecretOperationErrorTitle => 'Falha na operação de segredo';
 
   @override
-  String get agentActionsHistoryFilterSearch => 'Buscar execucao';
+  String get agentActionsHistoryFilterSearch => 'Buscar execução';
 
   @override
-  String get agentActionsRiskRunnerUnavailable => 'Runner indisponivel';
+  String get agentActionsRiskRunnerUnavailable => 'Runner indisponível';
 
   @override
-  String get agentActionsRiskElevated => 'Execucao elevada';
+  String get agentActionsRiskElevated => 'Execução elevada';
 
   @override
-  String get agentActionsActionTypeUnavailableTitle => 'Runner indisponivel para este tipo';
+  String get agentActionsActionTypeUnavailableTitle => 'Runner indisponível para este tipo';
 
   @override
   String agentActionsActionTypeUnavailableMessage(String actionType) {
-    return 'O subsistema de acoes esta degradado e nao pode executar acoes do tipo $actionType ate o runner ou a capability serem restaurados.';
+    return 'O subsistema de ações está degradado e não pode executar ações do tipo $actionType até o runner ou a capability serem restaurados.';
   }
 
   @override
   String agentActionsQueueActiveIndicator(int pending, int running) {
-    return '$pending na fila · $running em execucao na fila';
+    return '$pending na fila · $running em execução na fila';
   }
 
   @override
-  String get agentActionsConfirmRemoteTitle => 'Habilitar execucao remota?';
+  String get agentActionsConfirmRemoteTitle => 'Habilitar execução remota?';
 
   @override
   String get agentActionsConfirmRemoteMessage =>
-      'O Hub podera executar esta acao salva quando scopes, policy do token e feature flags permitirem.';
+      'O Hub poderá executar esta ação salva quando scopes, policy do token e feature flags permitirem.';
 
   @override
   String get agentActionsConfirmRemoteConfirm => 'Habilitar remoto';
@@ -1297,7 +1291,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsConfirmRemoteAdHocMessage =>
-      'Comandos ad-hoc remotos sao de alto risco; mantenha desligado salvo necessidade explicita.';
+      'Comandos ad-hoc remotos são de alto risco; mantenha desligado salvo necessidade explícita.';
 
   @override
   String get agentActionsConfirmRemoteAdHocConfirm => 'Habilitar ad-hoc';
@@ -1319,11 +1313,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsConfirmAppCloseTriggerCancel => 'Cancelar';
 
   @override
-  String get agentActionsConfirmElevatedTitle => 'Habilitar execucao elevada?';
+  String get agentActionsConfirmElevatedTitle => 'Habilitar execução elevada?';
 
   @override
   String get agentActionsConfirmElevatedMessage =>
-      'As execucoes usam o helper elevado e privilegios de administrador nesta maquina. Instale e prepare o helper antes de habilitar.';
+      'As execuções usam o helper elevado e privilégios de administrador nesta máquina. Instale e prepare o helper antes de habilitar.';
 
   @override
   String get agentActionsConfirmElevatedConfirm => 'Habilitar elevada';
@@ -1336,7 +1330,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String agentActionsConfirmDangerousCommandMessage(String patternId, String patternDescription) {
-    return 'O comando corresponde ao padrao \"$patternId\" ($patternDescription). Revise com cuidado antes de executar em producao.';
+    return 'O comando corresponde ao padrão \"$patternId\" ($patternDescription). Revise com cuidado antes de executar em produção.';
   }
 
   @override
@@ -1350,51 +1344,51 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsDangerousCommandBlockedMessage =>
-      'O comando contem um padrao de alto risco e foi bloqueado por seguranca. Revise o comando ou solicite aprovacao operacional.';
+      'O comando contém um padrão de alto risco e foi bloqueado por segurança. Revise o comando ou solicite aprovação operacional.';
 
   @override
   String get agentActionsDangerousCommandWarnTitle => 'Comando de alto risco detectado';
 
   @override
   String agentActionsDangerousCommandWarnMessage(String patternId, String patternDescription) {
-    return 'O comando corresponde ao padrao \"$patternId\" ($patternDescription). A execucao manual exige confirmacao.';
+    return 'O comando corresponde ao padrão \"$patternId\" ($patternDescription). A execução manual exige confirmação.';
   }
 
   @override
-  String get agentActionsValidationTitle => 'Confira os campos da acao';
+  String get agentActionsValidationTitle => 'Confira os campos da ação';
 
   @override
-  String get agentActionsMaintenanceMode => 'Modo de manutencao';
+  String get agentActionsMaintenanceMode => 'Modo de manutenção';
 
   @override
-  String get agentActionsMaintenanceModeInfoTitle => 'Modo de manutencao ativo';
+  String get agentActionsMaintenanceModeInfoTitle => 'Modo de manutenção ativo';
 
   @override
   String get agentActionsMaintenanceModeInfoMessage =>
-      'Execucoes agendadas, gatilhos de inicio/fechamento do app e execucoes remotas ficam pausadas. Voce ainda pode executar acoes nesta tela e editar definicoes.';
+      'Execuções agendadas, gatilhos de início/fechamento do app e execuções remotas ficam pausadas. Você ainda pode executar ações nesta tela e editar definições.';
 
   @override
-  String get agentActionsMaintenanceStrictMode => 'Bloquear execucao manual tambem';
+  String get agentActionsMaintenanceStrictMode => 'Bloquear execução manual também';
 
   @override
-  String get agentActionsElevatedRunnerNotReadyTitle => 'Executor elevado nao preparado';
+  String get agentActionsElevatedRunnerNotReadyTitle => 'Executor elevado não preparado';
 
   @override
   String get agentActionsElevatedRunnerNotReadyMessage =>
-      'Para usar execucao elevada, registre a tarefa do helper com privilegio alto. O Windows pode solicitar UAC uma vez. Hub, SQL remoto e demais funcoes do agente continuam normais.';
+      'Para usar execução elevada, registre a tarefa do helper com privilégio alto. O Windows pode solicitar UAC uma vez. Hub, SQL remoto e demais funções do agente continuam normais.';
 
   @override
-  String get agentActionsElevatedRunnerDegradedTitle => 'Executor elevado indisponivel';
+  String get agentActionsElevatedRunnerDegradedTitle => 'Executor elevado indisponível';
 
   @override
   String get agentActionsElevatedRunnerDegradedMessage =>
-      'O helper elevado falhou recentemente. Prepare novamente antes de executar acoes com privilegio alto. Hub, SQL remoto e demais funcoes do agente continuam normais.';
+      'O helper elevado falhou recentemente. Prepare novamente antes de executar ações com privilégio alto. Hub, SQL remoto e demais funções do agente continuam normais.';
 
   @override
   String get agentActionsElevatedRunnerPrepare => 'Preparar executor elevado';
 
   @override
-  String get agentActionsElevatedRunnerPreparing => 'Preparando executor elevado...';
+  String get agentActionsElevatedRunnerPreparing => 'Preparando executor elevado…';
 
   @override
   String get agentOperationalReadinessHubConnected => 'Hub: conectado';
@@ -1424,73 +1418,73 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentOperationalReadinessSchedulerIssue => 'Gatilhos agendados com problema';
 
   @override
-  String get agentActionsFormRunElevated => 'Executar com privilegio elevado (helper Windows)';
+  String get agentActionsFormRunElevated => 'Executar com privilégio elevado (helper Windows)';
 
   @override
   String get agentActionsFormRunElevatedHint => 'Requer o helper instalado e a tarefa agendada preparada neste agente.';
 
   @override
-  String get agentActionsSubsystemStatusStartingTitle => 'Acoes do agente em inicializacao';
+  String get agentActionsSubsystemStatusStartingTitle => 'Ações do agente em inicialização';
 
   @override
   String get agentActionsSubsystemStatusStartingMessage =>
-      'O subsistema ainda esta inicializando. Executar e testar ficam desabilitados ate ficar pronto.';
+      'O subsistema ainda está inicializando. Executar e testar ficam desabilitados até ficar pronto.';
 
   @override
-  String get agentActionsSubsystemStatusDrainingTitle => 'Acoes do agente em encerramento';
+  String get agentActionsSubsystemStatusDrainingTitle => 'Ações do agente em encerramento';
 
   @override
   String get agentActionsSubsystemStatusDrainingMessage =>
-      'Novas execucoes estao bloqueadas enquanto o Plug Agente fecha. Gatilhos de fechamento do app podem continuar.';
+      'Novas execuções estão bloqueadas enquanto o Plug Agente fecha. Gatilhos de fechamento do app podem continuar.';
 
   @override
-  String get agentActionsSubsystemStatusDegradedTitle => 'Alguns tipos de acao indisponiveis';
+  String get agentActionsSubsystemStatusDegradedTitle => 'Alguns tipos de ação indisponíveis';
 
   @override
   String agentActionsSubsystemStatusDegradedMessage(String types) {
-    return 'Tipos indisponiveis: $types. Outras acoes ainda podem ser executadas nesta tela.';
+    return 'Tipos indisponíveis: $types. Outras ações ainda podem ser executadas nesta tela.';
   }
 
   @override
-  String get agentActionsSubsystemStatusDisabledTitle => 'Subsistema de acoes desativado';
+  String get agentActionsSubsystemStatusDisabledTitle => 'Subsistema de ações desativado';
 
   @override
   String get agentActionsSubsystemStatusDisabledMessage =>
-      'O guard de runtime reporta o subsistema como desativado. Verifique as feature flags e reinicie o agente se necessario.';
+      'O guard de runtime reporta o subsistema como desativado. Verifique as feature flags e reinicie o agente se necessário.';
 
   @override
-  String get agentActionsSchedulerOperationalIssueTitle => 'Gatilhos agendados nao estao em execucao';
+  String get agentActionsSchedulerOperationalIssueTitle => 'Gatilhos agendados não estão em execução';
 
   @override
   String get agentActionsSchedulerInstanceLockedMessage =>
-      'Outro processo do Plug Agente ja esta executando o agendador de acoes nesta pasta de dados. Feche a outra instancia ou use um diretorio de dados separado. Execucoes manuais e acoes remotas podem continuar funcionando nesta janela.';
+      'Outro processo do Plug Agente já está executando o agendador de ações nesta pasta de dados. Feche a outra instância ou use um diretório de dados separado. Execuções manuais e ações remotas podem continuar funcionando nesta janela.';
 
   @override
   String get agentActionsSchedulerStorageAccessDeniedMessage =>
-      'O agendador de acoes nao conseguiu acessar o arquivo de lock nesta pasta de dados. Revise permissoes de leitura/escrita ou execute o agente com privilegios adequados.';
+      'O agendador de ações não conseguiu acessar o arquivo de lock nesta pasta de dados. Revise permissões de leitura/escrita ou execute o agente com privilégios adequados.';
 
   @override
   String get agentActionsSchedulerBootstrapFailedMessage =>
-      'O agendador de acoes foi desativado apos falha na inicializacao. Reinicie o agente ou revise os gatilhos salvos. Execucoes manuais podem continuar ate corrigir a configuracao de agendamento.';
+      'O agendador de ações foi desativado após falha na inicialização. Reinicie o agente ou revise os gatilhos salvos. Execuções manuais podem continuar até corrigir a configuração de agendamento.';
 
   @override
-  String get agentActionsComObjectHandlersMissingTitle => 'Acoes COM nao estao prontas';
+  String get agentActionsComObjectHandlersMissingTitle => 'Ações COM não estão prontas';
 
   @override
   String get agentActionsComObjectHandlersMissingMessage =>
-      'Nenhum handler COM (ProgID/membro) esta registrado neste agente. Acoes COM falharao ate registrar handlers em ComObjectInvocationRegistry ou configurar o stub de homologacao (AGENT_ACTION_COM_STUB_ENABLED). Consulte agent.getHealth com_object_invocation_ready.';
+      'Nenhum handler COM (ProgID/membro) está registrado neste agente. Ações COM falharão até registrar handlers em ComObjectInvocationRegistry ou configurar o stub de homologação (AGENT_ACTION_COM_STUB_ENABLED). Consulte agent.getHealth com_object_invocation_ready.';
 
   @override
-  String get agentActionsDisabledTitle => 'Acoes desativadas';
+  String get agentActionsDisabledTitle => 'Ações desativadas';
 
   @override
-  String get agentActionsDisabledMessage => 'As acoes do agente estao desativadas por feature flag.';
+  String get agentActionsDisabledMessage => 'As ações do agente estão desativadas por feature flag.';
 
   @override
-  String get agentActionsErrorTitle => 'Falha na operacao de acao';
+  String get agentActionsErrorTitle => 'Falha na operação de ação';
 
   @override
-  String get agentActionsSummaryActions => 'Acoes';
+  String get agentActionsSummaryActions => 'Ações';
 
   @override
   String get agentActionsSummaryQueued => 'Na fila';
@@ -1502,7 +1496,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsSummaryFailed => 'Falhas';
 
   @override
-  String get agentActionsSummaryMaintenance => 'Manutencao';
+  String get agentActionsSummaryMaintenance => 'Manutenção';
 
   @override
   String get agentActionsSummaryMaintenanceActive => 'Ativa';
@@ -1514,14 +1508,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsSummaryComHandlersNone => 'Nenhum';
 
   @override
-  String get agentActionsRetentionTitle => 'Retencao de dados';
+  String get agentActionsRetentionTitle => 'Retenção de dados';
 
   @override
   String get agentActionsRetentionDescription =>
-      'A limpeza periodica remove linhas locais mais antigas que as janelas abaixo. Valores salvos aqui tem precedencia sobre variaveis de ambiente nesta instalacao.';
+      'A limpeza periódica remove linhas locais mais antigas que as janelas abaixo. Valores salvos aqui têm precedência sobre variáveis de ambiente nesta instalação.';
 
   @override
-  String get agentActionsRetentionExecutionHistory => 'Historico de execucoes terminais';
+  String get agentActionsRetentionExecutionHistory => 'Histórico de execuções terminais';
 
   @override
   String agentActionsRetentionExecutionHistoryValue(int days) {
@@ -1535,7 +1529,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get agentActionsRetentionRemoteAudit => 'Auditoria remota agent.action';
+  String get agentActionsRetentionRemoteAudit => 'Histórico de auditoria remota';
 
   @override
   String agentActionsRetentionRemoteAuditValue(int days) {
@@ -1564,54 +1558,54 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsRetentionEnvVariables =>
-      'Variaveis de ambiente (fallback): AGENT_ACTION_EXECUTION_RETENTION_DAYS, AGENT_ACTION_REMOTE_AUDIT_RETENTION_DAYS, AGENT_ACTION_CAPTURED_OUTPUT_RETENTION_HOURS';
+      'Variáveis de ambiente (fallback): AGENT_ACTION_EXECUTION_RETENTION_DAYS, AGENT_ACTION_REMOTE_AUDIT_RETENTION_DAYS, AGENT_ACTION_CAPTURED_OUTPUT_RETENTION_HOURS';
 
   @override
-  String get agentActionsRetentionSave => 'Salvar retencao';
+  String get agentActionsRetentionSave => 'Salvar retenção';
 
   @override
-  String get agentActionsRetentionReset => 'Descartar alteracoes';
+  String get agentActionsRetentionReset => 'Descartar alterações';
 
   @override
   String get agentActionsRetentionUseEnvDefaults => 'Usar defaults de ambiente';
 
   @override
-  String get agentActionsRetentionClearedTitle => 'Retencao restaurada';
+  String get agentActionsRetentionClearedTitle => 'Retenção restaurada';
 
   @override
   String get agentActionsRetentionClearedMessage =>
-      'Os valores personalizados foram removidos. As janelas de limpeza passam a seguir variaveis de ambiente ou defaults do agente.';
+      'Os valores personalizados foram removidos. As janelas de limpeza passam a seguir variáveis de ambiente ou defaults do agente.';
 
   @override
-  String get agentActionsRetentionSavedTitle => 'Retencao salva';
+  String get agentActionsRetentionSavedTitle => 'Retenção salva';
 
   @override
-  String get agentActionsRetentionSavedMessage => 'As janelas de limpeza foram atualizadas nesta instalacao.';
+  String get agentActionsRetentionSavedMessage => 'As janelas de limpeza foram atualizadas nesta instalação.';
 
   @override
-  String get agentActionsRetentionInvalidValue => 'Informe numeros inteiros validos em todos os campos.';
+  String get agentActionsRetentionInvalidValue => 'Informe números inteiros válidos em todos os campos.';
 
   @override
   String get agentActionsRetentionPersistedHint =>
-      'Valores personalizados estao salvos localmente e substituem o fallback de ambiente.';
+      'Valores personalizados estão salvos localmente e substituem o fallback de ambiente.';
 
   @override
-  String get agentActionsEmptyActions => 'Nenhuma acao cadastrada.';
+  String get agentActionsEmptyActions => 'Nenhuma ação cadastrada.';
 
   @override
-  String get agentActionsListFilterType => 'Tipo de acao';
+  String get agentActionsListFilterType => 'Tipo de ação';
 
   @override
-  String get agentActionsListFilterSearch => 'Buscar acoes';
+  String get agentActionsListFilterSearch => 'Buscar ações';
 
   @override
-  String get agentActionsListFilterEmpty => 'Nenhuma acao corresponde aos filtros atuais.';
+  String get agentActionsListFilterEmpty => 'Nenhuma ação corresponde aos filtros atuais.';
 
   @override
-  String get agentActionsEmptySelection => 'Selecione uma acao para inspecionar detalhes de execucao.';
+  String get agentActionsEmptySelection => 'Selecione uma ação para inspecionar detalhes de execução.';
 
   @override
-  String get agentActionsHistoryTitle => 'Historico de execucao';
+  String get agentActionsHistoryTitle => 'Histórico de execução';
 
   @override
   String get agentActionsHistoryFilterStatus => 'Status';
@@ -1620,7 +1614,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsHistoryFilterSource => 'Origem';
 
   @override
-  String get agentActionsHistoryFilterPeriod => 'Periodo';
+  String get agentActionsHistoryFilterPeriod => 'Período';
 
   @override
   String get agentActionsHistoryFilterFailurePhase => 'Fase da falha';
@@ -1632,17 +1626,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsHistoryPeriodAll => 'Todos';
 
   @override
-  String get agentActionsHistoryPeriodLast24Hours => 'Ultimas 24 horas';
+  String get agentActionsHistoryPeriodLast24Hours => 'Últimas 24 horas';
 
   @override
-  String get agentActionsHistoryPeriodLast3Days => 'Ultimos 3 dias';
+  String get agentActionsHistoryPeriodLast3Days => 'Últimos 3 dias';
 
   @override
-  String get agentActionsRemoteAuditTitle => 'Auditoria remota agent.action';
+  String get agentActionsRemoteAuditTitle => 'Auditoria remota';
 
   @override
   String get agentActionsRemoteAuditDescription =>
-      'Linhas recentes de JSON-RPC do Hub e de ciclo de vida de execucao para agent.action.* (append-only; retencao e purge continuam valendo).';
+      'Linhas recentes de JSON-RPC do Hub e de ciclo de vida de execução para agent.action.* (append-only; retenção e purge continuam valendo).';
 
   @override
   String get agentActionsRemoteAuditFilterAll => 'Todas';
@@ -1666,10 +1660,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRemoteAuditOutcomeRpcError => 'Erro RPC';
 
   @override
-  String get agentActionsRemoteAuditOutcomeAuthorizationDenied => 'Autorizacao negada';
+  String get agentActionsRemoteAuditOutcomeAuthorizationDenied => 'Autorização negada';
 
   @override
-  String get agentActionsRemoteAuditOutcomeNotificationRejected => 'Notificacao rejeitada';
+  String get agentActionsRemoteAuditOutcomeNotificationRejected => 'Notificação rejeitada';
 
   @override
   String get agentActionsRemoteAuditOutcomeRateLimited => 'Rate limit';
@@ -1696,26 +1690,26 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRemoteAuditCopyJson => 'Copiar como JSON';
 
   @override
-  String get agentActionsRemoteAuditCopiedToast => 'Auditoria copiada para a area de transferencia.';
+  String get agentActionsRemoteAuditCopiedToast => 'Auditoria copiada para a área de transferência.';
 
   @override
-  String get agentActionsRemoteAuditShowInHistory => 'Ver no historico';
+  String get agentActionsRemoteAuditShowInHistory => 'Ver no histórico';
 
   @override
   String agentActionsRemoteAuditExecutionNotInHistory(Object executionId) {
-    return 'A execucao $executionId nao esta no historico carregado. Pode estar fora da retencao ou do limite da lista.';
+    return 'A execução $executionId não está no histórico carregado. Pode estar fora da retenção ou do limite da lista.';
   }
 
   @override
   String agentActionsRemoteAuditRuntimeInstanceMismatch(Object executionId, Object auditInstanceId) {
-    return 'A execucao $executionId pertence a outra instalacao do agente (instancia da auditoria $auditInstanceId). O historico local so destaca quando a instancia de runtime coincide.';
+    return 'A execução $executionId pertence a outra instalação do agente (instância da auditoria $auditInstanceId). O histórico local só destaca quando a instância de runtime coincide.';
   }
 
   @override
-  String get agentActionsRemoteAuditFieldAction => 'Acao';
+  String get agentActionsRemoteAuditFieldAction => 'Ação';
 
   @override
-  String get agentActionsRemoteAuditFieldExecution => 'Execucao';
+  String get agentActionsRemoteAuditFieldExecution => 'Execução';
 
   @override
   String get agentActionsRemoteAuditFieldTrace => 'Trace';
@@ -1724,7 +1718,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRemoteAuditFieldRequestedBy => 'Solicitante';
 
   @override
-  String get agentActionsRemoteAuditFieldIdempotencyKey => 'Idempotencia';
+  String get agentActionsRemoteAuditFieldIdempotencyKey => 'Idempotência';
 
   @override
   String get agentActionsRemoteAuditFieldReason => 'Motivo';
@@ -1733,61 +1727,61 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRemoteAuditFieldClient => 'Cliente';
 
   @override
-  String get agentActionsRemoteAuditFieldRuntimeInstance => 'Instancia';
+  String get agentActionsRemoteAuditFieldRuntimeInstance => 'Instância';
 
   @override
-  String get agentActionsRemoteAuditFieldRuntimeSession => 'Sessao';
+  String get agentActionsRemoteAuditFieldRuntimeSession => 'Sessão';
 
   @override
   String get agentActionsRemoteAuditReasonMissingClientToken => 'Token de cliente ausente';
 
   @override
-  String get agentActionsRemoteAuditReasonPermissionDenied => 'Permissao negada';
+  String get agentActionsRemoteAuditReasonPermissionDenied => 'Permissão negada';
 
   @override
   String get agentActionsRemoteAuditReasonRemoteRateLimited => 'Rate limit remoto';
 
   @override
-  String get agentActionsRemoteAuditReasonRemoteDisabled => 'Acoes remotas desativadas';
+  String get agentActionsRemoteAuditReasonRemoteDisabled => 'Ações remotas desativadas';
 
   @override
-  String get agentActionsRemoteAuditReasonFeatureDisabled => 'Acoes do agente desativadas';
+  String get agentActionsRemoteAuditReasonFeatureDisabled => 'Ações do agente desativadas';
 
   @override
-  String get agentActionsRemoteAuditReasonMaintenanceMode => 'Modo de manutencao';
+  String get agentActionsRemoteAuditReasonMaintenanceMode => 'Modo de manutenção';
 
   @override
-  String get agentActionsRemoteAuditReasonNotificationNotAllowed => 'Notificacao nao permitida';
+  String get agentActionsRemoteAuditReasonNotificationNotAllowed => 'Notificação não permitida';
 
   @override
-  String get agentActionsRemoteAuditReasonRemoteContextNotSupported => 'Contexto remoto nao suportado';
+  String get agentActionsRemoteAuditReasonRemoteContextNotSupported => 'Contexto remoto não suportado';
 
   @override
-  String get agentActionsRemoteAuditReasonIdempotencyRequired => 'Chave de idempotencia obrigatoria';
+  String get agentActionsRemoteAuditReasonIdempotencyRequired => 'Chave de idempotência obrigatória';
 
   @override
-  String get agentActionsRemoteAuditReasonIdempotencyMismatch => 'Fingerprint de idempotencia divergente';
+  String get agentActionsRemoteAuditReasonIdempotencyMismatch => 'Fingerprint de idempotência divergente';
 
   @override
-  String get agentActionsRemoteAuditReasonBatchNotAllowed => 'Metodo nao permitido em batch';
+  String get agentActionsRemoteAuditReasonBatchNotAllowed => 'Método não permitido em batch';
 
   @override
-  String get agentActionsRemoteAuditReasonExecutionNotFound => 'Execucao nao encontrada';
+  String get agentActionsRemoteAuditReasonExecutionNotFound => 'Execução não encontrada';
 
   @override
-  String get agentActionsRemoteAuditReasonAlreadyFinished => 'Ja finalizada';
+  String get agentActionsRemoteAuditReasonAlreadyFinished => 'Já finalizada';
 
   @override
   String get agentActionsRemoteAuditReasonKillFailed => 'Falha ao encerrar processo';
 
   @override
-  String get agentActionsEmptyHistory => 'Nenhuma execucao registrada para esta acao.';
+  String get agentActionsEmptyHistory => 'Nenhuma execução registrada para esta ação.';
 
   @override
   String get agentActionsTriggersTitle => 'Agendas e gatilhos';
 
   @override
-  String get agentActionsTriggersEmpty => 'Nenhum gatilho salvo para esta acao.';
+  String get agentActionsTriggersEmpty => 'Nenhum gatilho salvo para esta ação.';
 
   @override
   String get agentActionsTriggersLoading => 'Carregando gatilhos…';
@@ -1806,7 +1800,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String agentActionsTriggerNextRun(Object when) {
-    return 'Proxima execucao: $when';
+    return 'Próxima execução: $when';
   }
 
   @override
@@ -1815,7 +1809,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get agentActionsTriggerSummaryCatchUpEnabled => 'Execucao de atrasadas ativa';
+  String get agentActionsTriggerSummaryCatchUpEnabled => 'Execução de atrasadas ativa';
 
   @override
   String get agentActionsTriggerTypeManual => 'Manual';
@@ -1824,7 +1818,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsTriggerTypeRemote => 'Remoto';
 
   @override
-  String get agentActionsTriggerTypeOnce => 'Unica vez';
+  String get agentActionsTriggerTypeOnce => 'Única vez';
 
   @override
   String get agentActionsTriggerTypeInterval => 'Intervalo';
@@ -1839,7 +1833,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsTriggerTypeMonthly => 'Mensal';
 
   @override
-  String get agentActionsTriggerTypeAppStart => 'Inicio do app';
+  String get agentActionsTriggerTypeAppStart => 'Início do app';
 
   @override
   String get agentActionsTriggerTypeAppClose => 'Encerramento do app';
@@ -1852,7 +1846,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String agentActionsTriggerDeleteConfirmMessage(Object triggerLabel) {
-    return 'Excluir \"$triggerLabel\"? As execucoes agendadas deste gatilho param.';
+    return 'Excluir \"$triggerLabel\"? As execuções agendadas deste gatilho param.';
   }
 
   @override
@@ -1880,13 +1874,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsTriggerEditorTitleEdit => 'Editar gatilho';
 
   @override
-  String get agentActionsTriggerFieldName => 'Nome de exibicao';
+  String get agentActionsTriggerFieldName => 'Nome de exibição';
 
   @override
   String get agentActionsTriggerFieldType => 'Tipo de gatilho';
 
   @override
-  String get agentActionsTriggerFieldTimezone => 'Fuso horario IANA (opcional)';
+  String get agentActionsTriggerFieldTimezone => 'Fuso horário IANA (opcional)';
 
   @override
   String get agentActionsTriggerFieldTimezoneFilter => 'Filtrar fusos IANA';
@@ -1896,7 +1890,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentActionsTriggerHintTimezonePick =>
-      'Toque em uma linha para preencher o campo acima. Deixe vazio para usar o fuso padrao do dispositivo.';
+      'Toque em uma linha para preencher o campo acima. Deixe vazio para usar o fuso padrão do dispositivo.';
 
   @override
   String get agentActionsTriggerHintTimezoneSearchEmpty => 'Digite no filtro para buscar fusos IANA.';
@@ -1910,19 +1904,19 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get agentActionsTriggerFieldStartAt => 'Data e hora de inicio';
+  String get agentActionsTriggerFieldStartAt => 'Data e hora de início';
 
   @override
   String get agentActionsTriggerFieldStartAtOptional => 'Ativo a partir de (opcional)';
 
   @override
-  String get agentActionsTriggerFieldEndAtOptional => 'Ativo ate (opcional)';
+  String get agentActionsTriggerFieldEndAtOptional => 'Ativo até (opcional)';
 
   @override
   String get agentActionsTriggerFieldIntervalMinutes => 'Intervalo (minutos)';
 
   @override
-  String get agentActionsTriggerFieldTimeOfDay => 'Horario do dia';
+  String get agentActionsTriggerFieldTimeOfDay => 'Horário do dia';
 
   @override
   String get agentActionsTriggerHintTimeOfDay => 'HH:mm (24 horas)';
@@ -1931,35 +1925,35 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsTriggerFieldWeekdays => 'Dias da semana';
 
   @override
-  String get agentActionsTriggerFieldDayOfMonth => 'Dia do mes (1-31)';
+  String get agentActionsTriggerFieldDayOfMonth => 'Dia do mês (1-31)';
 
   @override
   String get agentActionsTriggerHintDateTime => 'Formato: yyyy-MM-dd HH:mm (local)';
 
   @override
-  String get agentActionsTriggerFieldIgnoreMissedRuns => 'Ignorar execucoes perdidas durante inatividade';
+  String get agentActionsTriggerFieldIgnoreMissedRuns => 'Ignorar execuções perdidas durante inatividade';
 
   @override
   String get agentActionsTriggerHintIgnoreMissedRuns =>
-      'Desmarque para tentar executar agendamentos perdidos com o app fechado, quando o tipo de gatilho suportar recuperacao.';
+      'Desmarque para tentar executar agendamentos perdidos com o app fechado, quando o tipo de gatilho suportar recuperação.';
 
   @override
   String get agentActionsTriggerValidationTitle => 'Revise os campos do gatilho';
 
   @override
-  String get agentActionsTriggerValidationInvalidStartAt => 'Informe uma data e hora de inicio validas.';
+  String get agentActionsTriggerValidationInvalidStartAt => 'Informe uma data e hora de início válidas.';
 
   @override
-  String get agentActionsTriggerValidationInvalidIntervalMinutes => 'Informe um numero inteiro positivo de minutos.';
+  String get agentActionsTriggerValidationInvalidIntervalMinutes => 'Informe um número inteiro positivo de minutos.';
 
   @override
-  String get agentActionsTriggerValidationInvalidTimeOfDay => 'Informe o horario como HH:mm em relogio de 24 horas.';
+  String get agentActionsTriggerValidationInvalidTimeOfDay => 'Informe o horário como HH:mm em relogio de 24 horas.';
 
   @override
   String get agentActionsTriggerValidationWeekdaysRequired => 'Selecione pelo menos um dia da semana.';
 
   @override
-  String get agentActionsTriggerValidationInvalidDayOfMonth => 'Informe um dia do mes entre 1 e 31.';
+  String get agentActionsTriggerValidationInvalidDayOfMonth => 'Informe um dia do mês entre 1 e 31.';
 
   @override
   String get agentActionsTriggerWeekdayMon => 'Seg';
@@ -1986,7 +1980,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsRequestedAt => 'Solicitada em';
 
   @override
-  String get agentActionsExitCode => 'Codigo de saida';
+  String get agentActionsExitCode => 'Código de saída';
 
   @override
   String get agentActionsSourceLocalUi => 'UI local';
@@ -2004,13 +1998,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsDiagnosticsCopySupport => 'Copiar JSON de suporte';
 
   @override
-  String get agentActionsDiagnosticsCopiedToast => 'Diagnostico copiado para a area de transferencia.';
+  String get agentActionsDiagnosticsCopiedToast => 'Diagnóstico copiado para a área de transferência.';
 
   @override
-  String get agentActionsDiagnosticsTitle => 'Diagnostico';
+  String get agentActionsDiagnosticsTitle => 'Diagnóstico';
 
   @override
-  String get agentActionsDiagnosticsExecutionId => 'Execucao';
+  String get agentActionsDiagnosticsExecutionId => 'Execução';
 
   @override
   String get agentActionsDiagnosticsSource => 'Origem';
@@ -2028,10 +2022,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsDiagnosticsTimeoutAt => 'Timeout';
 
   @override
-  String get agentActionsDiagnosticsDuration => 'Duracao';
+  String get agentActionsDiagnosticsDuration => 'Duração';
 
   @override
-  String get agentActionsDiagnosticsExecutable => 'Executavel';
+  String get agentActionsDiagnosticsExecutable => 'Executável';
 
   @override
   String get agentActionsDiagnosticsArgumentCount => 'Argumentos';
@@ -2040,28 +2034,28 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsDiagnosticsCommandPreview => 'Preview do comando';
 
   @override
-  String get agentActionsDiagnosticsFailureCode => 'Codigo de falha';
+  String get agentActionsDiagnosticsFailureCode => 'Código de falha';
 
   @override
   String get agentActionsDiagnosticsFailurePhase => 'Fase da falha';
 
   @override
-  String get agentActionsFailurePhaseExecutionPreflight => 'Preflight de execucao';
+  String get agentActionsFailurePhaseExecutionPreflight => 'Preflight de execução';
 
   @override
-  String get agentActionsFailurePhaseDefinitionValidation => 'Validacao da definicao';
+  String get agentActionsFailurePhaseDefinitionValidation => 'Validação da definição';
 
   @override
-  String get agentActionsFailurePhaseStartProcess => 'Inicio do processo';
+  String get agentActionsFailurePhaseStartProcess => 'Início do processo';
 
   @override
-  String get agentActionsFailurePhaseStdinSetup => 'Configuracao de stdin';
+  String get agentActionsFailurePhaseStdinSetup => 'Configuração de stdin';
 
   @override
-  String get agentActionsFailurePhaseProcessRuntime => 'Execucao do processo';
+  String get agentActionsFailurePhaseProcessRuntime => 'Execução do processo';
 
   @override
-  String get agentActionsFailurePhaseProcessExit => 'Saida do processo';
+  String get agentActionsFailurePhaseProcessExit => 'Saída do processo';
 
   @override
   String get agentActionsFailurePhaseQueue => 'Fila';
@@ -2070,10 +2064,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFailurePhaseTimeout => 'Timeout';
 
   @override
-  String get agentActionsFailurePhaseAuthorization => 'Autorizacao';
+  String get agentActionsFailurePhaseAuthorization => 'Autorização';
 
   @override
-  String get agentActionsFailurePhaseValidation => 'Validacao';
+  String get agentActionsFailurePhaseValidation => 'Validação';
 
   @override
   String get agentActionsFailurePhaseLookup => 'Consulta';
@@ -2082,19 +2076,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFailurePhaseCancel => 'Cancelamento';
 
   @override
-  String get agentActionsFailurePhasePlatformCheck => 'Verificacao de plataforma';
+  String get agentActionsFailurePhasePlatformCheck => 'Verificação de plataforma';
 
   @override
   String get agentActionsFailurePhaseSmtpSend => 'Envio SMTP';
 
   @override
-  String get agentActionsFailurePhaseExecutionSend => 'Preparacao do envio';
+  String get agentActionsFailurePhaseExecutionSend => 'Preparação do envio';
 
   @override
-  String get agentActionsFailurePhaseElevatedSubmit => 'Submissao elevada';
+  String get agentActionsFailurePhaseElevatedSubmit => 'Submissão elevada';
 
   @override
-  String get agentActionsFailurePhaseBootstrapReconciliation => 'Reconciliacao na inicializacao';
+  String get agentActionsFailurePhaseBootstrapReconciliation => 'Reconciliação na inicialização';
 
   @override
   String agentActionsExecutionFailurePhaseLabel(String phase) {
@@ -2102,47 +2096,47 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get agentActionsDiagnosticsCorrectiveAction => 'Acao corretiva';
+  String get agentActionsDiagnosticsCorrectiveAction => 'Ação corretiva';
 
   @override
   String get agentActionsDiagnosticsCorrectivePath =>
-      'Revise o caminho salvo, valide o arquivo ou diretorio novamente e atualize a acao antes de executar.';
+      'Revise o caminho salvo, valide o arquivo ou diretório novamente e atualize a ação antes de executar.';
 
   @override
   String get agentActionsDiagnosticsCorrectiveRunner =>
-      'Confira o caminho do executavel, interpretador ou runner configurado e valide a acao novamente.';
+      'Confira o caminho do executável, interpretador ou runner configurado e valide a ação novamente.';
 
   @override
   String get agentActionsDiagnosticsCorrectiveExitCode =>
-      'Revise o exit code e a saida redigida. Ajuste os codigos aceitos ou corrija o comando executado.';
+      'Revise o exit code e a saída redigida. Ajuste os códigos aceitos ou corrija o comando executado.';
 
   @override
   String get agentActionsDiagnosticsCorrectiveQueue =>
-      'Aguarde a fila reduzir ou ajuste os limites de concorrencia e enfileiramento da acao.';
+      'Aguarde a fila reduzir ou ajuste os limites de concorrência e enfileiramento da ação.';
 
   @override
   String get agentActionsDiagnosticsCorrectiveTimeout =>
-      'Revise o timeout configurado e investigue por que o processo nao concluiu dentro da janela esperada.';
+      'Revise o timeout configurado e investigue por que o processo não concluiu dentro da janela esperada.';
 
   @override
   String get agentActionsDiagnosticsCorrectiveKill =>
-      'Verifique se o processo principal ainda esta em execucao e tente cancelar novamente apos revisar PID e permissao.';
+      'Verifique se o processo principal ainda está em execução e tente cancelar novamente após revisar PID e permissão.';
 
   @override
   String get agentActionsDiagnosticsCorrectiveDefinitionValidation =>
-      'Revise os campos obrigatorios e valide o cadastro da acao novamente antes de executar.';
+      'Revise os campos obrigatórios e valide o cadastro da ação novamente antes de executar.';
 
   @override
   String get agentActionsDiagnosticsCorrectivePreflight =>
-      'Revalide paths, permissoes, contexto e pre-requisitos locais antes de iniciar a execucao.';
+      'Revalide paths, permissões, contexto e pré-requisitos locais antes de iniciar a execução.';
 
   @override
   String get agentActionsDiagnosticsCorrectiveStartProcess =>
-      'Confira executavel, argumentos e diretorio de trabalho antes de tentar iniciar o processo novamente.';
+      'Confira executável, argumentos e diretório de trabalho antes de tentar iniciar o processo novamente.';
 
   @override
   String get agentActionsDiagnosticsCorrectiveRuntime =>
-      'Consulte a saida redigida e os detalhes operacionais para identificar a falha ocorrida durante a execucao.';
+      'Consulte a saída redigida e os detalhes operacionais para identificar a falha ocorrida durante a execução.';
 
   @override
   String get agentActionsDiagnosticsStdout => 'stdout';
@@ -2157,10 +2151,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsDiagnosticsStoredInChunks => 'armazenado em segmentos';
 
   @override
-  String get agentActionsExecutionOutputInChunks => 'saida grande em segmentos';
+  String get agentActionsExecutionOutputInChunks => 'saída grande em segmentos';
 
   @override
-  String get agentActionsDiagnosticsOutputLoadFailed => 'Nao foi possivel carregar a saida capturada';
+  String get agentActionsDiagnosticsOutputLoadFailed => 'Não foi possível carregar a saída capturada';
 
   @override
   String get agentActionsDiagnosticsLoadMoreStdout => 'Carregar mais (stdout)';
@@ -2169,25 +2163,25 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsDiagnosticsLoadMoreStderr => 'Carregar mais (stderr)';
 
   @override
-  String get agentActionsDiagnosticsDefinitionSnapshotHash => 'Hash do snapshot da definicao';
+  String get agentActionsDiagnosticsDefinitionSnapshotHash => 'Hash do snapshot da definição';
 
   @override
   String get agentActionsDiagnosticsContextHash => 'Hash do contexto';
 
   @override
-  String get agentActionsDiagnosticsRedactionApplied => 'Redacao aplicada';
+  String get agentActionsDiagnosticsRedactionApplied => 'Redação aplicada';
 
   @override
   String get agentActionsDiagnosticsValueYes => 'Sim';
 
   @override
-  String get agentActionsDiagnosticsValueNo => 'Nao';
+  String get agentActionsDiagnosticsValueNo => 'Não';
 
   @override
   String get agentActionsDiagnosticsQueueStartedAt => 'Fila iniciada';
 
   @override
-  String get agentActionsDiagnosticsIdempotencyKey => 'Chave de idempotencia';
+  String get agentActionsDiagnosticsIdempotencyKey => 'Chave de idempotência';
 
   @override
   String get agentActionsDiagnosticsRequestedBy => 'Solicitado por';
@@ -2196,10 +2190,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsDiagnosticsTraceId => 'Trace id';
 
   @override
-  String get agentActionsDiagnosticsRuntimeInstanceId => 'ID da instancia (runtime)';
+  String get agentActionsDiagnosticsRuntimeInstanceId => 'ID da instância (runtime)';
 
   @override
-  String get agentActionsDiagnosticsRuntimeSessionId => 'ID da sessao (runtime)';
+  String get agentActionsDiagnosticsRuntimeSessionId => 'ID da sessão (runtime)';
 
   @override
   String get agentActionsDiagnosticsTriggerId => 'Gatilho';
@@ -2220,7 +2214,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsTypePowerShell => 'PowerShell';
 
   @override
-  String get agentActionsTypeExecutable => 'Executavel';
+  String get agentActionsTypeExecutable => 'Executável';
 
   @override
   String get agentActionsTypeScript => 'Script';

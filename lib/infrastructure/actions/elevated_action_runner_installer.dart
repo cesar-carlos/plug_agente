@@ -32,6 +32,9 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
   final ElevatedActionDirectoryAclHardener _directoryAclHardener;
   final bool Function() _isWindows;
 
+  static const int _uacCancelledExitCode = 1223;
+  static const int _accessDeniedExitCode = 5;
+
   @override
   Future<ElevatedActionRunnerInstallStatus> getStatus() async {
     if (!_isWindows()) {
@@ -165,15 +168,21 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
         ? await _runSchtasksWithUacFallback(createArgs)
         : await _runSchtasks(createArgs);
     if (createResult.exitCode != 0) {
+      final uacCancelled = createResult.exitCode == _uacCancelledExitCode;
       return Failure(
         ActionRuntimeFailure.withContext(
-          message: 'Failed to register elevated action runner scheduled task.',
+          message: uacCancelled
+              ? 'Elevated action runner installation was cancelled at the UAC prompt.'
+              : 'Failed to register elevated action runner scheduled task.',
           code: AgentActionFailureCode.elevatedSubmitFailed,
           context: {
             'exit_code': createResult.exitCode,
             'stdout': '${createResult.stdout}',
             'stderr': '${createResult.stderr}',
-            'user_message': 'Nao foi possivel registrar a tarefa elevada. Confirme o UAC e tente novamente.',
+            if (uacCancelled) 'uac_cancelled': true,
+            'user_message': uacCancelled
+                ? 'A preparacao do executor elevado foi cancelada no UAC. Confirme a elevacao para concluir a instalacao.'
+                : 'Nao foi possivel registrar a tarefa elevada. Confirme o UAC e tente novamente.',
           },
         ),
       );
@@ -286,8 +295,23 @@ class ElevatedActionRunnerInstaller implements IElevatedActionRunnerInstaller {
     return '''
 \$ErrorActionPreference = "Stop"
 \$arguments = @($psArgs)
-\$p = Start-Process -FilePath $psExecutable -ArgumentList \$arguments -Verb RunAs -Wait -PassThru
-exit \$p.ExitCode
+try {
+  \$p = Start-Process -FilePath $psExecutable -ArgumentList \$arguments -Verb RunAs -Wait -PassThru
+  if (\$null -eq \$p) {
+    exit $_uacCancelledExitCode
+  }
+  exit \$p.ExitCode
+} catch {
+  \$native = 0
+  try { \$native = [int]\$_.Exception.NativeErrorCode } catch {}
+  if (\$native -eq $_uacCancelledExitCode) { exit $_uacCancelledExitCode }
+  if (\$native -eq $_accessDeniedExitCode) { exit $_accessDeniedExitCode }
+  \$message = \$_.Exception.Message
+  if (\$message -match 'canceled by the user|cancelled by the user|cancelada pelo usuario') {
+    exit $_uacCancelledExitCode
+  }
+  throw
+}
 ''';
   }
 

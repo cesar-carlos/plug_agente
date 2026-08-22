@@ -114,6 +114,7 @@ class _RecordingStatusSyncer extends ElevatedActionStatusFileSyncer {
     required String executionId,
     required DateTime processStartedAt,
     required Duration timeout,
+    Future<void>? abort,
   }) async {
     return result;
   }

@@ -50,9 +50,14 @@ class AgentActionEditorFormHeader extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(
-                title,
-                style: context.sectionTitle,
+              child: Tooltip(
+                message: title,
+                child: Text(
+                  title,
+                  style: context.sectionTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             if (showChrome)

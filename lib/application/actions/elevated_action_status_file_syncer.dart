@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:plug_agente/application/actions/agent_action_execution_metrics_collector.dart';
@@ -34,9 +36,23 @@ class ElevatedActionStatusFileSyncer {
     }
 
     try {
-      final decoded = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      return _parseStatus(decoded);
-    } on Object {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map) {
+        return null;
+      }
+      return _parseStatus(Map<String, dynamic>.from(decoded));
+    } on FormatException {
+      return null;
+    } on FileSystemException {
+      return null;
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Unexpected error reading elevated status file',
+        name: 'elevated_action_status_file_syncer',
+        error: error,
+        stackTrace: stackTrace,
+        level: 900,
+      );
       return null;
     }
   }
@@ -70,6 +86,7 @@ class ElevatedActionStatusFileSyncer {
     required String executionId,
     required DateTime processStartedAt,
     required Duration timeout,
+    Future<void>? abort,
   }) async {
     final deadline = _now().add(timeout);
     while (_now().isBefore(deadline)) {
@@ -79,7 +96,29 @@ class ElevatedActionStatusFileSyncer {
         _metrics?.recordElevatedStatusFileTerminalRead();
         return Success(_toProcessResult(status, processStartedAt));
       }
-      await Future<void>.delayed(AgentActionElevatedConstants.statusPollInterval);
+
+      if (abort == null) {
+        await Future<void>.delayed(AgentActionElevatedConstants.statusPollInterval);
+        continue;
+      }
+
+      final delay = Future<void>.delayed(AgentActionElevatedConstants.statusPollInterval);
+      final abortedDuringWait = await Future.any<bool>([
+        delay.then((_) => false),
+        abort.then((_) => true),
+      ]);
+      if (abortedDuringWait) {
+        return Failure(
+          ActionRuntimeFailure.withContext(
+            message: 'Elevated execution was cancelled before completion.',
+            code: AgentActionFailureCode.executionCancelled,
+            context: {
+              'execution_id': executionId.trim(),
+              'user_message': 'A execucao elevada foi cancelada.',
+            },
+          ),
+        );
+      }
     }
 
     _metrics?.recordElevatedStatusFileWaitTimeout();

@@ -143,6 +143,80 @@ void main() {
       blocker.complete(const Success('late'));
     });
 
+    test('thrown in-flight task completes with Failure and releases the slot', () async {
+      final queue = ActionExecutionQueue();
+      final pendingStarted = Completer<void>();
+
+      final thrown = queue.enqueue(
+        AgentActionQueueRequest<String>(
+          actionId: 'a',
+          executionId: 'throws',
+          policies: _enqueuePolicies(),
+          task: () async {
+            throw StateError('task exploded');
+          },
+        ),
+      );
+
+      final thrownResult = await thrown;
+      check(thrownResult.isError()).isTrue();
+      final failure = thrownResult.exceptionOrNull()!;
+      check(failure).isA<ActionRuntimeFailure>();
+      check((failure as ActionRuntimeFailure).context['reason']).equals('unexpected_task_error');
+      check(queue.runningCount).equals(0);
+
+      final recovered = queue.enqueue(
+        AgentActionQueueRequest<String>(
+          actionId: 'a',
+          executionId: 'after-throw',
+          policies: _enqueuePolicies(),
+          task: () async {
+            pendingStarted.complete();
+            return const Success('recovered');
+          },
+        ),
+      );
+      await pendingStarted.future.timeout(const Duration(seconds: 2));
+      final recoveredResult = await recovered;
+      check(recoveredResult.isSuccess()).isTrue();
+    });
+
+    test('thrown pending task completes with Failure and releases the slot', () async {
+      final queue = ActionExecutionQueue();
+      final blocker = Completer<Result<String>>();
+
+      unawaited(
+        queue.enqueue(
+          AgentActionQueueRequest<String>(
+            actionId: 'a',
+            executionId: 'running',
+            policies: _enqueuePolicies(),
+            task: () => blocker.future,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final pending = queue.enqueue(
+        AgentActionQueueRequest<String>(
+          actionId: 'a',
+          executionId: 'pending-throw',
+          policies: _enqueuePolicies(),
+          task: () async {
+            throw StateError('pending exploded');
+          },
+        ),
+      );
+
+      blocker.complete(const Success('first'));
+      final pendingResult = await pending;
+      final idle = await queue.waitForActiveWorkers(timeout: const Duration(seconds: 2));
+      check(idle.isSuccess()).isTrue();
+      check(pendingResult.isError()).isTrue();
+      check(pendingResult.exceptionOrNull()).isA<ActionRuntimeFailure>();
+      check(queue.runningCount).equals(0);
+    });
+
     test('cancelQueued after dispose returns disposed failure', () {
       final queue = ActionExecutionQueue()..dispose();
 

@@ -244,6 +244,9 @@ class AgentActionRpcExecutionOperations {
         tokenPolicyForAudit = auth.policy;
         if (auth.denied != null) {
           response = auth.denied!;
+        } else if (await _remoteTriggerAdmissionGate(request: request, actionId: actionId)
+            case final RpcResponse triggerDenied) {
+          response = triggerDenied;
         } else {
           final rateLimited = _infrastructure.tryApplyAgentActionRemoteRateLimit(
             request: request,
@@ -309,6 +312,7 @@ class AgentActionRpcExecutionOperations {
     final hadCredential = clientToken != null && clientToken.trim().isNotEmpty;
     final cancel = _cancelAgentActionExecution;
     var executionId = '';
+    var executionActionIdForAudit = '';
     ClientTokenPolicy? tokenPolicyForAudit;
     late final RpcResponse response;
     if (cancel == null) {
@@ -350,7 +354,6 @@ class AgentActionRpcExecutionOperations {
             trimmedCredential != null &&
             trimmedCredential.isNotEmpty;
         RpcResponse? prefetchFailureResponse;
-        var executionActionIdForPolicy = '';
         if (needsAgentActionPolicyContext) {
           final lookup = _getAgentActionExecution;
           if (lookup == null) {
@@ -359,9 +362,12 @@ class AgentActionRpcExecutionOperations {
               'Agent action execution lookup is not configured on this dispatcher.',
             );
           } else {
-            final prefetchResult = await lookup(executionId);
+            final prefetchResult = await lookup(
+              executionId,
+              hydrateCapturedOutput: false,
+            );
             prefetchResult.fold(
-              (execution) => executionActionIdForPolicy = execution.actionId,
+              (execution) => executionActionIdForAudit = execution.actionId,
               (failure) => prefetchFailureResponse = RpcResponse.error(
                 id: request.id,
                 error: FailureToRpcErrorMapper.map(
@@ -381,40 +387,60 @@ class AgentActionRpcExecutionOperations {
             clientToken: clientToken,
             authorizationSql: AgentActionRpcConstants.clientTokenAuthorizationSqlAgentActionCancel,
             requiredAgentActionScope: AgentActionRpcConstants.agentActionsCancelScope,
-            actionIdForAllowlist: executionActionIdForPolicy,
+            actionIdForAllowlist: executionActionIdForAudit,
           );
           tokenPolicyForAudit = auth.policy;
           if (auth.denied != null) {
             response = auth.denied!;
           } else {
-            final rateLimited = _infrastructure.tryApplyAgentActionRemoteRateLimit(
-              request: request,
-              agentId: agentId,
-              method: request.method,
-              scopeActionId: executionId,
-              clientToken: clientToken,
-            );
-            if (rateLimited != null) {
-              response = rateLimited;
+            if (executionActionIdForAudit.isEmpty) {
+              final lookup = _getAgentActionExecution;
+              if (lookup != null) {
+                final actionIdLookup = await lookup(
+                  executionId,
+                  hydrateCapturedOutput: false,
+                );
+                actionIdLookup.fold(
+                  (execution) => executionActionIdForAudit = execution.actionId,
+                  (failure) => prefetchFailureResponse = _rpcResponseFromFailure(request, failure),
+                );
+              }
+            }
+            if (prefetchFailureResponse != null) {
+              response = prefetchFailureResponse!;
             } else {
-              final result = await cancel(executionId);
-              response = await result.fold(
-                (execution) async {
-                  final correlated = await _infrastructure.withRpcCorrelationBackfill(execution, request);
-                  return RpcResponse.success(
-                    id: request.id,
-                    result: agentActionCancelToRpcResult(correlated, cancelled: true),
-                  );
-                },
-                (failure) async => RpcResponse.error(
-                  id: request.id,
-                  error: FailureToRpcErrorMapper.map(
-                    failure as domain.Failure,
-                    instance: request.id?.toString(),
-                    useTimeoutByStage: _infrastructure.featureFlags.enableSocketTimeoutByStage,
-                  ),
-                ),
+              final rateLimited = _infrastructure.tryApplyAgentActionRemoteRateLimit(
+                request: request,
+                agentId: agentId,
+                method: request.method,
+                scopeActionId: executionActionIdForAudit.isNotEmpty ? executionActionIdForAudit : executionId,
+                clientToken: clientToken,
               );
+              if (rateLimited != null) {
+                response = rateLimited;
+              } else {
+                final result = await cancel(executionId);
+                response = await result.fold(
+                  (execution) async {
+                    final correlated = await _infrastructure.withRpcCorrelationBackfill(execution, request);
+                    if (executionActionIdForAudit.isEmpty) {
+                      executionActionIdForAudit = correlated.actionId;
+                    }
+                    return RpcResponse.success(
+                      id: request.id,
+                      result: agentActionCancelToRpcResult(correlated, cancelled: true),
+                    );
+                  },
+                  (failure) async => RpcResponse.error(
+                    id: request.id,
+                    error: FailureToRpcErrorMapper.map(
+                      failure as domain.Failure,
+                      instance: request.id?.toString(),
+                      useTimeoutByStage: _infrastructure.featureFlags.enableSocketTimeoutByStage,
+                    ),
+                  ),
+                );
+              }
             }
           }
         }
@@ -428,6 +454,7 @@ class AgentActionRpcExecutionOperations {
     return _audit.finishAgentActionRpcWithAudit(
       request: request,
       rpcMethod: AgentActionRpcConstants.agentActionCancelRpcMethodName,
+      actionId: executionActionIdForAudit.isEmpty ? null : executionActionIdForAudit,
       executionId: executionId.isEmpty ? null : executionId,
       response: response,
       credentialPresent: hadCredential,
@@ -494,6 +521,7 @@ class AgentActionRpcExecutionOperations {
     final hadCredential = clientToken != null && clientToken.trim().isNotEmpty;
     final getExecution = _getAgentActionExecution;
     var executionId = '';
+    var executionActionIdForAudit = '';
     ClientTokenPolicy? tokenPolicyForAudit;
     late final RpcResponse response;
     if (getExecution == null) {
@@ -543,7 +571,10 @@ class AgentActionRpcExecutionOperations {
             hydrateCapturedOutput: false,
           );
           prefetchResult.fold(
-            (execution) => cachedExecution = execution,
+            (execution) {
+              cachedExecution = execution;
+              executionActionIdForAudit = execution.actionId;
+            },
             (failure) => prefetchFailureResponse = RpcResponse.error(
               id: request.id,
               error: FailureToRpcErrorMapper.map(
@@ -568,19 +599,38 @@ class AgentActionRpcExecutionOperations {
           if (auth.denied != null) {
             response = auth.denied!;
           } else {
-            final rateLimited = _infrastructure.tryApplyAgentActionRemoteRateLimit(
-              request: request,
-              agentId: agentId,
-              method: request.method,
-              scopeActionId: executionId,
-              clientToken: clientToken,
-            );
-            if (rateLimited != null) {
-              response = rateLimited;
+            var loadedExecution = cachedExecution;
+            RpcResponse? loadFailure;
+            if (loadedExecution == null) {
+              final loadResult = await getExecution(
+                executionId,
+                hydrateCapturedOutput: false,
+              );
+              if (loadResult.isError()) {
+                loadFailure = _rpcResponseFromFailure(request, loadResult.exceptionOrNull()!);
+              } else {
+                loadedExecution = loadResult.getOrThrow();
+              }
+            }
+            if (loadFailure != null) {
+              response = loadFailure;
             } else {
-              final cached = cachedExecution;
-              if (cached != null) {
-                final correlated = await _infrastructure.withRpcCorrelationBackfill(cached, request);
+              final executionForRpc = loadedExecution!;
+              executionActionIdForAudit = executionForRpc.actionId;
+              final rateLimited = _infrastructure.tryApplyAgentActionRemoteRateLimit(
+                request: request,
+                agentId: agentId,
+                method: request.method,
+                scopeActionId: executionForRpc.actionId,
+                clientToken: clientToken,
+              );
+              if (rateLimited != null) {
+                response = rateLimited;
+              } else {
+                final correlated = await _infrastructure.withRpcCorrelationBackfill(
+                  executionForRpc,
+                  request,
+                );
                 final resultMap = await agentActionGetExecutionRpcResult(
                   execution: correlated,
                   params: params,
@@ -590,50 +640,7 @@ class AgentActionRpcExecutionOperations {
                     id: request.id,
                     result: result,
                   ),
-                  (failure) => RpcResponse.error(
-                    id: request.id,
-                    error: FailureToRpcErrorMapper.map(
-                      failure as domain.Failure,
-                      instance: request.id?.toString(),
-                      useTimeoutByStage: _infrastructure.featureFlags.enableSocketTimeoutByStage,
-                    ),
-                  ),
-                );
-              } else {
-                final result = await getExecution(
-                  executionId,
-                  hydrateCapturedOutput: false,
-                );
-                response = await result.fold(
-                  (execution) async {
-                    final correlated = await _infrastructure.withRpcCorrelationBackfill(execution, request);
-                    final resultMap = await agentActionGetExecutionRpcResult(
-                      execution: correlated,
-                      params: params,
-                    );
-                    return resultMap.fold(
-                      (mapped) => RpcResponse.success(
-                        id: request.id,
-                        result: mapped,
-                      ),
-                      (failure) => RpcResponse.error(
-                        id: request.id,
-                        error: FailureToRpcErrorMapper.map(
-                          failure as domain.Failure,
-                          instance: request.id?.toString(),
-                          useTimeoutByStage: _infrastructure.featureFlags.enableSocketTimeoutByStage,
-                        ),
-                      ),
-                    );
-                  },
-                  (failure) async => RpcResponse.error(
-                    id: request.id,
-                    error: FailureToRpcErrorMapper.map(
-                      failure as domain.Failure,
-                      instance: request.id?.toString(),
-                      useTimeoutByStage: _infrastructure.featureFlags.enableSocketTimeoutByStage,
-                    ),
-                  ),
+                  (failure) => _rpcResponseFromFailure(request, failure),
                 );
               }
             }
@@ -649,6 +656,7 @@ class AgentActionRpcExecutionOperations {
     return _audit.finishAgentActionRpcWithAudit(
       request: request,
       rpcMethod: AgentActionRpcConstants.agentActionGetExecutionRpcMethodName,
+      actionId: executionActionIdForAudit.isEmpty ? null : executionActionIdForAudit,
       executionId: executionId.isEmpty ? null : executionId,
       response: response,
       credentialPresent: hadCredential,
@@ -672,6 +680,36 @@ class AgentActionRpcExecutionOperations {
     return resolveAgentActionGetExecutionOutputOptions(
       params: params,
       capturePolicy: capturePolicy,
+    );
+  }
+
+  Future<RpcResponse?> _remoteTriggerAdmissionGate({
+    required RpcRequest request,
+    required String actionId,
+  }) async {
+    final remoteTrigger = _runAgentActionViaRemoteTrigger;
+    if (remoteTrigger == null) {
+      return null;
+    }
+
+    final triggerResult = await remoteTrigger.resolveEnabledRemoteTriggerId(
+      actionId: actionId,
+    );
+    if (triggerResult.isSuccess()) {
+      return null;
+    }
+
+    return _rpcResponseFromFailure(request, triggerResult.exceptionOrNull()!);
+  }
+
+  RpcResponse _rpcResponseFromFailure(RpcRequest request, Object failure) {
+    return RpcResponse.error(
+      id: request.id,
+      error: FailureToRpcErrorMapper.map(
+        failure as domain.Failure,
+        instance: request.id?.toString(),
+        useTimeoutByStage: _infrastructure.featureFlags.enableSocketTimeoutByStage,
+      ),
     );
   }
 }

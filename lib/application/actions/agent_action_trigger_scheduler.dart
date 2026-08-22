@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/actions/action_trigger_schedule_calculator.dart';
 import 'package:plug_agente/application/actions/agent_action_failure_diagnostics.dart';
@@ -74,6 +75,12 @@ class AgentActionTriggerScheduler {
   bool _started = false;
   bool _bootstrapDisabled = false;
   String? _lastStartIssueReason;
+  int _scheduleGeneration = 0;
+  bool _appStartDispatchedThisProcess = false;
+  bool _appCloseDispatchedThisProcess = false;
+  Future<Result<int>>? _appStartDispatchInFlight;
+  Future<Result<int>>? _appCloseDispatchInFlight;
+  Future<void>? _lockReleaseInFlight;
 
   int get scheduledTimerCount => _timersByTriggerId.length;
 
@@ -88,6 +95,7 @@ class AgentActionTriggerScheduler {
     final featureGateResult = _ensureSchedulerFeatureGateAllows();
     if (featureGateResult.isError()) {
       _lastStartIssueReason = _reasonFromFailure(featureGateResult.exceptionOrNull()!);
+      await _pauseScheduling();
       return Failure(featureGateResult.exceptionOrNull()!);
     }
 
@@ -106,6 +114,8 @@ class AgentActionTriggerScheduler {
       );
     }
 
+    await _awaitLockRelease();
+
     final lock = _schedulerInstanceLock;
     if (lock != null) {
       final lockResult = await lock.tryAcquire();
@@ -118,6 +128,10 @@ class AgentActionTriggerScheduler {
     _started = true;
     final reloadResult = await reloadTemporalTriggers();
     if (reloadResult.isError()) {
+      if (_isTransientSchedulerGateFailure(reloadResult.exceptionOrNull())) {
+        await _pauseScheduling();
+        return reloadResult;
+      }
       await _disableAfterBootstrapFailure();
       return reloadResult;
     }
@@ -129,7 +143,7 @@ class AgentActionTriggerScheduler {
   Future<Result<AgentActionSchedulerSnapshot>> reloadTemporalTriggers() async {
     final featureGateResult = _ensureSchedulerFeatureGateAllows();
     if (featureGateResult.isError()) {
-      _cancelAllTimers();
+      await _pauseScheduling();
       return Failure(featureGateResult.exceptionOrNull()!);
     }
 
@@ -137,6 +151,15 @@ class AgentActionTriggerScheduler {
     if (operationalResult.isError()) {
       _cancelAllTimers();
       return Failure(operationalResult.exceptionOrNull()!);
+    }
+
+    if (!_started) {
+      return const Success(
+        AgentActionSchedulerSnapshot(
+          scheduledCount: 0,
+          skippedCount: 0,
+        ),
+      );
     }
 
     _cancelAllTimers();
@@ -193,7 +216,13 @@ class AgentActionTriggerScheduler {
       return Future<Result<int>>.value(Failure(operationalResult.exceptionOrNull()!));
     }
 
-    return _dispatchLifecycleTriggers(AgentActionTriggerType.appStart);
+    return _dispatchLifecycleTriggersOnce(
+      type: AgentActionTriggerType.appStart,
+      alreadyDispatched: () => _appStartDispatchedThisProcess,
+      markDispatched: () => _appStartDispatchedThisProcess = true,
+      inFlight: () => _appStartDispatchInFlight,
+      setInFlight: (future) => _appStartDispatchInFlight = future,
+    );
   }
 
   Future<Result<int>> dispatchAppCloseTriggers({
@@ -209,24 +238,125 @@ class AgentActionTriggerScheduler {
       return Future<Result<int>>.value(Failure(operationalResult.exceptionOrNull()!));
     }
 
-    return _dispatchLifecycleTriggers(
-      AgentActionTriggerType.appClose,
+    return _dispatchLifecycleTriggersOnce(
+      type: AgentActionTriggerType.appClose,
       timeoutPerTrigger: timeoutPerTrigger,
+      alreadyDispatched: () => _appCloseDispatchedThisProcess,
+      markDispatched: () => _appCloseDispatchedThisProcess = true,
+      inFlight: () => _appCloseDispatchInFlight,
+      setInFlight: (future) => _appCloseDispatchInFlight = future,
     );
   }
 
+  void unscheduleTrigger(String triggerId) {
+    _unscheduleTrigger(triggerId);
+  }
+
+  Future<Result<bool>> syncTrigger(AgentActionTrigger trigger) async {
+    _unscheduleTrigger(trigger.id);
+
+    if (!_started || !trigger.isEnabled || !trigger.isTemporalTrigger) {
+      return const Success(false);
+    }
+
+    final featureGateResult = _ensureSchedulerFeatureGateAllows();
+    if (featureGateResult.isError()) {
+      return Failure(featureGateResult.exceptionOrNull()!);
+    }
+
+    final operationalResult = _ensureSchedulerOperational();
+    if (operationalResult.isError()) {
+      return Failure(operationalResult.exceptionOrNull()!);
+    }
+
+    return _scheduleTemporalTrigger(trigger);
+  }
+
   void stop() {
-    _started = false;
-    _cancelAllTimers();
-    unawaited(_schedulerInstanceLock?.release());
+    unawaited(_pauseScheduling());
   }
 
   Future<void> _disableAfterBootstrapFailure() async {
     _bootstrapDisabled = true;
-    _started = false;
     _lastStartIssueReason = AgentActionTriggerConstants.schedulerBootstrapFailedReason;
+    await _pauseScheduling();
+  }
+
+  Future<void> _pauseScheduling() async {
+    _started = false;
+    _scheduleGeneration += 1;
     _cancelAllTimers();
-    await _schedulerInstanceLock?.release();
+    await _releaseInstanceLock();
+  }
+
+  Future<void> _releaseInstanceLock() {
+    final inFlight = _lockReleaseInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final lock = _schedulerInstanceLock;
+    if (lock == null) {
+      return Future<void>.value();
+    }
+
+    final release = lock.release().whenComplete(() {
+      _lockReleaseInFlight = null;
+    });
+    _lockReleaseInFlight = release;
+    return release;
+  }
+
+  Future<void> _awaitLockRelease() async {
+    final inFlight = _lockReleaseInFlight;
+    if (inFlight != null) {
+      await inFlight;
+    }
+  }
+
+  bool _isSchedulingLive(int generation) {
+    return _started && !_bootstrapDisabled && generation == _scheduleGeneration;
+  }
+
+  bool _isTransientSchedulerGateFailure(Object? failure) {
+    if (failure is! ActionAuthorizationFailure) {
+      return false;
+    }
+
+    return failure.code == AgentActionFailureCode.maintenanceMode ||
+        failure.code == AgentActionFailureCode.featureDisabled;
+  }
+
+  Future<Result<int>> _dispatchLifecycleTriggersOnce({
+    required AgentActionTriggerType type,
+    required bool Function() alreadyDispatched,
+    required void Function() markDispatched,
+    required Future<Result<int>>? Function() inFlight,
+    required void Function(Future<Result<int>>? future) setInFlight,
+    Duration? timeoutPerTrigger,
+  }) {
+    if (alreadyDispatched()) {
+      return Future<Result<int>>.value(const Success(0));
+    }
+
+    final existing = inFlight();
+    if (existing != null) {
+      return existing;
+    }
+
+    final future =
+        _dispatchLifecycleTriggers(
+          type,
+          timeoutPerTrigger: timeoutPerTrigger,
+        ).then((result) {
+          if (result.isSuccess()) {
+            markDispatched();
+          }
+          return result;
+        });
+    final tracked = future.whenComplete(() => setInFlight(null));
+    setInFlight(tracked);
+    return tracked;
   }
 
   static String? _reasonFromFailure(Object failure) {
@@ -331,6 +461,10 @@ class AgentActionTriggerScheduler {
   Future<Result<bool>> _scheduleTemporalTrigger(
     AgentActionTrigger trigger,
   ) async {
+    if (!_started) {
+      return const Success(false);
+    }
+
     final decisionResult = _calculator.nextRun(
       trigger: trigger,
       now: _now(),
@@ -354,9 +488,10 @@ class AgentActionTriggerScheduler {
     }
 
     _timersByTriggerId[trigger.id]?.cancel();
+    final generation = _scheduleGeneration;
     _timersByTriggerId[trigger.id] = _timerFactory(
       _delayUntil(nextRunAt),
-      () => unawaited(_dispatchAndReschedule(trigger.id, nextRunAt)),
+      () => unawaited(_dispatchAndReschedule(trigger.id, nextRunAt, generation)),
     );
     return const Success(true);
   }
@@ -364,16 +499,48 @@ class AgentActionTriggerScheduler {
   Future<void> _dispatchAndReschedule(
     String triggerId,
     DateTime scheduledAt,
+    int generation,
   ) async {
-    _timersByTriggerId.remove(triggerId)?.cancel();
+    _unscheduleTrigger(triggerId);
+    if (!_isSchedulingLive(generation)) {
+      return;
+    }
 
-    await _dispatchTrigger(
+    final featureGateResult = _ensureSchedulerFeatureGateAllows();
+    if (featureGateResult.isError()) {
+      await _pauseScheduling();
+      return;
+    }
+
+    final operationalResult = _ensureSchedulerOperational();
+    if (operationalResult.isError()) {
+      return;
+    }
+
+    final dispatchResult = await _dispatchTrigger(
       triggerId: triggerId,
       scheduledAt: scheduledAt,
     );
+    if (!_isSchedulingLive(generation)) {
+      return;
+    }
+
+    if (dispatchResult.isError()) {
+      _logSchedulerIssue(
+        'Failed to dispatch scheduled agent action trigger $triggerId',
+        dispatchResult.exceptionOrNull(),
+      );
+    }
 
     final freshTriggerResult = await _repository.getTrigger(triggerId);
+    if (!_isSchedulingLive(generation)) {
+      return;
+    }
     if (freshTriggerResult.isError()) {
+      _logSchedulerIssue(
+        'Failed to reload agent action trigger $triggerId after dispatch',
+        freshTriggerResult.exceptionOrNull(),
+      );
       return;
     }
 
@@ -382,13 +549,21 @@ class AgentActionTriggerScheduler {
       return;
     }
 
-    final runAt = _now();
-    final updatedTrigger = freshTrigger.copyWith(
+    var updatedTrigger = freshTrigger.copyWith(
       lastScheduledAt: scheduledAt,
-      lastRunAt: runAt,
       clearNextRunAt: true,
     );
-    await _scheduleTemporalTrigger(updatedTrigger);
+    if (dispatchResult.isSuccess()) {
+      updatedTrigger = updatedTrigger.copyWith(lastRunAt: _now());
+    }
+
+    final rescheduleResult = await _scheduleTemporalTrigger(updatedTrigger);
+    if (rescheduleResult.isError()) {
+      _logSchedulerIssue(
+        'Failed to reschedule agent action trigger $triggerId',
+        rescheduleResult.exceptionOrNull(),
+      );
+    }
   }
 
   Future<Result<int>> _dispatchLifecycleTriggers(
@@ -409,7 +584,14 @@ class AgentActionTriggerScheduler {
         trigger,
         timeoutPerTrigger: timeoutPerTrigger,
       );
-      if (canDispatchResult.isError() || !canDispatchResult.getOrThrow()) {
+      if (canDispatchResult.isError()) {
+        _logSchedulerIssue(
+          'Skipped lifecycle trigger ${trigger.id}',
+          canDispatchResult.exceptionOrNull(),
+        );
+        continue;
+      }
+      if (!canDispatchResult.getOrThrow()) {
         continue;
       }
 
@@ -436,6 +618,11 @@ class AgentActionTriggerScheduler {
         dispatchedCount += 1;
         await _repository.saveTrigger(
           trigger.copyWith(lastRunAt: _now()),
+        );
+      } else {
+        _logSchedulerIssue(
+          'Failed to dispatch lifecycle trigger ${trigger.id}',
+          dispatchResult.exceptionOrNull(),
         );
       }
     }
@@ -533,11 +720,24 @@ class AgentActionTriggerScheduler {
     return delay;
   }
 
+  void _unscheduleTrigger(String triggerId) {
+    _timersByTriggerId.remove(triggerId)?.cancel();
+  }
+
   void _cancelAllTimers() {
     for (final timer in _timersByTriggerId.values) {
       timer.cancel();
     }
     _timersByTriggerId.clear();
+  }
+
+  void _logSchedulerIssue(String message, Object? error) {
+    developer.log(
+      message,
+      name: 'agent_action_trigger_scheduler',
+      level: 900,
+      error: error,
+    );
   }
 
   AgentActionSchedulerIssue _issueFor(

@@ -2591,7 +2591,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsElevatedRunnerPreparing.
   ///
   /// In en, this message translates to:
-  /// **'Preparing elevated runner...'**
+  /// **'Preparing elevated runner…'**
   String get agentActionsElevatedRunnerPreparing;
 
   /// No description provided for @agentOperationalReadinessHubConnected.
@@ -2819,7 +2819,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsRetentionRemoteAudit.
   ///
   /// In en, this message translates to:
-  /// **'Remote agent.action audit'**
+  /// **'Remote audit history'**
   String get agentActionsRetentionRemoteAudit;
 
   /// No description provided for @agentActionsRetentionRemoteAuditValue.
@@ -2987,7 +2987,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsRemoteAuditTitle.
   ///
   /// In en, this message translates to:
-  /// **'Remote agent.action audit'**
+  /// **'Remote audit'**
   String get agentActionsRemoteAuditTitle;
 
   /// No description provided for @agentActionsRemoteAuditDescription.

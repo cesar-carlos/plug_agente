@@ -4,6 +4,7 @@ import 'package:plug_agente/application/actions/agent_action_backup_sanitizer.da
 import 'package:plug_agente/application/use_cases/save_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/save_agent_action_trigger.dart';
 import 'package:plug_agente/core/constants/agent_action_backup_constants.dart';
+import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
 
@@ -71,38 +72,82 @@ class ImportAgentActionsBundle {
       );
     }
 
+    final preparedDefinitions = <AgentActionDefinition>[];
+    for (var index = 0; index < definitionMaps.length; index++) {
+      final rawDefinition = definitionMaps[index];
+      if (rawDefinition is! Map) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Agent action import bundle contains an invalid definition entry.',
+            context: {'field': 'definitions', 'index': index},
+          ),
+        );
+      }
+      preparedDefinitions.add(
+        _sanitizer.prepareDefinitionForImport(
+          Map<String, Object?>.from(rawDefinition.cast<String, Object?>()),
+        ),
+      );
+    }
+
+    final preparedTriggers = <AgentActionTrigger>[];
+    final triggerMaps = bundle['triggers'];
+    if (triggerMaps != null) {
+      if (triggerMaps is! List) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Agent action import bundle triggers must be an array.',
+            context: const {'field': 'triggers'},
+          ),
+        );
+      }
+      for (var index = 0; index < triggerMaps.length; index++) {
+        final rawTrigger = triggerMaps[index];
+        if (rawTrigger is! Map) {
+          return Failure(
+            domain.ValidationFailure.withContext(
+              message: 'Agent action import bundle contains an invalid trigger entry.',
+              context: {'field': 'triggers', 'index': index},
+            ),
+          );
+        }
+        preparedTriggers.add(
+          _sanitizer.prepareTriggerForImport(
+            Map<String, Object?>.from(rawTrigger.cast<String, Object?>()),
+          ),
+        );
+      }
+    }
+
     final importedDefinitionIds = <String>[];
     final importedTriggerIds = <String>[];
 
-    for (final Object? rawDefinition in definitionMaps) {
-      if (rawDefinition is! Map) {
-        continue;
-      }
-      final definition = _sanitizer.prepareDefinitionForImport(
-        Map<String, Object?>.from(rawDefinition.cast<String, Object?>()),
-      );
+    for (final definition in preparedDefinitions) {
       final saveResult = await _saveDefinition(definition);
       if (saveResult.isError()) {
-        return Failure(saveResult.exceptionOrNull()!);
+        return Failure(
+          _partialImportFailure(
+            saveResult.exceptionOrNull()!,
+            importedDefinitionIds: importedDefinitionIds,
+            importedTriggerIds: importedTriggerIds,
+          ),
+        );
       }
       importedDefinitionIds.add(saveResult.getOrThrow().id);
     }
 
-    final triggerMaps = bundle['triggers'];
-    if (triggerMaps is List) {
-      for (final Object? rawTrigger in triggerMaps) {
-        if (rawTrigger is! Map) {
-          continue;
-        }
-        final trigger = _sanitizer.prepareTriggerForImport(
-          Map<String, Object?>.from(rawTrigger.cast<String, Object?>()),
+    for (final trigger in preparedTriggers) {
+      final saveResult = await _saveTrigger(trigger);
+      if (saveResult.isError()) {
+        return Failure(
+          _partialImportFailure(
+            saveResult.exceptionOrNull()!,
+            importedDefinitionIds: importedDefinitionIds,
+            importedTriggerIds: importedTriggerIds,
+          ),
         );
-        final saveResult = await _saveTrigger(trigger);
-        if (saveResult.isError()) {
-          return Failure(saveResult.exceptionOrNull()!);
-        }
-        importedTriggerIds.add(saveResult.getOrThrow().id);
       }
+      importedTriggerIds.add(saveResult.getOrThrow().id);
     }
 
     final secretNames = _sanitizer.secretPlaceholdersInBundle(bundle).toList(growable: false)..sort();
@@ -113,6 +158,28 @@ class ImportAgentActionsBundle {
         importedTriggerIds: importedTriggerIds,
         secretPlaceholderNames: secretNames,
       ),
+    );
+  }
+
+  domain.Failure _partialImportFailure(
+    Object error, {
+    required List<String> importedDefinitionIds,
+    required List<String> importedTriggerIds,
+  }) {
+    if (importedDefinitionIds.isEmpty && importedTriggerIds.isEmpty) {
+      return error as domain.Failure;
+    }
+
+    final failure = error as domain.Failure;
+    return domain.ValidationFailure.withContext(
+      message: failure.message,
+      cause: failure,
+      context: {
+        ...failure.context,
+        'partial_import': true,
+        'imported_definition_ids': List<String>.from(importedDefinitionIds),
+        'imported_trigger_ids': List<String>.from(importedTriggerIds),
+      },
     );
   }
 }

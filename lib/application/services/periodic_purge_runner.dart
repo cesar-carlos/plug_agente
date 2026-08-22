@@ -26,6 +26,8 @@ class PeriodicPurgeRunner {
   final String _failureLogMessage;
   Timer? _timer;
 
+  bool _purgeInFlight = false;
+
   bool get isRunning => _timer != null;
 
   void start() {
@@ -45,6 +47,10 @@ class PeriodicPurgeRunner {
   void dispose() => stop();
 
   Future<void> purgeNow() async {
+    if (_purgeInFlight) {
+      return;
+    }
+    _purgeInFlight = true;
     try {
       final result = await _purge();
       result.fold(
@@ -74,6 +80,8 @@ class PeriodicPurgeRunner {
         error: error,
         stackTrace: stackTrace,
       );
+    } finally {
+      _purgeInFlight = false;
     }
   }
 }

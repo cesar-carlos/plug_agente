@@ -43,6 +43,23 @@ void main() {
       );
     });
 
+    test('editor kinds cover the full in-app catalog', () {
+      expect(AgentActionDraftKind.values, hasLength(8));
+      expect(
+        AgentActionDraftKind.values,
+        containsAll([
+          AgentActionDraftKind.commandLine,
+          AgentActionDraftKind.executable,
+          AgentActionDraftKind.script,
+          AgentActionDraftKind.jar,
+          AgentActionDraftKind.email,
+          AgentActionDraftKind.comObject,
+          AgentActionDraftKind.developer,
+          AgentActionDraftKind.powerShell,
+        ]),
+      );
+    });
+
     test('should map PowerShell script mode to a script action', () {
       expect(
         agentActionTypeForDraftKind(AgentActionDraftKind.powerShell, PowerShellDraftMode.script),

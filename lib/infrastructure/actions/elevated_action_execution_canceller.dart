@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -134,8 +135,14 @@ class ElevatedActionExecutionCanceller implements IElevatedActionExecutionCancel
       if (file.existsSync()) {
         await file.delete();
       }
-    } on Object {
-      // Best effort cleanup.
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Unable to delete elevated artifact during cancel',
+        name: 'elevated_action_execution_canceller',
+        error: error,
+        stackTrace: stackTrace,
+        level: 900,
+      );
     }
   }
 
@@ -160,7 +167,14 @@ class ElevatedActionExecutionCanceller implements IElevatedActionExecutionCancel
         return nonce;
       }
       return null;
-    } on Object {
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Unable to read elevated materialized nonce for cancel',
+        name: 'elevated_action_execution_canceller',
+        error: error,
+        stackTrace: stackTrace,
+        level: 800,
+      );
       return null;
     }
   }

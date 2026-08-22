@@ -2,6 +2,10 @@ part of '../agent_actions_provider.dart';
 
 extension AgentActionsProviderCapabilities on AgentActionsProvider {
   bool canRunDefinition(AgentActionDefinition definition) {
+    if (hasBlockingLocalOperation) {
+      return false;
+    }
+
     return _localOperationPolicy.canRunDefinition(
       definition: definition,
       isFeatureEnabled: isFeatureEnabled,
@@ -11,6 +15,10 @@ extension AgentActionsProviderCapabilities on AgentActionsProvider {
   }
 
   bool canTestDefinition(AgentActionDefinition definition) {
+    if (hasBlockingLocalOperation) {
+      return false;
+    }
+
     return _localOperationPolicy.canTestDefinition(
       isFeatureEnabled: isFeatureEnabled,
       isTesting: isTesting,

@@ -1,16 +1,12 @@
 # UI operacional — pagina Acoes (Plug Agente)
 
-Indice da superficie Fluent **Acoes** e gates de regressao. Plano completo:
-[plano_acoes_agendadas_execucoes.md](../plano_acoes_agendadas_execucoes.md).
+Indice da superficie Fluent **Acoes do Sistema** e gates de regressao. Plano
+completo: [plano_acoes_agendadas_execucoes.md](../plano_acoes_agendadas_execucoes.md).
 
-**Status (2026-05-21):** pagina operacional e gate UI fechado no manifesto
-`tool/agent_actions/manifests/agent_actions_ui_test_paths.txt` (7 arquivos:
-`agent_actions_page_test.dart` agora e shim que reexporta
-`agent_actions_actions_tab_test.dart` (~73 cenarios) e
-`agent_actions_settings_tab_test.dart` (~5 cenarios), alem de
-`agent_actions_summary_card_test.dart`, `agent_action_risk_labels_test.dart`,
-`agent_action_confirmations_test.dart` e
-`agent_action_remote_audit_labels_test.dart`).
+**Status (2026-08-22):** pagina operacional; gate UI no manifesto
+`tool/agent_actions/manifests/agent_actions_ui_test_paths.txt`.
+`agent_actions_page_test.dart` e shim que reexporta
+`agent_actions_actions_tab_test.dart` e `agent_actions_settings_tab_test.dart`.
 Rollout de producao da superficie completa ainda depende de `COM` real
 aprovado + Hub com policy/live signing alinhados.
 
@@ -18,25 +14,42 @@ aprovado + Hub com policy/live signing alinhados.
 
 | Item | Caminho / nota |
 | --- | --- |
-| Rota | `AppRoutes.agentActions` |
-| Pagina | `lib/presentation/pages/agent_actions_page.dart` |
-| Provider | `lib/presentation/providers/agent_actions_provider.dart` |
-| Shell desktop | Fluent UI; estados loading / empty / error na propria pagina |
+| Rota | `AppRoutes.agentActions` (`/agent-actions`) |
+| Pagina | `lib/presentation/pages/agent_actions/agent_actions_page.dart` |
+| Provider | `lib/presentation/providers/agent_actions_provider.dart` (fachada; controllers em `providers/agent_actions/`) |
+| Shell desktop | Fluent UI; loading / empty / error na propria pagina; abas Acoes, Historico, Preferencias, Auditoria remota (flag) |
 
 ## Superficies principais
 
-- **Toolbar:** export/import bundle JSON (`AgentActionsToolbarCard`).
-- **Lista e editor** por tipo: `commandLine`, `executable`, `script`, `jar`,
-  `email`, `comObject`, `developer` (Data7).
+- **Toolbar:** `AgentActionsToolbarCard` — nova, atualizar, export/import
+  bundle JSON, executar, testar, modo de manutencao. Run / test / bundle
+  transfer sao mutuamente exclusivos (`hasBlockingLocalOperation`). Falha ao
+  ligar manutencao nao e engolida. Refresh fica desabilitado enquanto uma
+  operacao local estiver em curso.
+- **Empty state:** lista todos os `AgentActionDraftKind` do editor (nao so
+  linha de comando / executavel / script).
+- **Lista e editor** por tipo persistido: `commandLine`, `executable`,
+  `script`, `jar`, `email`, `comObject`, `developer` (Data7). PowerShell e
+  kind de editor (`AgentActionDraftKind.powerShell`) e persiste como
+  `commandLine` (inline) ou `script`.
+- **Rebuilds:** abas e dialogs usam `AgentActionsSelectBuilder` para nao
+  reconstruir o grid/formulario a cada tick da fila.
 - **Gatilhos:** `AgentActionTriggerSaveDialog`, timezone IANA
-  (`IanaTimezoneIdField`), resumo de proxima execucao.
+  (`IanaTimezoneIdField`), resumo de proxima execucao. Save/delete de
+  gatilho ressincroniza o scheduler.
 - **Historico de execucoes:** filtro por id / trace / idempotency; diagnostico
-  com stdout/stderr paginado (inline ou chunks via `onSliceCapturedOutput`).
+  com stdout/stderr paginado (`pagingIdentity`; ignora `onSlice` por
+  identidade e fatias stale).
 - **Retencao:** `AgentActionsRetentionCard` + `AgentActionRetentionSettings`.
-- **Auditoria remota:** `AgentActionsRemoteAuditPanel`, correlacao com historico
+- **Auditoria remota:** `AgentActionsRemoteAuditPanel` escuta loading/erro/
+  linhas do provider; correlacao com historico
   (`focusExecutionFromRemoteAudit`).
 - **Riscos e confirmacoes:** chips (`agent_action_risk_labels.dart`),
-  dialogs (`agent_action_confirmations.dart`), reaprovacao remota.
+  dialogs (`agent_action_confirmations.dart`), reaprovacao remota. Run/delete
+  revalidam a acao selecionada depois do confirm.
+- **Atalhos:** `Ctrl+N` / Enter / Delete / `Ctrl+T` / `Ctrl+R` so na aba
+  Acoes; `F5` na pagina. Bloqueados com modal aberto ou operacao local
+  bloqueante.
 - **Segredos:** `AgentActionSecretsSection`, placeholders `${secret:name}`.
 - **Runtime / fila:** InfoBar `AgentActionRuntimeStateGuard`, metricas de fila,
   aviso scheduler lock / COM sem handlers, summary card.
@@ -60,7 +73,9 @@ python tool/agent_actions/run_agent_actions_operational_gate.py
 Cenarios criticos cobertos nos testes (nao exaustivo):
 
 - diagnostico + cancelamento de execucao em andamento;
-- stdout em chunks on-demand;
+- stdout em chunks on-demand (paginacao estavel se o parent rebuildar);
+- empty state com todos os kinds do editor;
+- run/test/import nao se sobrepoem;
 - mismatch `runtime_instance_id` auditoria vs historico;
 - lock do scheduler e COM handlers no summary;
 - politicas de captura, fila, paths, encoding no editor `commandLine`;

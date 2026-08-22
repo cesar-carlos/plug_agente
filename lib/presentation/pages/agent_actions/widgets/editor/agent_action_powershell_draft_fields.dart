@@ -120,12 +120,18 @@ class AgentActionPowerShellDraftFields extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.sm,
           children: [
-            SizedBox(width: 220, child: modeField),
-            const SizedBox(width: AppSpacing.md),
-            SizedBox(width: 240, child: executableField),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 200, maxWidth: 280),
+              child: modeField,
+            ),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 200, maxWidth: 280),
+              child: executableField,
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),

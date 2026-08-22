@@ -31,11 +31,14 @@ class AgentActionDefinitionNameCell extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                definition.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(height: 1.15),
+              Tooltip(
+                message: definition.name,
+                child: Text(
+                  definition.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(height: 1.15),
+                ),
               ),
               Text(
                 definition.id,
@@ -78,12 +81,12 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
         Tooltip(
           message: l10n.agentActionsRunSelected,
           child: IconButton(
-            icon: provider.isRunning
+            icon: provider.isRunning && provider.selectedActionId == definition.id
                 ? const SizedBox.square(
-                    dimension: 14,
+                    dimension: 16,
                     child: ProgressRing(strokeWidth: 2),
                   )
-                : const Icon(FluentIcons.play),
+                : const Icon(FluentIcons.play, size: 16),
             onPressed: provider.canRunDefinition(definition)
                 ? () {
                     provider.selectAction(definition.id);
@@ -102,12 +105,12 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
         Tooltip(
           message: l10n.agentActionsTestSelected,
           child: IconButton(
-            icon: provider.isTesting
+            icon: provider.isTesting && provider.selectedActionId == definition.id
                 ? const SizedBox.square(
-                    dimension: 14,
+                    dimension: 16,
                     child: ProgressRing(strokeWidth: 2),
                   )
-                : const Icon(FluentIcons.test_beaker),
+                : const Icon(FluentIcons.test_beaker, size: 16),
             onPressed: provider.canTestDefinition(definition)
                 ? () {
                     provider.selectAction(definition.id);
@@ -122,7 +125,7 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
           buttonBuilder: (context, onOpen) => Tooltip(
             message: l10n.agentActionsMoreActions,
             child: IconButton(
-              icon: const Icon(FluentIcons.more),
+              icon: const Icon(FluentIcons.more, size: 16),
               onPressed: onOpen,
             ),
           ),

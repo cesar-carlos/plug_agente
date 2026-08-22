@@ -1,3 +1,6 @@
+import 'dart:developer' as developer;
+
+import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
@@ -10,12 +13,14 @@ class SaveAgentActionTrigger {
   SaveAgentActionTrigger(
     this._repository,
     this._validateTrigger,
-    this._featureFlags,
-  );
+    this._featureFlags, {
+    AgentActionTriggerScheduler? scheduler,
+  }) : _scheduler = scheduler;
 
   final IAgentActionRepository _repository;
   final ValidateAgentActionTrigger _validateTrigger;
   final FeatureFlags _featureFlags;
+  final AgentActionTriggerScheduler? _scheduler;
 
   Future<Result<AgentActionTrigger>> call(
     AgentActionTrigger trigger,
@@ -83,6 +88,30 @@ class SaveAgentActionTrigger {
       );
     }
 
-    return _repository.saveTrigger(persistedTrigger);
+    final saveResult = await _repository.saveTrigger(persistedTrigger);
+    if (saveResult.isError()) {
+      return Failure(saveResult.exceptionOrNull()!);
+    }
+
+    final savedTrigger = saveResult.getOrThrow();
+    await _syncSavedTrigger(savedTrigger);
+    return Success(savedTrigger);
+  }
+
+  Future<void> _syncSavedTrigger(AgentActionTrigger trigger) async {
+    final scheduler = _scheduler;
+    if (scheduler == null) {
+      return;
+    }
+
+    final syncResult = await scheduler.syncTrigger(trigger);
+    if (syncResult.isError()) {
+      developer.log(
+        'Failed to sync saved agent action trigger ${trigger.id} with scheduler',
+        name: 'save_agent_action_trigger',
+        level: 900,
+        error: syncResult.exceptionOrNull(),
+      );
+    }
   }
 }

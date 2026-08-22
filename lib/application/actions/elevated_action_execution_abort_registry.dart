@@ -24,7 +24,13 @@ class ElevatedActionExecutionAbortRegistry {
 
   Future<void> whenAborted(String executionId) {
     final completer = _abortCompletersByExecutionId[executionId.trim()];
-    return completer?.future ?? Future<void>.value();
+    if (completer != null) {
+      return completer.future;
+    }
+
+    // Missing registration must not complete as "aborted"; that would mark a
+    // still-running elevated wait as cancelled.
+    return Completer<void>().future;
   }
 
   bool requestAbort(String executionId) {

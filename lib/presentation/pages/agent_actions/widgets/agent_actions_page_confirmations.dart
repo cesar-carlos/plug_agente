@@ -43,6 +43,13 @@ Future<void> confirmAgentActionDelete(
   );
 
   if (confirmed) {
+    if (!context.mounted) {
+      return;
+    }
+    provider.selectAction(definition.id);
+    if (!provider.canDeleteDefinition(definition)) {
+      return;
+    }
     await provider.deleteSelectedAction();
   }
 }
@@ -77,9 +84,14 @@ Future<void> runAgentActionWithDangerousCommandCheck(
       patternId: match.patternId,
       patternDescription: match.description,
     );
-    if (!confirmed) {
+    if (!confirmed || !context.mounted) {
       return;
     }
+  }
+
+  provider.selectAction(target.id);
+  if (!provider.canRunDefinition(target)) {
+    return;
   }
 
   await provider.runSelectedAction(

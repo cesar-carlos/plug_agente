@@ -50,6 +50,27 @@ class _InMemoryRepository extends Fake implements IAgentActionRepository {
 
 class _MockOrphanTerminator extends Mock implements IAgentActionOrphanProcessTerminator {}
 
+class _FailOnceSaveAgentActionExecution extends SaveAgentActionExecution {
+  _FailOnceSaveAgentActionExecution(super.repository, {required this.failId});
+
+  final String failId;
+
+  @override
+  Future<Result<AgentActionExecution>> call(AgentActionExecution execution) async {
+    if (execution.id == failId) {
+      return Failure(
+        ActionRuntimeFailure.withContext(
+          message: 'Unable to persist interrupted execution.',
+          context: const {
+            'user_message': 'Nao foi possivel gravar o estado interrompido desta execucao.',
+          },
+        ),
+      );
+    }
+    return super.call(execution);
+  }
+}
+
 void main() {
   late _InMemoryRepository repository;
   late _MockOrphanTerminator orphanTerminator;
@@ -144,6 +165,36 @@ void main() {
         repository.executions['running']?.failureMessage,
         contains('Processo principal encerrado durante a reconciliacao do bootstrap'),
       );
+    });
+
+    test('should keep reconciling remaining executions when one save fails', () async {
+      repository.executions['running-a'] = execution(
+        id: 'running-a',
+        status: AgentActionExecutionStatus.running,
+        pid: 111,
+      );
+      repository.executions['running-b'] = execution(
+        id: 'running-b',
+        status: AgentActionExecutionStatus.running,
+        pid: 222,
+      );
+      when(() => orphanTerminator.tryTerminateRunningProcess(any())).thenAnswer((_) async => false);
+
+      final useCase = ReconcileAgentActionExecutions(
+        repository,
+        saveExecution: _FailOnceSaveAgentActionExecution(repository, failId: 'running-a'),
+        orphanProcessTerminator: orphanTerminator,
+        now: () => DateTime.utc(2026, 5, 15, 10),
+      );
+
+      final result = await useCase();
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionFailure;
+      expect(failure.code, AgentActionFailureCode.interruptedOnBootstrap);
+      expect(failure.context['reconciled_count'], 1);
+      expect(repository.executions['running-a']?.status, AgentActionExecutionStatus.running);
+      expect(repository.executions['running-b']?.status, AgentActionExecutionStatus.interrupted);
     });
   });
 }

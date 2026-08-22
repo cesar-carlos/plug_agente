@@ -5,9 +5,8 @@ import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_ui_pr
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_execution_list.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_history_filters.dart';
-import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_keys.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
-import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_detail_panel.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
 class AgentActionsHistoryTab extends StatelessWidget {
@@ -24,22 +23,25 @@ class AgentActionsHistoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return AgentActionsSelectBuilder(
       listenable: provider,
-      builder: (context, _) => _buildTabContent(context),
+      selector: () => _historyTabListenToken(provider),
+      builder: _buildTabContent,
     );
   }
 
   Widget _buildTabContent(BuildContext context) {
     final selected = provider.selectedDefinition;
     if (selected == null) {
-      return AgentActionsEmptySelectionPanel(
-        detailScrollKey: AgentActionsPageKeys.detailScroll,
-        content: Center(
-          child: Text(
-            l10n.agentActionsEmptySelection,
-            style: context.bodyMuted,
-            textAlign: TextAlign.center,
+      return AppCard(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Text(
+              l10n.agentActionsEmptySelection,
+              style: context.bodyMuted,
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       );
@@ -53,7 +55,17 @@ class AgentActionsHistoryTab extends StatelessWidget {
             children: [
               Icon(agentActionTypeIcon(selected.type), size: 18),
               const SizedBox(width: AppSpacing.sm),
-              Expanded(child: Text(selected.name, style: context.sectionTitle)),
+              Expanded(
+                child: Tooltip(
+                  message: selected.name,
+                  child: Text(
+                    selected.name,
+                    style: context.sectionTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
               if (provider.isLoading)
                 const SizedBox.square(
                   dimension: 16,
@@ -86,4 +98,21 @@ class AgentActionsHistoryTab extends StatelessWidget {
       ),
     );
   }
+}
+
+int _historyTabListenToken(AgentActionsProvider provider) {
+  return Object.hashAll([
+    provider.isLoading,
+    provider.selectedActionId,
+    provider.selectedDefinition?.name,
+    identityHashCode(provider.executions),
+    provider.executions.length,
+    provider.historyStatusFilter,
+    provider.historySourceFilter,
+    provider.historyPeriodFilter,
+    provider.historyFailurePhaseFilter,
+    provider.historySearchQuery,
+    provider.auditCorrelationExecutionId,
+    provider.hasHistoryFilters,
+  ]);
 }

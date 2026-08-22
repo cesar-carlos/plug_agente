@@ -393,6 +393,44 @@ void main() {
       expect(runResult.getOrThrow().status, AgentActionExecutionStatus.killed);
     });
 
+    test('should not treat last-chunk cancel as killed after process already exited', () async {
+      final process = _FakeProcess.pendingExit(pid: 4321);
+      final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
+        processStarter: _starterFor(process),
+      );
+
+      final runFuture = runner.run(
+        executionId: 'execution-1',
+        definition: const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Command',
+          state: AgentActionState.active,
+          config: CommandLineActionConfig(command: 'long-running'),
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      process.completeExit(0);
+
+      final cancelResult = await runner.cancel(executionId: 'execution-1');
+      final runResult = await runFuture;
+
+      expect(cancelResult.isError(), isTrue);
+      expect(
+        (cancelResult.exceptionOrNull()! as ActionFailure).code,
+        AgentActionFailureCode.processNotActive,
+      );
+      expect(runResult.isSuccess(), isTrue);
+      expect(runResult.getOrThrow().status, AgentActionExecutionStatus.succeeded);
+    });
+
     test('should reject cancellation when expected pid does not match active process', () async {
       final process = _FakeProcess.pendingExit(pid: 4321);
       final runner = CommandLineActionProcessRunner(
@@ -584,10 +622,17 @@ class _FakeProcess implements Process {
   @override
   bool kill([ProcessSignal signal = ProcessSignal.sigterm]) {
     killCalled = true;
-    if (!_exitCodeCompleter.isCompleted) {
-      _exitCodeCompleter.complete(-1);
+    if (_exitCodeCompleter.isCompleted) {
+      return false;
     }
+    _exitCodeCompleter.complete(-1);
     return true;
+  }
+
+  void completeExit(int exitCode) {
+    if (!_exitCodeCompleter.isCompleted) {
+      _exitCodeCompleter.complete(exitCode);
+    }
   }
 
   static Stream<List<int>> _streamText(String value) {

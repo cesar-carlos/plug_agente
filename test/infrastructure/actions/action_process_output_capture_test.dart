@@ -22,6 +22,35 @@ void main() {
       expect(output.text, 'acao');
     });
 
+    test('should clip incomplete trailing utf8 bytes when truncated', () async {
+      final truncated = await ActionProcessOutputCapture.capture(
+        Stream<List<int>>.value(<int>[0x61, 0xC3, 0xA7]),
+        isEnabled: true,
+        maxBytes: 2,
+        encoding: AgentActionOutputEncodingMode.utf8,
+        redactor: const AgentActionRedactor(),
+        redactBeforePersisting: false,
+      );
+
+      expect(truncated.isTruncated, isTrue);
+      expect(truncated.text, 'a');
+      expect(truncated.text.contains('\uFFFD'), isFalse);
+
+      final complete = await ActionProcessOutputCapture.capture(
+        Stream<List<int>>.fromIterable([
+          <int>[0x61, 0xC3],
+          <int>[0xA7],
+        ]),
+        isEnabled: true,
+        maxBytes: 3,
+        encoding: AgentActionOutputEncodingMode.utf8,
+        redactor: const AgentActionRedactor(),
+        redactBeforePersisting: false,
+      );
+      expect(complete.isTruncated, isFalse);
+      expect(complete.text, 'aç');
+    });
+
     test('should skip output redaction when capture policy disables it', () async {
       final stream = Stream<List<int>>.value(utf8.encode('token=abc123'));
       final output = await ActionProcessOutputCapture.capture(

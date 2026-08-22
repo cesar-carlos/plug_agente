@@ -13,7 +13,9 @@ class ListRecentAgentActionRemoteAudit {
     int limit = AgentActionRemoteAuditConstants.listRecentDefaultLimit,
   }) async {
     try {
-      final rows = await _store.listRecent(limit: limit);
+      final rows = await _store.listRecent(
+        limit: AgentActionRemoteAuditConstants.clampListRecentLimit(limit),
+      );
       return Success(rows);
     } on Object catch (error) {
       return Failure(

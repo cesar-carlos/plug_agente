@@ -67,6 +67,7 @@ void _registerActionsUseCases(GetIt getIt) {
         getIt<IAgentActionRepository>(),
         getIt<ValidateAgentActionTrigger>(),
         getIt<FeatureFlags>(),
+        scheduler: getIt<AgentActionTriggerScheduler>(),
       ),
     )
     ..registerLazySingleton(
@@ -96,7 +97,10 @@ void _registerActionsUseCases(GetIt getIt) {
       ),
     )
     ..registerLazySingleton(
-      () => DeleteAgentActionTrigger(getIt<IAgentActionRepository>()),
+      () => DeleteAgentActionTrigger(
+        getIt<IAgentActionRepository>(),
+        scheduler: getIt<AgentActionTriggerScheduler>(),
+      ),
     )
     ..registerLazySingleton(
       () => SaveAgentActionExecution(getIt<IAgentActionRepository>()),

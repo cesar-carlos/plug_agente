@@ -64,6 +64,16 @@ String agentActionDraftKindLabel(AgentActionDraftKind draftKind, AppLocalization
   };
 }
 
+/// Localized labels for every draft kind the in-app editor can create.
+List<String> agentActionsSupportedEditorTypeLabels(AppLocalizations l10n) {
+  return AgentActionDraftKind.values.map((kind) => agentActionDraftKindLabel(kind, l10n)).toList(growable: false);
+}
+
+/// Comma-separated labels for every draft kind the in-app editor can create.
+String agentActionsSupportedEditorTypesHint(AppLocalizations l10n) {
+  return agentActionsSupportedEditorTypeLabels(l10n).join(', ');
+}
+
 String powerShellDraftModeLabel(PowerShellDraftMode mode, AppLocalizations l10n) {
   return switch (mode) {
     PowerShellDraftMode.inline => l10n.agentActionsFormPowerShellModeCommand,

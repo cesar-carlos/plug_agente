@@ -14,6 +14,19 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ### Changed
 
+- System Actions empty state lists every editor kind (including PowerShell,
+  which still persists as command line or script) and wraps those labels.
+  Local run, test, and bundle transfer are mutually exclusive; tabs/dialogs
+  rebuild only when their own state changes. Portuguese copy on this page
+  uses accents; the remote-audit tab label is "Auditoria remota". The tab
+  strip sizes to content, ellipsizes with a tooltip, and scrolls at the
+  900x650 minimum window. The action editor dialog fits that height.
+- `agent.action.run` / `validateRun` resolve an enabled `remote` trigger
+  before rate-limit and enqueue. `cancel` / `getExecution` rate-limit by
+  the execution `action_id`. Captured-output RPC/UI windows are UTF-8
+  aligned and slice Drift chunks without loading the full stream.
+- Elevated helper build uses `dart build cli` (sqlite3 3.x native hooks)
+  instead of `dart compile exe`.
 - Windows login with `--autostart` stays in the tray; the unused
   “start minimized” preference was removed from Settings.
 - User-initiated silent install (`Instalar agora`) no longer waits on quiet
@@ -32,6 +45,34 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ### Fixed
 
+- Linux CI no longer loads the `odbc_fast` native engine in dependency
+  registrar tests; Windows helper smoke compiles the elevated runner with
+  `dart build cli`.
+- System Actions UI: remote audit listens for refresh; paged stdout/stderr
+  no longer reset on parent rebuild or apply a stale slice; shortcuts and
+  editor opens are gated while another modal is pending; run/delete confirm
+  re-checks the same action; maintenance toggle failures surface to the
+  user; refresh is disabled during run/test/transfer.
+- Agent-action scheduler: maintenance/feature-off cancels armed timers;
+  save/delete resyncs timers; app-start/app-close fire once per process;
+  interval/daily slots do not double-fire at the exact boundary; unknown
+  IANA timezones fail instead of falling back to local time; failed
+  dispatch does not mark `lastRunAt`; overlapping periodic purges are
+  skipped.
+- Local execution: thrown queue tasks no longer deadlock the slot;
+  last-chunk cancel does not treat an already-exited process as
+  kill-failed; cancel/timeout persist as those statuses instead of
+  generic `failed`; concurrent same-key runs reserve idempotency before
+  await; stdin flush/close times out; UTF-8 capture does not split a
+  code unit; reconcile continues after a single save error; elevated
+  UAC cancel (1223) does not write the ready marker; abort stops status
+  polling.
+- Bundle import reports `partial_import` with ids already saved; export
+  lists triggers once instead of per definition; definition/trigger upserts
+  keep `createdAt`; secret `exists` uses `containsKey` without reading the
+  value; `cancel` / `getExecution` audit rows include `action_id` and skip
+  hydrating captured output during authorization prefetch; remote-audit
+  append logs no longer include `idempotencyKey`.
 - Windows auto-start: rollback failed Run/StartupApproved writes, heal HKCU
   from the installer marker, honor Task Manager disable without self-heal,
   and keep debug/`flutter run` executables out of the Run key.

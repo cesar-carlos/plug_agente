@@ -312,6 +312,8 @@ class ActionExecutionQueue {
     _runningByActionId[request.actionId] = (_runningByActionId[request.actionId] ?? 0) + 1;
     try {
       return await request.task();
+    } on Object catch (error) {
+      return Failure(_unexpectedTaskFailure(request, error));
     } finally {
       final current = (_runningByActionId[request.actionId] ?? 1) - 1;
       if (current <= 0) {
@@ -526,6 +528,22 @@ class ActionExecutionQueue {
   }
 }
 
+ActionRuntimeFailure _unexpectedTaskFailure<T extends Object>(
+  AgentActionQueueRequest<T> request,
+  Object error,
+) {
+  return ActionRuntimeFailure.withContext(
+    message: 'Action execution task failed unexpectedly.',
+    cause: error,
+    context: {
+      'action_id': request.actionId,
+      'execution_id': request.executionId,
+      'reason': 'unexpected_task_error',
+      'user_message': 'A execucao da acao falhou de forma inesperada.',
+    },
+  );
+}
+
 class _PendingActionTask<T extends Object> {
   _PendingActionTask({
     required this.request,
@@ -558,9 +576,15 @@ class _PendingActionTask<T extends Object> {
 
   Future<void> _run() async {
     metrics?.recordRunStarted();
-    final result = await request.task();
-    if (!_completer.isCompleted) {
-      _completer.complete(result);
+    try {
+      final result = await request.task();
+      if (!_completer.isCompleted) {
+        _completer.complete(result);
+      }
+    } on Object catch (error) {
+      if (!_completer.isCompleted) {
+        _completer.complete(Failure(_unexpectedTaskFailure(request, error)));
+      }
     }
   }
 

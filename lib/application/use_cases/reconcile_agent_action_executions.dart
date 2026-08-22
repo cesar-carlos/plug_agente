@@ -41,6 +41,7 @@ class ReconcileAgentActionExecutions {
 
     final now = _now();
     var reconciledCount = 0;
+    ActionFailure? firstSaveFailure;
     for (final execution in executionsResult.getOrThrow()) {
       final orphanTerminated =
           execution.status == AgentActionExecutionStatus.running &&
@@ -59,12 +60,43 @@ class ReconcileAgentActionExecutions {
         ),
       );
       if (saveResult.isError()) {
-        return Failure(saveResult.exceptionOrNull()!);
+        firstSaveFailure ??= _toActionFailure(saveResult.exceptionOrNull()!);
+        continue;
       }
       reconciledCount++;
     }
 
+    if (firstSaveFailure != null) {
+      return Failure(
+        ActionRuntimeFailure.withContext(
+          message: 'Bootstrap reconciliation could not update every active execution.',
+          cause: firstSaveFailure,
+          code: AgentActionFailureCode.interruptedOnBootstrap,
+          context: {
+            'phase': AgentActionProcessConstants.bootstrapReconciliationPhase,
+            'reconciled_count': reconciledCount,
+            'user_message': 'Algumas execucoes ativas nao puderam ser reconciliadas apos a reinicializacao.',
+          },
+        ),
+      );
+    }
+
     return Success(reconciledCount);
+  }
+
+  ActionFailure _toActionFailure(Exception failure) {
+    if (failure is ActionFailure) {
+      return failure;
+    }
+    return ActionRuntimeFailure.withContext(
+      message: 'Bootstrap reconciliation failed to persist an interrupted execution.',
+      cause: failure,
+      code: AgentActionFailureCode.interruptedOnBootstrap,
+      context: {
+        'phase': AgentActionProcessConstants.bootstrapReconciliationPhase,
+        'user_message': 'Nao foi possivel reconciliar execucoes ativas apos a reinicializacao.',
+      },
+    );
   }
 }
 

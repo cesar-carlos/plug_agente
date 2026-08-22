@@ -7,6 +7,12 @@ import 'package:plug_agente/infrastructure/actions/action_process_output_decoder
 
 void main() {
   group('ActionProcessOutputDecoder', () {
+    test('should clip incomplete trailing utf8 sequences', () {
+      expect(ActionProcessOutputDecoder.clipIncompleteTrailingUtf8(const <int>[]), isEmpty);
+      expect(ActionProcessOutputDecoder.clipIncompleteTrailingUtf8(<int>[0x61, 0xC3]), <int>[0x61]);
+      expect(ActionProcessOutputDecoder.clipIncompleteTrailingUtf8(<int>[0x61, 0xC3, 0xA7]), <int>[0x61, 0xC3, 0xA7]);
+    });
+
     test('should return empty string for empty bytes', () {
       expect(ActionProcessOutputDecoder.decode(const <int>[]), '');
     });

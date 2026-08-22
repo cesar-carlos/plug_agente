@@ -90,14 +90,22 @@ class AgentActionEditorDeveloperHintsWrap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.xs,
-      children: hints
-          .map(
-            (hint) => _AgentActionEditorDeveloperHintChip(hint: hint),
-          )
-          .toList(growable: false),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxChipWidth = constraints.maxWidth.isFinite ? constraints.maxWidth : 520.0;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: hints
+              .map(
+                (hint) => ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxChipWidth),
+                  child: _AgentActionEditorDeveloperHintChip(hint: hint),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
     );
   }
 }
@@ -128,9 +136,13 @@ class _AgentActionEditorDeveloperHintChip extends StatelessWidget {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: AppSpacing.xs),
-          Text(
-            hint.message,
-            style: context.captionText.copyWith(color: color),
+          Flexible(
+            child: Text(
+              hint.message,
+              style: context.captionText.copyWith(color: color),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
           ),
         ],
       ),

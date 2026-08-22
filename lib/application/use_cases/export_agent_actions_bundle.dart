@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:plug_agente/application/actions/agent_action_backup_sanitizer.dart';
 import 'package:plug_agente/application/use_cases/list_agent_action_definitions.dart';
 import 'package:plug_agente/application/use_cases/list_agent_action_triggers.dart';
-import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:result_dart/result_dart.dart';
 
 class ExportAgentActionsBundle {
@@ -31,14 +30,16 @@ class ExportAgentActionsBundle {
       definitions = definitions.where((definition) => filter.contains(definition.id)).toList(growable: false);
     }
 
-    final triggers = <AgentActionTrigger>[];
-    for (final definition in definitions) {
-      final triggersResult = await _listTriggers(actionId: definition.id);
-      if (triggersResult.isError()) {
-        return Failure(triggersResult.exceptionOrNull()!);
-      }
-      triggers.addAll(triggersResult.getOrThrow());
+    final triggersResult = await _listTriggers();
+    if (triggersResult.isError()) {
+      return Failure(triggersResult.exceptionOrNull()!);
     }
+
+    final exportedIds = definitions.map((definition) => definition.id).toSet();
+    final triggers = triggersResult
+        .getOrThrow()
+        .where((trigger) => exportedIds.contains(trigger.actionId))
+        .toList(growable: false);
 
     final bundle = _sanitizer.buildExportBundle(
       definitions: definitions,

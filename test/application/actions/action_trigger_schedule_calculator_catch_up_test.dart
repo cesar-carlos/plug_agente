@@ -82,6 +82,24 @@ void main() {
       expect(result.getOrThrow().nextRunAt, DateTime(2026, 5, 15, 8, 45));
     });
 
+    test('should advance interval when now lands on a slot already stored as lastScheduledAt', () {
+      final result = calculator.nextRun(
+        trigger: AgentActionTrigger(
+          id: 'trigger-interval',
+          actionId: 'action-1',
+          type: AgentActionTriggerType.interval,
+          schedule: AgentActionTriggerSchedule(
+            startAt: DateTime(2026, 5, 15, 8),
+            interval: const Duration(minutes: 15),
+          ),
+          lastScheduledAt: DateTime(2026, 5, 15, 8, 30),
+        ),
+        now: DateTime(2026, 5, 15, 8, 30),
+      );
+
+      expect(result.getOrThrow().nextRunAt, DateTime(2026, 5, 15, 8, 45));
+    });
+
     test('should keep ignoring interval missed slots when ignoreMissedRuns=true (default)', () {
       final result = calculator.nextRun(
         trigger: AgentActionTrigger(

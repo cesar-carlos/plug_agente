@@ -52,7 +52,7 @@ class RunAgentActionViaRemoteTrigger {
       );
     }
 
-    final resolvedTriggerResult = await _resolveRemoteTriggerId(
+    final resolvedTriggerResult = await resolveEnabledRemoteTriggerId(
       actionId: trimmedActionId,
       triggerId: triggerId,
     );
@@ -65,6 +65,31 @@ class RunAgentActionViaRemoteTrigger {
       idempotencyKey: trimmedIdempotencyKey,
       requestedBy: requestedBy?.trim(),
       traceId: traceId?.trim(),
+    );
+  }
+
+  /// Resolves the enabled `remote` trigger that [call] would dispatch, without enqueueing.
+  Future<Result<String>> resolveEnabledRemoteTriggerId({
+    required String actionId,
+    String? triggerId,
+  }) async {
+    final trimmedActionId = actionId.trim();
+    if (trimmedActionId.isEmpty) {
+      return Failure(
+        ActionValidationFailure.withContext(
+          message: 'Action id is required for remote trigger dispatch.',
+          context: const {
+            'field': 'actionId',
+            'reason': AgentActionValidationConstants.fieldRequiredReason,
+            'user_message': 'Informe a acao que sera executada remotamente.',
+          },
+        ),
+      );
+    }
+
+    return _resolveRemoteTriggerId(
+      actionId: trimmedActionId,
+      triggerId: triggerId,
     );
   }
 

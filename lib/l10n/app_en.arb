@@ -521,7 +521,7 @@
   "agentActionsElevatedRunnerDegradedTitle": "Elevated runner unavailable",
   "agentActionsElevatedRunnerDegradedMessage": "The elevated helper failed recently. Prepare it again before running actions with high privilege. Hub, remote SQL, and other agent features keep working normally.",
   "agentActionsElevatedRunnerPrepare": "Prepare elevated runner",
-  "agentActionsElevatedRunnerPreparing": "Preparing elevated runner...",
+  "agentActionsElevatedRunnerPreparing": "Preparing elevated runner…",
   "agentOperationalReadinessHubConnected": "Hub: connected",
   "agentOperationalReadinessHubConnecting": "Hub: connecting",
   "agentOperationalReadinessHubDisconnected": "Hub: disconnected",
@@ -580,7 +580,7 @@
       }
     }
   },
-  "agentActionsRetentionRemoteAudit": "Remote agent.action audit",
+  "agentActionsRetentionRemoteAudit": "Remote audit history",
   "agentActionsRetentionRemoteAuditValue": "{days, plural, one {1 day} other {{days} days}}",
   "@agentActionsRetentionRemoteAuditValue": {
     "placeholders": {
@@ -622,7 +622,7 @@
   "agentActionsHistoryPeriodAll": "All",
   "agentActionsHistoryPeriodLast24Hours": "Last 24 hours",
   "agentActionsHistoryPeriodLast3Days": "Last 3 days",
-  "agentActionsRemoteAuditTitle": "Remote agent.action audit",
+  "agentActionsRemoteAuditTitle": "Remote audit",
   "agentActionsRemoteAuditDescription": "Recent Hub JSON-RPC and execution lifecycle rows for agent.action.* (append-only; retention and purge still apply).",
   "agentActionsRemoteAuditFilterAll": "All",
   "agentActionsRemoteAuditFilterRpc": "RPC",

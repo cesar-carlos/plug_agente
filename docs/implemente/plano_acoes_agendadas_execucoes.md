@@ -46,11 +46,15 @@ Subdocs opcionais ainda nao criados (`runner_local`, `runner_elevado`,
 ## Arquitetura implementada (resumo)
 
 - Gate compartilhado: `AgentActionExecutionGateChain`
-- Orquestracao pos-gate: `AgentActionExecutionOrchestrator`
+- Orquestracao pos-gate: `AgentActionExecutionOrchestrator` +
+  `ActionExecutionQueue` (excecao no task libera o slot)
 - Lifecycle de processo: `AgentActionProcessLifecycle`
+- Scheduler: `AgentActionTriggerScheduler` (manutencao cancela timers;
+  save/delete ressincroniza; IANA invalido falha)
 - RPC: handlers em `lib/application/rpc/` +
   `AgentActionRpcMethodHandlerOperations`
 - Providers: controllers em `lib/presentation/providers/agent_actions/`
+- UI: `lib/presentation/pages/agent_actions/agent_actions_page.dart`
 - Auditoria remota append-only: Drift `agent_action_remote_audit`
 - Identidade de runtime: `AgentRuntimeIdentity` (`runtimeInstanceId` /
   `runtimeSessionId`)

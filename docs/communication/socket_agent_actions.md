@@ -48,7 +48,8 @@ requester (`client_token`, `client_id` ou `hub`). Configuravel por env
 `-32013` com `reason` `agent_action_remote_rate_limited`, `action_id`,
 `method` e `retry_after_ms`. Retry com a mesma `idempotency_key` e o mesmo
 payload permitido retorna a resposta/execucao cacheada antes de consumir nova
-cota de rate limit.
+cota de rate limit. Acao sem gatilho `remote` habilitado (ou `trigger_id`
+ambiguo/invalido) falha **antes** de consumir cota de rate limit.
 - **Idempotencia (duas camadas):** (1) cache RPC SQLite (`{method}:{idempotency_key}`)
   quando `enableSocketIdempotency` esta ativo — TTL por entrada via
   `AGENT_ACTION_RPC_IDEMPOTENCY_CACHE_TTL_SECONDS` (padrao `min(retencao de
@@ -114,6 +115,7 @@ requester (`client_token`, `client_id` ou `hub`), com o mesmo mecanismo de
 Configuravel por env `AGENT_ACTION_REMOTE_MAX_PER_MINUTE` (default **0**, sem
 limite) e `AGENT_ACTION_REMOTE_MAX_SCOPE_KEYS` (default **8192**). Excesso
 retorna `-32013` com `reason` `agent_action_remote_rate_limited`.
+Gatilho `remote` ausente/ambiguo falha antes de consumir a cota, como em `run`.
 - **Autorizacao propria:** quando `enableClientTokenAuthorization` estiver
 ativa, `client_token` (ou aliases) e obrigatorio; ausencia retorna `-32001` com
 `reason` `missing_client_token`. A policy precisa do scope
@@ -166,6 +168,10 @@ redigida (`output.stdout` / `output.stderr` com `text`, `utf8_total_bytes`,
 flags e failure segura (`code`, `phase`, `corrective_action`, `message`) quando
 houver falha registrada. O Hub deve paginar com `next_offset` ate
 `response_truncated` ser `false` em cada stream.
+- **Rate limit:** mesma chave que `run` (`agent_id` + metodo + `action_id` da
+execucao + requester), nao `execution_id`. Prefetch de autorizacao nao hidrata
+stdout/stderr. Janelas `stdout`/`stderr` sao alinhadas a code units UTF-8 e
+lidas so nos chunks Drift da faixa pedida.
 - **Erros:** `execution_not_found` quando a execucao nao existir; erros de
 token e rate limit usam o catalogo RPC padrao. A resposta nunca retorna o
 comando bruto salvo na acao.
@@ -223,6 +229,9 @@ aliases `clientToken` / `auth` quando a autorizacao por token estiver ativa.
 ativa, `client_token` (ou aliases) e obrigatorio; ausencia retorna `-32001` com
 `reason` `missing_client_token`. Com token, exige scope `agent_actions.cancel` e
 aplica allowlist opcional por actionId quando disponivel no payload de policy.
+Prefetch da execucao para allowlist/auditoria nao hidrata captured output.
+- **Rate limit:** chave `agent_id` + metodo + `action_id` da execucao +
+requester (nao `execution_id`). Auditoria do desfecho inclui `action_id`.
 - **Result:** objeto alinhado a
 `docs/communication/schemas/rpc.result.agent-action-cancel.schema.json`, com
 `cancelled`, `execution_id`, `status`, `reason` e snapshot redigido da execucao.

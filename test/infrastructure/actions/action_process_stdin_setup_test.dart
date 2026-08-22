@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/infrastructure/actions/action_process_stdin_setup.dart';
 import 'agent_action_process_runner_test_support.dart';
 
 void main() {
@@ -127,5 +130,70 @@ void main() {
         containsPair('reason', AgentActionValidationConstants.contextInjectionRequiresStdinPayloadReason),
       );
     });
+
+    test('should fail when stdin write exceeds the IO timeout', () async {
+      const setup = ActionProcessStdinSetup(
+        secretPlaceholderResolver: AgentActionSecretPlaceholderResolver(),
+        stdinIoTimeout: Duration(milliseconds: 20),
+      );
+      final process = _HangingStdinProcess();
+
+      final result = await setup.configure(
+        process: process,
+        definition: const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Test',
+          state: AgentActionState.active,
+          config: CommandLineActionConfig(command: 'ignored'),
+          policies: AgentActionDefinitionPolicies(
+            context: AgentActionContextPolicy(
+              injectionMode: AgentActionContextInjectionMode.stdin,
+            ),
+          ),
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+          runtimeParameters: {
+            AgentActionProcessConstants.stdinRuntimeParameterKey: 'payload',
+          },
+        ),
+        actionId: 'action-1',
+      );
+
+      expect(result.isError(), isTrue);
+      expect(result.exceptionOrNull(), isA<ActionTimeoutFailure>());
+      expect(
+        (result.exceptionOrNull()! as ActionTimeoutFailure).code,
+        AgentActionFailureCode.executionTimedOut,
+      );
+    });
   });
+}
+
+class _HangingStdinProcess implements Process {
+  _HangingStdinProcess() : stdin = _HangingIOSink();
+
+  @override
+  final IOSink stdin;
+
+  @override
+  int get pid => 4242;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _HangingIOSink implements IOSink {
+  @override
+  void add(List<int> data) {}
+
+  @override
+  Future<void> flush() => Completer<void>().future;
+
+  @override
+  Future<void> close() => Completer<void>().future;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

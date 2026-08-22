@@ -415,6 +415,59 @@ void main() {
       expect(window.nextOffset, 64);
     });
 
+    test('should align slice offsets that land inside a UTF-8 character', () async {
+      final largeStdout = '${'é'}${'z' * 20 * 1024}';
+      final execution = AgentActionExecution(
+        id: 'exec-utf8-slice',
+        actionId: 'action-1',
+        actionType: AgentActionType.commandLine,
+        status: AgentActionExecutionStatus.succeeded,
+        requestedAt: DateTime.utc(2026, 5, 15),
+        source: AgentActionRequestSource.localUi,
+        finishedAt: DateTime.utc(2026, 5, 15, 1),
+        stdoutText: largeStdout,
+      );
+
+      await repository.saveExecution(execution);
+
+      final slice = await repository.sliceCapturedOutput(
+        executionId: 'exec-utf8-slice',
+        stream: 'stdout',
+        offsetUtf8: 1,
+        maxBytes: 32,
+      );
+      final window = slice.getOrThrow();
+      expect(window.effectiveStart, 0);
+      expect(window.text.startsWith('é'), isTrue);
+      expect(window.responseTruncated, isTrue);
+    });
+
+    test('should preserve createdAt when updating an action definition', () async {
+      final createdAt = DateTime.utc(2026, 1, 2, 3);
+      await repository.saveDefinition(
+        AgentActionDefinition(
+          id: 'action-created-at',
+          name: 'Original',
+          config: const CommandLineActionConfig(command: 'dir'),
+          createdAt: createdAt,
+          updatedAt: createdAt,
+        ),
+      );
+
+      await repository.saveDefinition(
+        const AgentActionDefinition(
+          id: 'action-created-at',
+          name: 'Renamed',
+          config: CommandLineActionConfig(command: 'dir /w'),
+        ),
+      );
+
+      final loaded = (await repository.getDefinition('action-created-at')).getOrThrow();
+      expect(loaded.name, 'Renamed');
+      expect(loaded.createdAt!.toUtc(), createdAt.toUtc());
+      expect(loaded.updatedAt!.toUtc().isAfter(loaded.createdAt!.toUtc()), isTrue);
+    });
+
     group('saveExecution hydration', () {
       test('should return text from memory without re-reading chunks on first save', () async {
         final largeStdout = 'a' * 20 * 1024;

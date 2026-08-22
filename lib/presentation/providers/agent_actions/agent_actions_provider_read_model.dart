@@ -32,7 +32,9 @@ extension AgentActionsProviderReadModel on AgentActionsProvider {
   bool get isElevatedRunnerDegraded => _runtimeController.isElevatedRunnerDegraded;
   bool get isPreparingElevatedRunner => _runtimeController.isPreparingElevatedRunner;
   bool get canManageTriggers => isFeatureEnabled && !isMaintenanceMode;
-  bool get canTransferBundle => canManageTriggers && !isLoading && !isTransferringBundle && !isSaving && !isDeleting;
+  bool get hasBlockingLocalOperation => isRunning || isTesting || isTransferringBundle;
+  bool get canTransferBundle =>
+      canManageTriggers && !isLoading && !isSaving && !isDeleting && !hasBlockingLocalOperation;
   AgentActionRuntimeStateSnapshot get runtimeSubsystemSnapshot => _runtimeController.runtimeSubsystemSnapshot;
   String? get lastTestedActionId => _executionsController.lastTestedActionId;
   bool? get lastTestCanRun => _executionsController.lastTestCanRun;

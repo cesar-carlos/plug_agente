@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:plug_agente/application/actions/elevated_action_execution_abort_registry.dart';
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/actions/elevated_action_status_file_syncer.dart';
@@ -106,42 +104,11 @@ class ElevatedAgentActionExecutionService {
     required DateTime processStartedAt,
     required Duration timeout,
   }) async {
-    final completer = Completer<Result<AgentActionProcessResult>>();
-
-    unawaited(
-      _statusFileSyncer
-          .waitForTerminalResult(
-            executionId: executionId,
-            processStartedAt: processStartedAt,
-            timeout: timeout,
-          )
-          .then((result) {
-            if (!completer.isCompleted) {
-              completer.complete(result);
-            }
-          }),
+    return _statusFileSyncer.waitForTerminalResult(
+      executionId: executionId,
+      processStartedAt: processStartedAt,
+      timeout: timeout,
+      abort: _abortRegistry.whenAborted(executionId),
     );
-
-    unawaited(
-      _abortRegistry.whenAborted(executionId).then((_) {
-        if (completer.isCompleted) {
-          return;
-        }
-        completer.complete(
-          Failure(
-            ActionRuntimeFailure.withContext(
-              message: 'Elevated execution was cancelled before completion.',
-              code: AgentActionFailureCode.executionCancelled,
-              context: {
-                'execution_id': executionId,
-                'user_message': 'A execucao elevada foi cancelada.',
-              },
-            ),
-          ),
-        );
-      }),
-    );
-
-    return completer.future;
   }
 }

@@ -9,6 +9,7 @@ import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_dan
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_preflight_settings_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_retention_card.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_runtime_support_card.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_summary_card.dart';
 
 class AgentActionsSettingsTab extends StatelessWidget {
@@ -27,14 +28,16 @@ class AgentActionsSettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return AgentActionsSelectBuilder(
       listenable: provider,
-      builder: (context, _) => _buildTabContent(),
+      selector: () => _settingsTabListenToken(provider),
+      builder: (context) => _buildTabContent(),
     );
   }
 
   Widget _buildTabContent() {
     return ListView(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       children: [
         AgentActionsSummaryCard(provider: provider, l10n: l10n),
         const SizedBox(height: AppSpacing.md),
@@ -56,4 +59,28 @@ class AgentActionsSettingsTab extends StatelessWidget {
       ],
     );
   }
+}
+
+int _settingsTabListenToken(AgentActionsProvider provider) {
+  return Object.hashAll([
+    provider.isFeatureEnabled,
+    provider.isMaintenanceMode,
+    provider.isDangerousCommandWarnModeEnabled,
+    provider.preflightValidityDays,
+    provider.hasPreflightPersistedOverride,
+    provider.executionRetentionDays,
+    provider.remoteAuditRetentionDays,
+    provider.capturedOutputRetentionHours,
+    provider.hasRetentionPersistedOverrides,
+    provider.summaryQueuedCount,
+    provider.summaryRunningCount,
+    provider.failedCount,
+    provider.definitions.length,
+    provider.isElevatedAgentActionsEnabled,
+    provider.isElevatedRunnerConfigured,
+    provider.isElevatedRunnerDegraded,
+    provider.isPreparingElevatedRunner,
+    provider.errorMessage,
+    provider.runtimeSubsystemSnapshot,
+  ]);
 }

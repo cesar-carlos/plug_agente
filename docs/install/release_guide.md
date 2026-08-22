@@ -110,8 +110,9 @@ O `installer/build_installer.py` executa:
 
 1. `installer/update_version.py`
 2. `flutter build windows --release`
-3. `python tool/elevated/build_elevated_runner.py` (compila e copia
-   `plug_agente_elevated_runner.exe` para o bundle Release/Debug; obrigatorio)
+3. `python tool/elevated/build_elevated_runner.py` (`dart build cli`, copia
+   `plug_agente_elevated_runner.exe` e sidecars nativos para o bundle
+   Release/Debug; obrigatorio)
 4. Validacao de presenca de `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe` no bundle Release
 5. Assinatura opcional, na ordem: `plug_agente.exe`,

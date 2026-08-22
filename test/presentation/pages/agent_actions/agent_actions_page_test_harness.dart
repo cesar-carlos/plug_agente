@@ -111,7 +111,7 @@ Finder agentActionFormComboBox(String label) {
   final key = switch (label) {
     'Tipo' || 'Type' => 'agent_action_editor_type_dropdown',
     'Modo PowerShell' || 'PowerShell mode' => 'agent_action_editor_powershell_mode_dropdown',
-    'Executavel PowerShell' || 'PowerShell executable' => 'agent_action_editor_powershell_executable_dropdown',
+    'Executável PowerShell' || 'PowerShell executable' => 'agent_action_editor_powershell_executable_dropdown',
     _ => throw StateError('Unknown action form combo box label: $label'),
   };
 

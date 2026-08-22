@@ -19,6 +19,7 @@ import 'package:plug_agente/core/utils/powershell_command_line.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_kind.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -59,6 +60,9 @@ void main() {
 
     expect(find.text(ptL10n.navAgentActions), findsWidgets);
     expect(find.text(ptL10n.agentActionsEmptyActions), findsOneWidget);
+    for (final kind in AgentActionDraftKind.values) {
+      expect(find.text(agentActionDraftKindLabel(kind, ptL10n)), findsOneWidget);
+    }
     expect(find.text(ptL10n.agentActionsFormCreateTitle), findsNothing);
 
     await openCreateActionDialog(tester, ptL10n);
@@ -75,6 +79,20 @@ void main() {
     expect(find.text(ptL10n.agentActionsRetentionTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsRetentionEnvVariables), findsOneWidget);
     expect(find.text(ptL10n.agentActionsRetentionSave), findsOneWidget);
+  });
+
+  testWidgets('lists every editor kind in the empty state without clipping at compact width', (tester) async {
+    final harness = AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(920, 640));
+    await harness.pumpPage(tester);
+
+    expect(find.text(ptL10n.agentActionsEmptyActions), findsOneWidget);
+    for (final kind in AgentActionDraftKind.values) {
+      expect(find.text(agentActionDraftKindLabel(kind, ptL10n)), findsOneWidget);
+    }
+    expect(find.widgetWithText(FilledButton, ptL10n.agentActionsFormNew), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('action editor shows help flyouts for critical fields', (tester) async {
@@ -578,7 +596,7 @@ void main() {
     await tester.tap(agentActionFormComboBox(ptL10n.agentActionsFormType));
     await tester.pumpAndSettle();
 
-    expect(find.text(ptL10n.agentActionsTypePowerShell), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsTypePowerShell), findsWidgets);
   });
 
   testWidgets('saves a PowerShell inline action as command line config', (tester) async {
@@ -933,6 +951,7 @@ void main() {
       matching: find.byType(Button),
     );
     await tester.ensureVisible(shortcutButton);
+    await tester.pumpAndSettle();
     await tester.tap(shortcutButton);
     await tester.pumpAndSettle();
 
@@ -1649,6 +1668,32 @@ void main() {
     expect(find.text('Notify ops'), findsWidgets);
   });
 
+  testWidgets('shows filter-empty copy without the catalog empty CTA', (tester) async {
+    final harness = AgentActionsPageHarness();
+    harness.repository.definitions['cmd'] = const AgentActionDefinition(
+      id: 'cmd',
+      name: 'Backup command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2000));
+    await harness.pumpPage(tester);
+
+    harness.provider.setDefinitionSearchQuery('zz-no-match');
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsListFilterEmpty), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsEmptyActions), findsNothing);
+    expect(find.text('Backup command'), findsNothing);
+
+    await tester.tap(find.widgetWithText(Button, ptL10n.ctButtonClearFilters).last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Backup command'), findsWidgets);
+    expect(find.text(ptL10n.agentActionsListFilterEmpty), findsNothing);
+  });
+
   testWidgets('clears saved action filters from the grid controls', (tester) async {
     final harness = AgentActionsPageHarness();
     harness.repository.definitions['cmd'] = const AgentActionDefinition(
@@ -1773,6 +1818,40 @@ void main() {
     expect(harness.repository.definitions, isNot(contains('action-1')));
   });
 
+  testWidgets('moves list selection with arrow keys after a row is focused', (tester) async {
+    final harness = AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'First action',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+    harness.repository.definitions['action-2'] = const AgentActionDefinition(
+      id: 'action-2',
+      name: 'Second action',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'whoami'),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2000));
+    await harness.pumpPage(tester);
+
+    await tester.tap(find.text('First action'));
+    await tester.pump();
+
+    expect(harness.provider.selectedActionId, 'action-1');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+
+    expect(harness.provider.selectedActionId, 'action-2');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+
+    expect(harness.provider.selectedActionId, 'action-1');
+  });
+
   testWidgets('Ctrl+N opens the action editor when the page has focus', (tester) async {
     final harness = AgentActionsPageHarness();
 
@@ -1785,6 +1864,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ContentDialog), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
+  });
+
+  testWidgets('Ctrl+N does not open a second editor while one is already open', (tester) async {
+    final harness = AgentActionsPageHarness();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 2000));
+    await harness.pumpPage(tester);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
     expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
   });
 

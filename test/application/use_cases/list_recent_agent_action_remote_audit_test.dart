@@ -2,6 +2,7 @@ import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/list_recent_agent_action_remote_audit.dart';
+import 'package:plug_agente/core/constants/agent_action_remote_audit_constants.dart';
 import 'package:plug_agente/domain/entities/agent_action_remote_audit_record.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_remote_audit_store.dart';
 
@@ -40,6 +41,21 @@ void main() {
     check(result.isSuccess()).isTrue();
     check(result.getOrThrow().single.id).equals('a1');
     verify(() => store.listRecent(limit: 50)).called(1);
+  });
+
+  test('should clamp oversized limits before querying the store', () async {
+    final store = _MockStore();
+    when(() => store.listRecent(limit: any(named: 'limit'))).thenAnswer(
+      (_) async => const <AgentActionRemoteAuditRecord>[],
+    );
+
+    final useCase = ListRecentAgentActionRemoteAudit(store);
+    final result = await useCase(limit: 9999);
+
+    check(result.isSuccess()).isTrue();
+    verify(
+      () => store.listRecent(limit: AgentActionRemoteAuditConstants.listRecentMaxLimit),
+    ).called(1);
   });
 
   test('should return Failure when store throws', () async {

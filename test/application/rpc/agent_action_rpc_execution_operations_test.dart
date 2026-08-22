@@ -4,9 +4,11 @@ import 'package:plug_agente/application/rpc/agent_action_rpc_audit_operations.da
 import 'package:plug_agente/application/rpc/agent_action_rpc_execution_operations.dart';
 import 'package:plug_agente/application/rpc/agent_action_rpc_method_handler_support.dart';
 import 'package:plug_agente/application/rpc/agent_action_rpc_remote_infrastructure.dart';
+import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
 import 'package:plug_agente/application/use_cases/run_agent_action_via_remote_trigger.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:result_dart/result_dart.dart';
@@ -15,6 +17,8 @@ import 'package:uuid/uuid.dart';
 class MockFeatureFlags extends Mock implements FeatureFlags {}
 
 class MockRunAgentActionViaRemoteTrigger extends Mock implements RunAgentActionViaRemoteTrigger {}
+
+class MockRunAgentActionLocally extends Mock implements RunAgentActionLocally {}
 
 RpcResponse _invalidParams(
   RpcRequest request,
@@ -63,6 +67,7 @@ RpcResponse _internalError(RpcRequest request, String detail) {
 AgentActionRpcExecutionOperations _buildOperations({
   required FeatureFlags featureFlags,
   RunAgentActionViaRemoteTrigger? remoteRunner,
+  RunAgentActionLocally? localRunner,
 }) {
   final support = AgentActionRpcMethodHandlerSupport(
     invalidParams: _invalidParams,
@@ -91,6 +96,7 @@ AgentActionRpcExecutionOperations _buildOperations({
   return AgentActionRpcExecutionOperations(
     infrastructure: infrastructure,
     audit: audit,
+    runAgentActionLocally: localRunner,
     runAgentActionViaRemoteTrigger: remoteRunner,
   );
 }
@@ -220,6 +226,100 @@ void main() {
       final result = response.result! as Map<String, dynamic>;
       expect(result['execution_id'], 'exec-ops-1');
       expect(result.containsKey('stdout_text'), isFalse);
+    });
+
+    test('handleAgentActionValidateRun rejects when no enabled remote trigger exists', () async {
+      final remoteRunner = MockRunAgentActionViaRemoteTrigger();
+      final localRunner = MockRunAgentActionLocally();
+      when(
+        () => remoteRunner.resolveEnabledRemoteTriggerId(
+          actionId: any(named: 'actionId'),
+          triggerId: any(named: 'triggerId'),
+        ),
+      ).thenAnswer(
+        (_) async => Failure(
+          ActionValidationFailure.withContext(
+            message: 'Remote agent action run requires an enabled remote trigger.',
+            code: AgentActionFailureCode.remoteTriggerRequired,
+            context: const {
+              'reason': AgentActionTriggerConstants.remoteTriggerRequiredReason,
+            },
+          ),
+        ),
+      );
+
+      final operations = _buildOperations(
+        featureFlags: featureFlags,
+        remoteRunner: remoteRunner,
+        localRunner: localRunner,
+      );
+
+      final response = await operations.handleAgentActionValidateRun(
+        const RpcRequest(
+          jsonrpc: '2.0',
+          method: AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+          id: 4,
+          params: <String, dynamic>{
+            'action_id': 'action-1',
+            'idempotency_key': 'idem-ops',
+          },
+        ),
+        'agent-1',
+        null,
+      );
+
+      expect(response.isSuccess, isFalse);
+      expect(response.error?.code, RpcErrorCode.invalidParams);
+      expect(
+        (response.error?.data as Map<String, dynamic>?)?['reason'],
+        AgentActionTriggerConstants.remoteTriggerRequiredReason,
+      );
+      verifyNever(() => localRunner.validateRemoteRun(any()));
+    });
+
+    test('handleAgentActionValidateRun calls validateRemoteRun after remote trigger admission', () async {
+      final remoteRunner = MockRunAgentActionViaRemoteTrigger();
+      final localRunner = MockRunAgentActionLocally();
+      when(
+        () => remoteRunner.resolveEnabledRemoteTriggerId(
+          actionId: any(named: 'actionId'),
+          triggerId: any(named: 'triggerId'),
+        ),
+      ).thenAnswer((_) async => const Success('remote-1'));
+      when(() => localRunner.validateRemoteRun(any())).thenAnswer(
+        (_) async => const Success(
+          AgentActionValidateRunSummary(
+            actionId: 'action-1',
+            actionType: AgentActionType.commandLine,
+          ),
+        ),
+      );
+
+      final operations = _buildOperations(
+        featureFlags: featureFlags,
+        remoteRunner: remoteRunner,
+        localRunner: localRunner,
+      );
+
+      final response = await operations.handleAgentActionValidateRun(
+        const RpcRequest(
+          jsonrpc: '2.0',
+          method: AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+          id: 5,
+          params: <String, dynamic>{
+            'action_id': 'action-1',
+            'idempotency_key': 'idem-ops',
+          },
+        ),
+        'agent-1',
+        null,
+      );
+
+      expect(response.isSuccess, isTrue);
+      final result = response.result! as Map<String, dynamic>;
+      expect(result['valid'], isTrue);
+      expect(result['action_id'], 'action-1');
+      verify(() => localRunner.validateRemoteRun(any())).called(1);
     });
   });
 }

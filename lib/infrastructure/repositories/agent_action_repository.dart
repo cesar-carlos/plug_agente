@@ -27,7 +27,14 @@ class AgentActionRepository implements IAgentActionRepository {
   ) async {
     try {
       final now = DateTime.now();
-      final row = _mapper.definitionToData(definition, now: now);
+      final existing = await (_database.select(
+        _database.agentActionDefinitionTable,
+      )..where((table) => table.id.equals(definition.id))).getSingleOrNull();
+      final timestamped = definition.copyWith(
+        createdAt: existing?.createdAt ?? definition.createdAt ?? now,
+        updatedAt: now,
+      );
+      final row = _mapper.definitionToData(timestamped, now: now);
       await _database.into(_database.agentActionDefinitionTable).insertOnConflictUpdate(row);
       return Success(_mapper.definitionFromData(row));
     } on Exception catch (error) {
@@ -163,7 +170,14 @@ class AgentActionRepository implements IAgentActionRepository {
   ) async {
     try {
       final now = DateTime.now();
-      final row = _mapper.triggerToData(trigger, now: now);
+      final existing = await (_database.select(
+        _database.agentActionTriggerTable,
+      )..where((table) => table.id.equals(trigger.id))).getSingleOrNull();
+      final timestamped = trigger.copyWith(
+        createdAt: existing?.createdAt ?? trigger.createdAt ?? now,
+        updatedAt: now,
+      );
+      final row = _mapper.triggerToData(timestamped, now: now);
       await _database.into(_database.agentActionTriggerTable).insertOnConflictUpdate(row);
       return Success(_mapper.triggerFromData(row));
     } on Exception catch (error) {

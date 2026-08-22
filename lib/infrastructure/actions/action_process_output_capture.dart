@@ -35,8 +35,12 @@ abstract final class ActionProcessOutputCapture {
       }
     }
 
+    List<int> capturedBytes = builder.takeBytes();
+    if (encoding == AgentActionOutputEncodingMode.utf8) {
+      capturedBytes = ActionProcessOutputDecoder.clipIncompleteTrailingUtf8(capturedBytes);
+    }
     final decoded = ActionProcessOutputDecoder.decode(
-      builder.takeBytes(),
+      capturedBytes,
       mode: encoding,
     );
     final text = redactBeforePersisting ? redactor.redactText(decoded) : decoded;

@@ -1,5 +1,4 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/theme/theme.dart';
 
 /// Item for [AppFluentTabView] (icon, label, body).
 class AppFluentTabItem {
@@ -18,6 +17,11 @@ class AppFluentTabItem {
 ///
 /// When there is only one item, the tab strip is omitted and the body is shown
 /// directly to avoid a redundant single tab.
+///
+/// Section tabs are not documents: close buttons stay hidden (`onClosed` is
+/// null) and browser-style shortcuts stay off so host pages keep Ctrl+T / Ctrl+W.
+/// Labels size to content, ellipsize, and the strip scrolls when they no longer
+/// fit, including four tabs at the main window minimum width.
 class AppFluentTabView extends StatelessWidget {
   const AppFluentTabView({
     required this.currentIndex,
@@ -44,14 +48,18 @@ class AppFluentTabView extends StatelessWidget {
     return TabView(
       currentIndex: currentIndex,
       onChanged: onChanged,
-      minTabWidth: 180,
+      shortcutsEnabled: false,
+      tabWidthBehavior: TabWidthBehavior.sizeToContent,
+      closeButtonVisibility: CloseButtonVisibilityMode.never,
       tabs: items
           .map(
             (item) => Tab(
               icon: Icon(item.icon),
-              text: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                child: Text(item.text),
+              semanticLabel: item.text,
+              text: Text(
+                item.text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               body: item.body,
             ),

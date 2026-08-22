@@ -268,6 +268,7 @@ class AgentActionExecutionDiagnosticsState extends State<AgentActionExecutionDia
               fullText: stdoutText,
               storedInChunks: execution.stdoutStoredInChunks,
               storageTruncated: execution.stdoutTruncated,
+              pagingIdentity: Object.hash(execution.id, 'stdout', execution.finishedAt),
               l10n: l10n,
               onSlice: execution.stdoutStoredInChunks
                   ? (offsetUtf8, maxBytes) => widget.onSliceCapturedOutput(
@@ -287,6 +288,7 @@ class AgentActionExecutionDiagnosticsState extends State<AgentActionExecutionDia
               fullText: stderrText,
               storedInChunks: execution.stderrStoredInChunks,
               storageTruncated: execution.stderrTruncated,
+              pagingIdentity: Object.hash(execution.id, 'stderr', execution.finishedAt),
               l10n: l10n,
               onSlice: execution.stderrStoredInChunks
                   ? (offsetUtf8, maxBytes) => widget.onSliceCapturedOutput(

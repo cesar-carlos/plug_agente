@@ -32,6 +32,8 @@ class AgentActionsToolbarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final blockingLabel = provider.isRunning ? l10n.agentActionsStatusRunning : null;
+
     return AppCard(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -42,7 +44,77 @@ class AgentActionsToolbarCard extends StatelessWidget {
         runSpacing: AppSpacing.sm,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          ..._buildActionControls(context),
+          _ToolbarButtonGroup(
+            children: [
+              _ToolbarCommandButton(
+                icon: FluentIcons.add,
+                label: l10n.agentActionsFormNew,
+                onPressed: onCreateAction,
+                filled: true,
+                disabledReason: onCreateAction == null && !provider.isFeatureEnabled
+                    ? l10n.agentActionsDisabledMessage
+                    : null,
+              ),
+              _ToolbarCommandButton(
+                icon: FluentIcons.refresh,
+                label: l10n.agentActionsRefresh,
+                onPressed: provider.isLoading || provider.hasBlockingLocalOperation ? null : provider.load,
+                disabledReason: provider.hasBlockingLocalOperation ? blockingLabel : null,
+              ),
+            ],
+          ),
+          const _ToolbarGroupDivider(),
+          _ToolbarButtonGroup(
+            children: [
+              _ToolbarCommandButton(
+                icon: FluentIcons.download,
+                label: l10n.agentActionsExportBundle,
+                onPressed: provider.canTransferBundle ? () => unawaited(_exportBundle(context)) : null,
+                isBusy: provider.isTransferringBundle,
+                disabledReason: provider.isRunning || provider.isTesting ? blockingLabel : null,
+              ),
+              _ToolbarCommandButton(
+                icon: FluentIcons.upload,
+                label: l10n.agentActionsImportBundle,
+                onPressed: provider.canTransferBundle ? () => unawaited(_importBundle(context)) : null,
+                disabledReason: provider.hasBlockingLocalOperation ? blockingLabel : null,
+              ),
+            ],
+          ),
+          const _ToolbarGroupDivider(),
+          _ToolbarButtonGroup(
+            children: [
+              _ToolbarCommandButton(
+                icon: FluentIcons.play,
+                label: l10n.agentActionsRunSelected,
+                onPressed: provider.canRunSelected ? (onRunSelected ?? provider.runSelectedAction) : null,
+                isBusy: provider.isRunning,
+                disabledReason: provider.isTesting || provider.isTransferringBundle ? blockingLabel : null,
+              ),
+              _ToolbarCommandButton(
+                icon: FluentIcons.test_beaker,
+                label: l10n.agentActionsTestSelected,
+                onPressed: provider.canTestSelected ? provider.testSelectedAction : null,
+                isBusy: provider.isTesting,
+                disabledReason: provider.isRunning || provider.isTransferringBundle ? blockingLabel : null,
+              ),
+            ],
+          ),
+          if (provider.hasLiveQueueActivity)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(FluentIcons.processing, size: 16, color: FluentTheme.of(context).accentColor),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  l10n.agentActionsQueueActiveIndicator(
+                    provider.liveQueuePendingCount,
+                    provider.liveQueueRunningCount,
+                  ),
+                  style: context.captionText,
+                ),
+              ],
+            ),
           ToggleSwitch(
             checked: provider.isMaintenanceMode,
             onChanged: provider.isFeatureEnabled
@@ -60,7 +132,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
                       if (value == null) {
                         return;
                       }
-                      unawaited(provider.setMaintenanceStrictMode(enabled: value));
+                      unawaited(_setMaintenanceStrictMode(context, value));
                     }
                   : null,
               content: Text(l10n.agentActionsMaintenanceStrictMode),
@@ -68,110 +140,6 @@ class AgentActionsToolbarCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  List<Widget> _buildActionControls(BuildContext context) {
-    return [
-      FilledButton(
-        onPressed: onCreateAction,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(FluentIcons.add),
-            const SizedBox(width: AppSpacing.xs),
-            Text(l10n.agentActionsFormNew),
-          ],
-        ),
-      ),
-      Button(
-        onPressed: provider.isLoading ? null : provider.load,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(FluentIcons.refresh),
-            const SizedBox(width: AppSpacing.xs),
-            Text(l10n.agentActionsRefresh),
-          ],
-        ),
-      ),
-      Button(
-        onPressed: provider.canTransferBundle ? () => unawaited(_exportBundle(context)) : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (provider.isTransferringBundle)
-              const SizedBox.square(
-                dimension: 14,
-                child: ProgressRing(strokeWidth: 2),
-              )
-            else
-              const Icon(FluentIcons.download),
-            const SizedBox(width: AppSpacing.xs),
-            Text(l10n.agentActionsExportBundle),
-          ],
-        ),
-      ),
-      Button(
-        onPressed: provider.canTransferBundle ? () => unawaited(_importBundle(context)) : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(FluentIcons.upload),
-            const SizedBox(width: AppSpacing.xs),
-            Text(l10n.agentActionsImportBundle),
-          ],
-        ),
-      ),
-      Button(
-        onPressed: provider.canRunSelected ? (onRunSelected ?? provider.runSelectedAction) : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (provider.isRunning)
-              const SizedBox.square(
-                dimension: 14,
-                child: ProgressRing(strokeWidth: 2),
-              )
-            else
-              const Icon(FluentIcons.play),
-            const SizedBox(width: AppSpacing.xs),
-            Text(l10n.agentActionsRunSelected),
-          ],
-        ),
-      ),
-      Button(
-        onPressed: provider.canTestSelected ? provider.testSelectedAction : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (provider.isTesting)
-              const SizedBox.square(
-                dimension: 14,
-                child: ProgressRing(strokeWidth: 2),
-              )
-            else
-              const Icon(FluentIcons.test_beaker),
-            const SizedBox(width: AppSpacing.xs),
-            Text(l10n.agentActionsTestSelected),
-          ],
-        ),
-      ),
-      if (provider.hasLiveQueueActivity)
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(FluentIcons.processing, size: 14, color: FluentTheme.of(context).accentColor),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              l10n.agentActionsQueueActiveIndicator(
-                provider.liveQueuePendingCount,
-                provider.liveQueueRunningCount,
-              ),
-              style: context.captionText,
-            ),
-          ],
-        ),
-    ];
   }
 
   Future<void> _setMaintenanceMode(BuildContext context, bool enabled) async {
@@ -189,7 +157,43 @@ class AgentActionsToolbarCard extends StatelessWidget {
       }
     }
 
-    await provider.setMaintenanceMode(enabled: enabled);
+    try {
+      await provider.setMaintenanceMode(enabled: enabled);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'agent actions maintenance mode toggle failed',
+        name: 'agent_actions_toolbar_card',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (context.mounted) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.agentActionsErrorTitle,
+          message: l10n.agentActionsErrorTitle,
+        );
+      }
+    }
+  }
+
+  Future<void> _setMaintenanceStrictMode(BuildContext context, bool enabled) async {
+    try {
+      await provider.setMaintenanceStrictMode(enabled: enabled);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'agent actions maintenance strict mode toggle failed',
+        name: 'agent_actions_toolbar_card',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (context.mounted) {
+        await SettingsFeedback.showError(
+          context: context,
+          title: l10n.agentActionsErrorTitle,
+          message: l10n.agentActionsErrorTitle,
+        );
+      }
+    }
   }
 
   Future<void> _exportBundle(BuildContext context) async {
@@ -310,5 +314,93 @@ class AgentActionsToolbarCard extends StatelessWidget {
         );
       }
     }
+  }
+}
+
+const double _toolbarIconSize = 16;
+
+class _ToolbarButtonGroup extends StatelessWidget {
+  const _ToolbarButtonGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0) const SizedBox(width: AppSpacing.sm),
+          children[index],
+        ],
+      ],
+    );
+  }
+}
+
+class _ToolbarGroupDivider extends StatelessWidget {
+  const _ToolbarGroupDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 20,
+      color: FluentTheme.of(context).resources.controlStrokeColorDefault,
+    );
+  }
+}
+
+class _ToolbarCommandButton extends StatelessWidget {
+  const _ToolbarCommandButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.filled = false,
+    this.isBusy = false,
+    this.disabledReason,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool filled;
+  final bool isBusy;
+  final String? disabledReason;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: _toolbarIconSize),
+        const SizedBox(width: AppSpacing.xs),
+        Text(label),
+      ],
+    );
+    final button = filled
+        ? FilledButton(onPressed: onPressed, child: child)
+        : Button(onPressed: onPressed, child: child);
+
+    Widget command = button;
+    if (disabledReason != null && onPressed == null) {
+      command = Tooltip(message: disabledReason, child: command);
+    }
+
+    if (!isBusy) {
+      return command;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        command,
+        const SizedBox(width: AppSpacing.xs),
+        const SizedBox.square(
+          dimension: _toolbarIconSize,
+          child: ProgressRing(strokeWidth: 2),
+        ),
+      ],
+    );
   }
 }

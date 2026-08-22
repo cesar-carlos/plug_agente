@@ -18,25 +18,40 @@ class AgentActionEditorSaveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: FilledButton(
-        onPressed: enabled ? onPressed : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (saving)
-              const SizedBox.square(
-                dimension: 14,
-                child: ProgressRing(strokeWidth: 2),
-              )
-            else
-              const Icon(FluentIcons.save),
-            const SizedBox(width: AppSpacing.xs),
-            Text(l10n.agentActionsFormSave),
-          ],
-        ),
+    final button = FilledButton(
+      onPressed: enabled ? onPressed : null,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (saving)
+            const SizedBox.square(
+              dimension: 14,
+              child: ProgressRing(strokeWidth: 2),
+            )
+          else
+            const Icon(FluentIcons.save),
+          const SizedBox(width: AppSpacing.xs),
+          Text(l10n.agentActionsFormSave),
+        ],
       ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: button,
+        ),
+        if (!enabled && !saving) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            l10n.agentActionsDisabledMessage,
+            style: context.bodyMuted,
+            textAlign: TextAlign.end,
+          ),
+        ],
+      ],
     );
   }
 }

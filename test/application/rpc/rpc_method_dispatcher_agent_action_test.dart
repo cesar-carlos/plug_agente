@@ -22,6 +22,7 @@ import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_remote_audit_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_runtime_state_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
@@ -169,6 +170,31 @@ void main() {
       when(() => mockFeatureFlags.enableRemoteAgentActions).thenReturn(true);
       when(() => mockFeatureFlags.enableAgentActionsMaintenanceMode).thenReturn(false);
       when(() => mockFeatureFlags.enableRemoteAdHocAgentActions).thenReturn(false);
+
+      when(
+        () => mockRemoteRun.resolveEnabledRemoteTriggerId(
+          actionId: any(named: 'actionId'),
+          triggerId: any(named: 'triggerId'),
+        ),
+      ).thenAnswer((_) async => const Success('remote-1'));
+      when(
+        () => mockGetExecution(
+          any(),
+          hydrateCapturedOutput: any(named: 'hydrateCapturedOutput'),
+        ),
+      ).thenAnswer(
+        (_) async => Success(
+          AgentActionExecution(
+            id: 'exec-stub',
+            actionId: 'action-1',
+            actionType: AgentActionType.commandLine,
+            status: AgentActionExecutionStatus.queued,
+            requestedAt: DateTime.utc(2026, 5, 18),
+            source: AgentActionRequestSource.remoteHub,
+            redactionApplied: true,
+          ),
+        ),
+      );
 
       when(() => mockGetPolicy(any())).thenAnswer(
         (_) async => const Success(
@@ -840,6 +866,43 @@ void main() {
       check(result['valid']).equals(true);
       check(result['action_id']).equals('action-1');
       verify(() => mockRun.validateRemoteRun(any())).called(1);
+    });
+
+    test('should reject agent.action.validateRun when no enabled remote trigger exists', () async {
+      when(
+        () => mockRemoteRun.resolveEnabledRemoteTriggerId(
+          actionId: any(named: 'actionId'),
+          triggerId: any(named: 'triggerId'),
+        ),
+      ).thenAnswer(
+        (_) async => Failure(
+          ActionValidationFailure.withContext(
+            message: 'Remote agent action run requires an enabled remote trigger.',
+            code: AgentActionFailureCode.remoteTriggerRequired,
+            context: const {
+              'reason': AgentActionTriggerConstants.remoteTriggerRequiredReason,
+            },
+          ),
+        ),
+      );
+
+      final response = await dispatcher.dispatch(
+        const RpcRequest(
+          jsonrpc: '2.0',
+          method: AgentActionRpcConstants.agentActionValidateRunRpcMethodName,
+          id: 21,
+          params: <String, dynamic>{
+            'action_id': 'action-1',
+            'idempotency_key': 'idem-1',
+          },
+        ),
+        'agent-1',
+      );
+
+      check(response.isSuccess).isFalse();
+      final data = response.error!.data as Map<String, dynamic>;
+      check(data['reason']).equals(AgentActionTriggerConstants.remoteTriggerRequiredReason);
+      verifyNever(() => mockRun.validateRemoteRun(any()));
     });
 
     test('should route agent.action.cancel', () async {

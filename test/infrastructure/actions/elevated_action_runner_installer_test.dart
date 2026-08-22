@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/constants/agent_action_elevated_constants.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
-import 'package:plug_agente/domain/actions/elevated_action_runner_install_state.dart';
+import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/elevated_action_runner_installer.dart';
 import 'package:test/test.dart';
 
@@ -111,6 +111,38 @@ void main() {
 
       final status = await installer.getStatus();
       expect(status.state, ElevatedActionRunnerInstallState.helperPathChanged);
+    });
+
+    test('should fail install without writing ready marker when UAC is cancelled', () async {
+      installer = ElevatedActionRunnerInstaller(
+        storageContext: GlobalStorageContext(appDirectoryPath: tempDir.path),
+        processRunner: (executable, arguments) async {
+          recordedCommands.add(<String>[executable, ...arguments]);
+          if (executable == 'schtasks' && arguments.contains('/Create')) {
+            return ProcessResult(0, 1, '', 'Access is denied.');
+          }
+          if (executable == 'powershell') {
+            return ProcessResult(0, 1223, '', 'The operation was canceled by the user.');
+          }
+          return ProcessResult(1, 1, '', 'not found');
+        },
+        isWindows: () => true,
+      );
+
+      final result = await installer.install(requestElevation: true);
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionRuntimeFailure;
+      expect(failure.code, AgentActionFailureCode.elevatedSubmitFailed);
+      expect(failure.context['uac_cancelled'], isTrue);
+      expect(failure.context['exit_code'], 1223);
+      expect(
+        File(AgentActionElevatedConstants.readyMarkerPath(tempDir.path)).existsSync(),
+        isFalse,
+      );
+      final powershell = recordedCommands.firstWhere((command) => command.first == 'powershell');
+      expect(powershell.last, contains(r'if ($null -eq $p)'));
+      expect(powershell.last, contains('exit 1223'));
     });
   });
 }

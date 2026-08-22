@@ -9,6 +9,7 @@ import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_confirmations.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_coordinator.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_form_state.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/iana_timezone_id_field.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/app_dialog_title_bar.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
@@ -521,9 +522,14 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
     final provider = widget.provider;
     final contentSize = _dialogContentSize(context);
 
-    return ListenableBuilder(
+    return AgentActionsSelectBuilder(
       listenable: provider,
-      builder: (context, child) {
+      selector: () => Object.hash(
+        provider.isSavingTrigger,
+        provider.triggerErrorMessage,
+        provider.isRemoteAgentActionsEnabled,
+      ),
+      builder: (context) {
         final remoteError = provider.triggerErrorMessage;
 
         return ContentDialog(
@@ -553,14 +559,28 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
               onPressed: provider.isSavingTrigger ? null : () => Navigator.of(context).pop(),
               child: Text(l10n.agentActionsTriggerCancel),
             ),
-            FilledButton(
-              onPressed: provider.isSavingTrigger || !provider.isFeatureEnabled ? null : _handleSave,
-              child: provider.isSavingTrigger
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: ProgressRing(strokeWidth: 2),
-                    )
-                  : Text(l10n.agentActionsTriggerSave),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton(
+                  onPressed: provider.isSavingTrigger || !provider.isFeatureEnabled ? null : _handleSave,
+                  child: provider.isSavingTrigger
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: ProgressRing(strokeWidth: 2),
+                        )
+                      : Text(l10n.agentActionsTriggerSave),
+                ),
+                if (!provider.isFeatureEnabled && !provider.isSavingTrigger) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    l10n.agentActionsDisabledMessage,
+                    style: context.bodyMuted,
+                    textAlign: TextAlign.end,
+                  ),
+                ],
+              ],
             ),
           ],
         );

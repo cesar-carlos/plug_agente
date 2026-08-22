@@ -152,6 +152,11 @@ class AgentActionRpcAuditOperations {
     }
     final store = _agentActionRemoteAuditStore;
     if (store == null) {
+      developer.log(
+        'agent.action remote audit is enabled but no audit store is configured '
+        'rpcMethod=$rpcMethod outcome=$outcome',
+        name: 'rpc_method_dispatcher',
+      );
       return;
     }
     try {
@@ -179,11 +184,9 @@ class AgentActionRpcAuditOperations {
         recordRemoteAuditExecutionCorrelatedIfApplicable(executionId: executionId);
       }
     } on Exception catch (e, stackTrace) {
-      final trace = _infrastructure.resolvedRemoteAgentActionTraceId(request);
       developer.log(
         'agent.action remote audit append failed (best effort) '
-        'rpcMethod=$rpcMethod actionId=${actionId ?? '-'} '
-        'traceId=${trace ?? '-'} idempotencyKey=${idempotencyKey ?? '-'}',
+        'rpcMethod=$rpcMethod outcome=$outcome',
         name: 'rpc_method_dispatcher',
         error: e,
         stackTrace: stackTrace,

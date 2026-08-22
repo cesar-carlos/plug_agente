@@ -116,5 +116,41 @@ void main() {
         AgentActionTriggerConstants.remoteTriggerRequiredReason,
       );
     });
+
+    test('should resolve the enabled remote trigger without dispatching', () async {
+      final repository = FakeAgentActionRepository();
+      repository.definitions['action-1'] = const AgentActionDefinition(
+        id: 'action-1',
+        name: 'Remote action',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+      );
+      repository.triggers['remote-1'] = const AgentActionTrigger(
+        id: 'remote-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.remote,
+      );
+      final useCase = RunAgentActionViaRemoteTrigger(
+        repository,
+        DispatchAgentActionTrigger(
+          repository,
+          RunAgentActionLocally(
+            repository,
+            AgentActionLocalRunnerRegistry([
+              FakeAgentActionLocalRunner(
+                result: Failure(ActionRuntimeFailure('should not run')),
+              ),
+            ]),
+            const Uuid(),
+          ),
+        ),
+      );
+
+      final result = await useCase.resolveEnabledRemoteTriggerId(actionId: 'action-1');
+
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrThrow(), 'remote-1');
+      expect(repository.savedExecutions, isEmpty);
+    });
   });
 }

@@ -39,12 +39,18 @@ class AgentActionTriggerScheduleCalculator {
       );
     }
 
+    final locationResult = _resolveLocation(trigger);
+    if (locationResult.isError()) {
+      return Failure(locationResult.exceptionOrNull()!);
+    }
+
+    final location = locationResult.getOrThrow().location;
     final nextRunAt = switch (trigger.type) {
       AgentActionTriggerType.once => _nextOnce(trigger, now),
       AgentActionTriggerType.interval => _nextInterval(trigger, now),
-      AgentActionTriggerType.daily => _nextDaily(trigger, now),
-      AgentActionTriggerType.weekly => _nextWeekly(trigger, now),
-      AgentActionTriggerType.monthly => _nextMonthly(trigger, now),
+      AgentActionTriggerType.daily => _nextDaily(trigger, now, location),
+      AgentActionTriggerType.weekly => _nextWeekly(trigger, now, location),
+      AgentActionTriggerType.monthly => _nextMonthly(trigger, now, location),
       AgentActionTriggerType.manual ||
       AgentActionTriggerType.remote ||
       AgentActionTriggerType.appStart ||
@@ -60,16 +66,29 @@ class AgentActionTriggerScheduleCalculator {
     );
   }
 
-  tz.Location? _tryResolveLocation(AgentActionTrigger trigger) {
+  Result<_ResolvedScheduleLocation> _resolveLocation(AgentActionTrigger trigger) {
     final id = trigger.schedule.timezoneId?.trim();
     if (id == null || id.isEmpty) {
-      return null;
+      return const Success(_ResolvedScheduleLocation.none);
     }
+
     try {
       ensureIanaTimeZoneDataLoaded();
-      return tz.getLocation(id);
-    } on Object {
-      return null;
+      return Success(_ResolvedScheduleLocation(tz.getLocation(id)));
+    } on tz.LocationNotFoundException catch (error) {
+      return Failure(
+        ActionValidationFailure.withContext(
+          message: 'Action trigger timezone is not a known IANA identifier.',
+          cause: error,
+          context: {
+            'trigger_id': trigger.id,
+            'field': 'schedule.timezoneId',
+            'timezone_id': id,
+            'reason': AgentActionTriggerConstants.unknownTimezoneReason,
+            'user_message': 'Informe um fuso IANA valido (ex.: America/Sao_Paulo, Europe/Lisbon, UTC).',
+          },
+        ),
+      );
     }
   }
 
@@ -129,20 +148,24 @@ class AgentActionTriggerScheduleCalculator {
     }
 
     final nextStep = isOnBoundary ? completedSteps : completedSteps + 1;
-    final next = anchor.add(Duration(microseconds: intervalMicros * nextStep));
+    var next = anchor.add(Duration(microseconds: intervalMicros * nextStep));
+    final lastScheduledAt = trigger.lastScheduledAt;
+    if (lastScheduledAt != null && !next.isAfter(lastScheduledAt)) {
+      next = anchor.add(Duration(microseconds: intervalMicros * (nextStep + 1)));
+    }
     return _withinEnd(trigger, next) ? next : null;
   }
 
   DateTime? _nextDaily(
     AgentActionTrigger trigger,
     DateTime now,
+    tz.Location? location,
   ) {
     final timeOfDay = trigger.schedule.timeOfDayMinutes;
     if (timeOfDay == null) {
       return null;
     }
 
-    final location = _tryResolveLocation(trigger);
     if (location != null) {
       return _nextDailyInLocation(trigger, now, location, timeOfDay);
     }
@@ -207,13 +230,13 @@ class AgentActionTriggerScheduleCalculator {
   DateTime? _nextWeekly(
     AgentActionTrigger trigger,
     DateTime now,
+    tz.Location? location,
   ) {
     final timeOfDay = trigger.schedule.timeOfDayMinutes;
     if (timeOfDay == null || trigger.schedule.weekdays.isEmpty) {
       return null;
     }
 
-    final location = _tryResolveLocation(trigger);
     if (location != null) {
       return _nextWeeklyInLocation(trigger, now, location, timeOfDay);
     }
@@ -309,6 +332,7 @@ class AgentActionTriggerScheduleCalculator {
   DateTime? _nextMonthly(
     AgentActionTrigger trigger,
     DateTime now,
+    tz.Location? location,
   ) {
     final timeOfDay = trigger.schedule.timeOfDayMinutes;
     final dayOfMonth = trigger.schedule.dayOfMonth;
@@ -316,7 +340,6 @@ class AgentActionTriggerScheduleCalculator {
       return null;
     }
 
-    final location = _tryResolveLocation(trigger);
     if (location != null) {
       return _nextMonthlyInLocation(trigger, now, location, timeOfDay, dayOfMonth);
     }
@@ -455,12 +478,18 @@ class AgentActionTriggerScheduleCalculator {
     AgentActionTrigger trigger,
     DateTime now,
   ) {
+    var base = now;
     final startAt = trigger.schedule.startAt;
-    if (startAt == null || startAt.isBefore(now)) {
-      return now;
+    if (startAt != null && startAt.isAfter(now)) {
+      base = startAt;
     }
 
-    return startAt;
+    final lastScheduledAt = trigger.lastScheduledAt;
+    if (lastScheduledAt != null && !lastScheduledAt.isBefore(base)) {
+      return lastScheduledAt.add(const Duration(microseconds: 1));
+    }
+
+    return base;
   }
 
   tz.TZDateTime _tzAtTimeOfDay(
@@ -499,4 +528,12 @@ class AgentActionTriggerScheduleCalculator {
   int _daysInMonth(int year, int month) {
     return DateTime(year, month + 1, 0).day;
   }
+}
+
+class _ResolvedScheduleLocation {
+  const _ResolvedScheduleLocation(this.location);
+
+  static const none = _ResolvedScheduleLocation(null);
+
+  final tz.Location? location;
 }

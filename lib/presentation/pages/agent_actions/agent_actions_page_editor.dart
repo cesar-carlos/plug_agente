@@ -26,6 +26,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agen
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_widgets.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_file_picker.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
@@ -462,9 +463,23 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return AgentActionsSelectBuilder(
       listenable: widget.provider,
-      builder: (context, _) => _buildContent(context),
+      selector: () => Object.hashAll([
+        widget.provider.canSaveAction,
+        widget.provider.isSaving,
+        widget.provider.errorMessage,
+        widget.provider.isLoadingDeveloperConnections,
+        identityHashCode(widget.provider.developerConnections),
+        widget.provider.developerConnections.length,
+        widget.provider.developerConnectionLookupMessage,
+        widget.provider.resolvedDeveloperData7ConfigPath,
+        widget.provider.isElevatedAgentActionsEnabled,
+        widget.provider.isRemoteAgentActionsEnabled,
+        widget.provider.isRemoteAdHocAgentActionsEnabled,
+        widget.provider.runtimeSubsystemSnapshot,
+      ]),
+      builder: _buildContent,
     );
   }
 

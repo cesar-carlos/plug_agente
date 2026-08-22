@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,9 +13,13 @@ import 'package:result_dart/result_dart.dart';
 class ActionProcessStdinSetup {
   const ActionProcessStdinSetup({
     required IAgentActionSecretPlaceholderResolver secretPlaceholderResolver,
+    this.stdinIoTimeout = defaultStdinIoTimeout,
   }) : _secretPlaceholderResolver = secretPlaceholderResolver;
 
+  static const Duration defaultStdinIoTimeout = Duration(seconds: 10);
+
   final IAgentActionSecretPlaceholderResolver _secretPlaceholderResolver;
+  final Duration stdinIoTimeout;
 
   Future<Result<void>> configure({
     required Process process,
@@ -80,9 +85,27 @@ class ActionProcessStdinSetup {
 
     try {
       process.stdin.add(encoded);
-      await process.stdin.flush();
-      await process.stdin.close();
+      await process.stdin.flush().timeout(stdinIoTimeout);
+      await process.stdin.close().timeout(stdinIoTimeout);
       return const Success(unit);
+    } on TimeoutException catch (error) {
+      return Failure(
+        ActionTimeoutFailure.withContext(
+          message: 'Timed out writing stdin payload to the child process.',
+          cause: error,
+          code: AgentActionFailureCode.executionTimedOut,
+          context: {
+            'action_id': actionId,
+            ...diagnostics,
+            'phase': 'stdin_setup',
+            'pid': process.pid,
+            'payload_bytes': encoded.length,
+            'timeout_ms': stdinIoTimeout.inMilliseconds,
+            'reason': AgentActionProcessConstants.stdinWriteFailedReason,
+            'user_message': 'O processo nao leu a entrada padrao a tempo. A execucao foi interrompida.',
+          },
+        ),
+      );
     } on Exception catch (error) {
       return Failure(
         ActionRuntimeFailure.withContext(
@@ -108,8 +131,25 @@ class ActionProcessStdinSetup {
     required Map<String, Object?> diagnostics,
   }) async {
     try {
-      await process.stdin.close();
+      await process.stdin.close().timeout(stdinIoTimeout);
       return const Success(unit);
+    } on TimeoutException catch (error) {
+      return Failure(
+        ActionTimeoutFailure.withContext(
+          message: 'Timed out closing process stdin.',
+          cause: error,
+          code: AgentActionFailureCode.executionTimedOut,
+          context: {
+            'action_id': actionId,
+            ...diagnostics,
+            'phase': 'stdin_setup',
+            'pid': process.pid,
+            'timeout_ms': stdinIoTimeout.inMilliseconds,
+            'reason': AgentActionProcessConstants.stdinCloseFailedReason,
+            'user_message': 'Nao foi possivel preparar a entrada padrao do processo a tempo.',
+          },
+        ),
+      );
     } on Exception catch (error) {
       return Failure(
         ActionRuntimeFailure.withContext(

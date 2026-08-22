@@ -18,6 +18,7 @@ class AgentActionPagedCapturedOutput extends StatefulWidget {
     this.fullText,
     this.storedInChunks = false,
     this.onSlice,
+    this.pagingIdentity,
     super.key,
   }) : assert(
          fullText != null || onSlice != null,
@@ -32,6 +33,10 @@ class AgentActionPagedCapturedOutput extends StatefulWidget {
   final AppLocalizations l10n;
   final Future<Result<CapturedOutputUtf8Window>> Function(int, int)? onSlice;
 
+  /// Stable identity for the output source. Parent rebuilds often create a new
+  /// [onSlice] closure; comparing that identity would reset pagination.
+  final Object? pagingIdentity;
+
   @override
   State<AgentActionPagedCapturedOutput> createState() => AgentActionPagedCapturedOutputState();
 }
@@ -45,6 +50,7 @@ class AgentActionPagedCapturedOutputState extends State<AgentActionPagedCaptured
   var _isLoading = false;
   var _isLoadingMore = false;
   String? _loadError;
+  var _loadGeneration = 0;
 
   void _assignFromWindow(CapturedOutputUtf8Window window, {required bool append}) {
     _visibleText = append ? '$_visibleText${window.text}' : window.text;
@@ -59,6 +65,7 @@ class AgentActionPagedCapturedOutputState extends State<AgentActionPagedCaptured
       return;
     }
 
+    final generation = ++_loadGeneration;
     setState(() {
       if (append) {
         _isLoadingMore = true;
@@ -69,7 +76,7 @@ class AgentActionPagedCapturedOutputState extends State<AgentActionPagedCaptured
     });
 
     final result = await onSlice(offsetUtf8, _pageBytes);
-    if (!mounted) {
+    if (!mounted || generation != _loadGeneration) {
       return;
     }
 
@@ -117,7 +124,9 @@ class AgentActionPagedCapturedOutputState extends State<AgentActionPagedCaptured
     super.didUpdateWidget(oldWidget);
     if (oldWidget.fullText != widget.fullText ||
         oldWidget.storedInChunks != widget.storedInChunks ||
-        oldWidget.onSlice != widget.onSlice) {
+        oldWidget.storageTruncated != widget.storageTruncated ||
+        oldWidget.pagingIdentity != widget.pagingIdentity) {
+      _loadGeneration += 1;
       setState(() {
         _visibleText = '';
         _nextUtf8Offset = 0;

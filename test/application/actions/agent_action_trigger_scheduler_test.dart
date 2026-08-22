@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/actions.dart';
+import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.dart';
 import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.dart';
 import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
+import 'package:plug_agente/application/use_cases/save_agent_action_trigger.dart';
+import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -34,6 +37,28 @@ class _HeldSchedulerInstanceLock implements IAgentActionSchedulerInstanceLock {
 
   @override
   Future<void> release() async {}
+}
+
+class _RecordingSchedulerInstanceLock implements IAgentActionSchedulerInstanceLock {
+  int acquireCount = 0;
+  Completer<void>? releaseGate;
+
+  @override
+  bool get isHeld => acquireCount > 0 && releaseGate == null;
+
+  @override
+  Future<Result<Unit>> tryAcquire() async {
+    acquireCount += 1;
+    return const Success(unit);
+  }
+
+  @override
+  Future<void> release() async {
+    final gate = releaseGate;
+    if (gate != null) {
+      await gate.future;
+    }
+  }
 }
 
 class FakeAgentActionRepository implements IAgentActionRepository {
@@ -481,6 +506,40 @@ void main() {
       );
     });
 
+    test('should fail when IANA timezone cannot be resolved', () {
+      final result = calculator.nextRun(
+        trigger: const AgentActionTrigger(
+          id: 'trigger-1',
+          actionId: 'action-1',
+          type: AgentActionTriggerType.daily,
+          schedule: AgentActionTriggerSchedule(
+            timeOfDayMinutes: 9 * 60,
+            timezoneId: 'Not/A_Real_Zone',
+          ),
+        ),
+        now: DateTime.utc(2026, 5, 16, 14),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(failure.context['reason'], AgentActionTriggerConstants.unknownTimezoneReason);
+    });
+
+    test('should not re-fire daily slot when lastScheduledAt equals the candidate', () {
+      final result = calculator.nextRun(
+        trigger: AgentActionTrigger(
+          id: 'trigger-1',
+          actionId: 'action-1',
+          type: AgentActionTriggerType.daily,
+          schedule: const AgentActionTriggerSchedule(timeOfDayMinutes: 9 * 60),
+          lastScheduledAt: DateTime(2026, 5, 15, 9),
+        ),
+        now: DateTime(2026, 5, 15, 9),
+      );
+
+      expect(result.getOrThrow().nextRunAt, DateTime(2026, 5, 16, 9));
+    });
+
     test('should treat fall-back duplicate 01:30 wall times as two distinct instants', () {
       final loc = tz.getLocation('America/New_York');
       final first = tz.TZDateTime(loc, 2024, 11, 3, 1, 30);
@@ -567,6 +626,29 @@ void main() {
         scheduler.lastStartIssueReason,
         AgentActionTriggerConstants.schedulerInstanceLockedReason,
       );
+    });
+
+    test('should skip temporal trigger when IANA timezone cannot be resolved', () async {
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.daily,
+        schedule: AgentActionTriggerSchedule(
+          timeOfDayMinutes: 9 * 60,
+          timezoneId: 'Not/A_Real_Zone',
+        ),
+      );
+      final scheduler = createScheduler(
+        now: () => DateTime(2026, 5, 15, 8),
+      );
+
+      final result = await scheduler.start();
+
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrThrow().scheduledCount, 0);
+      expect(result.getOrThrow().skippedCount, 1);
+      expect(result.getOrThrow().issues.single.triggerId, 'trigger-1');
+      expect(timers, isEmpty);
     });
 
     test('should schedule enabled temporal triggers and persist next run', () async {
@@ -977,6 +1059,225 @@ void main() {
       expect(result.getOrThrow(), 0);
       expect(runner.runCount, 1);
       expect(repository.triggers['trigger-1']?.lastRunAt, isNull);
+    });
+
+    test('should pause armed timers when start is called after maintenance mode is enabled', () async {
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.daily,
+        schedule: AgentActionTriggerSchedule(timeOfDayMinutes: 9 * 60),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      final scheduler = createScheduler(
+        featureFlags: flags,
+        now: () => DateTime(2026, 5, 15, 8),
+      );
+
+      expect((await scheduler.start()).isSuccess(), isTrue);
+      expect(scheduler.scheduledTimerCount, 1);
+
+      await flags.setEnableAgentActionsMaintenanceMode(true);
+      final paused = await scheduler.start();
+
+      expect(paused.isError(), isTrue);
+      expect(paused.exceptionOrNull(), isA<ActionAuthorizationFailure>());
+      expect(scheduler.isTemporalSchedulerStarted, isFalse);
+      expect(scheduler.scheduledTimerCount, 0);
+      expect(timers.single.cancelled, isTrue);
+    });
+
+    test('should not dispatch scheduled trigger after stop cancels in-flight generation', () async {
+      final gate = Completer<Result<AgentActionProcessResult>>();
+      runner = FakeAgentActionLocalRunner(runHandler: () => gate.future);
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.daily,
+        schedule: AgentActionTriggerSchedule(timeOfDayMinutes: 9 * 60),
+      );
+      final scheduler = createScheduler(
+        now: () => DateTime(2026, 5, 15, 8),
+      );
+      await scheduler.start();
+
+      timers.single.fire();
+      await Future<void>.delayed(Duration.zero);
+      scheduler.stop();
+      gate.complete(
+        Success(
+          AgentActionProcessResult(
+            status: AgentActionExecutionStatus.succeeded,
+            pid: 1234,
+            exitCode: 0,
+            processStartedAt: DateTime(2026, 5, 15, 9),
+            finishedAt: DateTime(2026, 5, 15, 9, 1),
+            stdout: AgentActionCapturedOutput.disabled,
+            stderr: AgentActionCapturedOutput.disabled,
+            redactionApplied: true,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(scheduler.scheduledTimerCount, 0);
+      expect(scheduler.isTemporalSchedulerStarted, isFalse);
+    });
+
+    test('should consume lastScheduledAt but not lastRunAt when dispatch fails', () async {
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.daily,
+        schedule: AgentActionTriggerSchedule(timeOfDayMinutes: 9 * 60),
+      );
+      final scheduler = createScheduler(
+        now: () => DateTime(2026, 5, 15, 8),
+      );
+      await scheduler.start();
+      repository.definitions.remove('action-1');
+
+      timers.single.fire();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repository.triggers['trigger-1']?.lastRunAt, isNull);
+      expect(repository.triggers['trigger-1']?.lastScheduledAt, DateTime(2026, 5, 15, 9));
+      expect(repository.triggers['trigger-1']?.nextRunAt, DateTime(2026, 5, 16, 9));
+    });
+
+    test('should dispatch app-start lifecycle triggers only once per process', () async {
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.appStart,
+      );
+      final scheduler = createScheduler(
+        now: () => DateTime(2026, 5, 15, 8),
+      );
+
+      final first = await scheduler.dispatchAppStartTriggers();
+      final second = await scheduler.dispatchAppStartTriggers();
+
+      expect(first.getOrThrow(), 1);
+      expect(second.getOrThrow(), 0);
+      expect(runner.runCount, 1);
+    });
+
+    test('should dispatch app-close lifecycle triggers only once per process', () async {
+      repository.definitions['action-1'] = const AgentActionDefinition(
+        id: 'action-1',
+        name: 'Run command',
+        state: AgentActionState.active,
+        config: CommandLineActionConfig(command: 'dir'),
+        policies: AgentActionDefinitionPolicies(
+          timeout: AgentActionTimeoutPolicy(
+            maxRuntime: Duration(seconds: 1),
+          ),
+        ),
+      );
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.appClose,
+      );
+      final scheduler = createScheduler(
+        now: () => DateTime(2026, 5, 15, 18),
+      );
+
+      final first = await scheduler.dispatchAppCloseTriggers();
+      final second = await scheduler.dispatchAppCloseTriggers();
+
+      expect(first.getOrThrow(), 1);
+      expect(second.getOrThrow(), 0);
+      expect(runner.runCount, 1);
+    });
+
+    test('should wait for lock release before acquiring again after stop', () async {
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.daily,
+        schedule: AgentActionTriggerSchedule(timeOfDayMinutes: 9 * 60),
+      );
+      final lock = _RecordingSchedulerInstanceLock();
+      final scheduler = createScheduler(
+        schedulerInstanceLock: lock,
+        now: () => DateTime(2026, 5, 15, 8),
+      );
+
+      expect((await scheduler.start()).isSuccess(), isTrue);
+      expect(lock.acquireCount, 1);
+
+      lock.releaseGate = Completer<void>();
+      scheduler.stop();
+      final restart = scheduler.start();
+      await Future<void>.delayed(Duration.zero);
+      expect(lock.acquireCount, 1);
+
+      lock.releaseGate!.complete();
+      expect((await restart).isSuccess(), isTrue);
+      expect(lock.acquireCount, 2);
+    });
+
+    test('should cancel timer when trigger is unsynced after delete', () async {
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.daily,
+        schedule: AgentActionTriggerSchedule(timeOfDayMinutes: 9 * 60),
+      );
+      final scheduler = createScheduler(
+        now: () => DateTime(2026, 5, 15, 8),
+      );
+      await scheduler.start();
+      expect(scheduler.scheduledTimerCount, 1);
+
+      final deleteResult = await DeleteAgentActionTrigger(
+        repository,
+        scheduler: scheduler,
+      )('trigger-1');
+
+      expect(deleteResult.isSuccess(), isTrue);
+      expect(scheduler.scheduledTimerCount, 0);
+      expect(timers.single.cancelled, isTrue);
+    });
+
+    test('should reschedule timer when saved temporal trigger changes', () async {
+      repository.triggers['trigger-1'] = const AgentActionTrigger(
+        id: 'trigger-1',
+        actionId: 'action-1',
+        type: AgentActionTriggerType.daily,
+        schedule: AgentActionTriggerSchedule(timeOfDayMinutes: 9 * 60),
+      );
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      final scheduler = createScheduler(
+        featureFlags: flags,
+        now: () => DateTime(2026, 5, 15, 8),
+      );
+      await scheduler.start();
+      expect(timers.single.delay, const Duration(hours: 1));
+
+      final saveResult =
+          await SaveAgentActionTrigger(
+            repository,
+            const ValidateAgentActionTrigger(),
+            flags,
+            scheduler: scheduler,
+          )(
+            const AgentActionTrigger(
+              id: 'trigger-1',
+              actionId: 'action-1',
+              type: AgentActionTriggerType.daily,
+              schedule: AgentActionTriggerSchedule(timeOfDayMinutes: 10 * 60),
+            ),
+          );
+
+      expect(saveResult.isSuccess(), isTrue);
+      expect(timers.first.cancelled, isTrue);
+      expect(timers.last.delay, const Duration(hours: 2));
+      expect(scheduler.scheduledTimerCount, 1);
     });
   });
 }

@@ -177,6 +177,41 @@ void main() {
     expect(repository.savedExecutions, isEmpty);
   });
 
+  test('blocks bundle transfer, run, and test while a local run is in progress', () async {
+    repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Run command',
+      state: AgentActionState.active,
+      config: CommandLineActionConfig(command: 'dir'),
+    );
+
+    await provider.load();
+
+    expect(provider.canTransferBundle, isTrue);
+    expect(provider.canRunSelected, isTrue);
+    expect(provider.canTestSelected, isTrue);
+
+    provider.executionsController.isRunning = true;
+
+    expect(provider.hasBlockingLocalOperation, isTrue);
+    expect(provider.canTransferBundle, isFalse);
+    expect(provider.canRunSelected, isFalse);
+    expect(provider.canTestSelected, isFalse);
+
+    provider.executionsController.isRunning = false;
+    provider.executionsController.isTesting = true;
+
+    expect(provider.canTransferBundle, isFalse);
+    expect(provider.canRunSelected, isFalse);
+    expect(provider.canTestSelected, isFalse);
+
+    provider.executionsController.isTesting = false;
+
+    expect(provider.canTransferBundle, isTrue);
+    expect(provider.canRunSelected, isTrue);
+    expect(provider.canTestSelected, isTrue);
+  });
+
   test('caches filtered definition list until provider state changes', () async {
     repository.definitions['action-1'] = const AgentActionDefinition(
       id: 'action-1',

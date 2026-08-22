@@ -7,10 +7,7 @@ import 'package:plug_agente/core/constants/agent_action_captured_output_constant
 import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/actions/agent_action_captured_output_chunker.dart';
 import 'package:plug_agente/domain/actions/captured_output_utf8_window.dart';
-import 'package:plug_agente/infrastructure/infrastructure.dart' show AgentActionRepository;
-import 'package:plug_agente/infrastructure/repositories/agent_action_repository.dart' show AgentActionRepository;
 import 'package:plug_agente/infrastructure/repositories/agent_config_drift_database.dart';
-import 'package:plug_agente/infrastructure/repositories/repositories.dart' show AgentActionRepository;
 
 /// Drift persistence for spilled stdout/stderr captured output.
 final class AgentActionCapturedOutputChunkStore {
@@ -22,7 +19,7 @@ final class AgentActionCapturedOutputChunkStore {
   ///
   /// When `PRAGMA foreign_keys=ON`, the parent execution row must already exist
   /// and this method must run in the same Drift `Transaction` as that insert.
-  /// [AgentActionRepository.saveExecution] satisfies both requirements.
+  /// `AgentActionRepository.saveExecution` satisfies both requirements.
   Future<void> replaceStream({
     required String executionId,
     required String stream,
@@ -84,27 +81,17 @@ final class AgentActionCapturedOutputChunkStore {
     required int offsetUtf8,
     required int maxBytes,
   }) async {
-    final rows =
-        await (_database.select(_database.agentActionCapturedOutputChunkTable)
-              ..where(
-                (table) => table.executionId.equals(executionId) & table.stream.equals(stream),
-              )
-              ..orderBy([
-                (table) => OrderingTerm.asc(table.chunkIndex),
-              ]))
-            .get();
-    if (rows.isEmpty) {
+    final table = _database.agentActionCapturedOutputChunkTable;
+    final lastQuery = _database.select(table)
+      ..where((row) => row.executionId.equals(executionId) & row.stream.equals(stream))
+      ..orderBy([(row) => OrderingTerm.desc(row.chunkIndex)])
+      ..limit(1);
+    final last = await lastQuery.getSingleOrNull();
+    if (last == null) {
       return null;
     }
 
-    // Encode each chunk payload once; reuse the same Uint8List for both the
-    // totalBytes calculation and the actual slice copy below.
-    final rowBytes = rows.map((row) => utf8.encode(row.payload)).toList(growable: false);
-    var totalBytes = 0;
-    for (final bytes in rowBytes) {
-      totalBytes += bytes.length;
-    }
-
+    final totalBytes = last.utf8Offset + utf8.encode(last.payload).length;
     final safeOffset = offsetUtf8.clamp(0, totalBytes);
     if (safeOffset >= totalBytes) {
       return (
@@ -117,29 +104,64 @@ final class AgentActionCapturedOutputChunkStore {
     }
 
     final targetEnd = math.min(safeOffset + maxBytes, totalBytes);
-    final bytesBuilder = BytesBuilder(copy: false);
-    var cursor = 0;
-    for (var index = 0; index < rowBytes.length; index++) {
-      final chunkBytes = rowBytes[index];
-      final chunkStart = cursor;
-      final chunkEnd = cursor + chunkBytes.length;
-      if (chunkEnd > safeOffset && chunkStart < targetEnd) {
-        final takeStart = math.max(0, safeOffset - chunkStart);
-        final takeEnd = math.min(chunkBytes.length, targetEnd - chunkStart);
-        if (takeEnd > takeStart) {
-          bytesBuilder.add(chunkBytes.sublist(takeStart, takeEnd));
-        }
-      }
-      cursor = chunkEnd;
+    final startMetaQuery = _database.selectOnly(table)
+      ..addColumns([table.chunkIndex, table.utf8Offset])
+      ..where(
+        table.executionId.equals(executionId) &
+            table.stream.equals(stream) &
+            table.utf8Offset.isSmallerOrEqualValue(safeOffset),
+      )
+      ..orderBy([OrderingTerm.desc(table.utf8Offset)])
+      ..limit(1);
+    final startMeta = await startMetaQuery.getSingleOrNull();
+    final startChunkIndex = startMeta?.read(table.chunkIndex);
+    if (startChunkIndex == null) {
+      return (
+        text: '',
+        nextOffset: totalBytes,
+        totalBytes: totalBytes,
+        responseTruncated: false,
+        effectiveStart: safeOffset,
+      );
     }
 
-    final sliceBytes = bytesBuilder.takeBytes();
+    final rows =
+        await (_database.select(table)
+              ..where(
+                (row) =>
+                    row.executionId.equals(executionId) &
+                    row.stream.equals(stream) &
+                    row.chunkIndex.isBiggerOrEqualValue(startChunkIndex) &
+                    row.utf8Offset.isSmallerThanValue(targetEnd),
+              )
+              ..orderBy([(row) => OrderingTerm.asc(row.chunkIndex)]))
+            .get();
+    if (rows.isEmpty) {
+      return (
+        text: '',
+        nextOffset: totalBytes,
+        totalBytes: totalBytes,
+        responseTruncated: false,
+        effectiveStart: safeOffset,
+      );
+    }
+
+    final bytesBuilder = BytesBuilder(copy: false);
+    for (final row in rows) {
+      bytesBuilder.add(utf8.encode(row.payload));
+    }
+    final assembled = bytesBuilder.takeBytes();
+    final assembledStart = rows.first.utf8Offset;
+    final relativeStart = _alignUtf8StartOffset(assembled, safeOffset - assembledStart);
+    final window = _decodeUtf8Window(assembled, relativeStart, maxBytes);
+    final absoluteStart = assembledStart + relativeStart;
+    final absoluteEnd = assembledStart + window.end;
     return (
-      text: utf8.decode(sliceBytes),
-      nextOffset: targetEnd,
+      text: window.text,
+      nextOffset: absoluteEnd,
       totalBytes: totalBytes,
-      responseTruncated: targetEnd < totalBytes,
-      effectiveStart: safeOffset,
+      responseTruncated: absoluteEnd < totalBytes,
+      effectiveStart: absoluteStart,
     );
   }
 
@@ -169,4 +191,25 @@ final class AgentActionCapturedOutputChunkStore {
   static String streamNameForStdout() => AgentActionCapturedOutputConstants.stdoutStream;
 
   static String streamNameForStderr() => AgentActionCapturedOutputConstants.stderrStream;
+}
+
+int _alignUtf8StartOffset(List<int> bytes, int offset) {
+  var aligned = offset.clamp(0, bytes.length);
+  while (aligned > 0 && aligned < bytes.length && (bytes[aligned] & 0xC0) == 0x80) {
+    aligned--;
+  }
+  return aligned;
+}
+
+({int end, String text}) _decodeUtf8Window(List<int> bytes, int start, int maxBytes) {
+  var end = math.min(start + maxBytes, bytes.length);
+  while (end > start) {
+    try {
+      final slice = bytes.sublist(start, end);
+      return (end: end, text: utf8.decode(slice, allowMalformed: false));
+    } on FormatException {
+      end--;
+    }
+  }
+  return (end: start, text: '');
 }

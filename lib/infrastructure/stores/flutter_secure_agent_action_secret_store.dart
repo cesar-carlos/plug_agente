@@ -32,7 +32,6 @@ class FlutterSecureAgentActionSecretStore implements IAgentActionSecretStore {
 
   @override
   Future<bool> exists(String secretName) async {
-    final value = await readSecret(secretName);
-    return value != null && value.isNotEmpty;
+    return _secureStorage.containsKey(key: _keyFor(secretName));
   }
 }

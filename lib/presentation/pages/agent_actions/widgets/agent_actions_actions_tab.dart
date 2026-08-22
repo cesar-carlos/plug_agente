@@ -9,6 +9,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actio
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_page_confirmations.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_trigger_save_dialog.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_toolbar_card.dart';
 
 class AgentActionsActionsTab extends StatelessWidget {
@@ -31,48 +32,106 @@ class AgentActionsActionsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: provider,
-      builder: (context, _) => _buildTabContent(context),
-    );
-  }
-
-  Widget _buildTabContent(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AgentActionsToolbarCard(
-          provider: provider,
-          l10n: l10n,
-          onCreateAction: provider.canSaveAction ? onCreateAction : null,
-          onRunSelected: provider.canRunSelected
-              ? () => unawaited(runAgentActionWithDangerousCommandCheck(context, provider, l10n))
-              : null,
+        AgentActionsSelectBuilder(
+          listenable: provider,
+          selector: () => _actionsToolbarListenToken(provider),
+          builder: _buildToolbar,
         ),
         const SizedBox(height: AppSpacing.md),
         Expanded(
-          child: AgentActionsList(
-            provider: provider,
-            l10n: l10n,
-            uiPreferences: uiPreferences,
-            onCreateAction: onCreateAction,
-            onShowDetails: onShowDetails,
-            onAddTrigger: (definition) {
-              provider.selectAction(definition.id);
-              provider.clearTriggerOperationError();
-              unawaited(
-                showAgentActionTriggerSaveDialog(
-                  context: context,
-                  provider: provider,
-                  l10n: l10n,
-                  actionId: definition.id,
-                ),
-              );
-            },
-            onEditAction: onEditAction,
+          child: AgentActionsSelectBuilder(
+            listenable: provider,
+            selector: () => _actionsListListenToken(provider),
+            builder: _buildList,
           ),
         ),
       ],
     );
   }
+
+  Widget _buildToolbar(BuildContext context) {
+    return AgentActionsToolbarCard(
+      provider: provider,
+      l10n: l10n,
+      onCreateAction: provider.canSaveAction ? onCreateAction : null,
+      onRunSelected: provider.canRunSelected
+          ? () => unawaited(runAgentActionWithDangerousCommandCheck(context, provider, l10n))
+          : null,
+    );
+  }
+
+  Widget _buildList(BuildContext context) {
+    return AgentActionsList(
+      provider: provider,
+      l10n: l10n,
+      uiPreferences: uiPreferences,
+      onCreateAction: onCreateAction,
+      onShowDetails: onShowDetails,
+      onAddTrigger: (definition) {
+        provider.selectAction(definition.id);
+        provider.clearTriggerOperationError();
+        unawaited(
+          showAgentActionTriggerSaveDialog(
+            context: context,
+            provider: provider,
+            l10n: l10n,
+            actionId: definition.id,
+          ),
+        );
+      },
+      onEditAction: onEditAction,
+    );
+  }
+}
+
+int _actionsToolbarListenToken(AgentActionsProvider provider) {
+  return Object.hashAll([
+    provider.isLoading,
+    provider.isSaving,
+    provider.isDeleting,
+    provider.isRunning,
+    provider.isTesting,
+    provider.isTransferringBundle,
+    provider.isMaintenanceMode,
+    provider.isMaintenanceStrictMode,
+    provider.isFeatureEnabled,
+    provider.canSaveAction,
+    provider.canRunSelected,
+    provider.canTestSelected,
+    provider.canTransferBundle,
+    provider.hasLiveQueueActivity,
+    provider.liveQueuePendingCount,
+    provider.liveQueueRunningCount,
+  ]);
+}
+
+int _actionsListListenToken(AgentActionsProvider provider) {
+  final runtime = provider.runtimeSubsystemSnapshot;
+  return Object.hashAll([
+    provider.isLoading,
+    provider.isSaving,
+    provider.isDeleting,
+    provider.isRunning,
+    provider.isTesting,
+    provider.isTransferringBundle,
+    provider.isFeatureEnabled,
+    provider.canSaveAction,
+    provider.selectedActionId,
+    provider.definitionTypeFilter,
+    provider.definitionStateFilter,
+    provider.definitionSearchQuery,
+    provider.hasDefinitionListFilters,
+    identityHashCode(provider.definitions),
+    provider.definitions.length,
+    provider.isSavingTrigger,
+    provider.canManageTriggers,
+    identityHashCode(provider.triggers),
+    provider.triggers.length,
+    runtime.status,
+    runtime.unavailableActionTypes.length,
+    runtime.reason,
+  ]);
 }
