@@ -48,16 +48,15 @@ class PresentationConnectionContextSource implements IConnectionContextSource {
 
   @override
   String? resolveAuthTokenForReconnect() {
+    if (_trackingState.sessionAuthInvalid) {
+      return null;
+    }
+
     final liveToken = _normalizeToken(
       _authProvider()?.currentTokenForConfig(_trackingState.lastConfigId)?.token,
     );
     if (liveToken != null) {
-      _trackingState.sessionAuthInvalid = false;
       return _trackingState.lastAuthToken = liveToken;
-    }
-
-    if (_trackingState.sessionAuthInvalid) {
-      return null;
     }
 
     final configToken = _normalizeToken(_resolveTrackedConfig()?.authToken);

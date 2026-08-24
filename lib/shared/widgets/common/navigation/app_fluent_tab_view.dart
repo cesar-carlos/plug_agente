@@ -6,11 +6,15 @@ class AppFluentTabItem {
     required this.icon,
     required this.text,
     required this.body,
+    this.tooltip,
   });
 
   final IconData icon;
   final String text;
   final Widget body;
+
+  /// Hover label when [text] is abbreviated or may ellipsize.
+  final String? tooltip;
 }
 
 /// Fluent `TabView` wrapper for consistent tabbed surfaces (settings, dashboard).
@@ -56,15 +60,24 @@ class AppFluentTabView extends StatelessWidget {
             (item) => Tab(
               icon: Icon(item.icon),
               semanticLabel: item.text,
-              text: Text(
-                item.text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              text: _tabLabel(item),
               body: item.body,
             ),
           )
           .toList(growable: false),
     );
+  }
+
+  Widget _tabLabel(AppFluentTabItem item) {
+    final label = Text(
+      item.text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    final tooltip = item.tooltip;
+    if (tooltip == null || tooltip == item.text) {
+      return label;
+    }
+    return Tooltip(message: tooltip, child: label);
   }
 }

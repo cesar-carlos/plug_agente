@@ -309,7 +309,7 @@ void main() {
         enableHardReloginRecovery: false,
       );
 
-      await provider.connect('https://hub.test', 'agent-1');
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
       fakeTransport.triggerProtocolReady();
       expect(provider.status, ConnectionStatus.connected);
 
@@ -383,7 +383,7 @@ void main() {
         enableHardReloginRecovery: false,
       );
 
-      await provider.connect('https://hub.test', 'agent-1');
+      await provider.connect('https://hub.test', 'agent-1', authToken: 'tok-1');
       fakeTransport.triggerProtocolReady();
       expect(provider.status, ConnectionStatus.connected);
 

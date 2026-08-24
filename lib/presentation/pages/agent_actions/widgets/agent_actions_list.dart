@@ -11,6 +11,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actio
 import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_filter_helpers.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_empty_state.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_data_grid.dart';
 
@@ -124,46 +125,10 @@ class _AgentActionsEmptyCatalog extends StatelessWidget {
     }
 
     return AppCard(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final minHeight = constraints.hasBoundedHeight
-              ? (constraints.maxHeight - (AppSpacing.lg * 2)).clamp(0.0, double.infinity)
-              : 0.0;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.lg,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: minHeight),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        FluentIcons.processing,
-                        size: 36,
-                        color: FluentTheme.of(context).accentColor,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        l10n.agentActionsEmptyActions,
-                        style: context.sectionTitle,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _AgentActionsSupportedTypesHint(l10n: l10n),
-                      const SizedBox(height: AppSpacing.lg),
-                      createButton,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+      child: AgentActionsEmptyState(
+        message: l10n.agentActionsEmptyActions,
+        detail: _AgentActionsSupportedTypesHint(l10n: l10n),
+        action: createButton,
       ),
     );
   }

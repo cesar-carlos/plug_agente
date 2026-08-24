@@ -61,10 +61,8 @@ final class HubProactiveTokenRefreshRunner {
         if (retry.kind == TokenRefreshResultKind.refreshed) {
           return retry.token;
         }
-        if (_deps.isSessionAuthInvalid()) {
-          return null;
-        }
-        return _deps.resolveAuthTokenForReconnect();
+        // Token-expiry must not reuse the JWT the hub just rejected.
+        return null;
       case TokenRefreshResultKind.transientFailure:
         return _deps.resolveAuthTokenForReconnect();
       case TokenRefreshResultKind.terminalFailure:

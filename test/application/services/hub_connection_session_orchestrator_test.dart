@@ -134,6 +134,8 @@ void main() {
     when(() => resilienceCoordinator.invalidateHubConnectEpoch()).thenReturn(null);
     when(() => resilienceCoordinator.clearResilienceRecovery()).thenReturn(null);
     when(() => resilienceCoordinator.cancelNegotiatingWatchdog()).thenReturn(null);
+    when(() => resilienceCoordinator.lastHubConnectRunEpoch).thenReturn(1);
+    when(() => resilienceCoordinator.isHubConnectEpochCurrent(any())).thenReturn(true);
     when(
       () => resilienceCoordinator.runSerializedHubConnect<Result<void>>(
         any(),
@@ -233,5 +235,66 @@ void main() {
     expect(hubRecoveryOrchestrator.consecutiveReconnectFailures, 0);
     verify(() => transportClient.disconnect()).called(1);
     verify(() => resilienceCoordinator.clearResilienceRecovery()).called(1);
+  });
+
+  test('connect does not enter negotiating when hub-connect epoch is stale after success', () async {
+    var enteredNegotiating = false;
+    when(
+      () => connectToHub('http://hub', 'agent-1', authToken: any(named: 'authToken')),
+    ).thenAnswer((_) async => const Success(unit));
+    when(() => resilienceCoordinator.isHubConnectEpochCurrent(any())).thenReturn(false);
+
+    final orchestrator = HubConnectionSessionOrchestrator(
+      runtime: _runtimeDeps(
+        connectToHub: connectToHub,
+        transportClient: transportClient,
+        resilienceCoordinator: resilienceCoordinator,
+        hubRecoveryOrchestrator: hubRecoveryOrchestrator,
+        contextSource: contextSource,
+        onEnterNegotiating: () => enteredNegotiating = true,
+      ),
+    );
+
+    final result = await orchestrator.connect('http://hub', 'agent-1');
+
+    expect(result.isError(), isTrue);
+    expect(enteredNegotiating, isFalse);
+  });
+
+  test('connect does not start persistent retry on ConfigurationFailure', () async {
+    var persistentRetryStarted = false;
+    contextSource.context = const HubConnectionContext(
+      configId: 'cfg-1',
+      serverUrl: 'http://hub',
+      agentId: 'agent-1',
+    );
+    when(
+      () => connectToHub('http://hub', 'agent-1', authToken: any(named: 'authToken')),
+    ).thenAnswer(
+      (_) async => Failure(
+        domain_failures.ConfigurationFailure('Authentication token required to connect to the hub'),
+      ),
+    );
+
+    final orchestrator = HubConnectionSessionOrchestrator(
+      runtime: _runtimeDeps(
+        connectToHub: connectToHub,
+        transportClient: transportClient,
+        resilienceCoordinator: resilienceCoordinator,
+        hubRecoveryOrchestrator: hubRecoveryOrchestrator,
+        contextSource: contextSource,
+        onStartPersistentRetry: () => persistentRetryStarted = true,
+      ),
+    );
+
+    final result = await orchestrator.connect(
+      'http://hub',
+      'agent-1',
+      recoverOnFailure: true,
+    );
+
+    expect(result.isError(), isTrue);
+    expect(persistentRetryStarted, isFalse);
+    verifyNever(() => resilienceCoordinator.beginResilienceRecovery());
   });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:plug_agente/domain/entities/auth_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/presentation/adapters/presentation_connection_context_source.dart';
 import 'package:plug_agente/presentation/providers/auth_provider.dart';
@@ -72,5 +73,15 @@ void main() {
     );
 
     expect(source.resolveAuthTokenForReconnect(), 'config-token');
+  });
+
+  test('should not clear invalid-auth flag just because a leftover live token exists', () {
+    trackingState.sessionAuthInvalid = true;
+    when(() => authProvider.currentTokenForConfig(any())).thenReturn(
+      const AuthToken(token: 'leftover-live', refreshToken: 'refresh'),
+    );
+
+    expect(source.resolveAuthTokenForReconnect(), isNull);
+    expect(trackingState.sessionAuthInvalid, isTrue);
   });
 }

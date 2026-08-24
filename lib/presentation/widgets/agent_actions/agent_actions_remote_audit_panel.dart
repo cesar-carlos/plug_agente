@@ -10,6 +10,7 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/providers/agent_action_remote_audit_focus_result.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_remote_audit_labels.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_empty_state.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
@@ -119,14 +120,14 @@ class _AgentActionsRemoteAuditPanelState extends State<AgentActionsRemoteAuditPa
             const SizedBox(height: AppSpacing.sm),
             Expanded(
               child: !hasAnyRows && provider.remoteAuditLoadError == null
-                  ? Align(
-                      alignment: Alignment.topLeft,
-                      child: Text(l10n.agentActionsRemoteAuditEmpty, style: context.bodyMuted),
+                  ? AgentActionsEmptyState(
+                      icon: FluentIcons.cloud,
+                      message: l10n.agentActionsRemoteAuditEmpty,
                     )
                   : visibleEntries.isEmpty
-                  ? Align(
-                      alignment: Alignment.topLeft,
-                      child: Text(l10n.agentActionsRemoteAuditFilterEmpty, style: context.bodyMuted),
+                  ? AgentActionsEmptyState(
+                      icon: FluentIcons.filter,
+                      message: l10n.agentActionsRemoteAuditFilterEmpty,
                     )
                   : ListView.separated(
                       itemCount: visibleEntries.length,

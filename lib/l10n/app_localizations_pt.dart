@@ -1605,7 +1605,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsEmptySelection => 'Selecione uma ação para inspecionar detalhes de execução.';
 
   @override
+  String get agentActionsHistoryTab => 'Histórico';
+
+  @override
   String get agentActionsHistoryTitle => 'Histórico de execução';
+
+  @override
+  String get agentActionsToolbarSelectAction => 'Selecione uma ação primeiro.';
+
+  @override
+  String get agentActionsGoToActions => 'Ir para Ações';
 
   @override
   String get agentActionsHistoryFilterStatus => 'Status';

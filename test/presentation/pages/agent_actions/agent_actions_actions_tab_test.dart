@@ -47,7 +47,8 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await harness.pumpPage(tester);
 
-    expect(find.text(ptL10n.agentActionsDisabledTitle), findsWidgets);
+    expect(find.text(ptL10n.agentActionsDisabledTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsSummaryActions), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormSave), findsNothing);
     expect(find.text(ptL10n.agentActionsFormCommand), findsNothing);
   });
@@ -1348,7 +1349,7 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await harness.pumpPage(tester);
-    await openTab(tester, ptL10n.agentActionsHistoryTitle);
+    await openTab(tester, ptL10n.agentActionsHistoryTab);
 
     expect(find.text('Run command'), findsWidgets);
     expect(find.text(ptL10n.agentActionsDiagnosticsTitle), findsOneWidget);
@@ -1488,7 +1489,7 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await harness.pumpPage(tester);
-    await openTab(tester, ptL10n.agentActionsHistoryTitle);
+    await openTab(tester, ptL10n.agentActionsHistoryTab);
 
     expect(find.text('Chunked output'), findsWidgets);
     expect(
@@ -1917,7 +1918,7 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await harness.pumpPage(tester);
-    await openTab(tester, ptL10n.agentActionsHistoryTitle);
+    await openTab(tester, ptL10n.agentActionsHistoryTab);
 
     harness.provider.setHistorySearchQuery('trace-keep');
     await tester.pumpAndSettle();
@@ -1955,7 +1956,7 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await harness.pumpPage(tester);
-    await openTab(tester, ptL10n.agentActionsHistoryTitle);
+    await openTab(tester, ptL10n.agentActionsHistoryTab);
 
     harness.provider.setHistoryFailurePhaseFilter('process_exit');
     await tester.pumpAndSettle();
@@ -2477,7 +2478,7 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await harness.pumpPage(tester);
-    await openTab(tester, ptL10n.agentActionsHistoryTitle);
+    await openTab(tester, ptL10n.agentActionsHistoryTab);
 
     const copySupport = ValueKey<String>('execution_support_copy_button_execution-1');
     final copySupportFinder = find.byKey(copySupport);

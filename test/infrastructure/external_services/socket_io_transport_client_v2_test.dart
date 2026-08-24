@@ -95,6 +95,8 @@ void main() {
     registerFallbackValue(ProtocolCapabilities.defaultCapabilities());
     registerFallbackValue(const TransportLimits());
     registerFallbackValue(MockRpcStreamEmitter());
+    String? fallbackAuthTokenProvider() => null;
+    registerFallbackValue(fallbackAuthTokenProvider);
     registerFallbackValue(
       QueryRequest(
         id: 'test',
@@ -215,6 +217,7 @@ void main() {
         () => mockDataSource.createSocket(
           any(),
           authToken: any(named: 'authToken'),
+          authTokenProvider: any(named: 'authTokenProvider'),
         ),
       ).thenReturn(mockSocket);
       when(
@@ -1637,6 +1640,7 @@ void main() {
         () => mockDataSource.createSocket(
           any(),
           authToken: any(named: 'authToken'),
+          authTokenProvider: any(named: 'authTokenProvider'),
         ),
       );
     });
@@ -1665,6 +1669,7 @@ void main() {
         () => mockDataSource.createSocket(
           'https://hub.test',
           authToken: 'expired-token',
+          authTokenProvider: any(named: 'authTokenProvider'),
         ),
       ).called(1);
     });
@@ -2481,6 +2486,49 @@ void main() {
           expect(result['effective_max_rows'], isNotNull);
         },
       );
+    });
+
+    test('stale connect timeout must not dispose a newer socket', () {
+      fakeAsync((async) {
+        Result<void>? first;
+        Result<void>? second;
+        client.connect('https://hub.test', 'agent-1').then((value) => first = value);
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 5000));
+        client.connect('https://hub.test', 'agent-2').then((value) => second = value);
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 5000));
+        async.flushMicrotasks();
+
+        expect(first, isNotNull);
+        expect(second, isNull);
+        verify(() => mockSocket.dispose()).called(1);
+      });
+    });
+
+    test('overlapping connect cancels the first attempt without extra dispose after handshake', () async {
+      final first = client.connect('https://hub.test', 'agent-1');
+      final second = client.connect('https://hub.test', 'agent-2');
+      final firstResult = await first;
+
+      expect(firstResult.isError(), isTrue);
+      verify(() => mockSocket.dispose()).called(1);
+
+      emitEvent('connect');
+      await second;
+    });
+
+    test('should emit a single extra agent:register when connect and manager reconnect both fire after handshake', () async {
+      final connectFuture = client.connect('https://hub.test', 'agent-1');
+      emitEvent('connect');
+      await connectFuture;
+      emitted.clear();
+
+      emitEvent('connect');
+      emitManagerEvent('reconnect', 1);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted.where((item) => item.event == 'agent:register'), hasLength(1));
     });
   });
 }

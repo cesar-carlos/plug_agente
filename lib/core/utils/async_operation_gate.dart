@@ -8,8 +8,11 @@ import 'dart:async';
 class AsyncOperationGate {
   Future<void> _mutex = Future<void>.value();
   int _epoch = 0;
+  int _lastRunEpoch = 0;
 
   int get epoch => _epoch;
+
+  int get lastRunEpoch => _lastRunEpoch;
 
   void invalidateEpoch() {
     _epoch++;
@@ -32,7 +35,15 @@ class AsyncOperationGate {
         }
         throw StateError('Async operation epoch $capturedEpoch is stale (current $_epoch)');
       }
-      return await action();
+      _lastRunEpoch = capturedEpoch;
+      final value = await action();
+      if (shouldAbort?.call() ?? false) {
+        if (staleResult != null) {
+          return staleResult;
+        }
+        throw StateError('Async operation epoch $capturedEpoch is stale (current $_epoch)');
+      }
+      return value;
     } finally {
       release.complete();
     }

@@ -36,7 +36,7 @@ void main() {
     );
 
     expect(find.text(ptL10n.agentActionsSummaryActions), findsOneWidget);
-    expect(find.text(ptL10n.agentActionsHistoryTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsHistoryTab), findsOneWidget);
     expect(find.text(ptL10n.configTabPreferences), findsOneWidget);
     expect(find.text(ptL10n.agentActionsRemoteAuditTitle), findsOneWidget);
 
@@ -55,7 +55,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     await harness.pumpPage(tester);
 
-    await openTab(tester, ptL10n.agentActionsHistoryTitle);
+    await openTab(tester, ptL10n.agentActionsHistoryTab);
 
     final emptyText = find.text(ptL10n.agentActionsEmptySelection);
     expect(emptyText, findsOneWidget);
@@ -63,6 +63,28 @@ void main() {
       find.ancestor(of: emptyText, matching: find.byType(Center)),
       findsOneWidget,
     );
+    expect(find.text(ptL10n.agentActionsHistoryTitle), findsOneWidget);
+
+    await tester.tap(find.text(ptL10n.agentActionsGoToActions));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsEmptyActions), findsOneWidget);
+  });
+
+  testWidgets('keeps import and export behind the more-actions menu', (tester) async {
+    final harness = AgentActionsPageHarness();
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    await harness.pumpPage(tester);
+
+    expect(find.text(ptL10n.agentActionsMoreActions), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsExportBundle), findsNothing);
+    expect(find.text(ptL10n.agentActionsImportBundle), findsNothing);
+
+    await tester.tap(find.text(ptL10n.agentActionsMoreActions));
+    await tester.pumpAndSettle();
+
+    expect(find.text(ptL10n.agentActionsExportBundle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsImportBundle), findsOneWidget);
   });
 
   testWidgets('fits the action editor dialog inside the minimum window height', (tester) async {
@@ -147,7 +169,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(harness.provider.selectedDefinition?.id, 'action-1');
-    expect(find.text(ptL10n.agentActionsHistoryTitle), findsOneWidget);
+    expect(find.text(ptL10n.agentActionsHistoryTab), findsOneWidget);
   });
 
   testWidgets('wraps PowerShell mode fields instead of overflowing the editor', (tester) async {

@@ -6,6 +6,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actio
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_execution_list.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_history_filters.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_empty_state.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/shared/widgets/common/layout/app_card.dart';
 
@@ -14,12 +15,14 @@ class AgentActionsHistoryTab extends StatelessWidget {
     required this.provider,
     required this.l10n,
     required this.uiPreferences,
+    this.onGoToActions,
     super.key,
   });
 
   final AgentActionsProvider provider;
   final AppLocalizations l10n;
   final AgentActionsUiPreferences uiPreferences;
+  final VoidCallback? onGoToActions;
 
   @override
   Widget build(BuildContext context) {
@@ -34,15 +37,20 @@ class AgentActionsHistoryTab extends StatelessWidget {
     final selected = provider.selectedDefinition;
     if (selected == null) {
       return AppCard(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Text(
-              l10n.agentActionsEmptySelection,
-              style: context.bodyMuted,
-              textAlign: TextAlign.center,
-            ),
+        child: AgentActionsEmptyState(
+          icon: FluentIcons.history,
+          message: l10n.agentActionsHistoryTitle,
+          detail: Text(
+            l10n.agentActionsEmptySelection,
+            style: context.bodyMuted,
+            textAlign: TextAlign.center,
           ),
+          action: onGoToActions == null
+              ? null
+              : Button(
+                  onPressed: onGoToActions,
+                  child: Text(l10n.agentActionsGoToActions),
+                ),
         ),
       );
     }

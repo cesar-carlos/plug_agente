@@ -155,31 +155,14 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
                 const SizedBox(height: AppSpacing.md),
                 Expanded(
                   child: Selector<AgentActionsProvider, bool>(
-                    selector: (_, provider) => provider.isFeatureEnabled,
-                    builder: (context, isFeatureEnabled, _) {
-                      if (!isFeatureEnabled) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                          child: InfoBar(
-                            title: Text(l10n.agentActionsDisabledTitle),
-                            content: Text(l10n.agentActionsDisabledMessage),
-                            severity: InfoBarSeverity.warning,
-                            isLong: true,
-                          ),
-                        );
-                      }
-
-                      return Selector<AgentActionsProvider, bool>(
-                        selector: (_, provider) => provider.isRemoteAuditSectionVisible,
-                        builder: (context, _, child) {
-                          return _buildTabs(
-                            context: context,
-                            provider: context.read<AgentActionsProvider>(),
-                            l10n: l10n,
-                            runtimeCapabilities: widget.runtimeCapabilities,
-                            runtimeDiagnostics: widget.runtimeDiagnostics,
-                          );
-                        },
+                    selector: (_, provider) => provider.isRemoteAuditSectionVisible,
+                    builder: (context, _, child) {
+                      return _buildTabs(
+                        context: context,
+                        provider: context.read<AgentActionsProvider>(),
+                        l10n: l10n,
+                        runtimeCapabilities: widget.runtimeCapabilities,
+                        runtimeDiagnostics: widget.runtimeDiagnostics,
                       );
                     },
                   ),
@@ -228,8 +211,14 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
       ),
       AppFluentTabItem(
         icon: FluentIcons.history,
-        text: l10n.agentActionsHistoryTitle,
-        body: AgentActionsHistoryTab(provider: provider, l10n: l10n, uiPreferences: _uiPreferences),
+        text: l10n.agentActionsHistoryTab,
+        tooltip: l10n.agentActionsHistoryTitle,
+        body: AgentActionsHistoryTab(
+          provider: provider,
+          l10n: l10n,
+          uiPreferences: _uiPreferences,
+          onGoToActions: () => _handleTabChanged(AgentActionsTab.actions),
+        ),
       ),
       AppFluentTabItem(
         icon: FluentIcons.settings,
@@ -245,6 +234,7 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
         AppFluentTabItem(
           icon: FluentIcons.cloud,
           text: l10n.agentActionsRemoteAuditTitle,
+          tooltip: l10n.agentActionsRemoteAuditDescription,
           body: AgentActionsRemoteAuditPanel(
             provider: provider,
             l10n: l10n,

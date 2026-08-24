@@ -27,6 +27,8 @@ HubResilienceEnvironment _environment({
   bool Function()? hasPersistentRetryTimer,
   bool Function()? persistentRetryInFlight,
   bool Function()? isNegotiating,
+  bool Function()? isConnected,
+  int Function()? sessionGeneration,
   HubConnectionContext? Function()? resolveConnectionContext,
   String? Function()? lastAgentId,
   void Function(String? recoveryId)? syncTransportResilienceLogContext,
@@ -40,6 +42,8 @@ HubResilienceEnvironment _environment({
     hasPersistentRetryTimer: hasPersistentRetryTimer ?? () => false,
     persistentRetryInFlight: persistentRetryInFlight ?? () => false,
     isNegotiating: isNegotiating ?? () => false,
+    isConnected: isConnected ?? () => false,
+    sessionGeneration: sessionGeneration ?? () => 0,
     resolveConnectionContext: resolveConnectionContext ?? () => null,
     lastAgentId: lastAgentId ?? () => null,
     syncTransportResilienceLogContext: syncTransportResilienceLogContext ?? (_) {},
@@ -383,6 +387,54 @@ void main() {
       expect(result.outcome, HardReloginOutcome.transientFailure);
       verifyNever(() => bridge.clearStoredSession(any()));
       verifyNever(() => bridge.setRecoveryError(any()));
+    });
+
+    test('should skip kickHubTransportRecovery when already connected with healthy session', () async {
+      var handlerRuns = 0;
+      final coordinator = HubResilienceCoordinator(
+        environment: _environment(
+          isConnected: () => true,
+          sessionGeneration: () => 3,
+          handleReconnectionNeeded: () async {
+            handlerRuns++;
+          },
+        ),
+      );
+      coordinator.markSessionHealthy();
+
+      coordinator.kickHubTransportRecovery(trigger: 'late_reconnect_needed');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(handlerRuns, 0);
+    });
+
+    test('should still kick recovery while negotiating so the watchdog can fire', () async {
+      var handlerRuns = 0;
+      final coordinator = HubResilienceCoordinator(
+        environment: _environment(
+          isNegotiating: () => true,
+          sessionGeneration: () => 3,
+          handleReconnectionNeeded: () async {
+            handlerRuns++;
+          },
+        ),
+      );
+      coordinator.markSessionHealthy();
+
+      coordinator.kickHubTransportRecovery(trigger: 'negotiating_watchdog');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(handlerRuns, 1);
+    });
+
+    test('should skip token refresh without auth bridge instead of treating it as terminal', () async {
+      final coordinator = HubResilienceCoordinator(
+        environment: _environment(),
+      );
+
+      final result = await coordinator.tryRefreshToken(_context);
+
+      expect(result.kind, TokenRefreshResultKind.skippedByCooldown);
     });
   });
 }

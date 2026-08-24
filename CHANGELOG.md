@@ -45,9 +45,17 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ### Fixed
 
-- Linux CI no longer loads the `odbc_fast` native engine in dependency
-  registrar tests; Windows helper smoke compiles the elevated runner with
-  `dart build cli`.
+- Stale hub connect timeouts and `connect_error` events no longer tear down a
+  newer socket; overlapping connect attempts complete instead of hanging.
+- Socket.IO manager reconnect no longer double-emits `agent:register` after the
+  initial handshake; L0 reconnect can read the current JWT via `setAuthFn`.
+- Disconnect during delayed hub recovery no longer treats a later success as
+  restored; terminal auth failures stop persistent retry instead of storming.
+  A missing auth bridge skips token refresh and keeps the current JWT so
+  reconnect can proceed. The negotiating watchdog still kicks recovery;
+  leftover kicks are ignored only after protocol-ready.
+- Hub protocol-ready during `connecting` is latched until negotiating so the
+  watchdog does not kick a false recovery.
 - System Actions UI: remote audit listens for refresh; paged stdout/stderr
   no longer reset on parent rebuild or apply a stale slice; shortcuts and
   editor opens are gated while another modal is pending; run/delete confirm

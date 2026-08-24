@@ -51,6 +51,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
                 label: l10n.agentActionsFormNew,
                 onPressed: onCreateAction,
                 filled: true,
+                tooltip: '${l10n.agentActionsFormNew} (Ctrl+N)',
                 disabledReason: onCreateAction == null && !provider.isFeatureEnabled
                     ? l10n.agentActionsDisabledMessage
                     : null,
@@ -59,24 +60,7 @@ class AgentActionsToolbarCard extends StatelessWidget {
                 icon: FluentIcons.refresh,
                 label: l10n.agentActionsRefresh,
                 onPressed: provider.isLoading || provider.hasBlockingLocalOperation ? null : provider.load,
-                disabledReason: provider.hasBlockingLocalOperation ? blockingLabel : null,
-              ),
-            ],
-          ),
-          const _ToolbarGroupDivider(),
-          _ToolbarButtonGroup(
-            children: [
-              _ToolbarCommandButton(
-                icon: FluentIcons.download,
-                label: l10n.agentActionsExportBundle,
-                onPressed: provider.canTransferBundle ? () => unawaited(_exportBundle(context)) : null,
-                isBusy: provider.isTransferringBundle,
-                disabledReason: provider.isRunning || provider.isTesting ? blockingLabel : null,
-              ),
-              _ToolbarCommandButton(
-                icon: FluentIcons.upload,
-                label: l10n.agentActionsImportBundle,
-                onPressed: provider.canTransferBundle ? () => unawaited(_importBundle(context)) : null,
+                tooltip: '${l10n.agentActionsRefresh} (F5)',
                 disabledReason: provider.hasBlockingLocalOperation ? blockingLabel : null,
               ),
             ],
@@ -89,16 +73,35 @@ class AgentActionsToolbarCard extends StatelessWidget {
                 label: l10n.agentActionsRunSelected,
                 onPressed: provider.canRunSelected ? (onRunSelected ?? provider.runSelectedAction) : null,
                 isBusy: provider.isRunning,
-                disabledReason: provider.isTesting || provider.isTransferringBundle ? blockingLabel : null,
+                tooltip: '${l10n.agentActionsRunSelected} (Ctrl+R)',
+                disabledReason: _commandDisabledReason(
+                  l10n: l10n,
+                  canPerform: provider.canRunSelected,
+                  blockingLabel: blockingLabel,
+                ),
               ),
               _ToolbarCommandButton(
                 icon: FluentIcons.test_beaker,
                 label: l10n.agentActionsTestSelected,
                 onPressed: provider.canTestSelected ? provider.testSelectedAction : null,
                 isBusy: provider.isTesting,
-                disabledReason: provider.isRunning || provider.isTransferringBundle ? blockingLabel : null,
+                tooltip: '${l10n.agentActionsTestSelected} (Ctrl+T)',
+                disabledReason: _commandDisabledReason(
+                  l10n: l10n,
+                  canPerform: provider.canTestSelected,
+                  blockingLabel: blockingLabel,
+                ),
               ),
             ],
+          ),
+          const _ToolbarGroupDivider(),
+          _ToolbarOverflowMenu(
+            l10n: l10n,
+            canTransferBundle: provider.canTransferBundle,
+            isTransferringBundle: provider.isTransferringBundle,
+            disabledReason: provider.hasBlockingLocalOperation ? blockingLabel : null,
+            onExport: () => unawaited(_exportBundle(context)),
+            onImport: () => unawaited(_importBundle(context)),
           ),
           if (provider.hasLiveQueueActivity)
             Row(
@@ -140,6 +143,26 @@ class AgentActionsToolbarCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String? _commandDisabledReason({
+    required AppLocalizations l10n,
+    required bool canPerform,
+    required String? blockingLabel,
+  }) {
+    if (canPerform) {
+      return null;
+    }
+    if (!provider.isFeatureEnabled) {
+      return l10n.agentActionsDisabledMessage;
+    }
+    if (provider.hasBlockingLocalOperation) {
+      return blockingLabel;
+    }
+    if (provider.selectedDefinition == null) {
+      return l10n.agentActionsToolbarSelectAction;
+    }
+    return null;
   }
 
   Future<void> _setMaintenanceMode(BuildContext context, bool enabled) async {
@@ -351,6 +374,78 @@ class _ToolbarGroupDivider extends StatelessWidget {
   }
 }
 
+class _ToolbarOverflowMenu extends StatelessWidget {
+  const _ToolbarOverflowMenu({
+    required this.l10n,
+    required this.canTransferBundle,
+    required this.isTransferringBundle,
+    required this.onExport,
+    required this.onImport,
+    this.disabledReason,
+  });
+
+  static const ValueKey<String> buttonKey = ValueKey<String>('agent_actions_toolbar_more_actions');
+
+  final AppLocalizations l10n;
+  final bool canTransferBundle;
+  final bool isTransferringBundle;
+  final VoidCallback onExport;
+  final VoidCallback onImport;
+  final String? disabledReason;
+
+  @override
+  Widget build(BuildContext context) {
+    final menu = DropDownButton(
+      key: buttonKey,
+      items: [
+        MenuFlyoutItem(
+          leading: const Icon(FluentIcons.download, size: _toolbarIconSize),
+          text: Text(l10n.agentActionsExportBundle),
+          onPressed: canTransferBundle ? onExport : null,
+        ),
+        MenuFlyoutItem(
+          leading: const Icon(FluentIcons.upload, size: _toolbarIconSize),
+          text: Text(l10n.agentActionsImportBundle),
+          onPressed: canTransferBundle ? onImport : null,
+        ),
+      ],
+      buttonBuilder: (context, onOpen) {
+        Widget button = Button(
+          onPressed: onOpen,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(FluentIcons.more, size: _toolbarIconSize),
+              const SizedBox(width: AppSpacing.xs),
+              Text(l10n.agentActionsMoreActions),
+            ],
+          ),
+        );
+        if (disabledReason != null && !canTransferBundle) {
+          button = Tooltip(message: disabledReason, child: button);
+        }
+        return button;
+      },
+    );
+
+    if (!isTransferringBundle) {
+      return menu;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        menu,
+        const SizedBox(width: AppSpacing.xs),
+        const SizedBox.square(
+          dimension: _toolbarIconSize,
+          child: ProgressRing(strokeWidth: 2),
+        ),
+      ],
+    );
+  }
+}
+
 class _ToolbarCommandButton extends StatelessWidget {
   const _ToolbarCommandButton({
     required this.icon,
@@ -358,6 +453,7 @@ class _ToolbarCommandButton extends StatelessWidget {
     required this.onPressed,
     this.filled = false,
     this.isBusy = false,
+    this.tooltip,
     this.disabledReason,
   });
 
@@ -366,6 +462,7 @@ class _ToolbarCommandButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool filled;
   final bool isBusy;
+  final String? tooltip;
   final String? disabledReason;
 
   @override
@@ -382,9 +479,10 @@ class _ToolbarCommandButton extends StatelessWidget {
         ? FilledButton(onPressed: onPressed, child: child)
         : Button(onPressed: onPressed, child: child);
 
+    final tooltipMessage = onPressed == null ? disabledReason : tooltip;
     Widget command = button;
-    if (disabledReason != null && onPressed == null) {
-      command = Tooltip(message: disabledReason, child: command);
+    if (tooltipMessage != null) {
+      command = Tooltip(message: tooltipMessage, child: command);
     }
 
     if (!isBusy) {

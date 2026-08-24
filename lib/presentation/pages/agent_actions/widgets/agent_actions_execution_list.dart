@@ -7,6 +7,7 @@ import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_execution_diagnostics.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
+import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_empty_state.dart';
 
 class AgentActionExecutionList extends StatelessWidget {
   const AgentActionExecutionList({
@@ -23,12 +24,9 @@ class AgentActionExecutionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (executions.isEmpty) {
-      return Center(
-        child: Text(
-          l10n.agentActionsEmptyHistory,
-          style: context.bodyMuted,
-          textAlign: TextAlign.center,
-        ),
+      return AgentActionsEmptyState(
+        icon: FluentIcons.history,
+        message: l10n.agentActionsEmptyHistory,
       );
     }
 

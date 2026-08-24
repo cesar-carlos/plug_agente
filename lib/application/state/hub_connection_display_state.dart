@@ -26,6 +26,10 @@ final class HubConnectionDisplayState {
 
   bool get isConnected => status == ConnectionStatus.connected;
 
+  int sessionGeneration = 0;
+
+  void bumpSessionGeneration() => sessionGeneration++;
+
   bool get isConnectingOrNegotiating => status == ConnectionStatus.connecting || status == ConnectionStatus.negotiating;
 
   bool get isReconnectingEffective => isBurstRecoveryInFlight || status == ConnectionStatus.reconnecting;

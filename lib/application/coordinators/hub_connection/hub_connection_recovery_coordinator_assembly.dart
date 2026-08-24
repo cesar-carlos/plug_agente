@@ -32,6 +32,8 @@ void assembleHubConnectionRecoveryCoordinators({
       hasPersistentRetryTimer: () => scratch.persistentRetryCoordinator.hasActiveTimer,
       persistentRetryInFlight: () => scratch.persistentRetryCoordinator.retryInFlight,
       isNegotiating: () => input.displayState.status == ConnectionStatus.negotiating,
+      isConnected: () => input.displayState.isConnected,
+      sessionGeneration: () => input.displayState.sessionGeneration,
       resolveConnectionContext: input.contextSource.resolveConnectionContext,
       lastAgentId: () => input.connectionTrackingState.lastAgentId,
       syncTransportResilienceLogContext: input.transportClient.setResilienceLogContext,

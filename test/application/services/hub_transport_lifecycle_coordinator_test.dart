@@ -40,6 +40,7 @@ HubTransportLifecycleRuntimeDependencies _runtimeDeps({
     connectionStatusName: statusName,
     isDisconnectRequested: isDisconnectRequested,
     isDisconnected: () => statusName() == 'disconnected',
+    isConnecting: () => statusName() == 'connecting',
     isNegotiating: () => statusName() == 'negotiating',
     isReconnecting: () => statusName() == 'reconnecting',
     isConnected: () => statusName() == 'connected',
@@ -155,6 +156,39 @@ void main() {
       verify(resilience.beginResilienceRecovery).called(1);
       expect(status, 'reconnecting');
       expect(kickedTriggers, ['hub_transport_io_server_disconnect']);
+    });
+
+    test('latches protocol ready while connecting and applies it on enter negotiating', () {
+      final resilience = _MockHubResilienceCoordinator();
+      final uiSink = _RecordingUiSink();
+      var status = 'connecting';
+      var connected = false;
+      var watchdogArmedKick = false;
+
+      final coordinator = HubTransportLifecycleCoordinator(
+        runtime: _runtimeDeps(
+          resilience: resilience,
+          uiSink: uiSink,
+          statusName: () => status,
+          isDisconnectRequested: () => false,
+          enterConnected: () {
+            status = 'connected';
+            connected = true;
+          },
+          kickHubTransportRecovery: ({required trigger}) => watchdogArmedKick = true,
+        ),
+      );
+
+      coordinator.handle(const HubProtocolReady());
+      expect(connected, isFalse);
+
+      status = 'negotiating';
+      final applied = coordinator.consumeLatchedProtocolReady();
+
+      expect(applied, isTrue);
+      expect(connected, isTrue);
+      expect(watchdogArmedKick, isFalse);
+      verify(resilience.cancelNegotiatingWatchdog).called(1);
     });
   });
 }

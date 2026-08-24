@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/ports/hub_recovery_ui_sink.dart';
@@ -332,5 +335,96 @@ void main() {
         expect(bumpFailureCalls, 0);
       },
     );
+
+    test('runBurstRecovery does not reconnect when disconnect is requested during delay', () {
+      fakeAsync((async) {
+        var reconnectInvocations = 0;
+        var disconnectRequested = false;
+        late final HubRecoveryOrchestrator orchestrator;
+        final deps = HubRecoveryRuntimeDependencies(
+          resilienceCoordinator: _MockHubResilienceCoordinator(),
+          contextSource: _FakeHubContextSource(),
+          checkHubAvailability: null,
+          uiSink: _FakeHubRecoveryUiSink(),
+          resilienceLogPrefix: () => '',
+          isDisconnectRequested: () => disconnectRequested,
+          tryRefreshToken: (_) async => const TokenRefreshResult.skippedByCooldown(),
+          attemptReconnect: (serverUrl, agentId, {authToken, recordErrorMessage = true}) async {
+            reconnectInvocations++;
+            return true;
+          },
+          disconnectTransportForRecovery: () async {},
+          executeHardRelogin: (context, {required logSummary, ignoreCooldown = false}) async => null,
+          bumpPersistentReconnectFailure: (context, {required reason}) {},
+          isStatusError: () => false,
+          cancelPersistentRetryTimer: () {},
+        );
+        orchestrator = HubRecoveryOrchestrator(
+          initialReconnectDelay: const Duration(seconds: 1),
+          maxReconnectDelay: const Duration(seconds: 1),
+          runtime: deps,
+        );
+        final context = deps.contextSource.resolveConnectionContext()!;
+        var recovered = false;
+        unawaited(
+          orchestrator
+              .runBurstRecovery(
+                context,
+                proactiveHardReloginBeforeSocket: false,
+                effectiveHardReloginRecoveryEnabled: false,
+                hasAuthBridge: false,
+                maxReconnectAttempts: 3,
+                tokenRefreshIntervalAttempts: 10,
+                recoveryEnabled: false,
+                hardReloginFailureThreshold: 99,
+              )
+              .then((value) => recovered = value),
+        );
+        async.flushMicrotasks();
+        disconnectRequested = true;
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+        expect(recovered, isFalse);
+        expect(reconnectInvocations, 0);
+      });
+    });
+
+    test('runPersistentTick cancels timer on terminal token refresh', () async {
+      var cancelTimerCalls = 0;
+      var reconnectInvocations = 0;
+      late final HubRecoveryOrchestrator orchestrator;
+      final deps = HubRecoveryRuntimeDependencies(
+        resilienceCoordinator: _MockHubResilienceCoordinator(),
+        contextSource: _FakeHubContextSource(),
+        checkHubAvailability: null,
+        uiSink: _FakeHubRecoveryUiSink(),
+        resilienceLogPrefix: () => '',
+        isDisconnectRequested: () => false,
+        tryRefreshToken: (_) async => const TokenRefreshResult.terminalFailure(),
+        attemptReconnect: (serverUrl, agentId, {authToken, recordErrorMessage = true}) async {
+          reconnectInvocations++;
+          return false;
+        },
+        disconnectTransportForRecovery: () async {},
+        executeHardRelogin: (context, {required logSummary, ignoreCooldown = false}) async => null,
+        bumpPersistentReconnectFailure: (context, {required reason}) {},
+        isStatusError: () => false,
+        cancelPersistentRetryTimer: () => cancelTimerCalls++,
+      );
+      orchestrator = HubRecoveryOrchestrator(
+        initialReconnectDelay: Duration.zero,
+        maxReconnectDelay: Duration.zero,
+        runtime: deps,
+      );
+
+      await orchestrator.runPersistentTick(
+        tokenRefreshIntervalAttempts: 1,
+        recoveryEnabled: true,
+        hardReloginFailureThreshold: 3,
+      );
+
+      expect(cancelTimerCalls, 1);
+      expect(reconnectInvocations, 0);
+    });
   });
 }

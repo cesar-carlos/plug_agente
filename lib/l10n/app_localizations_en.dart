@@ -1610,7 +1610,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsEmptySelection => 'Select an action to inspect execution details.';
 
   @override
+  String get agentActionsHistoryTab => 'History';
+
+  @override
   String get agentActionsHistoryTitle => 'Execution history';
+
+  @override
+  String get agentActionsToolbarSelectAction => 'Select an action first.';
+
+  @override
+  String get agentActionsGoToActions => 'Go to Actions';
 
   @override
   String get agentActionsHistoryFilterStatus => 'Status';

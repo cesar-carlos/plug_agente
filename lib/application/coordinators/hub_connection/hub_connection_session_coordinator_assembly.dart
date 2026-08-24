@@ -65,10 +65,12 @@ void assembleHubConnectionSessionCoordinators({
       resetSessionAuthInvalid: () => input.connectionTrackingState.sessionAuthInvalid = false,
       clearTrackedAuthToken: () => input.connectionTrackingState.lastAuthToken = null,
       beginConnecting: () {
+        input.displayState.bumpSessionGeneration();
         input.displayState.status = ConnectionStatus.connecting;
         input.displayState.error = '';
       },
       enterDisconnected: ({clearError = false}) {
+        input.displayState.bumpSessionGeneration();
         input.displayState.status = ConnectionStatus.disconnected;
         if (clearError) {
           input.displayState.error = '';
@@ -176,12 +178,15 @@ void assembleHubConnectionSessionCoordinators({
       connectionStatusName: () => input.displayState.status.name,
       isDisconnectRequested: input.isDisconnectRequested,
       isDisconnected: () => input.displayState.status == ConnectionStatus.disconnected,
+      isConnecting: () => input.displayState.status == ConnectionStatus.connecting,
       isNegotiating: () => input.displayState.status == ConnectionStatus.negotiating,
       isReconnecting: () => input.displayState.isReconnectingEffective,
       isConnected: () => input.displayState.isConnected,
       isConnectedOrNegotiating: () =>
           input.displayState.status == ConnectionStatus.connected ||
           input.displayState.status == ConnectionStatus.negotiating,
+      sessionGeneration: () => input.displayState.sessionGeneration,
+      bumpSessionGeneration: input.displayState.bumpSessionGeneration,
       hasPersistentRetryTimer: () => scratch.persistentRetryCoordinator.hasActiveTimer,
       persistentRetryInFlight: () => scratch.persistentRetryCoordinator.retryInFlight,
       enterReconnecting: ({required clearError}) {

@@ -117,7 +117,26 @@ class TransportSocketEventBinder {
       );
       _onAuthorizationSessionReset();
       _onHeartbeatResetTransient();
+      // After the first connect Success, Socket.IO also emits `connect` on
+      // engine reconnect. Re-register is owned by manager `reconnect` only.
+      if (connectCompleter.isCompleted) {
+        AppLogger.debug(
+          'resilience: ${_resilienceLogPrefix()}socket_transport event=skip_register_on_connect_after_handshake '
+          'agent_id=$_agentId',
+        );
+        return;
+      }
       final registerSent = await _onTransportConnectedRegister();
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        AppLogger.debug(
+          'resilience: ${_resilienceLogPrefix()}socket_transport event=register_ignored_stale_generation '
+          'generation=$connectGeneration current=${_connectGenerationProvider()} agent_id=$_agentId',
+        );
+        if (!connectCompleter.isCompleted) {
+          connectCompleter.complete(_cancelledConnectResult());
+        }
+        return;
+      }
       if (!registerSent) {
         _onHeartbeatStop();
         _onCloseSocket();
@@ -145,6 +164,13 @@ class TransportSocketEventBinder {
     registerManagerReconnectHandlers(socket);
 
     socket.on('connect_error', (error) {
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        AppLogger.debug(
+          'resilience: ${_resilienceLogPrefix()}socket_transport event=connect_error_ignored_stale_generation '
+          'generation=$connectGeneration current=${_connectGenerationProvider()} agent_id=$_agentId',
+        );
+        return;
+      }
       cancelConnectTimeout();
       _logMessage('ERROR', 'connect_error', error);
       _onConnectError(error, connectCompleter);
@@ -328,6 +354,18 @@ class TransportSocketEventBinder {
       }
     }
     _managerReconnectSubscriptions.clear();
+  }
+
+  static Result<void> _cancelledConnectResult() {
+    return Failure(
+      domain.ConnectionFailure.withContext(
+        message: 'Connection attempt cancelled',
+        context: {
+          'operation': 'connect',
+          'reason': 'cancelled_or_disconnected',
+        },
+      ),
+    );
   }
 
   static int? _parseReconnectAttempt(dynamic data) {

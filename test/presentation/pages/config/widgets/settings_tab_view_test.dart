@@ -89,22 +89,24 @@ void main() {
             items: <AppFluentTabItem>[
               AppFluentTabItem(
                 icon: FluentIcons.processing,
-                text: 'Acoes',
+                text: 'Ações',
                 body: Text('body-a'),
               ),
               AppFluentTabItem(
                 icon: FluentIcons.history,
-                text: 'Historico de execucao',
+                text: 'Histórico',
+                tooltip: 'Histórico de execução',
                 body: Text('body-b'),
               ),
               AppFluentTabItem(
                 icon: FluentIcons.settings,
-                text: 'Preferencias',
+                text: 'Preferências',
                 body: Text('body-c'),
               ),
               AppFluentTabItem(
                 icon: FluentIcons.cloud,
-                text: 'Auditoria remota agent.action',
+                text: 'Auditoria remota',
+                tooltip: 'Linhas recentes de JSON-RPC do Hub',
                 body: Text('body-d'),
               ),
             ],
@@ -118,8 +120,9 @@ void main() {
       expect(tabView.tabWidthBehavior, TabWidthBehavior.sizeToContent);
       expect(tabView.closeButtonVisibility, CloseButtonVisibilityMode.never);
       expect(tabView.tabs, hasLength(4));
-      expect((tabView.tabs.last.text as Text).data, 'Auditoria remota agent.action');
-      expect((tabView.tabs.last.text as Text).overflow, TextOverflow.ellipsis);
+      expect(find.text('Auditoria remota'), findsOneWidget);
+      expect(find.byTooltip('Linhas recentes de JSON-RPC do Hub'), findsOneWidget);
+      expect(find.byTooltip('Histórico de execução'), findsOneWidget);
     });
   });
 }

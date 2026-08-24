@@ -2930,11 +2930,29 @@ abstract class AppLocalizations {
   /// **'Select an action to inspect execution details.'**
   String get agentActionsEmptySelection;
 
+  /// No description provided for @agentActionsHistoryTab.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get agentActionsHistoryTab;
+
   /// No description provided for @agentActionsHistoryTitle.
   ///
   /// In en, this message translates to:
   /// **'Execution history'**
   String get agentActionsHistoryTitle;
+
+  /// No description provided for @agentActionsToolbarSelectAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an action first.'**
+  String get agentActionsToolbarSelectAction;
+
+  /// No description provided for @agentActionsGoToActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Actions'**
+  String get agentActionsGoToActions;
 
   /// No description provided for @agentActionsHistoryFilterStatus.
   ///

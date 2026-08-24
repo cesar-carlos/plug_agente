@@ -188,7 +188,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
       emitHeartbeat: _emitAgentHeartbeatViaBridge,
       logMessage: _logHeartbeatEventViaBridge,
       onConnectionStale: () {
-        _lifecycle.closeSocket();
+        _lifecycle.invalidateGenerationAndCloseSocket();
         _onReconnectionNeeded?.call();
       },
     );

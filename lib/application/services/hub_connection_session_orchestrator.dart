@@ -60,10 +60,20 @@ final class HubConnectionSessionOrchestrator {
       ),
     );
 
+    final completedEpoch = _deps.resilienceCoordinator.lastHubConnectRunEpoch;
+
     final finalResult = result.fold<Result<void>>(
       (_) {
         if (_deps.isDisconnectRequested()) {
           return const Success(unit);
+        }
+        if (!_deps.resilienceCoordinator.isHubConnectEpochCurrent(completedEpoch)) {
+          return Failure(
+            domain_errors.ConnectionFailure.withContext(
+              message: 'Connection attempt superseded by a newer request',
+              context: {'operation': 'connect', 'reason': 'stale_epoch'},
+            ),
+          );
         }
         _deps.cancelPersistentRetryTimer();
         _deps.clearHubRecoveryUiHint();
@@ -83,7 +93,9 @@ final class HubConnectionSessionOrchestrator {
           );
           return Failure(failure);
         }
-        if (recoverOnFailure && _deps.contextSource.resolveConnectionContext() != null) {
+        if (recoverOnFailure &&
+            failure is! domain_errors.ConfigurationFailure &&
+            _deps.contextSource.resolveConnectionContext() != null) {
           _deps.resilienceCoordinator.beginResilienceRecovery();
           _deps.enterReconnecting(clearError: true);
           _deps.clearHubRecoveryUiHint();

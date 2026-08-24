@@ -15,7 +15,11 @@ HubConnectionCoordinatorBundle assembleHubConnectionCoordinators(
   void enterNegotiatingState() {
     input.displayState.status = ConnectionStatus.negotiating;
     input.displayState.error = '';
-    scratch.resilienceCoordinator.armNegotiatingWatchdog();
+    final appliedLatchedReady =
+        scratch.hubTransportLifecycleCoordinator.consumeLatchedProtocolReady();
+    if (!appliedLatchedReady) {
+      scratch.resilienceCoordinator.armNegotiatingWatchdog();
+    }
   }
 
   String logResiliencePrefix() => scratch.resilienceCoordinator.resilienceLogPrefix();

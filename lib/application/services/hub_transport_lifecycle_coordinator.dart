@@ -18,6 +18,20 @@ final class HubTransportLifecycleCoordinator {
   }) : _deps = runtime;
 
   final HubTransportLifecycleRuntimeDependencies _deps;
+  int? _latchedProtocolReadySessionGeneration;
+
+  bool consumeLatchedProtocolReady() {
+    final latchedGeneration = _latchedProtocolReadySessionGeneration;
+    _latchedProtocolReadySessionGeneration = null;
+    if (latchedGeneration == null) {
+      return false;
+    }
+    if (latchedGeneration != _deps.sessionGeneration()) {
+      return false;
+    }
+    _applyProtocolReady(eventName: 'protocol_ready_latched');
+    return true;
+  }
 
   void handle(HubLifecycleNotification notification) {
     if (_deps.isDisconnectRequested()) {
@@ -29,6 +43,8 @@ final class HubTransportLifecycleCoordinator {
         if (_deps.isDisconnected()) {
           return;
         }
+        _latchedProtocolReadySessionGeneration = null;
+        _deps.bumpSessionGeneration();
         _deps.resilienceCoordinator.beginResilienceRecovery();
         final serverInitiated = isHubIoServerInitiatedDisconnect(reason);
         final disconnectLine =
@@ -64,6 +80,14 @@ final class HubTransportLifecycleCoordinator {
   }
 
   void _handleProtocolReady({required String eventName}) {
+    if (_deps.isConnecting()) {
+      _latchedProtocolReadySessionGeneration = _deps.sessionGeneration();
+      AppLogger.debug(
+        'resilience: ${_deps.resilienceLogPrefix()}hub_transport event=${eventName}_latched '
+        'status=${_deps.connectionStatusName()} agent_id=${_deps.lastAgentId() ?? "?"}',
+      );
+      return;
+    }
     if (!_deps.isNegotiating() && !_deps.isReconnecting() && !_deps.isConnected()) {
       AppLogger.debug(
         'resilience: ${_deps.resilienceLogPrefix()}hub_transport event=${eventName}_ignored '
@@ -71,12 +95,17 @@ final class HubTransportLifecycleCoordinator {
       );
       return;
     }
+    _applyProtocolReady(eventName: eventName);
+  }
+
+  void _applyProtocolReady({required String eventName}) {
     AppLogger.info(
       'resilience: ${_deps.resilienceLogPrefix()}hub_transport event=$eventName '
       'agent_id=${_deps.lastAgentId() ?? "?"}',
     );
     _deps.resilienceCoordinator.cancelNegotiatingWatchdog();
     _deps.resilienceCoordinator.clearResilienceRecovery();
+    _deps.resilienceCoordinator.markSessionHealthy();
     _deps.cancelPersistentRetryTimer();
     _deps.uiSink.clearHubRecoveryUiHint();
     _deps.enterConnected();
@@ -105,7 +134,16 @@ final class HubTransportLifecycleRuntimeDependencies {
     required this.schedulePersistentRetryTick,
     required this.cancelPersistentRetryTimer,
     required this.startProactiveTokenRefreshSchedule,
+    this.isConnecting = HubTransportLifecycleRuntimeDependencies._alwaysFalse,
+    this.sessionGeneration = HubTransportLifecycleRuntimeDependencies._alwaysZero,
+    this.bumpSessionGeneration = HubTransportLifecycleRuntimeDependencies._noop,
   });
+
+  static bool _alwaysFalse() => false;
+
+  static int _alwaysZero() => 0;
+
+  static void _noop() {}
 
   final HubResilienceCoordinator resilienceCoordinator;
   final HubRecoveryUiSink uiSink;
@@ -126,4 +164,7 @@ final class HubTransportLifecycleRuntimeDependencies {
   final void Function() schedulePersistentRetryTick;
   final void Function() cancelPersistentRetryTimer;
   final void Function() startProactiveTokenRefreshSchedule;
+  final bool Function() isConnecting;
+  final int Function() sessionGeneration;
+  final void Function() bumpSessionGeneration;
 }

@@ -84,6 +84,10 @@ final class TransportConnectionLifecycle {
     compression: 'none',
   );
 
+  Timer? _connectTimeoutTimer;
+  Completer<Result<void>>? _connectCompleter;
+  String? _latestAuthToken;
+
   bool get isConnected => socket?.connected ?? false;
 
   Future<Result<void>> connect(
@@ -91,6 +95,7 @@ final class TransportConnectionLifecycle {
     String nextAgentId, {
     String? authToken,
   }) async {
+    _completePendingConnectAsCancelled();
     final nextGeneration = ++connectGeneration;
     try {
       if (!_binaryPayloadEnabled()) {
@@ -106,6 +111,7 @@ final class TransportConnectionLifecycle {
       closeSocket();
 
       agentId = nextAgentId;
+      _latestAuthToken = authToken;
       _capabilitiesNegotiator.reset();
       currentProtocol = const ProtocolConfig(
         protocol: 'jsonrpc-v2',
@@ -114,16 +120,20 @@ final class TransportConnectionLifecycle {
       );
       _publishPayloadSigningDiagnostic('connect_start');
 
-      socket = _dataSource.createSocket(serverUrl, authToken: authToken);
+      socket = _dataSource.createSocket(
+        serverUrl,
+        authToken: authToken,
+        authTokenProvider: () => _latestAuthToken,
+      );
 
       final completer = Completer<Result<void>>();
-      Timer? timeoutTimer;
+      _connectCompleter = completer;
 
       _socketEventBinder.bind(
         socket: socket!,
         connectGeneration: nextGeneration,
         connectCompleter: completer,
-        cancelConnectTimeout: () => timeoutTimer?.cancel(),
+        cancelConnectTimeout: cancelConnectTimeout,
       );
 
       socket!.connect();
@@ -133,11 +143,14 @@ final class TransportConnectionLifecycle {
         'agent_id=$agentId',
       );
 
-      timeoutTimer = Timer(
+      _connectTimeoutTimer = Timer(
         const Duration(
           milliseconds: ConnectionConstants.socketConnectionTimeoutMs,
         ),
         () {
+          if (nextGeneration != connectGeneration) {
+            return;
+          }
           if (!completer.isCompleted) {
             AppLogger.warning(
               'resilience: ${_resilienceLogPrefix()}socket_transport event=initial_connect_timeout '
@@ -180,9 +193,7 @@ final class TransportConnectionLifecycle {
 
   Future<Result<void>> disconnect() async {
     try {
-      connectGeneration++;
-      _heartbeatStop();
-      closeSocket();
+      invalidateGenerationAndCloseSocket();
       _authorizationDecisionLogger.resetSessionState();
       return const Success<Object, Exception>(Object());
     } on Object catch (e) {
@@ -194,6 +205,38 @@ final class TransportConnectionLifecycle {
         ),
       );
     }
+  }
+
+  /// Bumps [connectGeneration] then closes the socket so late events cannot
+  /// revive a dying connection (timeout, heartbeat stale, explicit disconnect).
+  void invalidateGenerationAndCloseSocket() {
+    connectGeneration++;
+    _completePendingConnectAsCancelled();
+    _heartbeatStop();
+    closeSocket();
+  }
+
+  void cancelConnectTimeout() {
+    _connectTimeoutTimer?.cancel();
+    _connectTimeoutTimer = null;
+  }
+
+  void _completePendingConnectAsCancelled() {
+    final pending = _connectCompleter;
+    if (pending == null || pending.isCompleted) {
+      return;
+    }
+    pending.complete(
+      Failure(
+        domain.ConnectionFailure.withContext(
+          message: 'Connection attempt cancelled',
+          context: {
+            'operation': 'connect',
+            'reason': 'cancelled_or_disconnected',
+          },
+        ),
+      ),
+    );
   }
 
   void handleDisconnect(dynamic reason) {
@@ -237,6 +280,7 @@ final class TransportConnectionLifecycle {
   }
 
   void closeSocket() {
+    cancelConnectTimeout();
     _socketEventBinder.clearSubscriptions();
     _capabilitiesNegotiator.reset();
     _pipelineCache.reset();

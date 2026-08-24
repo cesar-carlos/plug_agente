@@ -39,23 +39,31 @@ class AgentActionsSettingsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       children: [
-        AgentActionsSummaryCard(provider: provider, l10n: l10n),
-        const SizedBox(height: AppSpacing.md),
-        ...buildAgentActionElevatedRunnerStatusWidgets(provider, l10n),
-        AgentActionsPreflightSettingsCard(provider: provider, l10n: l10n),
-        const SizedBox(height: AppSpacing.md),
-        AgentActionsDangerousCommandWarnCard(provider: provider, l10n: l10n),
-        const SizedBox(height: AppSpacing.md),
-        AgentActionsRetentionCard(l10n: l10n, provider: provider),
-        if (runtimeCapabilities.isDegraded ||
-            runtimeCapabilities.isUnsupported ||
-            runtimeDiagnostics?.source == RuntimeDetectionSource.detectionFailed) ...[
-          const SizedBox(height: AppSpacing.md),
-          AgentActionsRuntimeSupportCard(
-            capabilities: runtimeCapabilities,
-            diagnostics: runtimeDiagnostics,
+        AppLayout.centeredContent(
+          maxWidth: AppLayout.maxWideFormWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AgentActionsSummaryCard(provider: provider, l10n: l10n),
+              const SizedBox(height: AppSpacing.md),
+              ...buildAgentActionElevatedRunnerStatusWidgets(provider, l10n),
+              AgentActionsPreflightSettingsCard(provider: provider, l10n: l10n),
+              const SizedBox(height: AppSpacing.md),
+              AgentActionsDangerousCommandWarnCard(provider: provider, l10n: l10n),
+              const SizedBox(height: AppSpacing.md),
+              AgentActionsRetentionCard(l10n: l10n, provider: provider),
+              if (runtimeCapabilities.isDegraded ||
+                  runtimeCapabilities.isUnsupported ||
+                  runtimeDiagnostics?.source == RuntimeDetectionSource.detectionFailed) ...[
+                const SizedBox(height: AppSpacing.md),
+                AgentActionsRuntimeSupportCard(
+                  capabilities: runtimeCapabilities,
+                  diagnostics: runtimeDiagnostics,
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
       ],
     );
   }

@@ -180,6 +180,10 @@ final class HubRecoveryOrchestrator {
     var authToken = _deps.contextSource.resolveAuthTokenForReconnect();
     if (!didProactiveHardRelogin) {
       final refreshResult = await tryRefreshToken(context);
+      if (refreshResult.kind == TokenRefreshResultKind.terminalFailure) {
+        _deps.cancelPersistentRetryTimer();
+        return false;
+      }
       if (refreshResult.kind == TokenRefreshResultKind.refreshed) {
         authToken = refreshResult.token;
       }
@@ -192,6 +196,9 @@ final class HubRecoveryOrchestrator {
           'delay_ms=${delay.inMilliseconds} agent_id=${context.agentId}',
         );
         await Future<void>.delayed(delay);
+        if (_deps.isDisconnectRequested()) {
+          return false;
+        }
       }
 
       AppLogger.info(
@@ -201,6 +208,9 @@ final class HubRecoveryOrchestrator {
         context.serverUrl,
         stage: 'burst',
       );
+      if (_deps.isDisconnectRequested()) {
+        return false;
+      }
       if (!hubReachable) {
         AppLogger.info(
           'resilience: ${prefix}hub_unreachable_skip_connect attempt=$attempt agent_id=${context.agentId}',
@@ -213,6 +223,12 @@ final class HubRecoveryOrchestrator {
         context.agentId,
         authToken: authToken,
       );
+      if (_deps.isDisconnectRequested()) {
+        if (connected) {
+          await _deps.disconnectTransportForRecovery();
+        }
+        return false;
+      }
       if (connected) {
         AppLogger.info('Connection recovered on attempt $attempt');
         return true;
@@ -254,6 +270,10 @@ final class HubRecoveryOrchestrator {
 
       if (attempt % tokenRefreshIntervalAttempts == 0) {
         final refreshResult = await tryRefreshToken(context);
+        if (refreshResult.kind == TokenRefreshResultKind.terminalFailure) {
+          _deps.cancelPersistentRetryTimer();
+          return false;
+        }
         if (refreshResult.kind == TokenRefreshResultKind.refreshed && refreshResult.token != null) {
           authToken = refreshResult.token;
         }
@@ -294,7 +314,11 @@ final class HubRecoveryOrchestrator {
       'agent_id=${context.agentId}',
     );
     if (persistentRetryTickCount % tokenRefreshIntervalAttempts == 0) {
-      await tryRefreshToken(context);
+      final refreshResult = await tryRefreshToken(context);
+      if (refreshResult.kind == TokenRefreshResultKind.terminalFailure) {
+        _deps.cancelPersistentRetryTimer();
+        return;
+      }
     }
     final hubReachable = await isHubReachableForReconnect(
       context.serverUrl,
@@ -312,6 +336,10 @@ final class HubRecoveryOrchestrator {
       return;
     }
     final authToken = _deps.contextSource.resolveAuthTokenForReconnect();
+    if (authToken == null || authToken.isEmpty) {
+      _deps.cancelPersistentRetryTimer();
+      return;
+    }
     final ok = await _deps.attemptReconnect(
       context.serverUrl,
       context.agentId,

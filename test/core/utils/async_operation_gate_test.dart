@@ -126,6 +126,25 @@ void main() {
       expect(result, 'aborted');
       expect(aborted, isFalse);
     });
+
+    test('should return staleResult when shouldAbort becomes true after action starts', () async {
+      final gate = AsyncOperationGate();
+      final started = Completer<void>();
+      final release = Completer<void>();
+      var abort = false;
+
+      final inFlight = gate.runSerialized(() async {
+        started.complete();
+        await release.future;
+        return 'ran';
+      }, staleResult: 'stale', shouldAbort: () => abort);
+
+      await started.future;
+      abort = true;
+      release.complete();
+
+      expect(await inFlight, 'stale');
+    });
   });
 
   group('ExclusiveRecoveryGate', () {

@@ -72,7 +72,13 @@ class HubResilienceEnvironment {
     required this.handleReconnectionNeeded,
     required this.onNegotiatingWatchdogTimeoutWithoutContext,
     required this.onNegotiatingWatchdogTimeoutWithContext,
+    this.isConnected = HubResilienceEnvironment._alwaysFalse,
+    this.sessionGeneration = HubResilienceEnvironment._alwaysZero,
   });
+
+  static bool _alwaysFalse() => false;
+
+  static int _alwaysZero() => 0;
 
   final bool Function() isDisconnectRequested;
 
@@ -81,6 +87,8 @@ class HubResilienceEnvironment {
   final bool Function() hasPersistentRetryTimer;
   final bool Function() persistentRetryInFlight;
   final bool Function() isNegotiating;
+  final bool Function() isConnected;
+  final int Function() sessionGeneration;
   final HubConnectionContext? Function() resolveConnectionContext;
   final String? Function() lastAgentId;
   final void Function(String? recoveryId) syncTransportResilienceLogContext;
@@ -122,6 +130,7 @@ class HubResilienceCoordinator {
   Timer? _negotiatingWatchdog;
   String? _resilienceRecoveryId;
   DateTime? _lastHardReloginEndedAt;
+  int _healthySessionGeneration = -1;
 
   String? get recoveryId => _resilienceRecoveryId;
 
@@ -143,6 +152,16 @@ class HubResilienceCoordinator {
 
   void invalidateHubConnectEpoch() {
     _hubConnectGate.invalidateEpoch();
+  }
+
+  int get currentHubConnectEpoch => _hubConnectGate.epoch;
+
+  int get lastHubConnectRunEpoch => _hubConnectGate.lastRunEpoch;
+
+  bool isHubConnectEpochCurrent(int epoch) => _hubConnectGate.epoch == epoch;
+
+  void markSessionHealthy() {
+    _healthySessionGeneration = _environment.sessionGeneration();
   }
 
   Future<T> runSerializedHubConnect<T>(
@@ -231,6 +250,16 @@ class HubResilienceCoordinator {
       );
       return;
     }
+    // Skip leftover kicks only after protocol-ready (connected). Negotiating
+    // must still allow the watchdog to start burst recovery.
+    if (_environment.isConnected() &&
+        _environment.sessionGeneration() == _healthySessionGeneration) {
+      AppLogger.debug(
+        'resilience: ${resilienceLogPrefix()}hub_transport event=recovery_skipped '
+        'trigger=$trigger reason=already_healthy',
+      );
+      return;
+    }
     unawaited(scheduleExclusiveRecovery());
   }
 
@@ -266,7 +295,9 @@ class HubResilienceCoordinator {
   Future<TokenRefreshResult> tryRefreshToken(HubConnectionContext context) async {
     final bridge = _recoveryAuthBridge;
     if (bridge == null) {
-      return const TokenRefreshResult.terminalFailure();
+      // No auth bridge means refresh is unavailable, not that the session is
+      // terminal. Keep the current token and continue reconnect.
+      return const TokenRefreshResult.skippedByCooldown();
     }
 
     final refreshResult = await _tokenRefreshGate.runExclusive<Result<AuthToken>>(
@@ -289,16 +320,16 @@ class HubResilienceCoordinator {
         return TokenRefreshResult.refreshed(normalizedToken);
       },
       (failure) {
-        if (failure is domain_errors.Failure && failure.isTransient) {
-          AppLogger.warning(
-            'resilience: ${resilienceLogPrefix()}token_refresh event=transient_failure '
-            'display=${failure.toDisplayMessage()} '
-            'technical=${failure.toTechnicalMessage()}',
-          );
-          return const TokenRefreshResult.transientFailure();
+        if (failure is domain_errors.Failure && !failure.isTransient) {
+          bridge.setRecoveryError(failure.toDisplayMessage());
+          return const TokenRefreshResult.terminalFailure();
         }
-        bridge.setRecoveryError(failure.toDisplayMessage());
-        return const TokenRefreshResult.terminalFailure();
+        AppLogger.warning(
+          'resilience: ${resilienceLogPrefix()}token_refresh event=transient_failure '
+          'display=${failure is domain_errors.Failure ? failure.toDisplayMessage() : failure.toString()} '
+          'technical=${failure is domain_errors.Failure ? failure.toTechnicalMessage() : failure.toString()}',
+        );
+        return const TokenRefreshResult.transientFailure();
       },
     );
   }

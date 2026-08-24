@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/constants/agent_action_failure_phase_filter_constants.dart';
-import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_ui_preferences.dart';
@@ -10,6 +9,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actio
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_dropdown.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
+import 'package:plug_agente/shared/widgets/common/layout/app_filter_bar.dart';
 
 class AgentActionsHistoryFilters extends StatefulWidget {
   const AgentActionsHistoryFilters({
@@ -59,9 +59,7 @@ class AgentActionsHistoryFiltersState extends State<AgentActionsHistoryFilters> 
     final provider = widget.provider;
     final l10n = widget.l10n;
 
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
+    return AppFilterBar(
       children: [
         SizedBox(
           width: 190,
