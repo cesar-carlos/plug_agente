@@ -5,6 +5,7 @@ import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
 import 'package:plug_agente/domain/errors/failures.dart' show ConfigurationFailure, NetworkFailure;
@@ -33,18 +34,95 @@ void main() {
       );
     });
 
-    test('should authorize read operation when permission exists', () async {
-      when(
-        () => resolver.resolvePolicy(any()),
-      ).thenAnswer((_) async => Success(_buildAllowedPolicy()));
+    test(
+      'should authorize documented JOIN when global read is enabled',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildFullAccessPolicy()));
 
-      final result = await useCase.call(
-        token: 'bearer-token',
-        sql: 'SELECT * FROM dbo.users',
-      );
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: '''
+/* CONTA RECEBER */
+SELECT cr.CodEmpresa
+FROM ContaReceber cr
+INNER JOIN Cliente c ON c.CodCliente = cr.CodCliente
+''',
+        );
 
-      expect(result.isSuccess(), isTrue);
-    });
+        expect(result.isSuccess(), isTrue);
+      },
+    );
+
+    test(
+      'should authorize identically when PreparedSql is supplied',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildFullAccessPolicy()));
+
+        const sql = '''
+/* CONTA RECEBER */
+SELECT cr.CodEmpresa
+FROM ContaReceber cr
+INNER JOIN Cliente c ON c.CodCliente = cr.CodCliente
+''';
+        final prepared = PreparedSql.parse(sql);
+
+        final withoutPrepared = await useCase.call(
+          token: 'bearer-token',
+          sql: sql,
+        );
+        final withPrepared = await useCase.call(
+          token: 'bearer-token',
+          sql: sql,
+          preparedSql: prepared,
+        );
+
+        expect(withoutPrepared.isSuccess(), isTrue);
+        expect(withPrepared.isSuccess(), isTrue);
+      },
+    );
+
+    test(
+      'should authorize when global scope is on even if a deny rule matches',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer(
+          (_) async => const Success(
+            ClientTokenPolicy(
+              clientId: 'client-acme',
+              allTables: true,
+              allViews: true,
+              globalPermissions: ClientPermissionSet.fullAccess,
+              rules: [
+                ClientTokenRule(
+                  resource: DatabaseResource(
+                    resourceType: DatabaseResourceType.unknown,
+                    name: 'dbo.users',
+                  ),
+                  permissions: ClientPermissionSet(
+                    canRead: true,
+                    canUpdate: true,
+                    canDelete: true,
+                  ),
+                  effect: ClientTokenRuleEffect.deny,
+                ),
+              ],
+            ),
+          ),
+        );
+
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: 'SELECT * FROM dbo.users',
+        );
+
+        expect(result.isSuccess(), isTrue);
+      },
+    );
 
     test(
       'should authorize CTE query using underlying table permission',
@@ -139,6 +217,43 @@ void main() {
               equals(<String>['dbo.orders']),
             );
             expect(f.context['resource'], equals('dbo.orders'));
+          },
+        );
+      },
+    );
+
+    test(
+      'should deny the same resources when PreparedSql is supplied',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildAllowedPolicy()));
+
+        const sql = 'SELECT * FROM dbo.users u JOIN dbo.orders o ON u.id = o.user_id';
+        final withoutPrepared = await useCase.call(
+          token: 'bearer-token-a',
+          sql: sql,
+        );
+        final withPrepared = await useCase.call(
+          token: 'bearer-token-b',
+          sql: sql,
+          preparedSql: PreparedSql.parse(sql),
+        );
+
+        expect(withoutPrepared.isError(), isTrue);
+        expect(withPrepared.isError(), isTrue);
+        withoutPrepared.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final f = failure as ConfigurationFailure;
+            expect(f.context['denied_resources'], equals(<String>['dbo.orders']));
+          },
+        );
+        withPrepared.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final f = failure as ConfigurationFailure;
+            expect(f.context['denied_resources'], equals(<String>['dbo.orders']));
           },
         );
       },
@@ -329,6 +444,16 @@ void main() {
       verify(() => resolver.resolvePolicy(any())).called(1);
     });
   });
+}
+
+ClientTokenPolicy _buildFullAccessPolicy() {
+  return const ClientTokenPolicy(
+    clientId: 'client-acme',
+    allTables: true,
+    allViews: true,
+    globalPermissions: ClientPermissionSet.fullAccess,
+    rules: <ClientTokenRule>[],
+  );
 }
 
 ClientTokenPolicy _buildAllowedPolicy() {

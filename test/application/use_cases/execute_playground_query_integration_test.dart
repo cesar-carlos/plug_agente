@@ -309,13 +309,11 @@ void main() {
       expect(result.isSuccess(), isTrue);
     });
 
-    test('should reject query with SQL injection pattern', () async {
-      // Act
+    test('should reject query with stacked SQL statements', () async {
       final result = await useCase.call(
-        'SELECT * FROM users -- DROP TABLE users',
+        'SELECT * FROM users; DROP TABLE users',
       );
 
-      // Assert
       expect(result.isError(), isTrue);
       result.fold(
         (success) => fail('Should have failed'),
@@ -323,6 +321,47 @@ void main() {
           expect(failure, isA<domain.ValidationFailure>());
         },
       );
+    });
+
+    test('should accept SELECT with documentation comments', () async {
+      const validQuery = '/* header */ SELECT id FROM users ORDER BY id -- note';
+      final config = Config(
+        id: 'config-1',
+        agentId: 'agent-123',
+        driverName: 'MySQL',
+        odbcDriverName: 'ODBC Driver for MySQL',
+        connectionString: 'DSN=Test',
+        username: 'root',
+        databaseName: 'testdb',
+        host: 'localhost',
+        port: 3306,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      final expectedResponse = QueryResponse(
+        id: 'response-1',
+        requestId: 'test-uuid-123',
+        agentId: 'agent-123',
+        data: [],
+        timestamp: DateTime.now(),
+      );
+
+      when(
+        () => mockQueryConfigSource.resolveConfigForQuery(any()),
+      ).thenAnswer((_) async => Success(config));
+      when(
+        () => mockDatabaseGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer((_) async => Success(expectedResponse));
+
+      final result = await useCase.call(
+        validQuery,
+        pagination: _materializedPlaygroundPagination,
+      );
+
+      expect(result.isSuccess(), isTrue);
     });
 
     test('should create QueryRequest with UUID from Uuid service', () async {

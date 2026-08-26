@@ -40,6 +40,35 @@ void main() {
         );
       },
     );
+
+    test('should not split on semicolon inside a line comment', () {
+      expect(
+        splitSqlStatements('SELECT 1 -- a; DROP TABLE t\nFROM dual'),
+        ['SELECT 1 -- a; DROP TABLE t\nFROM dual'],
+      );
+    });
+
+    test('should split on a SQL Server GO batch separator', () {
+      expect(
+        splitSqlStatements('SELECT 1\nGO\nSELECT 2'),
+        ['SELECT 1', 'SELECT 2'],
+      );
+      expect(
+        splitSqlStatements('SELECT 1\ngo\nSELECT 2'),
+        ['SELECT 1', 'SELECT 2'],
+      );
+    });
+
+    test('should not treat go as a separator when it is not a whole line', () {
+      expect(
+        splitSqlStatements("SELECT 'GO' FROM t"),
+        ["SELECT 'GO' FROM t"],
+      );
+      expect(
+        splitSqlStatements('SELECT go FROM t'),
+        ['SELECT go FROM t'],
+      );
+    });
   });
 
   group('sqlHasMultipleTopLevelStatements', () {
@@ -51,6 +80,10 @@ void main() {
       expect(sqlHasMultipleTopLevelStatements('SELECT 1; SELECT 2'), isTrue);
     });
 
+    test('should be true for GO-separated batches', () {
+      expect(sqlHasMultipleTopLevelStatements('SELECT 1\nGO\nSELECT 2'), isTrue);
+    });
+
     test('should agree with splitSqlStatements segment count', () {
       const cases = <String>[
         'SELECT 1; SELECT 2',
@@ -59,6 +92,8 @@ void main() {
         '  SELECT 1  ;  ; SELECT 2  ',
         'SELECT [a;b] FROM t',
         "SELECT ';' AS x",
+        'SELECT 1\nGO\nSELECT 2',
+        "SELECT '-- keep; DROP' FROM t",
       ];
       for (final sql in cases) {
         expect(

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/validation/sql_validator.dart';
 
@@ -79,33 +80,18 @@ void main() {
         expect(result.isError(), isTrue);
       });
 
-      test('should reject query with SQL comment (--)', () {
-        // Arrange
-        const query = 'SELECT * FROM users -- DROP TABLE users';
-
-        // Act
-        final result = SqlValidator.validateSelectQuery(query);
-
-        // Assert
-        expect(result.isError(), isTrue);
-        result.fold(
-          (success) => fail('Should have failed'),
-          (failure) => expect(
-            failure.toString(),
-            contains('padrões potencialmente perigosos'),
-          ),
+      test('should accept query with documentation line comments', () {
+        final result = SqlValidator.validateSelectQuery(
+          'SELECT * FROM users -- column notes stay in the client SQL',
         );
+        expect(result.isSuccess(), isTrue);
       });
 
-      test('should reject query with block comment (/* */)', () {
-        // Arrange
-        const query = 'SELECT /* DROP TABLE users */ * FROM users';
-
-        // Act
-        final result = SqlValidator.validateSelectQuery(query);
-
-        // Assert
-        expect(result.isError(), isTrue);
+      test('should accept query with documentation block comments', () {
+        final result = SqlValidator.validateSelectQuery(
+          '/* header */ SELECT /* note */ * FROM users',
+        );
+        expect(result.isSuccess(), isTrue);
       });
 
       test('should reject query with multiple statements', () {
@@ -156,6 +142,26 @@ void main() {
 
         // Assert
         expect(result.isSuccess(), isTrue);
+      });
+
+      test('validatePreparedSelectQuery matches validateSelectQuery', () {
+        const query = '/* CONTA RECEBER */ SELECT * FROM users';
+        final fromRaw = SqlValidator.validateSelectQuery(query);
+        final fromPrepared = SqlValidator.validatePreparedSelectQuery(
+          PreparedSql.parse(query),
+        );
+
+        expect(fromRaw.isSuccess(), isTrue);
+        expect(fromPrepared.isSuccess(), isTrue);
+      });
+
+      test('validatePreparedSelectQuery rejects non-select like validateSelectQuery', () {
+        const query = 'DELETE FROM users';
+        expect(SqlValidator.validateSelectQuery(query).isError(), isTrue);
+        expect(
+          SqlValidator.validatePreparedSelectQuery(PreparedSql.parse(query)).isError(),
+          isTrue,
+        );
       });
     });
 
@@ -245,6 +251,20 @@ void main() {
         );
 
         expect(r.isError(), isTrue);
+      });
+
+      test('should accept SELECT that starts with a documentation comment', () {
+        final result = SqlValidator.validateSqlForExecution(
+          '/* CONTA RECEBER */\nSELECT id FROM dbo.users',
+        );
+        expect(result.isSuccess(), isTrue);
+      });
+
+      test('should still reject DML stacked after a comment', () {
+        final result = SqlValidator.validateSqlForExecution(
+          'SELECT 1; -- note\nDROP TABLE users',
+        );
+        expect(result.isError(), isTrue);
       });
     });
 
@@ -365,6 +385,15 @@ void main() {
         // Assert
         expect(result, isNot(contains('/* comment1 */')));
         expect(result, isNot(contains('/* comment2 */')));
+      });
+
+      test('should keep comment markers inside string literals', () {
+        final result = SqlValidator.removeComments(
+          "SELECT '-- keep', '/* keep */' FROM users",
+        );
+
+        expect(result, contains('-- keep'));
+        expect(result, contains('/* keep */'));
       });
     });
   });

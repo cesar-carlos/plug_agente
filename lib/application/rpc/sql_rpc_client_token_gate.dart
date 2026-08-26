@@ -5,6 +5,7 @@ import 'package:plug_agente/application/rpc/sql_authorization_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
@@ -37,6 +38,7 @@ class SqlRpcClientTokenGate {
     required String investigationSqlOnDeny,
     required String? requestDatabase,
     required DateTime? deadline,
+    Iterable<PreparedSql?>? preparedStatements,
     bool deduplicateEquivalentSql = false,
     bool skipEmptyAfterTrim = false,
   }) async {
@@ -64,8 +66,11 @@ class SqlRpcClientTokenGate {
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
+    final statements = sqlStatements.toList(growable: false);
+    final preparedList = preparedStatements?.toList(growable: false);
     final authorizedFingerprints = <String>{};
-    for (final raw in sqlStatements) {
+    for (var i = 0; i < statements.length; i++) {
+      final raw = statements[i];
       final stmt = skipEmptyAfterTrim ? raw.trim() : raw;
       if (skipEmptyAfterTrim && stmt.isEmpty) {
         continue;
@@ -79,6 +84,9 @@ class SqlRpcClientTokenGate {
         authorizedFingerprints.add(fingerprint);
       }
 
+      final preparedSql = preparedList == null || i >= preparedList.length
+          ? null
+          : preparedList[i];
       final authStopwatch = Stopwatch()..start();
       final authResult = await _support.authorizeWithBudget(
         token: clientToken,
@@ -87,6 +95,7 @@ class SqlRpcClientTokenGate {
         requestId: request.id?.toString(),
         method: request.method,
         deadline: deadline,
+        preparedSql: preparedSql,
       );
       authStopwatch.stop();
       if (authResult.isError()) {

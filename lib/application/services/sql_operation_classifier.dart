@@ -1,4 +1,4 @@
-import 'package:plug_agente/core/utils/split_sql_statements.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
@@ -15,8 +15,6 @@ class SqlOperationClassification {
 }
 
 class SqlOperationClassifier {
-  static final RegExp _blockComments = RegExp(r'/\*.*?\*/', dotAll: true);
-  static final RegExp _lineComments = RegExp(r'--.*$', multiLine: true);
   static final RegExp _identifierStart = RegExp('[a-z_]', caseSensitive: false);
   static final RegExp _identifierPart = RegExp(
     r'[a-z0-9_$#]',
@@ -24,12 +22,15 @@ class SqlOperationClassifier {
   );
 
   Result<SqlOperationClassification> classify(String sql) {
-    final trimmed = sql.trim();
-    if (trimmed.isEmpty) {
+    return classifyPrepared(PreparedSql.parse(sql));
+  }
+
+  Result<SqlOperationClassification> classifyPrepared(PreparedSql prepared) {
+    if (prepared.trimmed.isEmpty) {
       return Failure(domain.ValidationFailure('SQL cannot be empty'));
     }
 
-    if (sqlHasMultipleTopLevelStatements(trimmed)) {
+    if (prepared.hasMultipleStatements) {
       return Failure(
         domain.ValidationFailure.withContext(
           message: 'Multiple SQL statements are not supported',
@@ -40,7 +41,7 @@ class SqlOperationClassifier {
       );
     }
 
-    final normalized = _normalizeSql(sql);
+    final normalized = prepared.stripped.toLowerCase();
     if (normalized.isEmpty) {
       return Failure(domain.ValidationFailure('SQL cannot be empty'));
     }
@@ -104,7 +105,7 @@ class SqlOperationClassifier {
     final cteAliases = _extractCteAliases(sql);
 
     if (operation == SqlOperation.read) {
-      resources.addAll(_extractByKeywords(sql, const ['from', 'join']));
+      resources.addAll(_extractByKeywords(sql, const ['from', 'join', 'apply']));
     } else if (operation == SqlOperation.update) {
       if (sql.startsWith('update ')) {
         final updateTarget = _extractUpdateTarget(sql);
@@ -116,7 +117,7 @@ class SqlOperationClassifier {
             ),
           );
         }
-        resources.addAll(_extractByKeywords(sql, const ['from', 'join']));
+        resources.addAll(_extractByKeywords(sql, const ['from', 'join', 'apply']));
       } else if (sql.startsWith('insert ')) {
         resources.addAll(_extractByKeywords(sql, const ['into']));
       } else if (sql.startsWith('merge ')) {
@@ -232,8 +233,9 @@ class SqlOperationClassifier {
 
   Set<DatabaseResource> _extractByKeywords(
     String sql,
-    List<String> keywords,
-  ) {
+    List<String> keywords, {
+    int subqueryDepth = 0,
+  }) {
     final extracted = <DatabaseResource>{};
     final lowerSql = sql.toLowerCase();
 
@@ -245,6 +247,22 @@ class SqlOperationClassifier {
           break;
         }
         searchIndex = keywordIndex + keyword.length;
+        final afterKeyword = _skipWhitespace(sql, searchIndex);
+        if (afterKeyword < sql.length && sql[afterKeyword] == '(') {
+          final close = _findClosingParenthesis(sql, afterKeyword);
+          if (close > afterKeyword && subqueryDepth < 1) {
+            final inner = sql.substring(afterKeyword + 1, close);
+            extracted.addAll(
+              _extractByKeywords(
+                inner,
+                const ['from', 'join', 'apply'],
+                subqueryDepth: subqueryDepth + 1,
+              ),
+            );
+          }
+          searchIndex = close >= 0 ? close + 1 : searchIndex;
+          continue;
+        }
         final identifier = _readQualifiedIdentifier(sql, searchIndex);
         if (identifier == null || identifier.value.trim().isEmpty) {
           continue;
@@ -543,12 +561,6 @@ class SqlOperationClassifier {
       i++;
     }
     return -1;
-  }
-
-  String _normalizeSql(String sql) {
-    final noBlockComments = sql.replaceAll(_blockComments, ' ');
-    final noLineComments = noBlockComments.replaceAll(_lineComments, ' ');
-    return noLineComments.trim().toLowerCase();
   }
 }
 

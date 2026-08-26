@@ -14,6 +14,7 @@ import 'package:plug_agente/core/config/odbc_stream_wire_only_config.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_streaming_constants.dart';
 import 'package:plug_agente/core/utils/batch_odbc_timeout.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -115,16 +116,23 @@ class SqlRpcDbStreamingExecutor {
     required int effectiveMaxRows,
     String? clientToken,
     String? database,
+    PreparedSql? preparedSql,
   }) async {
-    final normalizedSql = _autoPolicy.normalizeSqlForDbStreaming(sql);
+    final sqlForPolicy = preparedSql?.stripped ?? sql;
+    final alreadyStripped = preparedSql != null;
+    final normalizedSql = _autoPolicy.normalizeSqlForDbStreaming(
+      sqlForPolicy,
+      alreadyStripped: alreadyStripped,
+    );
     final autoStreamingReason = _autoPolicy.resolveAutoReason(
       featureFlags: _featureFlags,
       queryRequest: queryRequest,
-      sql: sql,
+      sql: sqlForPolicy,
       negotiatedExtensions: negotiatedExtensions,
       preferDbStreaming: preferDbStreaming,
       effectiveMaxRows: effectiveMaxRows,
       limits: limits,
+      alreadyStripped: alreadyStripped,
     );
     final autoStreaming = autoStreamingReason != DbStreamingAutoReason.none;
     if (!supportsStreamingChunks(negotiatedExtensions)) {
@@ -208,7 +216,10 @@ class SqlRpcDbStreamingExecutor {
       }
       preparedExecution = prepared.getOrThrow();
     }
-    if (SqlValidator.validateSelectQuery(sql).isError()) {
+    final selectValidation = preparedSql == null
+        ? SqlValidator.validateSelectQuery(sql)
+        : SqlValidator.validatePreparedSelectQuery(preparedSql);
+    if (selectValidation.isError()) {
       _dispatchMetrics?.recordSqlExecuteDbStreamingSkipped('non_select_sql');
       return const SqlDbStreamingTryResult(skipReason: 'non_select_sql');
     }

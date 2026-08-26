@@ -24,6 +24,7 @@ import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart'
 import 'package:plug_agente/application/use_cases/run_agent_action_via_remote_trigger.dart';
 import 'package:plug_agente/application/use_cases/slice_agent_action_captured_output.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
@@ -96,11 +97,11 @@ class DefaultRpcMethodHandlerOperationsFactory {
     AgentActionRuntimeStateGuard? agentActionRuntimeStateGuard,
     AgentRuntimeIdentity? agentRuntimeIdentity,
     AgentActionRetentionSettings? agentActionRetentionSettings,
-    Duration sqlExecuteTotalBudget = const Duration(seconds: 35),
-    Duration sqlBatchTotalBudget = const Duration(seconds: 45),
-    Duration authorizationStageBudget = const Duration(seconds: 3),
-    Duration queryStageBudget = const Duration(seconds: 30),
-    Duration batchExecutionStageBudget = const Duration(seconds: 35),
+    Duration sqlExecuteTotalBudget = RpcSqlBudgetConstants.defaultSqlExecuteTotalBudget,
+    Duration sqlBatchTotalBudget = RpcSqlBudgetConstants.defaultSqlBatchTotalBudget,
+    Duration authorizationStageBudget = RpcSqlBudgetConstants.defaultAuthorizationStageBudget,
+    Duration queryStageBudget = RpcSqlBudgetConstants.defaultQueryStageBudget,
+    Duration batchExecutionStageBudget = RpcSqlBudgetConstants.defaultBatchExecutionStageBudget,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
     RpcIdempotencyCoordinator? idempotencyCoordinator,
     IOdbcConnectionSettings? odbcConnectionSettings,

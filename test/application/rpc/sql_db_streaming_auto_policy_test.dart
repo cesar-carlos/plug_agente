@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/sql_db_streaming_auto_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 
@@ -102,7 +103,7 @@ void main() {
       expect(reason, DbStreamingAutoReason.sqlLength);
     });
 
-    test('returns sqlSignal when query contains join', () {
+    test('returns none for a short join without explicit prefer', () {
       final reason = policy.resolveAutoReason(
         featureFlags: featureFlags,
         queryRequest: queryRequest(sql: 'SELECT u.id FROM users u JOIN orders o ON u.id = o.user_id'),
@@ -112,6 +113,36 @@ void main() {
       );
 
       expect(reason, DbStreamingAutoReason.none);
+    });
+
+    test('returns largeMaxRows for a short join when max rows is large', () {
+      const limits = TransportLimits();
+      final reason = policy.resolveAutoReason(
+        featureFlags: featureFlags,
+        queryRequest: queryRequest(sql: 'SELECT u.id FROM users u JOIN orders o ON u.id = o.user_id'),
+        sql: 'SELECT u.id FROM users u JOIN orders o ON u.id = o.user_id',
+        negotiatedExtensions: const {'streamingResults': true},
+        preferDbStreaming: false,
+        effectiveMaxRows: limits.streamingRowThreshold,
+      );
+
+      expect(reason, DbStreamingAutoReason.largeMaxRows);
+    });
+
+    test('returns sqlLength for a long join', () {
+      final longJoin =
+          'SELECT u.id FROM users u JOIN orders o ON u.id = o.user_id WHERE '
+          '${List.filled(12, 'o.created_at IS NOT NULL').join(' AND ')}';
+
+      final reason = policy.resolveAutoReason(
+        featureFlags: featureFlags,
+        queryRequest: queryRequest(sql: longJoin),
+        sql: longJoin,
+        negotiatedExtensions: const {'streamingResults': true},
+        preferDbStreaming: false,
+      );
+
+      expect(reason, DbStreamingAutoReason.sqlLength);
     });
 
     test('returns none when chunk streaming is enabled for auto policy only', () {
@@ -155,6 +186,34 @@ void main() {
       );
 
       expect(prefers, isFalse);
+    });
+
+    test('alreadyStripped path matches comment-stripping path', () {
+      const rawSql = '/* docs */ SELECT * FROM users -- trailing';
+      final stripped = PreparedSql.parse(rawSql).stripped;
+
+      expect(
+        policy.normalizeSqlForDbStreaming(stripped, alreadyStripped: true),
+        policy.normalizeSqlForDbStreaming(rawSql),
+      );
+
+      final withStrip = policy.resolveAutoReason(
+        featureFlags: featureFlags,
+        queryRequest: queryRequest(sql: rawSql),
+        sql: rawSql,
+        negotiatedExtensions: const {'streamingResults': true},
+        preferDbStreaming: true,
+      );
+      final withoutStrip = policy.resolveAutoReason(
+        featureFlags: featureFlags,
+        queryRequest: queryRequest(sql: stripped),
+        sql: stripped,
+        negotiatedExtensions: const {'streamingResults': true},
+        preferDbStreaming: true,
+        alreadyStripped: true,
+      );
+
+      expect(withoutStrip, withStrip);
     });
 
     test('shouldMaterializeBoundedDbStreaming is true for explicit row limit', () {

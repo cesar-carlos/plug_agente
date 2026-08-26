@@ -72,8 +72,12 @@ class SqlRpcOdbcBudgetRunner {
       }
       return Failure(
         domain.QueryExecutionFailure.withContext(
-          message: 'SQL execution budget exhausted before database call',
-          context: context,
+          message: 'SQL request budget exhausted before the database call (not a SQL Server timeout)',
+          context: {
+            ...context,
+            'user_message':
+                'O orçamento de tempo desta requisição SQL esgotou antes de chamar o banco. Tente novamente ou reduza a consulta.',
+          },
         ),
       );
     }

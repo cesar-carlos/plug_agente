@@ -55,6 +55,7 @@ SqlRpcMethodHandlerSupport _support() {
           required requestId,
           required method,
           required deadline,
+          preparedSql,
         }) async => const Success(unit),
     effectiveStageTimeout: ({required deadline, required stageBudget}) => stageBudget,
   );

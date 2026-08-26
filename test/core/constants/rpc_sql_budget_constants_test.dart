@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/odbc_connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 
 void main() {
@@ -14,6 +15,19 @@ void main() {
       ];
       expect(reasons, everyElement(isNotEmpty));
       expect(reasons.toSet().length, reasons.length);
+    });
+
+    test('query stage budget matches the ODBC query timeout', () {
+      expect(
+        RpcSqlBudgetConstants.defaultQueryStageBudget,
+        OdbcConnectionConstants.defaultQueryTimeout,
+      );
+      expect(
+        RpcSqlBudgetConstants.defaultSqlExecuteTotalBudget,
+        RpcSqlBudgetConstants.defaultAuthorizationStageBudget +
+            RpcSqlBudgetConstants.defaultQueryStageBudget +
+            RpcSqlBudgetConstants.defaultSqlExecuteHeadroom,
+      );
     });
   });
 }

@@ -2,11 +2,13 @@ import 'package:plug_agente/application/services/client_token_validation_service
 import 'package:plug_agente/application/services/sql_operation_classifier.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
 import 'package:plug_agente/core/utils/client_token_credential.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_authorization_cache_metrics.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_decision_cache.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
+import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:result_dart/result_dart.dart';
 
 const int _kMaxResourceNamesInTechnicalMessage = 20;
@@ -34,8 +36,11 @@ class AuthorizeSqlOperation {
     String? requestDatabase,
     String? requestId,
     String? method,
+    PreparedSql? preparedSql,
   }) async {
-    final classificationResult = _classifier.classify(sql);
+    final classificationResult = preparedSql == null
+        ? _classifier.classify(sql)
+        : _classifier.classifyPrepared(preparedSql);
     return classificationResult.fold(
       (classification) async {
         final tokenHash = hashClientCredentialToken(token);
@@ -122,6 +127,30 @@ class AuthorizeSqlOperation {
                 );
               }
               return Failure(databaseConstraintFailure);
+            }
+
+            if (_canShortCircuitGlobalAllow(policy, classification)) {
+              for (final i in missIndices) {
+                _cacheDecision(
+                  key: decisionKeys[i],
+                  allowed: true,
+                  clientId: policy.clientId,
+                  requestId: requestId,
+                  method: method,
+                );
+              }
+              if (deniedNames.isEmpty) {
+                return const Success(unit);
+              }
+              return Failure(
+                _buildAuthorizationFailure(
+                  classification: classification,
+                  policy: policy,
+                  deniedNames: deniedNames,
+                  reasonByDeniedName: reasonByDeniedName,
+                  clientIdFromCache: clientIdFromCache,
+                ),
+              );
             }
 
             for (final i in missIndices) {
@@ -211,6 +240,29 @@ class AuthorizeSqlOperation {
         );
       },
     );
+  }
+
+  bool _canShortCircuitGlobalAllow(
+    ClientTokenPolicy policy,
+    SqlOperationClassification classification,
+  ) {
+    if (policy.isRevoked || !policy.usesGlobalScope) {
+      return false;
+    }
+    if (!policy.globalPermissions.allows(classification.operation)) {
+      return false;
+    }
+    for (final resource in classification.resources) {
+      final supported = switch (resource.resourceType) {
+        DatabaseResourceType.table => policy.allTables,
+        DatabaseResourceType.view => policy.allViews,
+        DatabaseResourceType.unknown => policy.allTables || policy.allViews,
+      };
+      if (!supported) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _recordReasonForName({

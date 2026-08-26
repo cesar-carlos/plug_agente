@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart';
 import 'package:plug_agente/core/utils/sql_dangerous_pattern_scan.dart';
+import 'package:plug_agente/core/utils/strip_sql_comments.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:result_dart/result_dart.dart';
@@ -42,11 +44,6 @@ class SqlValidator {
 
   static final RegExp _trailingSemicolons = RegExp(r';+\s*$');
   static final RegExp _namedParameter = RegExp(r':(\w+)');
-  static final RegExp _removeCommentsLine = RegExp(r'--.*?\n');
-  static final RegExp _removeCommentsBlock = RegExp(
-    r'/\*.*?\*/',
-    dotAll: true,
-  );
   static final RegExp _orderTermPattern = RegExp(
     r'^(?<expr>(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))*)(?:\s+(?<dir>asc|desc))?$',
     caseSensitive: false,
@@ -58,23 +55,29 @@ class SqlValidator {
 
   /// Validates SQL for execution in RPC/legacy flows.
   /// Allows SELECT, WITH, UPDATE, INSERT, MERGE, DELETE and DDL v1.
-  /// Blocks multiple statements, comments, and dangerous patterns.
+  /// Documentation comments (`--`, `/* */`) are stripped before the prefix and
+  /// dangerous-pattern checks. Multiple statements and lock hints stay blocked.
   static Result<void> validateSqlForExecution(
     String query, {
     bool allowMultipleStatements = false,
   }) {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) {
-      return Failure(
-        _sqlValidationFailure(
-          message: 'SQL cannot be empty',
-          userMessage: 'A consulta SQL está vazia. Informe um comando SQL para continuar.',
-        ),
-      );
+    return validatePreparedSql(
+      PreparedSql.parse(query),
+      allowMultipleStatements: allowMultipleStatements,
+    );
+  }
+
+  /// Validates a previously prepared SQL request. Documentation comments are
+  /// already stripped on [prepared]; the original SQL is not sent to ODBC here.
+  static Result<void> validatePreparedSql(
+    PreparedSql prepared, {
+    bool allowMultipleStatements = false,
+  }) {
+    if (prepared.trimmed.isEmpty) {
+      return Failure(_emptySqlFailure());
     }
 
-    final normalized = trimmed.toLowerCase();
-    if (!allowMultipleStatements && sqlHasMultipleTopLevelStatements(trimmed)) {
+    if (!allowMultipleStatements && prepared.hasMultipleStatements) {
       return Failure(
         _sqlValidationFailure(
           message: 'Multiple SQL statements are not supported',
@@ -83,6 +86,11 @@ class SqlValidator {
       );
     }
 
+    if (prepared.stripped.isEmpty) {
+      return Failure(_emptySqlFailure());
+    }
+
+    final normalized = prepared.stripped.toLowerCase();
     final startsWithAllowed = _allowedPrefixes.any(normalized.startsWith);
     if (!startsWithAllowed) {
       return Failure(
@@ -95,7 +103,7 @@ class SqlValidator {
       );
     }
 
-    final dangerous = _checkDangerousPatterns(query);
+    final dangerous = _checkDangerousPatterns(prepared.stripped);
     if (dangerous != null) {
       return Failure(dangerous);
     }
@@ -119,9 +127,17 @@ class SqlValidator {
   }
 
   static Result<void> validateSelectQuery(String query) {
-    final trimmed = query.trim().toUpperCase();
+    return validatePreparedSelectQuery(PreparedSql.parse(query));
+  }
 
-    if (!trimmed.startsWith('SELECT') && !trimmed.startsWith('WITH')) {
+  static Result<void> validatePreparedSelectQuery(PreparedSql prepared) {
+    final stripped = prepared.stripped;
+    if (stripped.isEmpty) {
+      return Failure(_emptySqlFailure());
+    }
+
+    final upper = stripped.toUpperCase();
+    if (!upper.startsWith('SELECT') && !upper.startsWith('WITH')) {
       return Failure(
         _sqlValidationFailure(
           message: 'Apenas consultas SELECT/WITH são permitidas no playground',
@@ -130,7 +146,7 @@ class SqlValidator {
       );
     }
 
-    if (sqlContainsTopLevelDangerousPatterns(query)) {
+    if (sqlContainsTopLevelDangerousPatterns(stripped)) {
       return Failure(
         _sqlValidationFailure(
           message: 'Query contém padrões potencialmente perigosos',
@@ -149,7 +165,7 @@ class SqlValidator {
       return Failure(selectValidation.exceptionOrNull()! as domain.ValidationFailure);
     }
 
-    final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');
+    final normalizedQuery = _sqlForClauseScan(query);
     final orderByIndex = _findTopLevelOrderBy(normalizedQuery);
     if (orderByIndex < 0) {
       return Failure(
@@ -194,7 +210,7 @@ class SqlValidator {
   }
 
   static bool containsTopLevelPaginationClause(String query) {
-    final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');
+    final normalizedQuery = _sqlForClauseScan(query);
     if (normalizedQuery.isEmpty) {
       return false;
     }
@@ -205,7 +221,7 @@ class SqlValidator {
   }
 
   static bool containsTopLevelSelectTop(String query) {
-    final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');
+    final normalizedQuery = _sqlForClauseScan(query);
     if (normalizedQuery.isEmpty) {
       return false;
     }
@@ -264,7 +280,7 @@ class SqlValidator {
   }
 
   static String stripTopLevelOrderBy(String query) {
-    final normalizedQuery = query.trim().replaceFirst(_trailingSemicolons, '');
+    final normalizedQuery = _sqlForClauseScan(query);
     if (normalizedQuery.isEmpty) {
       return normalizedQuery;
     }
@@ -287,13 +303,22 @@ class SqlValidator {
   }
 
   static String removeComments(String query) {
-    var result = query.replaceAll(_removeCommentsLine, '');
+    return stripTopLevelSqlComments(query).replaceAll(_normalizeFingerprintWhitespace, ' ');
+  }
 
-    result = result.replaceAll(_removeCommentsBlock, '');
+  static String _sqlWithoutComments(String query) {
+    return stripTopLevelSqlComments(query.trim()).trim();
+  }
 
-    result = result.replaceAll(_normalizeFingerprintWhitespace, ' ');
+  static String _sqlForClauseScan(String query) {
+    return _sqlWithoutComments(query).replaceFirst(_trailingSemicolons, '');
+  }
 
-    return result;
+  static domain.ValidationFailure _emptySqlFailure() {
+    return _sqlValidationFailure(
+      message: 'SQL cannot be empty',
+      userMessage: 'A consulta SQL está vazia. Informe um comando SQL para continuar.',
+    );
   }
 
   static int _findTopLevelOrderBy(String sql) {

@@ -22,6 +22,7 @@ import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart'
 import 'package:plug_agente/application/use_cases/run_agent_action_via_remote_trigger.dart';
 import 'package:plug_agente/application/use_cases/slice_agent_action_captured_output.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -43,11 +44,11 @@ import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.da
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:uuid/uuid.dart';
 
-const _defaultSqlExecuteTotalBudget = Duration(seconds: 35);
-const _defaultSqlBatchTotalBudget = Duration(seconds: 45);
-const _defaultAuthorizationStageBudget = Duration(seconds: 3);
-const _defaultQueryStageBudget = Duration(seconds: 30);
-const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
+const Duration _defaultSqlExecuteTotalBudget = RpcSqlBudgetConstants.defaultSqlExecuteTotalBudget;
+const Duration _defaultSqlBatchTotalBudget = RpcSqlBudgetConstants.defaultSqlBatchTotalBudget;
+const Duration _defaultAuthorizationStageBudget = RpcSqlBudgetConstants.defaultAuthorizationStageBudget;
+const Duration _defaultQueryStageBudget = RpcSqlBudgetConstants.defaultQueryStageBudget;
+const Duration _defaultBatchExecutionStageBudget = RpcSqlBudgetConstants.defaultBatchExecutionStageBudget;
 
 /// RPC method facade for routing JSON-RPC requests to registered handlers.
 class RpcMethodDispatcher implements IRpcRequestDispatcher {

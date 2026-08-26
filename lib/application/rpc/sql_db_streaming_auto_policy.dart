@@ -1,6 +1,7 @@
 import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart';
 import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/utils/strip_sql_comments.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/value_objects/database_driver.dart';
@@ -51,6 +52,7 @@ class SqlDbStreamingAutoPolicy {
     required bool preferDbStreaming,
     int? effectiveMaxRows,
     TransportLimits limits = const TransportLimits(),
+    bool alreadyStripped = false,
   }) {
     if (!featureFlags.enableSocketStreamingFromDb || !supportsStreamingChunks(negotiatedExtensions)) {
       return false;
@@ -62,7 +64,7 @@ class SqlDbStreamingAutoPolicy {
       return false;
     }
 
-    final normalized = normalizeSqlForDbStreaming(sql);
+    final normalized = normalizeSqlForDbStreaming(sql, alreadyStripped: alreadyStripped);
     if (!normalized.startsWith(' select ') && !normalized.startsWith(' with ')) {
       return false;
     }
@@ -92,6 +94,7 @@ class SqlDbStreamingAutoPolicy {
           preferDbStreaming: preferDbStreaming,
           effectiveMaxRows: effectiveMaxRows,
           limits: limits,
+          alreadyStripped: alreadyStripped,
         ) !=
         DbStreamingAutoReason.none;
   }
@@ -104,6 +107,7 @@ class SqlDbStreamingAutoPolicy {
     required bool preferDbStreaming,
     int? effectiveMaxRows,
     TransportLimits limits = const TransportLimits(),
+    bool alreadyStripped = false,
   }) {
     if (!featureFlags.enableSocketStreamingFromDb ||
         featureFlags.enableSocketStreamingChunks ||
@@ -114,7 +118,7 @@ class SqlDbStreamingAutoPolicy {
       return DbStreamingAutoReason.none;
     }
 
-    final normalized = normalizeSqlForDbStreaming(sql);
+    final normalized = normalizeSqlForDbStreaming(sql, alreadyStripped: alreadyStripped);
     if (!normalized.startsWith(' select ') && !normalized.startsWith(' with ')) {
       return DbStreamingAutoReason.none;
     }
@@ -124,9 +128,6 @@ class SqlDbStreamingAutoPolicy {
     if (preferDbStreaming) {
       return DbStreamingAutoReason.prefer;
     }
-    if (requiresExplicitDbStreamingPreference(normalized)) {
-      return DbStreamingAutoReason.none;
-    }
     if (normalized.length >= _sqlLengthThreshold) {
       return DbStreamingAutoReason.sqlLength;
     }
@@ -135,6 +136,9 @@ class SqlDbStreamingAutoPolicy {
     }
     if (effectiveMaxRows != null && effectiveMaxRows >= limits.streamingRowThreshold) {
       return DbStreamingAutoReason.largeMaxRows;
+    }
+    if (requiresExplicitDbStreamingPreference(normalized)) {
+      return DbStreamingAutoReason.none;
     }
     if (largeSqlSignals.any(normalized.contains)) {
       return DbStreamingAutoReason.sqlSignal;
@@ -235,8 +239,9 @@ class SqlDbStreamingAutoPolicy {
     return value.trim().toLowerCase().replaceAll(RegExp(r'^[\["]+|[\]"]+$'), '').replaceAll(RegExp(r'[\[\]"]'), '');
   }
 
-  String normalizeSqlForDbStreaming(String sql) {
-    return ' ${sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim()} ';
+  String normalizeSqlForDbStreaming(String sql, {bool alreadyStripped = false}) {
+    final source = alreadyStripped ? sql : stripTopLevelSqlComments(sql);
+    return ' ${source.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim()} ';
   }
 
   bool containsExplicitRowLimit(String normalizedSql) {

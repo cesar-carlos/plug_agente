@@ -4,6 +4,7 @@ import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:result_dart/result_dart.dart';
@@ -76,6 +77,7 @@ void main() {
                 required requestId,
                 required method,
                 required deadline,
+                preparedSql,
               }) async => const Success(unit),
         ),
       );
@@ -106,6 +108,7 @@ void main() {
                 required requestId,
                 required method,
                 required deadline,
+                preparedSql,
               }) async => const Success(unit),
         ),
       );
@@ -139,6 +142,7 @@ void main() {
                 required requestId,
                 required method,
                 required deadline,
+                preparedSql,
               }) async {
                 authorizeCalls++;
                 return const Success(unit);
@@ -177,6 +181,7 @@ void main() {
                 required requestId,
                 required method,
                 required deadline,
+                preparedSql,
               }) async {
                 return Failure(
                   domain.ConfigurationFailure.withContext(
@@ -208,6 +213,49 @@ void main() {
       expect(response, isNotNull);
       expect(response!.isError, isTrue);
       expect(response.error!.code, RpcErrorCode.unauthorized);
+    });
+
+    test('forwards preparedSql to authorizeWithBudget for matching statements', () async {
+      when(() => mockFeatureFlags.enableClientTokenAuthorization).thenReturn(true);
+
+      PreparedSql? receivedPrepared;
+      final prepared = PreparedSql.parse('SELECT 1');
+      final gate = SqlRpcClientTokenGate(
+        featureFlags: mockFeatureFlags,
+        support: _support(
+          authorizeWithBudget:
+              ({
+                required token,
+                required sql,
+                required requestDatabase,
+                required requestId,
+                required method,
+                required deadline,
+                preparedSql,
+              }) async {
+                receivedPrepared = preparedSql;
+                return const Success(unit);
+              },
+        ),
+      );
+
+      final response = await gate.enforce(
+        request: const RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-prepared',
+          params: <String, dynamic>{'sql': 'SELECT 1'},
+        ),
+        clientToken: 'token',
+        sqlStatements: const ['SELECT 1'],
+        preparedStatements: [prepared],
+        investigationSqlOnDeny: 'SELECT 1',
+        requestDatabase: null,
+        deadline: DateTime.now().add(const Duration(seconds: 30)),
+      );
+
+      expect(response, isNull);
+      expect(identical(receivedPrepared, prepared), isTrue);
     });
   });
 }

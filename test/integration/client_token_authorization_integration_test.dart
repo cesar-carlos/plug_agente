@@ -105,7 +105,42 @@ void main() {
     );
   }
 
-  ClientTokenPolicy policyDenyAll() {
+  ClientTokenPolicy policyDenyOverridesAllowOnUsers() {
+    return const ClientTokenPolicy(
+      clientId: 'test-client',
+      allTables: false,
+      allViews: false,
+      allPermissions: false,
+      rules: [
+        ClientTokenRule(
+          resource: DatabaseResource(
+            resourceType: DatabaseResourceType.table,
+            name: 'dbo.users',
+          ),
+          permissions: ClientPermissionSet(
+            canRead: true,
+            canUpdate: true,
+            canDelete: true,
+          ),
+          effect: ClientTokenRuleEffect.allow,
+        ),
+        ClientTokenRule(
+          resource: DatabaseResource(
+            resourceType: DatabaseResourceType.table,
+            name: 'dbo.users',
+          ),
+          permissions: ClientPermissionSet(
+            canRead: true,
+            canUpdate: false,
+            canDelete: false,
+          ),
+          effect: ClientTokenRuleEffect.deny,
+        ),
+      ],
+    );
+  }
+
+  ClientTokenPolicy policyGlobalScopeWithDenyOnUsers() {
     return const ClientTokenPolicy(
       clientId: 'test-client',
       allTables: true,
@@ -263,7 +298,7 @@ void main() {
     test('should deny when deny rule overrides allow', () async {
       when(
         () => mockResolver.resolvePolicy('valid-token'),
-      ).thenAnswer((_) async => Success(policyDenyAll()));
+      ).thenAnswer((_) async => Success(policyDenyOverridesAllowOnUsers()));
 
       const request = RpcRequest(
         jsonrpc: '2.0',
@@ -280,6 +315,47 @@ void main() {
 
       check(response.isError).isTrue();
       check(authMetrics.getSummary().totalDenied).equals(1);
+    });
+
+    test('should authorize when global scope ignores deny rules', () async {
+      when(
+        () => mockResolver.resolvePolicy('valid-token'),
+      ).thenAnswer((_) async => Success(policyGlobalScopeWithDenyOnUsers()));
+
+      final queryResponse = QueryResponse(
+        id: 'resp-1',
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        data: const [],
+        timestamp: DateTime.now(),
+      );
+      when(
+        () => mockGateway.executeQuery(
+          any(),
+          timeout: any(named: 'timeout'),
+          database: any(named: 'database'),
+        ),
+      ).thenAnswer((_) async => Success(queryResponse));
+      when(
+        () => mockNormalizer.normalize(any()),
+      ).thenAnswer((_) => queryResponse);
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-1',
+        params: {'sql': 'SELECT * FROM dbo.users'},
+      );
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'valid-token',
+      );
+
+      check(response.isSuccess).isTrue();
+      check(authMetrics.getSummary().totalAuthorized).equals(1);
+      check(authMetrics.getSummary().totalDenied).equals(0);
     });
 
     test('should deny when token is invalid or revoked', () async {

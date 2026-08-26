@@ -57,5 +57,49 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
     });
+
+    test('should classify commented INNER JOIN as read on joined tables', () {
+      final result = classifier.classify('''
+/* CONTA RECEBER */
+SELECT cr.CodEmpresa -- chave
+FROM ContaReceber cr
+INNER JOIN Cliente c ON c.CodCliente = cr.CodCliente
+''');
+
+      expect(result.isSuccess(), isTrue);
+      result.fold((value) {
+        expect(value.operation, equals(SqlOperation.read));
+        final names = value.resources.map((resource) => resource.normalizedName).toList()..sort();
+        expect(names, equals(['cliente', 'contareceber']));
+      }, (_) => fail('Expected success'));
+    });
+
+    test('should extract table from a one-level derived table', () {
+      final result = classifier.classify(
+        'SELECT * FROM (SELECT * FROM dbo.users) q',
+      );
+
+      expect(result.isSuccess(), isTrue);
+      result.fold((value) {
+        expect(value.operation, equals(SqlOperation.read));
+        expect(
+          value.resources.map((resource) => resource.normalizedName),
+          contains('dbo.users'),
+        );
+      }, (_) => fail('Expected success'));
+    });
+
+    test('should extract table to the right of CROSS APPLY', () {
+      final result = classifier.classify(
+        'SELECT u.id FROM dbo.users u CROSS APPLY dbo.fn_split(u.name) s',
+      );
+
+      expect(result.isSuccess(), isTrue);
+      result.fold((value) {
+        expect(value.operation, equals(SqlOperation.read));
+        final names = value.resources.map((resource) => resource.normalizedName).toList()..sort();
+        expect(names, containsAll(['dbo.fn_split', 'dbo.users']));
+      }, (_) => fail('Expected success'));
+    });
   });
 }

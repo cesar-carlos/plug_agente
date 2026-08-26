@@ -16,6 +16,7 @@ import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -243,13 +244,13 @@ class SqlRpcMethodHandlerOperations {
 
   SqlStreamingCoordinator get sqlStreamingCoordinator => _sqlStreamingCoordinator;
 
-  static const _defaultSqlExecuteTotalBudget = Duration(seconds: 35);
+  static const Duration _defaultSqlExecuteTotalBudget = RpcSqlBudgetConstants.defaultSqlExecuteTotalBudget;
 
-  static const _defaultSqlBatchTotalBudget = Duration(seconds: 45);
+  static const Duration _defaultSqlBatchTotalBudget = RpcSqlBudgetConstants.defaultSqlBatchTotalBudget;
 
-  static const _defaultQueryStageBudget = Duration(seconds: 30);
+  static const Duration _defaultQueryStageBudget = RpcSqlBudgetConstants.defaultQueryStageBudget;
 
-  static const _defaultBatchExecutionStageBudget = Duration(seconds: 35);
+  static const Duration _defaultBatchExecutionStageBudget = RpcSqlBudgetConstants.defaultBatchExecutionStageBudget;
 
   Future<RpcResponse> handleSqlExecute(
     RpcRequest request,

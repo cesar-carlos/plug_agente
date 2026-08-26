@@ -1,106 +1,32 @@
-/// Detects SQL comment markers and `;keyword` sequences only at statement
-/// boundaries, respecting `'...'`, `"..."`, `[...]` using the same scan rules as
-/// `splitSqlStatements` in `split_sql_statements.dart`.
+import 'package:plug_agente/core/utils/sql_text_scanner.dart';
+
+/// Detects leftover SQL comment markers and `;keyword` sequences only at
+/// statement boundaries, respecting `'...'`, `"..."`, `[...]` using the same
+/// scan rules as `splitSqlStatements`.
 ///
-/// Returns true when top-level `--`, `/*`, lock hints, or `;` followed by a
-/// dangerous keyword (drop, delete, insert, update, alter, create, truncate)
-/// appears outside string/bracket literals.
+/// Callers that allow documentation comments should strip them first with
+/// `stripTopLevelSqlComments`. Returns true when top-level `--`, `/*`, lock
+/// hints, or `;` followed by a dangerous keyword (drop, delete, insert, update,
+/// alter, create, truncate) appears outside string/bracket literals.
 bool sqlContainsTopLevelDangerousPatterns(String sql) {
   final lower = sql.toLowerCase();
-  var i = 0;
-  var inSingle = false;
-  var inDouble = false;
-  var inBracket = false;
-
-  while (i < sql.length) {
-    final c = sql[i];
-
-    if (inBracket) {
-      if (c == ']') {
-        inBracket = false;
+  var dangerous = false;
+  scanSqlText(
+    sql,
+    onCode: (start, end) {
+      if (dangerous) {
+        return;
       }
-      i++;
-      continue;
-    }
-
-    if (inSingle) {
-      if (c == "'") {
-        if (i + 1 < sql.length && sql[i + 1] == "'") {
-          i += 2;
-          continue;
-        }
-        inSingle = false;
+      if (_codeRangeHasDangerousPatterns(lower, start, end)) {
+        dangerous = true;
       }
-      i++;
-      continue;
-    }
-
-    if (inDouble) {
-      if (c == '"') {
-        if (i + 1 < sql.length && sql[i + 1] == '"') {
-          i += 2;
-          continue;
-        }
-        inDouble = false;
-      }
-      i++;
-      continue;
-    }
-
-    if (c == '-' && i + 1 < sql.length && sql[i + 1] == '-') {
-      return true;
-    }
-
-    if (c == '/' && i + 1 < sql.length && sql[i + 1] == '*') {
-      return true;
-    }
-
-    if (c == ';') {
-      var j = i + 1;
-      while (j < sql.length) {
-        final ch = sql[j];
-        if (ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r') {
-          break;
-        }
-        j++;
-      }
-      if (_dangerousKeywordFollows(lower, j)) {
-        return true;
-      }
-      i++;
-      continue;
-    }
-
-    if (_isAsciiLetter(c.codeUnitAt(0))) {
-      if (_lockHintFollows(lower, i)) {
-        return true;
-      }
-      i++;
-      continue;
-    }
-
-    if (c == '[') {
-      inBracket = true;
-      i++;
-      continue;
-    }
-
-    if (c == "'") {
-      inSingle = true;
-      i++;
-      continue;
-    }
-
-    if (c == '"') {
-      inDouble = true;
-      i++;
-      continue;
-    }
-
-    i++;
-  }
-
-  return false;
+    },
+    onLiteral: (_, _) {},
+    onComment: (_, _, {required isBlock}) {
+      dangerous = true;
+    },
+  );
+  return dangerous;
 }
 
 const List<String> _sqlDangerousKeywords = [
@@ -122,6 +48,34 @@ const List<String> _sqlLockHintKeywords = [
   'updlock',
   'xlock',
 ];
+
+bool _codeRangeHasDangerousPatterns(String lower, int start, int end) {
+  var i = start;
+  while (i < end) {
+    final c = lower[i];
+    if (c == ';') {
+      var j = i + 1;
+      while (j < end) {
+        final ch = lower[j];
+        if (ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r') {
+          break;
+        }
+        j++;
+      }
+      if (_dangerousKeywordFollows(lower, j)) {
+        return true;
+      }
+      i++;
+      continue;
+    }
+
+    if (_isAsciiLetter(c.codeUnitAt(0)) && _lockHintFollows(lower, i)) {
+      return true;
+    }
+    i++;
+  }
+  return false;
+}
 
 // Expects [lower] to be the pre-lowercased version of the original SQL string,
 // ensuring index [j] aligns with the original scan position.

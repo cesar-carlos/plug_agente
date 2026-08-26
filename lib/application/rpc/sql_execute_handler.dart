@@ -16,6 +16,7 @@ import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/core/utils/split_sql_statements.dart' show sqlStatementsForClientTokenAuthorization;
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -95,6 +96,7 @@ class SqlExecuteHandler {
     if (sql == null || sql.isEmpty) {
       return _support.invalidParams(request, 'sql is required');
     }
+    final prepared = PreparedSql.parse(sql);
     final options = paramReader.options;
     if (options?['preserve_sql'] == true) {
       _deprecationMetrics?.recordPreserveSqlUsage(
@@ -156,22 +158,8 @@ class SqlExecuteHandler {
       return idempotentEarly;
     }
 
-    final authDenied = await _clientTokenGate.enforce(
-      request: request,
-      clientToken: clientToken,
-      sqlStatements: multiResultRequested ? sqlStatementsForClientTokenAuthorization(sql) : [sql],
-      investigationSqlOnDeny: sql,
-      requestDatabase: database,
-      deadline: deadline,
-      deduplicateEquivalentSql: multiResultRequested,
-      skipEmptyAfterTrim: multiResultRequested,
-    );
-    if (authDenied != null) {
-      return authDenied;
-    }
-
-    final validation = SqlValidator.validateSqlForExecution(
-      sql,
+    final validation = SqlValidator.validatePreparedSql(
+      prepared,
       allowMultipleStatements: multiResultRequested,
     );
     if (validation.isError()) {
@@ -182,6 +170,21 @@ class SqlExecuteHandler {
         useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
       );
       return RpcResponse.error(id: request.id, error: rpcError);
+    }
+
+    final authDenied = await _clientTokenGate.enforce(
+      request: request,
+      clientToken: clientToken,
+      sqlStatements: multiResultRequested ? sqlStatementsForClientTokenAuthorization(sql) : [sql],
+      preparedStatements: multiResultRequested ? null : [prepared],
+      investigationSqlOnDeny: sql,
+      requestDatabase: database,
+      deadline: deadline,
+      deduplicateEquivalentSql: multiResultRequested,
+      skipEmptyAfterTrim: multiResultRequested,
+    );
+    if (authDenied != null) {
+      return authDenied;
     }
 
     final queryRequest = QueryRequest(
@@ -205,7 +208,8 @@ class SqlExecuteHandler {
         final prefersDbStreaming = _dbStreamingAutoPolicy.prefersDbStreamingOverMaterialized(
           featureFlags: _featureFlags,
           queryRequest: queryRequest,
-          sql: sql,
+          sql: prepared.stripped,
+          alreadyStripped: true,
           negotiatedExtensions: negotiatedExtensions,
           preferDbStreaming: options?['prefer_db_streaming'] == true,
           effectiveMaxRows: maxRows,
@@ -231,6 +235,7 @@ class SqlExecuteHandler {
           effectiveMaxRows: maxRows,
           clientToken: clientToken,
           database: database,
+          preparedSql: multiResultRequested ? null : prepared,
         );
         if (!streamingTry.succeeded && !explicitPreferDbStreaming && (prefersDbStreaming || autoPreferDbStreaming)) {
           streamingTry = await _dbStreamingExecutor.tryStreamingFromDb(
@@ -246,6 +251,7 @@ class SqlExecuteHandler {
             effectiveMaxRows: maxRows,
             clientToken: clientToken,
             database: database,
+            preparedSql: multiResultRequested ? null : prepared,
           );
         }
         final streamingFromDbResponse = streamingTry.response;
@@ -318,7 +324,8 @@ class SqlExecuteHandler {
             final avoidMaterializedStreaming = _dbStreamingAutoPolicy.prefersDbStreamingOverMaterialized(
               featureFlags: _featureFlags,
               queryRequest: queryRequest,
-              sql: sql,
+              sql: prepared.stripped,
+              alreadyStripped: true,
               negotiatedExtensions: negotiatedExtensions,
               preferDbStreaming: options?['prefer_db_streaming'] == true,
               effectiveMaxRows: maxRows,

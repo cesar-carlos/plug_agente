@@ -11,6 +11,7 @@ import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/core/utils/rpc_wire_map.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -97,6 +98,7 @@ class RpcMethodHandlerIdempotencyOrchestrator {
     required String? requestId,
     required String method,
     required DateTime? deadline,
+    PreparedSql? preparedSql,
   }) async {
     final timeout = effectiveStageTimeout(
       deadline: deadline,
@@ -130,6 +132,7 @@ class RpcMethodHandlerIdempotencyOrchestrator {
           requestDatabase: requestDatabase,
           requestId: requestId,
           method: method,
+          preparedSql: preparedSql,
         );
       }
       return await _authorizeSqlOperation(
@@ -138,6 +141,7 @@ class RpcMethodHandlerIdempotencyOrchestrator {
         requestDatabase: requestDatabase,
         requestId: requestId,
         method: method,
+        preparedSql: preparedSql,
       ).timeout(timeout);
     } on TimeoutException catch (error) {
       final context = <String, dynamic>{

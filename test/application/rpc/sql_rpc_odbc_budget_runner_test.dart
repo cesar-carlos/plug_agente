@@ -48,6 +48,7 @@ SqlRpcMethodHandlerSupport _support({
           required requestId,
           required method,
           required deadline,
+          preparedSql,
         }) async => const Success(unit),
     effectiveStageTimeout: effectiveStageTimeout ?? ({required deadline, required stageBudget}) => stageBudget,
   );
@@ -142,9 +143,13 @@ void main() {
 
       expect(result.isError(), isTrue);
       final failure = result.exceptionOrNull()! as domain.QueryExecutionFailure;
-      expect(failure.message, 'SQL execution budget exhausted before database call');
+      expect(failure.message, 'SQL request budget exhausted before the database call (not a SQL Server timeout)');
       expect(failure.context['stage'], 'query');
       expect(failure.context['reason'], RpcSqlBudgetConstants.queryBudgetExhaustedReason);
+      expect(
+        failure.context['user_message'],
+        'O orçamento de tempo desta requisição SQL esgotou antes de chamar o banco. Tente novamente ou reduza a consulta.',
+      );
       expect(failure.context['request_id'], 'req-1');
       verifyNever(() => mockGateway.executeQuery(any()));
     });

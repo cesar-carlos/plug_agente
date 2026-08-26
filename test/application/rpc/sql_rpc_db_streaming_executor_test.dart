@@ -10,6 +10,7 @@ import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -130,6 +131,7 @@ SqlRpcMethodHandlerSupport _support() {
           required requestId,
           required method,
           required deadline,
+          preparedSql,
         }) async => const Success(unit),
     effectiveStageTimeout: ({required deadline, required stageBudget}) => stageBudget,
   );
@@ -227,6 +229,40 @@ void main() {
       verify(() => repository.getCurrentConfig()).called(1);
       verifyNever(() => repository.getCurrentConfigMetadata());
       verifyNever(() => repository.getByIdMetadata(any()));
+    });
+
+    test('uses PreparedSql without changing streaming success', () async {
+      const sql = '/* docs */ SELECT * FROM users';
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-prepared',
+        params: <String, dynamic>{'sql': sql},
+      );
+      final queryRequest = QueryRequest(
+        id: 'q-prepared',
+        agentId: 'agent-1',
+        query: sql,
+        timestamp: now,
+      );
+
+      final tryResult = await executor.tryStreamingFromDb(
+        request,
+        queryRequest,
+        sql,
+        _AcceptingStreamEmitter(),
+        limits: const TransportLimits(streamingRowThreshold: 10),
+        deadline: DateTime.now().add(const Duration(seconds: 30)),
+        timeoutMs: 0,
+        negotiatedExtensions: const <String, dynamic>{'streamingResults': true},
+        preferDbStreaming: true,
+        effectiveMaxRows: 10_000,
+        preparedSql: PreparedSql.parse(sql),
+      );
+
+      expect(tryResult.succeeded, isTrue);
+      expect(tryResult.response, isNotNull);
+      expect(tryResult.response!.isSuccess, isTrue);
     });
   });
 }

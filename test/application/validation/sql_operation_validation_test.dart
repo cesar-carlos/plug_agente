@@ -117,18 +117,28 @@ void main() {
         expect(r.isSuccess(), isTrue);
       });
 
-      test('should reject query with line comment', () {
+      test('should accept query with documentation line comments', () {
         final r = SqlValidator.validateSqlForExecution(
           'SELECT * FROM users -- DROP TABLE',
         );
-        expect(r.isError(), isTrue);
+        expect(r.isSuccess(), isTrue);
       });
 
-      test('should reject query with block comment', () {
+      test('should accept query with documentation block comments', () {
         final r = SqlValidator.validateSqlForExecution(
           'SELECT /* DROP */ * FROM users',
         );
-        expect(r.isError(), isTrue);
+        expect(r.isSuccess(), isTrue);
+      });
+
+      test('should accept documented SELECT with INNER JOIN', () {
+        final r = SqlValidator.validateSqlForExecution('''
+/* CONTA RECEBER */
+SELECT cr.CodEmpresa, c.Nome -- cliente
+FROM ContaReceber cr
+INNER JOIN Cliente c ON c.CodCliente = cr.CodCliente
+''');
+        expect(r.isSuccess(), isTrue);
       });
     });
   });
@@ -195,6 +205,14 @@ void main() {
 
       expect(hasClause, isFalse);
     });
+
+    test('should ignore limit mentioned only in a comment', () {
+      final hasClause = SqlValidator.containsTopLevelPaginationClause(
+        'SELECT * FROM users -- LIMIT 10',
+      );
+
+      expect(hasClause, isFalse);
+    });
   });
 
   group('SqlValidator.containsTopLevelSelectTop', () {
@@ -204,6 +222,15 @@ void main() {
           'SELECT TOP 1 Nome FROM Cliente ORDER BY CodCliente',
         ),
         isTrue,
+      );
+    });
+
+    test('should ignore SELECT TOP that appears only inside a comment', () {
+      expect(
+        SqlValidator.containsTopLevelSelectTop(
+          '/* SELECT TOP 1 Nome FROM Cliente */ SELECT Nome FROM Cliente',
+        ),
+        isFalse,
       );
     });
 

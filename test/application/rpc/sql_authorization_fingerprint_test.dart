@@ -9,5 +9,16 @@ void main() {
         sqlAuthorizationFingerprint('select * from users where id = 1'),
       );
     });
+
+    test('strips comments before collapsing whitespace', () {
+      expect(
+        sqlAuthorizationFingerprint('SELECT 1 -- a'),
+        sqlAuthorizationFingerprint('SELECT 1'),
+      );
+      expect(
+        sqlAuthorizationFingerprint('SELECT 1 /* block */'),
+        sqlAuthorizationFingerprint('SELECT 1'),
+      );
+    });
   });
 }

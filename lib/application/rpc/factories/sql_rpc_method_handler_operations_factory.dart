@@ -5,6 +5,7 @@ import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/application/services/active_config_resolver.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/repositories/i_active_config_query_cache.dart';
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_authorization_metrics_collector.dart';
@@ -40,10 +41,10 @@ class SqlRpcMethodHandlerOperationsFactory {
     IRpcDispatchMetricsCollector? dispatchMetrics,
     ISqlInvestigationCollector? sqlInvestigation,
     IStreamingDatabaseGateway? streamingGateway,
-    Duration sqlExecuteTotalBudget = const Duration(seconds: 35),
-    Duration sqlBatchTotalBudget = const Duration(seconds: 45),
-    Duration queryStageBudget = const Duration(seconds: 30),
-    Duration batchExecutionStageBudget = const Duration(seconds: 35),
+    Duration sqlExecuteTotalBudget = RpcSqlBudgetConstants.defaultSqlExecuteTotalBudget,
+    Duration sqlBatchTotalBudget = RpcSqlBudgetConstants.defaultSqlBatchTotalBudget,
+    Duration queryStageBudget = RpcSqlBudgetConstants.defaultQueryStageBudget,
+    Duration batchExecutionStageBudget = RpcSqlBudgetConstants.defaultBatchExecutionStageBudget,
     SqlStreamingCoordinator? sqlStreamingCoordinator,
     IOdbcConnectionSettings? odbcConnectionSettings,
     ISqlInFlightExecutionAbortPort? inFlightAbortPort,

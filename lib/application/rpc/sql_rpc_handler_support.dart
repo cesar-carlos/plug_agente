@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:result_dart/result_dart.dart';
@@ -42,6 +43,7 @@ typedef SqlRpcAuthorizeWithBudget =
       required String? requestId,
       required String method,
       required DateTime? deadline,
+      PreparedSql? preparedSql,
     });
 
 typedef SqlRpcEffectiveStageTimeout =

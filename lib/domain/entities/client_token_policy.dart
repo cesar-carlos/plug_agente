@@ -60,6 +60,12 @@ class ClientTokenPolicy {
 
   bool get allPermissions => allTables && allViews && globalPermissions.isFullAccess;
 
+  bool get usesGlobalScope => allTables || allViews;
+
+  /// Resource rules ignored when global table/view scope is on, matching
+  /// the UI authorization policy.
+  List<ClientTokenRule> get effectiveRules => usesGlobalScope ? const <ClientTokenRule>[] : rules;
+
   String? get payloadDatabaseConstraint => _normalizeDatabaseName(payload['database']);
 
   bool isAllowed({
@@ -71,7 +77,7 @@ class ClientTokenPolicy {
     }
 
     var hasExplicitAllow = false;
-    for (final rule in rules) {
+    for (final rule in effectiveRules) {
       if (!rule.appliesTo(resource)) {
         continue;
       }

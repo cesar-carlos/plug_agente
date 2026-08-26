@@ -12,6 +12,8 @@ import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/get_client_token_policy.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/authorization_context_constants.dart';
+import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
+import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/domain/entities/config.dart';
@@ -141,6 +143,7 @@ void main() {
       );
       registerFallbackValue(const SqlExecutionOptions());
       registerFallbackValue(SqlHandlingMode.managed);
+      registerFallbackValue(PreparedSql.parse('SELECT 1'));
       registerFallbackValue(
         const BulkInsertRequest(
           table: 'users',
@@ -480,6 +483,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
         ),
@@ -712,6 +716,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
         ),
@@ -797,6 +802,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
         ),
@@ -873,6 +879,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
         ),
@@ -905,6 +912,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
         ),
@@ -941,6 +949,40 @@ void main() {
 
       expect(response.isError, isTrue);
       expect(response.error!.code, equals(RpcErrorCode.invalidParams));
+    });
+
+    test('should validate sql.execute before authorizing', () async {
+      when(
+        () => mockFeatureFlags.enableClientTokenAuthorization,
+      ).thenReturn(true);
+
+      const request = RpcRequest(
+        jsonrpc: '2.0',
+        method: 'sql.execute',
+        id: 'req-validate-first',
+        params: {
+          'sql': 'SELECT * FROM users WITH (TABLOCKX)',
+        },
+      );
+
+      final response = await dispatcher.dispatch(
+        request,
+        'agent-1',
+        clientToken: 'opaque-token',
+      );
+
+      expect(response.isError, isTrue);
+      expect(response.error!.code, equals(RpcErrorCode.sqlValidationFailed));
+      verifyNever(
+        () => mockAuthorize(
+          token: any(named: 'token'),
+          sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
+          requestDatabase: any(named: 'requestDatabase'),
+          requestId: any(named: 'requestId'),
+          method: any(named: 'method'),
+        ),
+      );
     });
 
     test('should execute sql.execute successfully', () async {
@@ -993,6 +1035,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestDatabase: any(named: 'requestDatabase'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
@@ -1041,6 +1084,7 @@ void main() {
         () => mockAuthorize(
           token: 'opaque-token',
           sql: 'SELECT * FROM users',
+          preparedSql: any(named: 'preparedSql'),
           requestDatabase: ' ERP_MAIN ',
           requestId: 'req-db-auth',
           method: 'sql.execute',
@@ -1093,7 +1137,10 @@ void main() {
         expect(response.isSuccess, isTrue);
         expect(capturedTimeout, isNotNull);
         expect(capturedTimeout!.inMilliseconds, greaterThan(0));
-        expect(capturedTimeout!.inMilliseconds, lessThanOrEqualTo(30000));
+        expect(
+          capturedTimeout!.inMilliseconds,
+          lessThanOrEqualTo(RpcSqlBudgetConstants.defaultQueryStageBudget.inMilliseconds),
+        );
       },
     );
 
@@ -2982,6 +3029,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestDatabase: any(named: 'requestDatabase'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
@@ -3033,6 +3081,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestDatabase: any(named: 'requestDatabase'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
@@ -3211,6 +3260,7 @@ void main() {
           () => mockAuthorize(
             token: any(named: 'token'),
             sql: any(named: 'sql'),
+            preparedSql: any(named: 'preparedSql'),
             requestId: any(named: 'requestId'),
             method: any(named: 'method'),
           ),
@@ -3260,6 +3310,7 @@ void main() {
           () => mockAuthorize(
             token: any(named: 'token'),
             sql: any(named: 'sql'),
+            preparedSql: any(named: 'preparedSql'),
             requestId: any(named: 'requestId'),
             method: any(named: 'method'),
           ),
@@ -3446,6 +3497,7 @@ void main() {
           () => mockAuthorize(
             token: any(named: 'token'),
             sql: any(named: 'sql'),
+            preparedSql: any(named: 'preparedSql'),
             requestId: any(named: 'requestId'),
             method: any(named: 'method'),
           ),
@@ -3511,6 +3563,7 @@ void main() {
           () => mockAuthorize(
             token: any(named: 'token'),
             sql: any(named: 'sql'),
+            preparedSql: any(named: 'preparedSql'),
             requestId: any(named: 'requestId'),
             method: any(named: 'method'),
           ),
@@ -3581,6 +3634,7 @@ void main() {
           () => mockAuthorize(
             token: any(named: 'token'),
             sql: any(named: 'sql'),
+            preparedSql: any(named: 'preparedSql'),
             requestId: any(named: 'requestId'),
             method: any(named: 'method'),
           ),
@@ -3642,6 +3696,7 @@ void main() {
         () => mockAuthorize(
           token: any(named: 'token'),
           sql: any(named: 'sql'),
+          preparedSql: any(named: 'preparedSql'),
           requestId: any(named: 'requestId'),
           method: any(named: 'method'),
         ),
@@ -4676,6 +4731,7 @@ void main() {
             () => mockAuthorize(
               token: any(named: 'token'),
               sql: any(named: 'sql'),
+              preparedSql: any(named: 'preparedSql'),
               requestDatabase: any(named: 'requestDatabase'),
               requestId: any(named: 'requestId'),
               method: any(named: 'method'),

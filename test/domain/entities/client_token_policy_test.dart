@@ -147,7 +147,7 @@ void main() {
       ).isTrue();
     });
 
-    test('should deny when deny rule matches, even with allPermissions', () {
+    test('should ignore deny rules when global scope is enabled', () {
       const policy = ClientTokenPolicy(
         clientId: clientId,
         allTables: true,
@@ -177,7 +177,7 @@ void main() {
         ),
       );
 
-      check(result).isFalse();
+      check(result).isTrue();
     });
 
     test('should allow when allow rule matches', () {

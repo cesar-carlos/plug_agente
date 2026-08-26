@@ -22,7 +22,9 @@ void main() {
   group('NativeCompatibleAcquirePolicy pure classification', () {
     test('normalizeSql strips comments, collapses whitespace and trailing semicolons', () {
       expect(
-        NativeCompatibleAcquirePolicy.normalizeSql('SELECT   id FROM t;;  '),
+        NativeCompatibleAcquirePolicy.normalizeSql(
+          'SELECT   id /* note */ FROM t;; -- trailing',
+        ),
         'select id from t',
       );
     });

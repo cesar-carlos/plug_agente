@@ -1,10 +1,13 @@
-/// Splits [sql] at top-level `;` boundaries for separate authorization.
+import 'package:plug_agente/core/utils/sql_text_scanner.dart';
+
+/// Splits [sql] at top-level `;` boundaries and SQL Server `GO` batch
+/// separators for separate authorization.
 ///
 /// Not a full SQL parser: respects `'...'`, `"..."`, `[...]`, `--` line comments,
 /// and `/* */` block comments so semicolons inside literals do not split.
 ///
-/// Does not handle MySQL backtick strings, PostgreSQL dollar-quoting, or
-/// SQL Server `GO` batch separators.
+/// A line whose code-only content is `GO` (any case) is treated as a batch
+/// separator. Does not handle MySQL backtick strings or PostgreSQL dollar-quoting.
 List<String> splitSqlStatements(String sql) {
   final out = <String>[];
   _scanTopLevelSqlStatements(sql, (trimmed) {
@@ -16,7 +19,7 @@ List<String> splitSqlStatements(String sql) {
 
 /// Whether [sql] contains more than one non-empty top-level statement.
 ///
-/// Uses the same scan rules as [splitSqlStatements] (literals and comments).
+/// Uses the same scan rules as [splitSqlStatements] (literals, comments, `GO`).
 /// Stops scanning once a second non-empty statement is found.
 bool sqlHasMultipleTopLevelStatements(String sql) {
   var nonEmptySegments = 0;
@@ -43,124 +46,83 @@ void _scanTopLevelSqlStatements(
   bool Function(String trimmed) onNonEmptySegment,
 ) {
   final buf = StringBuffer();
-  var i = 0;
-  var inSingle = false;
-  var inDouble = false;
-  var inBracket = false;
+  var stmtLineStart = 0;
+  final lineCode = StringBuffer();
   var stop = false;
 
   bool flush() {
     final trimmed = buf.toString().trim();
     buf.clear();
+    stmtLineStart = 0;
+    lineCode.clear();
     if (trimmed.isEmpty) {
       return false;
     }
     return onNonEmptySegment(trimmed);
   }
 
-  while (i < sql.length && !stop) {
-    final c = sql[i];
-
-    if (inBracket) {
-      buf.write(c);
-      if (c == ']') {
-        inBracket = false;
-      }
-      i++;
-      continue;
-    }
-
-    if (inSingle) {
-      buf.write(c);
-      if (c == "'") {
-        if (i + 1 < sql.length && sql[i + 1] == "'") {
-          buf.write(sql[i + 1]);
-          i += 2;
-          continue;
-        }
-        inSingle = false;
-      }
-      i++;
-      continue;
-    }
-
-    if (inDouble) {
-      buf.write(c);
-      if (c == '"') {
-        if (i + 1 < sql.length && sql[i + 1] == '"') {
-          buf.write(sql[i + 1]);
-          i += 2;
-          continue;
-        }
-        inDouble = false;
-      }
-      i++;
-      continue;
-    }
-
-    if (c == '-' && i + 1 < sql.length && sql[i + 1] == '-') {
-      buf.write(c);
-      buf.write(sql[i + 1]);
-      i += 2;
-      while (i < sql.length) {
-        final ch = sql[i];
-        if (ch == '\n' || ch == '\r') {
-          break;
-        }
-        buf.write(ch);
-        i++;
-      }
-      continue;
-    }
-
-    if (c == '/' && i + 1 < sql.length && sql[i + 1] == '*') {
-      buf.write(c);
-      buf.write(sql[i + 1]);
-      i += 2;
-      while (i + 1 < sql.length) {
-        if (sql[i] == '*' && sql[i + 1] == '/') {
-          buf.write('*');
-          buf.write('/');
-          i += 2;
-          break;
-        }
-        buf.write(sql[i]);
-        i++;
-      }
-      continue;
-    }
-
-    if (c == ';') {
-      stop = flush();
-      i++;
-      continue;
-    }
-
-    if (c == '[') {
-      inBracket = true;
-      buf.write(c);
-      i++;
-      continue;
-    }
-
-    if (c == "'") {
-      inSingle = true;
-      buf.write(c);
-      i++;
-      continue;
-    }
-
-    if (c == '"') {
-      inDouble = true;
-      buf.write(c);
-      i++;
-      continue;
-    }
-
-    buf.write(c);
-    i++;
+  void discardCurrentLine() {
+    final text = buf.toString();
+    buf
+      ..clear()
+      ..write(text.substring(0, stmtLineStart));
   }
 
+  void handleEndOfLine() {
+    if (lineCode.toString().trim().toUpperCase() == 'GO') {
+      discardCurrentLine();
+      stop = flush();
+    } else {
+      stmtLineStart = buf.length;
+    }
+    lineCode.clear();
+  }
+
+  void writeCodeRange(int start, int end) {
+    var i = start;
+    while (i < end && !stop) {
+      final c = sql[i];
+      if (c == ';') {
+        stop = flush();
+        i++;
+        continue;
+      }
+      if (c == '\n' || c == '\r') {
+        buf.write(c);
+        i++;
+        if (c == '\r' && i < end && sql[i] == '\n') {
+          buf.write('\n');
+          i++;
+        }
+        handleEndOfLine();
+        continue;
+      }
+      buf.write(c);
+      lineCode.write(c);
+      i++;
+    }
+  }
+
+  scanSqlText(
+    sql,
+    onCode: writeCodeRange,
+    onLiteral: (start, end) {
+      if (stop) {
+        return;
+      }
+      buf.write(sql.substring(start, end));
+    },
+    onComment: (start, end, {required isBlock}) {
+      if (stop) {
+        return;
+      }
+      buf.write(sql.substring(start, end));
+    },
+  );
+
+  if (!stop && lineCode.toString().trim().toUpperCase() == 'GO') {
+    discardCurrentLine();
+  }
   if (!stop) {
     flush();
   }
