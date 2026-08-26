@@ -136,7 +136,7 @@ void main() {
         setupScript,
         isNot(
           contains(
-            'Root: HKCU; Subkey: "Software\\Microsoft\\Windows\\CurrentVersion\\Run"',
+            r'Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"',
           ),
         ),
       );
@@ -145,7 +145,7 @@ void main() {
     test('registers the plugdb URL protocol for uninstallable HKLM classes', () {
       final setupScript = File('installer/setup.iss').readAsStringSync();
 
-      expect(setupScript, contains('Software\\Classes\\plugdb'));
+      expect(setupScript, contains(r'Software\Classes\plugdb'));
       expect(setupScript, contains('URL Protocol'));
       expect(setupScript, contains(r'""{app}\{#MyAppExeName}"" ""%1""'));
       expect(setupScript, contains('Flags: uninsdeletekey'));
@@ -158,7 +158,7 @@ void main() {
       expect(languages.indexOf('brazilianportuguese'), lessThan(languages.indexOf('Name: "english"')));
       expect(setupScript, contains('#define MyAppPublisher "Se7e Sistemas"'));
       expect(setupScript, contains('DisableWelcomePage=yes'));
-      expect(setupScript, contains(r'VersionInfoVersion={#MyAppVersion}.0'));
+      expect(setupScript, contains('VersionInfoVersion={#MyAppVersion}.0'));
       expect(setupScript, contains('Compression=lzma2/ultra64'));
       expect(setupScript, contains(r'WizardImageFile=wizard\wizard-image.png'));
       expect(setupScript, contains(r'WizardSmallImageFile=wizard\wizard-small-image.png'));
