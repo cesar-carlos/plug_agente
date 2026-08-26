@@ -78,6 +78,24 @@ jobs:
       - name: Installer setup script test
         run: flutter test test/installer/setup_script_test.dart
 
+  iss-syntax:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Compile installer script syntax
+        run: python tool/release/release_preflight.py --compile-iss
+
   appcast-tooling:
     runs-on: ubuntu-latest
     steps:

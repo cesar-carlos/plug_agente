@@ -15,21 +15,23 @@ python installer/build_installer.py
 
 Esse comando executa:
 
-1. `python installer/update_version.py` (sincroniza versao em `pubspec.yaml`,
-   `installer/setup.iss` e `lib/core/constants/app_version.g.dart`)
-2. `flutter build windows --release` (gera `plug_agente.exe` e
-   `plug_update_helper.exe` no bundle Release)
-3. `python tool/elevated/build_elevated_runner.py` (compila o helper Dart
+1. `flutter build windows --release` (gera `plug_agente.exe` e
+   `plug_update_helper.exe` no bundle Release). Passe `--sync-version` se
+   quiser sincronizar `pubspec.yaml`, `installer/setup.iss` e
+   `lib/core/constants/app_version.g.dart` via `update_version.py` antes do
+   build. Sem essa flag a versao atual e preservada (util para testes locais).
+2. `python tool/elevated/build_elevated_runner.py` (compila o helper Dart
    `plug_agente_elevated_runner.exe` em `tool/plug_agente_elevated_runner/` e
    copia para o bundle Release/Debug). O script falha cedo se esse helper nao
    estiver no bundle.
-4. Validacao de que `plug_agente.exe`, `plug_update_helper.exe` e
+3. Validacao de que `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe` estao no bundle Release.
-5. Assinatura opcional, na ordem `plug_agente.exe`,
-   `plug_update_helper.exe`, `plug_agente_elevated_runner.exe` e instalador,
-   quando o certificado esta configurado.
-6. `ISCC installer/setup.iss`
-7. Assinatura opcional do `PlugAgente-Setup-<versao>.exe` gerado.
+4. Assinatura opcional de `plug_agente.exe`, `plug_update_helper.exe` e
+   `plug_agente_elevated_runner.exe` quando o certificado esta configurado.
+5. `ISCC installer/setup.iss`. Com certificado, o ISCC recebe `SignTool` e
+   `SignedUninstaller=yes` para assinar o setup e o uninstaller embutido.
+6. `signtool verify` no `PlugAgente-Setup-<versao>.exe` quando a assinatura
+   estiver configurada.
 
 Quando o ambiente ou `.env` define `AUTO_UPDATE_FEED_URL`,
 `AUTO_UPDATE_CHANNEL`, `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE`,
@@ -47,6 +49,17 @@ e expoe o input `require_valid_update_signature` para virar `true` quando
 helper e instalador ja estiverem assinados ponta a ponta. Em builds locais que
 ainda nao tem certificado configurado, exporte `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false`
 no `.env` antes de rodar o build.
+
+Para validar a sintaxe do Inno Setup sem o bundle Flutter (o mesmo gate do
+job `iss-syntax` no Flutter CI), rode:
+
+```bash
+python tool/release/release_preflight.py --compile-iss
+```
+
+Esse comando chama `ISCC /DCOMPILE_SCRIPT_ONLY` e grava o exe em um diretorio
+temporario (nunca em `installer/dist`). A diretiva omite a secao `[Files]`
+porque o payload Release nao existe em PRs.
 
 Antes de publicar manualmente, rode:
 
@@ -76,10 +89,11 @@ artifacts sem criar commit, tag ou release.
 
 Assinatura de codigo e opcional. Se `WINDOWS_CODE_SIGNING_CERT_PATH` apontar
 para um certificado PFX, o script assina `plug_agente.exe`,
-`plug_update_helper.exe`, `plug_agente_elevated_runner.exe` e o instalador
-(`PlugAgente-Setup-<versao>.exe`). Use `WINDOWS_CODE_SIGNING_CERT_PASSWORD`
-para senha do PFX e `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar quando a
-assinatura nao estiver configurada.
+`plug_update_helper.exe` e `plug_agente_elevated_runner.exe` e passa
+`SignTool` ao ISCC (`SignedUninstaller=yes`) para o instalador e o
+uninstaller embutido. Use `WINDOWS_CODE_SIGNING_CERT_PASSWORD` para senha do
+PFX e `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar quando a assinatura
+nao estiver configurada. Builds locais unsigned nao definem `SignTool`.
 
 No workflow `Publish Windows Release`, o passo `Verify Authenticode
 signatures` valida `signtool verify /pa /v` para installer e helper apos o

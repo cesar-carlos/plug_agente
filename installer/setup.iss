@@ -1,13 +1,15 @@
 ﻿; Plug Agente - Inno Setup Script
 ; Version is updated by installer/update_version.py
-; Uses #$XXXX for Unicode chars to avoid encoding issues on build machines
+; File encoding: UTF-8. Portuguese CustomMessages must use real Unicode
+; characters; Inno does not expand #$XXXX escapes in [CustomMessages].
 
 #include "constants.iss"
 #define MyAppName "Plug Agente"
 #define MyAppVersion "1.8.6"
-#define MyAppPublisher "com.se7esistemas"
+#define MyAppPublisher "Se7e Sistemas"
 #define MyAppURL "https://github.com/cesar-carlos/plug_agente"
 #define MyAppExeName "plug_agente.exe"
+#define VCRedistUrl "https://aka.ms/vs/17/release/vc_redist.x64.exe"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5E}
@@ -17,14 +19,23 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
+AppCopyright=Copyright (C) 2026 {#MyAppPublisher}
+UninstallDisplayName={#MyAppName}
+VersionInfoVersion={#MyAppVersion}.0
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
+DisableWelcomePage=yes
+DisableProgramGroupPage=yes
 AllowNoIcons=yes
 OutputDir=dist
 OutputBaseFilename=PlugAgente-Setup-{#MyAppVersion}
 SetupIconFile=..\windows\runner\resources\app_icon.ico
+WizardImageFile=wizard\wizard-image.png
+WizardSmallImageFile=wizard\wizard-small-image.png
 UninstallDisplayIcon={app}\{#MyAppExeName}
-Compression=lzma
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
@@ -37,48 +48,61 @@ MinVersion=10.0
 ; first; an AppMutex check would abort /VERYSILENT if the process is still
 ; in its pre-close grace window.
 SetupMutex=PlugAgenteSetup
-CloseApplications=yes
+CloseApplications=force
 CloseApplicationsFilter=plug_agente.exe
-ForceCloseApplications=yes
 SetupLogging=yes
+#ifdef SIGN_INSTALLER
+SignTool=mysigntool
+SignedUninstaller=yes
+#endif
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
 english.StartWithWindows=Start with Windows
 brazilianportuguese.StartWithWindows=Iniciar com o Windows
 english.StartupOptionsGroup=Startup options
-brazilianportuguese.StartupOptionsGroup=Op#$00E7#$00F5es de Inicializa#$00E7#$00E3o
+brazilianportuguese.StartupOptionsGroup=Opções de Inicialização
+english.VCRedistDownloading=Downloading Microsoft Visual C++ Redistributable x64
+brazilianportuguese.VCRedistDownloading=Baixando o Microsoft Visual C++ Redistributable x64
+english.VCRedistDownloadFailed=Could not download Microsoft Visual C++ Redistributable x64. Check your internet connection and try again.%n{#VCRedistUrl}
+brazilianportuguese.VCRedistDownloadFailed=Não foi possível baixar o Microsoft Visual C++ Redistributable x64. Verifique a conexão com a internet e tente novamente.%n{#VCRedistUrl}
+english.VCRedistInstallFailed=Could not install Microsoft Visual C++ Redistributable x64.
+brazilianportuguese.VCRedistInstallFailed=Não foi possível instalar o Microsoft Visual C++ Redistributable x64.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "startup"; Description: "{cm:StartWithWindows}"; GroupDescription: "{cm:StartupOptionsGroup}"
 
+#ifndef COMPILE_SCRIPT_ONLY
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Excludes: "*.pdb,*.ilk,*.exp,*.lib,*.log"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\Desinstalar {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldLaunchAfterSilentUpdate
 ; Write HKCU Run for the logged-on user (not the elevated admin token).
-; Silent updates pass /MERGETASKS="!startup", so this Task is skipped.
+; Silent updates pass /MERGETASKS="!desktopicon,!startup", so this Task is skipped.
 Filename: "{sys}\reg.exe"; Parameters: "{code:GetLoggedOnUserAutostartRegParams}"; Flags: runasoriginaluser runhidden; Tasks: startup
 
-; Grant standard users Modify on shared ProgramData so the agent works without
-; requiring "Run as administrator" after install (matches GlobalStorageAclConstants).
-
 [Registry]
-; Per-user Run key only, aligned with the app's AutoStartService (HKCU). Avoids
-; duplicate HKLM entries that require UAC to clean up. Silent update passes
-; /MERGETASKS="!desktopicon,!startup" so this Task is not reprocessed.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "{code:GetAutostartValue}"; Flags: uninsdeletevalue; Tasks: startup
+Root: HKLM; Subkey: "Software\Classes\plugdb"; ValueType: string; ValueName: ""; ValueData: "URL:Plug Agente Protocol"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\plugdb"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKLM; Subkey: "Software\Classes\plugdb\DefaultIcon"; ValueType: string; ValueData: "{app}\{#MyAppExeName},0"
+Root: HKLM; Subkey: "Software\Classes\plugdb\shell\open\command"; ValueType: string; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+
+; [UninstallRun] on Inno 6.6.1 does not accept runasoriginaluser.
+; cmd swallows "value not found" so a missing Run key does not fail uninstall.
+[UninstallRun]
+Filename: "{cmd}"; Parameters: "/c reg delete ""HKCU\Software\Microsoft\Windows\CurrentVersion\Run"" /v ""{#MyAppName}"" /f >nul 2>&1"; Flags: runhidden; RunOnceId: "RemoveAutostart"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{commonappdata}\PlugAgente\updates"
@@ -135,23 +159,6 @@ begin
   SaveStringToFile(MarkerPath, '1', False);
 end;
 
-procedure WriteLoggedOnUserAutostartRunKey;
-var
-  ResultCode: Integer;
-begin
-  if not ExecAsOriginalUser(
-    ExpandConstant('{sys}\reg.exe'),
-    GetLoggedOnUserAutostartRegParams(''),
-    '',
-    SW_HIDE,
-    ewWaitUntilTerminated,
-    ResultCode
-  ) then
-    Log('ExecAsOriginalUser for HKCU Run key failed to start')
-  else
-    Log('Logged-on user HKCU Run key write exit code: ' + IntToStr(ResultCode));
-end;
-
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
@@ -159,11 +166,8 @@ begin
     ConfigureSharedProgramDataPermissions;
     // Silent updates pass /MERGETASKS="!startup", so this does not re-request
     // auto-start. The app then writes HKCU for the interactive user.
-    if IsTaskSelected('startup') then
-    begin
+    if WizardIsTaskSelected('startup') then
       WriteAutostartRequestMarker;
-      WriteLoggedOnUserAutostartRunKey;
-    end;
   end;
 end;
 
@@ -182,23 +186,75 @@ begin
     Result := False;
 end;
 
-function InitializeSetup(): Boolean;
+function IsVCRedistInstallExitCodeSuccess(ResultCode: Integer): Boolean;
 begin
-  Result := True;
+  Result := (ResultCode = 0) or (ResultCode = 1638) or (ResultCode = 3010);
+end;
 
-  if not IsVCRedistInstalled() then
-  begin
-    if WizardSilent() then
-    begin
-      Log('Microsoft Visual C++ Redistributable x64 was not detected. Continuing because setup is running silently.');
-    end
-    else
-    begin
-      if MsgBox('Microsoft Visual C++ Redistributable x64 n' + Chr(227) + 'o foi detectado.' + #13#10 + #13#10 +
-        'Instale-o antes de usar o ' + ExpandConstant('{#MyAppName}') + ':' + #13#10 +
-        'https://aka.ms/vs/17/release/vc_redist.x64.exe' + #13#10 + #13#10 +
-        'Deseja continuar a instala' + Chr(231) + Chr(227) + 'o mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
-        Result := False;
+function DownloadAndInstallVCRedist(): String;
+var
+  DownloadPage: TDownloadWizardPage;
+  ResultCode: Integer;
+  RedistPath: String;
+begin
+  Result := '';
+  DownloadPage := CreateDownloadPage(
+    CustomMessage('VCRedistDownloading'),
+    CustomMessage('VCRedistDownloading'),
+    nil
+  );
+  DownloadPage.Clear;
+  DownloadPage.Add('{#VCRedistUrl}', 'vc_redist.x64.exe', '');
+  try
+    try
+      DownloadPage.Show;
+      DownloadPage.Download;
+    except
+      Result := CustomMessage('VCRedistDownloadFailed');
+      Log('VC++ Redistributable download failed: ' + GetExceptionMessage);
+      Exit;
     end;
+  finally
+    DownloadPage.Hide;
   end;
+
+  RedistPath := ExpandConstant('{tmp}\vc_redist.x64.exe');
+  if not FileExists(RedistPath) then
+  begin
+    Result := CustomMessage('VCRedistDownloadFailed');
+    Exit;
+  end;
+
+  if not Exec(
+    RedistPath,
+    '/install /quiet /norestart',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+  begin
+    Result := CustomMessage('VCRedistInstallFailed');
+    Exit;
+  end;
+
+  if not IsVCRedistInstallExitCodeSuccess(ResultCode) then
+  begin
+    Log('VC++ Redistributable installer exit code: ' + IntToStr(ResultCode));
+    Result := CustomMessage('VCRedistInstallFailed') + ' (' + IntToStr(ResultCode) + ')';
+    Exit;
+  end;
+
+  if ResultCode = 3010 then
+    Log('VC++ Redistributable installed with reboot pending (3010). Continuing.');
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  NeedsRestart := False;
+  if IsVCRedistInstalled() then
+    Exit;
+  Log('Microsoft Visual C++ Redistributable x64 was not detected. Downloading and installing.');
+  Result := DownloadAndInstallVCRedist();
 end;

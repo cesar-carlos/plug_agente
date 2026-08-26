@@ -115,9 +115,10 @@ O `installer/build_installer.py` executa:
    Release/Debug; obrigatorio)
 4. Validacao de presenca de `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe` no bundle Release
-5. Assinatura opcional, na ordem: `plug_agente.exe`,
-   `plug_update_helper.exe`, `plug_agente_elevated_runner.exe`, instalador
-6. `ISCC installer/setup.iss`
+5. Assinatura opcional de `plug_agente.exe`, `plug_update_helper.exe` e
+   `plug_agente_elevated_runner.exe`
+6. `ISCC installer/setup.iss` (com `SignTool` + `SignedUninstaller` quando o
+   certificado estiver configurado)
 
 A segunda chamada do preflight (`--check-installer --feed-public-key`)
 confirma que a chave publica Ed25519 esta embutida no `.exe` gerado; sem isso,
@@ -258,9 +259,10 @@ python tool/release/release_preflight.py --version 1.2.7 --require-iscc --check-
   do instalador para reduzir alertas de SmartScreen e aumentar confianca no
   update.
 - O script `installer/build_installer.py` assina `plug_agente.exe`,
-  `plug_update_helper.exe`, `plug_agente_elevated_runner.exe` e o instalador
-  `PlugAgente-Setup-<versao>.exe` quando `WINDOWS_CODE_SIGNING_CERT_PATH`
-  aponta para um PFX. Use `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar
+  `plug_update_helper.exe` e `plug_agente_elevated_runner.exe`, e passa
+  `SignTool` ao ISCC (`SignedUninstaller=yes`) para o instalador e o
+  uninstaller embutido quando `WINDOWS_CODE_SIGNING_CERT_PATH` aponta para um
+  PFX. Use `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar
   explicitamente quando a assinatura nao estiver configurada.
 - O workflow `Publish Windows Release` roda `signtool verify /pa /v` sobre
   instalador e `plug_update_helper.exe` apos o build. Esse gate falha o

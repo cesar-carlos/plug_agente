@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -54,10 +55,10 @@ def resolve_command(cmd: Sequence[str]) -> list[str]:
     return [resolved, *args[1:]]
 
 
-def run(cmd: Sequence[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run(cmd: Sequence[str], *, check: bool = True, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
         resolve_command(cmd),
-        cwd=PROJECT_ROOT,
+        cwd=cwd or PROJECT_ROOT,
         check=False,
         text=True,
         encoding="utf-8",
@@ -138,6 +139,25 @@ def find_iscc() -> str | None:
         if path != "ISCC" and Path(path).exists():
             return path
     return None
+
+
+def compile_iss_syntax() -> None:
+    iscc = find_iscc()
+    if iscc is None:
+        raise RuntimeError("ISCC is required for --compile-iss.")
+    installer_dir = SETUP_ISS.parent
+    with tempfile.TemporaryDirectory(prefix="plug-agente-iss-") as tmp:
+        output_dir = Path(tmp)
+        run(
+            [
+                iscc,
+                "/Q",
+                "/DCOMPILE_SCRIPT_ONLY",
+                f"/O{output_dir}",
+                str(SETUP_ISS),
+            ],
+            cwd=installer_dir,
+        )
 
 
 def ensure_tools(*, require_iscc: bool, check_pages: bool) -> None:
@@ -377,6 +397,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-dirty", action="store_true", help="Allow local uncommitted changes.")
     parser.add_argument("--allow-existing-tag", action="store_true", help="Do not fail when the release tag exists.")
     parser.add_argument("--require-iscc", action="store_true", help="Require Inno Setup compiler to be available.")
+    parser.add_argument(
+        "--compile-iss",
+        action="store_true",
+        help="Compile installer/setup.iss with /DCOMPILE_SCRIPT_ONLY into a temp directory (no Flutter payload).",
+    )
     parser.add_argument("--check-installer", action="store_true", help="Require installer/dist asset for this version.")
     parser.add_argument("--check-pages", action="store_true", help="Require GitHub Pages to be enabled for Actions deploy.")
     parser.add_argument("--repo", default="cesar-carlos/plug_agente", help="GitHub repository used by --check-pages.")
@@ -447,6 +472,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.check_secrets or args.print_publish_hints or args.early:
             for warning in collect_publish_secret_warnings(args.repo):
                 print(f"WARN: {warning}", file=sys.stderr)
+
+        if args.compile_iss:
+            compile_iss_syntax()
+            print("ISCC syntax compile passed (COMPILE_SCRIPT_ONLY).")
+            return 0
 
         if args.early:
             if not args.version:

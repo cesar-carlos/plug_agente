@@ -215,6 +215,37 @@ class ReleasePreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "skipped tests"):
                 release_preflight.ensure_appcast_signing_tests_not_skipped()
 
+    def test_compile_iss_syntax_requires_iscc(self) -> None:
+        with patch.object(release_preflight, "find_iscc", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "ISCC is required"):
+                release_preflight.compile_iss_syntax()
+
+    def test_compile_iss_syntax_passes_compile_script_only_define(self) -> None:
+        with (
+            patch.object(release_preflight, "find_iscc", return_value="ISCC"),
+            patch.object(release_preflight, "run") as run_mock,
+        ):
+            release_preflight.compile_iss_syntax()
+
+        cmd = run_mock.call_args.args[0]
+        self.assertEqual(cmd[0], "ISCC")
+        self.assertIn("/DCOMPILE_SCRIPT_ONLY", cmd)
+        self.assertTrue(any(str(part).startswith("/O") for part in cmd))
+        self.assertEqual(run_mock.call_args.kwargs["cwd"], release_preflight.SETUP_ISS.parent)
+
+    def test_main_compile_iss_skips_version_and_tag_checks(self) -> None:
+        with (
+            patch.object(release_preflight, "compile_iss_syntax") as compile_iss,
+            patch.object(release_preflight, "load_version_state") as load_state,
+            patch.object(release_preflight, "ensure_tag_available") as tag_check,
+        ):
+            code = release_preflight.main(["--compile-iss"])
+
+        self.assertEqual(code, 0)
+        compile_iss.assert_called_once()
+        load_state.assert_not_called()
+        tag_check.assert_not_called()
+
     def test_early_checks_validates_tag_without_version_sync(self) -> None:
         with (
             patch.object(release_preflight, "ensure_tools"),

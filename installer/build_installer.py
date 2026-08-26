@@ -203,6 +203,48 @@ def ensure_signing_matches_runtime() -> None:
         )
 
 
+def build_iscc_signtool_command() -> Optional[str]:
+    cert_path = signing_cert_path()
+    if cert_path is None:
+        return None
+    if not cert_path.exists():
+        raise SystemExit(f"Certificado de assinatura nao encontrado: {cert_path}")
+    signtool = find_signtool()
+    if signtool is None:
+        raise SystemExit(
+            "signtool nao encontrado. Instale Windows SDK ou coloque signtool no PATH."
+        )
+    command = (
+        f'"{signtool}" sign /f "{cert_path}" /fd SHA256 /tr {timestamp_url()} '
+        f"/td SHA256"
+    )
+    password = signing_password()
+    if password:
+        command += f' /p "{password}"'
+    command += " $f"
+    return command
+
+
+def build_iscc_command() -> List[str]:
+    cmd = [find_iscc()]
+    sign_command = build_iscc_signtool_command()
+    if sign_command is not None:
+        cmd.append("/DSIGN_INSTALLER")
+        cmd.append(f"/Smysigntool={sign_command}")
+        print("   ISCC SignTool habilitado (SignedUninstaller).", flush=True)
+    cmd.append(str(SETUP_ISS))
+    return cmd
+
+
+def verify_signed_file(path: Path) -> None:
+    signtool = find_signtool()
+    if signtool is None:
+        raise SystemExit(
+            "signtool nao encontrado. Instale Windows SDK ou coloque signtool no PATH."
+        )
+    run([signtool, "verify", "/pa", "/v", str(path)])
+
+
 def sign_file(path: Path) -> None:
     cert_path = signing_cert_path()
     required = read_env_flag("WINDOWS_CODE_SIGNING_REQUIRED")
@@ -235,7 +277,7 @@ def sign_file(path: Path) -> None:
         cmd.extend(["/p", password])
     cmd.append(str(path))
     run(cmd)
-    run([signtool, "verify", "/pa", "/v", str(path)])
+    verify_signed_file(path)
 
 
 def parse_args() -> argparse.Namespace:
@@ -318,14 +360,13 @@ def main() -> None:
 
     step += 1
     print(f"\n{step}. Compilando instalador Inno Setup...", flush=True)
-    iscc = find_iscc()
-    run([iscc, str(SETUP_ISS)], cwd=INSTALLER_DIR)
+    run(build_iscc_command(), cwd=INSTALLER_DIR)
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     installer_path = find_generated_installer()
-    if should_sign_artifacts():
-        print(f"\n{step}.1. Assinando instalador Windows...", flush=True)
-        sign_file(installer_path)
+    if should_sign_artifacts() and signing_cert_path() is not None:
+        print(f"\n{step}.1. Verificando assinatura do instalador Windows...", flush=True)
+        verify_signed_file(installer_path)
     print(f"\nInstalador gerado em: {installer_path}", flush=True)
 
 

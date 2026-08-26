@@ -13,11 +13,11 @@ Requisitos para instalar e executar o Plug Agente pelo instalador Windows.
 | Permissões              | Administrador para instalação    |
 | Runtime                 | Microsoft Visual C++ Redistributable x64 |
 
-O instalador verifica o Microsoft Visual C++ Redistributable x64 e mostra um
-aviso quando ele não é detectado. Em instalações silenciosas, o aviso é gravado
-no log do instalador e a instalação continua.
+O instalador verifica o Microsoft Visual C++ Redistributable x64. Se ele não
+estiver presente, o setup baixa `vc_redist.x64.exe` da Microsoft e instala em
+modo quieto. Sem HTTPS a instalação é abortada (também em `/VERYSILENT`).
 
-Download manual:
+URL usada pelo instalador:
 
 ```text
 https://aka.ms/vs/17/release/vc_redist.x64.exe
@@ -39,9 +39,10 @@ Playground SQL devem continuar funcionando quando o runtime permitir.
 ## Inicialização com o Windows
 
 - Instalações novas com a task **Iniciar com o Windows** selecionada gravam
-  HKCU Run para o usuário interativo via `runasoriginaluser` e deixam o
-  marker `{commonappdata}\PlugAgente\autostart-requested`. No primeiro
-  lançamento o app registra HKCU para o usuário logado e limpa o marker.
+  HKCU Run para o usuário interativo via `runasoriginaluser` (`[Run]` +
+  `reg add`) e deixam o marker `{commonappdata}\PlugAgente\autostart-requested`.
+  No primeiro lançamento o app registra HKCU para o usuário logado e limpa o
+  marker.
 - Updates silenciosos passam `/MERGETASKS="!desktopicon,!startup"` e **não**
   re-solicitam auto-start.
 - Login com `--autostart` permanece na bandeja (tray) quando o tray está
@@ -74,6 +75,8 @@ uma ferramenta de banco precisar ser chamada por linha de comando, como
 
 ## Rede
 
+- HTTPS para `aka.ms` na primeira instalação se o Visual C++ Redistributable
+  x64 ainda não estiver no Windows.
 - Acesso ao hub remoto quando Socket.IO estiver configurado.
 - Acesso ao feed oficial se o auto-update estiver habilitado.
 - Regras de proxy/firewall devem permitir HTTPS para GitHub Releases e GitHub

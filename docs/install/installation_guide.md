@@ -12,9 +12,8 @@ Antes de comecar, certifique-se de ter:
 
 1. **Windows 10 ou superior** (64 bits)
 2. **Permissoes de Administrador** para instalacao
-3. **Conexao com a Internet** (para atualizacoes, se configurado)
+3. **Conexao com a Internet** (o setup baixa o Visual C++ Redistributable x64 se ele nao estiver instalado; tambem e usada para atualizacoes)
 4. **Espaco em disco** suficiente (minimo 500 MB)
-5. **Microsoft Visual C++ Redistributable x64**
 
 ---
 
@@ -27,7 +26,7 @@ Antes de comecar, certifique-se de ter:
 
 ## Passo 2: Executar o Instalador
 
-1. **Localize o arquivo** do instalador (ex.: `PlugAgente-Setup-1.0.0.exe`)
+1. **Localize o arquivo** do instalador (ex.: `PlugAgente-Setup-1.8.6.exe`)
 2. **Clique com o botão direito** no arquivo
 3. Selecione **"Executar como administrador"**
 4. Se aparecer o **Controle de Conta de Usuário (UAC)**, clique em **"Sim"**
@@ -36,41 +35,36 @@ Antes de comecar, certifique-se de ter:
 
 ## Passo 3: Assistente de Instalação
 
-### 3.1 Tela de Boas-vindas
+A tela de boas-vindas fica desligada. O assistente começa pela pasta de instalação.
 
-- Clique em **"Avançar"** para continuar
-
-### 3.2 Licença
-
-- Leia os termos de licença
-- Se concordar, marque **"Aceito o acordo"**
-- Clique em **"Avançar"**
-
-### 3.3 Localização de Instalação
+### 3.1 Localização de Instalação
 
 - O instalador sugere: `C:\Program Files\Plug Agente`
 - Para instalar em outro local, clique em **"Procurar"** e escolha a pasta
 - Clique em **"Avançar"**
 
-### 3.4 Componentes Adicionais
+### 3.2 Tarefas adicionais
 
-O instalador pode mostrar opções para:
+O instalador mostra opções para:
 
-- **Criar ícone na área de trabalho**: Marque se desejar um atalho na área de trabalho
-- **Iniciar com o Windows**: Marque se desejar que o aplicativo inicie automaticamente
-  no login (`--autostart`, na bandeja). Não há opção de "iniciar minimizado".
+- **Criar um atalho na área de trabalho**
+- **Iniciar com o Windows**: o aplicativo inicia no login (`--autostart`, na bandeja). Não há opção de "iniciar minimizado".
+
+Se o Microsoft Visual C++ Redistributable x64 não estiver presente, o setup baixa e instala o runtime da Microsoft antes de copiar os arquivos. Sem internet essa etapa falha e a instalação é abortada.
 
 Selecione as opções desejadas e clique em **"Avançar"**
 
-### 3.5 Pronto para Instalar
+### 3.3 Pronto para Instalar
 
 - Revise as opções selecionadas
 - Clique em **"Instalar"** para começar a instalação
 
-### 3.6 Instalação Concluída
+### 3.4 Instalação Concluída
 
 - Marque **"Executar Plug Agente"** se desejar iniciar o aplicativo agora
 - Clique em **"Concluir"**
+
+O instalador registra o protocolo `plugdb://` para abrir o agente a partir de links no Windows.
 
 ---
 
@@ -82,8 +76,9 @@ Para distribuição por TI, use os parâmetros padrão do Inno Setup:
 PlugAgente-Setup-{versão}.exe /VERYSILENT /NORESTART /LOG
 ```
 
-O instalador requer administrador e grava aviso no log se o Visual C++
-Redistributable x64 não for detectado.
+O instalador requer administrador. Se o Visual C++ Redistributable x64 não
+estiver instalado, o setup tenta baixá-lo e instalá-lo; sem internet a
+instalação silenciosa falha.
 
 ---
 
@@ -126,6 +121,7 @@ desinstalar o aplicativo principal.
 - Atalhos e ícones
 - Cache de updates em `C:\ProgramData\PlugAgente\updates`
 - Marker de auto-start `C:\ProgramData\PlugAgente\autostart-requested`
+- Registro do protocolo `plugdb://`
 
 **NÃO remove**: Logs e demais configurações (permanecem em `C:\ProgramData\PlugAgente\`)
 
@@ -139,11 +135,11 @@ desinstalar o aplicativo principal.
 2. Clique com o botão direito no arquivo `.exe`
 3. Selecione **"Executar como administrador"**
 
-### "Microsoft Visual C++ Redistributable x64 não foi detectado"
+### "Não foi possível baixar o Microsoft Visual C++ Redistributable x64"
 
-1. Baixe manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe
-2. Execute como administrador
-3. Tente instalar o Plug Agente novamente
+1. Confirme a conexão com a internet e o acesso a `https://aka.ms/vs/17/release/vc_redist.x64.exe`
+2. Ou instale o runtime manualmente e rode o setup de novo
+3. Execute o instalador como administrador
 
 ### "Aplicativo não inicia após instalação"
 

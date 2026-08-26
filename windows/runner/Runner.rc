@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.se7esistemas" "\0"
-            VALUE "FileDescription", "plug_agente" "\0"
+            VALUE "CompanyName", "Se7e Sistemas" "\0"
+            VALUE "FileDescription", "Plug Agente" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "plug_agente" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.se7esistemas. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Se7e Sistemas. All rights reserved." "\0"
             VALUE "OriginalFilename", "plug_agente.exe" "\0"
-            VALUE "ProductName", "plug_agente" "\0"
+            VALUE "ProductName", "Plug Agente" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

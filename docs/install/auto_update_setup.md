@@ -278,7 +278,7 @@ Windows**. Auto-start de instalacao elevada (nao de update) usa
 O `installer/setup.iss` usa `SetupMutex=PlugAgenteSetup` para impedir duas
 instancias do Setup (manual + helper silencioso). `AppMutex` e omitido de
 proposito: o helper espera o PID primeiro; um AppMutex abortaria
-`/VERYSILENT` durante a janela de pre-close. `ForceCloseApplications=yes`
+`/VERYSILENT` durante a janela de pre-close. `CloseApplications=force`
 com filtro `plug_agente.exe` fecha o processo se ele ainda estiver vivo
 apos essa espera. A desinstalacao remove `{commonappdata}\PlugAgente\updates`.
 

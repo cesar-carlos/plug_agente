@@ -733,6 +733,7 @@ std::vector<std::wstring> build_base_setup_args(const Options& options) {
       L"/SUPPRESSMSGBOXES",
       L"/NORESTART",
       L"/CLOSEAPPLICATIONS",
+      L"/FORCECLOSEAPPLICATIONS",
       // Do not ask Inno to restart closed apps. [Run] already relaunches via
       // /LAUNCHAFTERUPDATE=1; both together can start two app instances.
       L"/LAUNCHAFTERUPDATE=1",
