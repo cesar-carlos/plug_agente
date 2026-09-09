@@ -108,6 +108,17 @@ class CapabilitiesNegotiator {
     _awaitingPostReconnectCapabilities = false;
   }
 
+  /// Invalidates the negotiated state while preserving the Socket.IO manager.
+  /// The next capabilities envelope is therefore required before application
+  /// requests are accepted on a reconnected transport session.
+  void resetForReconnect() {
+    _capabilitiesTimeoutTimer?.cancel();
+    _capabilitiesTimeoutTimer = null;
+    _reRegisterCount = 0;
+    _hasReceivedCapabilities = false;
+    _awaitingPostReconnectCapabilities = true;
+  }
+
   /// Handles an `agent:register_error` event from the hub. Cancels the in-flight
   /// timeout watchdog, logs the structured error, and triggers a forced
   /// reconnect when the error is non-recoverable. Recoverable errors (only

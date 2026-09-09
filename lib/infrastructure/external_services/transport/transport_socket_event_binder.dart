@@ -24,6 +24,7 @@ class TransportSocketEventBinder {
     required String Function() agentIdProvider,
     required String Function() resilienceLogPrefixProvider,
     required int Function() connectGenerationProvider,
+    required int Function() transportSessionGenerationProvider,
     required bool Function(int generation) isStaleConnectGeneration,
     required void Function() onAuthorizationSessionReset,
     required void Function() onHeartbeatResetTransient,
@@ -33,7 +34,7 @@ class TransportSocketEventBinder {
     required void Function(dynamic error, Completer<Result<void>> completer) onConnectError,
     required void Function(dynamic error) onSocketError,
     required void Function(dynamic reason) onDisconnect,
-    required void Function() onReleaseStreamStateAfterTransportLoss,
+    required void Function() onBeginFreshTransportSession,
     required void Function(dynamic data) onCapabilitiesEnvelope,
     required void Function(dynamic data) onHeartbeatAck,
     required void Function()? onReconnectionNeeded,
@@ -48,6 +49,7 @@ class TransportSocketEventBinder {
        _agentIdProvider = agentIdProvider,
        _resilienceLogPrefixProvider = resilienceLogPrefixProvider,
        _connectGenerationProvider = connectGenerationProvider,
+       _transportSessionGenerationProvider = transportSessionGenerationProvider,
        _isStaleConnectGeneration = isStaleConnectGeneration,
        _onAuthorizationSessionReset = onAuthorizationSessionReset,
        _onHeartbeatResetTransient = onHeartbeatResetTransient,
@@ -57,7 +59,7 @@ class TransportSocketEventBinder {
        _onConnectError = onConnectError,
        _onSocketError = onSocketError,
        _onDisconnect = onDisconnect,
-       _onReleaseStreamStateAfterTransportLoss = onReleaseStreamStateAfterTransportLoss,
+       _onBeginFreshTransportSession = onBeginFreshTransportSession,
        _onCapabilitiesEnvelope = onCapabilitiesEnvelope,
        _onHeartbeatAck = onHeartbeatAck,
        _onReconnectionNeeded = onReconnectionNeeded,
@@ -73,6 +75,7 @@ class TransportSocketEventBinder {
   final String Function() _agentIdProvider;
   final String Function() _resilienceLogPrefixProvider;
   final int Function() _connectGenerationProvider;
+  final int Function() _transportSessionGenerationProvider;
   final bool Function(int generation) _isStaleConnectGeneration;
   final void Function() _onAuthorizationSessionReset;
   final void Function() _onHeartbeatResetTransient;
@@ -82,7 +85,7 @@ class TransportSocketEventBinder {
   final void Function(dynamic error, Completer<Result<void>> completer) _onConnectError;
   final void Function(dynamic error) _onSocketError;
   final void Function(dynamic reason) _onDisconnect;
-  final void Function() _onReleaseStreamStateAfterTransportLoss;
+  final void Function() _onBeginFreshTransportSession;
   final void Function(dynamic data) _onCapabilitiesEnvelope;
   final void Function(dynamic data) _onHeartbeatAck;
   final void Function()? _onReconnectionNeeded;
@@ -161,7 +164,7 @@ class TransportSocketEventBinder {
       }
     });
 
-    registerManagerReconnectHandlers(socket);
+    registerManagerReconnectHandlers(socket, connectGeneration);
 
     socket.on('connect_error', (error) {
       if (_isStaleConnectGeneration(connectGeneration)) {
@@ -177,6 +180,9 @@ class TransportSocketEventBinder {
     });
 
     socket.on('error', (error) {
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        return;
+      }
       _logMessage('ERROR', 'socket_error', error);
       _onSocketError(error);
     });
@@ -200,11 +206,17 @@ class TransportSocketEventBinder {
     });
 
     socket.on('agent:capabilities', (data) {
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        return;
+      }
       _logMessage('RECEIVED', 'agent:capabilities', data);
       _onCapabilitiesEnvelope(data);
     });
 
     socket.on('agent:register_error', (data) {
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        return;
+      }
       _logMessage('RECEIVED', 'agent:register_error', data);
       final map = data is Map ? data.map((key, value) => MapEntry(key.toString(), value)) : <String, dynamic>{};
       final shouldReconnect = _capabilitiesNegotiator.handleRegisterError(map);
@@ -217,6 +229,9 @@ class TransportSocketEventBinder {
     // Hub emits plain JSON then disconnects the superseded socket under
     // SOCKET_AGENT_SESSION_POLICY=takeover_disconnect_previous.
     socket.on('agent:session.superseded', (data) {
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        return;
+      }
       _logMessage('RECEIVED', 'agent:session.superseded', data);
       final map = data is Map ? data.map((key, value) => MapEntry(key.toString(), value)) : <String, dynamic>{};
       final reason = map['reason']?.toString() ?? 'session_superseded';
@@ -231,9 +246,17 @@ class TransportSocketEventBinder {
       _onHeartbeatStop();
     });
 
-    socket.on('hub:heartbeat_ack', _onHeartbeatAck);
+    socket.on('hub:heartbeat_ack', (data) {
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        return;
+      }
+      _onHeartbeatAck(data);
+    });
 
     socket.on('rpc:request', (data) {
+      if (_isStaleConnectGeneration(connectGeneration)) {
+        return;
+      }
       if (_hasMessageCallback()) {
         _logMessage('RECEIVED', 'rpc:request', data);
       }
@@ -241,9 +264,23 @@ class TransportSocketEventBinder {
         unawaited(_inboundHandler.emitConcurrencyLimitedError(data));
         return;
       }
+      final inboundSessionGeneration = _transportSessionGenerationProvider();
       // Defer hub sql.execute dispatch out of the socket listener turn, keeping
       // Socket.IO I/O free to process ACKs, pulls and disconnects promptly.
-      Timer.run(() => unawaited(_inboundHandler.handleRequestWithRelease(data)));
+      Timer.run(() {
+        if (_isStaleConnectGeneration(connectGeneration)) {
+          _inboundHandler.releaseSlot();
+          return;
+        }
+        unawaited(
+          runZoned(
+            () => _inboundHandler.handleRequestWithRelease(data),
+            zoneValues: <Symbol, Object>{
+              #transportRequestGeneration: inboundSessionGeneration,
+            },
+          ),
+        );
+      });
     });
 
     // Register rpc:stream.pull whenever any streaming path is active: the hub
@@ -253,18 +290,21 @@ class TransportSocketEventBinder {
         _featureFlags.enableSocketStreamingChunks ||
         _featureFlags.enableSocketStreamingFromDb) {
       socket.on('rpc:stream.pull', (data) {
+        if (_isStaleConnectGeneration(connectGeneration)) {
+          return;
+        }
         _logMessage('RECEIVED', 'rpc:stream.pull', data);
         _streamPullHandler.handlePull(data);
       });
     }
   }
 
-  void registerManagerReconnectHandlers(io.Socket socket) {
+  void registerManagerReconnectHandlers(io.Socket socket, int connectGeneration) {
     clearSubscriptions();
     _managerReconnectSubscriptions
       ..add(
         io.DartySocket(socket).onReconnect((dynamic data) {
-          unawaited(_handleManagerReconnect(data));
+          unawaited(_handleManagerReconnect(data, connectGeneration));
         }),
       )
       ..add(io.DartySocket(socket).onReconnectAttempt(_handleManagerReconnectAttempt))
@@ -276,8 +316,7 @@ class TransportSocketEventBinder {
       ..add(io.DartySocket(socket).onReconnectError(_handleManagerReconnectError));
   }
 
-  Future<void> _handleManagerReconnect(dynamic data) async {
-    final generationAtEvent = _connectGenerationProvider();
+  Future<void> _handleManagerReconnect(dynamic data, int generationAtEvent) async {
     _logMessage('RECEIVED', 'reconnect', data);
     AppLogger.info(
       'resilience: ${_resilienceLogPrefix()}socket_transport event=transport_reconnected '
@@ -294,7 +333,7 @@ class TransportSocketEventBinder {
     // emitter slots immediately so a post-reconnect sql.execute stream is not
     // blocked when negotiated max_concurrent_streams is 1. Safe if disconnect
     // already ran (cancel + registry dispose are idempotent).
-    _onReleaseStreamStateAfterTransportLoss();
+    _onBeginFreshTransportSession();
     _onHeartbeatResetTransient();
     try {
       await _sendReRegisterAfterReconnect();

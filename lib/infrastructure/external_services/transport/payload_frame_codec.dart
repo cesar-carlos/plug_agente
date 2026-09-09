@@ -178,6 +178,7 @@ class PayloadFrameCodec {
         eventName: event,
         signDurationUs: signingResult.metrics.signDurationUs,
         canonicalizeDurationUs: signingResult.metrics.canonicalizeDurationUs,
+        usedHmacSignIsolate: frame.originalSize > ConnectionConstants.signingIsolateThresholdBytes,
       );
     }
     return Success(frame.toSocketPayload());
@@ -217,9 +218,24 @@ class PayloadFrameCodec {
     final protocol = _protocolProvider();
     try {
       final frame = PayloadFrame.fromJson(_requireFrameMap(payload));
-      final validationResult = _validateFrameAgainstLocalCapabilities(frame, sourceEvent: sourceEvent);
+      final validationResult = _validateFrameAgainstLocalCapabilities(
+        frame,
+        sourceEvent: sourceEvent,
+        verifySignature: false,
+      );
       if (validationResult.isError()) {
         return Failure(validationResult.exceptionOrNull()! as domain.Failure);
+      }
+      if (!await _verifyFrameSignatureAsync(frame, sourceEvent: sourceEvent)) {
+        return Failure(
+          domain.ValidationFailure.withContext(
+            message: 'Invalid transport frame signature',
+            context: {
+              'request_id': frame.requestId,
+              'transport_signature_invalid': true,
+            },
+          ),
+        );
       }
 
       final processed = await _pipelineCache
@@ -343,6 +359,7 @@ class PayloadFrameCodec {
   Result<void> _validateFrameAgainstLocalCapabilities(
     PayloadFrame frame, {
     String? sourceEvent,
+    bool verifySignature = true,
   }) {
     final localCapabilities = _localCapabilitiesProvider();
     final schemaVersionSegments = frame.schemaVersion.split('.');
@@ -392,7 +409,7 @@ class PayloadFrameCodec {
         ),
       );
     }
-    if (!_verifyFrameSignature(frame, sourceEvent: sourceEvent)) {
+    if (verifySignature && !_verifyFrameSignature(frame, sourceEvent: sourceEvent)) {
       return Failure(
         domain.ValidationFailure.withContext(
           message: 'Invalid transport frame signature',
@@ -439,6 +456,28 @@ class PayloadFrameCodec {
     return verificationResult.isValid;
   }
 
+  Future<bool> _verifyFrameSignatureAsync(PayloadFrame frame, {String? sourceEvent}) async {
+    final signatureJson = frame.signature;
+    final signer = _payloadSigner;
+    if (signer == null ||
+        signatureJson == null ||
+        frame.originalSize <= ConnectionConstants.signingIsolateThresholdBytes) {
+      return _verifyFrameSignature(frame, sourceEvent: sourceEvent);
+    }
+    final signature = PayloadSignature.fromJson(signatureJson);
+    final verificationResult = await signer.verifyFrameAsyncWithMetrics(frame, signature);
+    _recordSigningMetric(
+      frame: frame,
+      direction: 'verify',
+      eventName: sourceEvent,
+      success: verificationResult.isValid,
+      verifyDurationUs: verificationResult.metrics.verifyDurationUs,
+      canonicalizeDurationUs: verificationResult.metrics.canonicalizeDurationUs,
+      usedHmacVerifyIsolate: true,
+    );
+    return verificationResult.isValid;
+  }
+
   void _recordSigningMetric({
     required PayloadFrame frame,
     required String direction,
@@ -447,6 +486,8 @@ class PayloadFrameCodec {
     int? signDurationUs,
     int? verifyDurationUs,
     int? canonicalizeDurationUs,
+    bool usedHmacSignIsolate = false,
+    bool usedHmacVerifyIsolate = false,
   }) {
     final totalDurationUs = (signDurationUs ?? 0) + (verifyDurationUs ?? 0) + (canonicalizeDurationUs ?? 0);
     _metricsCollector?.record(
@@ -464,6 +505,9 @@ class PayloadFrameCodec {
         signDurationUs: signDurationUs,
         verifyDurationUs: verifyDurationUs,
         canonicalizeDurationUs: canonicalizeDurationUs,
+        usedIsolate: usedHmacSignIsolate || usedHmacVerifyIsolate,
+        usedHmacSignIsolate: usedHmacSignIsolate,
+        usedHmacVerifyIsolate: usedHmacVerifyIsolate,
       ),
     );
   }

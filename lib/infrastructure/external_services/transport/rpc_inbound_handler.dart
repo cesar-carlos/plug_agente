@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/rpc_inbound_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
@@ -61,6 +63,7 @@ class RpcInboundHandler {
     required Future<void> Function(dynamic responseData) emitRpcResponse,
     required Future<void> Function(String event, dynamic payload) emitEvent,
     required bool Function() hasReceivedCapabilities,
+    bool Function(int expectedGeneration)? isTransportSessionCurrent,
     Future<void> Function(
       dynamic responseData, {
       Map<Object?, String> methodsById,
@@ -83,6 +86,8 @@ class RpcInboundHandler {
        _schemaValidator = schemaValidator,
        _streamEmitterFactory = streamEmitterFactory,
        _hasReceivedCapabilities = hasReceivedCapabilities,
+       _isTransportSessionCurrent = isTransportSessionCurrent ?? _alwaysCurrentSession,
+       _metricsCollector = metricsCollector,
        _setHubSqlDashboardCapturePaused = setHubSqlDashboardCapturePaused {
     _healthPiggybackSampler = healthService == null
         ? null
@@ -162,6 +167,8 @@ class RpcInboundHandler {
   final RpcRequestSchemaValidator _schemaValidator;
   final IRpcStreamEmitter Function() _streamEmitterFactory;
   final bool Function() _hasReceivedCapabilities;
+  final bool Function(int expectedGeneration) _isTransportSessionCurrent;
+  final MetricsCollector? _metricsCollector;
   final void Function(bool paused)? _setHubSqlDashboardCapturePaused;
   late final RpcHealthPiggybackSampler? _healthPiggybackSampler;
   late final RpcInboundResponseEnricher _responseEnricher;
@@ -203,6 +210,10 @@ class RpcInboundHandler {
       dynamic payload = wirePayload.payload;
       final socketAck = wirePayload.socketAck;
 
+      if (_discardIfSessionStale('rpc_before_decode')) {
+        return;
+      }
+
       // Protocol-not-ready guard: the hub must NOT send `rpc:request` before
       // receiving `agent:capabilities`. If it does, reject with a structured
       // error so the hub can retry after negotiation completes.
@@ -218,6 +229,9 @@ class RpcInboundHandler {
       }
 
       final decodeResult = await _frameCodec.decodeIncomingAsync(payload, sourceEvent: 'rpc:request');
+      if (_discardIfSessionStale('rpc_after_decode')) {
+        return;
+      }
       if (decodeResult.isError()) {
         final failure = decodeResult.exceptionOrNull()! as domain.Failure;
         final mapped = mapRpcInboundTransportDecodeFailure(failure);
@@ -364,6 +378,9 @@ class RpcInboundHandler {
         _setHubSqlDashboardCapturePaused?.call(true);
       }
       try {
+        if (_discardIfSessionStale('rpc_before_dispatch')) {
+          return;
+        }
         latencyTrace?.markDispatchStarted();
         final response = await _dispatcher.dispatch(
           request,
@@ -441,7 +458,13 @@ class RpcInboundHandler {
 
   /// Processes a JSON-RPC batch request via [RpcBatchInboundHandler].
   Future<void> handleBatchRequest(List<dynamic> data) {
-    return _batchHandler.handleBatchRequest(data);
+    if (_discardIfSessionStale('rpc_batch_before_validation')) {
+      return Future<void>.value();
+    }
+    return _batchHandler.handleBatchRequest(
+      data,
+      isSessionCurrent: _isCurrentTransportSession,
+    );
   }
 
   /// Cancels the ack-flush timer and discards any pending acks. Called by the
@@ -461,4 +484,19 @@ class RpcInboundHandler {
       protocolProvider: _protocolProvider,
     );
   }
+
+  bool _isCurrentTransportSession() {
+    final expectedGeneration = Zone.current[#transportRequestGeneration] as int?;
+    return expectedGeneration == null || _isTransportSessionCurrent(expectedGeneration);
+  }
+
+  bool _discardIfSessionStale(String reason) {
+    if (_isCurrentTransportSession()) {
+      return false;
+    }
+    _metricsCollector?.recordTransportStaleEventDropped(reason);
+    return true;
+  }
+
+  static bool _alwaysCurrentSession(int _) => true;
 }

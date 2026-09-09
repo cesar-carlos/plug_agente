@@ -97,9 +97,11 @@ void main() {
   late List<bool> hubSqlCaptureTransitions;
   late RpcInboundHandler handler;
   late MetricsCollector inboundMetrics;
+  late int activeTransportSessionGeneration;
 
   setUp(() {
     inboundMetrics = MetricsCollector();
+    activeTransportSessionGeneration = 1;
     featureFlags = _MockFeatureFlags();
     when(() => featureFlags.enableSocketSchemaValidation).thenReturn(false);
     when(() => featureFlags.enableSocketDeliveryGuarantees).thenReturn(false);
@@ -178,9 +180,29 @@ void main() {
         emittedEvents.add((event: event, payload: payload));
       },
       hasReceivedCapabilities: () => true,
+      isTransportSessionCurrent: (expectedGeneration) => expectedGeneration == activeTransportSessionGeneration,
       metricsCollector: inboundMetrics,
       setHubSqlDashboardCapturePaused: (paused) => hubSqlCaptureTransitions.add(paused),
     );
+  });
+
+  group('transport session generation', () {
+    test('drops a stale request before decode, dispatch, or response emission', () async {
+      await runZoned(
+        () => handler.handleRequest(<String, dynamic>{'not': 'decoded'}),
+        zoneValues: <Object?, Object?>{#transportRequestGeneration: 0},
+      );
+
+      verifyNever(
+        () => dispatcher.dispatch(
+          any(),
+          any(),
+          streamEmitter: any(named: 'streamEmitter'),
+        ),
+      );
+      expect(emittedResponses, isEmpty);
+      expect(inboundMetrics.eventCounters['transport_stale_event_dropped'], equals(1));
+    });
   });
 
   group('concurrency slots', () {

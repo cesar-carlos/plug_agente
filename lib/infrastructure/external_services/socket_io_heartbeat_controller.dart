@@ -13,6 +13,7 @@ final class SocketIoHeartbeatController {
     required this.emitHeartbeat,
     required this.logMessage,
     required this.onConnectionStale,
+    this.emitHeartbeatWithEpoch,
     Duration? interval,
     Duration? ackTimeout,
     int? maxMissed,
@@ -31,6 +32,7 @@ final class SocketIoHeartbeatController {
 
   final bool Function() isConnected;
   final Future<bool> Function() emitHeartbeat;
+  final Future<bool> Function(int heartbeatEpoch)? emitHeartbeatWithEpoch;
   final void Function(String direction, String event, dynamic data) logMessage;
   final void Function() onConnectionStale;
 
@@ -42,10 +44,14 @@ final class SocketIoHeartbeatController {
   Timer? _ackTimer;
   bool _waitingAck = false;
   int _missedHeartbeats = 0;
+  int _heartbeatEpoch = 0;
+  String? _expectedTraceId;
 
   void resetTransientState() {
+    _heartbeatEpoch++;
     _missedHeartbeats = 0;
     _waitingAck = false;
+    _expectedTraceId = null;
     _ackTimer?.cancel();
     _ackTimer = null;
   }
@@ -58,17 +64,48 @@ final class SocketIoHeartbeatController {
   }
 
   void stop() {
+    _heartbeatEpoch++;
     _periodicTimer?.cancel();
     _periodicTimer = null;
     _ackTimer?.cancel();
     _ackTimer = null;
     _waitingAck = false;
+    _expectedTraceId = null;
   }
 
-  void onAckReceived() {
+  bool registerExpectedTraceId(String traceId, int heartbeatEpoch) {
+    if (heartbeatEpoch != _heartbeatEpoch) {
+      return false;
+    }
+    _expectedTraceId = traceId;
+    return true;
+  }
+
+  bool onAckReceived([String? traceId]) {
+    if (ackRejectionReason(traceId) != null) {
+      return false;
+    }
     _ackTimer?.cancel();
     _waitingAck = false;
     _missedHeartbeats = 0;
+    _expectedTraceId = null;
+    return true;
+  }
+
+  String? ackRejectionReason([String? traceId]) {
+    if (!_waitingAck) {
+      return 'not_waiting';
+    }
+    if (_expectedTraceId == null) {
+      return null;
+    }
+    if (traceId == null || traceId.isEmpty) {
+      return 'trace_missing';
+    }
+    if (traceId != _expectedTraceId) {
+      return 'trace_mismatch';
+    }
+    return null;
   }
 
   void _onPeriodicTick() {
@@ -82,28 +119,38 @@ final class SocketIoHeartbeatController {
       return;
     }
 
-    unawaited(_emitAndArmAck());
+    unawaited(_emitAndArmAck(_heartbeatEpoch));
   }
 
-  Future<void> _emitAndArmAck() async {
-    final emitted = await emitHeartbeat();
+  Future<void> _emitAndArmAck(int heartbeatEpoch) async {
+    final emitted = await (emitHeartbeatWithEpoch?.call(heartbeatEpoch) ?? emitHeartbeat());
+    if (heartbeatEpoch != _heartbeatEpoch) {
+      return;
+    }
     if (!emitted) {
+      _expectedTraceId = null;
       logMessage('ERROR', 'heartbeat_emit_failed', {
         'missed_heartbeats': _missedHeartbeats,
       });
       return;
     }
     if (!isConnected()) {
+      _expectedTraceId = null;
       return;
     }
     _waitingAck = true;
     _ackTimer?.cancel();
-    _ackTimer = Timer(_ackTimeout, _handleTimeout);
+    _ackTimer = Timer(_ackTimeout, () {
+      if (heartbeatEpoch == _heartbeatEpoch) {
+        _handleTimeout();
+      }
+    });
   }
 
   void _handleTimeout() {
     _ackTimer?.cancel();
     _waitingAck = false;
+    _expectedTraceId = null;
     _missedHeartbeats++;
 
     logMessage('ERROR', 'heartbeat_timeout', {

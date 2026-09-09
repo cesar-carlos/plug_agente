@@ -223,6 +223,9 @@ void main() {
       when(
         () => mockDispatcher.cancelActiveStreamOnDisconnect(),
       ).thenAnswer((_) async {});
+      when(
+        () => mockDispatcher.cancelActiveSqlOnDisconnect(),
+      ).thenAnswer((_) async => const Success(unit));
       when(() => mockSocket.connected).thenReturn(true);
       when(() => mockSocket.io).thenReturn(mockManager);
       when(() => mockSocket.on(any<String>(), any())).thenAnswer((invocation) {
@@ -697,7 +700,9 @@ void main() {
 
     test('should record rpc:response ACK fallback outcome when retries exhaust', () async {
       when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
-      when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenThrow(Exception('ack timeout'));
+      when(
+        () => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack')),
+      ).thenThrow(Exception('ack timeout'));
 
       final connectFuture = client.connect('https://hub.test', 'agent-1');
       emitEvent('connect');
@@ -1081,7 +1086,9 @@ void main() {
       () async {
         when(() => mockFeatureFlags.enableSocketDeliveryGuarantees).thenReturn(true);
         var ackAttempts = 0;
-        when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((_) async {
+        when(() => mockSocket.emitWithAck('rpc:response', any<dynamic>(), ack: any(named: 'ack'))).thenAnswer((
+          _,
+        ) async {
           ackAttempts++;
           throw StateError('sql.executeBatch response should not wait for Socket.IO ACK');
         });
@@ -2518,17 +2525,20 @@ void main() {
       await second;
     });
 
-    test('should emit a single extra agent:register when connect and manager reconnect both fire after handshake', () async {
-      final connectFuture = client.connect('https://hub.test', 'agent-1');
-      emitEvent('connect');
-      await connectFuture;
-      emitted.clear();
+    test(
+      'should emit a single extra agent:register when connect and manager reconnect both fire after handshake',
+      () async {
+        final connectFuture = client.connect('https://hub.test', 'agent-1');
+        emitEvent('connect');
+        await connectFuture;
+        emitted.clear();
 
-      emitEvent('connect');
-      emitManagerEvent('reconnect', 1);
-      await Future<void>.delayed(Duration.zero);
+        emitEvent('connect');
+        emitManagerEvent('reconnect', 1);
+        await Future<void>.delayed(Duration.zero);
 
-      expect(emitted.where((item) => item.event == 'agent:register'), hasLength(1));
-    });
+        expect(emitted.where((item) => item.event == 'agent:register'), hasLength(1));
+      },
+    );
   });
 }

@@ -125,6 +125,10 @@ Ao receber qualquer evento de aplicacao:
 - Rejeitar `enc` nao suportado.
 - Rejeitar `cmp` nao suportado.
 - Aplicar limite de expansao para evitar zip bomb.
+- A descompressao deve ser incremental e limitada antes de acumular a saida:
+  usar o menor entre `originalSize`, o limite negociado e a razao maxima de
+  expansao. Excedente, razao excessiva, tamanho divergente e GZIP invalido sao
+  `CompressionFailure`, sem derrubar a conexao.
 - Nao assumir que toda mensagem vira `gzip`; suportar `cmp: none`.
 - Mapear falha de **decode** do conteudo ja descomprimido (ex.: JSON invalido apos `cmp: none` ou apos gunzip) para `-32010`.
 - Mapear falha de **compressao/descompressao GZIP** do blob em `payload` para `-32011`.
@@ -257,6 +261,11 @@ sessao devem trazer assinatura valida. Antes da negociacao obrigatoria, um
 frame sem assinatura pode ser aceito; um frame que traz `signature` deve ser
 verificavel pelo `key_id` informado. Vetores de contrato estao em
 `test/fixtures/payload_signing_test_vectors.json`.
+
+Para frames acima do limiar configurado, canonicalizacao e HMAC (assinatura ou
+verificacao) executam em isolate. O snapshot de saude conserva apenas metricas
+agregadas de duracao e contagem de isolates; nao inclui payload, request ID,
+SQL, credenciais ou outros valores de alta cardinalidade.
 
 Ordem recomendada no recebimento:
 

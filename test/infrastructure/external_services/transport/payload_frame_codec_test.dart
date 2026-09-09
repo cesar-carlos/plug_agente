@@ -597,5 +597,27 @@ void main() {
       expect(verifyMetric.verifyDurationUs, isNotNull);
       expect(verifyMetric.canonicalizeDurationUs, isNotNull);
     });
+
+    test('verifies a large signed frame through the async receive path', () async {
+      final signer = PayloadSigner(keys: {'key-1': 'secret'});
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'none',
+          signatureAlgorithms: ['hmac-sha256'],
+        ),
+        localShouldSignOutgoing: true,
+        payloadSigner: signer,
+      );
+      final wire = (await codec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: {'id': 'req-large', 'result': 'x' * (70 * 1024)},
+      )).getOrThrow();
+
+      final result = await codec.decodeIncomingAsync(wire, sourceEvent: 'rpc:response');
+
+      expect(result.isSuccess(), isTrue);
+    });
   });
 }

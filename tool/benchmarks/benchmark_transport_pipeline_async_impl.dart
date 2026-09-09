@@ -1,3 +1,5 @@
+import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
@@ -32,7 +34,12 @@ Future<Map<String, dynamic>> runTransportPipelineBenchmarkCaseAsync({
       metricEventName: benchmarkCaseName,
     );
     final frame = prepareResult.getOrThrow();
-    final wireFrame = signer == null ? frame : frame.copyWith(signature: signer.signFrame(frame).toJson());
+    final wireFrame = await _signAndVerifyFrame(
+      frame: frame,
+      signer: signer,
+      collector: collector,
+      eventName: benchmarkCaseName,
+    );
     await pipeline.receiveProcessAsync(wireFrame, metricEventName: benchmarkCaseName);
   }
 
@@ -62,11 +69,80 @@ Future<Map<String, dynamic>> runTransportPipelineBenchmarkCaseAsync({
     'receive_p50_us': receiveSummary.totalDurationPercentiles.p50Us,
     'receive_p95_us': receiveSummary.totalDurationPercentiles.p95Us,
     'receive_p99_us': receiveSummary.totalDurationPercentiles.p99Us,
+    'compress_p50_us': summary.compressDurationPercentiles.p50Us,
+    'compress_p95_us': summary.compressDurationPercentiles.p95Us,
+    'compress_p99_us': summary.compressDurationPercentiles.p99Us,
+    'decompress_p50_us': summary.decompressDurationPercentiles.p50Us,
+    'decompress_p95_us': summary.decompressDurationPercentiles.p95Us,
+    'decompress_p99_us': summary.decompressDurationPercentiles.p99Us,
+    'sign_p50_us': summary.signDurationPercentiles.p50Us,
+    'sign_p95_us': summary.signDurationPercentiles.p95Us,
+    'sign_p99_us': summary.signDurationPercentiles.p99Us,
+    'verify_p50_us': summary.verifyDurationPercentiles.p50Us,
+    'verify_p95_us': summary.verifyDurationPercentiles.p95Us,
+    'verify_p99_us': summary.verifyDurationPercentiles.p99Us,
     'isolate_operations': summary.totalIsolateOperations,
     'json_encode_isolate_operations': summary.jsonEncodeIsolateOperations,
     'gzip_compress_isolate_operations': summary.gzipCompressIsolateOperations,
     'json_decode_isolate_operations': summary.jsonDecodeIsolateOperations,
     'gzip_decompress_isolate_operations': summary.gzipDecompressIsolateOperations,
+    'hmac_sign_isolate_operations': summary.hmacSignIsolateOperations,
+    'hmac_verify_isolate_operations': summary.hmacVerifyIsolateOperations,
     'summary': summary.toJson(),
   };
+}
+
+Future<PayloadFrame> _signAndVerifyFrame({
+  required PayloadFrame frame,
+  required PayloadSigner? signer,
+  required ProtocolMetricsCollector collector,
+  required String eventName,
+}) async {
+  if (signer == null) {
+    return frame;
+  }
+  final useIsolate = frame.originalSize > ConnectionConstants.signingIsolateThresholdBytes;
+  final signing = useIsolate ? await signer.signFrameAsync(frame) : signer.signFrameWithMetrics(frame);
+  final signedFrame = frame.copyWith(signature: signing.signature.toJson());
+  collector.record(
+    ProtocolMetrics(
+      timestamp: DateTime.now().toUtc(),
+      protocol: 'jsonrpc-v2',
+      encoding: frame.enc,
+      compression: frame.cmp,
+      originalSize: frame.originalSize,
+      compressedSize: frame.compressedSize,
+      direction: 'sign',
+      eventName: eventName,
+      totalDurationUs: signing.metrics.canonicalizeDurationUs + (signing.metrics.signDurationUs ?? 0),
+      signDurationUs: signing.metrics.signDurationUs,
+      canonicalizeDurationUs: signing.metrics.canonicalizeDurationUs,
+      usedIsolate: useIsolate,
+      usedHmacSignIsolate: useIsolate,
+    ),
+  );
+  final verification = useIsolate
+      ? await signer.verifyFrameAsyncWithMetrics(signedFrame, signing.signature)
+      : signer.verifyFrameWithMetrics(signedFrame, signing.signature);
+  if (!verification.isValid) {
+    throw StateError('Benchmark signature verification failed');
+  }
+  collector.record(
+    ProtocolMetrics(
+      timestamp: DateTime.now().toUtc(),
+      protocol: 'jsonrpc-v2',
+      encoding: frame.enc,
+      compression: frame.cmp,
+      originalSize: frame.originalSize,
+      compressedSize: frame.compressedSize,
+      direction: 'verify',
+      eventName: eventName,
+      totalDurationUs: verification.metrics.canonicalizeDurationUs + (verification.metrics.verifyDurationUs ?? 0),
+      verifyDurationUs: verification.metrics.verifyDurationUs,
+      canonicalizeDurationUs: verification.metrics.canonicalizeDurationUs,
+      usedIsolate: useIsolate,
+      usedHmacVerifyIsolate: useIsolate,
+    ),
+  );
+  return signedFrame;
 }

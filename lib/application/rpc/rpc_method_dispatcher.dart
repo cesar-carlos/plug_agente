@@ -42,6 +42,7 @@ import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
+import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
 const Duration _defaultSqlExecuteTotalBudget = RpcSqlBudgetConstants.defaultSqlExecuteTotalBudget;
@@ -104,6 +105,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     DefaultRpcMethodHandlerOperationsFactory? operationsFactory,
   }) : _defaultLimits = defaultLimits,
        _dispatchMetrics = dispatchMetrics,
+       _inFlightAbortPort = inFlightAbortPort,
        _methodConcurrencyLimiter = methodConcurrencyLimiter ?? RpcMethodConcurrencyLimiter.fromEnvironment(),
        _sqlStreamingCoordinator =
            sqlStreamingCoordinator ??
@@ -171,6 +173,8 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
   final RpcMethodConcurrencyLimiter _methodConcurrencyLimiter;
   final SqlStreamingCoordinator _sqlStreamingCoordinator;
+  final ISqlInFlightExecutionAbortPort? _inFlightAbortPort;
+  final Set<String> _activeSqlRequestIds = <String>{};
   late final Map<String, RpcMethodHandler> _handlersByMethod;
 
   @override
@@ -196,6 +200,10 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
       return _methodConcurrencyLimited(request, concurrency.limit);
     }
     final lease = concurrency.lease;
+    final sqlRequestId = _sqlRequestIdForTracking(request);
+    if (sqlRequestId != null) {
+      _activeSqlRequestIds.add(sqlRequestId);
+    }
     try {
       return await handler.handle(
         request,
@@ -208,6 +216,9 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
         ),
       );
     } finally {
+      if (sqlRequestId != null) {
+        _activeSqlRequestIds.remove(sqlRequestId);
+      }
       lease?.release();
     }
   }
@@ -215,6 +226,46 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
   @override
   Future<void> cancelActiveStreamOnDisconnect() {
     return _sqlStreamingCoordinator.cancelActiveStreamOnDisconnect();
+  }
+
+  @override
+  Future<Result<void>> cancelActiveSqlOnDisconnect() async {
+    final abortPort = _inFlightAbortPort;
+    if (abortPort == null || _activeSqlRequestIds.isEmpty) {
+      return const Success(unit);
+    }
+
+    final requestIds = List<String>.unmodifiable(_activeSqlRequestIds);
+    Exception? firstFailure;
+    for (final requestId in requestIds) {
+      _dispatchMetrics?.recordSqlDisconnectAbortAttempt();
+      final abortResult = await abortPort.abortInFlightExecution(
+        requestId,
+        armIfMissing: true,
+      );
+      if (abortResult.isError()) {
+        _dispatchMetrics?.recordSqlDisconnectAbortFailure();
+        firstFailure ??= abortResult.exceptionOrNull();
+        continue;
+      }
+      if (abortResult.getOrThrow()) {
+        _dispatchMetrics?.recordSqlDisconnectAbortRequested();
+      } else {
+        _dispatchMetrics?.recordSqlDisconnectAbortArmed();
+      }
+    }
+    if (firstFailure != null) {
+      return Failure(firstFailure);
+    }
+    return const Success(unit);
+  }
+
+  String? _sqlRequestIdForTracking(RpcRequest request) {
+    if (!request.method.startsWith('sql.') || request.method == 'sql.cancel') {
+      return null;
+    }
+    final requestId = request.id?.toString();
+    return requestId == null || requestId.isEmpty ? null : requestId;
   }
 
   Map<String, RpcMethodHandler> _buildHandlerRegistry(

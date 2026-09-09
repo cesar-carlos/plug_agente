@@ -132,32 +132,22 @@ class PayloadSigner {
     return signFrameWithMetrics(frame).signature;
   }
 
-  /// Async variant of [signFrameWithMetrics]: offloads the HMAC-SHA256
-  /// computation to a background isolate via `compute()`. Canonicalization
-  /// runs on the main isolate; only the HMAC step is offloaded, since that
-  /// is the CPU-intensive part and the canonical bytes are a plain `Uint8List`
-  /// that can be transferred cheaply.
+  /// Async variant of [signFrameWithMetrics] that keeps canonicalization and
+  /// HMAC work off the UI isolate for large transport frames.
   Future<PayloadSigningResult> signFrameAsync(PayloadFrame frame) async {
     final keyId = activeKeyId;
     final key = _keyBytes[keyId]!;
-
-    final canonicalizeSw = Stopwatch()..start();
-    final canonicalBytes = _canonicalizeFrameUtf8(frame);
-    canonicalizeSw.stop();
-
-    final signSw = Stopwatch()..start();
-    final hmacValue = await compute(_computeHmacIsolate, (canonicalBytes, key));
-    signSw.stop();
+    final result = await compute(_signFrameIsolate, (_frameDataForIsolate(frame), key, keyId));
 
     return PayloadSigningResult(
       signature: PayloadSignature(
         alg: supportedAlgorithm,
-        value: hmacValue,
-        keyId: keyId,
+        value: result['value']! as String,
+        keyId: result['keyId']! as String,
       ),
       metrics: PayloadSigningMetrics(
-        canonicalizeDurationUs: canonicalizeSw.elapsedMicroseconds,
-        signDurationUs: signSw.elapsedMicroseconds,
+        canonicalizeDurationUs: result['canonicalizeDurationUs']! as int,
+        signDurationUs: result['signDurationUs']! as int,
       ),
     );
   }
@@ -226,12 +216,56 @@ class PayloadSigner {
     );
   }
 
+  /// Verifies large transport frames off the UI isolate. Canonicalization is
+  /// part of the isolate work so receive-side signature checks cannot monopolize
+  /// the socket/UI isolate for large binary frames.
+  Future<PayloadVerificationResult> verifyFrameAsyncWithMetrics(
+    PayloadFrame frame,
+    PayloadSignature signature,
+  ) async {
+    if (signature.alg != supportedAlgorithm) {
+      return _invalidVerificationResult;
+    }
+    final key = _keyBytes[signature.keyId];
+    if (key == null) {
+      return _invalidVerificationResult;
+    }
+    final frameData = _frameDataForIsolate(frame);
+    final result = await compute(_verifyFrameIsolate, (frameData, key, signature.value));
+    return PayloadVerificationResult(
+      isValid: result['isValid']! as bool,
+      metrics: PayloadSigningMetrics(
+        canonicalizeDurationUs: result['canonicalizeDurationUs']! as int,
+        verifyDurationUs: result['verifyDurationUs']! as int,
+      ),
+    );
+  }
+
+  static const PayloadVerificationResult _invalidVerificationResult = PayloadVerificationResult(
+    isValid: false,
+    metrics: PayloadSigningMetrics(canonicalizeDurationUs: 0, verifyDurationUs: 0),
+  );
+
   Uint8List _canonicalizeUtf8(Map<String, dynamic> payload) {
     return PayloadSigningCanonicalizer.canonicalizeLogicalPayload(payload);
   }
 
   Uint8List _canonicalizeFrameUtf8(PayloadFrame frame) {
     return PayloadSigningCanonicalizer.canonicalizeFrame(frame);
+  }
+
+  Map<String, dynamic> _frameDataForIsolate(PayloadFrame frame) {
+    return <String, dynamic>{
+      'schemaVersion': frame.schemaVersion,
+      'enc': frame.enc,
+      'cmp': frame.cmp,
+      'contentType': frame.contentType,
+      'originalSize': frame.originalSize,
+      'compressedSize': frame.compressedSize,
+      'payload': PayloadSigningCanonicalizer.payloadBytesForFrame(frame.payload),
+      if (frame.traceId != null) 'traceId': frame.traceId,
+      if (frame.requestId != null) 'requestId': frame.requestId,
+    };
   }
 
   String _computeHmacFromUtf8Bytes(Uint8List data, Uint8List key) {
@@ -291,13 +325,58 @@ class PayloadSigner {
   }
 }
 
-/// Top-level function for [PayloadSigner.signFrameAsync] — must be top-level
-/// so it can be passed to `compute()`.
-///
-/// Receives a record of (canonicalBytes, keyBytes) and returns the
-/// HMAC-SHA256 digest as a base64-encoded string.
-String _computeHmacIsolate((Uint8List, Uint8List) args) {
-  final (data, key) = args;
-  final digest = Hmac(sha256, key).convert(data);
-  return base64Encode(digest.bytes);
+Map<String, Object> _signFrameIsolate((Map<String, dynamic>, Uint8List, String) args) {
+  final (frameData, key, keyId) = args;
+  final frame = PayloadFrame.fromJson(frameData);
+  final canonicalizeStopwatch = Stopwatch()..start();
+  final canonicalBytes = PayloadSigningCanonicalizer.canonicalizeFrame(frame);
+  canonicalizeStopwatch.stop();
+  final signStopwatch = Stopwatch()..start();
+  final value = base64Encode(Hmac(sha256, key).convert(canonicalBytes).bytes);
+  signStopwatch.stop();
+  return <String, Object>{
+    'value': value,
+    'keyId': keyId,
+    'canonicalizeDurationUs': canonicalizeStopwatch.elapsedMicroseconds,
+    'signDurationUs': signStopwatch.elapsedMicroseconds,
+  };
+}
+
+Map<String, Object> _verifyFrameIsolate((Map<String, dynamic>, Uint8List, String) args) {
+  final (frameData, key, suppliedSignature) = args;
+  final frame = PayloadFrame.fromJson(frameData);
+  final canonicalizeStopwatch = Stopwatch()..start();
+  final canonicalBytes = PayloadSigningCanonicalizer.canonicalizeFrame(frame);
+  canonicalizeStopwatch.stop();
+  final verifyStopwatch = Stopwatch()..start();
+  final expected = base64Encode(Hmac(sha256, key).convert(canonicalBytes).bytes);
+  final isValid = _constantTimeEqualsIsolate(expected, suppliedSignature);
+  verifyStopwatch.stop();
+  return <String, Object>{
+    'isValid': isValid,
+    'canonicalizeDurationUs': canonicalizeStopwatch.elapsedMicroseconds,
+    'verifyDurationUs': verifyStopwatch.elapsedMicroseconds,
+  };
+}
+
+bool _constantTimeEqualsIsolate(String expected, String actual) {
+  try {
+    final expectedBytes = base64Decode(_padBase64Isolate(expected));
+    final actualBytes = base64Decode(_padBase64Isolate(actual));
+    final length = expectedBytes.length > actualBytes.length ? expectedBytes.length : actualBytes.length;
+    var difference = expectedBytes.length ^ actualBytes.length;
+    for (var index = 0; index < length; index++) {
+      difference |=
+          (index < expectedBytes.length ? expectedBytes[index] : 0) ^
+          (index < actualBytes.length ? actualBytes[index] : 0);
+    }
+    return difference == 0;
+  } on FormatException {
+    return false;
+  }
+}
+
+String _padBase64Isolate(String value) {
+  final remainder = value.length % 4;
+  return remainder == 0 ? value : '$value${'=' * (4 - remainder)}';
 }

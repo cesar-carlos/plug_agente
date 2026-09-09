@@ -1,4 +1,4 @@
-﻿import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
+import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 
 class ProtocolMetricsSummaryBuilder {
   const ProtocolMetricsSummaryBuilder._();
@@ -37,6 +37,8 @@ class ProtocolMetricsSummaryBuilder {
     var gzipCompressIsolateOperations = 0;
     var jsonDecodeIsolateOperations = 0;
     var gzipDecompressIsolateOperations = 0;
+    var hmacSignIsolateOperations = 0;
+    var hmacVerifyIsolateOperations = 0;
 
     final totalDurationValues = <int>[];
     final encodeDurationValues = <int>[];
@@ -98,26 +100,31 @@ class ProtocolMetricsSummaryBuilder {
           decompressDurationSamples++;
           decompressDurationValues.add(value);
         }
-        if (metric.usedIsolate) {
-          totalIsolateOperations++;
-        }
-        if (metric.usedJsonEncodeIsolate) {
-          jsonEncodeIsolateOperations++;
-        }
-        if (metric.usedGzipCompressIsolate) {
-          gzipCompressIsolateOperations++;
-        }
-        if (metric.usedJsonDecodeIsolate) {
-          jsonDecodeIsolateOperations++;
-        }
-        if (metric.usedGzipDecompressIsolate) {
-          gzipDecompressIsolateOperations++;
-        }
-
         if (metric.errorCode != null) {
           errorCount++;
           errorCounts[metric.errorCode!] = (errorCounts[metric.errorCode!] ?? 0) + 1;
         }
+      }
+      if (metric.usedIsolate) {
+        totalIsolateOperations++;
+      }
+      if (metric.usedJsonEncodeIsolate) {
+        jsonEncodeIsolateOperations++;
+      }
+      if (metric.usedGzipCompressIsolate) {
+        gzipCompressIsolateOperations++;
+      }
+      if (metric.usedJsonDecodeIsolate) {
+        jsonDecodeIsolateOperations++;
+      }
+      if (metric.usedGzipDecompressIsolate) {
+        gzipDecompressIsolateOperations++;
+      }
+      if (metric.usedHmacSignIsolate) {
+        hmacSignIsolateOperations++;
+      }
+      if (metric.usedHmacVerifyIsolate) {
+        hmacVerifyIsolateOperations++;
       }
       if (metric.signDurationUs != null) {
         final value = metric.signDurationUs!;
@@ -187,6 +194,8 @@ class ProtocolMetricsSummaryBuilder {
       gzipCompressIsolateOperations: gzipCompressIsolateOperations,
       jsonDecodeIsolateOperations: jsonDecodeIsolateOperations,
       gzipDecompressIsolateOperations: gzipDecompressIsolateOperations,
+      hmacSignIsolateOperations: hmacSignIsolateOperations,
+      hmacVerifyIsolateOperations: hmacVerifyIsolateOperations,
     );
   }
 }

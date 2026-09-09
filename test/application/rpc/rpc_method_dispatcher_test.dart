@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/rpc/client_token_get_policy_rate_limiter.dart';
 import 'package:plug_agente/application/rpc/rpc_method_dispatcher.dart';
+import 'package:plug_agente/application/rpc/rpc_method_handler.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/application/services/query_normalizer_service.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
@@ -27,6 +28,7 @@ import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
 import 'package:plug_agente/domain/repositories/i_idempotency_store.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
+import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
 import 'package:plug_agente/domain/streaming/streaming_cancel_reason.dart';
 import 'package:plug_agente/domain/validation/sql_validator.dart';
@@ -66,6 +68,33 @@ void _stubAgentConfigRepository(
 class MockRpcStreamEmitter extends Mock implements IRpcStreamEmitter {}
 
 class MockOdbcNativeMetricsService extends Mock implements OdbcNativeMetricsService {}
+
+class MockSqlInFlightAbortPort extends Mock implements ISqlInFlightExecutionAbortPort {}
+
+class _PendingSqlHandler implements RpcMethodHandler {
+  _PendingSqlHandler(this.expectedCalls);
+
+  final int expectedCalls;
+  final Completer<void> _allStarted = Completer<void>();
+  final Completer<RpcResponse> _completion = Completer<RpcResponse>();
+  int _calls = 0;
+
+  @override
+  String get method => 'sql.execute';
+
+  Future<void> get allStarted => _allStarted.future;
+
+  void complete() => _completion.complete(RpcResponse.success(id: 'done', result: const <String, dynamic>{}));
+
+  @override
+  Future<RpcResponse> handle(RpcRequest request, RpcDispatchContext context) {
+    _calls++;
+    if (_calls == expectedCalls && !_allStarted.isCompleted) {
+      _allStarted.complete();
+    }
+    return _completion.future;
+  }
+}
 
 HealthService _testHealthService(IDatabaseGateway gateway) => HealthService(
   metricsCollector: MetricsCollector(),
@@ -295,6 +324,56 @@ void main() {
         streamingGateway: mockStreamingGateway,
         odbcNativeMetricsService: mockOdbcNativeMetricsService,
       );
+    });
+
+    test('cancels every active SQL request on disconnect and reports aggregate outcomes', () async {
+      final abortPort = MockSqlInFlightAbortPort();
+      final pendingHandler = _PendingSqlHandler(2);
+      final metrics = MetricsCollector();
+      final disconnectDispatcher = RpcMethodDispatcher(
+        streamingConnectionStringCache: rpcTestStreamingConnectionStringCache(),
+        databaseGateway: mockGateway,
+        healthService: _testHealthService(mockGateway),
+        normalizerService: mockNormalizer,
+        uuid: const Uuid(),
+        authorizeSqlOperation: mockAuthorize,
+        getClientTokenPolicy: mockGetClientTokenPolicy,
+        getPolicyRateLimiter: _testDisabledGetPolicyRateLimiter,
+        featureFlags: mockFeatureFlags,
+        streamingGateway: mockStreamingGateway,
+        odbcNativeMetricsService: mockOdbcNativeMetricsService,
+        handlers: <RpcMethodHandler>[pendingHandler],
+        inFlightAbortPort: abortPort,
+        dispatchMetrics: RpcDispatchMetricsCollector(metrics),
+      );
+      when(
+        () => abortPort.abortInFlightExecution('req-1', armIfMissing: true),
+      ).thenAnswer((_) async => const Success(true));
+      when(
+        () => abortPort.abortInFlightExecution('req-2', armIfMissing: true),
+      ).thenAnswer((_) async => Failure(Exception('native abort failed')));
+
+      final first = disconnectDispatcher.dispatch(
+        const RpcRequest(jsonrpc: '2.0', method: 'sql.execute', id: 'req-1'),
+        'agent-1',
+      );
+      final second = disconnectDispatcher.dispatch(
+        const RpcRequest(jsonrpc: '2.0', method: 'sql.execute', id: 'req-2'),
+        'agent-1',
+      );
+      await pendingHandler.allStarted;
+
+      final cancellation = await disconnectDispatcher.cancelActiveSqlOnDisconnect();
+
+      expect(cancellation.isError(), isTrue);
+      verify(() => abortPort.abortInFlightExecution('req-1', armIfMissing: true)).called(1);
+      verify(() => abortPort.abortInFlightExecution('req-2', armIfMissing: true)).called(1);
+      final snapshot = metrics.getSnapshot();
+      expect(snapshot['sql_disconnect_abort_attempt'], 2);
+      expect(snapshot['sql_disconnect_abort_requested'], 1);
+      expect(snapshot['sql_disconnect_abort_failure'], 1);
+      pendingHandler.complete();
+      await Future.wait(<Future<RpcResponse>>[first, second]);
     });
 
     test('should return methodNotFound for unknown method', () async {

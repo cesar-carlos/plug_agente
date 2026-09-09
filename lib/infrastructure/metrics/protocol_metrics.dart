@@ -36,6 +36,8 @@ class ProtocolMetrics {
     this.usedGzipCompressIsolate = false,
     this.usedJsonDecodeIsolate = false,
     this.usedGzipDecompressIsolate = false,
+    this.usedHmacSignIsolate = false,
+    this.usedHmacVerifyIsolate = false,
     this.errorCode,
   });
 
@@ -63,6 +65,8 @@ class ProtocolMetrics {
   final bool usedGzipCompressIsolate;
   final bool usedJsonDecodeIsolate;
   final bool usedGzipDecompressIsolate;
+  final bool usedHmacSignIsolate;
+  final bool usedHmacVerifyIsolate;
   final int? errorCode;
 
   double get compressionRatio => originalSize > 0 ? compressedSize / originalSize : 1.0;
@@ -99,6 +103,8 @@ class ProtocolMetrics {
       'used_gzip_compress_isolate': usedGzipCompressIsolate,
       'used_json_decode_isolate': usedJsonDecodeIsolate,
       'used_gzip_decompress_isolate': usedGzipDecompressIsolate,
+      'used_hmac_sign_isolate': usedHmacSignIsolate,
+      'used_hmac_verify_isolate': usedHmacVerifyIsolate,
       if (errorCode != null) 'error_code': errorCode,
     };
   }

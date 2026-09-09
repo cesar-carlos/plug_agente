@@ -26,7 +26,7 @@ void main() {
       final original = Uint8List.fromList(utf8.encode('Hello World! ' * 100));
       final compressed = codec.compress(original).getOrThrow();
 
-      final result = codec.decompress(compressed);
+      final result = codec.decompress(compressed, maxOutputBytes: original.length);
 
       expect(result.isSuccess(), isTrue);
       final decompressed = result.getOrThrow();
@@ -41,7 +41,10 @@ void main() {
       final compressResult = codec.compress(original);
       expect(compressResult.isSuccess(), isTrue);
 
-      final decompressResult = codec.decompress(compressResult.getOrThrow());
+      final decompressResult = codec.decompress(
+        compressResult.getOrThrow(),
+        maxOutputBytes: original.length,
+      );
       expect(decompressResult.isSuccess(), isTrue);
 
       expect(decompressResult.getOrThrow(), equals(original));
@@ -50,7 +53,7 @@ void main() {
     test('should return failure when decompressing invalid data', () {
       final invalidData = Uint8List.fromList([1, 2, 3, 4]);
 
-      final result = codec.decompress(invalidData);
+      final result = codec.decompress(invalidData, maxOutputBytes: 1024);
 
       expect(result.isError(), isTrue);
     });
@@ -79,7 +82,7 @@ void main() {
     test('should return data unchanged on decompress', () {
       final data = Uint8List.fromList([1, 2, 3, 4]);
 
-      final result = codec.decompress(data);
+      final result = codec.decompress(data, maxOutputBytes: data.length);
 
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow(), equals(data));
@@ -88,6 +91,16 @@ void main() {
     test('should have correct algorithm name', () {
       expect(codec.algorithm, equals('none'));
     });
+  });
+
+  test('should reject gzip output above configured limit', () {
+    const codec = GzipCompressionCodec();
+    final original = Uint8List.fromList(utf8.encode('x' * 4096));
+    final compressed = codec.compress(original).getOrThrow();
+
+    final result = codec.decompress(compressed, maxOutputBytes: 1024);
+
+    expect(result.isError(), isTrue);
   });
 
   group('CompressionCodecFactory', () {

@@ -21,6 +21,8 @@ void main() {
       expect(report, contains('large_sql_low_compressibility'));
       expect(report, contains('large_incompressible_blob'));
       expect(report, contains('| async | auto | true |'));
+      expect(report, contains('HMAC sign p50/p95/p99'));
+      expect(report, contains('gzip decompress p50/p95/p99'));
     },
     timeout: Timeout.none,
     tags: const ['perf'],

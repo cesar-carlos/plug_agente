@@ -22,6 +22,7 @@ final class RpcResponseDeliveryCoordinator {
     required bool Function() deliveryGuaranteesEnabled,
     required io.Socket? Function() activeSocket,
     required int Function() connectGeneration,
+    required int Function() transportSessionGeneration,
     required MetricsCollector? metricsCollector,
     required Future<void> Function(dynamic requestId) emitInternalErrorResponse,
     void Function({required String event, required dynamic logicalPayload})? onValidatedPayload,
@@ -32,6 +33,7 @@ final class RpcResponseDeliveryCoordinator {
        _deliveryGuaranteesEnabled = deliveryGuaranteesEnabled,
        _activeSocket = activeSocket,
        _connectGeneration = connectGeneration,
+       _transportSessionGeneration = transportSessionGeneration,
        _metricsCollector = metricsCollector,
        _emitInternalErrorResponse = emitInternalErrorResponse,
        _onValidatedPayload = onValidatedPayload,
@@ -43,6 +45,7 @@ final class RpcResponseDeliveryCoordinator {
   final bool Function() _deliveryGuaranteesEnabled;
   final io.Socket? Function() _activeSocket;
   final int Function() _connectGeneration;
+  final int Function() _transportSessionGeneration;
   final MetricsCollector? _metricsCollector;
   final Future<void> Function(dynamic requestId) _emitInternalErrorResponse;
   final void Function({required String event, required dynamic logicalPayload})? _onValidatedPayload;
@@ -52,6 +55,11 @@ final class RpcResponseDeliveryCoordinator {
     dynamic responseData, {
     Map<Object?, String> methodsById = const <Object?, String>{},
   }) async {
+    final expectedGeneration = Zone.current[#transportRequestGeneration] as int?;
+    if (expectedGeneration != null && expectedGeneration != _transportSessionGeneration()) {
+      _metricsCollector?.recordRpcResponseEmitSkippedDisconnected();
+      return;
+    }
     final prepared = responseData is List<RpcResponse>
         ? responseData.map(_responsePreparer.prepareForSend).toList()
         : _responsePreparer.prepareForSend(responseData as RpcResponse);
@@ -86,6 +94,12 @@ final class RpcResponseDeliveryCoordinator {
     }
     final outgoingPayload = outgoingResult.getOrThrow();
 
+    if (expectedGeneration != null && expectedGeneration != _transportSessionGeneration()) {
+      _metricsCollector?.recordRpcResponseEmitSkippedDisconnected();
+      AppLogger.info('Skipping rpc:response emit because its transport session ended');
+      return;
+    }
+
     final deliverySocket = _activeSocket();
     if (deliverySocket == null) {
       _metricsCollector?.recordRpcResponseEmitSkippedDisconnected();
@@ -114,11 +128,21 @@ final class RpcResponseDeliveryCoordinator {
 
     _logMessage('SENT', 'rpc:response', validatedPayload);
     final deliveryGeneration = _connectGeneration();
+    final deliverySessionGeneration = expectedGeneration ?? _transportSessionGeneration();
+    if (!_isDeliveryCurrent(
+      socket: deliverySocket,
+      connectGeneration: deliveryGeneration,
+      transportSessionGeneration: deliverySessionGeneration,
+    )) {
+      _metricsCollector?.recordRpcResponseEmitSkippedDisconnected();
+      return;
+    }
     unawaited(
       _deliverWithAck(
         outgoingPayload,
         socket: deliverySocket,
         connectGeneration: deliveryGeneration,
+        transportSessionGeneration: deliverySessionGeneration,
       ).catchError((Object error, StackTrace stackTrace) {
         AppLogger.error(
           'Unhandled rpc:response ACK delivery failure',
@@ -159,12 +183,17 @@ final class RpcResponseDeliveryCoordinator {
     dynamic outgoingPayload, {
     required io.Socket socket,
     required int connectGeneration,
+    required int transportSessionGeneration,
   }) async {
     const maxRetries = DeliveryGuaranteeConfig.maxResponseRetries;
     const totalAttempts = maxRetries + 1;
 
     for (var attempt = 0; attempt < totalAttempts; attempt++) {
-      if (!_isDeliveryCurrent(socket: socket, connectGeneration: connectGeneration)) {
+      if (!_isDeliveryCurrent(
+        socket: socket,
+        connectGeneration: connectGeneration,
+        transportSessionGeneration: transportSessionGeneration,
+      )) {
         _metricsCollector?.recordRpcResponseAckAbortedConnectionChange();
         AppLogger.info(
           'rpc:response ack delivery aborted due connection generation change',
@@ -176,6 +205,7 @@ final class RpcResponseDeliveryCoordinator {
           socket,
           outgoingPayload,
           connectGeneration: connectGeneration,
+          transportSessionGeneration: transportSessionGeneration,
         );
         _metricsCollector?.recordRpcResponseAckDelivered();
         return;
@@ -186,7 +216,11 @@ final class RpcResponseDeliveryCoordinator {
         );
         return;
       } on Object catch (error, stackTrace) {
-        if (!_isDeliveryCurrent(socket: socket, connectGeneration: connectGeneration)) {
+        if (!_isDeliveryCurrent(
+          socket: socket,
+          connectGeneration: connectGeneration,
+          transportSessionGeneration: transportSessionGeneration,
+        )) {
           _metricsCollector?.recordRpcResponseAckAbortedConnectionChange();
           AppLogger.info(
             'rpc:response ack delivery aborted due connection generation change',
@@ -217,8 +251,11 @@ final class RpcResponseDeliveryCoordinator {
   bool _isDeliveryCurrent({
     required io.Socket socket,
     required int connectGeneration,
+    required int transportSessionGeneration,
   }) {
-    return _activeSocket() == socket && _connectGeneration() == connectGeneration;
+    return _activeSocket() == socket &&
+        _connectGeneration() == connectGeneration &&
+        _transportSessionGeneration() == transportSessionGeneration;
   }
 
   /// Own timeout + [io.Socket.emitWithAck] with a 0-arg-tolerant callback.
@@ -230,6 +267,7 @@ final class RpcResponseDeliveryCoordinator {
     io.Socket socket,
     dynamic outgoingPayload, {
     required int connectGeneration,
+    required int transportSessionGeneration,
   }) async {
     final completer = Completer<void>();
     Timer? timeoutTimer;
@@ -261,7 +299,11 @@ final class RpcResponseDeliveryCoordinator {
     });
 
     generationPoll = Timer.periodic(DeliveryGuaranteeConfig.responseAckGenerationPollInterval, (_) {
-      if (!_isDeliveryCurrent(socket: socket, connectGeneration: connectGeneration)) {
+      if (!_isDeliveryCurrent(
+        socket: socket,
+        connectGeneration: connectGeneration,
+        transportSessionGeneration: transportSessionGeneration,
+      )) {
         completeOnce(
           () => completer.completeError(const _AckDeliveryAborted()),
         );

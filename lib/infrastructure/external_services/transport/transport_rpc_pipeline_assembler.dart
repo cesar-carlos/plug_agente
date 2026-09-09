@@ -60,6 +60,7 @@ final class TransportRpcPipelineAssemblyDeps {
     required this.hasReceivedCapabilities,
     required this.usesBinaryTransport,
     required this.connectGeneration,
+    required this.transportSessionGeneration,
     required this.activeSocket,
     required this.onReconnectionNeeded,
     required this.onHubLifecycle,
@@ -77,7 +78,7 @@ final class TransportRpcPipelineAssemblyDeps {
     required this.onConnectError,
     required this.onSocketError,
     required this.onDisconnect,
-    required this.onReleaseStreamStateAfterTransportLoss,
+    required this.onBeginFreshTransportSession,
     required this.onCapabilitiesEnvelope,
     required this.onHeartbeatAck,
     this.healthService,
@@ -113,6 +114,7 @@ final class TransportRpcPipelineAssemblyDeps {
   final bool Function() hasReceivedCapabilities;
   final bool Function() usesBinaryTransport;
   final int Function() connectGeneration;
+  final int Function() transportSessionGeneration;
   final io.Socket? Function() activeSocket;
   final void Function()? onReconnectionNeeded;
   final void Function(HubLifecycleNotification notification)? onHubLifecycle;
@@ -134,7 +136,7 @@ final class TransportRpcPipelineAssemblyDeps {
   final void Function(dynamic error, Completer<Result<void>> completer) onConnectError;
   final void Function(dynamic error) onSocketError;
   final void Function(dynamic reason) onDisconnect;
-  final void Function() onReleaseStreamStateAfterTransportLoss;
+  final void Function() onBeginFreshTransportSession;
   final void Function(dynamic data) onCapabilitiesEnvelope;
   final void Function(dynamic data) onHeartbeatAck;
   final IAgentHealthStatusProvider? healthService;
@@ -226,6 +228,7 @@ final class TransportRpcPipelineAssembler {
       emitRpcResponseWithMethodContext: deps.emitRpcResponse,
       emitEvent: deps.emitEventVoid,
       hasReceivedCapabilities: deps.hasReceivedCapabilities,
+      isTransportSessionCurrent: (expectedGeneration) => expectedGeneration == deps.transportSessionGeneration(),
       jsonSchemaValidator: deps.jsonSchemaValidator,
       schemaCatalog: deps.schemaCatalog,
       metricsCollector: deps.metricsCollector,
@@ -239,6 +242,7 @@ final class TransportRpcPipelineAssembler {
       deliveryGuaranteesEnabled: () => deps.featureFlags.enableSocketDeliveryGuarantees,
       activeSocket: deps.activeSocket,
       connectGeneration: deps.connectGeneration,
+      transportSessionGeneration: deps.transportSessionGeneration,
       metricsCollector: deps.metricsCollector,
       emitInternalErrorResponse: deps.emitInternalErrorResponse,
       onValidatedPayload: deps.publishLargeResponseAdvice,
@@ -269,6 +273,7 @@ final class TransportRpcPipelineAssembler {
       agentIdProvider: deps.agentId,
       resilienceLogPrefixProvider: deps.resilienceLogPrefix,
       connectGenerationProvider: deps.connectGeneration,
+      transportSessionGenerationProvider: deps.transportSessionGeneration,
       isStaleConnectGeneration: (generation) => generation != deps.connectGeneration(),
       onAuthorizationSessionReset: authorizationDecisionLogger.resetSessionState,
       onHeartbeatResetTransient: deps.resetHeartbeatTransient,
@@ -278,7 +283,7 @@ final class TransportRpcPipelineAssembler {
       onConnectError: deps.onConnectError,
       onSocketError: deps.onSocketError,
       onDisconnect: deps.onDisconnect,
-      onReleaseStreamStateAfterTransportLoss: deps.onReleaseStreamStateAfterTransportLoss,
+      onBeginFreshTransportSession: deps.onBeginFreshTransportSession,
       onCapabilitiesEnvelope: deps.onCapabilitiesEnvelope,
       onHeartbeatAck: deps.onHeartbeatAck,
       onReconnectionNeeded: deps.onReconnectionNeeded,

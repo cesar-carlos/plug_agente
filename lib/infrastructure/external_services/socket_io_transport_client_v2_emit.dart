@@ -47,6 +47,10 @@ base mixin _SocketIoTransportEmit on _SocketIoTransportHost {
   }
 
   Future<bool> _emitEventAsync(String event, dynamic logicalPayload) async {
+    final expectedGeneration = Zone.current[#transportRequestGeneration] as int?;
+    if (expectedGeneration != null && expectedGeneration != lifecycle.transportSessionGeneration) {
+      return false;
+    }
     final socket = lifecycle.socket;
     if (socket == null) {
       return false;
@@ -63,6 +67,10 @@ base mixin _SocketIoTransportEmit on _SocketIoTransportHost {
       return false;
     }
     final outgoingPayload = outgoingResult.getOrThrow();
+    if ((expectedGeneration != null && expectedGeneration != lifecycle.transportSessionGeneration) ||
+        lifecycle.socket != socket) {
+      return false;
+    }
     try {
       socket.emit(event, outgoingPayload);
     } on Object catch (error, stackTrace) {
@@ -170,6 +178,10 @@ base mixin _SocketIoTransportEmit on _SocketIoTransportHost {
   }
 
   Future<void> _emitInternalErrorResponse(dynamic requestId) async {
+    final expectedGeneration = Zone.current[#transportRequestGeneration] as int?;
+    if (expectedGeneration != null && expectedGeneration != lifecycle.transportSessionGeneration) {
+      return;
+    }
     final socket = lifecycle.socket;
     if (socket == null) return;
     try {
@@ -201,6 +213,10 @@ base mixin _SocketIoTransportEmit on _SocketIoTransportHost {
         return;
       }
       final outgoingPayload = outgoingResult.getOrThrow();
+      if ((expectedGeneration != null && expectedGeneration != lifecycle.transportSessionGeneration) ||
+          lifecycle.socket != socket) {
+        return;
+      }
       _logMessage('SENT', 'rpc:response', validatedResult.getOrThrow());
       socket.emit('rpc:response', outgoingPayload);
     } on Object catch (e, st) {

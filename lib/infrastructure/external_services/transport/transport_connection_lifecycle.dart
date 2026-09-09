@@ -16,6 +16,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/socket_io
 import 'package:plug_agente/infrastructure/external_services/transport/transport_local_capabilities_builder.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_pipeline_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/transport_socket_event_binder.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
@@ -39,6 +40,7 @@ final class TransportConnectionLifecycle {
     required VoidCallback? onReconnectionNeeded,
     required void Function(String stage) publishPayloadSigningDiagnostic,
     required bool Function() binaryPayloadEnabled,
+    MetricsCollector? metricsCollector,
   }) : _dataSource = dataSource,
        _connectionErrorHandler = connectionErrorHandler,
        _socketEventBinder = socketEventBinder,
@@ -55,7 +57,8 @@ final class TransportConnectionLifecycle {
        _onHubLifecycle = onHubLifecycle,
        _onReconnectionNeeded = onReconnectionNeeded,
        _publishPayloadSigningDiagnostic = publishPayloadSigningDiagnostic,
-       _binaryPayloadEnabled = binaryPayloadEnabled;
+       _binaryPayloadEnabled = binaryPayloadEnabled,
+       _metricsCollector = metricsCollector;
 
   final SocketDataSource _dataSource;
   final SocketIoTransportConnectionErrorHandler _connectionErrorHandler;
@@ -74,9 +77,11 @@ final class TransportConnectionLifecycle {
   final VoidCallback? _onReconnectionNeeded;
   final void Function(String stage) _publishPayloadSigningDiagnostic;
   final bool Function() _binaryPayloadEnabled;
+  final MetricsCollector? _metricsCollector;
 
   io.Socket? socket;
   int connectGeneration = 0;
+  int transportSessionGeneration = 0;
   String agentId = '';
   ProtocolConfig currentProtocol = const ProtocolConfig(
     protocol: 'jsonrpc-v2',
@@ -87,6 +92,7 @@ final class TransportConnectionLifecycle {
   Timer? _connectTimeoutTimer;
   Completer<Result<void>>? _connectCompleter;
   String? _latestAuthToken;
+  int? _lastTransportLossResetGeneration;
 
   bool get isConnected => socket?.connected ?? false;
 
@@ -97,6 +103,7 @@ final class TransportConnectionLifecycle {
   }) async {
     _completePendingConnectAsCancelled();
     final nextGeneration = ++connectGeneration;
+    beginFreshTransportSession(fromTransportLoss: false);
     try {
       if (!_binaryPayloadEnabled()) {
         return Failure(
@@ -211,8 +218,16 @@ final class TransportConnectionLifecycle {
   /// revive a dying connection (timeout, heartbeat stale, explicit disconnect).
   void invalidateGenerationAndCloseSocket() {
     connectGeneration++;
+    beginFreshTransportSession();
     _completePendingConnectAsCancelled();
     _heartbeatStop();
+    closeSocket();
+  }
+
+  /// Clears the current transport session without cancelling the pending
+  /// connect completer. Connection-error callers still own its typed result.
+  void resetTransportSessionAndCloseSocket() {
+    beginFreshTransportSession();
     closeSocket();
   }
 
@@ -240,11 +255,7 @@ final class TransportConnectionLifecycle {
   }
 
   void handleDisconnect(dynamic reason) {
-    _heartbeatStop();
-    // Soft reconnect keeps the Socket.IO manager socket; without this, active
-    // stream emitters retain slots until idle TTL / closeSocket and block new
-    // streams when negotiated max_concurrent_streams is low (often 1).
-    releaseStreamStateAfterTransportLoss();
+    beginFreshTransportSession();
     final asString = reason is String ? reason : reason?.toString();
     final serverInitiated = isHubIoServerInitiatedDisconnect(asString);
     final disconnectLine =
@@ -263,6 +274,21 @@ final class TransportConnectionLifecycle {
     }
   }
 
+  /// Starts a clean physical transport session. Socket.IO `disconnect` and
+  /// manager `reconnect` can describe the same transport loss, therefore that
+  /// reset is idempotent without suppressing an explicit new `connect()`.
+  void beginFreshTransportSession({bool fromTransportLoss = true}) {
+    if (fromTransportLoss && _lastTransportLossResetGeneration == connectGeneration) {
+      return;
+    }
+    _lastTransportLossResetGeneration = fromTransportLoss ? connectGeneration : null;
+    transportSessionGeneration++;
+    _metricsCollector?.recordTransportSessionReset();
+    _heartbeatStop();
+    _resetSoftDisconnectedSessionState();
+    releaseStreamStateAfterTransportLoss();
+  }
+
   /// Cancels in-flight SQL streams and clears the stream emitter registry.
   ///
   /// Safe to call repeatedly (soft disconnect, soft reconnect, closeSocket).
@@ -276,7 +302,41 @@ final class TransportConnectionLifecycle {
         );
       }),
     );
+    unawaited(
+      _rpcDispatcher
+          .cancelActiveSqlOnDisconnect()
+          .then((result) {
+            if (result.isError()) {
+              AppLogger.warning(
+                'Failed to cancel active SQL on socket disconnect',
+                result.exceptionOrNull(),
+              );
+            }
+          })
+          .catchError((Object error, StackTrace stackTrace) {
+            AppLogger.warning(
+              'Failed to cancel active SQL on socket disconnect',
+              error,
+              stackTrace,
+            );
+          }),
+    );
     _streamPullHandler.dispose();
+  }
+
+  /// Invalidates negotiated state retained by Socket.IO's manager during a
+  /// soft reconnect. A new physical session must negotiate capabilities again.
+  void _resetSoftDisconnectedSessionState() {
+    _capabilitiesNegotiator.resetForReconnect();
+    _pipelineCache.reset();
+    _localCapabilitiesBuilder.invalidateCache();
+    _requestGuard.clearReplayCache();
+    _inboundHandler.resetAckBuffer();
+    currentProtocol = const ProtocolConfig(
+      protocol: 'jsonrpc-v2',
+      encoding: 'json',
+      compression: 'none',
+    );
   }
 
   void closeSocket() {
@@ -286,7 +346,6 @@ final class TransportConnectionLifecycle {
     _pipelineCache.reset();
     _localCapabilitiesBuilder.invalidateCache();
     _requestGuard.clearReplayCache();
-    releaseStreamStateAfterTransportLoss();
     final activeSocket = socket;
     socket = null;
     _inboundHandler.resetAckBuffer();

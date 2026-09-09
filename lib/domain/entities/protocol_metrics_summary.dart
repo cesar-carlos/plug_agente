@@ -1,4 +1,4 @@
-﻿/// Summary of protocol metrics.
+/// Summary of protocol metrics.
 class ProtocolMetricsSummary {
   const ProtocolMetricsSummary({
     required this.totalMessages,
@@ -36,6 +36,8 @@ class ProtocolMetricsSummary {
     required this.gzipCompressIsolateOperations,
     required this.jsonDecodeIsolateOperations,
     required this.gzipDecompressIsolateOperations,
+    required this.hmacSignIsolateOperations,
+    required this.hmacVerifyIsolateOperations,
   });
   final int totalMessages;
   final Map<String, int> protocolUsage;
@@ -72,6 +74,8 @@ class ProtocolMetricsSummary {
   final int gzipCompressIsolateOperations;
   final int jsonDecodeIsolateOperations;
   final int gzipDecompressIsolateOperations;
+  final int hmacSignIsolateOperations;
+  final int hmacVerifyIsolateOperations;
 
   double get errorRate => totalMessages > 0 ? errorCount / totalMessages : 0.0;
 
@@ -119,6 +123,8 @@ class ProtocolMetricsSummary {
       'gzip_compress_isolate_operations': gzipCompressIsolateOperations,
       'json_decode_isolate_operations': jsonDecodeIsolateOperations,
       'gzip_decompress_isolate_operations': gzipDecompressIsolateOperations,
+      'hmac_sign_isolate_operations': hmacSignIsolateOperations,
+      'hmac_verify_isolate_operations': hmacVerifyIsolateOperations,
     };
   }
 }

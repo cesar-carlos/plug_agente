@@ -200,6 +200,9 @@ Namespace do agente: `/agents` (JWT de `POST /auth/agent-login` no handshake).
   - recebido do hub como confirmacao de heartbeat
   - o hub deve espelhar o `trace_id` recebido no ack quando presente, permitindo
     correlacionar emissao e confirmacao sem relogio sincronizado
+  - o agente aceita o ACK somente quando o `trace_id` e a epoca da sessao
+    ativa coincidem; ACK ausente, duplicado, atrasado ou de sessao anterior e
+    descartado e nao reinicia o contador de liveness
   - na ausencia de `ack` por janelas consecutivas, o agente marca conexao como
   stale e aciona fluxo de reconexao
 
@@ -238,6 +241,12 @@ Namespace do agente: `/agents` (JWT de `POST /auth/agent-login` no handshake).
 | `rpc:chunk`                | agente -> hub | `PayloadFrame<{ stream_id, request_id, chunk_index, rows }>`            | (quando `enableSocketStreamingChunks`)                                                                                                                     |
 | `rpc:complete`             | agente -> hub | `PayloadFrame<{ stream_id, request_id, total_rows, terminal_status? }>` | (quando `enableSocketStreamingChunks`; `terminal_status` opcional `aborted`/`error` quando o stream termina sem sucesso completo — ver texto em streaming) |
 | `rpc:stream.pull`          | hub -> agente | `PayloadFrame<{ stream_id, window_size }>`                              | registrado pelo agente quando qualquer flag de streaming estiver ativa (`enableSocketBackpressure`, `enableSocketStreamingChunks` ou `enableSocketStreamingFromDb`); `window_size` so e processado ativamente quando `enableSocketBackpressure` |
+
+Em `disconnect` e no reconnect L0, o agente invalida a geracao da sessao antes
+de novo `agent:register`. Capabilities, protocolo negociado, cache de pipeline,
+ACKs inbound, timers e trabalhos pendentes da geracao anterior sao descartados;
+`rpc:request` permanece bloqueado ate a chegada de capabilities novas. Respostas
+de uma sessao perdida nunca sao reenviadas na sessao nova.
 
 
 ### Reasons de `agent:register_error` (wire do hub)

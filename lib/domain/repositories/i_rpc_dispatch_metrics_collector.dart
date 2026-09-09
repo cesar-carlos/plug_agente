@@ -63,4 +63,12 @@ abstract class IRpcDispatchMetricsCollector {
   void recordSqlStreamCancelled(String reason);
 
   void recordSqlStreamCancelFailed(String reason);
+
+  void recordSqlDisconnectAbortAttempt();
+
+  void recordSqlDisconnectAbortRequested();
+
+  void recordSqlDisconnectAbortArmed();
+
+  void recordSqlDisconnectAbortFailure();
 }

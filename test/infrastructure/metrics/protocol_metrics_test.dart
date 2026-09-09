@@ -326,6 +326,7 @@ void main() {
           totalDurationUs: 60,
           signDurationUs: 40,
           canonicalizeDurationUs: 20,
+          usedHmacSignIsolate: true,
         ),
         ProtocolMetrics(
           timestamp: DateTime.now(),
@@ -339,6 +340,7 @@ void main() {
           totalDurationUs: 70,
           verifyDurationUs: 45,
           canonicalizeDurationUs: 25,
+          usedHmacVerifyIsolate: true,
         ),
       ]);
 
@@ -350,6 +352,8 @@ void main() {
       expect(summary.averageSignDurationUs, equals(40));
       expect(summary.averageVerifyDurationUs, equals(45));
       expect(summary.averageCanonicalizeDurationUs, equals(22.5));
+      expect(summary.hmacSignIsolateOperations, equals(1));
+      expect(summary.hmacVerifyIsolateOperations, equals(1));
     });
 
     test('should export diagnostic json summary', () {

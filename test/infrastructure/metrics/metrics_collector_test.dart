@@ -487,6 +487,29 @@ void main() {
       });
     });
 
+    group('transport reliability counters', () {
+      test('exports stable session, heartbeat, compression, and SQL cancellation counters', () {
+        collector.recordTransportSessionReset();
+        collector.recordTransportStaleEventDropped('rpc_before_dispatch');
+        collector.recordHeartbeatAckRejected('trace_mismatch');
+        collector.recordTransportCompressionLimitRejected('max_output');
+        collector.recordSqlDisconnectAbortAttempt();
+        collector.recordSqlDisconnectAbortRequested();
+        collector.recordSqlDisconnectAbortArmed();
+        collector.recordSqlDisconnectAbortFailure();
+
+        final snapshot = collector.getSnapshot();
+        expect(snapshot['transport_session_reset'], 1);
+        expect(snapshot['transport_stale_event_dropped'], 1);
+        expect(snapshot['heartbeat_ack_rejected'], 1);
+        expect(snapshot['transport_compression_limit_rejected'], 1);
+        expect(snapshot['sql_disconnect_abort_attempt'], 1);
+        expect(snapshot['sql_disconnect_abort_requested'], 1);
+        expect(snapshot['sql_disconnect_abort_armed'], 1);
+        expect(snapshot['sql_disconnect_abort_failure'], 1);
+      });
+    });
+
     group('recordRpcAgentActionRemoteOutcome', () {
       test('should increment bounded counters for published methods only', () {
         collector.recordRpcAgentActionRemoteOutcome('agent.action.run', success: true);

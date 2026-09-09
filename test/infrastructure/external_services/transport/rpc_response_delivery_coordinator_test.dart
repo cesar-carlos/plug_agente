@@ -38,6 +38,7 @@ void main() {
       int connectGeneration = 1,
       io.Socket? Function()? activeSocket,
       int Function()? connectGenerationProvider,
+      int Function()? transportSessionGenerationProvider,
       Duration? responseAckTimeout,
     }) {
       return RpcResponseDeliveryCoordinator(
@@ -47,6 +48,7 @@ void main() {
         deliveryGuaranteesEnabled: () => deliveryGuaranteesEnabled,
         activeSocket: activeSocket ?? () => socket,
         connectGeneration: connectGenerationProvider ?? () => connectGeneration,
+        transportSessionGeneration: transportSessionGenerationProvider ?? () => connectGeneration,
         metricsCollector: metrics,
         emitInternalErrorResponse: (requestId) async => internalErrorRequestIds.add(requestId),
         responseAckTimeout: responseAckTimeout,

@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -172,9 +171,9 @@ Future<String> buildTransportPipelineBenchmarkReport({
     ..writeln('- stage-p50/p95/p99 (ms)')
     ..writeln()
     ..writeln(
-      '| case | path | mode | signed | cmp | original | wire | saved | send p50/p95/p99 | receive p50/p95/p99 | isolates |',
+      '| case | path | mode | signed | cmp | original | wire | saved | send p50/p95/p99 | receive p50/p95/p99 | gzip compress p50/p95/p99 | gzip decompress p50/p95/p99 | HMAC sign p50/p95/p99 | HMAC verify p50/p95/p99 | isolates |',
     )
-    ..writeln('| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
+    ..writeln('| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (final result in results) {
     buffer.writeln(
       '| ${result['case']} | $path | ${result['requested_compression']} | ${result['signed']} | '
@@ -182,6 +181,8 @@ Future<String> buildTransportPipelineBenchmarkReport({
       '${_formatBytes(result['original_bytes'] as int)} | ${_formatBytes(result['wire_bytes'] as int)} | '
       '${_formatBytes(result['bytes_saved'] as int)} | '
       '${_formatMicrosTriple(result, 'send')} | ${_formatMicrosTriple(result, 'receive')} | '
+      '${_formatMicrosTriple(result, 'compress')} | ${_formatMicrosTriple(result, 'decompress')} | '
+      '${_formatMicrosTriple(result, 'sign')} | ${_formatMicrosTriple(result, 'verify')} | '
       '${result['isolate_operations']} |',
     );
   }
@@ -362,6 +363,18 @@ Map<String, dynamic> _buildCaseResult({
     'receive_p50_us': receiveSummary.totalDurationPercentiles.p50Us,
     'receive_p95_us': receiveSummary.totalDurationPercentiles.p95Us,
     'receive_p99_us': receiveSummary.totalDurationPercentiles.p99Us,
+    'compress_p50_us': summary.compressDurationPercentiles.p50Us,
+    'compress_p95_us': summary.compressDurationPercentiles.p95Us,
+    'compress_p99_us': summary.compressDurationPercentiles.p99Us,
+    'decompress_p50_us': summary.decompressDurationPercentiles.p50Us,
+    'decompress_p95_us': summary.decompressDurationPercentiles.p95Us,
+    'decompress_p99_us': summary.decompressDurationPercentiles.p99Us,
+    'sign_p50_us': summary.signDurationPercentiles.p50Us,
+    'sign_p95_us': summary.signDurationPercentiles.p95Us,
+    'sign_p99_us': summary.signDurationPercentiles.p99Us,
+    'verify_p50_us': summary.verifyDurationPercentiles.p50Us,
+    'verify_p95_us': summary.verifyDurationPercentiles.p95Us,
+    'verify_p99_us': summary.verifyDurationPercentiles.p99Us,
     'isolate_operations': summary.totalIsolateOperations,
     'json_encode_isolate_operations': summary.jsonEncodeIsolateOperations,
     'gzip_compress_isolate_operations': summary.gzipCompressIsolateOperations,
@@ -460,7 +473,12 @@ void _receiveFrameSync({
 
   if (frame.cmp == 'gzip') {
     final decompressStopwatch = Stopwatch()..start();
-    decodableBytes = CompressionCodecFactory.getCodec('gzip').decompress(bytes).getOrThrow();
+    decodableBytes = CompressionCodecFactory.getCodec('gzip')
+        .decompress(
+          bytes,
+          maxOutputBytes: frame.originalSize,
+        )
+        .getOrThrow();
     decompressStopwatch.stop();
     decompressDurationUs = decompressStopwatch.elapsedMicroseconds;
     if (bytes.isNotEmpty && decodableBytes.length / bytes.length > defaultTransportMaxInflationRatio) {

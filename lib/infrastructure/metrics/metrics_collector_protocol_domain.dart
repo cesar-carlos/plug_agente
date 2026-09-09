@@ -161,6 +161,34 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
   void recordRpcResponseEmitSkippedDisconnected() =>
       _incrementEventCounter(MetricsCounterNames.rpcResponseEmitSkippedDisconnectedCounter);
 
+  void recordTransportSessionReset() => _incrementEventCounter(MetricsCounterNames.transportSessionResetCounter);
+
+  void recordTransportStaleEventDropped(String reason) {
+    _incrementEventCounter(MetricsCounterNames.transportStaleEventDroppedCounter);
+    recordDiagnosticReason(category: 'transport_stale_event', reason: reason);
+  }
+
+  void recordHeartbeatAckRejected(String reason) {
+    _incrementEventCounter(MetricsCounterNames.heartbeatAckRejectedCounter);
+    recordDiagnosticReason(category: 'heartbeat_ack_rejected', reason: reason);
+  }
+
+  void recordTransportCompressionLimitRejected(String reason) {
+    _incrementEventCounter(MetricsCounterNames.transportCompressionLimitRejectedCounter);
+    recordDiagnosticReason(category: 'transport_compression_limit', reason: reason);
+  }
+
+  void recordSqlDisconnectAbortAttempt() =>
+      _incrementEventCounter(MetricsCounterNames.sqlDisconnectAbortAttemptCounter);
+
+  void recordSqlDisconnectAbortRequested() =>
+      _incrementEventCounter(MetricsCounterNames.sqlDisconnectAbortRequestedCounter);
+
+  void recordSqlDisconnectAbortArmed() => _incrementEventCounter(MetricsCounterNames.sqlDisconnectAbortArmedCounter);
+
+  void recordSqlDisconnectAbortFailure() =>
+      _incrementEventCounter(MetricsCounterNames.sqlDisconnectAbortFailureCounter);
+
   void recordRpcStreamPullInvalid() => _incrementEventCounter(MetricsCounterNames.rpcStreamPullInvalidCounter);
 
   void recordSqlStreamCancelled(String reason) {

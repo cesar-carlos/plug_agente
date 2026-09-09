@@ -77,4 +77,16 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
 
   @override
   void recordSqlStreamCancelFailed(String reason) => _metrics.recordSqlStreamCancelFailed(reason);
+
+  @override
+  void recordSqlDisconnectAbortAttempt() => _metrics.recordSqlDisconnectAbortAttempt();
+
+  @override
+  void recordSqlDisconnectAbortRequested() => _metrics.recordSqlDisconnectAbortRequested();
+
+  @override
+  void recordSqlDisconnectAbortArmed() => _metrics.recordSqlDisconnectAbortArmed();
+
+  @override
+  void recordSqlDisconnectAbortFailure() => _metrics.recordSqlDisconnectAbortFailure();
 }

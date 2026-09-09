@@ -102,7 +102,15 @@ mixin TransportPipelineReceive {
       if (frame.cmp != 'none') {
         final decompressStopwatch = Stopwatch()..start();
         final compressionCodec = CompressionCodecFactory.getCodec(frame.cmp);
-        final decompressResult = compressionCodec.decompress(bytes);
+        final decompressResult = compressionCodec.decompress(
+          bytes,
+          maxOutputBytes: _maximumDecodedBytes(
+            frame: frame,
+            compressedSize: bytes.length,
+            maxOriginalBytes: maxOriginalBytes,
+            maxInflationRatio: inflationRatioLimit,
+          ),
+        );
 
         if (decompressResult.isError()) {
           return Failure(
@@ -289,7 +297,18 @@ mixin TransportPipelineReceive {
         if (frame.cmp == 'gzip' && frame.originalSize >= gzipIsolateThresholdBytes) {
           usedGzipDecompressIsolate = true;
           try {
-            decodableBytes = await compute(decompressGzipInIsolate, bytes);
+            decodableBytes = await compute(
+              decompressGzipInIsolate,
+              (
+                bytes,
+                _maximumDecodedBytes(
+                  frame: frame,
+                  compressedSize: bytes.length,
+                  maxOriginalBytes: maxOriginalBytes,
+                  maxInflationRatio: inflationRatioLimit,
+                ),
+              ),
+            );
           } on Object catch (error) {
             return Failure(
               domain.CompressionFailure.withContext(
@@ -304,7 +323,15 @@ mixin TransportPipelineReceive {
           }
         } else {
           final compressionCodec = CompressionCodecFactory.getCodec(frame.cmp);
-          final decompressResult = compressionCodec.decompress(bytes);
+          final decompressResult = compressionCodec.decompress(
+            bytes,
+            maxOutputBytes: _maximumDecodedBytes(
+              frame: frame,
+              compressedSize: bytes.length,
+              maxOriginalBytes: maxOriginalBytes,
+              maxInflationRatio: inflationRatioLimit,
+            ),
+          );
 
           if (decompressResult.isError()) {
             return Failure(
@@ -432,5 +459,15 @@ mixin TransportPipelineReceive {
         ),
       );
     }
+  }
+
+  int _maximumDecodedBytes({
+    required PayloadFrame frame,
+    required int compressedSize,
+    required int? maxOriginalBytes,
+    required double maxInflationRatio,
+  }) {
+    final ratioLimit = (compressedSize * maxInflationRatio).floor();
+    return <int>[frame.originalSize, ?maxOriginalBytes, ratioLimit].reduce((a, b) => a < b ? a : b);
   }
 }

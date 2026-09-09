@@ -127,7 +127,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
         contractValidator: _contractValidator,
         resilienceLogPrefix: _resilienceLogPrefix,
         recoveryId: () => _resilienceRecoveryId,
-        closeSocket: () => _lifecycle.closeSocket(),
+        closeSocket: () => _lifecycle.resetTransportSessionAndCloseSocket(),
         onTokenExpired: () => _onTokenExpired?.call(),
         registerProfileProvider: _registerProfileProvider,
         emitEventAsync: _emitEventAsync,
@@ -140,6 +140,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
         hasReceivedCapabilities: () => pipeline.capabilitiesNegotiator.hasReceivedCapabilities,
         usesBinaryTransport: () => _usesBinaryTransport,
         connectGeneration: () => _lifecycle.connectGeneration,
+        transportSessionGeneration: () => _lifecycle.transportSessionGeneration,
         activeSocket: () => _lifecycle.socket,
         onReconnectionNeeded: () => _onReconnectionNeeded?.call(),
         onHubLifecycle: (notification) => _onHubLifecycle?.call(notification),
@@ -157,7 +158,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
         onConnectError: _handleConnectionError,
         onSocketError: _handleSocketError,
         onDisconnect: (reason) => _lifecycle.handleDisconnect(reason),
-        onReleaseStreamStateAfterTransportLoss: () => _lifecycle.releaseStreamStateAfterTransportLoss(),
+        onBeginFreshTransportSession: () => _lifecycle.beginFreshTransportSession(),
         onCapabilitiesEnvelope: _handleCapabilitiesNegotiation,
         onHeartbeatAck: (data) => _heartbeatBridge.handleHeartbeatAck(data),
         healthService: options.healthService,
@@ -182,10 +183,12 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
       onReconnectionNeeded: () => _onReconnectionNeeded?.call(),
       publishPayloadSigningDiagnostic: _publishPayloadSigningDiagnostic,
       binaryPayloadEnabled: () => _featureFlags.enableBinaryPayload,
+      metricsCollector: _metricsCollector,
     );
     _heartbeat = SocketIoHeartbeatController(
       isConnected: () => _lifecycle.isConnected,
       emitHeartbeat: _emitAgentHeartbeatViaBridge,
+      emitHeartbeatWithEpoch: _emitAgentHeartbeatViaBridge,
       logMessage: _logHeartbeatEventViaBridge,
       onConnectionStale: () {
         _lifecycle.invalidateGenerationAndCloseSocket();
@@ -199,6 +202,7 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
       emitEventAsync: _emitEventAsync,
       logMessage: _logMessage,
       decodeIncomingPayload: _decodeIncomingPayloadOrThrow,
+      metricsCollector: _metricsCollector,
     );
     _payloadSigningDiagnosticPublisher = TransportPayloadSigningDiagnosticPublisher(
       featureFlags: _featureFlags,
@@ -362,7 +366,8 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
     _pipeline.capabilitiesLifecycleHandler.handle(_pipeline.capabilitiesNegotiator.handleEnvelope(data));
   }
 
-  Future<bool> _emitAgentHeartbeatViaBridge() => _heartbeatBridge.emitAgentHeartbeat();
+  Future<bool> _emitAgentHeartbeatViaBridge([int? heartbeatEpoch]) =>
+      _heartbeatBridge.emitAgentHeartbeat(heartbeatEpoch);
 
   void _logHeartbeatEventViaBridge(String direction, String event, dynamic data) =>
       _heartbeatBridge.logHeartbeatEvent(direction, event, data);

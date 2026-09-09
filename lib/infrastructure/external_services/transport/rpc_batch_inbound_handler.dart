@@ -108,7 +108,13 @@ class RpcBatchInboundHandler {
   /// Validates the batch envelope, dispatches each item independently, then
   /// emits the merged batch response (optionally preserving order based on the
   /// negotiated extension).
-  Future<void> handleBatchRequest(List<dynamic> data) async {
+  Future<void> handleBatchRequest(
+    List<dynamic> data, {
+    bool Function()? isSessionCurrent,
+  }) async {
+    if (_discardIfSessionStale(isSessionCurrent, 'rpc_batch_before_validation')) {
+      return;
+    }
     final pauseDashboardCapture = _shouldPauseDashboardCapture(data);
     if (pauseDashboardCapture) {
       _setHubSqlDashboardCapturePaused?.call(true);
@@ -199,6 +205,9 @@ class RpcBatchInboundHandler {
           }
         }
 
+        if (_discardIfSessionStale(isSessionCurrent, 'rpc_batch_before_ack')) {
+          return;
+        }
         if (_featureFlags.enableSocketDeliveryGuarantees) {
           await _emitBatchRequestAck(requests);
         }
@@ -328,17 +337,19 @@ class RpcBatchInboundHandler {
               responses,
               responseMethodsById,
               pendingRequests,
+              isSessionCurrent,
             );
           } else {
             await _dispatchBatchItemsSequentially(
               pendingDispatches,
               responses,
               responseMethodsById,
+              isSessionCurrent,
             );
           }
         }
 
-        if (responses.isEmpty) {
+        if (responses.isEmpty || _discardIfSessionStale(isSessionCurrent, 'rpc_batch_before_response')) {
           return;
         }
 
@@ -510,11 +521,16 @@ class RpcBatchInboundHandler {
     List<({int index, RpcRequest request})> items,
     List<({int index, RpcResponse response})> responses,
     Map<Object?, String> responseMethodsById,
+    bool Function()? isSessionCurrent,
   ) async {
     for (final item in items) {
+      if (_discardIfSessionStale(isSessionCurrent, 'rpc_batch_before_dispatch')) {
+        return;
+      }
       final dispatchResult = await _executeBatchDispatchItem(
         index: item.index,
         request: item.request,
+        isSessionCurrent: isSessionCurrent,
       );
       _recordBatchDispatchResult(
         dispatchResult,
@@ -529,15 +545,20 @@ class RpcBatchInboundHandler {
     List<({int index, RpcResponse response})> responses,
     Map<Object?, String> responseMethodsById,
     List<RpcRequest> batchRequests,
+    bool Function()? isSessionCurrent,
   ) async {
     final semaphore = PoolSemaphore(_parallelBatchDispatchConcurrency(batchRequests));
     final dispatchResults = await Future.wait(
       items.map((item) async {
         await semaphore.acquire();
         try {
+          if (_discardIfSessionStale(isSessionCurrent, 'rpc_batch_before_dispatch')) {
+            return null;
+          }
           return await _executeBatchDispatchItem(
             index: item.index,
             request: item.request,
+            isSessionCurrent: isSessionCurrent,
           );
         } finally {
           semaphore.release();
@@ -545,7 +566,8 @@ class RpcBatchInboundHandler {
       }),
     );
 
-    for (final dispatchResult in dispatchResults) {
+    for (final dispatchResult
+        in dispatchResults.whereType<({int index, RpcResponse? response, Object? id, String method})>()) {
       _recordBatchDispatchResult(
         dispatchResult,
         responses,
@@ -557,8 +579,12 @@ class RpcBatchInboundHandler {
   Future<({int index, RpcResponse? response, Object? id, String method})> _executeBatchDispatchItem({
     required int index,
     required RpcRequest request,
+    bool Function()? isSessionCurrent,
   }) async {
     try {
+      if (_discardIfSessionStale(isSessionCurrent, 'rpc_batch_before_dispatch')) {
+        return (index: index, response: null, id: request.id, method: request.method);
+      }
       final clientToken = _extractClientTokenFromRpcParams(request.params);
       final response = await _dispatcher.dispatch(
         request,
@@ -629,6 +655,14 @@ class RpcBatchInboundHandler {
     }
     responses.add((index: dispatchResult.index, response: response));
     responseMethodsById[dispatchResult.id] = dispatchResult.method;
+  }
+
+  bool _discardIfSessionStale(bool Function()? isSessionCurrent, String reason) {
+    if (isSessionCurrent == null || isSessionCurrent()) {
+      return false;
+    }
+    _metricsCollector?.recordTransportStaleEventDropped(reason);
+    return true;
   }
 
   Future<void> _emitBatchRequestAck(List<RpcRequest> requests) async {

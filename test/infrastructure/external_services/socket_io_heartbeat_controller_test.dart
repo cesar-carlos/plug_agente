@@ -63,6 +63,27 @@ void main() {
       expect(staleCalls, isEmpty);
     });
 
+    test('should ignore an ack whose trace id belongs to a previous heartbeat', () async {
+      late SocketIoHeartbeatController controller;
+      controller = SocketIoHeartbeatController(
+        isConnected: () => true,
+        emitHeartbeat: () async => true,
+        emitHeartbeatWithEpoch: (epoch) async => controller.registerExpectedTraceId('trace-current', epoch),
+        logMessage: (_, _, _) {},
+        onConnectionStale: () {},
+        interval: const Duration(milliseconds: 50),
+        ackTimeout: const Duration(milliseconds: 20),
+        maxMissed: 2,
+      );
+
+      controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+
+      expect(controller.onAckReceived('trace-old'), isFalse);
+      expect(controller.onAckReceived('trace-current'), isTrue);
+      controller.stop();
+    });
+
     test('failed emit does not arm ack wait or count as miss', () async {
       final staleCalls = <int>[];
       final logs = <String>[];

@@ -253,11 +253,8 @@ void main() {
       final result = receiverPipeline.receiveProcess(frame);
 
       expect(result.isError(), isTrue);
-      final failure = result.exceptionOrNull()! as ValidationFailure;
-      expect(
-        failure.context['maxInflationRatio'],
-        equals(defaultTransportMaxInflationRatio),
-      );
+      final failure = result.exceptionOrNull()! as CompressionFailure;
+      expect(failure.context['algorithm'], equals('gzip'));
     });
 
     test(
