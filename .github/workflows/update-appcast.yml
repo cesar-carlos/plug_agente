@@ -406,7 +406,7 @@ jobs:
           fetch-depth: 1
 
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Prepare Pages artifact
         run: |
