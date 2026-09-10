@@ -1,0 +1,78 @@
+name: Scheduled Workflow Alert
+
+on:
+  workflow_run:
+    workflows:
+      - Flutter CI
+      - Validate Current Appcast
+    types: [completed]
+
+permissions:
+  actions: read
+  issues: write
+
+jobs:
+  alert-on-consecutive-failures:
+    if: github.event.workflow_run.event == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or resolve a scheduled workflow alert
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const title = `[CI] ${run.name}: scheduled runs are failing`;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existingIssue = issues.find((issue) => issue.title === title);
+
+            if (run.conclusion !== 'failure') {
+              if (existingIssue) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existingIssue.number,
+                  state: 'closed',
+                });
+              }
+              core.info('The scheduled run succeeded; no active alert remains.');
+              return;
+            }
+
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: run.workflow_id,
+              event: 'schedule',
+              per_page: 2,
+            });
+            const recentRuns = data.workflow_runs
+              .filter((candidate) => candidate.status === 'completed')
+              .slice(0, 2);
+            const hasConsecutiveFailures =
+              recentRuns.length === 2 && recentRuns.every((candidate) => candidate.conclusion === 'failure');
+
+            if (!hasConsecutiveFailures) {
+              core.info('Fewer than two consecutive scheduled failures; alert not opened.');
+              return;
+            }
+            if (existingIssue) {
+              core.warning(`An alert is already open: #${existingIssue.number}`);
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: [
+                'Two consecutive scheduled executions failed.',
+                '',
+                `Latest failed run: ${run.html_url}`,
+                'Inspect the workflow logs and close this issue after a successful scheduled execution.',
+              ].join('\n'),
+            });

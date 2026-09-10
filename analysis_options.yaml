@@ -70,9 +70,6 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
-  plugins:
-    - drift_dev
-
   errors:
     # Treat missing return as an error
     missing_return: error

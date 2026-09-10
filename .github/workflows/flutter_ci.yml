@@ -30,7 +30,7 @@ jobs:
       - name: Lint workflows
         run: '"$HOME/go/bin/actionlint"'
 
-  analyze-and-test:
+  analyze:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,8 +45,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze
+      - name: Analyze application
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/analyze
+          flutter analyze 2>&1 | tee artifacts/analyze/flutter-analyze.log
 
       - name: Install elevated runner dependencies
         working-directory: tool/plug_agente_elevated_runner
@@ -54,7 +58,34 @@ jobs:
 
       - name: Analyze elevated runner
         working-directory: tool/plug_agente_elevated_runner
-        run: dart analyze
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ../../artifacts/analyze
+          dart analyze 2>&1 | tee ../../artifacts/analyze/elevated-runner-analyze.log
+
+      - name: Upload analyzer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: analyzer-diagnostics-${{ github.run_id }}
+          path: artifacts/analyze/**/*
+          if-no-files-found: warn
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
 
       # Live ODBC/Hub E2E tests use tags live|slow|perf and are local-only
       # (see docs/testing/e2e_setup.md). CI must not run them on GitHub runners.
@@ -62,6 +93,24 @@ jobs:
       #   python tool/odbc/run_odbc_release_gate.py --offline-only
       - name: Test
         run: flutter test --exclude-tags "live || slow || perf"
+
+      - name: Installer setup script test
+        run: flutter test test/installer/setup_script_test.dart
+
+  agent-actions-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
 
       - name: Agent actions production preflight
         run: dart run tool/agent_actions/preflight_agent_actions_production.dart
@@ -75,8 +124,26 @@ jobs:
           flutter test "${contract_paths[@]}"
           flutter test "${ui_paths[@]}"
 
-      - name: Installer setup script test
-        run: flutter test test/installer/setup_script_test.dart
+  verify-code-generation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify Drift generated sources are current
+        shell: bash
+        run: |
+          dart run build_runner build
+          git diff --exit-code -- lib
 
   iss-syntax:
     runs-on: windows-2022
@@ -107,8 +174,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install appcast tooling dependencies
+        run: python3 -m pip install --quiet "cryptography>=42.0.0"
+
       - name: Validate appcast tooling
-        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release -v
+        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.appcast.test_appcast_signing -v
 
       - name: Validate benchmark tooling
         run: |
@@ -238,24 +308,28 @@ jobs:
         run: flutter pub get
 
       - name: Run transport benchmark suite
+        shell: bash
         run: |
+          set -o pipefail
+          mkdir -p artifacts/benchmark
           python tool/benchmarks/run_benchmark_suite.py \
             --only transport_pipeline \
-            --skip-dart-tool
+            --skip-dart-tool 2>&1 | tee artifacts/benchmark/transport-benchmark.log
 
       - name: Compare against committed baseline
         if: ${{ !cancelled() }}
         continue-on-error: true
         run: |
+          mkdir -p artifacts/benchmark
           latest="$(find benchmarks/results -mindepth 2 -maxdepth 2 -type f -name summary.json 2>/dev/null | sort -r | head -n 1)"
           if [ -z "$latest" ]; then
-            echo "No benchmark summary produced; skipping baseline compare."
+            echo "No benchmark summary produced; skipping baseline compare." | tee artifacts/benchmark/baseline-comparison.log
             exit 0
           fi
           python tool/benchmarks/compare_benchmark_summary.py \
             --baseline benchmarks/baseline/summary.json \
             --current "$latest" \
-            --threshold 0.25
+            --threshold 0.25 2>&1 | tee artifacts/benchmark/baseline-comparison.log
 
       - name: Upload benchmark artifacts
         if: ${{ !cancelled() }}
@@ -264,4 +338,5 @@ jobs:
           name: transport-benchmark-${{ github.run_id }}
           path: |
             benchmarks/results/**/*
+            artifacts/benchmark/**/*
           if-no-files-found: warn

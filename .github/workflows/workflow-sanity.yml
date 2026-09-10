@@ -1,0 +1,51 @@
+name: Workflow Sanity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'tool/appcast/**'
+      - 'tool/ci/**'
+      - 'tool/tests/test_validate_ci_configuration.py'
+      - 'analysis_options.yaml'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'tool/appcast/**'
+      - 'tool/ci/**'
+      - 'tool/tests/test_validate_ci_configuration.py'
+      - 'analysis_options.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-workflow-configuration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Validate CI configuration
+        run: python3 tool/ci/validate_ci_configuration.py
+
+      - name: Run CI configuration tests
+        run: python3 -m unittest tool.tests.test_validate_ci_configuration -v
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: Lint workflows
+        run: '"$HOME/go/bin/actionlint"'
