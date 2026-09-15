@@ -8072,6 +8072,78 @@ abstract class AppLocalizations {
   /// **'All permissions'**
   String get ctScopeAllPermissions;
 
+  /// No description provided for @ctScopeAllSqlPermissions.
+  ///
+  /// In en, this message translates to:
+  /// **'Full SQL access'**
+  String get ctScopeAllSqlPermissions;
+
+  /// No description provided for @ctRuntimeRestrictionsActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Restrictions active'**
+  String get ctRuntimeRestrictionsActive;
+
+  /// No description provided for @ctRuntimeRestrictionsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get ctRuntimeRestrictionsNone;
+
+  /// No description provided for @ctLabelSqlPermissions.
+  ///
+  /// In en, this message translates to:
+  /// **'SQL permissions'**
+  String get ctLabelSqlPermissions;
+
+  /// No description provided for @ctLabelRuntimeRestrictions.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime restrictions'**
+  String get ctLabelRuntimeRestrictions;
+
+  /// No description provided for @ctLabelDatabaseRestriction.
+  ///
+  /// In en, this message translates to:
+  /// **'Restricted database'**
+  String get ctLabelDatabaseRestriction;
+
+  /// No description provided for @ctLabelAgentActionAuthorization.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote actions'**
+  String get ctLabelAgentActionAuthorization;
+
+  /// No description provided for @ctAgentActionScopes.
+  ///
+  /// In en, this message translates to:
+  /// **'Configured scopes'**
+  String get ctAgentActionScopes;
+
+  /// No description provided for @ctAgentActionAllowlist.
+  ///
+  /// In en, this message translates to:
+  /// **'Specific action allowlist'**
+  String get ctAgentActionAllowlist;
+
+  /// No description provided for @ctAgentActionAllowlistAny.
+  ///
+  /// In en, this message translates to:
+  /// **'Any action within the scopes'**
+  String get ctAgentActionAllowlistAny;
+
+  /// No description provided for @ctPayloadRestrictionsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The payload contains restrictions that take precedence over global SQL access.'**
+  String get ctPayloadRestrictionsHint;
+
+  /// No description provided for @ctLabelPayloadAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced payload'**
+  String get ctLabelPayloadAdvanced;
+
   /// No description provided for @ctScopeRestricted.
   ///
   /// In en, this message translates to:
@@ -8197,6 +8269,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'payload.database must not be empty.'**
   String get ctErrorPayloadDatabaseCannotBeEmpty;
+
+  /// No description provided for @ctErrorPayloadRuntimeRestrictionsInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime restrictions must use strings or arrays of strings.'**
+  String get ctErrorPayloadRuntimeRestrictionsInvalid;
 
   /// No description provided for @ctPermissionRead.
   ///

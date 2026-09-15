@@ -53,6 +53,7 @@ class ClientTokenProvider extends ChangeNotifier {
   bool _hasLoaded = false;
   ClientTokenListQuery _lastListQuery = const ClientTokenListQuery();
   int _loadGeneration = 0;
+  int? _visibleLoadingGeneration;
 
   List<ClientTokenSummary> get tokens => _tokens;
   bool get isLoading => _isLoading;
@@ -84,22 +85,23 @@ class ClientTokenProvider extends ChangeNotifier {
     _lastListQuery = effectiveQuery;
     final generation = ++_loadGeneration;
 
-    _isLoading = true;
-    _clearErrorState();
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      _visibleLoadingGeneration = generation;
+      _clearErrorState();
+      notifyListeners();
+    }
 
     final result = await _listClientTokens(query: effectiveQuery);
 
     if (generation != _loadGeneration) {
-      _isLoading = false;
-      notifyListeners();
       return Failure(PresentationOperationFailures.superseded);
     }
 
     if (result.isError()) {
       final failure = result.exceptionOrNull()!;
       _applyFailure(failure);
-      _isLoading = false;
+      _finishVisibleLoading();
       notifyListeners();
       return Failure(failure);
     }
@@ -107,7 +109,7 @@ class ClientTokenProvider extends ChangeNotifier {
     _tokens = result.getOrThrow();
     _clearErrorState();
     _hasLoaded = true;
-    _isLoading = false;
+    _finishVisibleLoading();
     notifyListeners();
     return const Success(unit);
   }
@@ -131,7 +133,7 @@ class ClientTokenProvider extends ChangeNotifier {
     } else {
       _lastCreatedToken = result.getOrThrow();
       _clearErrorState();
-      outcome = refreshTokens ? await loadTokens(silent: true) : const Success(unit);
+      outcome = refreshTokens ? await _refreshAfterMutation() : const Success(unit);
     }
 
     _isCreating = false;
@@ -205,7 +207,7 @@ class ClientTokenProvider extends ChangeNotifier {
           updatedAt: updateResult.updatedAt,
           didRotateToken: updateResult.didRotateToken,
         );
-        outcome = refreshTokens && !patched ? await loadTokens(silent: true) : const Success(unit);
+        outcome = refreshTokens && !patched ? await _refreshAfterMutation() : const Success(unit);
       }
     }
 
@@ -296,6 +298,22 @@ class ClientTokenProvider extends ChangeNotifier {
     }
     _lastCreatedToken = null;
     notifyListeners();
+  }
+
+  Future<Result<void>> _refreshAfterMutation() async {
+    final result = await loadTokens(silent: true);
+    if (result.isError() && PresentationOperationFailures.isSilent(result.exceptionOrNull()!)) {
+      return const Success(unit);
+    }
+    return result;
+  }
+
+  void _finishVisibleLoading() {
+    if (_visibleLoadingGeneration == null) {
+      return;
+    }
+    _visibleLoadingGeneration = null;
+    _isLoading = false;
   }
 
   Future<void> recordCopiedToken({

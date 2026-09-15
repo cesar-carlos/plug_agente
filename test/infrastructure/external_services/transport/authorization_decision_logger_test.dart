@@ -46,6 +46,26 @@ void main() {
       expect(logs, hasLength(1));
       expect(logs.single.event, 'authorization.allowed');
     });
+
+    test('logs denied remote agent action without leaking the token', () {
+      logger.log(
+        request: const RpcRequest(jsonrpc: '2.0', method: 'agent.action.run', id: 'action-1'),
+        response: RpcResponse.error(
+          id: 'action-1',
+          error: const RpcError(
+            code: RpcErrorCode.unauthorized,
+            message: 'Unauthorized',
+            data: {'reason': 'agent_action_permission_denied'},
+          ),
+        ),
+        clientToken: 'secret-token',
+      );
+
+      final data = logs.single.data as Map<String, dynamic>;
+      expect(logs.single.event, 'authorization.denied');
+      expect(data['reason'], 'agent_action_permission_denied');
+      expect(data.values.join(), isNot(contains('secret-token')));
+    });
   });
 
   group('log - skip conditions', () {

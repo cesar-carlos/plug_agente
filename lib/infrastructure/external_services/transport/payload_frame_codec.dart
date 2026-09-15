@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/logger/log_rate_limiter.dart';
@@ -166,7 +168,8 @@ class PayloadFrameCodec {
       }
       // Offload HMAC to a background isolate for large frames to avoid
       // blocking the main isolate during sustained high-throughput scenarios.
-      final signingResult = frame.originalSize > ConnectionConstants.signingIsolateThresholdBytes
+      final signingWorkSize = _signatureWorkSize(frame, frame.compressedSize);
+      final signingResult = signingWorkSize > ConnectionConstants.signingIsolateThresholdBytes
           ? await signer.signFrameAsync(frame)
           : signer.signFrameWithMetrics(frame);
       frame = frame.copyWith(
@@ -178,7 +181,7 @@ class PayloadFrameCodec {
         eventName: event,
         signDurationUs: signingResult.metrics.signDurationUs,
         canonicalizeDurationUs: signingResult.metrics.canonicalizeDurationUs,
-        usedHmacSignIsolate: frame.originalSize > ConnectionConstants.signingIsolateThresholdBytes,
+        usedHmacSignIsolate: signingWorkSize > ConnectionConstants.signingIsolateThresholdBytes,
       );
     }
     return Success(frame.toSocketPayload());
@@ -218,6 +221,10 @@ class PayloadFrameCodec {
     final protocol = _protocolProvider();
     try {
       final frame = PayloadFrame.fromJson(_requireFrameMap(payload));
+      final boundsResult = _validateFramePayloadBounds(frame, protocol);
+      if (boundsResult.isError()) {
+        return Failure(boundsResult.exceptionOrNull()! as domain.Failure);
+      }
       final validationResult = _validateFrameAgainstLocalCapabilities(
         frame,
         sourceEvent: sourceEvent,
@@ -226,7 +233,11 @@ class PayloadFrameCodec {
       if (validationResult.isError()) {
         return Failure(validationResult.exceptionOrNull()! as domain.Failure);
       }
-      if (!await _verifyFrameSignatureAsync(frame, sourceEvent: sourceEvent)) {
+      if (!await _verifyFrameSignatureAsync(
+        frame,
+        payloadByteLength: boundsResult.getOrThrow(),
+        sourceEvent: sourceEvent,
+      )) {
         return Failure(
           domain.ValidationFailure.withContext(
             message: 'Invalid transport frame signature',
@@ -277,6 +288,10 @@ class PayloadFrameCodec {
     final protocol = _protocolProvider();
     try {
       final frame = PayloadFrame.fromJson(_requireFrameMap(payload));
+      final boundsResult = _validateFramePayloadBounds(frame, protocol);
+      if (boundsResult.isError()) {
+        return Failure(boundsResult.exceptionOrNull()! as domain.Failure);
+      }
       final validationResult = _validateFrameAgainstLocalCapabilities(frame, sourceEvent: sourceEvent);
       if (validationResult.isError()) {
         return Failure(validationResult.exceptionOrNull()! as domain.Failure);
@@ -354,6 +369,69 @@ class PayloadFrameCodec {
       throw StateError('PayloadFrame shape check passed but map normalization failed');
     }
     return map;
+  }
+
+  /// Rejects impossible or oversized binary envelopes before HMAC
+  /// canonicalization. Metadata is attacker controlled until the signature has
+  /// been verified, so the actual attachment size is the primary bound.
+  Result<int> _validateFramePayloadBounds(PayloadFrame frame, ProtocolConfig protocol) {
+    if (frame.originalSize < 0 || frame.compressedSize < 0) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'PayloadFrame sizes must not be negative',
+          context: {'rpc_error_code': RpcErrorCode.invalidPayload},
+        ),
+      );
+    }
+    final payloadByteLength = _binaryPayloadLength(frame.payload);
+    if (payloadByteLength == null) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'PayloadFrame payload must be a binary attachment',
+          context: {'rpc_error_code': RpcErrorCode.invalidPayload},
+        ),
+      );
+    }
+    final limits = protocol.effectiveLimits;
+    if (payloadByteLength != frame.compressedSize ||
+        payloadByteLength > limits.maxCompressedPayloadBytes ||
+        frame.compressedSize > limits.maxCompressedPayloadBytes ||
+        frame.originalSize > limits.maxDecodedPayloadBytes) {
+      return Failure(
+        domain.ValidationFailure.withContext(
+          message: 'PayloadFrame exceeds declared or negotiated byte limits',
+          context: {
+            'rpc_error_code': RpcErrorCode.invalidPayload,
+            'reason': 'payload_frame_size_mismatch_or_limit',
+          },
+        ),
+      );
+    }
+    if (frame.cmp == 'gzip' &&
+        (frame.originalSize == 0 || frame.originalSize > payloadByteLength * protocol.maxInflationRatio)) {
+      return Failure(
+        domain.CompressionFailure.withContext(
+          message: 'PayloadFrame exceeds the negotiated compression inflation ratio',
+          context: {
+            'operation': 'decompress',
+            // This is a compression-envelope violation, before JSON decoding
+            // begins. Keep the established wire contract for corrupt GZIP and
+            // inflation-limit failures.
+            'rpc_error_code': RpcErrorCode.compressionFailed,
+          },
+        ),
+      );
+    }
+    return Success(payloadByteLength);
+  }
+
+  int? _binaryPayloadLength(Object? payload) {
+    if (payload is ByteBuffer) return payload.lengthInBytes;
+    if (payload is Uint8List) return payload.lengthInBytes;
+    if (payload is List<int>) {
+      return payload.every((byte) => byte >= 0 && byte <= 255) ? payload.length : null;
+    }
+    return null;
   }
 
   Result<void> _validateFrameAgainstLocalCapabilities(
@@ -456,12 +534,17 @@ class PayloadFrameCodec {
     return verificationResult.isValid;
   }
 
-  Future<bool> _verifyFrameSignatureAsync(PayloadFrame frame, {String? sourceEvent}) async {
+  Future<bool> _verifyFrameSignatureAsync(
+    PayloadFrame frame, {
+    required int payloadByteLength,
+    String? sourceEvent,
+  }) async {
     final signatureJson = frame.signature;
     final signer = _payloadSigner;
+    final signatureWorkSize = _signatureWorkSize(frame, payloadByteLength);
     if (signer == null ||
         signatureJson == null ||
-        frame.originalSize <= ConnectionConstants.signingIsolateThresholdBytes) {
+        signatureWorkSize <= ConnectionConstants.signingIsolateThresholdBytes) {
       return _verifyFrameSignature(frame, sourceEvent: sourceEvent);
     }
     final signature = PayloadSignature.fromJson(signatureJson);
@@ -476,6 +559,14 @@ class PayloadFrameCodec {
       usedHmacVerifyIsolate: true,
     );
     return verificationResult.isValid;
+  }
+
+  int _signatureWorkSize(PayloadFrame frame, int payloadByteLength) {
+    return [
+      frame.originalSize,
+      frame.compressedSize,
+      payloadByteLength,
+    ].reduce((left, right) => left > right ? left : right);
   }
 
   void _recordSigningMetric({

@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_policy_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_create_dialog_rules_section.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token/client_token_form_shared.dart';
 import 'package:plug_agente/presentation/pages/config/widgets/client_token_rules_grid.dart';
+import 'package:plug_agente/shared/widgets/common/feedback/inline_feedback_card.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 class ClientTokenCreateDialogContent extends StatelessWidget {
@@ -81,6 +85,18 @@ class ClientTokenCreateDialogContent extends StatelessWidget {
 
   bool get _isGlobalScopeMode => allTables || allViews;
 
+  ClientTokenRuntimeRestrictions? get _payloadRestrictions {
+    final raw = payloadController.text.trim();
+    if (raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return ClientTokenRuntimeRestrictions.fromPayload(Map<String, dynamic>.from(decoded));
+    } on FormatException {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -102,6 +118,13 @@ class ClientTokenCreateDialogContent extends StatelessWidget {
                 textInputAction: TextInputAction.next,
               ),
             ),
+            if (_payloadRestrictions?.hasRestrictions ?? false) ...[
+              const SizedBox(height: AppSpacing.sm),
+              InlineFeedbackCard(
+                severity: InfoBarSeverity.warning,
+                message: l10n.ctPayloadRestrictionsHint,
+              ),
+            ],
             const SizedBox(height: AppSpacing.md),
             ClientTokenIdentityFields(
               clientIdController: clientIdController,

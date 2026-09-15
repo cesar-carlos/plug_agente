@@ -1,4 +1,5 @@
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/client_token_authorization_policy.dart';
 
@@ -84,6 +85,8 @@ class ClientTokenSummary {
 
   bool get allPermissions => allTables && allViews && globalPermissions.isFullAccess;
 
+  ClientTokenRuntimeRestrictions get runtimeRestrictions => ClientTokenRuntimeRestrictions.fromPayload(payload);
+
   /// Authorization policy snapshot used to compare with edit requests when
   /// deciding whether the underlying token must be rotated.
   ClientTokenAuthorizationPolicy get policy => ClientTokenAuthorizationPolicy(
@@ -91,6 +94,7 @@ class ClientTokenSummary {
     allViews: allViews,
     globalPermissions: globalPermissions,
     rules: rules,
+    runtimeRestrictions: runtimeRestrictions,
   );
 
   ClientTokenSummary copyWith({

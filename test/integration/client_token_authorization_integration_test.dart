@@ -450,7 +450,7 @@ void main() {
           },
         );
         final tokenHash = hashClientCredentialToken(clientToken);
-        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
           (_) async => Failure(
             domain.NotFoundFailure.withContext(
               message: 'Client token not found',
@@ -499,7 +499,7 @@ void main() {
         final data = response.error!.data as Map<String, dynamic>;
         check(data['reason']).equals(AuthorizationContextConstants.unauthorizedReason);
         check(data['odbc_reason']).equals('token_not_found');
-        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).called(1);
         verifyNever(() => mockGateway.executeQuery(any()));
       },
     );
@@ -542,7 +542,7 @@ void main() {
           },
         );
         final tokenHash = hashClientCredentialToken(clientToken);
-        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
           (_) async => Success(localSummary),
         );
 
@@ -598,7 +598,7 @@ void main() {
         );
 
         check(response.isError).isFalse();
-        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).called(1);
         verify(
           () => mockGateway.executeQuery(
             any(),
@@ -625,7 +625,7 @@ void main() {
         );
         const clientToken = 'opaque';
         final tokenHash = hashClientCredentialToken(clientToken);
-        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
           (_) async => Success(localSummary),
         );
 

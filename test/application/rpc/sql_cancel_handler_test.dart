@@ -70,14 +70,17 @@ void main() {
     abortPort = _MockAbortPort();
     when(() => featureFlags.enableSocketCancelMethod).thenReturn(true);
     when(() => featureFlags.enableSocketTimeoutByStage).thenReturn(false);
+    when(() => featureFlags.enableClientTokenAuthorization).thenReturn(false);
     when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const Success(true));
   });
 
   test('cancels materialized execution via in-flight abort port', () async {
+    final coordinator = SqlStreamingCoordinator(gateway: _MockStreamingGateway());
+    coordinator.reserveRequestOwner(requestId: 'req-materialized');
     final handler = SqlCancelHandler(
       featureFlags: featureFlags,
       support: _support(),
-      sqlStreamingCoordinator: SqlStreamingCoordinator(gateway: _MockStreamingGateway()),
+      sqlStreamingCoordinator: coordinator,
       streamingGateway: _MockStreamingGateway(),
       inFlightAbortPort: abortPort,
     );
@@ -95,11 +98,13 @@ void main() {
 
   test('returns execution not found when abort port reports nothing registered', () async {
     when(() => abortPort.abortInFlightExecution(any())).thenAnswer((_) async => const Success(false));
+    final coordinator = SqlStreamingCoordinator(gateway: _MockStreamingGateway());
+    coordinator.reserveRequestOwner(requestId: 'req-missing');
 
     final handler = SqlCancelHandler(
       featureFlags: featureFlags,
       support: _support(),
-      sqlStreamingCoordinator: SqlStreamingCoordinator(gateway: _MockStreamingGateway()),
+      sqlStreamingCoordinator: coordinator,
       streamingGateway: _MockStreamingGateway(),
       inFlightAbortPort: abortPort,
     );
@@ -111,5 +116,55 @@ void main() {
     expect(response.error?.code, -32109);
     expect(response.result, isNull);
     verify(() => abortPort.abortInFlightExecution('req-missing')).called(1);
+  });
+
+  test('denies materialized cancellation from a different client credential', () async {
+    when(() => featureFlags.enableClientTokenAuthorization).thenReturn(true);
+    final coordinator = SqlStreamingCoordinator(gateway: _MockStreamingGateway());
+    coordinator.reserveRequestOwner(requestId: 'req-owned', clientToken: 'owner-token');
+    final handler = SqlCancelHandler(
+      featureFlags: featureFlags,
+      support: _support(),
+      sqlStreamingCoordinator: coordinator,
+      streamingGateway: _MockStreamingGateway(),
+      inFlightAbortPort: abortPort,
+    );
+
+    final response = await handler.handleSqlCancel(
+      const RpcRequest(
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'sql.cancel',
+        params: {'request_id': 'req-owned', 'client_token': 'other-token'},
+      ),
+    );
+
+    expect(response.error?.code, RpcErrorCode.unauthorized);
+    verifyNever(() => abortPort.abortInFlightExecution(any()));
+  });
+
+  test('accepts matching bearer credential for materialized cancellation', () async {
+    when(() => featureFlags.enableClientTokenAuthorization).thenReturn(true);
+    final coordinator = SqlStreamingCoordinator(gateway: _MockStreamingGateway());
+    coordinator.reserveRequestOwner(requestId: 'req-owned', clientToken: 'Bearer owner-token');
+    final handler = SqlCancelHandler(
+      featureFlags: featureFlags,
+      support: _support(),
+      sqlStreamingCoordinator: coordinator,
+      streamingGateway: _MockStreamingGateway(),
+      inFlightAbortPort: abortPort,
+    );
+
+    final response = await handler.handleSqlCancel(
+      const RpcRequest(
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'sql.cancel',
+        params: {'request_id': 'req-owned', 'auth': 'owner-token'},
+      ),
+    );
+
+    expect(response.error, isNull);
+    verify(() => abortPort.abortInFlightExecution('req-owned')).called(1);
   });
 }

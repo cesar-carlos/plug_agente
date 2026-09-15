@@ -4326,6 +4326,42 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ctScopeAllPermissions => 'Todas as permissões';
 
   @override
+  String get ctScopeAllSqlPermissions => 'Acesso SQL total';
+
+  @override
+  String get ctRuntimeRestrictionsActive => 'Restrições em vigor';
+
+  @override
+  String get ctRuntimeRestrictionsNone => 'Nenhuma';
+
+  @override
+  String get ctLabelSqlPermissions => 'Permissões SQL';
+
+  @override
+  String get ctLabelRuntimeRestrictions => 'Restrições em tempo de execução';
+
+  @override
+  String get ctLabelDatabaseRestriction => 'Banco restrito';
+
+  @override
+  String get ctLabelAgentActionAuthorization => 'Ações remotas';
+
+  @override
+  String get ctAgentActionScopes => 'Escopos configurados';
+
+  @override
+  String get ctAgentActionAllowlist => 'Lista de ações específica';
+
+  @override
+  String get ctAgentActionAllowlistAny => 'Qualquer ação dentro dos escopos';
+
+  @override
+  String get ctPayloadRestrictionsHint => 'O payload contém restrições que prevalecem sobre o acesso SQL global.';
+
+  @override
+  String get ctLabelPayloadAdvanced => 'Payload avançado';
+
+  @override
   String get ctScopeRestricted => 'Permissões restritas';
 
   @override
@@ -4390,6 +4426,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get ctErrorPayloadDatabaseCannotBeEmpty => 'payload.database nao pode ficar vazio.';
+
+  @override
+  String get ctErrorPayloadRuntimeRestrictionsInvalid =>
+      'As restricoes de runtime devem usar strings ou listas de strings.';
 
   @override
   String get ctPermissionRead => 'Read';

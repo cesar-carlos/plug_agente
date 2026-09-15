@@ -398,6 +398,19 @@ void main() {
       expect(secretStore.readCallCount, equals(0));
     });
 
+    test('getTokenPolicySummaryByHash does not hydrate token values or consult secure storage', () async {
+      final secretStore = _FakeTokenSecretStore();
+      final repository = await buildRepository(secretStore: secretStore);
+      final token = (await repository.createToken(baseRequest())).getOrNull()!;
+      secretStore.resetCounters();
+
+      final summary = await repository.getTokenPolicySummaryByHash(repository.hashTokenForLookup(token));
+
+      expect(summary.isSuccess(), isTrue);
+      expect(summary.getOrNull()!.tokenValue, isNull);
+      expect(secretStore.readCallCount, equals(0));
+    });
+
     test('getTokenSecret migrates legacy tokenId secret to tokenHash key', () async {
       final db = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(db.close);

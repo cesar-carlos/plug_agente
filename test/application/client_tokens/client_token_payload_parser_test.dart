@@ -31,4 +31,33 @@ void main() {
       expect(r.error, ClientTokenPayloadParseError.invalidJson);
     });
   });
+
+  group('validateClientTokenPayload', () {
+    test('accepts documented runtime restriction shapes', () {
+      expect(
+        validateClientTokenPayload({
+          'database': 'ERP',
+          'token_scope': ['agent.action.run'],
+          'agent_actions': {
+            'scopes': 'agent.action.cancel',
+            'action_ids': ['sync-orders'],
+          },
+        }),
+        isNull,
+      );
+    });
+
+    test('rejects malformed runtime restriction shapes', () {
+      expect(
+        validateClientTokenPayload({
+          'agent_actions': {'action_ids': 'sync-orders'},
+        }),
+        ClientTokenPayloadValidationError.runtimeRestrictionsInvalid,
+      );
+      expect(
+        validateClientTokenPayload({'token_scope': 42}),
+        ClientTokenPayloadValidationError.runtimeRestrictionsInvalid,
+      );
+    });
+  });
 }

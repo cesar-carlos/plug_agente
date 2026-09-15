@@ -2,6 +2,8 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 
+export 'package:plug_agente/core/utils/client_token_credential.dart' show extractClientTokenFromRpcParams;
+
 const Set<String> rpcInboundSqlDashboardCaptureMethods = <String>{
   'sql.execute',
   'sql.executeBatch',
@@ -19,12 +21,6 @@ Map<Object?, String> rpcInboundMethodsByIdForValidationError({
     return <Object?, String>{id: method};
   }
   return const <Object?, String>{};
-}
-
-String? extractClientTokenFromRpcParams(dynamic params) {
-  if (params is! Map<String, dynamic>) return null;
-  final raw = params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?;
-  return raw != null && raw.trim().isNotEmpty ? raw.trim() : null;
 }
 
 bool rpcInboundExceedsPayloadLimit(

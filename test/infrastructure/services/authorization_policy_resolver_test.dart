@@ -237,7 +237,7 @@ void main() {
         );
 
         when(
-          () => mockClientTokenRepository.getTokenByHash(tokenHash),
+          () => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash),
         ).thenAnswer((_) async => Success(summary));
 
         resolver = AuthorizationPolicyResolver(
@@ -252,7 +252,7 @@ void main() {
           expect(policy.clientId, equals('local-client'));
           expect(policy.allPermissions, isTrue);
         }, (_) => fail('Expected success'));
-        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).called(1);
       },
     );
 
@@ -262,7 +262,7 @@ void main() {
         const opaqueToken = 'missing-token-xyz';
         final tokenHash = hashClientCredentialToken(opaqueToken);
 
-        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
           (_) async => Failure(
             domain.NotFoundFailure.withContext(
               message: 'Client token not found',
@@ -286,7 +286,7 @@ void main() {
             expect(authFailure.context['reason'], equals('token_not_found'));
           },
         );
-        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).called(1);
       },
     );
 
@@ -296,7 +296,7 @@ void main() {
         const opaqueToken = 'db-error-token';
         final tokenHash = hashClientCredentialToken(opaqueToken);
 
-        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
           (_) async => Failure(
             domain.ServerFailure.withContext(
               message: 'Failed to load local client token',
@@ -335,7 +335,7 @@ void main() {
         when(
           () => mockFeatureFlags.enableSocketJwksValidation,
         ).thenReturn(true);
-        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
           (_) async => Failure(
             domain.NotFoundFailure.withContext(
               message: 'Client token not found',
@@ -379,7 +379,7 @@ void main() {
       () async {
         const opaqueToken = 'missing-audit-token';
         final tokenHash = hashClientCredentialToken(opaqueToken);
-        when(() => mockClientTokenRepository.getTokenByHash(tokenHash)).thenAnswer(
+        when(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).thenAnswer(
           (_) async => Failure(
             domain.NotFoundFailure.withContext(
               message: 'Client token not found',
@@ -428,7 +428,7 @@ void main() {
         );
 
         when(
-          () => mockClientTokenRepository.getTokenByHash(tokenHash),
+          () => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash),
         ).thenAnswer((_) async => Success(summary));
 
         resolver = AuthorizationPolicyResolver(
@@ -446,7 +446,7 @@ void main() {
             expect(authFailure.context['reason'], equals(AuthorizationContextConstants.tokenRevokedReason));
           },
         );
-        verify(() => mockClientTokenRepository.getTokenByHash(tokenHash)).called(1);
+        verify(() => mockClientTokenRepository.getTokenPolicySummaryByHash(tokenHash)).called(1);
       },
     );
   });

@@ -62,10 +62,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
   }
 
   Future<void> _initializeTokenListState() async {
-    final restored = _controller.restoreListPreferences();
-    if (restored != null && mounted) {
-      setState(() => _controller.applyRestoredListPreferences(restored));
-    }
     if (!mounted) {
       return;
     }
@@ -84,7 +80,6 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
     if (!mounted) {
       return;
     }
-    setState(() {});
     final provider = context.read<ClientTokenProvider>();
     await showClientTokenCreateDialog(
       context: context,
@@ -100,12 +95,35 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ClientTokenProvider>(
-      builder: (context, provider, _) {
+    return Selector<
+      ClientTokenProvider,
+      ({
+        List<ClientTokenSummary> tokens,
+        bool isLoading,
+        bool hasLoaded,
+        bool isMutating,
+        String error,
+        String? revokingId,
+        String? deletingId,
+        String? copyingId,
+      })
+    >(
+      selector: (_, provider) => (
+        tokens: provider.tokens,
+        isLoading: provider.isLoading,
+        hasLoaded: provider.hasLoaded,
+        isMutating: provider.isTokenMutationInProgress,
+        error: provider.error,
+        revokingId: provider.revokingTokenId,
+        deletingId: provider.deletingTokenId,
+        copyingId: provider.copyingTokenSecretId,
+      ),
+      builder: (context, state, _) {
+        final provider = context.read<ClientTokenProvider>();
         final l10n = AppLocalizations.of(context)!;
-        final listedTokens = provider.tokens;
-        final isInitialLoading = provider.isLoading && !provider.hasLoaded;
-        final isListInteractionLocked = provider.isTokenMutationInProgress;
+        final listedTokens = state.tokens;
+        final isInitialLoading = state.isLoading && !state.hasLoaded;
+        final isListInteractionLocked = state.isMutating;
         return AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,11 +143,11 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                   ),
                 ],
               ),
-              if (provider.error.isNotEmpty) ...[
+              if (state.error.isNotEmpty) ...[
                 InlineFeedbackCard(
                   severity: InfoBarSeverity.error,
                   title: l10n.modalTitleError,
-                  message: provider.error,
+                  message: state.error,
                   onDismiss: provider.clearError,
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -139,9 +157,9 @@ class _ClientTokenSectionState extends State<ClientTokenSection> {
                 listedTokens: listedTokens,
                 isInitialLoading: isInitialLoading,
                 isListInteractionLocked: isListInteractionLocked,
-                hasLoaded: provider.hasLoaded,
-                isLoading: provider.isLoading,
-                hasLoadError: provider.error.isNotEmpty,
+                hasLoaded: state.hasLoaded,
+                isLoading: state.isLoading,
+                hasLoadError: state.error.isNotEmpty,
                 hasActiveFilters: _controller.hasActiveFilters(),
                 clientFilterController: _controller.listClientFilterController,
                 tokenStatusFilter: _controller.tokenStatusFilter,

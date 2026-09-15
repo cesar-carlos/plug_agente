@@ -1,21 +1,12 @@
 import 'package:plug_agente/domain/entities/agent_action_authorization_scopes.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 
 /// Interprets hub-issued `ClientTokenPolicy.payload` for remote `agent.action.*`
 /// when `enableClientTokenAuthorization` is on, per `socket_communication_standard.md`.
 abstract final class ClientTokenPolicyAgentActionAuthorization {
   /// When false, scope/allowlist checks are skipped (legacy tokens without agent-action metadata).
   static bool payloadDeclaresAgentActionScopeMetadata(Map<String, dynamic> payload) {
-    if (payload.containsKey('token_scope')) {
-      return true;
-    }
-    if (payload.containsKey('agent_action_scopes')) {
-      return true;
-    }
-    final nested = payload['agent_actions'];
-    if (nested is Map) {
-      return nested.containsKey('scopes') || nested.containsKey('action_ids');
-    }
-    return false;
+    return ClientTokenRuntimeRestrictions.fromPayload(payload).declaresAgentActionMetadata;
   }
 
   /// Returns whether the policy payload authorizes the RPC for [requiredScope] and [actionId].
@@ -30,7 +21,8 @@ abstract final class ClientTokenPolicyAgentActionAuthorization {
     if (!payloadDeclaresAgentActionScopeMetadata(policyPayload)) {
       return true;
     }
-    final granted = _collectGrantedScopes(policyPayload);
+    final restrictions = ClientTokenRuntimeRestrictions.fromPayload(policyPayload);
+    final granted = restrictions.agentActionScopes;
     if (granted.isEmpty) {
       return false;
     }
@@ -40,19 +32,14 @@ abstract final class ClientTokenPolicyAgentActionAuthorization {
     if (!hasRequired) {
       return false;
     }
-    return _allowlistPermits(policyPayload, actionId.trim());
+    return _allowlistPermits(restrictions, actionId.trim());
   }
 
-  static bool _allowlistPermits(Map<String, dynamic> policyPayload, String trimmedActionId) {
-    final nested = policyPayload['agent_actions'];
-    if (nested is! Map) {
+  static bool _allowlistPermits(ClientTokenRuntimeRestrictions restrictions, String trimmedActionId) {
+    if (!restrictions.hasActionIdAllowlist) {
       return true;
     }
-    final map = Map<String, dynamic>.from(nested);
-    if (!map.containsKey('action_ids')) {
-      return true;
-    }
-    final allowed = _parseStringSet(map['action_ids']);
+    final allowed = restrictions.actionIds;
     if (allowed.isEmpty) {
       return false;
     }
@@ -60,49 +47,5 @@ abstract final class ClientTokenPolicyAgentActionAuthorization {
       return false;
     }
     return allowed.contains(trimmedActionId);
-  }
-
-  static Set<String> _collectGrantedScopes(Map<String, dynamic> policyPayload) {
-    final out = <String>{};
-    _addScopes(out, policyPayload['token_scope']);
-    _addScopes(out, policyPayload['agent_action_scopes']);
-    final nested = policyPayload['agent_actions'];
-    if (nested is Map) {
-      final map = Map<String, dynamic>.from(nested);
-      _addScopes(out, map['scopes']);
-    }
-    return out.map((s) => s.toLowerCase()).toSet();
-  }
-
-  static void _addScopes(Set<String> target, Object? raw) {
-    if (raw == null) {
-      return;
-    }
-    if (raw is String) {
-      for (final part in raw.split(RegExp(r'[\s,]+'))) {
-        final trimmed = part.trim();
-        if (trimmed.isNotEmpty) {
-          target.add(trimmed);
-        }
-      }
-      return;
-    }
-    if (raw is Iterable) {
-      for (final Object? e in raw) {
-        if (e is String) {
-          final trimmed = e.trim();
-          if (trimmed.isNotEmpty) {
-            target.add(trimmed);
-          }
-        }
-      }
-    }
-  }
-
-  static Set<String> _parseStringSet(Object? raw) {
-    if (raw is Iterable) {
-      return raw.whereType<String>().map((s) => s.trim()).where((s) => s.isNotEmpty).toSet();
-    }
-    return <String>{};
   }
 }

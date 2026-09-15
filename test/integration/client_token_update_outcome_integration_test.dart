@@ -141,6 +141,100 @@ void main() {
       expect(auditStore.recorded.single.eventType, TokenAuditEventType.rotate);
     });
 
+    test('runtime database restriction change rotates the secret', () async {
+      final seeded = await seedToken(
+        rules: const [
+          ClientTokenRule(
+            resource: DatabaseResource(
+              resourceType: DatabaseResourceType.table,
+              name: 'dbo.users',
+            ),
+            permissions: ClientPermissionSet(canRead: true, canUpdate: false, canDelete: false),
+            effect: ClientTokenRuleEffect.allow,
+          ),
+        ],
+      );
+
+      final result = await useCase(
+        seeded.tokenId,
+        const ClientTokenCreateRequest(
+          clientId: 'integration-client',
+          name: 'integration-name',
+          allTables: false,
+          allViews: false,
+          rules: [
+            ClientTokenRule(
+              resource: DatabaseResource(
+                resourceType: DatabaseResourceType.table,
+                name: 'dbo.users',
+              ),
+              permissions: ClientPermissionSet(canRead: true, canUpdate: false, canDelete: false),
+              effect: ClientTokenRuleEffect.allow,
+            ),
+          ],
+          payload: {'database': 'ERP_SECONDARY'},
+        ),
+        expectedVersion: 1,
+      );
+
+      expect(result.isSuccess(), isTrue);
+      final update = result.getOrNull()!;
+      expect(update.outcome, ClientTokenUpdateOutcome.rotated);
+      expect(update.tokenValue, isNot(seeded.tokenValue));
+      expect(
+        (await repository.getTokenByHash(repository.hashTokenForLookup(seeded.tokenValue))).isError(),
+        isTrue,
+      );
+    });
+
+    test('equivalent runtime restrictions do not rotate the secret', () async {
+      final seeded = await seedToken(
+        rules: const [
+          ClientTokenRule(
+            resource: DatabaseResource(
+              resourceType: DatabaseResourceType.table,
+              name: 'dbo.users',
+            ),
+            permissions: ClientPermissionSet(canRead: true, canUpdate: false, canDelete: false),
+            effect: ClientTokenRuleEffect.allow,
+          ),
+        ],
+        payload: const {
+          'database': 'ERP',
+          'token_scope': ['agent.action.run', 'agent.action.cancel'],
+        },
+      );
+
+      final result = await useCase(
+        seeded.tokenId,
+        const ClientTokenCreateRequest(
+          clientId: 'integration-client',
+          name: 'integration-name',
+          allTables: false,
+          allViews: false,
+          rules: [
+            ClientTokenRule(
+              resource: DatabaseResource(
+                resourceType: DatabaseResourceType.table,
+                name: 'dbo.users',
+              ),
+              permissions: ClientPermissionSet(canRead: true, canUpdate: false, canDelete: false),
+              effect: ClientTokenRuleEffect.allow,
+            ),
+          ],
+          payload: {
+            'database': ' erp ',
+            'token_scope': 'AGENT.ACTION.CANCEL, agent.action.run',
+          },
+        ),
+        expectedVersion: 1,
+      );
+
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrNull()!.outcome, ClientTokenUpdateOutcome.metadataOnly);
+      expect(result.getOrNull()!.tokenValue, isNull);
+    });
+
     test('no-op edit keeps state untouched and skips audit', () async {
       const rule = ClientTokenRule(
         resource: DatabaseResource(

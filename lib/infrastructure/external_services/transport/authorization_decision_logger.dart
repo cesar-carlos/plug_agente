@@ -32,8 +32,8 @@ class AuthorizationDecisionLogger {
     _tokenRefreshRequested = false;
   }
 
-  /// Logs the authorization decision and, when applicable (auth failed or
-  /// token revoked), triggers a single token refresh.
+  /// Logs the authorization decision and triggers a single token refresh only
+  /// when the hub explicitly reports a revoked credential.
   void log({
     required RpcRequest request,
     required RpcResponse response,
@@ -49,6 +49,7 @@ class AuthorizationDecisionLogger {
 
     final isAuthRelevantMethod =
         request.method.startsWith('sql.') ||
+        request.method.startsWith('agent.action.') ||
         (request.method == 'client_token.getPolicy' && _featureFlags.enableClientTokenPolicyIntrospection);
     if (!isAuthRelevantMethod) {
       return;

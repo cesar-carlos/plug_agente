@@ -2,6 +2,7 @@
 // Reason: Immutable value object compares by value for equality.
 
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 
 /// Authorization policy carried by a client token: scope flags, global
@@ -16,12 +17,22 @@ class ClientTokenAuthorizationPolicy {
     required this.allViews,
     required this.globalPermissions,
     required List<ClientTokenRule> rules,
-  }) : rules = List<ClientTokenRule>.unmodifiable(rules);
+    ClientTokenRuntimeRestrictions? runtimeRestrictions,
+  }) : rules = List<ClientTokenRule>.unmodifiable(rules),
+       runtimeRestrictions =
+           runtimeRestrictions ??
+           const ClientTokenRuntimeRestrictions(
+             declaresAgentActionMetadata: false,
+             agentActionScopes: <String>{},
+             hasActionIdAllowlist: false,
+             actionIds: <String>{},
+           );
 
   final bool allTables;
   final bool allViews;
   final ClientPermissionSet globalPermissions;
   final List<ClientTokenRule> rules;
+  final ClientTokenRuntimeRestrictions runtimeRestrictions;
 
   bool get usesGlobalScope => allTables || allViews;
 
@@ -45,6 +56,9 @@ class ClientTokenAuthorizationPolicy {
       return false;
     }
     if (other.effectiveGlobalPermissions != effectiveGlobalPermissions) {
+      return false;
+    }
+    if (other.runtimeRestrictions != runtimeRestrictions) {
       return false;
     }
 
@@ -75,6 +89,7 @@ class ClientTokenAuthorizationPolicy {
       allViews,
       effectiveGlobalPermissions,
       Object.hashAll(sortedRules),
+      runtimeRestrictions,
     );
   }
 

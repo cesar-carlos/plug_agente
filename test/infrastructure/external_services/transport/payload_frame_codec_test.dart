@@ -391,6 +391,33 @@ void main() {
         ),
       );
     });
+
+    test('rejects mismatched binary length before HMAC verification', () async {
+      final collector = ProtocolMetricsCollector();
+      final signer = PayloadSigner(keys: {'key-1': 'secret'});
+      final codec = buildCodec(
+        protocol: const ProtocolConfig(
+          protocol: 'jsonrpc-v2',
+          encoding: 'json',
+          compression: 'none',
+          signatureAlgorithms: ['hmac-sha256'],
+        ),
+        localShouldSignOutgoing: true,
+        payloadSigner: signer,
+        metricsCollector: collector,
+      );
+      final wire = (await codec.prepareOutgoing(
+        event: 'rpc:response',
+        logicalPayload: {'id': 'req-large', 'result': 'x' * (70 * 1024)},
+      )).getOrThrow();
+      wire['compressedSize'] = 1;
+      wire['originalSize'] = 1;
+
+      final result = await codec.decodeIncomingAsync(wire, sourceEvent: 'rpc:response');
+
+      expect(result.isError(), isTrue);
+      expect(collector.metrics.where((metric) => metric.direction == 'verify'), isEmpty);
+    });
   });
 
   group('PayloadFrameCodec.shouldSignTransportFrames', () {
@@ -600,6 +627,7 @@ void main() {
 
     test('verifies a large signed frame through the async receive path', () async {
       final signer = PayloadSigner(keys: {'key-1': 'secret'});
+      final collector = ProtocolMetricsCollector();
       final codec = buildCodec(
         protocol: const ProtocolConfig(
           protocol: 'jsonrpc-v2',
@@ -609,6 +637,7 @@ void main() {
         ),
         localShouldSignOutgoing: true,
         payloadSigner: signer,
+        metricsCollector: collector,
       );
       final wire = (await codec.prepareOutgoing(
         event: 'rpc:response',
@@ -618,6 +647,10 @@ void main() {
       final result = await codec.decodeIncomingAsync(wire, sourceEvent: 'rpc:response');
 
       expect(result.isSuccess(), isTrue);
+      expect(
+        collector.metrics.any((metric) => metric.direction == 'verify' && metric.usedHmacVerifyIsolate),
+        isTrue,
+      );
     });
   });
 }

@@ -4890,13 +4890,10 @@ void main() {
           );
 
           expect(cancelResponse.isError, isTrue);
-          expect(cancelResponse.error!.code, equals(RpcErrorCode.invalidParams));
+          expect(cancelResponse.error!.code, equals(RpcErrorCode.unauthorized));
           final data = cancelResponse.error!.data as Map<String, dynamic>;
-          expect(data['reason'], equals('invalid_params'));
-          expect(
-            data['detail'] as String,
-            contains('clientToken does not match'),
-          );
+          expect(data['reason'], equals('unauthorized'));
+          expect(data['subreason'], equals('cancel_token_mismatch'));
           verifyNever(() => mockStreamingGateway.cancelActiveStream());
 
           completer.complete(const Success(unit));

@@ -17,3 +17,13 @@ String normalizeClientCredentialToken(String token) {
 /// credential string yields one stable identifier.
 String hashClientCredentialToken(String token) =>
     sha256.convert(utf8.encode(normalizeClientCredentialToken(token))).toString();
+
+/// Extracts the documented client credential aliases from JSON-RPC params.
+///
+/// The caller receives the original token form so the authorization boundary
+/// can normalize it exactly once before hashing or resolving a policy.
+String? extractClientTokenFromRpcParams(Object? params) {
+  if (params is! Map<String, dynamic>) return null;
+  final raw = params['client_token'] ?? params['auth'] ?? params['clientToken'];
+  return raw is String && raw.trim().isNotEmpty ? raw.trim() : null;
+}

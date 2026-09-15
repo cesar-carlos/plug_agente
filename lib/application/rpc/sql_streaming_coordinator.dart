@@ -1,3 +1,4 @@
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_dispatch_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_streaming_database_gateway.dart';
@@ -16,6 +17,7 @@ class SqlStreamingCoordinator {
   final Map<String, ActiveSqlStreamExecution> _activeByStreamId = <String, ActiveSqlStreamExecution>{};
   final Map<String, ActiveSqlStreamExecution> _activeByExecutionId = <String, ActiveSqlStreamExecution>{};
   final Map<String, ActiveSqlStreamExecution> _activeByRequestId = <String, ActiveSqlStreamExecution>{};
+  final Map<String, ActiveSqlRequestOwner> _activeRequestOwners = <String, ActiveSqlRequestOwner>{};
 
   ActiveSqlStreamExecution? get activeExecution {
     if (_activeByStreamId.isEmpty) {
@@ -25,6 +27,33 @@ class SqlStreamingCoordinator {
   }
 
   int get activeCount => _activeByStreamId.length;
+
+  /// Reserves an executable SQL request id for its credential owner.
+  ///
+  /// Only a normalized credential hash is retained. Reserving duplicate IDs is
+  /// rejected so a later request cannot take ownership of an in-flight one.
+  bool reserveRequestOwner({
+    required String requestId,
+    String? clientToken,
+  }) {
+    final normalizedRequestId = requestId.trim();
+    if (normalizedRequestId.isEmpty || _activeRequestOwners.containsKey(normalizedRequestId)) {
+      return false;
+    }
+    final normalizedToken = clientToken == null ? '' : normalizeClientCredentialToken(clientToken);
+    _activeRequestOwners[normalizedRequestId] = ActiveSqlRequestOwner(
+      credentialHash: normalizedToken.isEmpty ? null : hashClientCredentialToken(normalizedToken),
+    );
+    return true;
+  }
+
+  void releaseRequestOwner(String requestId) {
+    _activeRequestOwners.remove(requestId.trim());
+  }
+
+  ActiveSqlRequestOwner? findRequestOwner(String requestId) {
+    return _activeRequestOwners[requestId.trim()];
+  }
 
   ActiveSqlStreamExecution markStarted({
     required String streamId,
@@ -48,13 +77,13 @@ class SqlStreamingCoordinator {
         'Duplicate executionId in SqlStreamingCoordinator: $executionId is already tracked',
       );
     }
-    final owner = clientToken?.trim();
+    final owner = clientToken == null ? '' : normalizeClientCredentialToken(clientToken);
     final execution = ActiveSqlStreamExecution(
       streamId: streamId,
       executionId: executionId,
       requestId: requestId,
       cancellationToken: CancellationToken(),
-      ownerClientToken: (owner != null && owner.isNotEmpty) ? owner : null,
+      ownerCredentialHash: owner.isEmpty ? null : hashClientCredentialToken(owner),
     );
     _activeByStreamId[streamId] = execution;
     _activeByExecutionId[executionId] = execution;
@@ -184,13 +213,19 @@ class SqlStreamingCoordinator {
   }
 }
 
+class ActiveSqlRequestOwner {
+  const ActiveSqlRequestOwner({required this.credentialHash});
+
+  final String? credentialHash;
+}
+
 class ActiveSqlStreamExecution {
   ActiveSqlStreamExecution({
     required this.streamId,
     required this.executionId,
     required this.requestId,
     required this.cancellationToken,
-    this.ownerClientToken,
+    this.ownerCredentialHash,
   });
 
   final String streamId;
@@ -198,9 +233,10 @@ class ActiveSqlStreamExecution {
   final String? requestId;
   final CancellationToken cancellationToken;
 
-  /// Normalized (trimmed) clientToken that initiated the stream, or null when
-  /// the stream was started without a client token (hub direct call).
-  final String? ownerClientToken;
+  /// SHA-256 of the normalized credential that initiated the stream, or null
+  /// when it started without a client token. Raw credentials are never kept in
+  /// long-lived stream state.
+  final String? ownerCredentialHash;
   StreamingCancelReason? cancelReason;
 
   void cancel(StreamingCancelReason reason) {

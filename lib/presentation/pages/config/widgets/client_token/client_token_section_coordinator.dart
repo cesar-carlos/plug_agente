@@ -31,6 +31,7 @@ class ClientTokenSectionCoordinator {
       ClientTokenFormErrorKey.payloadMustBeJsonObject => l10n.ctErrorPayloadMustBeJsonObject,
       ClientTokenFormErrorKey.payloadDatabaseMustBeString => l10n.ctErrorPayloadDatabaseMustBeString,
       ClientTokenFormErrorKey.payloadDatabaseCannotBeEmpty => l10n.ctErrorPayloadDatabaseCannotBeEmpty,
+      ClientTokenFormErrorKey.payloadRuntimeRestrictionsInvalid => l10n.ctErrorPayloadRuntimeRestrictionsInvalid,
       null => '',
     };
   }

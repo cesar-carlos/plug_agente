@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -67,6 +68,11 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
     return encoder.convert(token.payload);
   }
 
+  String _buildSqlPermissionsLabel(AppLocalizations l10n) {
+    if (token.allPermissions) return l10n.ctScopeAllSqlPermissions;
+    return _buildScopeLabel(l10n);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -119,9 +125,11 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
                 value: token.isRevoked ? l10n.ctStatusRevoked : l10n.ctStatusActive,
               ),
               const SizedBox(height: AppSpacing.sm),
-              _DetailField(
-                label: l10n.ctLabelScope,
-                value: _buildScopeLabel(l10n),
+              _DetailField(label: l10n.ctLabelSqlPermissions, value: _buildSqlPermissionsLabel(l10n)),
+              const SizedBox(height: AppSpacing.sm),
+              _RuntimeRestrictionsSurface(
+                l10n: l10n,
+                restrictions: token.runtimeRestrictions,
               ),
               const SizedBox(height: AppSpacing.sm),
               _DetailField(
@@ -130,7 +138,7 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                '${l10n.ctLabelPayload}:',
+                '${l10n.ctLabelPayloadAdvanced}:',
                 style: context.bodyStrong,
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -153,6 +161,29 @@ class _ClientTokenDetailsDialog extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _RuntimeRestrictionsSurface extends StatelessWidget {
+  const _RuntimeRestrictionsSurface({required this.l10n, required this.restrictions});
+
+  final AppLocalizations l10n;
+  final ClientTokenRuntimeRestrictions restrictions;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!restrictions.hasRestrictions) {
+      return _DetailField(label: l10n.ctLabelRuntimeRestrictions, value: l10n.ctRuntimeRestrictionsNone);
+    }
+    final values = <String>[
+      if (restrictions.database != null) '${l10n.ctLabelDatabaseRestriction}: ${restrictions.database}',
+      if (restrictions.declaresAgentActionMetadata)
+        '${l10n.ctLabelAgentActionAuthorization}: ${restrictions.agentActionScopes.isEmpty ? l10n.ctScopeRestricted : restrictions.agentActionScopes.join(', ')}',
+      if (restrictions.hasActionIdAllowlist && restrictions.actionIds.isEmpty) l10n.ctAgentActionAllowlist,
+      if (restrictions.hasActionIdAllowlist && restrictions.actionIds.isNotEmpty)
+        '${l10n.ctAgentActionAllowlist}: ${restrictions.actionIds.join(', ')}',
+    ];
+    return _DetailField(label: l10n.ctLabelRuntimeRestrictions, value: values.join('\n'));
   }
 }
 

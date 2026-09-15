@@ -109,6 +109,43 @@ class ClientTokenRepository implements IClientTokenRepository {
   }
 
   @override
+  Future<Result<ClientTokenSummary>> getTokenPolicySummaryByHash(String tokenHash) async {
+    try {
+      final row = await _localDataSource.findRowByHash(tokenHash);
+      if (row == null) {
+        return Failure(
+          domain.NotFoundFailure.withContext(
+            message: 'Client token not found',
+            context: {
+              'operation': 'get_local_client_token_policy_by_hash',
+              'token_hash': tokenHash,
+            },
+          ),
+        );
+      }
+      return Success(_localDataSource.mapRowToSummaryWithoutTokenValue(row));
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to load client token policy by hash',
+        name: 'client_token_repository',
+        error: error,
+        stackTrace: stackTrace,
+        level: 1000,
+      );
+      return Failure(
+        domain.ServerFailure.withContext(
+          message: 'Failed to load local client token policy',
+          cause: error,
+          context: {
+            'operation': 'get_local_client_token_policy_by_hash',
+            'token_hash': tokenHash,
+          },
+        ),
+      );
+    }
+  }
+
+  @override
   Future<Result<ClientTokenSecretLookup>> getTokenSecret(String tokenId) async {
     try {
       final row = await _localDataSource.findRowById(tokenId);

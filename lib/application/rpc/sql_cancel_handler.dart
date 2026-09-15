@@ -2,6 +2,7 @@ import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_streaming_coordinator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/utils/client_token_credential.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
@@ -57,27 +58,11 @@ class SqlCancelHandler {
         return _support.executionNotFound(request);
       }
 
-      if (_featureFlags.enableClientTokenAuthorization) {
-        final cancelToken =
-            (params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?)
-                ?.trim();
-        final ownerToken = activeExecution.ownerClientToken;
-        if (ownerToken != null && ownerToken.isNotEmpty) {
-          if (cancelToken == null || cancelToken.isEmpty || cancelToken != ownerToken) {
-            final rpcError = FailureToRpcErrorMapper.map(
-              domain.ValidationFailure.withContext(
-                message: 'sql.cancel: clientToken does not match the token that started the stream.',
-                context: {
-                  'reason': 'cancel_token_mismatch',
-                  'execution_id': executionId,
-                },
-              ),
-              instance: request.id?.toString(),
-              useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-            );
-            return RpcResponse.error(id: request.id, error: rpcError);
-          }
-        }
+      if (!_isCancellationAuthorized(
+        params: params,
+        ownerCredentialHash: activeExecution.ownerCredentialHash,
+      )) {
+        return _cancelAuthorizationDenied(request, targetId: activeExecution.requestId ?? activeExecution.executionId);
       }
 
       final cancelResult = await _sqlStreamingCoordinator.cancel(
@@ -108,6 +93,16 @@ class SqlCancelHandler {
     if (abortTargetId != null) {
       final abortPort = _inFlightAbortPort;
       if (abortPort != null) {
+        final owner = _sqlStreamingCoordinator.findRequestOwner(abortTargetId);
+        if (owner == null) {
+          return _support.executionNotFound(request);
+        }
+        if (!_isCancellationAuthorized(
+          params: params,
+          ownerCredentialHash: owner.credentialHash,
+        )) {
+          return _cancelAuthorizationDenied(request, targetId: abortTargetId);
+        }
         final abortResult = await abortPort.abortInFlightExecution(abortTargetId);
         return abortResult.fold(
           (aborted) {
@@ -134,6 +129,36 @@ class SqlCancelHandler {
     }
 
     return _support.executionNotFound(request);
+  }
+
+  bool _isCancellationAuthorized({
+    required Map<String, dynamic> params,
+    required String? ownerCredentialHash,
+  }) {
+    if (!_featureFlags.enableClientTokenAuthorization) {
+      return true;
+    }
+    final cancelToken = extractClientTokenFromRpcParams(params);
+    if (cancelToken == null || ownerCredentialHash == null) {
+      return false;
+    }
+    return hashClientCredentialToken(cancelToken) == ownerCredentialHash;
+  }
+
+  RpcResponse _cancelAuthorizationDenied(RpcRequest request, {required String targetId}) {
+    final rpcError = FailureToRpcErrorMapper.map(
+      domain.ConfigurationFailure.withContext(
+        message: 'sql.cancel is not authorized for the active SQL request.',
+        context: {
+          'authorization': true,
+          'reason': 'cancel_token_mismatch',
+          'target_request_id': targetId,
+        },
+      ),
+      instance: request.id?.toString(),
+      useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+    );
+    return RpcResponse.error(id: request.id, error: rpcError);
   }
 
   String? _resolveInFlightAbortTargetId({

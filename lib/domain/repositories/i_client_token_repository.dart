@@ -10,6 +10,10 @@ abstract class IClientTokenRepository {
 
   Future<Result<ClientTokenSummary>> getTokenByHash(String tokenHash);
 
+  /// Resolves authorization metadata without reading the credential value from
+  /// secure storage. Intended for inbound policy checks only.
+  Future<Result<ClientTokenSummary>> getTokenPolicySummaryByHash(String tokenHash);
+
   Future<Result<ClientTokenSecretLookup>> getTokenSecret(String tokenId);
 
   Future<Result<String>> createToken(ClientTokenCreateRequest request);

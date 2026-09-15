@@ -137,7 +137,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     String rawToken,
   ) async {
     final tokenHash = hashClientCredentialToken(rawToken);
-    final summaryResult = await repository.getTokenByHash(tokenHash);
+    final summaryResult = await repository.getTokenPolicySummaryByHash(tokenHash);
     if (summaryResult.isError()) {
       final error = summaryResult.exceptionOrNull();
       if (error is domain.Failure) {
@@ -201,6 +201,8 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           context: {
             'authorization': true,
             'reason': AuthorizationContextConstants.tokenNotFoundReason,
+            'user_message':
+                'Token de cliente nao encontrado. Confirme se o valor enviado e o token atual; alteracoes de permissao rotacionam o token.',
           },
         ),
       );

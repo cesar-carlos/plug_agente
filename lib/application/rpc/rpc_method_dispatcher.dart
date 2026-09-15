@@ -201,6 +201,14 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     }
     final lease = concurrency.lease;
     final sqlRequestId = _sqlRequestIdForTracking(request);
+    if (sqlRequestId != null &&
+        !_sqlStreamingCoordinator.reserveRequestOwner(
+          requestId: sqlRequestId,
+          clientToken: clientToken,
+        )) {
+      lease?.release();
+      return _activeSqlRequestIdConflict(request);
+    }
     if (sqlRequestId != null) {
       _activeSqlRequestIds.add(sqlRequestId);
     }
@@ -218,6 +226,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
     } finally {
       if (sqlRequestId != null) {
         _activeSqlRequestIds.remove(sqlRequestId);
+        _sqlStreamingCoordinator.releaseRequestOwner(sqlRequestId);
       }
       lease?.release();
     }
@@ -322,6 +331,23 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
             'scope': 'client',
             ...?(limit == null ? null : <String, dynamic>{'limit': limit}),
           },
+        ),
+      ),
+    );
+  }
+
+  RpcResponse _activeSqlRequestIdConflict(RpcRequest request) {
+    const code = RpcErrorCode.invalidRequest;
+    return RpcResponse.error(
+      id: request.id,
+      error: RpcError(
+        code: code,
+        message: RpcErrorCode.getMessage(code),
+        data: RpcErrorCode.buildErrorData(
+          code: code,
+          technicalMessage: 'An executable SQL request with this request id is already active.',
+          correlationId: request.id?.toString(),
+          reason: 'active_sql_request_id_conflict',
         ),
       ),
     );

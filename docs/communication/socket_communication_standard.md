@@ -1090,38 +1090,39 @@ Pelo menos um de `execution_id` ou `request_id` e obrigatorio.
 
 Quando `enableClientTokenAuthorization` esta ativo, o cancelamento pode incluir
 `client_token` (ou aliases `clientToken` / `auth`) com as mesmas regras de schema
-que `sql.execute`. Se o stream foi iniciado com um token de cliente, o
-`sql.cancel` deve reapresentar **o mesmo token**; caso contrario o agente rejeita
-o pedido antes de sinalizar cancelamento cooperativo.
+que `sql.execute`. Para qualquer execucao SQL ativa rastreada (streaming,
+materializada ou aguardando ODBC), `sql.cancel` deve reapresentar **o mesmo
+token**; caso contrario o agente rejeita o pedido antes de sinalizar
+cancelamento cooperativo ou ODBC.
 
 ### Propriedade do token (token ownership)
 
-O runtime associa cada execucao em streaming rastreada ao `client_token` que
-iniciou o `sql.execute` correspondente (quando informado). Um peer do hub que
-nao possua o mesmo token nao pode cancelar streams de outro emissor, mesmo
-conhecendo `execution_id` ou `request_id`.
+O runtime associa cada execucao SQL rastreada ao hash SHA-256 da credencial que
+iniciou a request. O segredo nao permanece no estado da execucao. Um peer do
+hub que nao possua a mesma credencial nao pode cancelar trabalho de outro
+emissor, mesmo conhecendo `execution_id` ou `request_id`.
 
-Streams iniciados sem `client_token` (por exemplo, hub autenticado apenas na
-sessao `/agents`) nao exigem token no cancelamento.
+Com `enableClientTokenAuthorization` ativo, uma execucao sem proprietario
+verificavel tambem nao pode ser cancelada via RPC; o cancelamento interno por
+disconnect permanece best-effort e independente desse gate.
 
-### Erro quando o token nao corresponde ao dono do stream
+### Erro quando o token nao corresponde ao dono da execucao
 
 ```json
 {
   "jsonrpc": "2.0",
   "id": "req-cancel-mismatch",
   "error": {
-    "code": -32602,
-    "message": "Invalid params",
+    "code": -32002,
+    "message": "Unauthorized",
     "data": {
-      "reason": "invalid_params",
-      "category": "validation",
+      "reason": "unauthorized",
       "retryable": false,
-      "user_message": "sql.cancel: clientToken does not match the token that started the stream.",
-      "technical_message": "sql.cancel: clientToken does not match the token that started the stream.",
+      "user_message": "sql.cancel is not authorized for the active SQL request.",
+      "technical_message": "sql.cancel is not authorized for the active SQL request.",
       "correlation_id": "corr-cancel-mismatch",
       "timestamp": "2026-03-12T10:00:04Z",
-      "detail": "sql.cancel: clientToken does not match the token that started the stream.",
+      "detail": "sql.cancel is not authorized for the active SQL request.",
       "subreason": "cancel_token_mismatch"
     }
   }
@@ -1129,8 +1130,8 @@ sessao `/agents`) nao exigem token no cancelamento.
 ```
 
 O dominio interno registra a causa estruturada `cancel_token_mismatch` para
-correlacao em logs; o contrato publicado expõe `-32602` com `reason:
-invalid_params` e `detail` acionavel para o hub.
+correlacao em logs; o contrato publicado expõe `-32002` com `reason:
+unauthorized` e `subreason` acionavel para o hub.
 
 ### Cancelamento cooperativo e tokens da fila SQL
 
@@ -1372,9 +1373,10 @@ devolve politica.
 que o fluxo de autorizacao SQL, mapeados via `FailureToRpcErrorMapper`
 (por exemplo `-32001` autenticacao, `-32002` autorizacao com `reason` em
 `error.data`).
-- **Transporte:** com auth e introspecao ativos, o cliente de transporte aplica a mesma
-heuristica de log/refresh de token que para `sql.`* (ex.: `token_revoked` ou
-falha de autenticacao pode solicitar refresh da credencial).
+- **Transporte:** com auth e introspecao ativos, o cliente de transporte registra
+as decisoes para `sql.`* e `agent.action.`*. Somente `token_revoked` solicita
+um refresh/reconexao por sessao; `authentication_failed` de client token e
+registrado sem renovar a credencial do hub.
 - **Observabilidade:** contadores `rpc_client_token_get_policy_`* no
 `MetricsCollector` (sucesso, falha de resolucao agregada, falhas por tipo de
 `Failure`, rate limit).
@@ -1794,10 +1796,17 @@ documento.
 3. Lookup local: hash SHA-256 do token -> SQLite -> politica (regras, all_tables, all_views, global_permissions e `all_permissions` legado derivado).
 4. Se nao encontrado localmente: fallback opcional para JWKS (JWT) quando `enableSocketJwksValidation` ativo.
 5. Politica define se a operacao SQL e permitida; deny tem precedencia sobre allow.
+   `all_permissions` e o acesso SQL global derivado, nao um bypass: `payload.database`
+   continua exigindo o database correspondente, SQL sem recurso classificavel continua
+   bloqueado e metadados de `agent_actions` exigem seus proprios escopos/allowlist.
 
 ### Formato do token
 
 - **Tokens criados no agente**: opacos (string hex aleatoria). Permissoes ficam no banco local, nao no token.
+- **Rotacao de politica**: qualquer mudanca efetiva de permissao SQL,
+  `payload.database`, escopo de `agent.action.*` ou allowlist de `action_ids`
+  rotaciona o token opaco. Integracoes devem substituir imediatamente o valor
+  exibido; campos de payload sem efeito autorizativo nao rotacionam a credencial.
 - **Fallback externo**: JWT com payload `policy` quando JWKS ativo.
 
 ### Onde passar o token
@@ -1821,8 +1830,8 @@ documento.
 - Coleta de metricas de autorizacao em memoria (allow/deny, por operacao, recurso e motivo).
 - Logs estruturados no transporte para decisoes de autorizacao no fluxo RPC (`authorization.allowed` e `authorization.denied`).
 - Exibicao de resumo de autorizacao no dashboard via `WebSocketLogViewer`.
-- Quando o RPC retorna `authentication_failed` ou `token_revoked`, o transporte
-dispara callback de refresh de token/reconexao.
+- O transporte registra `authentication_failed` e `token_revoked`; somente
+`token_revoked` dispara callback de refresh/reconexao, uma vez por sessao.
 - Contadores operacionais em memoria para observabilidade de resiliencia:
 `timeout_cancel_success`, `timeout_cancel_failure`,
 `transaction_rollback_failure` e `idempotency_fingerprint_mismatch`.
@@ -2054,8 +2063,9 @@ outbound.
 qualquer conteudo de arquivo precisa ser modelado no payload logico do metodo
 e, depois, transportado dentro do `PayloadFrame`.
 - Metodo `sql.cancel` disponivel via feature flag `enableSocketCancelMethod`
-(cancela execucao em streaming ativa; execucoes nao-streaming nao sao
-cancelaveis).
+  para execucoes SQL ativas em streaming, materializadas ou registradas antes
+  do statement ODBC; quando a autorizacao por token esta ativa, exige a mesma
+  credencial que iniciou a request alvo.
 - Streaming chunked: `enableSocketStreamingChunks` agora liga por default; com
 o hub anunciando `streamingResults`, resultados acima do
 `streaming_row_threshold` fluem em chunks (`rpc:chunk`, `rpc:complete`).

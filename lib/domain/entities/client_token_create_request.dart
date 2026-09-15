@@ -1,4 +1,5 @@
 import 'package:plug_agente/domain/entities/client_token_rule.dart';
+import 'package:plug_agente/domain/entities/client_token_runtime_restrictions.dart';
 import 'package:plug_agente/domain/entities/client_token_summary.dart';
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/client_token_authorization_policy.dart';
@@ -49,6 +50,7 @@ class ClientTokenCreateRequest {
     allViews: allViews,
     globalPermissions: effectiveGlobalPermissions,
     rules: effectiveRules,
+    runtimeRestrictions: ClientTokenRuntimeRestrictions.fromPayload(payload),
   );
 
   String get normalizedClientId => clientId.trim();
@@ -62,9 +64,8 @@ class ClientTokenCreateRequest {
   }
 
   /// Returns true when this request changes the authorization policy compared
-  /// with [current], i.e. token scope, global permissions, or resource rules.
-  /// Pure metadata fields (clientId, name, agentId, payload) are ignored on
-  /// purpose: editing them must not rotate the underlying token secret.
+  /// with [current], including runtime database and remote-action constraints.
+  /// Payload fields that do not affect authorization remain metadata-only.
   bool changesAuthorizationPolicyFrom(ClientTokenSummary current) {
     return policy != current.policy;
   }

@@ -151,6 +151,47 @@ void main() {
       expect(provider.error, isEmpty);
     });
 
+    test('keeps active loading state when an older request completes first', () async {
+      final firstLoad = Completer<Result<List<ClientTokenSummary>>>();
+      final secondLoad = Completer<Result<List<ClientTokenSummary>>>();
+      var invocationCount = 0;
+      when(() => mockListClientTokens(query: any(named: 'query'))).thenAnswer((_) {
+        invocationCount++;
+        return invocationCount == 1 ? firstLoad.future : secondLoad.future;
+      });
+
+      final staleFuture = provider.loadTokens(query: const ClientTokenListQuery(clientIdContains: 'old'));
+      final currentFuture = provider.loadTokens(query: const ClientTokenListQuery(clientIdContains: 'new'));
+      firstLoad.complete(const Success(<ClientTokenSummary>[]));
+
+      expect((await staleFuture).isError(), isTrue);
+      expect(provider.isLoading, isTrue);
+
+      secondLoad.complete(const Success(<ClientTokenSummary>[]));
+      expect((await currentFuture).isSuccess(), isTrue);
+      expect(provider.isLoading, isFalse);
+    });
+
+    test('settles visible loading when a silent refresh supersedes it', () async {
+      final firstLoad = Completer<Result<List<ClientTokenSummary>>>();
+      final secondLoad = Completer<Result<List<ClientTokenSummary>>>();
+      var invocationCount = 0;
+      when(() => mockListClientTokens(query: any(named: 'query'))).thenAnswer((_) {
+        invocationCount++;
+        return invocationCount == 1 ? firstLoad.future : secondLoad.future;
+      });
+
+      final visibleFuture = provider.loadTokens();
+      final silentFuture = provider.loadTokens(silent: true);
+      firstLoad.complete(const Success(<ClientTokenSummary>[]));
+      expect((await visibleFuture).isError(), isTrue);
+      expect(provider.isLoading, isTrue);
+
+      secondLoad.complete(const Success(<ClientTokenSummary>[]));
+      expect((await silentFuture).isSuccess(), isTrue);
+      expect(provider.isLoading, isFalse);
+    });
+
     test('should expose failure message on initial load', () async {
       when(
         () => mockListClientTokens(query: any(named: 'query')),
@@ -204,7 +245,7 @@ void main() {
 
       final future = provider.loadTokens(silent: true);
 
-      expect(provider.isLoading, isTrue);
+      expect(provider.isLoading, isFalse);
 
       final result = await future;
 

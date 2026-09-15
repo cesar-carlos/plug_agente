@@ -25,6 +25,7 @@ enum ClientTokenFormErrorKey {
   payloadMustBeJsonObject,
   payloadDatabaseMustBeString,
   payloadDatabaseCannotBeEmpty,
+  payloadRuntimeRestrictionsInvalid,
 }
 
 /// Owns client-token section form state, list filters, and draft assembly.
@@ -332,6 +333,8 @@ class ClientTokenSectionController {
       formErrorKey = switch (payloadValidationError) {
         ClientTokenPayloadValidationError.databaseMustBeString => ClientTokenFormErrorKey.payloadDatabaseMustBeString,
         ClientTokenPayloadValidationError.databaseCannotBeEmpty => ClientTokenFormErrorKey.payloadDatabaseCannotBeEmpty,
+        ClientTokenPayloadValidationError.runtimeRestrictionsInvalid =>
+          ClientTokenFormErrorKey.payloadRuntimeRestrictionsInvalid,
       };
       notifyCreateTokenDialogChanged();
       return null;

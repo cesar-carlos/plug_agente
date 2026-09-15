@@ -29,6 +29,8 @@ class CreateClientToken {
           switch (payloadValidationError) {
             ClientTokenPayloadValidationError.databaseMustBeString => 'payload.database must be a string',
             ClientTokenPayloadValidationError.databaseCannotBeEmpty => 'payload.database must not be empty',
+            ClientTokenPayloadValidationError.runtimeRestrictionsInvalid =>
+              'Runtime token restrictions must use strings or arrays of strings',
           },
         ),
       );

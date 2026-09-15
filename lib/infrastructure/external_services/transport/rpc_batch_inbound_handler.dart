@@ -15,6 +15,7 @@ import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_request_context.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_guard_mapping.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_response_enricher.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_validation_error_mapper.dart';
@@ -585,7 +586,7 @@ class RpcBatchInboundHandler {
       if (_discardIfSessionStale(isSessionCurrent, 'rpc_batch_before_dispatch')) {
         return (index: index, response: null, id: request.id, method: request.method);
       }
-      final clientToken = _extractClientTokenFromRpcParams(request.params);
+      final clientToken = extractClientTokenFromRpcParams(request.params);
       final response = await _dispatcher.dispatch(
         request,
         _agentIdProvider(),
@@ -691,12 +692,6 @@ class RpcBatchInboundHandler {
     final extensionValue = _protocolProvider().negotiatedExtensions['orderedBatchResponses'];
     if (extensionValue is bool) return extensionValue;
     return true;
-  }
-
-  String? _extractClientTokenFromRpcParams(dynamic params) {
-    if (params is! Map<String, dynamic>) return null;
-    final raw = params['client_token'] as String? ?? params['auth'] as String? ?? params['clientToken'] as String?;
-    return raw != null && raw.trim().isNotEmpty ? raw.trim() : null;
   }
 
   String? _extractSqlFromRpcParams(dynamic params) {

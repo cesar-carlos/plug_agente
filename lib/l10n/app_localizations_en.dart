@@ -4319,6 +4319,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ctScopeAllPermissions => 'All permissions';
 
   @override
+  String get ctScopeAllSqlPermissions => 'Full SQL access';
+
+  @override
+  String get ctRuntimeRestrictionsActive => 'Restrictions active';
+
+  @override
+  String get ctRuntimeRestrictionsNone => 'None';
+
+  @override
+  String get ctLabelSqlPermissions => 'SQL permissions';
+
+  @override
+  String get ctLabelRuntimeRestrictions => 'Runtime restrictions';
+
+  @override
+  String get ctLabelDatabaseRestriction => 'Restricted database';
+
+  @override
+  String get ctLabelAgentActionAuthorization => 'Remote actions';
+
+  @override
+  String get ctAgentActionScopes => 'Configured scopes';
+
+  @override
+  String get ctAgentActionAllowlist => 'Specific action allowlist';
+
+  @override
+  String get ctAgentActionAllowlistAny => 'Any action within the scopes';
+
+  @override
+  String get ctPayloadRestrictionsHint =>
+      'The payload contains restrictions that take precedence over global SQL access.';
+
+  @override
+  String get ctLabelPayloadAdvanced => 'Advanced payload';
+
+  @override
   String get ctScopeRestricted => 'Restricted permissions';
 
   @override
@@ -4381,6 +4418,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctErrorPayloadDatabaseCannotBeEmpty => 'payload.database must not be empty.';
+
+  @override
+  String get ctErrorPayloadRuntimeRestrictionsInvalid => 'Runtime restrictions must use strings or arrays of strings.';
 
   @override
   String get ctPermissionRead => 'Read';

@@ -65,13 +65,18 @@ class ClientTokenSummaryGrid extends StatelessWidget {
   }
 
   String _buildScopeLabel(ClientTokenSummary token, AppLocalizations l10n) {
-    if (token.allPermissions) return l10n.ctScopeAllPermissions;
+    if (token.allPermissions) {
+      final label = l10n.ctScopeAllSqlPermissions;
+      return token.runtimeRestrictions.hasRestrictions ? '$label · ${l10n.ctRuntimeRestrictionsActive}' : label;
+    }
     final scopes = <String>[
       if (token.allTables) l10n.ctScopeTables,
       if (token.allViews) l10n.ctScopeViews,
     ];
     if (scopes.isEmpty) {
-      return l10n.ctScopeRestricted;
+      return token.runtimeRestrictions.hasRestrictions
+          ? '${l10n.ctScopeRestricted} · ${l10n.ctRuntimeRestrictionsActive}'
+          : l10n.ctScopeRestricted;
     }
 
     final permissionsLabel = _buildPermissionsLabel(
@@ -79,9 +84,12 @@ class ClientTokenSummaryGrid extends StatelessWidget {
       l10n,
     );
     if (permissionsLabel.isEmpty) {
-      return scopes.join(', ');
+      return token.runtimeRestrictions.hasRestrictions
+          ? '${scopes.join(', ')} · ${l10n.ctRuntimeRestrictionsActive}'
+          : scopes.join(', ');
     }
-    return '${scopes.join(', ')}: $permissionsLabel';
+    final label = '${scopes.join(', ')}: $permissionsLabel';
+    return token.runtimeRestrictions.hasRestrictions ? '$label · ${l10n.ctRuntimeRestrictionsActive}' : label;
   }
 
   @override
