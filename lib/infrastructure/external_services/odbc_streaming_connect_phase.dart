@@ -27,6 +27,12 @@ final class OdbcStreamingConnectPhase {
 
   OdbcStreamingSessionCache get sessionCache => _sessionCache;
 
+  /// One direct slot remains available for a fresh connection while idle
+  /// sessions are reused. A single-slot runtime intentionally skips caching.
+  void configureSessionCacheCapacity(int directConnectionCapacity) {
+    _sessionCache.setCapacityLimit(directConnectionCapacity - 1);
+  }
+
   Future<Result<DirectOdbcConnectionLease>> acquireLease({
     required String operation,
   }) {
@@ -38,11 +44,11 @@ final class OdbcStreamingConnectPhase {
     required ConnectionOptions options,
     required String operation,
   }) async {
-    final cachedConnectionId = _sessionCache.tryTake(connectionString);
-    if (cachedConnectionId != null) {
+    final cached = takeCachedSession(connectionString);
+    if (cached != null) {
       return Success(
         Connection(
-          id: cachedConnectionId,
+          id: cached.connectionId,
           connectionString: connectionString,
           createdAt: DateTime.now(),
           isActive: true,
@@ -57,13 +63,19 @@ final class OdbcStreamingConnectPhase {
     );
   }
 
+  OdbcCachedStreamingSession? takeCachedSession(String connectionString) {
+    return _sessionCache.tryTakeSession(connectionString);
+  }
+
   Future<bool> offerSessionForReuse({
     required String connectionString,
     required String connectionId,
+    DirectOdbcConnectionLease? reservation,
   }) {
     return _sessionCache.offer(
       connectionString: connectionString,
       connectionId: connectionId,
+      reservation: reservation,
     );
   }
 

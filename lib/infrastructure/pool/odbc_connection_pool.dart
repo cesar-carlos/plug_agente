@@ -68,6 +68,7 @@ class OdbcConnectionPool
     Duration? acquireTimeout,
   }) async {
     final effectiveAcquireTimeout = acquireTimeout ?? _acquireTimeout;
+    final stopwatch = Stopwatch()..start();
     try {
       await _semaphore.acquire(
         timeout: effectiveAcquireTimeout,
@@ -92,7 +93,11 @@ class OdbcConnectionPool
     }
 
     try {
-      await _nativeHandshakeSemaphore.acquire(timeout: effectiveAcquireTimeout);
+      final remainingAcquireBudget = effectiveAcquireTimeout - stopwatch.elapsed;
+      if (remainingAcquireBudget <= Duration.zero) {
+        throw TimeoutException('Lease pool acquisition budget exhausted');
+      }
+      await _nativeHandshakeSemaphore.acquire(timeout: remainingAcquireBudget);
     } on TimeoutException catch (error) {
       _semaphore.release();
       _metrics?.recordPoolAcquireTimeout();
@@ -170,7 +175,6 @@ class OdbcConnectionPool
     return _disconnectLeasedConnection(
       connectionId,
       operation: 'pool_release',
-      logMessage: 'Failed to disconnect leased ODBC connection $connectionId',
       releaseLeaseOnFailure: false,
       eagerLeaseRelease: false,
     );
@@ -181,7 +185,6 @@ class OdbcConnectionPool
     return _disconnectLeasedConnection(
       connectionId,
       operation: 'pool_discard',
-      logMessage: 'Failed to discard leased ODBC connection $connectionId',
       releaseLeaseOnFailure: true,
       eagerLeaseRelease: true,
     );
@@ -381,7 +384,6 @@ class OdbcConnectionPool
   Future<Result<void>> _disconnectLeasedConnection(
     String connectionId, {
     required String operation,
-    required String logMessage,
     required bool releaseLeaseOnFailure,
     required bool eagerLeaseRelease,
   }) async {
@@ -443,10 +445,10 @@ class OdbcConnectionPool
 
         _metrics?.recordPoolReleaseFailure();
         developer.log(
-          logMessage,
+          'Leased ODBC connection cleanup failed (reason=lease_disconnect_failed)',
           name: 'connection_pool',
           level: 900,
-          error: error,
+          error: <String, Object?>{'operation': operation},
         );
 
         if (!leaseReleasedEarly && (releaseLeaseOnFailure || _shouldForceFinalizeLeaseOnDisconnectError(error))) {

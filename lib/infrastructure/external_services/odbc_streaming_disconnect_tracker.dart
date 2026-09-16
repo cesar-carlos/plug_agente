@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
@@ -7,27 +8,37 @@ import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:result_dart/result_dart.dart';
 
-/// Tracks native streaming disconnects after the caller stops waiting.
+/// Bounded, deduplicated cleanup queue for native streaming connections.
 ///
-/// `odbc_fast` 4.5.1 exposes `disconnect(connectionId)` and
-/// `cancelStream(streamId)` only. High-level `streamQuery*` APIs do not return
-/// a stream id, and disconnect has no force-close or timeout argument. A Dart
-/// `.timeout()` must not abandon the underlying future: this tracker keeps it
-/// until the native call completes so the handle is not forgotten.
+/// `odbc_fast` does not expose a force-close API. A timed-out caller therefore
+/// observes a failure while the native cleanup remains owned by this tracker
+/// until it completes. Keeping the queue bounded prevents a disconnect storm
+/// from consuming every native worker.
 final class OdbcStreamingDisconnectTracker {
   OdbcStreamingDisconnectTracker({
     this.maxInFlight = defaultMaxInFlight,
+    this.maxPending = defaultMaxPending,
     this.observedTimeout = defaultObservedTimeout,
-  });
+  }) : assert(maxInFlight > 0, 'maxInFlight must be positive'),
+       assert(maxPending > 0 && maxPending <= maximumPending, 'maxPending must be within bounds');
 
   static const int defaultMaxInFlight = 16;
+  static const int defaultMaxPending = 64;
+  static const int maximumPending = 256;
   static const Duration defaultObservedTimeout = Duration(seconds: 8);
 
   final int maxInFlight;
+  final int maxPending;
   final Duration observedTimeout;
-  final Map<String, Future<Result<void>>> _inFlight = <String, Future<Result<void>>>{};
+  final Queue<_QueuedDisconnect> _pending = Queue<_QueuedDisconnect>();
+  final Map<String, Future<Result<void>>> _tracked = <String, Future<Result<void>>>{};
+  int _running = 0;
 
-  int get inFlightCount => _inFlight.length;
+  /// Includes both running work and accepted work waiting for a slot.
+  int get inFlightCount => _tracked.length;
+  int get runningCount => _running;
+  int get pendingCount => _pending.length;
+  bool get isSaturated => _pending.length >= maxPending;
 
   Future<Result<void>> run({
     required String connectionId,
@@ -36,73 +47,75 @@ final class OdbcStreamingDisconnectTracker {
     void Function()? onTimeout,
     void Function()? onFailure,
     void Function()? onSaturated,
+    void Function()? onComplete,
   }) async {
     if (connectionId.isEmpty) {
       return const Success(unit);
     }
 
-    if (_inFlight.length >= maxInFlight) {
+    final existing = _tracked[connectionId];
+    if (existing != null) {
+      return _observe(existing, timeout: timeout, onTimeout: onTimeout, onFailure: onFailure);
+    }
+    if (_pending.length >= maxPending) {
       onSaturated?.call();
       developer.log(
-        'Streaming disconnect backlog is saturated '
-        '(in_flight=${_inFlight.length}, max=$maxInFlight); still starting disconnect for $connectionId',
+        'Streaming disconnect queue is saturated; new cleanup was not started',
         name: 'odbc_streaming_disconnect_tracker',
         level: 900,
+        error: <String, Object?>{
+          'running': _running,
+          'pending': _pending.length,
+          'max_in_flight': maxInFlight,
+          'max_pending': maxPending,
+        },
+      );
+      return Failure(
+        domain.ConnectionFailure.withContext(
+          message: 'Streaming cleanup capacity is temporarily exhausted',
+          context: const <String, Object?>{
+            'reason': 'stream_disconnect_backlog_saturated',
+            'retryable': true,
+            'discarded': true,
+          },
+        ),
       );
     }
 
-    final work = disconnect(connectionId);
-    _inFlight[connectionId] = work;
-    unawaited(
-      work.whenComplete(() {
-        if (identical(_inFlight[connectionId], work)) {
-          _inFlight.remove(connectionId);
-        }
-      }),
+    final completer = Completer<Result<void>>();
+    final queued = _QueuedDisconnect(
+      connectionId: connectionId,
+      disconnect: disconnect,
+      completer: completer,
+      onComplete: onComplete,
     );
+    _tracked[connectionId] = completer.future;
+    _pending.add(queued);
+    _pump();
+    return _observe(completer.future, timeout: timeout, onTimeout: onTimeout, onFailure: onFailure);
+  }
 
+  Future<Result<void>> _observe(
+    Future<Result<void>> work, {
+    Duration? timeout,
+    void Function()? onTimeout,
+    void Function()? onFailure,
+  }) async {
     try {
       final result = await work.timeout(timeout ?? observedTimeout);
-      return await result.fold(
-        (_) => const Success(unit),
-        (error) {
-          if (OdbcErrorInspector.isInvalidConnectionId(error)) {
-            return const Success(unit);
-          }
-          onFailure?.call();
-          developer.log(
-            'Streaming disconnect failed for $connectionId; handle remains discarded',
-            name: 'odbc_streaming_disconnect_tracker',
-            level: 900,
-            error: error,
-          );
-          return Failure(
-            OdbcFailureMapper.mapConnectionError(
-              error,
-              operation: 'streaming_disconnect',
-              context: {
-                'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
-                'discarded': true,
-              },
-            ),
-          );
-        },
-      );
+      if (result.isSuccess()) {
+        return const Success(unit);
+      }
+      onFailure?.call();
+      return Failure(result.exceptionOrNull()!);
     } on TimeoutException catch (error) {
       onTimeout?.call();
-      developer.log(
-        'Streaming disconnect timed out for $connectionId; native call stays tracked until completion',
-        name: 'odbc_streaming_disconnect_tracker',
-        level: 900,
-        error: error,
-      );
       return Failure(
         domain.ConnectionFailure.withContext(
           message: 'Streaming disconnect did not finish within the expected time',
           cause: error,
-          context: {
+          context: <String, Object?>{
             'reason': OdbcContextConstants.streamCancelDisconnectTimeoutReason,
-            'connectionId': connectionId,
             'discarded': true,
             'in_flight': true,
             'timeout_ms': (timeout ?? observedTimeout).inMilliseconds,
@@ -112,28 +125,95 @@ final class OdbcStreamingDisconnectTracker {
     }
   }
 
-  /// Waits for tracked disconnects. A [timeout] logs leftovers instead of
-  /// hanging forever; 4.5.1 has no hard-free API for a stuck disconnect.
-  Future<void> drain({Duration? timeout}) async {
-    if (_inFlight.isEmpty) {
-      return;
+  void _pump() {
+    while (_running < maxInFlight && _pending.isNotEmpty) {
+      final queued = _pending.removeFirst();
+      _running++;
+      unawaited(_runQueued(queued));
     }
+  }
 
-    final pending = List<Future<Result<void>>>.of(_inFlight.values);
-    if (timeout == null) {
-      await Future.wait(pending);
-      return;
-    }
-
+  Future<void> _runQueued(_QueuedDisconnect queued) async {
+    Result<void> result;
     try {
-      await Future.wait(pending).timeout(timeout);
+      final disconnectResult = await queued.disconnect(queued.connectionId);
+      result = disconnectResult.fold(
+        (_) => const Success(unit),
+        (error) => OdbcErrorInspector.isInvalidConnectionId(error)
+            ? const Success(unit)
+            : Failure(
+                OdbcFailureMapper.mapConnectionError(
+                  error,
+                  operation: 'streaming_disconnect',
+                  context: const <String, Object?>{
+                    'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
+                    'discarded': true,
+                  },
+                ),
+              ),
+      );
+    } on Object catch (error) {
+      result = Failure(
+        OdbcFailureMapper.mapConnectionError(
+          error,
+          operation: 'streaming_disconnect',
+          context: const <String, Object?>{
+            'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
+            'discarded': true,
+          },
+        ),
+      );
+    }
+
+    if (!queued.completer.isCompleted) {
+      queued.completer.complete(result);
+    }
+    queued.onComplete?.call();
+    _running--;
+    if (identical(_tracked[queued.connectionId], queued.completer.future)) {
+      _tracked.remove(queued.connectionId);
+    }
+    _pump();
+  }
+
+  /// Waits for accepted cleanup without abandoning native handles.
+  Future<void> drain({Duration? timeout}) async {
+    if (_tracked.isEmpty) {
+      return;
+    }
+    final pending = List<Future<Result<void>>>.of(_tracked.values);
+    try {
+      final wait = Future.wait(pending);
+      if (timeout == null) {
+        await wait;
+      } else {
+        await wait.timeout(timeout);
+      }
     } on TimeoutException {
       developer.log(
-        'Streaming disconnect drain timed out with ${_inFlight.length} native handle(s) still in flight '
-        '(${OdbcContextConstants.streamDisconnectStillInFlightReason})',
+        'Streaming disconnect drain timed out; native cleanup remains tracked',
         name: 'odbc_streaming_disconnect_tracker',
         level: 900,
+        error: <String, Object?>{
+          'running': _running,
+          'pending': _pending.length,
+          'reason': OdbcContextConstants.streamDisconnectStillInFlightReason,
+        },
       );
     }
   }
+}
+
+final class _QueuedDisconnect {
+  const _QueuedDisconnect({
+    required this.connectionId,
+    required this.disconnect,
+    required this.completer,
+    this.onComplete,
+  });
+
+  final String connectionId;
+  final Future<Result<void>> Function(String connectionId) disconnect;
+  final Completer<Result<void>> completer;
+  final void Function()? onComplete;
 }

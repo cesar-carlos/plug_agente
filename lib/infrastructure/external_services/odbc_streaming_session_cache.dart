@@ -8,6 +8,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_odbc_streaming_session_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_string_driver_hint.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_disconnect_tracker.dart';
+import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
 
 typedef OdbcStreamingSessionDisconnect = Future<Result<void>> Function(String connectionId);
@@ -16,21 +17,31 @@ class _CachedStreamingSession {
   const _CachedStreamingSession({
     required this.connectionId,
     required this.cachedAt,
+    this.reservation,
   });
 
   final String connectionId;
   final DateTime cachedAt;
+  final DirectOdbcConnectionLease? reservation;
+}
+
+/// A cached physical session and its retained direct-connection reservation.
+final class OdbcCachedStreamingSession {
+  const OdbcCachedStreamingSession({
+    required this.connectionId,
+    this.reservation,
+  });
+
+  final String connectionId;
+  final DirectOdbcConnectionLease? reservation;
 }
 
 /// Short-TTL cache of idle streaming ODBC connections keyed by connection string.
 ///
-/// Reuse skips the ODBC handshake on back-to-back streams for the same DSN when
-/// the driver family supports columnar streaming (PostgreSQL). SQL Anywhere and
-/// SQL Server stay on connect/disconnect per stream.
-///
-/// Evictions on [tryTake] stay queued so checkout stays synchronous. [offer]
-/// and [drainCachedSessions] await those disconnects so handles are not leaked.
-/// Timed-out disconnects stay tracked until the native call completes.
+/// A cached connection retains its limiter reservation. This makes physical
+/// connection reuse count against the same capacity as active streams; the
+/// lease is transferred on reuse and is released only after native disconnect
+/// actually completes.
 final class OdbcStreamingSessionCache implements IOdbcStreamingSessionCache {
   OdbcStreamingSessionCache({
     Duration? ttl,
@@ -48,97 +59,107 @@ final class OdbcStreamingSessionCache implements IOdbcStreamingSessionCache {
        _disconnectTracker = disconnectTracker ?? OdbcStreamingDisconnectTracker();
 
   final Duration _ttl;
-  final int _maxEntries;
+  int _maxEntries;
   final DateTime Function() _clock;
   final OdbcStreamingSessionDisconnect? _disconnectConnection;
   final OdbcStreamingDisconnectTracker _disconnectTracker;
   final Map<String, _CachedStreamingSession> _entries = <String, _CachedStreamingSession>{};
 
-  String? tryTake(String connectionString) {
-    if (!ConnectionConstants.streamingConnectReuseEnabled) {
-      return null;
-    }
-    if (!connectionStringEligibleForStreamingConnectReuse(connectionString)) {
-      return null;
-    }
+  String? tryTake(String connectionString) => tryTakeSession(connectionString)?.connectionId;
 
-    final now = _clock();
+  OdbcCachedStreamingSession? tryTakeSession(String connectionString) {
+    if (!ConnectionConstants.streamingConnectReuseEnabled ||
+        !connectionStringEligibleForStreamingConnectReuse(connectionString)) {
+      return null;
+    }
     final cached = _entries.remove(connectionString);
     if (cached == null) {
       return null;
     }
-    if (now.difference(cached.cachedAt) >= _ttl) {
-      _enqueueDisconnect(cached.connectionId);
+    if (_clock().difference(cached.cachedAt) >= _ttl) {
+      _enqueueDisconnect(cached);
       return null;
     }
-    return cached.connectionId;
+    return OdbcCachedStreamingSession(
+      connectionId: cached.connectionId,
+      reservation: cached.reservation,
+    );
   }
 
   Future<bool> offer({
     required String connectionString,
     required String connectionId,
+    DirectOdbcConnectionLease? reservation,
   }) async {
-    if (!ConnectionConstants.streamingConnectReuseEnabled) {
-      return false;
-    }
-    if (!connectionStringEligibleForStreamingConnectReuse(connectionString)) {
-      return false;
-    }
-    if (connectionId.isEmpty) {
+    if (!ConnectionConstants.streamingConnectReuseEnabled ||
+        !connectionStringEligibleForStreamingConnectReuse(connectionString) ||
+        connectionId.isEmpty ||
+        _maxEntries <= 0) {
       return false;
     }
 
-    final evictedIds = <String>[
+    final evicted = <_CachedStreamingSession>[
       ..._evictExpired(),
       if (_entries.length >= _maxEntries && !_entries.containsKey(connectionString)) ..._evictOldest(),
     ];
-
     final previous = _entries[connectionString];
     if (previous != null && previous.connectionId != connectionId) {
-      evictedIds.add(previous.connectionId);
+      evicted.add(previous);
     }
-
     _entries[connectionString] = _CachedStreamingSession(
       connectionId: connectionId,
       cachedAt: _clock(),
+      reservation: reservation,
     );
-    await _disconnectAll(evictedIds);
+    await _disconnectAll(evicted);
     return true;
+  }
+
+  /// Keeps one direct slot free for a fresh stream. Shrinking the limit evicts
+  /// excess sessions immediately, while their lease remains held until native
+  /// cleanup has finished.
+  void setCapacityLimit(int maxEntries) {
+    _maxEntries = maxEntries < 0 ? 0 : maxEntries;
+    while (_entries.length > _maxEntries) {
+      _evictOldest().forEach(_enqueueDisconnect);
+    }
   }
 
   @override
   void invalidate({String? connectionString}) {
     if (connectionString == null) {
-      final connectionIds = _entries.values.map((entry) => entry.connectionId).toList(growable: false);
+      final sessions = _entries.values.toList(growable: false);
       _entries.clear();
-      connectionIds.forEach(_enqueueDisconnect);
+      sessions.forEach(_enqueueDisconnect);
       return;
     }
-    final removed = _entries.remove(connectionString);
-    if (removed != null) {
-      _enqueueDisconnect(removed.connectionId);
+    final session = _entries.remove(connectionString);
+    if (session != null) {
+      _enqueueDisconnect(session);
     }
   }
 
   @override
   Future<Result<void>> drainCachedSessions() async {
-    final connectionIds = _entries.values.map((entry) => entry.connectionId).toList(growable: false);
+    final sessions = _entries.values.toList(growable: false);
     _entries.clear();
-
     final disconnect = _disconnectConnection;
     if (disconnect == null) {
+      for (final session in sessions) {
+        session.reservation?.release();
+      }
       return _finishDrain(const <Object>[]);
     }
 
     final errors = <Object>[];
-    for (final connectionId in connectionIds) {
-      final result = await _disconnectTracked(connectionId);
+    for (final session in sessions) {
+      final result = await _disconnectTracked(session);
       result.fold(
         (_) {},
         (error) {
           errors.add(error);
           developer.log(
-            'Failed to disconnect cached streaming session $connectionId during drain',
+            'Failed to disconnect a cached streaming session during drain',
             name: 'odbc_streaming_session_cache',
             level: 900,
             error: error,
@@ -150,28 +171,27 @@ final class OdbcStreamingSessionCache implements IOdbcStreamingSessionCache {
   }
 
   int get entryCount => _entries.length;
-
   int get inFlightDisconnectCount => _disconnectTracker.inFlightCount;
 
-  List<String> _evictExpired() {
+  List<_CachedStreamingSession> _evictExpired() {
     if (_entries.isEmpty) {
-      return const <String>[];
+      return const <_CachedStreamingSession>[];
     }
+    final expired = <_CachedStreamingSession>[];
     final now = _clock();
-    final expiredIds = <String>[];
     _entries.removeWhere((_, entry) {
-      final expired = now.difference(entry.cachedAt) >= _ttl;
-      if (expired) {
-        expiredIds.add(entry.connectionId);
+      final isExpired = now.difference(entry.cachedAt) >= _ttl;
+      if (isExpired) {
+        expired.add(entry);
       }
-      return expired;
+      return isExpired;
     });
-    return expiredIds;
+    return expired;
   }
 
-  List<String> _evictOldest() {
+  List<_CachedStreamingSession> _evictOldest() {
     if (_entries.isEmpty) {
-      return const <String>[];
+      return const <_CachedStreamingSession>[];
     }
     var oldestKey = _entries.keys.first;
     var oldestAt = _entries[oldestKey]!.cachedAt;
@@ -182,30 +202,29 @@ final class OdbcStreamingSessionCache implements IOdbcStreamingSessionCache {
       }
     }
     final removed = _entries.remove(oldestKey);
-    if (removed == null) {
-      return const <String>[];
-    }
-    return <String>[removed.connectionId];
+    return removed == null ? const <_CachedStreamingSession>[] : <_CachedStreamingSession>[removed];
   }
 
-  void _enqueueDisconnect(String connectionId) {
-    unawaited(_disconnectTracked(connectionId));
+  void _enqueueDisconnect(_CachedStreamingSession session) {
+    unawaited(_disconnectTracked(session));
   }
 
-  Future<void> _disconnectAll(Iterable<String> connectionIds) async {
-    for (final connectionId in connectionIds) {
-      await _disconnectTracked(connectionId);
+  Future<void> _disconnectAll(Iterable<_CachedStreamingSession> sessions) async {
+    for (final session in sessions) {
+      await _disconnectTracked(session);
     }
   }
 
-  Future<Result<void>> _disconnectTracked(String connectionId) async {
+  Future<Result<void>> _disconnectTracked(_CachedStreamingSession session) async {
     final disconnect = _disconnectConnection;
-    if (disconnect == null || connectionId.isEmpty) {
+    if (disconnect == null || session.connectionId.isEmpty) {
+      session.reservation?.release();
       return const Success(unit);
     }
     return _disconnectTracker.run(
-      connectionId: connectionId,
+      connectionId: session.connectionId,
       disconnect: disconnect,
+      onComplete: session.reservation?.release,
     );
   }
 
@@ -216,7 +235,7 @@ final class OdbcStreamingSessionCache implements IOdbcStreamingSessionCache {
       remaining.add(
         domain.ConnectionFailure.withContext(
           message: 'One or more streaming disconnects are still in flight after drain',
-          context: {
+          context: <String, Object?>{
             'reason': OdbcContextConstants.streamDisconnectStillInFlightReason,
             'in_flight': _disconnectTracker.inFlightCount,
             'discarded': true,
@@ -224,21 +243,17 @@ final class OdbcStreamingSessionCache implements IOdbcStreamingSessionCache {
         ),
       );
     }
-
     if (remaining.isEmpty) {
       return const Success(unit);
     }
-
     if (remaining.length == 1 && remaining.first is domain.Failure) {
       return Failure(remaining.first as domain.Failure);
     }
-
-    final messages = remaining.map((error) => error is domain.Failure ? error.message : error.toString()).join('; ');
     return Failure(
       domain.ConnectionFailure.withContext(
-        message: 'Failed to disconnect one or more cached streaming sessions: $messages',
+        message: 'Failed to disconnect one or more cached streaming sessions',
         cause: remaining.first,
-        context: {
+        context: <String, Object?>{
           'reason': OdbcContextConstants.poolErrorReason,
           'operation': 'streaming_session_cache_drain',
           'error_count': remaining.length,

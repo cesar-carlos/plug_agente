@@ -173,6 +173,19 @@ void main() {
       verify(() => service.asyncCancel(9)).called(1);
       verify(() => service.asyncFree(9)).called(1);
     });
+
+    test('records a failed native async cancellation', () async {
+      when(() => service.asyncCancel(9)).thenAnswer((_) async => Failure(Exception('cancel failed')));
+
+      await executor.abortAsyncRequest(
+        connectionId: 'c1',
+        requestId: 9,
+      );
+
+      expect(discarded, contains('c1'));
+      expect(metrics.timeoutCancelFailureCount, 1);
+      expect(metrics.timeoutCancelSuccessCount, 0);
+    });
   });
 
   group('executePreparedStatementWithTimeout', () {

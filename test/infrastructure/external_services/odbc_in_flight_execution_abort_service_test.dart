@@ -64,6 +64,29 @@ void main() {
     expect(discarded, contains('conn-1'));
   });
 
+  test('abort cancels every parallel execution owned by the same RPC request', () async {
+    when(() => service.cancelStatement('conn-1', 7)).thenAnswer((_) async => const Success(unit));
+    when(() => service.cancelStatement('conn-2', 8)).thenAnswer((_) async => const Success(unit));
+    registry.register(
+      'batch-rpc',
+      const OdbcInFlightExecutionHandle(connectionId: 'conn-1', statementId: 7),
+      executionId: 'batch-item-1',
+    );
+    registry.register(
+      'batch-rpc',
+      const OdbcInFlightExecutionHandle(connectionId: 'conn-2', statementId: 8),
+      executionId: 'batch-item-2',
+    );
+
+    final result = await abortService.abortInFlightExecution('batch-rpc');
+
+    expect(result.getOrNull(), isTrue);
+    verify(() => service.cancelStatement('conn-1', 7)).called(1);
+    verify(() => service.cancelStatement('conn-2', 8)).called(1);
+    registry.unregister('batch-rpc', executionId: 'batch-item-1');
+    expect(registry.peekAll('batch-rpc'), hasLength(1));
+  });
+
   test('abort miss without armIfMissing does not arm pending poison pill', () async {
     final result = await abortService.abortInFlightExecution('missing');
 

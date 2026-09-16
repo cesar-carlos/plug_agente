@@ -3743,7 +3743,9 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
 
         final result = await gateway.executeQuery(
           request,
-          timeout: const Duration(milliseconds: 20),
+          // Keep enough shared deadline budget for acquisition and the native
+          // async request to start before exercising timeout cancellation.
+          timeout: const Duration(milliseconds: 100),
         );
 
         expect(result.isError(), isTrue);
@@ -3813,7 +3815,10 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
 
         final result = await gateway.executeQuery(
           request,
-          timeout: const Duration(milliseconds: 20),
+          // The gateway now consumes one deadline across acquisition and
+          // execution. A very short value can legitimately expire before an
+          // async request exists, which is a different safety path.
+          timeout: const Duration(milliseconds: 100),
         );
 
         expect(result.isError(), isTrue);
@@ -3823,6 +3828,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         expect(queryFailure.context['timeout'], isTrue);
         expect(queryFailure.context['reason'], 'query_timeout');
         expect(metrics.timeoutCancelFailureCount, greaterThanOrEqualTo(1));
+        await Future<void>.delayed(Duration.zero);
         expect(metrics.poolReleaseFailureCount, greaterThanOrEqualTo(1));
         verify(() => mockService.asyncCancel(asyncRequestId)).called(1);
         verify(() => mockService.asyncFree(asyncRequestId)).called(1);

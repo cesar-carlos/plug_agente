@@ -58,5 +58,58 @@ void main() {
       expect(failure.context['discarded'], isTrue);
       expect(tracker.inFlightCount, 0);
     });
+
+    test('deduplicates work and rejects new cleanup when the bounded queue is full', () async {
+      final first = Completer<Result<void>>();
+      final second = Completer<Result<void>>();
+      var firstStarts = 0;
+      var secondStarts = 0;
+      final tracker = OdbcStreamingDisconnectTracker(
+        maxInFlight: 1,
+        maxPending: 1,
+        observedTimeout: const Duration(seconds: 1),
+      );
+
+      unawaited(
+        tracker.run(
+          connectionId: 'conn-1',
+          disconnect: (_) {
+            firstStarts++;
+            return first.future;
+          },
+        ),
+      );
+      unawaited(
+        tracker.run(
+          connectionId: 'conn-2',
+          disconnect: (_) {
+            secondStarts++;
+            return second.future;
+          },
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final duplicate = tracker.run(
+        connectionId: 'conn-1',
+        disconnect: (_) => Future<Result<void>>.error(StateError('must not start twice')),
+      );
+      final saturated = await tracker.run(
+        connectionId: 'conn-3',
+        disconnect: (_) async => const Success(unit),
+      );
+      expect(firstStarts, 1);
+      expect(secondStarts, 0);
+      expect(tracker.runningCount, 1);
+      expect(tracker.pendingCount, 1);
+      expect(saturated.isError(), isTrue);
+
+      first.complete(const Success(unit));
+      await duplicate;
+      await Future<void>.delayed(Duration.zero);
+      expect(secondStarts, 1);
+      second.complete(const Success(unit));
+      await tracker.drain();
+    });
   });
 }

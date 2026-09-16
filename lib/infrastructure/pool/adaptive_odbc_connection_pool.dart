@@ -140,8 +140,7 @@ final class AdaptiveOdbcConnectionPool
       driverInfo: driverInfo,
     );
     _lastCircuitKey = circuitKey;
-    final canTryNative =
-        _shouldUseNativePool(databaseType) && !_isNativeCircuitOpen(circuitKey);
+    final canTryNative = _shouldUseNativePool(databaseType) && !_isNativeCircuitOpen(circuitKey);
     if (canTryNative) {
       final nativeAcquire = await _nativePool.acquireWithin(
         connectionString,
@@ -494,6 +493,7 @@ final class AdaptiveOdbcConnectionPool
           OdbcErrorInspector.message(error),
         ) ||
         OdbcErrorInspector.isTimeout(error) ||
+        _hasFailureReason(error, 'native_pool_quarantined') ||
         _hasFailureReason(error, 'buffer_too_small') ||
         _hasFailureReason(error, OdbcContextConstants.odbcWorkerBusyConnectReason) ||
         _looksLikePoolHealthFailure(error);

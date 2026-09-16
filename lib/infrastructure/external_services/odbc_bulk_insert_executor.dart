@@ -91,15 +91,39 @@ final class OdbcBulkInsertExecutor {
     Duration? timeout,
     DateTime? deadline,
     DatabaseType? databaseType,
-  }) {
-    return _executeChunkedBulkInsert(
-      connectionId: connectionId,
-      request: request,
-      deadline: deadline ?? OdbcExecutionDeadline.deadlineFor(timeout),
-      timeout: timeout,
-      databaseType: databaseType,
-      allowNativeBcp: false,
-    );
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
+  }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(_cancelledFailure());
+    }
+    final inFlightRequestId = _inFlightTrackingKey(sourceRpcRequestId);
+    final executionId = inFlightRequestId == null ? null : 'bulk:$connectionId';
+    if (inFlightRequestId != null) {
+      _inFlightRegistry?.register(
+        inFlightRequestId,
+        OdbcInFlightExecutionHandle(connectionId: connectionId),
+        executionId: executionId,
+      );
+    }
+    try {
+      return await _executeChunkedBulkInsert(
+        connectionId: connectionId,
+        request: request,
+        deadline: deadline ?? OdbcExecutionDeadline.deadlineFor(timeout),
+        timeout: timeout,
+        databaseType: databaseType,
+        allowNativeBcp: false,
+        cancellationToken: cancellationToken,
+      );
+    } finally {
+      if (inFlightRequestId != null) {
+        _inFlightRegistry?.unregister(
+          inFlightRequestId,
+          executionId: executionId,
+        );
+      }
+    }
   }
 
   /// Runs the bulk insert on a freshly acquired direct connection, bounded by
@@ -140,6 +164,7 @@ final class OdbcBulkInsertExecutor {
         connectionString,
         timeout: timeout,
         parallelism: BulkInsertParallelPolicy.parallelismForPoolSize(_settings.poolSize),
+        cancellationToken: cancellationToken,
       );
     }
 
@@ -183,6 +208,7 @@ final class OdbcBulkInsertExecutor {
               databaseType: databaseType,
               wrapChunksInTransaction: true,
               allowNativeBcp: !requireAtomic,
+              cancellationToken: cancellationToken,
             );
             if (inserted.isError()) {
               return Failure(inserted.exceptionOrNull()!);
@@ -233,7 +259,11 @@ final class OdbcBulkInsertExecutor {
     String connectionString, {
     required int parallelism,
     Duration? timeout,
+    CancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(_cancelledFailure());
+    }
     final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final poolIdResult = await _parallelPool!.ensurePoolId(connectionString);
     if (poolIdResult.isError()) {
@@ -247,6 +277,7 @@ final class OdbcBulkInsertExecutor {
       parallelism: parallelism,
       deadline: deadline,
       timeout: timeout,
+      cancellationToken: cancellationToken,
     );
   }
 
@@ -256,7 +287,11 @@ final class OdbcBulkInsertExecutor {
     required int parallelism,
     required DateTime? deadline,
     required Duration? timeout,
+    CancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(_cancelledFailure());
+    }
     final chunkSize = ConnectionConstants.bulkInsertChunkRowCount;
     if (request.rows.length <= chunkSize) {
       return _executeSingleBulkInsertParallel(
@@ -265,12 +300,16 @@ final class OdbcBulkInsertExecutor {
         parallelism: parallelism,
         deadline: deadline,
         timeout: timeout,
+        cancellationToken: cancellationToken,
       );
     }
 
     _metrics.recordBulkInsertChunked();
     var totalInserted = 0;
     for (var offset = 0; offset < request.rows.length; offset += chunkSize) {
+      if (cancellationToken?.isCancelled ?? false) {
+        return Failure(_cancelledFailure());
+      }
       final end = offset + chunkSize < request.rows.length ? offset + chunkSize : request.rows.length;
       final chunkRequest = BulkInsertRequest(
         table: request.table,
@@ -283,6 +322,7 @@ final class OdbcBulkInsertExecutor {
         parallelism: parallelism,
         deadline: deadline,
         timeout: timeout,
+        cancellationToken: cancellationToken,
       );
       if (chunkResult.isError()) {
         return Failure(
@@ -303,7 +343,11 @@ final class OdbcBulkInsertExecutor {
     required int parallelism,
     required DateTime? deadline,
     required Duration? timeout,
+    CancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(_cancelledFailure());
+    }
     final builder = _buildNativeBulkInsert(request);
     final operation = _service.bulkInsertParallel(
       poolId,
@@ -354,6 +398,7 @@ final class OdbcBulkInsertExecutor {
     required DatabaseType? databaseType,
     required bool wrapChunksInTransaction,
     required bool allowNativeBcp,
+    CancellationToken? cancellationToken,
   }) {
     final chunkSize = ConnectionConstants.bulkInsertChunkRowCount;
     final shouldWrap =
@@ -368,6 +413,7 @@ final class OdbcBulkInsertExecutor {
         timeout: timeout,
         databaseType: databaseType,
         allowNativeBcp: allowNativeBcp,
+        cancellationToken: cancellationToken,
       );
     }
 
@@ -377,6 +423,7 @@ final class OdbcBulkInsertExecutor {
       deadline: deadline,
       timeout: timeout,
       databaseType: databaseType,
+      cancellationToken: cancellationToken,
     );
   }
 
@@ -386,6 +433,7 @@ final class OdbcBulkInsertExecutor {
     required DateTime? deadline,
     required Duration? timeout,
     required DatabaseType? databaseType,
+    CancellationToken? cancellationToken,
   }) async {
     final remaining = OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout;
     final beginResult = await _service.beginTransaction(
@@ -412,6 +460,7 @@ final class OdbcBulkInsertExecutor {
         timeout: timeout,
         databaseType: databaseType,
         allowNativeBcp: false,
+        cancellationToken: cancellationToken,
       );
       if (inserted.isError()) {
         await _rollbackBulkTransaction(connectionId, transactionId);
@@ -456,7 +505,11 @@ final class OdbcBulkInsertExecutor {
     required Duration? timeout,
     DatabaseType? databaseType,
     bool allowNativeBcp = true,
+    CancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(_cancelledFailure());
+    }
     final chunkSize = ConnectionConstants.bulkInsertChunkRowCount;
     if (request.rows.length <= chunkSize) {
       return _executeSingleBulkInsert(
@@ -466,12 +519,16 @@ final class OdbcBulkInsertExecutor {
         timeout: timeout,
         databaseType: databaseType,
         allowNativeBcp: allowNativeBcp,
+        cancellationToken: cancellationToken,
       );
     }
 
     _metrics.recordBulkInsertChunked();
     var totalInserted = 0;
     for (var offset = 0; offset < request.rows.length; offset += chunkSize) {
+      if (cancellationToken?.isCancelled ?? false) {
+        return Failure(_cancelledFailure());
+      }
       final end = offset + chunkSize < request.rows.length ? offset + chunkSize : request.rows.length;
       final chunkRequest = BulkInsertRequest(
         table: request.table,
@@ -485,6 +542,7 @@ final class OdbcBulkInsertExecutor {
         timeout: timeout,
         databaseType: databaseType,
         allowNativeBcp: allowNativeBcp,
+        cancellationToken: cancellationToken,
       );
       if (chunkResult.isError()) {
         return Failure(chunkResult.exceptionOrNull()!);
@@ -501,7 +559,11 @@ final class OdbcBulkInsertExecutor {
     required Duration? timeout,
     DatabaseType? databaseType,
     bool allowNativeBcp = true,
+    CancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(_cancelledFailure());
+    }
     final pilotEnabled = allowNativeBcp && shouldAttemptNativeBcpBulkInsert(databaseType: databaseType);
     if (pilotEnabled) {
       _metrics.recordDiagnosticReason(
@@ -585,6 +647,13 @@ final class OdbcBulkInsertExecutor {
             'A carga paralela falhou. Parte das linhas pode já ter sido gravada '
             'e não foi revertida em conjunto. Verifique a tabela antes de repetir a operação.',
       },
+    );
+  }
+
+  domain.QueryExecutionFailure _cancelledFailure() {
+    return domain.QueryExecutionFailure.withContext(
+      message: 'Bulk insert execution cancelled',
+      context: const <String, Object?>{'cooperative_cancel': true},
     );
   }
 

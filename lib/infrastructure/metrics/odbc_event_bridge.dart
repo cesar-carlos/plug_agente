@@ -33,54 +33,51 @@ final class OdbcEventBridge {
   final MetricsCollector? _metrics;
   final IOdbcWorkerRuntimeRecoveryPort? _workerRecoveryPort;
   final int _maxRecentEvents;
-  final ListQueue<OdbcEvent> _recentEvents = ListQueue<OdbcEvent>();
+  final ListQueue<Map<String, Object?>> _recentEvents = ListQueue<Map<String, Object?>>();
   late final StreamSubscription<OdbcEvent> _subscription;
+  bool _isDisposed = false;
 
   static const String _logName = 'odbc_event_bridge';
-  static const int _previewMaxLength = 80;
-  static const int _previewTruncatedLength = 77;
 
   /// Returns the most recent events captured by the bridge, newest first.
   /// Bounded to [kOdbcEventBridgeMaxRecentEvents] by default; older events
   /// are evicted automatically. Safe to read while events arrive: the
   /// returned list is an immutable snapshot.
-  List<OdbcEvent> get recentEvents => UnmodifiableListView<OdbcEvent>(
+  List<Map<String, Object?>> get recentEvents => UnmodifiableListView<Map<String, Object?>>(
     _recentEvents.toList(growable: false),
   );
 
   void _handleEvent(OdbcEvent event) {
+    if (_isDisposed) {
+      return;
+    }
     _trackRecent(event);
     switch (event) {
-      case ConnectionLost(:final connectionId, :final reason, :final timestamp):
+      case ConnectionLost(:final timestamp):
         _metrics?.recordOdbcEventConnectionLost();
         developer.log(
           'ODBC connection lost',
           name: _logName,
           level: 900,
           time: timestamp,
-          error: <String, Object?>{
-            'connection_id': connectionId,
-            'reason_type': reason.runtimeType.toString(),
-            'reason_message': reason.toString(),
-          },
+          error: _safeEvent(event),
         );
-      case AutoReconnectAttempted(:final connectionId, :final attempt, :final maxAttempts, :final timestamp):
+      case AutoReconnectAttempted(:final attempt, :final maxAttempts, :final timestamp):
         _metrics?.recordOdbcEventAutoReconnectAttempted();
         developer.log(
           'ODBC auto-reconnect attempt $attempt/$maxAttempts',
           name: _logName,
           level: 800,
           time: timestamp,
-          error: <String, Object?>{
-            'connection_id': connectionId,
-            'attempt': attempt,
-            'max_attempts': maxAttempts,
-          },
+          error: _safeEvent(event),
         );
       case WorkerRecovered(:final timestamp):
         _metrics?.recordOdbcEventWorkerRecovered();
         unawaited(() async {
           try {
+            if (_isDisposed) {
+              return;
+            }
             await _workerRecoveryPort?.recoverAfterNativeWorkerCrash();
           } on Object catch (error, stackTrace) {
             developer.log(
@@ -99,44 +96,67 @@ final class OdbcEventBridge {
           level: 900,
           time: timestamp,
         );
-      case PoolResize(:final poolId, :final oldSize, :final newSize, :final timestamp):
+      case PoolResize(:final oldSize, :final newSize, :final timestamp):
         _metrics?.recordOdbcEventPoolResize();
         developer.log(
           'ODBC native pool resize $oldSize -> $newSize',
           name: _logName,
           level: 800,
           time: timestamp,
-          error: <String, Object?>{
-            'pool_id': poolId,
-            'old_size': oldSize,
-            'new_size': newSize,
-          },
+          error: _safeEvent(event),
         );
-      case SlowQueryDetected(:final connectionId, :final sql, :final durationMs, :final timestamp):
+      case SlowQueryDetected(:final durationMs, :final timestamp):
         _metrics?.recordOdbcEventSlowQueryDetected();
-        final preview = sql.length > _previewMaxLength ? '${sql.substring(0, _previewTruncatedLength)}...' : sql;
         developer.log(
-          'ODBC slow query (${durationMs}ms): $preview',
+          'ODBC slow query detected (${durationMs}ms)',
           name: _logName,
           level: 900,
           time: timestamp,
-          error: <String, Object?>{
-            'connection_id': connectionId,
-            'duration_ms': durationMs,
-            'sql_preview': preview,
-          },
+          error: _safeEvent(event),
         );
     }
   }
 
   void _trackRecent(OdbcEvent event) {
-    _recentEvents.addFirst(event);
+    _recentEvents.addFirst(_safeEvent(event));
     while (_recentEvents.length > _maxRecentEvents) {
       _recentEvents.removeLast();
     }
   }
 
+  static Map<String, Object?> _safeEvent(OdbcEvent event) {
+    final base = <String, Object?>{
+      'kind': event.runtimeType.toString(),
+      'timestamp': event.timestamp.toIso8601String(),
+    };
+    switch (event) {
+      case ConnectionLost(:final reason):
+        base['reason_code'] = reason.runtimeType.toString();
+      case AutoReconnectAttempted(:final attempt, :final maxAttempts):
+        base['attempt'] = attempt;
+        base['max_attempts'] = maxAttempts;
+      case WorkerRecovered():
+        break;
+      case PoolResize(:final oldSize, :final newSize):
+        base['old_size'] = oldSize;
+        base['new_size'] = newSize;
+      case SlowQueryDetected(:final sql, :final durationMs):
+        base['duration_ms'] = durationMs;
+        base['sql_kind'] = _sqlKind(sql);
+    }
+    return Map<String, Object?>.unmodifiable(base);
+  }
+
+  static String _sqlKind(String sql) {
+    final normalized = sql.trimLeft();
+    if (normalized.isEmpty) {
+      return 'unknown';
+    }
+    return normalized.split(RegExp(r'\s+')).first.toLowerCase();
+  }
+
   Future<void> dispose() async {
+    _isDisposed = true;
     await _subscription.cancel();
   }
 }

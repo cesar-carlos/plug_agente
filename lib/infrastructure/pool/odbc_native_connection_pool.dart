@@ -5,6 +5,7 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_native_bulk_insert_pool.dart';
@@ -48,7 +49,17 @@ class OdbcNativeConnectionPool
 
   final Map<String, int> _pools = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
+  final Map<String, int> _poolGenerations = <String, int>{};
+  final Map<String, String> _connectionOwners = <String, String>{};
+  final Map<String, int> _activeByConnectionString = <String, int>{};
+  final Set<String> _quarantinedConnectionStrings = <String>{};
+  final Map<String, Timer> _quarantineRetryTimers = <String, Timer>{};
+  final Map<String, int> _quarantineRetryAttempts = <String, int>{};
   int _activeAcquireCount = 0;
+
+  static const int _maxQuarantineRetries = 5;
+  static const Duration _quarantineRetryBaseDelay = Duration(milliseconds: 250);
+  static const Duration _quarantineRetryMaxDelay = Duration(seconds: 30);
 
   String _odbcErrorMessage(Object error) => OdbcErrorInspector.message(error);
 
@@ -131,29 +142,12 @@ class OdbcNativeConnectionPool
       return inFlightCreation;
     }
 
-    final creationFuture = _createPool(connectionString);
+    final generation = _poolGenerations.putIfAbsent(connectionString, () => 0);
+    final creationFuture = _createPool(connectionString, generation: generation);
     _poolCreationFutures[connectionString] = creationFuture;
     final result = await creationFuture;
-    _poolCreationFutures.remove(connectionString);
-
-    // If recycle() ran while creation was in-flight, _pools no longer contains
-    // this connection string even though _createPool registered the new pool.
-    // Close the orphaned pool immediately to avoid a resource leak.
-    if (result.isSuccess() && !_pools.containsKey(connectionString)) {
-      final orphanId = result.getOrThrow();
-      developer.log(
-        'Closing orphaned native pool $orphanId: recycle ran during creation',
-        name: 'connection_pool',
-        level: 900,
-      );
-      await _service.poolClose(orphanId);
-      return Failure(
-        OdbcFailureMapper.mapPoolError(
-          StateError('Pool was recycled during creation; retry to get a fresh pool.'),
-          operation: 'pool_acquire',
-          context: {'reason': OdbcContextConstants.poolNotCreatedReason, 'retryable': true},
-        ),
-      );
+    if (identical(_poolCreationFutures[connectionString], creationFuture)) {
+      _poolCreationFutures.remove(connectionString);
     }
 
     return result;
@@ -162,6 +156,13 @@ class OdbcNativeConnectionPool
   Future<Result<Map<String, Object?>>> getDetailedState(
     String connectionString,
   ) async {
+    if (_quarantinedConnectionStrings.contains(connectionString)) {
+      return const Success(<String, Object?>{
+        'available': false,
+        'state': 'quarantined',
+        'reason': 'native_pool_quarantined',
+      });
+    }
     final poolId = _pools[connectionString];
     if (poolId == null) {
       return const Success(<String, Object?>{
@@ -181,7 +182,10 @@ class OdbcNativeConnectionPool
     );
   }
 
-  Future<Result<int>> _createPool(String connectionString) async {
+  Future<Result<int>> _createPool(
+    String connectionString, {
+    required int generation,
+  }) async {
     developer.log(
       'Creating native pool for connection',
       name: 'connection_pool',
@@ -213,31 +217,39 @@ class OdbcNativeConnectionPool
       _nativeHandshakeSemaphore.release();
     }
 
-    return poolResult.fold(
-      (poolId) {
-        _pools[connectionString] = poolId;
-        developer.log(
-          'Native pool created: $poolId',
-          name: 'connection_pool',
-          level: 500,
-        );
-        return Success(poolId);
-      },
-      (error) {
-        developer.log(
-          'Failed to create pool',
-          name: 'connection_pool',
-          level: 1000,
-          error: error,
-        );
-        return Failure(
-          OdbcFailureMapper.mapPoolError(
-            error,
-            operation: 'pool_create',
-          ),
-        );
-      },
+    if (poolResult.isError()) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          poolResult.exceptionOrNull()!,
+          operation: 'pool_create',
+        ),
+      );
+    }
+
+    final poolId = poolResult.getOrThrow();
+    if (_poolGenerations[connectionString] != generation) {
+      // A recycle/close occurred while the native worker was creating this
+      // pool. Never publish a stale handle into the new generation.
+      await _service.poolClose(poolId);
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError('Pool was invalidated during creation; retry acquisition.'),
+          operation: 'pool_acquire',
+          context: const <String, dynamic>{
+            'reason': OdbcContextConstants.poolNotCreatedReason,
+            'retryable': true,
+          },
+        ),
+      );
+    }
+
+    _pools[connectionString] = poolId;
+    developer.log(
+      'Native pool created',
+      name: 'connection_pool',
+      level: 500,
     );
+    return Success(poolId);
   }
 
   @override
@@ -254,13 +266,31 @@ class OdbcNativeConnectionPool
     ConnectionAcquireOptions? options,
     Duration? acquireTimeout,
   }) async {
+    final effectiveAcquireTimeout = acquireTimeout ?? ConnectionConstants.defaultPoolAcquireTimeout;
+    final stopwatch = Stopwatch()..start();
+    if (_quarantinedConnectionStrings.contains(connectionString)) {
+      _scheduleQuarantineRecovery(connectionString);
+      return Failure(
+        domain.ConnectionFailure.withContext(
+          message: 'Native ODBC pool is being recycled after an unsafe execution',
+          context: const <String, Object?>{
+            'reason': 'native_pool_quarantined',
+            'retryable': true,
+          },
+        ),
+      );
+    }
     final poolResult = await _getOrCreatePool(connectionString);
 
     return poolResult.fold(
       (poolId) async {
         try {
+          final remainingAcquireBudget = effectiveAcquireTimeout - stopwatch.elapsed;
+          if (remainingAcquireBudget <= Duration.zero) {
+            throw TimeoutException('Native pool acquisition budget exhausted');
+          }
           await _nativeHandshakeSemaphore.acquire(
-            timeout: acquireTimeout ?? ConnectionConstants.defaultPoolAcquireTimeout,
+            timeout: remainingAcquireBudget,
           );
         } on TimeoutException catch (error) {
           return Failure(
@@ -298,6 +328,8 @@ class OdbcNativeConnectionPool
         return connResult.fold(
           (connection) {
             _activeAcquireCount++;
+            _connectionOwners[connection.id] = connectionString;
+            _activeByConnectionString[connectionString] = (_activeByConnectionString[connectionString] ?? 0) + 1;
             return Success(connection.id);
           },
           (error) => Failure(
@@ -314,6 +346,7 @@ class OdbcNativeConnectionPool
 
   @override
   Future<Result<void>> release(String connectionId) async {
+    final connectionString = _connectionOwners.remove(connectionId);
     var handshakeHeld = false;
     try {
       await _nativeHandshakeSemaphore.acquire(
@@ -339,17 +372,23 @@ class OdbcNativeConnectionPool
 
     return result.fold(
       (_) {
-        if (_activeAcquireCount > 0) {
-          _activeAcquireCount--;
-        }
+        _decrementActive(connectionString);
+        _scheduleQuarantineRecoveryIfDrained(connectionString);
         return const Success(unit);
       },
       (error) {
         if (_messageIndicatesInvalidConnectionId(error)) {
-          if (_activeAcquireCount > 0) {
-            _activeAcquireCount--;
-          }
+          _decrementActive(connectionString);
+          _scheduleQuarantineRecoveryIfDrained(connectionString);
           return const Success(unit);
+        }
+        // The caller can no longer safely own a handle whose release failed.
+        // Account for it as drained and quarantine its native pool so a later
+        // checkout cannot reuse a potentially poisoned connection.
+        if (connectionString != null) {
+          _quarantinedConnectionStrings.add(connectionString);
+          _decrementActive(connectionString);
+          _scheduleQuarantineRecoveryIfDrained(connectionString);
         }
         _metrics?.recordPoolReleaseFailure();
         return Failure(
@@ -364,6 +403,14 @@ class OdbcNativeConnectionPool
 
   @override
   Future<Result<void>> discard(String connectionId) async {
+    final connectionString = _connectionOwners.remove(connectionId);
+    if (connectionString != null) {
+      _quarantinedConnectionStrings.add(connectionString);
+    } else {
+      // An unknown pooled connection cannot safely be associated with one pool.
+      // Quarantine all known pools rather than risk returning a poisoned handle.
+      _quarantinedConnectionStrings.addAll(_pools.keys);
+    }
     var handshakeHeld = false;
     try {
       await _nativeHandshakeSemaphore.acquire(
@@ -392,18 +439,21 @@ class OdbcNativeConnectionPool
 
     return result.fold(
       (_) {
-        if (_activeAcquireCount > 0) {
-          _activeAcquireCount--;
-        }
+        _decrementActive(connectionString);
+        _scheduleQuarantineRecoveryIfDrained(connectionString);
         return const Success(unit);
       },
       (error) {
         if (_messageIndicatesInvalidConnectionId(error)) {
-          if (_activeAcquireCount > 0) {
-            _activeAcquireCount--;
-          }
+          _decrementActive(connectionString);
+          _scheduleQuarantineRecoveryIfDrained(connectionString);
           return const Success(unit);
         }
+        // The pool-owned handle cannot be retried by its former caller. Keep
+        // the pool quarantined, but release the logical checkout so recovery
+        // is allowed to close and recreate it rather than waiting forever.
+        _decrementActive(connectionString);
+        _scheduleQuarantineRecoveryIfDrained(connectionString);
         _metrics?.recordPoolReleaseFailure();
         return Failure(
           OdbcFailureMapper.mapPoolError(
@@ -424,6 +474,12 @@ class OdbcNativeConnectionPool
     );
 
     final errors = <String>[];
+
+    final invalidatedConnectionStrings = <String>{
+      ..._pools.keys,
+      ..._poolCreationFutures.keys,
+    };
+    invalidatedConnectionStrings.forEach(_invalidatePoolGeneration);
 
     for (final poolId in _pools.values) {
       var handshakeHeld = false;
@@ -454,6 +510,14 @@ class OdbcNativeConnectionPool
 
     _pools.clear();
     _poolCreationFutures.clear();
+    _connectionOwners.clear();
+    _activeByConnectionString.clear();
+    _quarantinedConnectionStrings.clear();
+    _quarantineRetryAttempts.clear();
+    for (final timer in _quarantineRetryTimers.values) {
+      timer.cancel();
+    }
+    _quarantineRetryTimers.clear();
     _activeAcquireCount = 0;
 
     if (errors.isNotEmpty) {
@@ -469,6 +533,7 @@ class OdbcNativeConnectionPool
 
   @override
   Future<Result<void>> recycle(String connectionString) async {
+    _invalidatePoolGeneration(connectionString);
     final poolId = _pools.remove(connectionString);
     _poolCreationFutures.remove(connectionString);
     if (poolId == null) {
@@ -669,6 +734,69 @@ class OdbcNativeConnectionPool
       'native_skip_reason': null,
       'lease_active_count': 0,
       'native_active_count': _activeAcquireCount,
+      'native_quarantined_pool_count': _quarantinedConnectionStrings.length,
+      'native_quarantine_recovery_scheduled': _quarantineRetryTimers.length,
     };
+  }
+
+  void _decrementActive(String? connectionString) {
+    if (_activeAcquireCount > 0) {
+      _activeAcquireCount--;
+    }
+    if (connectionString == null) {
+      return;
+    }
+    final active = _activeByConnectionString[connectionString] ?? 0;
+    if (active <= 1) {
+      _activeByConnectionString.remove(connectionString);
+    } else {
+      _activeByConnectionString[connectionString] = active - 1;
+    }
+  }
+
+  void _scheduleQuarantineRecoveryIfDrained(String? connectionString) {
+    if (connectionString != null && _quarantinedConnectionStrings.contains(connectionString)) {
+      _scheduleQuarantineRecovery(connectionString);
+    }
+  }
+
+  void _scheduleQuarantineRecovery(String connectionString) {
+    if (!_quarantinedConnectionStrings.contains(connectionString) ||
+        _quarantineRetryTimers.containsKey(connectionString)) {
+      return;
+    }
+    final attempt = _quarantineRetryAttempts[connectionString] ?? 0;
+    if (attempt >= _maxQuarantineRetries) {
+      return;
+    }
+    final multiplier = 1 << attempt;
+    final rawDelay = _quarantineRetryBaseDelay * multiplier;
+    final delay = rawDelay > _quarantineRetryMaxDelay ? _quarantineRetryMaxDelay : rawDelay;
+    _quarantineRetryTimers[connectionString] = Timer(delay, () {
+      _quarantineRetryTimers.remove(connectionString);
+      unawaited(_recoverQuarantinedPool(connectionString));
+    });
+  }
+
+  Future<void> _recoverQuarantinedPool(String connectionString) async {
+    if (!_quarantinedConnectionStrings.contains(connectionString)) {
+      return;
+    }
+    if ((_activeByConnectionString[connectionString] ?? 0) > 0) {
+      _scheduleQuarantineRecovery(connectionString);
+      return;
+    }
+    final recycleResult = await recycle(connectionString);
+    if (recycleResult.isSuccess()) {
+      _quarantinedConnectionStrings.remove(connectionString);
+      _quarantineRetryAttempts.remove(connectionString);
+      return;
+    }
+    _quarantineRetryAttempts[connectionString] = (_quarantineRetryAttempts[connectionString] ?? 0) + 1;
+    _scheduleQuarantineRecovery(connectionString);
+  }
+
+  void _invalidatePoolGeneration(String connectionString) {
+    _poolGenerations[connectionString] = (_poolGenerations[connectionString] ?? 0) + 1;
   }
 }

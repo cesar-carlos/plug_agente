@@ -94,7 +94,13 @@ class DirectOdbcConnectionLimiter implements IDirectConnectionLimiterDiagnostics
       try {
         await classSemaphore.acquire(timeout: effectiveTimeout);
         classSlotHeld = true;
-        await _globalSemaphore.acquire(timeout: effectiveTimeout);
+        // Both semaphores are part of one admission operation. Do not grant a
+        // fresh timeout after the class queue has already consumed budget.
+        final remaining = effectiveTimeout - stopwatch.elapsed;
+        if (remaining <= Duration.zero) {
+          throw TimeoutException('Direct ODBC admission budget exhausted');
+        }
+        await _globalSemaphore.acquire(timeout: remaining);
       } on TimeoutException catch (error) {
         if (classSlotHeld) {
           classSemaphore.release();

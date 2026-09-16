@@ -1,6 +1,6 @@
 import 'dart:async';
 
-/// Native ODBC handles for an in-flight SQL execution, keyed by request id.
+/// Native ODBC handles for one physical execution owned by an RPC request.
 final class OdbcInFlightExecutionHandle {
   const OdbcInFlightExecutionHandle({
     required this.connectionId,
@@ -34,7 +34,9 @@ const Duration kOdbcPendingAbortTtl = Duration(minutes: 2);
 
 /// Thread-safe registry of in-flight ODBC executions for cooperative / ghost abort.
 ///
-/// When abort races ahead of handle registration, callers arm a pending abort via
+/// A single RPC can own several physical executions (notably a parallel batch).
+/// Handles are therefore indexed by both owner request and execution id. When an
+/// abort races ahead of registration, callers arm it for the owner via
 /// [markPendingAbort]. Registration and native-target binds then notify
 /// [setPendingAbortListener] so abort can run as soon as a handle exists.
 /// Pending aborts expire after [pendingAbortTtl] to avoid orphan poison pills.
@@ -45,14 +47,34 @@ final class OdbcInFlightExecutionRegistry {
 
   final Duration pendingAbortTtl;
 
-  final Map<String, OdbcInFlightExecutionHandle> _active = <String, OdbcInFlightExecutionHandle>{};
+  final Map<String, Map<String, OdbcInFlightExecutionHandle>> _active =
+      <String, Map<String, OdbcInFlightExecutionHandle>>{};
   final Set<String> _pendingAborts = <String>{};
+  final Set<String> _ownerAborts = <String>{};
   final Map<String, Timer> _pendingAbortExpiryTimers = <String, Timer>{};
   void Function(String requestId)? _pendingAbortListener;
 
-  OdbcInFlightExecutionHandle? peek(String requestId) => _active[requestId];
+  /// Compatibility lookup for callers that only need to know whether the
+  /// owner has a cancel target. New code should use [peekAll].
+  OdbcInFlightExecutionHandle? peek(String requestId) {
+    final executions = _active[requestId];
+    if (executions == null || executions.isEmpty) {
+      return null;
+    }
+    return executions.values.first;
+  }
+
+  List<OdbcInFlightExecutionHandle> peekAll(String requestId) {
+    final executions = _active[requestId];
+    if (executions == null || executions.isEmpty) {
+      return const <OdbcInFlightExecutionHandle>[];
+    }
+    return List<OdbcInFlightExecutionHandle>.unmodifiable(executions.values);
+  }
 
   bool hasPendingAbort(String requestId) => _pendingAborts.contains(requestId);
+
+  bool hasOwnerAbort(String requestId) => _ownerAborts.contains(requestId);
 
   void setPendingAbortListener(void Function(String requestId)? listener) {
     _pendingAbortListener = listener;
@@ -67,7 +89,7 @@ final class OdbcInFlightExecutionRegistry {
     _armPendingAbortExpiry(requestId);
     // Notify only on first arm. Re-arming from abort-without-native-target must
     // not re-notify or fulfill loops forever while the handle still lacks a target.
-    if (!wasPending && _active.containsKey(requestId)) {
+    if (!wasPending && (_active[requestId]?.isNotEmpty ?? false)) {
       _notifyPendingAbort(requestId);
     }
   }
@@ -80,49 +102,92 @@ final class OdbcInFlightExecutionRegistry {
     _cancelPendingAbortExpiry(requestId);
   }
 
-  void register(String requestId, OdbcInFlightExecutionHandle handle) {
+  /// Keeps an active owner's cancellation armed while parallel children are
+  /// registered. This differs from [markPendingAbort], whose TTL models only
+  /// the pre-registration ghost race.
+  void markOwnerAbort(String requestId) {
     if (requestId.isEmpty) {
       return;
     }
-    _active[requestId] = handle;
+    final wasArmed = _ownerAborts.contains(requestId);
+    _ownerAborts.add(requestId);
+    if (!wasArmed) {
+      _notifyPendingAbort(requestId);
+    }
+  }
+
+  void register(
+    String requestId,
+    OdbcInFlightExecutionHandle handle, {
+    String? executionId,
+  }) {
+    if (requestId.isEmpty) {
+      return;
+    }
+    final effectiveExecutionId = executionId?.isNotEmpty == true ? executionId! : requestId;
+    _active.putIfAbsent(requestId, () => <String, OdbcInFlightExecutionHandle>{})[effectiveExecutionId] = handle;
     _notifyPendingAbort(requestId);
   }
 
-  void bindStatement(String requestId, int statementId) {
+  void bindStatement(
+    String requestId,
+    int statementId, {
+    String? executionId,
+  }) {
     if (requestId.isEmpty) {
       return;
     }
-    final existing = _active[requestId];
+    final executions = _active[requestId];
+    final effectiveExecutionId = executionId?.isNotEmpty == true ? executionId! : requestId;
+    final existing = executions?[effectiveExecutionId];
     if (existing == null) {
       return;
     }
-    _active[requestId] = existing.copyWith(statementId: statementId);
+    executions![effectiveExecutionId] = existing.copyWith(statementId: statementId);
     _notifyPendingAbort(requestId);
   }
 
-  void bindAsyncRequest(String requestId, int asyncRequestId) {
+  void bindAsyncRequest(
+    String requestId,
+    int asyncRequestId, {
+    String? executionId,
+  }) {
     if (requestId.isEmpty) {
       return;
     }
-    final existing = _active[requestId];
+    final executions = _active[requestId];
+    final effectiveExecutionId = executionId?.isNotEmpty == true ? executionId! : requestId;
+    final existing = executions?[effectiveExecutionId];
     if (existing == null) {
       return;
     }
-    _active[requestId] = existing.copyWith(asyncRequestId: asyncRequestId);
+    executions![effectiveExecutionId] = existing.copyWith(asyncRequestId: asyncRequestId);
     _notifyPendingAbort(requestId);
   }
 
-  void unregister(String requestId) {
+  void unregister(String requestId, {String? executionId}) {
     if (requestId.isEmpty) {
       return;
     }
-    _active.remove(requestId);
-    clearPendingAbort(requestId);
+    if (executionId == null || executionId.isEmpty) {
+      _active.remove(requestId);
+      clearPendingAbort(requestId);
+      _ownerAborts.remove(requestId);
+      return;
+    }
+    final executions = _active[requestId];
+    executions?.remove(executionId);
+    if (executions?.isEmpty ?? false) {
+      _active.remove(requestId);
+      clearPendingAbort(requestId);
+      _ownerAborts.remove(requestId);
+    }
   }
 
   void clearAll() {
     _active.clear();
     _pendingAborts.clear();
+    _ownerAborts.clear();
     for (final timer in _pendingAbortExpiryTimers.values) {
       timer.cancel();
     }
@@ -145,7 +210,7 @@ final class OdbcInFlightExecutionRegistry {
   }
 
   void _notifyPendingAbort(String requestId) {
-    if (!_pendingAborts.contains(requestId)) {
+    if (!_pendingAborts.contains(requestId) && !_ownerAborts.contains(requestId)) {
       return;
     }
     final listener = _pendingAbortListener;
@@ -166,3 +231,6 @@ String odbcInFlightRegistryKey({
   }
   return requestId;
 }
+
+/// A unique physical execution id must never be replaced by the outer RPC id.
+String odbcInFlightExecutionId({required String requestId}) => requestId;

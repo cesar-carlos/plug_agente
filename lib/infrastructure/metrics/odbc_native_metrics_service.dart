@@ -134,36 +134,8 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
     return <String, dynamic>{
       'available': true,
       'count': events.length,
-      'events': events.map(_serializeOdbcEvent).toList(growable: false),
+      'events': events,
     };
-  }
-
-  Map<String, Object?> _serializeOdbcEvent(OdbcEvent event) {
-    final base = <String, Object?>{
-      'kind': event.runtimeType.toString(),
-      'timestamp': event.timestamp.toIso8601String(),
-    };
-    switch (event) {
-      case ConnectionLost(:final connectionId, :final reason):
-        base['connection_id'] = connectionId;
-        base['reason_type'] = reason.runtimeType.toString();
-        base['reason_message'] = reason.toString();
-      case AutoReconnectAttempted(:final connectionId, :final attempt, :final maxAttempts):
-        base['connection_id'] = connectionId;
-        base['attempt'] = attempt;
-        base['max_attempts'] = maxAttempts;
-      case WorkerRecovered():
-        break;
-      case PoolResize(:final poolId, :final oldSize, :final newSize):
-        base['pool_id'] = poolId;
-        base['old_size'] = oldSize;
-        base['new_size'] = newSize;
-      case SlowQueryDetected(:final connectionId, :final sql, :final durationMs):
-        base['connection_id'] = connectionId;
-        base['duration_ms'] = durationMs;
-        base['sql_preview'] = sql.length > 80 ? '${sql.substring(0, 77)}...' : sql;
-    }
-    return base;
   }
 
   Future<String?> _resolveConnectionString() async {
@@ -206,7 +178,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
       (error) => <String, dynamic>{
         'available': true,
         'valid': false,
-        'error': error.toString(),
+        'reason_code': error.runtimeType.toString(),
       },
     );
   }
@@ -228,7 +200,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
       },
       (error) => <String, dynamic>{
         'available': false,
-        'error': error.toString(),
+        'reason_code': error.runtimeType.toString(),
       },
     );
   }
@@ -254,7 +226,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
       (state) => <String, dynamic>{...state},
       (error) => <String, dynamic>{
         'available': false,
-        'error': error.toString(),
+        'reason_code': error.runtimeType.toString(),
       },
     );
   }
@@ -277,7 +249,7 @@ class OdbcNativeMetricsService implements IOdbcDiagnosticsSnapshotCollector {
       },
       (error) => <String, dynamic>{
         'available': false,
-        'error': error.toString(),
+        'reason_code': error.runtimeType.toString(),
         if (diagnostics.isNotEmpty) 'diagnostics': diagnostics,
       },
     );

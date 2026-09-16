@@ -157,6 +157,7 @@ final class OdbcBatchExecutionOrchestrator {
         timeout: effectiveTimeout,
         sourceRpcRequestId: sourceRpcRequestId,
         batchSqlPreview: batchPreview,
+        cancellationToken: cancellationToken,
       );
     }
     if (HomogeneousInsertBatchPlanner.shouldRecommend(commands)) {
@@ -171,6 +172,7 @@ final class OdbcBatchExecutionOrchestrator {
         timeout: effectiveTimeout,
         sourceRpcRequestId: sourceRpcRequestId,
         batchSqlPreview: batchPreview,
+        cancellationToken: cancellationToken,
       );
     }
 
@@ -252,6 +254,7 @@ final class OdbcBatchExecutionOrchestrator {
             options: options,
             transaction: transaction,
             sourceRpcRequestId: sourceRpcRequestId,
+            cancellationToken: cancellationToken,
           );
           if (commandResult.isError()) {
             final commandFailure = commandResult.exceptionOrNull()!;

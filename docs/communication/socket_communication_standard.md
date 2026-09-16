@@ -1198,6 +1198,12 @@ materializacao sem registro in-flight nao sao cancelaveis por este metodo. O
 ownership de `client_token` aplica-se ao caminho streaming; o abort in-flight
 nao inventa checagem de owner quando o registry nao guarda token.
 
+Uma request SQL pode possuir varios handles ODBC, como em batch somente-leitura
+paralelo. O cancelamento interno e por proprietario da request e tenta todos os
+handles registrados; cancelamentos do driver continuam best-effort. Depois de
+timeout, cancelamento ou handle incerto, o pool nativo entra em quarentena e o
+runtime usa o caminho lease/direto ate a reciclagem segura do pool.
+
 ## Metodo `agent.getProfile`
 
 - **Onde roda:** tratado no `RpcMethodDispatcher` como metodo de negocio normal.
@@ -1308,6 +1314,12 @@ Agregados de timeout e cancelamento por timeout: `sql_total`, `pool_total`,
 
 Razoes recentes de diagnostico ODBC/SQL: `top_recent_reasons` (mapa contagem) e
 `recent_reasons` (lista ordenada).
+
+Eventos ODBC recentes usam somente codigos estaveis, classe de comando e
+duracao. O snapshot e os logs nao incluem SQL, parametros, connection strings,
+IDs nativos ou mensagens brutas do driver. Diagnosticos de pool podem indicar
+quarentena/reciclagem, e streaming pode indicar capacidade limitada de limpeza;
+ambos sao estados transitorios e seguros para retry.
 
 ### Bloco `sql_execution_by_mode`
 

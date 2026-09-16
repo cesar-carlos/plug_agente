@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:plug_agente/core/constants/rpc_sql_diagnostics_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -68,6 +69,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
     required int poolSize,
     bool allowNativeCompatibleAcquire = false,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   }) async {
     final deadline = timeout == null ? null : DateTime.now().add(timeout);
     final safePoolParallelism = safeParallelismForPoolSize(poolSize);
@@ -93,6 +95,12 @@ final class OdbcReadOnlyBatchParallelExecutor {
 
     final workerConnections = <String>[];
     for (var workerIndex = 0; workerIndex < parallelism; workerIndex++) {
+      if (cancellationToken?.isCancelled ?? false) {
+        await _releaseWorkerConnections(workerConnections);
+        return Failure(
+          domain.QueryExecutionFailure('Batch SQL execution was cancelled before worker pool warm-up'),
+        );
+      }
       final remainingTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
       if (remainingTimeout != null && remainingTimeout <= Duration.zero) {
         await _releaseWorkerConnections(workerConnections);
@@ -152,6 +160,9 @@ final class OdbcReadOnlyBatchParallelExecutor {
       Future<void> worker(int workerIndex) async {
         final connectionId = workerConnections[workerIndex];
         while (true) {
+          if (cancellationToken?.isCancelled ?? false) {
+            return;
+          }
           final index = cursor++;
           if (index >= commands.length) {
             return;
@@ -187,6 +198,13 @@ final class OdbcReadOnlyBatchParallelExecutor {
           _metrics.recordReadOnlyBatchParallelWaitTime(waitStopwatch.elapsed);
 
           try {
+            if (cancellationToken?.isCancelled ?? false) {
+              results[index] = SqlCommandResult.failure(
+                index: index,
+                error: 'Batch SQL execution was cancelled',
+              );
+              return;
+            }
             final executionTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
             if (executionTimeout != null && executionTimeout <= Duration.zero) {
               results[index] = SqlCommandResult.failure(
@@ -214,6 +232,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
               preparedExecution: preparedExecution,
               connectionString: connectionString,
               timeout: executionTimeout ?? timeout,
+              cancellationToken: cancellationToken,
               executionMode: allowNativeCompatibleAcquire
                   ? 'read_only_batch_parallel_native'
                   : 'read_only_batch_parallel',
@@ -274,7 +293,9 @@ final class OdbcReadOnlyBatchParallelExecutor {
                 entry.value ??
                 SqlCommandResult.failure(
                   index: entry.key,
-                  error: 'Read-only batch item did not complete',
+                  error: cancellationToken?.isCancelled ?? false
+                      ? 'Batch SQL execution was cancelled'
+                      : 'Read-only batch item did not complete',
                 ),
           )
           .toList(),

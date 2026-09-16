@@ -51,9 +51,8 @@ final class OdbcStreamingCancelCoordinator {
       final result = await disconnectActiveStream(stream);
       if (result.isError()) {
         app_log.AppLogger.warning(
-          'cancelActiveStream: disconnect after cancel request completed with error '
-          '(cancellation was still applied; execution will stop): '
-          '${result.exceptionOrNull()}',
+          'cancelActiveStream: disconnect confirmation failed after cancellation '
+          '(reason=stream_disconnect_cleanup_failed; execution remains discarded)',
         );
       }
     }
@@ -72,7 +71,7 @@ final class OdbcStreamingCancelCoordinator {
     if (result.isError()) {
       app_log.AppLogger.warning(
         'safeDisconnect: streaming disconnect did not confirm immediately '
-        '(handle stays discarded and tracked): ${result.exceptionOrNull()}',
+        '(reason=stream_disconnect_cleanup_failed; handle stays discarded and tracked)',
       );
     }
   }
@@ -187,7 +186,7 @@ final class OdbcStreamingCancelCoordinator {
     }
     if (activeStream.cancelReason == StreamingCancelReason.socketDisconnect) {
       app_log.AppLogger.info(
-        'resilience: stream_cancelled_on_disconnect connection_id=$connectionId',
+        'resilience: stream_cancelled_on_disconnect',
       );
       return Failure(
         OdbcFailureMapper.mapStreamingError(

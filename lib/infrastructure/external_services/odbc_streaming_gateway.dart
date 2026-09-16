@@ -198,7 +198,7 @@ class OdbcStreamingGateway
 
     if (executionId != null && _activeStreams.containsKey(executionId)) {
       app_log.AppLogger.warning(
-        'executeQueryStream: duplicate executionId rejected before connect ($executionId)',
+        'executeQueryStream: duplicate execution id rejected before connect',
       );
       return Failure(
         _connectPhase.duplicateExecutionIdFailure(
@@ -216,13 +216,8 @@ class OdbcStreamingGateway
     if (_directConnectionLimiter.maxConcurrent != desiredDirectConcurrency) {
       _directConnectionLimiter.reconfigureMaxConcurrent(desiredDirectConcurrency);
     }
-    final leaseResult = await _connectPhase.acquireLease(operation: 'streaming_query');
-    if (leaseResult.isError()) {
-      return Failure(leaseResult.exceptionOrNull()!);
-    }
-    final directLease = leaseResult.getOrThrow();
+    _connectPhase.configureSessionCacheCapacity(_directConnectionLimiter.maxConcurrent);
     if (cancellationToken?.isCancelled ?? false) {
-      directLease.release();
       return Failure(
         _cancelCoordinator.streamCancelledFailure(
           executionId: executionId,
@@ -231,6 +226,7 @@ class OdbcStreamingGateway
         ),
       );
     }
+    final cachedSession = _connectPhase.takeCachedSession(connectionString);
     final nativeStreamingOptions = OdbcStreamingNativeOptions.resolve(
       fetchSize: fetchSize,
       chunkSizeBytes: chunkSizeBytes,
@@ -247,16 +243,59 @@ class OdbcStreamingGateway
       lazyStrings: connectionStringBenefitsFromLazyStrings(connectionString),
     );
 
-    final connResult = await _connectPhase.connectStreaming(
-      connectionString: connectionString,
-      options: streamingOptions,
-      operation: 'connect_streaming',
-    );
-    if (connResult.isError()) {
-      directLease.release();
-      return Failure(connResult.exceptionOrNull()!);
+    DirectOdbcConnectionLease directLease;
+    Connection connection;
+    if (cachedSession?.reservation case final cachedLease?) {
+      directLease = cachedLease;
+      connection = Connection(
+        id: cachedSession!.connectionId,
+        connectionString: connectionString,
+        createdAt: DateTime.now(),
+        isActive: true,
+      );
+    } else {
+      // Keep the retained-session reservation and new streams under the same
+      // limiter.  The connect phase also exposes acquisition for standalone
+      // callers, but using it here would create a second limiter when the
+      // gateway constructs its default dependencies.
+      final leaseResult = await _directConnectionLimiter.acquire(
+        operation: 'streaming_query',
+      );
+      if (leaseResult.isError()) {
+        return Failure(leaseResult.exceptionOrNull()!);
+      }
+      directLease = leaseResult.getOrThrow();
+      if (cachedSession != null) {
+        connection = Connection(
+          id: cachedSession.connectionId,
+          connectionString: connectionString,
+          createdAt: DateTime.now(),
+          isActive: true,
+        );
+      } else {
+        final connResult = await _connectPhase.connectWithCircuitBreaker(
+          connectionString: connectionString,
+          options: streamingOptions,
+          operation: 'connect_streaming',
+        );
+        if (connResult.isError()) {
+          directLease.release();
+          return Failure(connResult.exceptionOrNull()!);
+        }
+        connection = connResult.getOrThrow();
+      }
     }
-    final connection = connResult.getOrThrow();
+    if (cancellationToken?.isCancelled ?? false) {
+      await _cancelCoordinator.safeDisconnect(connection.id);
+      directLease.release();
+      return Failure(
+        _cancelCoordinator.streamCancelledFailure(
+          executionId: executionId,
+          connectionId: connection.id,
+          reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
+        ),
+      );
+    }
 
     final streamExecutionId = executionId ?? connection.id;
     if (cancellationToken?.isCancelled ?? false) {
@@ -409,12 +448,14 @@ class OdbcStreamingGateway
       );
     } finally {
       _recordNativeStreamingPathMetrics(nativeChunkCount);
-      await _releaseStreamingConnection(
+      final retainedForReuse = await _releaseStreamingConnection(
         activeStream: activeStream,
         connectionString: connectionString,
         reuseEligible: streamCompletedSuccessfully,
       );
-      activeStream.lease.release();
+      if (!retainedForReuse) {
+        activeStream.lease.release();
+      }
       _unregisterInFlightExecution(streamExecutionId);
       _activeStreams.remove(streamExecutionId);
     }
@@ -455,13 +496,8 @@ class OdbcStreamingGateway
     if (_directConnectionLimiter.maxConcurrent != desiredDirectConcurrency) {
       _directConnectionLimiter.reconfigureMaxConcurrent(desiredDirectConcurrency);
     }
-    final leaseResult = await _connectPhase.acquireLease(operation: 'streaming_multi_result');
-    if (leaseResult.isError()) {
-      return Failure(leaseResult.exceptionOrNull()!);
-    }
-    final directLease = leaseResult.getOrThrow();
+    _connectPhase.configureSessionCacheCapacity(_directConnectionLimiter.maxConcurrent);
     if (cancellationToken?.isCancelled ?? false) {
-      directLease.release();
       return Failure(
         _cancelCoordinator.streamCancelledFailure(
           executionId: executionId,
@@ -470,6 +506,7 @@ class OdbcStreamingGateway
         ),
       );
     }
+    final cachedSession = _connectPhase.takeCachedSession(connectionString);
 
     final hintedBufferBytes = _adaptiveBufferCache.lookup(
       connectionString: connectionString,
@@ -490,16 +527,55 @@ class OdbcStreamingGateway
       maxResultBufferBytes: nativeStreamingOptions.maxResultBufferBytes,
       lazyStrings: connectionStringBenefitsFromLazyStrings(connectionString),
     );
-    final connResult = await _connectPhase.connectStreaming(
-      connectionString: connectionString,
-      options: streamingOptions,
-      operation: 'connect_streaming_multi_result',
-    );
-    if (connResult.isError()) {
-      directLease.release();
-      return Failure(connResult.exceptionOrNull()!);
+    DirectOdbcConnectionLease directLease;
+    Connection connection;
+    if (cachedSession?.reservation case final cachedLease?) {
+      directLease = cachedLease;
+      connection = Connection(
+        id: cachedSession!.connectionId,
+        connectionString: connectionString,
+        createdAt: DateTime.now(),
+        isActive: true,
+      );
+    } else {
+      final leaseResult = await _directConnectionLimiter.acquire(
+        operation: 'streaming_multi_result',
+      );
+      if (leaseResult.isError()) {
+        return Failure(leaseResult.exceptionOrNull()!);
+      }
+      directLease = leaseResult.getOrThrow();
+      if (cachedSession != null) {
+        connection = Connection(
+          id: cachedSession.connectionId,
+          connectionString: connectionString,
+          createdAt: DateTime.now(),
+          isActive: true,
+        );
+      } else {
+        final connResult = await _connectPhase.connectWithCircuitBreaker(
+          connectionString: connectionString,
+          options: streamingOptions,
+          operation: 'connect_streaming_multi_result',
+        );
+        if (connResult.isError()) {
+          directLease.release();
+          return Failure(connResult.exceptionOrNull()!);
+        }
+        connection = connResult.getOrThrow();
+      }
     }
-    final connection = connResult.getOrThrow();
+    if (cancellationToken?.isCancelled ?? false) {
+      await _cancelCoordinator.safeDisconnect(connection.id);
+      directLease.release();
+      return Failure(
+        _cancelCoordinator.streamCancelledFailure(
+          executionId: executionId,
+          connectionId: connection.id,
+          reason: cancellationReasonProvider?.call() ?? StreamingCancelReason.socketDisconnect,
+        ),
+      );
+    }
     final streamExecutionId = executionId ?? connection.id;
     final activeStream = OdbcStreamingActiveConnection(
       executionId: streamExecutionId,
@@ -600,12 +676,14 @@ class OdbcStreamingGateway
         ),
       );
     } finally {
-      await _releaseStreamingConnection(
+      final retainedForReuse = await _releaseStreamingConnection(
         activeStream: activeStream,
         connectionString: connectionString,
         reuseEligible: streamCompletedSuccessfully,
       );
-      activeStream.lease.release();
+      if (!retainedForReuse) {
+        activeStream.lease.release();
+      }
       _unregisterInFlightExecution(streamExecutionId);
       _activeStreams.remove(streamExecutionId);
     }
@@ -660,7 +738,7 @@ class OdbcStreamingGateway
     _inFlightRegistry?.unregister(requestId);
   }
 
-  Future<void> _releaseStreamingConnection({
+  Future<bool> _releaseStreamingConnection({
     required OdbcStreamingActiveConnection activeStream,
     required String connectionString,
     required bool reuseEligible,
@@ -672,10 +750,12 @@ class OdbcStreamingGateway
         await _connectPhase.offerSessionForReuse(
           connectionString: connectionString,
           connectionId: activeStream.connectionId,
+          reservation: activeStream.lease,
         );
     if (canReuse) {
-      return;
+      return true;
     }
     await _cancelCoordinator.disconnectActiveStream(activeStream);
+    return false;
   }
 }

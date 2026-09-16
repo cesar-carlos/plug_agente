@@ -7,6 +7,7 @@ import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_diagnostics_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/validation/sql_validator.dart';
@@ -127,7 +128,11 @@ final class OdbcBatchRoutingPhases {
     required Duration? timeout,
     required String batchSqlPreview,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(_cancelledBatchFailure());
+    }
     final validationFailure = OdbcBulkInsertExecutor.validate(plan.request);
     if (validationFailure != null) {
       return Failure(validationFailure);
@@ -152,6 +157,8 @@ final class OdbcBatchRoutingPhases {
         plan.request,
         timeout: timeout,
         database: database,
+        cancellationToken: cancellationToken,
+        sourceRpcRequestId: sourceRpcRequestId,
       );
       return bulkResult.fold(
         (_) => Success(_syntheticBulkInsertBatchResults(commands)),
@@ -213,6 +220,8 @@ final class OdbcBatchRoutingPhases {
             request: plan.request,
             timeout: _remainingTimeout(context.deadline) ?? timeout,
             deadline: context.deadline,
+            cancellationToken: cancellationToken,
+            sourceRpcRequestId: sourceRpcRequestId,
           );
           if (bulkResult.isError()) {
             final bulkFailure = bulkResult.exceptionOrNull()!;
@@ -336,6 +345,7 @@ final class OdbcBatchRoutingPhases {
     required Duration? timeout,
     required String batchSqlPreview,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   }) async {
     final initResult = await _ensureInitialized();
     if (initResult.isError()) {
@@ -399,6 +409,7 @@ final class OdbcBatchRoutingPhases {
         poolSize: _poolSize,
         allowNativeCompatibleAcquire: allowNativeCompatibleAcquire,
         sourceRpcRequestId: sourceRpcRequestId,
+        cancellationToken: cancellationToken,
       );
 
       if (!allowNativeCompatibleAcquire || attempt > 0) {
@@ -440,6 +451,8 @@ final class OdbcBatchRoutingPhases {
     BulkInsertRequest request, {
     Duration? timeout,
     String? database,
+    CancellationToken? cancellationToken,
+    String? sourceRpcRequestId,
   }) async {
     final initResult = await _ensureInitialized();
     return initResult.fold(
@@ -458,6 +471,8 @@ final class OdbcBatchRoutingPhases {
               connectionString,
               timeout: timeout,
               databaseType: localConfig.databaseType,
+              cancellationToken: cancellationToken,
+              sourceRpcRequestId: sourceRpcRequestId,
             );
           },
           (domainFailure) => Failure(
@@ -497,6 +512,13 @@ final class OdbcBatchRoutingPhases {
       throw TimeoutException('Execution deadline exceeded');
     }
     return remaining;
+  }
+
+  domain.QueryExecutionFailure _cancelledBatchFailure() {
+    return domain.QueryExecutionFailure.withContext(
+      message: 'Batch bulk insert execution cancelled',
+      context: const <String, Object?>{'cooperative_cancel': true},
+    );
   }
 
   Future<void> _rollbackActiveTransaction({

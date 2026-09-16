@@ -39,15 +39,15 @@ final class OdbcInFlightExecutionAbortService implements ISqlInFlightExecutionAb
       return const Success(false);
     }
 
-    final handle = _registry.peek(requestId);
-    if (handle == null) {
+    final handles = _registry.peekAll(requestId);
+    if (handles.isEmpty) {
       if (armIfMissing) {
         _registry.markPendingAbort(requestId);
       }
       return const Success(false);
     }
 
-    return _abortHandle(requestId, handle);
+    return _abortHandles(requestId, handles);
   }
 
   void _onPendingAbortReady(String requestId) {
@@ -55,35 +55,51 @@ final class OdbcInFlightExecutionAbortService implements ISqlInFlightExecutionAb
   }
 
   Future<void> _fulfillPendingAbort(String requestId) async {
-    if (!_registry.hasPendingAbort(requestId)) {
+    if (!_registry.hasPendingAbort(requestId) && !_registry.hasOwnerAbort(requestId)) {
       return;
     }
 
-    final handle = _registry.peek(requestId);
-    if (handle == null) {
+    final handles = _registry.peekAll(requestId);
+    if (handles.isEmpty) {
       return;
     }
 
-    await _abortHandle(requestId, handle);
+    await _abortHandles(requestId, handles);
   }
 
-  Future<Result<bool>> _abortHandle(
+  Future<Result<bool>> _abortHandles(
     String requestId,
-    OdbcInFlightExecutionHandle handle,
+    List<OdbcInFlightExecutionHandle> handles,
   ) async {
-    if (handle.hasNativeCancelTarget) {
-      await _statementExecutor.abortInFlightHandle(handle);
-      _registry.clearPendingAbort(requestId);
-    } else {
-      // Keep pending until bind provides a native cancel target.
-      _registry.markPendingAbort(requestId);
+    var hasPendingTarget = false;
+    for (final handle in handles) {
+      if (handle.hasNativeCancelTarget) {
+        await _statementExecutor.abortInFlightHandle(handle);
+        continue;
+      }
+
+      // Keep pending until bind provides a native cancel target. This is per
+      // owner so later parallel children are also cancelled.
+      hasPendingTarget = true;
       _markConnectionForDiscard?.call(handle.connectionId);
+    }
+
+    // Keep the owner armed until its final child unregisters. A parallel batch
+    // can register the next child after every current handle already has a
+    // native target; clearing here would let that child escape cancellation.
+    _registry.markOwnerAbort(requestId);
+    if (hasPendingTarget) {
+      _registry.markPendingAbort(requestId);
       developer.log(
-        'In-flight abort had no native cancel target; connection marked for discard when available',
+        'In-flight abort is waiting for a native cancel target; affected connections are quarantined',
         name: 'database_gateway',
         level: 900,
-        error: {'request_id': requestId, 'connection_id': handle.connectionId},
+        error: <String, Object?>{'request_id': requestId, 'handle_count': handles.length},
       );
+    } else {
+      // The pre-registration ghost race has been fulfilled. The owner remains
+      // armed separately so later parallel children still observe cancellation.
+      _registry.clearPendingAbort(requestId);
     }
 
     return const Success(true);

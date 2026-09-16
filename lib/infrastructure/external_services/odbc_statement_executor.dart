@@ -127,9 +127,14 @@ final class OdbcStatementExecutor {
     Duration? timeout,
     OdbcInFlightExecutionRegistry? inFlightRegistry,
     String? inFlightRequestId,
+    String? inFlightExecutionId,
   }) async {
     if (inFlightRegistry != null && inFlightRequestId != null && inFlightRequestId.isNotEmpty) {
-      inFlightRegistry.bindStatement(inFlightRequestId, statementId);
+      inFlightRegistry.bindStatement(
+        inFlightRequestId,
+        statementId,
+        executionId: inFlightExecutionId,
+      );
     }
 
     final statementOptions = StatementOptions(
@@ -188,6 +193,7 @@ final class OdbcStatementExecutor {
     required Duration timeout,
     OdbcInFlightExecutionRegistry? inFlightRegistry,
     String? inFlightRequestId,
+    String? inFlightExecutionId,
   }) async {
     final startResult = await _service.executeAsyncStart(
       connectionId,
@@ -199,7 +205,11 @@ final class OdbcStatementExecutor {
 
     final requestId = startResult.getOrThrow();
     if (inFlightRegistry != null && inFlightRequestId != null && inFlightRequestId.isNotEmpty) {
-      inFlightRegistry.bindAsyncRequest(inFlightRequestId, requestId);
+      inFlightRegistry.bindAsyncRequest(
+        inFlightRequestId,
+        requestId,
+        executionId: inFlightExecutionId,
+      );
     }
     final deadline = DateTime.now().add(timeout);
 
@@ -257,20 +267,18 @@ final class OdbcStatementExecutor {
       connectionId,
       statementId,
     );
-    cancelResult.fold(
-      (_) {
-        _metrics.recordTimeoutCancelSuccess();
-      },
-      (error) {
-        _markConnectionForDiscard(connectionId);
-        _metrics.recordTimeoutCancelFailure();
-        developer.log(
-          'Failed to cancel prepared statement after abort',
-          name: 'database_gateway',
-          level: 900,
-          error: error,
-        );
-      },
+    if (cancelResult.isSuccess()) {
+      _metrics.recordTimeoutCancelSuccess();
+      return;
+    }
+
+    _markConnectionForDiscard(connectionId);
+    _metrics.recordTimeoutCancelFailure();
+    developer.log(
+      'Failed to cancel prepared statement after abort',
+      name: 'database_gateway',
+      level: 900,
+      error: cancelResult.exceptionOrNull(),
     );
   }
 
@@ -280,19 +288,17 @@ final class OdbcStatementExecutor {
   }) async {
     _markConnectionForDiscard(connectionId);
     final cancelResult = await _service.asyncCancel(requestId);
-    cancelResult.fold(
-      (_) {
-        _metrics.recordTimeoutCancelSuccess();
-      },
-      (error) {
-        _metrics.recordTimeoutCancelFailure();
-        developer.log(
-          'Failed to cancel async SQL request after abort',
-          name: 'database_gateway',
-          level: 900,
-          error: error,
-        );
-      },
+    if (cancelResult.isSuccess()) {
+      _metrics.recordTimeoutCancelSuccess();
+      return;
+    }
+
+    _metrics.recordTimeoutCancelFailure();
+    developer.log(
+      'Failed to cancel async SQL request after abort',
+      name: 'database_gateway',
+      level: 900,
+      error: cancelResult.exceptionOrNull(),
     );
   }
 

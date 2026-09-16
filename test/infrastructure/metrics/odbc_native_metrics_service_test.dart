@@ -467,7 +467,9 @@ void main() {
       final newest = events.first as Map<String, Object?>;
       expect(newest['kind'], 'SlowQueryDetected');
       expect(newest['duration_ms'], 1234);
-      expect(newest['connection_id'], 'conn-1');
+      expect(newest['sql_kind'], 'select');
+      expect(newest.containsKey('connection_id'), isFalse);
+      expect(newest.containsKey('sql_preview'), isFalse);
     });
 
     test('should return typed failure when getMetrics fails', () async {

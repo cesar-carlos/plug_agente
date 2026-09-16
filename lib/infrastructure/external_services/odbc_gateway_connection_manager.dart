@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
@@ -20,12 +21,14 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     required MetricsCollector metrics,
     int Function()? directConnectionMaxProvider,
     Duration inflightDiscardStaleThreshold = const Duration(seconds: 30),
+    int maxInflightPoolDiscards = 8,
   }) : _service = service,
        _connectionPool = connectionPool,
        _directConnectionLimiter = directConnectionLimiter,
        _metrics = metrics,
        _directConnectionMaxProvider = directConnectionMaxProvider,
-       _inflightDiscardStaleThreshold = inflightDiscardStaleThreshold;
+       _inflightDiscardStaleThreshold = inflightDiscardStaleThreshold,
+       _discardSemaphore = PoolSemaphore(maxInflightPoolDiscards);
 
   final OdbcService _service;
   final IConnectionPool _connectionPool;
@@ -33,6 +36,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
   final MetricsCollector _metrics;
   final int Function()? _directConnectionMaxProvider;
   final Duration _inflightDiscardStaleThreshold;
+  final PoolSemaphore _discardSemaphore;
   final Set<String> _connectionsToDiscard = <String>{};
   final Map<String, DateTime> _lastRecycleAttempt = <String, DateTime>{};
   final Map<String, DateTime> _inflightDiscards = <String, DateTime>{};
@@ -62,7 +66,6 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       level: 900,
       error: <String, Object?>{
         'stale_count': staleIds.length,
-        'connection_ids': staleIds,
         'threshold_seconds': _inflightDiscardStaleThreshold.inSeconds,
       },
     );
@@ -213,13 +216,12 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       return;
     }
 
-    final disconnectError = disconnectResult.exceptionOrNull()!;
     _metrics.recordPoolReleaseFailure();
     developer.log(
-      'Failed to disconnect owned ODBC connection: $connectionId ($operation)',
+      'Failed to disconnect owned ODBC connection (reason=owned_disconnect_failed)',
       name: 'database_gateway',
       level: 900,
-      error: disconnectError,
+      error: <String, Object?>{'operation': operation},
     );
   }
 
@@ -241,12 +243,14 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
   Future<void> releaseConnectionSafely(String connectionId) async {
     final shouldDiscard = _connectionsToDiscard.remove(connectionId);
     if (shouldDiscard) {
+      await _discardSemaphore.acquire();
       _inflightDiscards[connectionId] = DateTime.now();
       _metrics.recordPoolDiscardInflightStarted();
       unawaited(
         _discardConnectionSafely(connectionId).whenComplete(() {
           _inflightDiscards.remove(connectionId);
           _metrics.recordPoolDiscardInflightCompleted();
+          _discardSemaphore.release();
         }),
       );
       return;
@@ -257,13 +261,12 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       return;
     }
 
-    final releaseError = releaseResult.exceptionOrNull()!;
     _metrics.recordPoolReleaseFailure();
     developer.log(
-      'Failed to release pooled connection: $connectionId',
+      'Failed to release pooled connection (reason=pool_release_failed)',
       name: 'database_gateway',
       level: 900,
-      error: releaseError,
+      error: const <String, Object?>{'operation': 'pool_release'},
     );
   }
 
@@ -330,7 +333,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
         'Skipping pool recycle because active-count snapshot failed',
         name: 'database_gateway',
         level: 900,
-        error: activeCountResult.exceptionOrNull(),
+        error: const <String, Object?>{'reason': 'pool_active_count_unavailable'},
       );
       return;
     }
@@ -362,7 +365,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       'Failed to recycle pool after invalid connection id',
       name: 'database_gateway',
       level: 900,
-      error: recycleResult.exceptionOrNull(),
+      error: const <String, Object?>{'reason': 'pool_recycle_failed'},
     );
   }
 
@@ -374,13 +377,12 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       return;
     }
 
-    final discardError = discardResult.exceptionOrNull()!;
     _metrics.recordPoolReleaseFailure();
     developer.log(
       'Re-discard failed during stale in-flight reconciliation; forcing disconnect',
       name: 'database_gateway',
       level: 900,
-      error: discardError,
+      error: const <String, Object?>{'reason': 'pool_discard_reconciliation_failed'},
     );
 
     await disconnectOwnedConnectionSafely(
@@ -403,13 +405,12 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       return;
     }
 
-    final discardError = discardResult.exceptionOrNull()!;
     _metrics.recordPoolReleaseFailure();
     developer.log(
-      'Failed to discard pooled connection: $connectionId',
+      'Failed to discard pooled connection (reason=pool_discard_failed)',
       name: 'database_gateway',
       level: 900,
-      error: discardError,
+      error: const <String, Object?>{'reason': 'pool_discard_failed'},
     );
   }
 

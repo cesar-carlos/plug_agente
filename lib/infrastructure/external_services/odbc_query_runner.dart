@@ -108,7 +108,8 @@ final class OdbcQueryRunner {
     var timeoutCleanupAlreadyHandled = false;
     final preparedCachePolicy = OdbcPreparedStatementCachePolicy.forExecutionMode(executionMode);
     final inFlightRequestId = _inFlightTrackingKey(request);
-    _registerInFlightExecution(inFlightRequestId, connId);
+    final inFlightExecutionId = odbcInFlightExecutionId(requestId: request.id);
+    _registerInFlightExecution(inFlightRequestId, inFlightExecutionId, connId);
     try {
       if (usesPreparedTimeout) {
         return await _guardWithCooperativeCancellation(
@@ -119,6 +120,8 @@ final class OdbcQueryRunner {
             timeout: timeout,
             cachePolicy: preparedCachePolicy,
             inFlightRequestId: inFlightRequestId,
+            inFlightExecutionId: inFlightExecutionId,
+            manageInFlightRegistration: false,
           ),
           cancellationToken: cancellationToken,
           timeout: timeout,
@@ -135,6 +138,7 @@ final class OdbcQueryRunner {
               timeout: timeout,
               inFlightRegistry: _inFlightRegistry,
               inFlightRequestId: inFlightRequestId,
+              inFlightExecutionId: inFlightExecutionId,
             ),
             cancellationToken: cancellationToken,
           );
@@ -195,7 +199,7 @@ final class OdbcQueryRunner {
       );
       return QueryExecutionOutcome.failure(error);
     } finally {
-      _unregisterInFlightExecution(inFlightRequestId);
+      _unregisterInFlightExecution(inFlightRequestId, inFlightExecutionId);
       stopwatch.stop();
       _metrics.recordSqlExecutionTime(
         stopwatch.elapsed,
@@ -214,9 +218,14 @@ final class OdbcQueryRunner {
     required String statementKey,
     Duration? timeout,
     OdbcPreparedStatementCachePolicy cachePolicy = OdbcPreparedStatementCachePolicy.leasePool,
+    CancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return const QueryExecutionOutcome.failure(CancellationException('Operation was cancelled'));
+    }
     final trackingId = _inFlightTrackingKey(request);
-    _registerInFlightExecution(trackingId, connectionId);
+    final executionId = odbcInFlightExecutionId(requestId: request.id);
+    _registerInFlightExecution(trackingId, executionId, connectionId);
     try {
       final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
       final stmtId = await _statementExecutor.getOrPrepareStatement(
@@ -235,13 +244,18 @@ final class OdbcQueryRunner {
 
       final preparedStatementId = stmtId.getOrThrow();
       final startedAt = DateTime.now();
-      final result = await _statementExecutor.executePreparedStatementWithTimeout(
-        connectionId: connectionId,
-        preparedExecution: preparedExecution,
-        statementId: preparedStatementId,
+      final result = await _guardWithCooperativeCancellation(
+        () => _statementExecutor.executePreparedStatementWithTimeout(
+          connectionId: connectionId,
+          preparedExecution: preparedExecution,
+          statementId: preparedStatementId,
+          timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+          inFlightRegistry: _inFlightRegistry,
+          inFlightRequestId: trackingId,
+          inFlightExecutionId: executionId,
+        ),
+        cancellationToken: cancellationToken,
         timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
-        inFlightRegistry: _inFlightRegistry,
-        inFlightRequestId: trackingId,
       );
       return await result.fold(
         (queryResult) => QueryExecutionOutcome.success(
@@ -249,8 +263,15 @@ final class OdbcQueryRunner {
         ),
         QueryExecutionOutcome.failure,
       );
+    } on CancellationException catch (error) {
+      await _abortInFlightExecution(
+        trackingId,
+        connectionId,
+        usesPreparedTimeout: true,
+      );
+      return QueryExecutionOutcome.failure(error);
     } finally {
-      _unregisterInFlightExecution(trackingId);
+      _unregisterInFlightExecution(trackingId, executionId);
     }
   }
 
@@ -263,9 +284,14 @@ final class OdbcQueryRunner {
     Duration? timeout,
     OdbcPreparedStatementCachePolicy cachePolicy = OdbcPreparedStatementCachePolicy.leasePool,
     String? inFlightRequestId,
+    String? inFlightExecutionId,
+    bool manageInFlightRegistration = true,
   }) async {
     final trackingId = inFlightRequestId ?? _inFlightTrackingKey(request);
-    _registerInFlightExecution(trackingId, connectionId);
+    final executionId = inFlightExecutionId ?? odbcInFlightExecutionId(requestId: request.id);
+    if (manageInFlightRegistration) {
+      _registerInFlightExecution(trackingId, executionId, connectionId);
+    }
     final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final preparedStatements = <String, int>{};
     final statementKey = preparedStatementKeyFor(preparedExecution);
@@ -292,6 +318,7 @@ final class OdbcQueryRunner {
         timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
         inFlightRegistry: _inFlightRegistry,
         inFlightRequestId: trackingId,
+        inFlightExecutionId: executionId,
       );
       return await result.fold(
         (queryResult) => QueryExecutionOutcome.success(
@@ -300,7 +327,9 @@ final class OdbcQueryRunner {
         QueryExecutionOutcome.failure,
       );
     } finally {
-      _unregisterInFlightExecution(trackingId);
+      if (manageInFlightRegistration) {
+        _unregisterInFlightExecution(trackingId, executionId);
+      }
       await _statementExecutor.closePreparedStatements(
         connectionId,
         preparedStatements.values,
@@ -394,15 +423,20 @@ final class OdbcQueryRunner {
     );
   }
 
-  void _registerInFlightExecution(String requestId, String connectionId) {
+  void _registerInFlightExecution(
+    String requestId,
+    String executionId,
+    String connectionId,
+  ) {
     _inFlightRegistry?.register(
       requestId,
       OdbcInFlightExecutionHandle(connectionId: connectionId),
+      executionId: executionId,
     );
   }
 
-  void _unregisterInFlightExecution(String requestId) {
-    _inFlightRegistry?.unregister(requestId);
+  void _unregisterInFlightExecution(String requestId, String executionId) {
+    _inFlightRegistry?.unregister(requestId, executionId: executionId);
   }
 
   Future<void> _abortInFlightExecution(

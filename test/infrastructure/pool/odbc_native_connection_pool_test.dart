@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
@@ -239,6 +241,29 @@ void main() {
       verifyNever(() => mockService.poolGetConnection(any()));
     });
 
+    test('does not publish a pool created after its generation was recycled', () async {
+      final creation = Completer<Result<int>>();
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) => creation.future);
+      when(() => mockService.poolClose(17)).thenAnswer((_) async => const Success(unit));
+
+      final pending = pool.ensurePoolId('DSN=Race');
+      await Future<void>.delayed(Duration.zero);
+      await pool.recycle('DSN=Race');
+      creation.complete(const Success(17));
+
+      final result = await pending;
+
+      expect(result.isError(), isTrue);
+      verify(() => mockService.poolClose(17)).called(1);
+    });
+
     test('should return failure when poolGetConnection fails', () async {
       when(
         () => mockService.poolCreate(
@@ -310,6 +335,36 @@ void main() {
       expect(result.isSuccess(), isTrue);
       expect(metrics.poolReleaseFailureCount, 0);
       verify(() => mockService.poolReleaseConnection('cid')).called(1);
+    });
+
+    test('discard failure releases active accounting so quarantine can recover', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(14));
+      when(() => mockService.poolGetConnection(14)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'discard-failure',
+            connectionString: 'DSN=Discard',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.poolReleaseConnection('discard-failure')).thenAnswer(
+        (_) async => const Failure(ConnectionError(message: 'release_failed')),
+      );
+
+      await pool.acquire('DSN=Discard');
+      final discarded = await pool.discard('discard-failure');
+
+      expect(discarded.isError(), isTrue);
+      expect(pool.getHealthDiagnostics()['native_active_count'], 0);
     });
 
     test('recycle with unknown connection string succeeds without close', () async {

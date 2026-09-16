@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
+import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -59,6 +60,7 @@ final class OdbcBatchCommandPhase {
     required SqlExecutionOptions options,
     required BatchTransactionGuard transaction,
     String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
   }) async {
     final results = <SqlCommandResult>[];
     final repeatedPreparedKeys = OdbcQueryRunner.collectRepeatedPreparedKeys(commands);
@@ -66,6 +68,23 @@ final class OdbcBatchCommandPhase {
 
     try {
       for (var i = 0; i < commands.length; i++) {
+        if (cancellationToken?.isCancelled ?? false) {
+          if (options.transaction) {
+            final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
+            await transaction.rollback(
+              (transactionId) => _txManager.rollbackIfNeeded(
+                context.connectionId,
+                transactionId,
+                timeout: rollbackTimeout,
+              ),
+            );
+            return Failure(domain.QueryExecutionFailure('Transaction aborted because the batch was cancelled'));
+          }
+          for (; i < commands.length; i++) {
+            results.add(SqlCommandResult.failure(index: i, error: 'Batch SQL execution was cancelled'));
+          }
+          break;
+        }
         final command = commands[i];
         final validation = SqlValidator.validateSqlForExecution(command.sql);
         if (validation.isError()) {
@@ -128,6 +147,7 @@ final class OdbcBatchCommandPhase {
                   preparedStatements: preparedStatements,
                   statementKey: key,
                   timeout: remainingTimeout,
+                  cancellationToken: cancellationToken,
                 )
               : _queryRunner.runWithTimeout(
                   connId: currentConnectionId,
@@ -137,6 +157,7 @@ final class OdbcBatchCommandPhase {
                   timeout: remainingTimeout,
                   preferPreparedTimeout: options.transaction,
                   executionMode: options.transaction ? 'batch_transaction' : 'batch',
+                  cancellationToken: cancellationToken,
                 );
         }
 

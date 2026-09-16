@@ -200,8 +200,8 @@ void main() {
 
       final events = bridge.recentEvents;
       check(events.length).equals(3);
-      check(events.first.timestamp).equals(baseTimestamp.add(const Duration(seconds: 4)));
-      check(events.last.timestamp).equals(baseTimestamp.add(const Duration(seconds: 2)));
+      check(events.first['timestamp']).equals(baseTimestamp.add(const Duration(seconds: 4)).toIso8601String());
+      check(events.last['timestamp']).equals(baseTimestamp.add(const Duration(seconds: 2)).toIso8601String());
 
       await bridge.dispose();
     });

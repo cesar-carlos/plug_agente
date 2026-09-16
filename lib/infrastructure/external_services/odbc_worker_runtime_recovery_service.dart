@@ -39,9 +39,24 @@ final class OdbcWorkerRuntimeRecoveryService implements IOdbcWorkerRuntimeRecove
   final ISqlExecutionIdleWaitPort? _sqlExecutionIdleWaitPort;
   final OdbcStreamingGateway? _streamingGatewayConcrete;
   final MetricsCollector? _metrics;
+  Future<void>? _recoveryInProgress;
 
   @override
-  Future<void> recoverAfterNativeWorkerCrash() async {
+  Future<void> recoverAfterNativeWorkerCrash() {
+    final running = _recoveryInProgress;
+    if (running != null) {
+      return running;
+    }
+    final recovery = _recoverAfterNativeWorkerCrash();
+    _recoveryInProgress = recovery;
+    return recovery.whenComplete(() {
+      if (identical(_recoveryInProgress, recovery)) {
+        _recoveryInProgress = null;
+      }
+    });
+  }
+
+  Future<void> _recoverAfterNativeWorkerCrash() async {
     _metrics?.recordOdbcWorkerRecoveryInvalidation();
 
     await _waitForInFlightSqlWorkers();
