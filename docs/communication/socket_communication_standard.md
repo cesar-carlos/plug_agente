@@ -627,7 +627,11 @@ alem de TTL por entrada. Invalidacao apos alterar token afeta apenas o hash da
 credencial afetada quando o segredo e resolvido; caso contrario o agente faz
 flush completo desses caches. Contadores de evento no `MetricsCollector`:
 `auth_decision_cache_hit`, `auth_decision_cache_miss`, `auth_policy_cache_hit`,
-`auth_policy_cache_miss`. Para `sql.execute`, contadores de caminho de resposta:
+`auth_policy_cache_miss`. Resolucao concorrente da mesma credencial usa
+**single-flight**: uma unica consulta SQLite/JWKS e compartilhada entre os
+chamadores. Revogacao, rotacao ou alteracao de politica invalida cache e a
+resolucao pendente; um resultado antigo nao pode repopular a politica.
+Para `sql.execute`, contadores de caminho de resposta:
 `rpc_sql_execute_streaming_chunks_response`, `rpc_sql_execute_streaming_from_db_response`,
 `rpc_sql_execute_auto_streaming_from_db_response`,
 `rpc_sql_execute_prefer_db_streaming_response`,
@@ -1595,6 +1599,13 @@ handlers concorrentes no transporte. O hub/cliente deve usar
 `error.data.technical_message` para distinguir (ex.: mensagem contem
 `Concurrent RPC handler limit exceeded`).
 
+Depois que uma request e aceita, o transporte tambem reserva capacidade para a
+resposta ate encode/emissao terminar. Sob Hub lento, novas requests que ainda
+nao iniciaram dispatch recebem o mesmo `-32013` com
+`reason: outbound_response_capacity_exceeded`; respostas ja aceitas nao sao
+descartadas. O snapshot de `agent.getHealth` inclui ocupacao, pico, espera,
+reservas, liberacoes, rejeicoes e resets dessa cota.
+
 ### Replay protection
 
 
@@ -2056,6 +2067,11 @@ comprimido e **menor** que o JSON UTF-8 bruto; caso contrario o frame usa
 gzip quando o tamanho atinge o limiar, mas ainda cai para `cmp: none` quando o
 frame comprimido violaria `maxInflationRatio`. Clientes devem aceitar
 `cmp: gzip` e `cmp: none` em qualquer frame recebido.
+- Para evitar CPU repetida com payloads incompressiveis, o modo `auto` mantem
+  uma LRU curta por `evento + faixa de tamanho`, sem usar o conteudo do
+  payload como chave. Depois de uma tentativa que nao reduz bytes, GZIP e
+  pulado apenas para aquela classe ate o TTL expirar; `gzip` explicito nunca
+  e pulado.
 - O runtime atual **nao** suporta sobrescrever essa politica por request via
 `meta`; a negociacao `compressions: none` na sessao continua a impedir GZIP
 outbound.
@@ -2071,6 +2087,14 @@ o hub anunciando `streamingResults`, resultados acima do
 `streaming_row_threshold` fluem em chunks (`rpc:chunk`, `rpc:complete`).
 Operadores ainda podem desligar via feature flag se um deployment especifico
 nao expuser `streamingResults`.
+- Para `SELECT` sem paginacao, cursor ou multi-result, o agente tambem mede o
+  volume real das linhas materializadas. Ao ultrapassar o menor entre 512 KiB
+  e um quarto de `max_decoded_payload_bytes`, a resposta e promovida para
+  chunks, preservando ordem e backpressure.
+- JSON, GZIP e HMAC grandes compartilham um pool reutilizavel de workers,
+  iniciado sob demanda (2 por padrao; `TRANSPORT_WORKER_POOL_SIZE`, limitado a
+  1..4). Frames abaixo dos limiares negociados continuam no caminho sincrono;
+  o pool e encerrado no shutdown do runtime.
 - `capabilities.extensions.streamingResults` e negociado entre agente e hub.
   Quando `enableSocketStreamingFromDb` esta ativo, o agente pode criar emissor
   de stream para consultas `SELECT` elegiveis mesmo que o chunking materializado

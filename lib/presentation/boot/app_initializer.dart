@@ -6,8 +6,8 @@ import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/runtime/i_windows_runtime_probe.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/services/noop_tray_manager_service.dart';
-import 'package:plug_agente/core/services/window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_notification_service.dart';
 import 'package:plug_agente/presentation/boot/desktop_shell_bootstrap.dart';
@@ -46,7 +46,7 @@ DesktopShellBootstrapDependencies _createDesktopShellBootstrapDependencies() {
     settingsStore: getIt<IAppSettingsStore>(),
     trayService: getIt.isRegistered<ITrayService>() ? getIt<ITrayService>() : NoopTrayManagerService(),
     notificationService: getIt<INotificationService>(),
-    resolveWindowManager: getIt.isRegistered<WindowManagerService>() ? getIt<WindowManagerService>() : null,
+    resolveWindowManager: getIt.isRegistered<IDesktopWindowService>() ? getIt<IDesktopWindowService>() : null,
   );
 }
 

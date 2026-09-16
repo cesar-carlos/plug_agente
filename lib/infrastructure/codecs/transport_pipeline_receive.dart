@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+
 import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
@@ -6,8 +7,8 @@ import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_helpers.dart';
-import 'package:plug_agente/infrastructure/codecs/transport_pipeline_isolate.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_metrics.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_work_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -19,6 +20,7 @@ mixin TransportPipelineReceive {
   String get protocol;
   String get compression;
   ProtocolMetricsCollector? get metricsCollector;
+  TransportWorkPool get workPool;
 
   /// Receives and processes a payload frame.
   ///
@@ -297,9 +299,9 @@ mixin TransportPipelineReceive {
         if (frame.cmp == 'gzip' && frame.originalSize >= gzipIsolateThresholdBytes) {
           usedGzipDecompressIsolate = true;
           try {
-            decodableBytes = await compute(
-              decompressGzipInIsolate,
-              (
+            decodableBytes = await workPool.submit<Uint8List>(
+              TransportWorkOperation.gzipDecompress,
+              <Object>[
                 bytes,
                 _maximumDecodedBytes(
                   frame: frame,
@@ -307,7 +309,7 @@ mixin TransportPipelineReceive {
                   maxOriginalBytes: maxOriginalBytes,
                   maxInflationRatio: inflationRatioLimit,
                 ),
-              ),
+              ],
             );
           } on Object catch (error) {
             return Failure(
@@ -394,8 +396,8 @@ mixin TransportPipelineReceive {
       if (frame.enc == 'json' && decodableBytes.length >= jsonPayloadIsolateEncodeThresholdBytes) {
         usedJsonDecodeIsolate = true;
         try {
-          decoded = await compute(
-            jsonDecodeUtf8PayloadInIsolate,
+          decoded = await workPool.submit<Object>(
+            TransportWorkOperation.jsonDecode,
             decodableBytes,
           );
         } on Object catch (error) {

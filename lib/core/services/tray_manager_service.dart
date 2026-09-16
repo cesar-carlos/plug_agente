@@ -5,9 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:plug_agente/core/constants/window_timings.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
-import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 class TrayManagerService with TrayListener implements ITrayService {
@@ -16,21 +14,36 @@ class TrayManagerService with TrayListener implements ITrayService {
   static final TrayManagerService _instance = TrayManagerService._();
 
   final Logger _logger = Logger();
-  void Function(TrayMenuAction)? _onMenuAction;
+  TrayMenuActionHandler? _onMenuAction;
   bool _isInitialized = false;
   bool _interactionsEnabled = false;
   String? _cachedIconPath;
   String _showWindowLabel = 'Open Plug Database';
   String _exitLabel = 'Exit';
+  TrayAvailability _availability = TrayAvailability.initializing;
+  Future<void>? _disposeFuture;
+
+  @override
+  TrayAvailability get availability => _availability;
+
+  @override
+  bool get isReady => _availability == TrayAvailability.ready;
 
   @override
   Future<void> initialize({
-    void Function(TrayMenuAction)? onMenuAction,
+    TrayMenuActionHandler? onMenuAction,
     String showWindowLabel = 'Open Plug Database',
     String exitLabel = 'Exit',
   }) async {
     if (_isInitialized) return;
 
+    final pendingDispose = _disposeFuture;
+    if (pendingDispose != null) {
+      await pendingDispose;
+      _disposeFuture = null;
+    }
+
+    _availability = TrayAvailability.initializing;
     _onMenuAction = onMenuAction;
     _showWindowLabel = showWindowLabel;
     _exitLabel = exitLabel;
@@ -46,7 +59,7 @@ class TrayManagerService with TrayListener implements ITrayService {
         final executablePath = Platform.resolvedExecutable;
         await trayManager.setIcon(executablePath);
       }
-    } on Exception catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       _logger.e(
         'Failed to set tray icon',
         error: e,
@@ -55,8 +68,11 @@ class TrayManagerService with TrayListener implements ITrayService {
       try {
         final executablePath = Platform.resolvedExecutable;
         await trayManager.setIcon(executablePath);
-      } on Exception catch (e2) {
+      } on Object catch (e2, stackTrace) {
         _logger.e('Critical error setting tray icon', error: e2);
+        await _rollbackFailedInitialization();
+        _availability = TrayAvailability.failed;
+        Error.throwWithStackTrace(e2, stackTrace);
       }
     }
 
@@ -68,15 +84,17 @@ class TrayManagerService with TrayListener implements ITrayService {
       await Future<void>.delayed(WindowTimings.trayInitDelay);
 
       _isInitialized = true;
+      _availability = TrayAvailability.ready;
       _enableInteractionsAfterWarmup();
       _logger.i('TrayManager initialized');
-    } on Exception catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       _logger.e(
         'Error during TrayManager initialization',
         error: e,
         stackTrace: stackTrace,
       );
       await _rollbackFailedInitialization();
+      _availability = TrayAvailability.failed;
       rethrow;
     }
   }
@@ -84,16 +102,35 @@ class TrayManagerService with TrayListener implements ITrayService {
   void _enableInteractionsAfterWarmup() {
     unawaited(
       Future<void>.delayed(WindowTimings.trayInteractionWarmupDelay, () {
-        _interactionsEnabled = true;
+        if (_availability == TrayAvailability.ready) {
+          _interactionsEnabled = true;
+        }
       }),
     );
   }
 
   Future<void> _rollbackFailedInitialization() async {
+    await _disposeTray();
+  }
+
+  Future<void> _disposeTray() {
+    final existingDispose = _disposeFuture;
+    if (existingDispose != null) {
+      return existingDispose;
+    }
+
     _isInitialized = false;
     _interactionsEnabled = false;
+    _availability = TrayAvailability.failed;
     _onMenuAction = null;
     trayManager.removeListener(this);
+
+    final disposeFuture = _destroyTray();
+    _disposeFuture = disposeFuture;
+    return disposeFuture;
+  }
+
+  Future<void> _destroyTray() async {
     try {
       await trayManager.destroy();
     } on Object catch (error, stackTrace) {
@@ -214,18 +251,8 @@ class TrayManagerService with TrayListener implements ITrayService {
 
   @override
   void onTrayIconMouseDown() {
-    if (!_interactionsEnabled) {
-      return;
-    }
-    unawaited(
-      Future<void>.delayed(WindowTimings.trayIconClickDelay, () {
-        unawaited(
-          _restoreWindow().then((_) => _onMenuAction?.call(TrayMenuAction.show)).catchError((Object e) {
-            _logger.e('Erro ao restaurar janela do tray', error: e);
-          }),
-        );
-      }),
-    );
+    // Mouse-up is the single activation event. Handling both phases caused
+    // duplicate window restores for one click.
   }
 
   @override
@@ -234,19 +261,26 @@ class TrayManagerService with TrayListener implements ITrayService {
       return;
     }
     unawaited(
-      _restoreWindow().then((_) => _onMenuAction?.call(TrayMenuAction.show)).catchError((Object e) {
-        _logger.e('Erro ao restaurar janela do tray', error: e);
-      }),
+      _dispatchMenuAction(TrayMenuAction.show),
     );
   }
 
-  Future<void> _restoreWindow() async {
-    if (!getIt.isRegistered<IWindowManagerService>()) {
-      _logger.w('Window manager not available');
+  Future<void> _dispatchMenuAction(TrayMenuAction action) async {
+    final handler = _onMenuAction;
+    if (handler == null) {
+      _logger.w('Tray action ignored because no handler is registered');
       return;
     }
-    final windowManager = getIt<IWindowManagerService>();
-    await windowManager.show();
+
+    try {
+      await handler(action);
+    } on Object catch (error, stackTrace) {
+      _logger.e(
+        'Tray action failed: ${action.name}',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   @override
@@ -291,31 +325,14 @@ class TrayManagerService with TrayListener implements ITrayService {
   void onTrayMenuItemClick(MenuItem menuItem) {
     switch (menuItem.key) {
       case 'show':
-        unawaited(
-          _restoreWindow().then((_) => _onMenuAction?.call(TrayMenuAction.show)).catchError((Object e) {
-            _logger.e('Erro ao restaurar janela do menu', error: e);
-          }),
-        );
+        unawaited(_dispatchMenuAction(TrayMenuAction.show));
       case 'exit':
-        _onMenuAction?.call(TrayMenuAction.exit);
+        unawaited(_dispatchMenuAction(TrayMenuAction.exit));
       default:
         _logger.w('Item de menu desconhecido: ${menuItem.key}');
     }
   }
 
   @override
-  void dispose() {
-    _isInitialized = false;
-    _interactionsEnabled = false;
-    _onMenuAction = null;
-    unawaited(
-      (trayManager..removeListener(this)).destroy().catchError(
-        (Object e, StackTrace? s) => _logger.w(
-          'Tray destroy failed',
-          error: e,
-          stackTrace: s,
-        ),
-      ),
-    );
-  }
+  Future<void> dispose() => _disposeTray();
 }

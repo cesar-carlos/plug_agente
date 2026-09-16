@@ -16,6 +16,7 @@ import 'package:plug_agente/infrastructure/external_services/rpc_request_guard.d
 import 'package:plug_agente/infrastructure/external_services/transport/authorization_decision_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_log_summarizer.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_request_context.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_outbound_response_admission.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_guard_mapping.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_response_enricher.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_validation_error_mapper.dart';
@@ -51,6 +52,13 @@ class RpcBatchInboundHandler {
     sendSchemaValidationError,
     required Future<bool> Function(List<dynamic> data) validateBatchRequestJsonSchemasOrEmit,
     required bool Function(Map<String, dynamic> requestMap) hasNullIdCompatibilityViolation,
+    Future<void> Function(
+      dynamic responseData, {
+      Map<Object?, String> methodsById,
+      void Function()? onCompleted,
+    })?
+    emitInboundRpcResponseWithCompletion,
+    RpcOutboundResponseAdmission? outboundResponseAdmission,
     MetricsCollector? metricsCollector,
     int Function()? poolSizeProvider,
     void Function(bool paused)? setHubSqlDashboardCapturePaused,
@@ -65,10 +73,13 @@ class RpcBatchInboundHandler {
        _schemaValidator = schemaValidator,
        _agentIdProvider = agentIdProvider,
        _emitInboundRpcResponse = emitInboundRpcResponse,
+       _emitInboundRpcResponseWithCompletion = emitInboundRpcResponseWithCompletion,
        _emitEvent = emitEvent,
        _sendSchemaValidationError = sendSchemaValidationError,
        _validateBatchRequestJsonSchemasOrEmit = validateBatchRequestJsonSchemasOrEmit,
        _hasNullIdCompatibilityViolation = hasNullIdCompatibilityViolation,
+       _outboundResponseAdmission =
+           outboundResponseAdmission ?? RpcOutboundResponseAdmission(metricsCollector: metricsCollector),
        _metricsCollector = metricsCollector,
        _poolSizeProvider = poolSizeProvider ?? _defaultPoolSize,
        _setHubSqlDashboardCapturePaused = setHubSqlDashboardCapturePaused,
@@ -90,6 +101,12 @@ class RpcBatchInboundHandler {
     Map<Object?, String> methodsById,
   })
   _emitInboundRpcResponse;
+  final Future<void> Function(
+    dynamic responseData, {
+    Map<Object?, String> methodsById,
+    void Function()? onCompleted,
+  })?
+  _emitInboundRpcResponseWithCompletion;
   final Future<void> Function(String event, dynamic payload) _emitEvent;
   final Future<void> Function(
     dynamic id,
@@ -101,6 +118,7 @@ class RpcBatchInboundHandler {
   _sendSchemaValidationError;
   final Future<bool> Function(List<dynamic> data) _validateBatchRequestJsonSchemasOrEmit;
   final bool Function(Map<String, dynamic> requestMap) _hasNullIdCompatibilityViolation;
+  final RpcOutboundResponseAdmission _outboundResponseAdmission;
   final MetricsCollector? _metricsCollector;
   final int Function() _poolSizeProvider;
   final void Function(bool paused)? _setHubSqlDashboardCapturePaused;
@@ -113,6 +131,8 @@ class RpcBatchInboundHandler {
     List<dynamic> data, {
     bool Function()? isSessionCurrent,
   }) async {
+    RpcOutboundResponseReservation? responseReservation;
+    var responseReservationTransferred = false;
     if (_discardIfSessionStale(isSessionCurrent, 'rpc_batch_before_validation')) {
       return;
     }
@@ -331,22 +351,43 @@ class RpcBatchInboundHandler {
         }
 
         if (pendingDispatches.isNotEmpty) {
-          final pendingRequests = pendingDispatches.map((entry) => entry.request).toList(growable: false);
-          if (_shouldUseParallelBatchDispatch(pendingRequests)) {
-            await _dispatchBatchItemsInParallel(
-              pendingDispatches,
-              responses,
-              responseMethodsById,
-              pendingRequests,
-              isSessionCurrent,
-            );
+          responseReservation = _outboundResponseAdmission.tryReserve();
+          if (responseReservation == null) {
+            for (final item in pendingDispatches) {
+              if (item.request.isNotification) {
+                continue;
+              }
+              responses.add((
+                index: item.index,
+                response: _responsePreparer.buildErrorResponse(
+                  id: item.request.id,
+                  code: RpcErrorCode.rateLimited,
+                  technicalMessage: RpcInboundConstants.outboundResponseCapacityExceededTechnicalMessage(
+                    _outboundResponseAdmission.maxOutstanding,
+                  ),
+                  errorReason: RpcInboundConstants.outboundResponseCapacityExceededReason,
+                ),
+              ));
+              responseMethodsById[item.request.id] = item.request.method;
+            }
           } else {
-            await _dispatchBatchItemsSequentially(
-              pendingDispatches,
-              responses,
-              responseMethodsById,
-              isSessionCurrent,
-            );
+            final pendingRequests = pendingDispatches.map((entry) => entry.request).toList(growable: false);
+            if (_shouldUseParallelBatchDispatch(pendingRequests)) {
+              await _dispatchBatchItemsInParallel(
+                pendingDispatches,
+                responses,
+                responseMethodsById,
+                pendingRequests,
+                isSessionCurrent,
+              );
+            } else {
+              await _dispatchBatchItemsSequentially(
+                pendingDispatches,
+                responses,
+                responseMethodsById,
+                isSessionCurrent,
+              );
+            }
           }
         }
 
@@ -359,9 +400,12 @@ class RpcBatchInboundHandler {
                   .map((entry) => entry.response)
                   .toList()
             : responses.map((entry) => entry.response).toList();
-        await _emitInboundRpcResponse(
+        final reservation = responseReservation;
+        responseReservationTransferred = reservation != null;
+        await _emitResponse(
           orderedResponses,
           methodsById: responseMethodsById,
+          onCompleted: reservation?.release,
         );
       } on Exception catch (error, stackTrace) {
         AppLogger.error(
@@ -392,10 +436,31 @@ class RpcBatchInboundHandler {
         }
       }
     } finally {
+      if (!responseReservationTransferred) {
+        responseReservation?.release();
+      }
       if (pauseDashboardCapture) {
         _setHubSqlDashboardCapturePaused?.call(false);
       }
     }
+  }
+
+  Future<void> _emitResponse(
+    dynamic responseData, {
+    Map<Object?, String> methodsById = const <Object?, String>{},
+    void Function()? onCompleted,
+  }) async {
+    final completionEmitter = _emitInboundRpcResponseWithCompletion;
+    if (completionEmitter != null) {
+      await completionEmitter(
+        responseData,
+        methodsById: methodsById,
+        onCompleted: onCompleted,
+      );
+      return;
+    }
+    await _emitInboundRpcResponse(responseData, methodsById: methodsById);
+    onCompleted?.call();
   }
 
   bool _shouldPauseDashboardCapture(List<dynamic> data) {

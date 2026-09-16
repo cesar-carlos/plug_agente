@@ -1,9 +1,8 @@
 import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:plug_agente/core/di/service_locator.dart';
-import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
+import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/config/models/updates_config_view_state.dart';
@@ -27,8 +26,7 @@ class ConfigPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final capabilities = getIt<RuntimeCapabilities>();
-    final supportsTray = capabilities.supportsTray;
+    final trayBehaviorSupported = readOptionalGetItService<ITrayService>()?.isReady ?? false;
     final isDarkThemeEnabled = context.select<ThemeProvider, bool>((provider) => provider.isDarkMode);
     final themeError = context.select<ThemeProvider, SystemSettingsErrorState?>(
       (provider) => provider.persistenceError,
@@ -41,6 +39,9 @@ class ConfigPage extends StatelessWidget {
         startupError: provider.startupError,
         preferenceError: provider.preferenceError,
         startupNotice: provider.startupNotice,
+        isChangingStartWithWindows: provider.isChangingStartWithWindows,
+        isChangingMinimizeToTray: provider.isChangingMinimizeToTray,
+        isChangingCloseToTray: provider.isChangingCloseToTray,
       ),
     );
     final themeProvider = context.read<ThemeProvider>();
@@ -60,14 +61,18 @@ class ConfigPage extends StatelessWidget {
           child: _ConfigTabbedContent(
             isDarkThemeEnabled: isDarkThemeEnabled,
             startWithWindows: systemSettings.startWithWindows,
-            minimizeToTray: supportsTray && systemSettings.minimizeToTray,
-            closeToTray: supportsTray && systemSettings.closeToTray,
+            minimizeToTray: systemSettings.minimizeToTray,
+            closeToTray: systemSettings.closeToTray,
             startupSupported: startupSupported,
-            trayBehaviorSupported: supportsTray,
+            trayBehaviorSupported: trayBehaviorSupported,
+            startupUsesTray: trayBehaviorSupported,
             startupError: systemSettings.startupError,
             preferenceError: systemSettings.preferenceError,
             themeError: themeError,
             startupNotice: systemSettings.startupNotice,
+            isChangingStartWithWindows: systemSettings.isChangingStartWithWindows,
+            isChangingMinimizeToTray: systemSettings.isChangingMinimizeToTray,
+            isChangingCloseToTray: systemSettings.isChangingCloseToTray,
             onDarkThemeChanged: themeProvider.setIsDarkMode,
             onStartWithWindowsChanged: (value) => _onStartWithWindowsChanged(
               context,
@@ -146,10 +151,14 @@ class _ConfigTabbedContent extends StatefulWidget {
     required this.closeToTray,
     required this.startupSupported,
     required this.trayBehaviorSupported,
+    required this.startupUsesTray,
     required this.startupError,
     required this.preferenceError,
     required this.themeError,
     required this.startupNotice,
+    required this.isChangingStartWithWindows,
+    required this.isChangingMinimizeToTray,
+    required this.isChangingCloseToTray,
     required this.onDarkThemeChanged,
     required this.onStartWithWindowsChanged,
     required this.onMinimizeToTrayChanged,
@@ -165,10 +174,14 @@ class _ConfigTabbedContent extends StatefulWidget {
   final bool closeToTray;
   final bool startupSupported;
   final bool trayBehaviorSupported;
+  final bool startupUsesTray;
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
   final SystemSettingsErrorState? themeError;
   final SystemSettingsNoticeState? startupNotice;
+  final bool isChangingStartWithWindows;
+  final bool isChangingMinimizeToTray;
+  final bool isChangingCloseToTray;
   final ValueChanged<bool> onDarkThemeChanged;
   final ValueChanged<bool> onStartWithWindowsChanged;
   final ValueChanged<bool> onMinimizeToTrayChanged;
@@ -207,10 +220,14 @@ class _ConfigTabbedContentState extends State<_ConfigTabbedContent> {
             closeToTray: widget.closeToTray,
             startupSupported: widget.startupSupported,
             trayBehaviorSupported: widget.trayBehaviorSupported,
+            startupUsesTray: widget.startupUsesTray,
             startupError: widget.startupError,
             preferenceError: widget.preferenceError,
             themeError: widget.themeError,
             startupNotice: widget.startupNotice,
+            isChangingStartWithWindows: widget.isChangingStartWithWindows,
+            isChangingMinimizeToTray: widget.isChangingMinimizeToTray,
+            isChangingCloseToTray: widget.isChangingCloseToTray,
             onDarkThemeChanged: widget.onDarkThemeChanged,
             onStartWithWindowsChanged: widget.onStartWithWindowsChanged,
             onMinimizeToTrayChanged: widget.onMinimizeToTrayChanged,
@@ -291,6 +308,9 @@ class _ConfigSystemSettingsViewState {
     required this.startupError,
     required this.preferenceError,
     required this.startupNotice,
+    required this.isChangingStartWithWindows,
+    required this.isChangingMinimizeToTray,
+    required this.isChangingCloseToTray,
   });
 
   final bool startWithWindows;
@@ -299,6 +319,9 @@ class _ConfigSystemSettingsViewState {
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
   final SystemSettingsNoticeState? startupNotice;
+  final bool isChangingStartWithWindows;
+  final bool isChangingMinimizeToTray;
+  final bool isChangingCloseToTray;
 
   @override
   bool operator ==(Object other) {
@@ -309,7 +332,10 @@ class _ConfigSystemSettingsViewState {
             closeToTray == other.closeToTray &&
             startupError == other.startupError &&
             preferenceError == other.preferenceError &&
-            startupNotice == other.startupNotice;
+            startupNotice == other.startupNotice &&
+            isChangingStartWithWindows == other.isChangingStartWithWindows &&
+            isChangingMinimizeToTray == other.isChangingMinimizeToTray &&
+            isChangingCloseToTray == other.isChangingCloseToTray;
   }
 
   @override
@@ -320,5 +346,8 @@ class _ConfigSystemSettingsViewState {
     startupError,
     preferenceError,
     startupNotice,
+    isChangingStartWithWindows,
+    isChangingMinimizeToTray,
+    isChangingCloseToTray,
   );
 }

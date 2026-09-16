@@ -6,6 +6,11 @@ abstract final class RpcInboundConstants {
   /// Hub should reduce parallelism (distinct from window-based rate limiting).
   static const String concurrentHandlersExceededReason = 'concurrent_handlers_exceeded';
 
+  /// A response accepted earlier is still waiting on a slow hub. This uses the
+  /// same transient JSON-RPC code as other admission limits, while telling the
+  /// hub to drain output before submitting more work.
+  static const String outboundResponseCapacityExceededReason = 'outbound_response_capacity_exceeded';
+
   /// Sliding-window limit from RpcRequestGuard (same RPC code as generic rate limit).
   static const String rateWindowExceededReason = 'rate_window_exceeded';
 
@@ -26,6 +31,9 @@ abstract final class RpcInboundConstants {
 
   static String concurrentHandlersExceededTechnicalMessage(int maxConcurrentHandlers) =>
       'Concurrent RPC handler limit exceeded ($maxConcurrentHandlers)';
+
+  static String outboundResponseCapacityExceededTechnicalMessage(int maxOutstandingResponses) =>
+      'Outstanding RPC response limit exceeded ($maxOutstandingResponses)';
 
   static const String protocolNotReadyTechnicalMessage =
       'Protocol not ready: agent:capabilities has not been received yet';

@@ -75,35 +75,6 @@ void main() {
       });
     });
 
-    group('autostart window bootstrap', () {
-      test('should hide during autostart bootstrap and never reveal on login', () {
-        expect(
-          AppPreferencesPolicy.shouldHideWindowDuringAutostartBootstrap(
-            isAutostartLaunch: true,
-          ),
-          isTrue,
-        );
-        expect(
-          AppPreferencesPolicy.shouldHideWindowDuringAutostartBootstrap(
-            isAutostartLaunch: false,
-          ),
-          isFalse,
-        );
-        expect(
-          AppPreferencesPolicy.shouldRevealWindowAfterAutostartBootstrap(
-            isAutostartLaunch: true,
-          ),
-          isFalse,
-        );
-        expect(
-          AppPreferencesPolicy.shouldRevealWindowAfterAutostartBootstrap(
-            isAutostartLaunch: false,
-          ),
-          isFalse,
-        );
-      });
-    });
-
     group('shouldRunWinSparkleBackgroundChecks', () {
       test('should run when notifications are on and silent updates are off', () {
         expect(

@@ -6656,6 +6656,12 @@ abstract class AppLocalizations {
   /// **'Make sure Plug Agente is enabled in Windows Startup apps. Windows login starts the app in the tray.'**
   String get gsToggleStartWithWindowsOpenStartupAppsHint;
 
+  /// No description provided for @gsToggleStartWithWindowsNoTrayHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows startup is active. Because the tray is unavailable in this session, the app will show its window at login.'**
+  String get gsToggleStartWithWindowsNoTrayHint;
+
   /// No description provided for @gsToggleMinimizeToTray.
   ///
   /// In en, this message translates to:
@@ -6817,6 +6823,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to save local preference'**
   String get gsErrorSettingsPersistenceFailed;
+
+  /// No description provided for @gsErrorTrayUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The tray is unavailable in this session. Your preferences were preserved for the next launch.'**
+  String get gsErrorTrayUnavailable;
+
+  /// No description provided for @gsErrorTrayBehaviorApplyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not apply the window behavior for the tray'**
+  String get gsErrorTrayBehaviorApplyFailed;
 
   /// Combines the translated error message with an optional technical detail.
   ///

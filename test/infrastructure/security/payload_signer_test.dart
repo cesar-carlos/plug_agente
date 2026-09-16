@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -151,6 +152,26 @@ void main() {
           signature,
         ),
       ).isFalse();
+    });
+
+    test('async frame signing and verification use the reusable transport workers', () async {
+      final frame = PayloadFrame(
+        schemaVersion: '1.0',
+        enc: 'json',
+        cmp: 'none',
+        contentType: 'application/json',
+        originalSize: 70000,
+        compressedSize: 70000,
+        payload: Uint8List(70000),
+        traceId: 'trace-async',
+      );
+
+      final signed = await signer.signFrameAsync(frame);
+      final verified = await signer.verifyFrameAsyncWithMetrics(frame, signed.signature);
+
+      check(verified.isValid).isTrue();
+      check(signed.metrics.signDurationUs).isNotNull();
+      check(verified.metrics.verifyDurationUs).isNotNull();
     });
 
     test('matches shared HMAC test vectors', () {

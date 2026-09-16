@@ -6,7 +6,7 @@ import 'package:plug_agente/application/policies/app_preferences_policy.dart';
 import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
-import 'package:plug_agente/core/services/window_manager_service.dart';
+import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/presentation/boot/desktop_shell_bootstrap_dependencies.dart';
@@ -58,7 +58,7 @@ class DesktopShellBootstrap {
   final NativeWindowVisibilityFallback _nativeWindowVisibilityFallback;
 
   Future<void> initialize(RuntimeCapabilities capabilities) async {
-    WindowManagerService? windowManagerService;
+    IDesktopWindowService? windowManagerService;
 
     if (capabilities.supportsWindowManager) {
       windowManagerService = await _initializeWindowManager(capabilities);
@@ -66,8 +66,9 @@ class DesktopShellBootstrap {
       await _restoreNativeWindowWhenWindowManagerUnavailable();
     }
 
+    var trayReady = false;
     if (capabilities.supportsTray && windowManagerService != null) {
-      await _initializeTray(windowManagerService);
+      trayReady = await _initializeTray(windowManagerService);
     } else if (capabilities.supportsTray) {
       developer.log(
         'Tray manager skipped because window manager is unavailable',
@@ -82,15 +83,20 @@ class DesktopShellBootstrap {
       );
     }
 
-    await _revealWindowAfterAutostartIfNeeded(windowManagerService);
+    if (!trayReady && windowManagerService != null) {
+      await _restoreWindowAfterTrayUnavailable(windowManagerService);
+    }
     await _initializeNotifications();
   }
 
-  Future<WindowManagerService?> _initializeWindowManager(
+  Future<IDesktopWindowService?> _initializeWindowManager(
     RuntimeCapabilities capabilities,
   ) async {
     try {
-      final windowManagerService = _dependencies.resolveWindowManager ?? WindowManagerService();
+      final windowManagerService = _dependencies.resolveWindowManager;
+      if (windowManagerService == null) {
+        throw StateError('Window manager service is unavailable.');
+      }
       final minSize = WindowConstraints.getMainWindowMinSize();
       const initialSize = Size(1200, 800);
 
@@ -103,11 +109,7 @@ class DesktopShellBootstrap {
       await windowManagerService.initialize(
         size: initialSize,
         minimumSize: minSize,
-        startMinimized:
-            AppPreferencesPolicy.shouldHideWindowDuringAutostartBootstrap(
-              isAutostartLaunch: isAutostartLaunch,
-            ) ||
-            preferences.startMinimized,
+        startMinimized: preferences.startMinimized,
       );
 
       developer.log(
@@ -117,7 +119,7 @@ class DesktopShellBootstrap {
         level: 800,
       );
       return windowManagerService;
-    } on Exception catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       developer.log(
         'Failed to initialize window manager (degraded mode will continue)',
         name: 'desktop_shell_bootstrap',
@@ -137,7 +139,7 @@ class DesktopShellBootstrap {
 
     try {
       await _nativeWindowVisibilityFallback();
-    } on Exception catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       developer.log(
         'Failed to restore native window after window manager initialization failure',
         name: 'desktop_shell_bootstrap',
@@ -155,7 +157,7 @@ class DesktopShellBootstrap {
 
     try {
       await _nativeWindowVisibilityFallback();
-    } on Exception catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       developer.log(
         'Failed to restore native window when window manager is unavailable',
         name: 'desktop_shell_bootstrap',
@@ -166,9 +168,7 @@ class DesktopShellBootstrap {
     }
   }
 
-  Future<void> _initializeTray(
-    WindowManagerService windowManagerService,
-  ) async {
+  Future<bool> _initializeTray(IDesktopWindowService windowManagerService) async {
     try {
       final trayService = _dependencies.trayService;
       await trayService.initialize(
@@ -177,18 +177,42 @@ class DesktopShellBootstrap {
             case TrayMenuAction.show:
               await windowManagerService.show();
             case TrayMenuAction.exit:
-              trayService.dispose();
+              await trayService.dispose();
               await windowManagerService.close();
           }
         },
       );
+      if (!trayService.isReady) {
+        developer.log(
+          'Tray manager did not become ready after initialization',
+          name: 'desktop_shell_bootstrap',
+          level: 900,
+        );
+        return false;
+      }
 
       final prefs = _dependencies.settingsStore;
       final preferences = resolveStartupWindowPreferences(prefs);
 
-      windowManagerService
-        ..setMinimizeToTray(value: preferences.minimizeToTray)
-        ..setCloseToTray(value: preferences.closeToTray);
+      final minimizeResult = await windowManagerService.setMinimizeToTray(
+        value: preferences.minimizeToTray,
+      );
+      final closeResult = await windowManagerService.setCloseToTray(
+        value: preferences.closeToTray,
+      );
+      if (minimizeResult.isError() || closeResult.isError()) {
+        developer.log(
+          'Tray behavior could not be applied; disabling tray for this session',
+          name: 'desktop_shell_bootstrap',
+          level: 900,
+          error: minimizeResult.exceptionOrNull() ?? closeResult.exceptionOrNull(),
+        );
+        await _disableTrayBehaviorsForCurrentSession(
+          windowManagerService,
+          trayService,
+        );
+        return false;
+      }
 
       developer.log(
         'Tray behaviors configured '
@@ -203,7 +227,8 @@ class DesktopShellBootstrap {
         name: 'desktop_shell_bootstrap',
         level: 800,
       );
-    } on Exception catch (e, stackTrace) {
+      return true;
+    } on Object catch (e, stackTrace) {
       developer.log(
         'Failed to initialize tray manager (continuing without tray)',
         name: 'desktop_shell_bootstrap',
@@ -211,27 +236,38 @@ class DesktopShellBootstrap {
         error: e,
         stackTrace: stackTrace,
       );
-      await _restoreWindowAfterTrayFailure(windowManagerService);
+      await _disposeTrayService(trayService: _dependencies.trayService);
+      return false;
     }
   }
 
-  Future<void> _revealWindowAfterAutostartIfNeeded(
-    WindowManagerService? windowManagerService,
+  Future<void> _disableTrayBehaviorsForCurrentSession(
+    IDesktopWindowService windowManagerService,
+    ITrayService trayService,
   ) async {
-    if (windowManagerService == null) {
-      return;
-    }
-    if (!AppPreferencesPolicy.shouldRevealWindowAfterAutostartBootstrap(
-      isAutostartLaunch: isAutostartLaunch,
-    )) {
-      return;
-    }
-
-    try {
-      await windowManagerService.show();
-    } on Exception catch (e, stackTrace) {
+    final disableMinimizeResult = await windowManagerService.setMinimizeToTray(
+      value: false,
+    );
+    final disableCloseResult = await windowManagerService.setCloseToTray(
+      value: false,
+    );
+    if (disableMinimizeResult.isError() || disableCloseResult.isError()) {
       developer.log(
-        'Failed to reveal window after autostart bootstrap',
+        'Could not fully disable tray behaviors for the current session',
+        name: 'desktop_shell_bootstrap',
+        level: 900,
+        error: disableMinimizeResult.exceptionOrNull() ?? disableCloseResult.exceptionOrNull(),
+      );
+    }
+    await _disposeTrayService(trayService: trayService);
+  }
+
+  Future<void> _disposeTrayService({required ITrayService trayService}) async {
+    try {
+      await trayService.dispose();
+    } on Object catch (e, stackTrace) {
+      developer.log(
+        'Failed to dispose tray manager after it became unavailable',
         name: 'desktop_shell_bootstrap',
         level: 900,
         error: e,
@@ -240,16 +276,16 @@ class DesktopShellBootstrap {
     }
   }
 
-  Future<void> _restoreWindowAfterTrayFailure(
-    WindowManagerService windowManagerService,
+  Future<void> _restoreWindowAfterTrayUnavailable(
+    IDesktopWindowService windowManagerService,
   ) async {
     try {
       if (!await windowManagerService.isVisible()) {
         await windowManagerService.show();
       }
-    } on Exception catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       developer.log(
-        'Failed to restore window after tray initialization failure',
+        'Failed to restore window after tray was unavailable',
         name: 'desktop_shell_bootstrap',
         level: 900,
         error: e,

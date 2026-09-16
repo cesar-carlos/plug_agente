@@ -78,16 +78,38 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     }
 
     final clientTokenRepository = _clientTokenRepository;
+    if (policyCache != null) {
+      final joined = policyCache.hasPendingResolution(credentialHash);
+      if (joined) {
+        _cacheMetrics?.recordPolicyResolutionJoined();
+      } else {
+        _cacheMetrics?.recordPolicyResolutionStarted();
+      }
+      final resolution = await policyCache.resolveSingleFlight(
+        credentialHash,
+        () => _resolveUncachedPolicy(rawToken, clientTokenRepository),
+      );
+      if (!resolution.isCurrent) {
+        // A revoke/rotation/delete won the race. Re-check revocation and load
+        // the current policy instead of letting an old lookup authorize.
+        return resolvePolicy(token);
+      }
+      return resolution.result;
+    }
+
+    return _resolveUncachedPolicy(rawToken, clientTokenRepository);
+  }
+
+  Future<Result<ClientTokenPolicy>> _resolveUncachedPolicy(
+    String rawToken,
+    IClientTokenRepository? clientTokenRepository,
+  ) async {
     if (clientTokenRepository != null) {
       final localResult = await _resolvePolicyFromLocalStore(
         clientTokenRepository,
         rawToken,
       );
       if (localResult.isSuccess()) {
-        final policy = localResult.getOrNull();
-        if (policy != null) {
-          policyCache?.put(credentialHash, policy);
-        }
         return localResult;
       }
       final localFailure = localResult.exceptionOrNull()! as domain.Failure;
@@ -116,11 +138,6 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
         if (failure is domain.Failure) {
           _addToRevokedStoreIfNeeded(rawToken, failure);
           await _recordAuthorizationDeniedAudit(failure);
-        }
-      } else {
-        final policy = jwksResolved.getOrNull();
-        if (policy != null) {
-          policyCache?.put(credentialHash, policy);
         }
       }
       return jwksResolved;

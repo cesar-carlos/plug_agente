@@ -19,6 +19,12 @@ enum SystemSettingsErrorCode {
 
   /// Falha ao persistir uma preferência local.
   settingsPersistenceFailed,
+
+  /// A bandeja não ficou operacional nesta sessão.
+  trayUnavailable,
+
+  /// A preferência foi salva, mas o comportamento de janela não pôde ser aplicado.
+  trayBehaviorApplyFailed,
 }
 
 enum SystemSettingsNoticeCode {

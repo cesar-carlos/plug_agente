@@ -3,4 +3,8 @@ abstract class IAuthorizationCacheMetrics {
   void recordDecisionCacheLookup({required bool hit});
 
   void recordPolicyCacheLookup({required bool hit});
+
+  void recordPolicyResolutionStarted();
+
+  void recordPolicyResolutionJoined();
 }

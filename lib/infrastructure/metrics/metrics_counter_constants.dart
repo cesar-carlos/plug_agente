@@ -47,7 +47,11 @@ abstract final class MetricsCounterNames {
   static const String authDecisionCacheMissCounter = 'auth_decision_cache_miss';
   static const String authPolicyCacheHitCounter = 'auth_policy_cache_hit';
   static const String authPolicyCacheMissCounter = 'auth_policy_cache_miss';
+  static const String authPolicyResolutionStartedCounter = 'auth_policy_resolution_started';
+  static const String authPolicyResolutionJoinedCounter = 'auth_policy_resolution_joined';
   static const String rpcSqlExecuteStreamingChunksResponseCounter = 'rpc_sql_execute_streaming_chunks_response';
+  static const String rpcSqlExecuteMaterializedPromotionToStreamingCounter =
+      'rpc_sql_execute_materialized_promotion_to_streaming';
   static const String rpcSqlExecuteStreamingFromDbResponseCounter = 'rpc_sql_execute_streaming_from_db_response';
   static const String rpcSqlExecuteAutoStreamingFromDbResponseCounter =
       'rpc_sql_execute_auto_streaming_from_db_response';
@@ -66,6 +70,10 @@ abstract final class MetricsCounterNames {
   static const String rpcResponseAckSkippedSqlExecuteBatchCounter = 'rpc_response_ack_skipped_sql_execute_batch';
   static const String rpcResponseEmitFailureCounter = 'rpc_response_emit_failure';
   static const String rpcResponseEmitSkippedDisconnectedCounter = 'rpc_response_emit_skipped_disconnected';
+  static const String rpcOutboundResponseReservedCounter = 'rpc_outbound_response_reserved';
+  static const String rpcOutboundResponseRejectedCounter = 'rpc_outbound_response_rejected';
+  static const String rpcOutboundResponseReleasedCounter = 'rpc_outbound_response_released';
+  static const String rpcOutboundResponseSessionResetCounter = 'rpc_outbound_response_session_reset';
   static const String transportSessionResetCounter = 'transport_session_reset';
   static const String transportStaleEventDroppedCounter = 'transport_stale_event_dropped';
   static const String heartbeatAckRejectedCounter = 'heartbeat_ack_rejected';

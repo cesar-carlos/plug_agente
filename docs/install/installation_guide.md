@@ -48,7 +48,7 @@ A tela de boas-vindas fica desligada. O assistente começa pela pasta de instala
 O instalador mostra opções para:
 
 - **Criar um atalho na área de trabalho**
-- **Iniciar com o Windows**: o aplicativo inicia no login (`--autostart`, na bandeja). Não há opção de "iniciar minimizado".
+- **Iniciar com o Windows**: o aplicativo inicia no login (`--autostart`, na bandeja quando ela estiver operacional). Se a bandeja não estiver disponível, a janela é exibida como fallback seguro. Não há opção de "iniciar minimizado".
 
 Se o Microsoft Visual C++ Redistributable x64 não estiver presente, o setup baixa e instala o runtime da Microsoft antes de copiar os arquivos. Sem internet essa etapa falha e a instalação é abortada.
 

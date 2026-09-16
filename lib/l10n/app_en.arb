@@ -1439,6 +1439,7 @@
   "gsToggleStartMinimizedRequiresTray": "Requires tray support in this environment.",
   "gsToggleStartWithWindowsAdminHint": "If the app does not start with Windows, also check Windows Startup apps.",
   "gsToggleStartWithWindowsOpenStartupAppsHint": "Make sure Plug Agente is enabled in Windows Startup apps. Windows login starts the app in the tray.",
+  "gsToggleStartWithWindowsNoTrayHint": "Windows startup is active. Because the tray is unavailable in this session, the app will show its window at login.",
   "gsToggleMinimizeToTray": "Minimize to tray",
   "gsToggleCloseToTray": "Close to tray",
   "gsSectionUpdates": "Updates",
@@ -1466,6 +1467,8 @@
   "gsErrorStartupServiceUnavailable": "Startup configuration is not available in this environment",
   "gsErrorStartupOpenSystemSettingsFailed": "Failed to open system settings",
   "gsErrorSettingsPersistenceFailed": "Failed to save local preference",
+  "gsErrorTrayUnavailable": "The tray is unavailable in this session. Your preferences were preserved for the next launch.",
+  "gsErrorTrayBehaviorApplyFailed": "Could not apply the window behavior for the tray",
   "gsErrorWithDetail": "{message}: {detail}",
   "@gsErrorWithDetail": {
     "description": "Combines the translated error message with an optional technical detail.",

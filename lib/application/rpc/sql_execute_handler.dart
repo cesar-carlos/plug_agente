@@ -4,6 +4,7 @@ import 'package:plug_agente/application/rpc/sql_db_streaming_auto_policy.dart';
 import 'package:plug_agente/application/rpc/sql_execute_materialized_result_policy.dart';
 import 'package:plug_agente/application/rpc/sql_execute_params_reader.dart';
 import 'package:plug_agente/application/rpc/sql_execute_result_mapper.dart';
+import 'package:plug_agente/application/rpc/sql_materialized_streaming_promotion_policy.dart';
 import 'package:plug_agente/application/rpc/sql_options_resolver.dart';
 import 'package:plug_agente/application/rpc/sql_pagination_resolver.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
@@ -42,6 +43,8 @@ class SqlExecuteHandler {
     required Duration sqlExecuteTotalBudget,
     SqlDbStreamingAutoPolicy? dbStreamingAutoPolicy,
     SqlExecuteMaterializedResultPolicy? materializedResultPolicy,
+    SqlMaterializedStreamingPromotionPolicy materializedStreamingPromotionPolicy =
+        const SqlMaterializedStreamingPromotionPolicy(),
     IDeprecationMetricsCollector? deprecationMetrics,
     IRpcDispatchMetricsCollector? dispatchMetrics,
   }) : _normalizerService = normalizerService,
@@ -54,6 +57,7 @@ class SqlExecuteHandler {
        _materializedStreamingExecutor = materializedStreamingExecutor,
        _dbStreamingAutoPolicy = dbStreamingAutoPolicy ?? SqlDbStreamingAutoPolicy(),
        _materializedResultPolicy = materializedResultPolicy ?? const SqlExecuteMaterializedResultPolicy(),
+       _materializedStreamingPromotionPolicy = materializedStreamingPromotionPolicy,
        _sqlExecuteTotalBudgetDuration = sqlExecuteTotalBudget,
        _deprecationMetrics = deprecationMetrics,
        _dispatchMetrics = dispatchMetrics;
@@ -68,6 +72,7 @@ class SqlExecuteHandler {
   final SqlRpcMaterializedStreamingExecutor _materializedStreamingExecutor;
   final SqlDbStreamingAutoPolicy _dbStreamingAutoPolicy;
   final SqlExecuteMaterializedResultPolicy _materializedResultPolicy;
+  final SqlMaterializedStreamingPromotionPolicy _materializedStreamingPromotionPolicy;
   final Duration _sqlExecuteTotalBudgetDuration;
   final IDeprecationMetricsCollector? _deprecationMetrics;
   final IRpcDispatchMetricsCollector? _dispatchMetrics;
@@ -331,13 +336,21 @@ class SqlExecuteHandler {
               effectiveMaxRows: maxRows,
               limits: limits,
             );
+            final promotedByPayloadVolume =
+                !multiResultRequested &&
+                pagination == null &&
+                SqlValidator.validateSelectQuery(prepared.stripped).isSuccess() &&
+                _materializedStreamingPromotionPolicy.shouldPromote(
+                  rows: limitedRows,
+                  limits: limits,
+                );
             final useStreaming =
                 _featureFlags.enableSocketStreamingChunks &&
                 streamEmitter != null &&
                 !request.isNotification &&
                 pagination == null &&
                 !responseForWire.hasMultiResult &&
-                limitedRows.length > limits.streamingRowThreshold &&
+                (limitedRows.length > limits.streamingRowThreshold || promotedByPayloadVolume) &&
                 !avoidMaterializedStreaming;
 
             if (!useStreaming && avoidMaterializedStreaming && limitedRows.length > limits.streamingRowThreshold) {
@@ -345,6 +358,9 @@ class SqlExecuteHandler {
             }
 
             if (useStreaming) {
+              if (promotedByPayloadVolume && limitedRows.length <= limits.streamingRowThreshold) {
+                _dispatchMetrics?.recordSqlExecuteMaterializedPromotionToStreaming();
+              }
               final streamingFallbackGuard = _materializedResultPolicy.rejectIfMaterializedStreamingFallbackUnsafe(
                 rowCount: limitedRows.length,
                 limits: limits,

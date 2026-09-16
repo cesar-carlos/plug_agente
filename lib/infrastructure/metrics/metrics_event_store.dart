@@ -13,6 +13,8 @@ final class MetricsEventStore {
   int maxQueueSize = 0;
   int currentActiveWorkers = 0;
   int maxActiveWorkers = 0;
+  int outboundResponseActive = 0;
+  int outboundResponseMaxActive = 0;
   final ListQueue<Duration> queueWaitTimes = ListQueue<Duration>();
   final ListQueue<Duration> agentActionQueueWaitTimes = ListQueue<Duration>();
   final ListQueue<Duration> agentActionExecutionDurations = ListQueue<Duration>();
@@ -37,6 +39,7 @@ final class MetricsEventStore {
   final Queue<String> recentDiagnosticReasons = Queue<String>();
   final ListQueue<Duration> autoUpdateProbeTimes = ListQueue<Duration>();
   final ListQueue<Duration> autoUpdateDownloadTimes = ListQueue<Duration>();
+  final ListQueue<Duration> outboundResponseWaitTimes = ListQueue<Duration>();
 
   int counterValue(String counter) => eventCounters[counter] ?? 0;
 
@@ -85,9 +88,12 @@ final class MetricsEventStore {
     maxQueueSize = 0;
     currentActiveWorkers = 0;
     maxActiveWorkers = 0;
+    outboundResponseActive = 0;
+    outboundResponseMaxActive = 0;
     queueWaitTimes.clear();
     autoUpdateProbeTimes.clear();
     autoUpdateDownloadTimes.clear();
+    outboundResponseWaitTimes.clear();
     agentActionQueueWaitTimes.clear();
     agentActionExecutionDurations.clear();
     poolWaitTimes.clear();

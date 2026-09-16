@@ -204,6 +204,9 @@ abstract final class ConnectionConstants {
       SocketTransportConstants.defaultAuthorizationDecisionCacheTtlSeconds;
   static Duration get authorizationDecisionCacheTtl => SocketTransportConstants.authorizationDecisionCacheTtl;
   static int get gzipIsolateThresholdBytes => SocketTransportConstants.gzipIsolateThresholdBytes;
+  static const Duration adaptiveCompressionSkipTtl = SocketTransportConstants.adaptiveCompressionSkipTtl;
+  static const int adaptiveCompressionCacheMaxEntries = SocketTransportConstants.adaptiveCompressionCacheMaxEntries;
+  static int get transportWorkerPoolSize => SocketTransportConstants.transportWorkerPoolSize;
   static const int defaultSigningIsolateThresholdBytes = SocketTransportConstants.defaultSigningIsolateThresholdBytes;
   static int get signingIsolateThresholdBytes => SocketTransportConstants.signingIsolateThresholdBytes;
   static const int defaultRecommendedStreamPullWindowSize =

@@ -78,12 +78,14 @@ class SettingsToggleTile extends StatelessWidget {
     required this.onChanged,
     super.key,
     this.description,
+    this.isLoading = false,
   });
 
   final String label;
   final String? description;
   final bool value;
   final ValueChanged<bool>? onChanged;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -117,9 +119,16 @@ class SettingsToggleTile extends StatelessWidget {
             ],
           ),
         ),
-        ExcludeSemantics(
-          child: ToggleSwitch(checked: value, onChanged: onChanged),
-        ),
+        if (isLoading)
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: ProgressRing(strokeWidth: 2),
+          )
+        else
+          ExcludeSemantics(
+            child: ToggleSwitch(checked: value, onChanged: onChanged),
+          ),
       ],
     );
 

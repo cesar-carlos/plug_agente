@@ -54,12 +54,15 @@ final class MetricsCollectorSnapshotBuilder {
       'sql_queue_max_size': store.maxQueueSize,
       'sql_queue_current_workers': store.currentActiveWorkers,
       'sql_queue_max_workers': store.maxActiveWorkers,
+      'rpc_outbound_response_active': store.outboundResponseActive,
+      'rpc_outbound_response_max_active': store.outboundResponseMaxActive,
       'sql_queue_avg_wait_time_ms': store.queueWaitTimes.isEmpty
           ? 0.0
           : store.queueWaitTimes.fold<int>(0, (sum, d) => sum + d.inMilliseconds) / store.queueWaitTimes.length,
       'sql_queue_p95_wait_time_ms': p95QueueWaitTime?.inMilliseconds ?? 0,
       'sql_queue_max_recent_wait_time_ms': maxRecentQueueWaitTime?.inMilliseconds ?? 0,
       ..._durationStatsSnapshot('agent_action_queue_wait', store.agentActionQueueWaitTimes),
+      ..._durationStatsSnapshot('rpc_outbound_response_wait', store.outboundResponseWaitTimes),
       ..._durationStatsSnapshot('agent_action_execution', store.agentActionExecutionDurations),
       ..._durationStatsSnapshot('pool_wait', store.poolWaitTimes),
       ..._durationStatsSnapshot('direct_connection_wait', store.directConnectionWaitTimes),

@@ -1439,6 +1439,7 @@
   "gsToggleStartMinimizedRequiresTray": "Requer suporte à bandeja neste ambiente.",
   "gsToggleStartWithWindowsAdminHint": "Se o app não iniciar com o Windows, verifique também em Aplicativos de Inicialização do Windows.",
   "gsToggleStartWithWindowsOpenStartupAppsHint": "Confira se o Plug Agente está ativado em Inicialização do Windows. No login, o app inicia na bandeja.",
+  "gsToggleStartWithWindowsNoTrayHint": "A inicialização com o Windows está ativa. Como a bandeja não está disponível nesta sessão, o app abrirá a janela no login.",
   "gsToggleMinimizeToTray": "Minimizar para bandeja",
   "gsToggleCloseToTray": "Fechar para bandeja",
   "gsSectionUpdates": "Atualizações",
@@ -1466,6 +1467,8 @@
   "gsErrorStartupServiceUnavailable": "Configurações de inicialização não disponíveis neste ambiente",
   "gsErrorStartupOpenSystemSettingsFailed": "Falha ao abrir configurações do sistema",
   "gsErrorSettingsPersistenceFailed": "Falha ao salvar preferência local",
+  "gsErrorTrayUnavailable": "A bandeja não está disponível nesta sessão. As preferências foram preservadas para a próxima inicialização.",
+  "gsErrorTrayBehaviorApplyFailed": "Não foi possível aplicar o comportamento da janela para a bandeja",
   "gsErrorWithDetail": "{message}: {detail}",
   "@gsErrorWithDetail": {
     "description": "Combina a mensagem traduzida do erro com um detalhe técnico opcional.",

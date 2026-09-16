@@ -23,4 +23,10 @@ class AuthorizationCacheMetricsCollector implements IAuthorizationCacheMetrics {
       _metrics.recordAuthPolicyCacheMiss();
     }
   }
+
+  @override
+  void recordPolicyResolutionStarted() => _metrics.recordAuthPolicyResolutionStarted();
+
+  @override
+  void recordPolicyResolutionJoined() => _metrics.recordAuthPolicyResolutionJoined();
 }

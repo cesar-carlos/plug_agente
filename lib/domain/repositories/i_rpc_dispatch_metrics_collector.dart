@@ -4,6 +4,8 @@ import 'package:plug_agente/domain/errors/failures.dart';
 abstract class IRpcDispatchMetricsCollector {
   void recordSqlExecuteStreamingChunksResponse();
 
+  void recordSqlExecuteMaterializedPromotionToStreaming();
+
   void recordSqlExecuteStreamingFromDbResponse();
 
   void recordSqlExecuteAutoStreamingFromDbResponse();

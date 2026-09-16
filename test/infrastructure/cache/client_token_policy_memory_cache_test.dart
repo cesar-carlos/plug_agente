@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/entities/client_token_policy.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
+import 'package:result_dart/result_dart.dart';
 
 void main() {
   group('ClientTokenPolicyMemoryCache', () {
@@ -61,6 +64,30 @@ void main() {
       final cache = ClientTokenPolicyMemoryCache();
       cache.put('h', policy('c'));
       cache.invalidateAll();
+      expect(cache.get('h'), isNull);
+    });
+
+    test('shares one pending lookup and does not cache a result invalidated mid-flight', () async {
+      final cache = ClientTokenPolicyMemoryCache();
+      final completer = Completer<Result<ClientTokenPolicy>>();
+      var calls = 0;
+      Future<Result<ClientTokenPolicy>> load() {
+        calls++;
+        return completer.future;
+      }
+
+      final first = cache.resolveSingleFlight('h', load);
+      final second = cache.resolveSingleFlight('h', load);
+      expect(cache.hasPendingResolution('h'), isTrue);
+      expect(calls, 1);
+
+      cache.invalidate('h');
+      completer.complete(Success(policy('c1')));
+      final firstResult = await first;
+      final secondResult = await second;
+
+      expect(firstResult.isCurrent, isFalse);
+      expect(secondResult.isCurrent, isFalse);
       expect(cache.get('h'), isNull);
     });
   });

@@ -35,6 +35,9 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
   void recordRpcSqlExecuteStreamingChunksResponse() =>
       _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteStreamingChunksResponseCounter);
 
+  void recordRpcSqlExecuteMaterializedPromotionToStreaming() =>
+      _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteMaterializedPromotionToStreamingCounter);
+
   void recordRpcSqlExecuteStreamingFromDbResponse() =>
       _incrementEventCounter(MetricsCounterNames.rpcSqlExecuteStreamingFromDbResponseCounter);
 
@@ -160,6 +163,30 @@ base mixin MetricsCollectorProtocolDomain on MetricsCollectorCore {
 
   void recordRpcResponseEmitSkippedDisconnected() =>
       _incrementEventCounter(MetricsCounterNames.rpcResponseEmitSkippedDisconnectedCounter);
+
+  void recordRpcOutboundResponseReserved() {
+    _incrementEventCounter(MetricsCounterNames.rpcOutboundResponseReservedCounter);
+    store.outboundResponseActive++;
+    if (store.outboundResponseActive > store.outboundResponseMaxActive) {
+      store.outboundResponseMaxActive = store.outboundResponseActive;
+    }
+  }
+
+  void recordRpcOutboundResponseRejected() =>
+      _incrementEventCounter(MetricsCounterNames.rpcOutboundResponseRejectedCounter);
+
+  void recordRpcOutboundResponseReleased(Duration wait) {
+    _incrementEventCounter(MetricsCounterNames.rpcOutboundResponseReleasedCounter);
+    if (store.outboundResponseActive > 0) {
+      store.outboundResponseActive--;
+    }
+    store.recordDurationSample(store.outboundResponseWaitTimes, wait);
+  }
+
+  void recordRpcOutboundResponseReset() {
+    _incrementEventCounter(MetricsCounterNames.rpcOutboundResponseSessionResetCounter);
+    store.outboundResponseActive = 0;
+  }
 
   void recordTransportSessionReset() => _incrementEventCounter(MetricsCounterNames.transportSessionResetCounter);
 

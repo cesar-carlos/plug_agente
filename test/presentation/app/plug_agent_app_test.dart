@@ -32,10 +32,10 @@ class _RecordingWindowManager implements IWindowManagerService {
   }
 
   @override
-  void setCloseToTray({required bool value}) {}
+  Future<Result<Unit>> setCloseToTray({required bool value}) async => const Success(unit);
 
   @override
-  void setMinimizeToTray({required bool value}) {}
+  Future<Result<Unit>> setMinimizeToTray({required bool value}) async => const Success(unit);
 }
 
 class _FakeOrchestrator implements IAutoUpdateOrchestrator {

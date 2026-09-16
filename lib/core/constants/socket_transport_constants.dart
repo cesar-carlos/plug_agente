@@ -191,6 +191,17 @@ abstract final class SocketTransportConstants {
   static int get gzipIsolateThresholdBytes =>
       ConnectionConstantsEnv.positiveInt('TRANSPORT_GZIP_ISOLATE_THRESHOLD_BYTES') ?? defaultGzipIsolateThresholdBytes;
 
+  /// Short negative-cache TTL for automatic GZIP of an incompressible event
+  /// and size tier. Explicit `gzip` never consults this cache.
+  static const Duration adaptiveCompressionSkipTtl = Duration(seconds: 30);
+
+  static const int adaptiveCompressionCacheMaxEntries = 64;
+
+  /// Reusable workers for large JSON/GZIP/HMAC transport operations.
+  /// Override with `TRANSPORT_WORKER_POOL_SIZE`; values are clamped to 1..4.
+  static int get transportWorkerPoolSize =>
+      (ConnectionConstantsEnv.positiveInt('TRANSPORT_WORKER_POOL_SIZE') ?? 2).clamp(1, 4);
+
   /// Transport-frame original size above which HMAC-SHA256 signing/verification
   /// is offloaded to a background isolate via `compute()`.
   ///

@@ -24,6 +24,7 @@ import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbou
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_response_emitter.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_validation_responder.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_inbound_wire_payload.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound/rpc_outbound_response_admission.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_guard_mapping.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_response_enricher.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/rpc_inbound_schema_validation_pipeline.dart';
@@ -74,6 +75,7 @@ class RpcInboundHandler {
     MetricsCollector? metricsCollector,
     void Function(bool paused)? setHubSqlDashboardCapturePaused,
     IAgentHealthStatusProvider? healthService,
+    RpcOutboundResponseAdmission? outboundResponseAdmission,
   }) : _featureFlags = featureFlags,
        _protocolProvider = protocolProvider,
        _agentIdProvider = agentIdProvider,
@@ -113,6 +115,8 @@ class RpcInboundHandler {
         });
 
     _concurrencySlots = RpcInboundConcurrencySlots();
+    _outboundResponseAdmission =
+        outboundResponseAdmission ?? RpcOutboundResponseAdmission(metricsCollector: metricsCollector);
     _responseEmitter = RpcInboundResponseEmitter(
       concurrencySlots: _concurrencySlots,
       emitRpcResponse: emitRpcResponseWithContext,
@@ -145,10 +149,12 @@ class RpcInboundHandler {
       schemaValidator: _schemaValidator,
       agentIdProvider: _agentIdProvider,
       emitInboundRpcResponse: _responseEmitter.emit,
+      emitInboundRpcResponseWithCompletion: _responseEmitter.emit,
       emitEvent: emitEvent,
       sendSchemaValidationError: _validationResponder.sendSchemaValidationError,
       validateBatchRequestJsonSchemasOrEmit: _validationResponder.validateBatchRequestJsonSchemasOrEmit,
       hasNullIdCompatibilityViolation: _hasNullIdCompatibilityViolation,
+      outboundResponseAdmission: _outboundResponseAdmission,
       metricsCollector: metricsCollector,
       setHubSqlDashboardCapturePaused: _setHubSqlDashboardCapturePaused,
       responseEnricher: _responseEnricher,
@@ -174,6 +180,7 @@ class RpcInboundHandler {
   late final RpcInboundResponseEnricher _responseEnricher;
 
   late final RpcInboundConcurrencySlots _concurrencySlots;
+  late final RpcOutboundResponseAdmission _outboundResponseAdmission;
   late final RpcInboundResponseEmitter _responseEmitter;
   late final RpcInboundAckCoalescer _ackCoalescer;
   late final RpcInboundRateLimitResponder _rateLimitResponder;
@@ -205,6 +212,8 @@ class RpcInboundHandler {
   Future<void> handleRequest(dynamic data) async {
     dynamic inboundRequestId;
     Object? inboundRequestMethod;
+    RpcOutboundResponseReservation? responseReservation;
+    var responseReservationTransferred = false;
     try {
       final wirePayload = unwrapRpcInboundWirePayload(data);
       dynamic payload = wirePayload.payload;
@@ -353,6 +362,19 @@ class RpcInboundHandler {
         return;
       }
 
+      final expectsResponse = !_featureFlags.enableSocketNotificationsContract || !request.isNotification;
+      if (expectsResponse) {
+        responseReservation = _outboundResponseAdmission.tryReserve();
+        if (responseReservation == null) {
+          await _rateLimitResponder.emitOutboundCapacityLimitedError(
+            id: request.id,
+            method: request.method,
+            maxOutstandingResponses: _outboundResponseAdmission.maxOutstanding,
+          );
+          return;
+        }
+      }
+
       if (_featureFlags.enableSocketDeliveryGuarantees && !request.isNotification) {
         // Ack means "accepted for processing" after guard checks (rate-limit /
         // replay), not "dispatch completed". The hub may still receive this
@@ -408,9 +430,12 @@ class RpcInboundHandler {
           return;
         }
 
+        final reservation = responseReservation;
+        responseReservationTransferred = reservation != null;
         await _responseEmitter.emit(
           enrichedResponse,
           methodsById: <Object?, String>{request.id: request.method},
+          onCompleted: reservation?.release,
         );
       } finally {
         if (pauseDashboardCapture) {
@@ -452,7 +477,13 @@ class RpcInboundHandler {
           id: inboundRequestId,
           method: inboundRequestMethod,
         ),
+        onCompleted: responseReservation?.release,
       );
+      responseReservationTransferred = responseReservation != null;
+    } finally {
+      if (!responseReservationTransferred) {
+        responseReservation?.release();
+      }
     }
   }
 
@@ -476,6 +507,7 @@ class RpcInboundHandler {
   void resetAckBuffer() {
     _ackCoalescer.resetAckBuffer();
     _healthPiggybackSampler?.reset();
+    _outboundResponseAdmission.reset();
   }
 
   bool _hasNullIdCompatibilityViolation(Map<String, dynamic> requestMap) {

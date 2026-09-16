@@ -22,6 +22,7 @@ void main() {
     bool closeToTray = true,
     bool startupSupported = true,
     bool trayBehaviorSupported = true,
+    bool startupUsesTray = true,
     SystemSettingsErrorState? startupError,
     SystemSettingsErrorState? preferenceError,
     SystemSettingsErrorState? themeError,
@@ -50,6 +51,7 @@ void main() {
               closeToTray: closeToTray,
               startupSupported: startupSupported,
               trayBehaviorSupported: trayBehaviorSupported,
+              startupUsesTray: startupUsesTray,
               startupError: startupError,
               preferenceError: preferenceError,
               themeError: themeError,
@@ -207,6 +209,18 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(openedSettings, isTrue);
+    });
+
+    testWidgets('explains safe visible-window fallback when tray is unavailable', (tester) async {
+      await pumpSection(
+        tester,
+        startWithWindows: true,
+        trayBehaviorSupported: false,
+        startupUsesTray: false,
+      );
+
+      expect(find.text(ptL10n.gsToggleStartWithWindowsNoTrayHint), findsOneWidget);
+      expect(find.text(ptL10n.gsToggleStartWithWindowsOpenStartupAppsHint), findsNothing);
     });
 
     testWidgets('translates startupToggleFailed without detail', (tester) async {

@@ -27,6 +27,18 @@ class SystemSettingsFailureMapper {
 
   static SystemSettingsErrorState preferenceFailure(Object failure) {
     if (failure is domain.Failure) {
+      switch (failure.code) {
+        case 'TRAY_UNAVAILABLE':
+          return const SystemSettingsErrorState(
+            code: SystemSettingsErrorCode.trayUnavailable,
+          );
+        case 'TRAY_BEHAVIOR_APPLY_FAILED':
+          return const SystemSettingsErrorState(
+            code: SystemSettingsErrorCode.trayBehaviorApplyFailed,
+          );
+      }
+    }
+    if (failure is domain.Failure) {
       developer.log(
         failure.message,
         name: 'system_settings_failure_mapper',

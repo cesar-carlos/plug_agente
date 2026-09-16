@@ -184,7 +184,7 @@ final class AppShutdownSequence {
       return;
     }
     try {
-      _getIt<ITrayService>().dispose();
+      await _getIt<ITrayService>().dispose();
     } on Object catch (error, stackTrace) {
       developer.log(
         'Failed to dispose tray service during shutdown',

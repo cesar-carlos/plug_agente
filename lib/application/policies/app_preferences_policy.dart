@@ -26,22 +26,6 @@ abstract final class AppPreferencesPolicy {
     return supportsTray && isAutostartLaunch;
   }
 
-  /// Autostart keeps the window hidden while tray/window managers initialize
-  /// so login never flashes a frame before Dart decides visibility.
-  static bool shouldHideWindowDuringAutostartBootstrap({
-    required bool isAutostartLaunch,
-  }) {
-    return isAutostartLaunch;
-  }
-
-  /// Login launches stay in the tray after bootstrap. Manual launches never
-  /// use this reveal path.
-  static bool shouldRevealWindowAfterAutostartBootstrap({
-    required bool isAutostartLaunch,
-  }) {
-    return !isAutostartLaunch && isAutostartLaunch;
-  }
-
   /// Whether WinSparkle background checks should run (non-silent path).
   static bool shouldRunWinSparkleBackgroundChecks({
     required bool updateNotificationsEnabled,

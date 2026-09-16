@@ -3,6 +3,7 @@ import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/infrastructure/codecs/adaptive_compression_cache.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
@@ -41,6 +42,7 @@ class TransportPipelineCache {
   final FeatureFlags _featureFlags;
   final ProtocolMetricsCollector? _metricsCollector;
   final int _maxReceiveEntries;
+  final AdaptiveCompressionCache _adaptiveCompressionCache = AdaptiveCompressionCache();
 
   TransportPipeline? _cachedSendPipeline;
   String _sendPipelineCacheKey = '';
@@ -73,6 +75,7 @@ class TransportPipelineCache {
       gzipIsolateThresholdBytes: ConnectionConstants.gzipIsolateThresholdBytes,
       protocol: protocol.protocol,
       metricsCollector: _metricsCollector,
+      adaptiveCompressionCache: _adaptiveCompressionCache,
     );
     _cachedSendPipeline = pipeline;
     _sendPipelineCacheKey = cacheKey;
@@ -124,7 +127,11 @@ class TransportPipelineCache {
     _cachedSendPipeline = null;
     _sendPipelineCacheKey = '';
     _receivePipelineByKey.clear();
+    _adaptiveCompressionCache.clear();
   }
+
+  int get adaptiveCompressionSkippedAttempts => _adaptiveCompressionCache.skippedAttempts;
+  int get adaptiveCompressionAvoidedInputBytes => _adaptiveCompressionCache.avoidedInputBytes;
 
   int get receiveCacheSize => _receivePipelineByKey.length;
   Iterable<String> get receiveCacheKeys => _receivePipelineByKey.keys;

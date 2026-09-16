@@ -53,6 +53,9 @@ class SystemSettingsProvider extends ChangeNotifier {
   late bool _closeToTray;
   bool _isDisposed = false;
   int _startupUserMutations = 0;
+  bool _isChangingStartWithWindows = false;
+  bool _isChangingMinimizeToTray = false;
+  bool _isChangingCloseToTray = false;
 
   SystemSettingsErrorState? _startupError;
   SystemSettingsErrorState? _preferenceError;
@@ -66,6 +69,9 @@ class SystemSettingsProvider extends ChangeNotifier {
   bool get startWithWindows => _startWithWindows;
   bool get minimizeToTray => _minimizeToTray;
   bool get closeToTray => _closeToTray;
+  bool get isChangingStartWithWindows => _isChangingStartWithWindows;
+  bool get isChangingMinimizeToTray => _isChangingMinimizeToTray;
+  bool get isChangingCloseToTray => _isChangingCloseToTray;
 
   void clearError() {
     if (_startupError != null || _preferenceError != null || _startupNotice != null) {
@@ -118,37 +124,44 @@ class SystemSettingsProvider extends ChangeNotifier {
   }
 
   Future<StartupChangeOutcome?> setStartWithWindows(bool value) async {
-    if (_startWithWindows == value) {
+    if (_isChangingStartWithWindows || _startWithWindows == value) {
       return null;
     }
 
     _startupUserMutations++;
+    _isChangingStartWithWindows = true;
     clearStartupFeedback();
+    _notifyIfActive();
 
-    final result = await _setStartWithWindows(value);
-    if (_isDisposed) {
-      return null;
-    }
-
-    return result.fold(
-      (outcome) {
-        _startWithWindows = value;
-        _applyLaunchConfigurationOutcome(outcome.launchConfiguration);
-        _notifyIfActive();
-        return outcome.change;
-      },
-      (failure) {
-        if (failure is StartupServiceFailure) {
-          _startupError = SystemSettingsFailureMapper.startupFailure(failure);
-        } else if (failure is domain.Failure) {
-          _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
-        } else {
-          _startupError = SystemSettingsFailureMapper.startupFailure(failure);
-        }
-        _notifyIfActive();
+    try {
+      final result = await _setStartWithWindows(value);
+      if (_isDisposed) {
         return null;
-      },
-    );
+      }
+
+      return await result.fold(
+        (outcome) {
+          _startWithWindows = value;
+          _applyLaunchConfigurationOutcome(outcome.launchConfiguration);
+          return outcome.change;
+        },
+        (failure) {
+          if (failure is StartupServiceFailure) {
+            _startupError = SystemSettingsFailureMapper.startupFailure(failure);
+          } else if (failure is domain.Failure) {
+            _preferenceError = SystemSettingsFailureMapper.preferenceFailure(failure);
+          } else {
+            _startupError = SystemSettingsFailureMapper.startupFailure(failure);
+          }
+          return null;
+        },
+      );
+    } finally {
+      if (!_isDisposed) {
+        _isChangingStartWithWindows = false;
+        _notifyIfActive();
+      }
+    }
   }
 
   Future<void> repairStartupLaunchConfiguration() async {
@@ -228,21 +241,39 @@ class SystemSettingsProvider extends ChangeNotifier {
   }
 
   Future<void> setMinimizeToTray(bool value) async {
-    if (_minimizeToTray == value) {
+    if (_isChangingMinimizeToTray || _minimizeToTray == value) {
       return;
     }
 
+    _isChangingMinimizeToTray = true;
     clearPreferenceError();
-    await _applyTrayBehaviorPreference(TrayBehaviorKind.minimizeToTray, value);
+    _notifyIfActive();
+    try {
+      await _applyTrayBehaviorPreference(TrayBehaviorKind.minimizeToTray, value);
+    } finally {
+      if (!_isDisposed) {
+        _isChangingMinimizeToTray = false;
+        _notifyIfActive();
+      }
+    }
   }
 
   Future<void> setCloseToTray(bool value) async {
-    if (_closeToTray == value) {
+    if (_isChangingCloseToTray || _closeToTray == value) {
       return;
     }
 
+    _isChangingCloseToTray = true;
     clearPreferenceError();
-    await _applyTrayBehaviorPreference(TrayBehaviorKind.closeToTray, value);
+    _notifyIfActive();
+    try {
+      await _applyTrayBehaviorPreference(TrayBehaviorKind.closeToTray, value);
+    } finally {
+      if (!_isDisposed) {
+        _isChangingCloseToTray = false;
+        _notifyIfActive();
+      }
+    }
   }
 
   Future<void> _applyTrayBehaviorPreference(TrayBehaviorKind kind, bool value) async {

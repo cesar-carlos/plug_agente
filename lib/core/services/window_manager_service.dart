@@ -9,9 +9,11 @@ import 'package:plug_agente/core/constants/window_constraints.dart';
 import 'package:plug_agente/core/constants/window_timings.dart';
 import 'package:plug_agente/core/di/service_locator.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:result_dart/result_dart.dart';
 import 'package:window_manager/window_manager.dart';
 
-class WindowManagerService with WindowListener implements IWindowManagerService {
+class WindowManagerService with WindowListener implements IDesktopWindowService {
   WindowManagerService();
 
   final Logger _logger = Logger();
@@ -19,11 +21,13 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
   bool _minimizeToTray = false;
   bool _closeToTray = false;
   bool _isClosing = false;
+  bool _isShutdownInProgress = false;
 
   VoidCallback? _onMinimize;
   VoidCallback? _onClose;
   VoidCallback? _onFocus;
 
+  @override
   Future<void> initialize({
     ui.Size? size,
     ui.Size? minimumSize,
@@ -58,9 +62,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
       }
     });
 
-    if (startMinimized) {
-      await _ensureWindowHiddenAtStartup();
-    } else {
+    if (!startMinimized) {
       await windowManager.setSkipTaskbar(false);
     }
 
@@ -119,34 +121,60 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
   }
 
   @override
-  void setMinimizeToTray({required bool value}) {
+  Future<Result<Unit>> setMinimizeToTray({required bool value}) async {
     _minimizeToTray = value;
     _logger.d('Minimize to tray: $value');
+    return const Success(unit);
   }
 
   @override
-  void setCloseToTray({required bool value}) {
+  Future<Result<Unit>> setCloseToTray({required bool value}) async {
+    final previousValue = _closeToTray;
     _closeToTray = value;
     _logger.d('Close to tray: $value');
 
-    unawaited(
-      _updatePreventClose(value).catchError((Object e) {
-        _logger.w('Failed to configure preventClose: $e');
-      }),
-    );
+    try {
+      await _updatePreventClose(value);
+      return const Success(unit);
+    } on Object catch (error, stackTrace) {
+      _closeToTray = previousValue;
+      var nativeRollbackSucceeded = true;
+      try {
+        await _updatePreventClose(previousValue);
+      } on Object catch (rollbackError, rollbackStackTrace) {
+        nativeRollbackSucceeded = false;
+        _logger.w(
+          'Failed to restore preventClose after configuration failure',
+          error: rollbackError,
+          stackTrace: rollbackStackTrace,
+        );
+      }
+      _logger.w(
+        'Failed to configure preventClose',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'Could not apply close-to-tray behavior.',
+          code: 'TRAY_BEHAVIOR_APPLY_FAILED',
+          cause: error,
+          context: {
+            'operation': 'set_close_to_tray',
+            'nativeRollbackSucceeded': nativeRollbackSucceeded,
+          },
+        ),
+      );
+    }
   }
 
   Future<void> _updatePreventClose(bool closeToTray) async {
-    try {
-      if (closeToTray) {
-        await windowManager.setPreventClose(true);
-        _logger.d('PreventClose enabled - close will go to tray');
-      } else {
-        await windowManager.setPreventClose(false);
-        _logger.d('PreventClose disabled - close will exit application');
-      }
-    } on Exception catch (e) {
-      _logger.w('Failed to configure preventClose: $e');
+    if (closeToTray) {
+      await windowManager.setPreventClose(true);
+      _logger.d('PreventClose enabled - close will go to tray');
+    } else {
+      await windowManager.setPreventClose(false);
+      _logger.d('PreventClose disabled - close will exit application');
     }
   }
 
@@ -200,14 +228,21 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
     }
   }
 
+  @override
   Future<void> close() async {
+    if (_isShutdownInProgress) {
+      _logger.d('Close request ignored because shutdown is already in progress');
+      return;
+    }
+
+    _isShutdownInProgress = true;
+    _isClosing = true;
     try {
       _logger.i('Closing application...');
 
       // Shutdown all resources before closing window
       await shutdownApp();
 
-      _isClosing = true;
       _closeToTray = false;
       await windowManager.setPreventClose(false);
       await windowManager.close();
@@ -229,6 +264,7 @@ class WindowManagerService with WindowListener implements IWindowManagerService 
     await windowManager.setTitle(title);
   }
 
+  @override
   Future<bool> isVisible() async {
     return windowManager.isVisible();
   }

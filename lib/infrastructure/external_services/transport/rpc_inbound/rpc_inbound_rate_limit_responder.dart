@@ -56,4 +56,22 @@ class RpcInboundRateLimitResponder {
       wirePayload.socketAck?.call();
     }
   }
+
+  Future<void> emitOutboundCapacityLimitedError({
+    required Object? id,
+    required String method,
+    required int maxOutstandingResponses,
+  }) {
+    return _responseEmitter.emit(
+      _responsePreparer.buildErrorResponse(
+        id: id,
+        code: RpcErrorCode.rateLimited,
+        technicalMessage: RpcInboundConstants.outboundResponseCapacityExceededTechnicalMessage(
+          maxOutstandingResponses,
+        ),
+        errorReason: RpcInboundConstants.outboundResponseCapacityExceededReason,
+      ),
+      methodsById: <Object?, String>{id: method},
+    );
+  }
 }

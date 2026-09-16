@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/infrastructure/codecs/adaptive_compression_cache.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_constants.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_receive.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_send.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_work_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:uuid/uuid.dart';
 
@@ -27,8 +29,11 @@ class TransportPipeline with TransportPipelineSend, TransportPipelineReceive {
     this.schemaVersion = '1.0',
     this.protocol = 'jsonrpc-v2',
     this.metricsCollector,
+    this.adaptiveCompressionCache,
+    TransportWorkPool? workPool,
     Uuid? uuid,
-  }) : pipelineUuid = uuid ?? const Uuid();
+  }) : pipelineUuid = uuid ?? const Uuid(),
+       workPool = workPool ?? TransportWorkPool.shared;
 
   /// Selected encoding format.
   @override
@@ -62,6 +67,13 @@ class TransportPipeline with TransportPipelineSend, TransportPipelineReceive {
   /// Optional collector for transport telemetry.
   @override
   final ProtocolMetricsCollector? metricsCollector;
+
+  /// Shared by the cached send pipeline; see [AdaptiveCompressionCache].
+  @override
+  final AdaptiveCompressionCache? adaptiveCompressionCache;
+
+  @override
+  final TransportWorkPool workPool;
 
   @override
   final Uuid pipelineUuid;

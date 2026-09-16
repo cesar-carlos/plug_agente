@@ -3577,6 +3577,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Make sure Plug Agente is enabled in Windows Startup apps. Windows login starts the app in the tray.';
 
   @override
+  String get gsToggleStartWithWindowsNoTrayHint =>
+      'Windows startup is active. Because the tray is unavailable in this session, the app will show its window at login.';
+
+  @override
   String get gsToggleMinimizeToTray => 'Minimize to tray';
 
   @override
@@ -3658,6 +3662,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gsErrorSettingsPersistenceFailed => 'Failed to save local preference';
+
+  @override
+  String get gsErrorTrayUnavailable =>
+      'The tray is unavailable in this session. Your preferences were preserved for the next launch.';
+
+  @override
+  String get gsErrorTrayBehaviorApplyFailed => 'Could not apply the window behavior for the tray';
 
   @override
   String gsErrorWithDetail(String message, String detail) {

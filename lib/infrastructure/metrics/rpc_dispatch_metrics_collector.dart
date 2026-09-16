@@ -11,6 +11,10 @@ class RpcDispatchMetricsCollector implements IRpcDispatchMetricsCollector {
   void recordSqlExecuteStreamingChunksResponse() => _metrics.recordRpcSqlExecuteStreamingChunksResponse();
 
   @override
+  void recordSqlExecuteMaterializedPromotionToStreaming() =>
+      _metrics.recordRpcSqlExecuteMaterializedPromotionToStreaming();
+
+  @override
   void recordSqlExecuteStreamingFromDbResponse() => _metrics.recordRpcSqlExecuteStreamingFromDbResponse();
 
   @override

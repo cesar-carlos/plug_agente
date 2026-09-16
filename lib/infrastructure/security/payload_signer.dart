@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_work_pool.dart';
 import 'package:plug_agente/infrastructure/security/payload_signing_canonicalizer.dart';
 
 class PayloadSignature {
@@ -67,6 +68,7 @@ class PayloadSigner {
   factory PayloadSigner({
     required Map<String, String> keys,
     String? activeKeyId,
+    TransportWorkPool? workPool,
   }) {
     final normalizedKeys = Map<String, String>.unmodifiable(_normalizeKeys(keys));
     if (normalizedKeys.isEmpty) {
@@ -80,20 +82,24 @@ class PayloadSigner {
       keys: normalizedKeys,
       keyBytes: keyBytes,
       activeKeyId: resolvedActiveKeyId,
+      workPool: workPool ?? TransportWorkPool.shared,
     );
   }
 
-  const PayloadSigner._({
+  PayloadSigner._({
     required Map<String, String> keys,
     required Map<String, Uint8List> keyBytes,
     required String activeKeyId,
+    required TransportWorkPool workPool,
   }) : _keys = keys,
        _keyBytes = keyBytes,
-       _activeKeyId = activeKeyId;
+       _activeKeyId = activeKeyId,
+       _workPool = workPool;
 
   final Map<String, String> _keys;
   final Map<String, Uint8List> _keyBytes;
   final String _activeKeyId;
+  final TransportWorkPool _workPool;
   static const supportedAlgorithm = 'hmac-sha256';
 
   String get activeKeyId => _activeKeyId;
@@ -137,7 +143,14 @@ class PayloadSigner {
   Future<PayloadSigningResult> signFrameAsync(PayloadFrame frame) async {
     final keyId = activeKeyId;
     final key = _keyBytes[keyId]!;
-    final result = await compute(_signFrameIsolate, (_frameDataForIsolate(frame), key, keyId));
+    final result = await _workPool.submit<Map<String, Object>>(
+      TransportWorkOperation.hmacSign,
+      <String, Object>{
+        'frame': _frameDataForIsolate(frame),
+        'key': key,
+        'keyId': keyId,
+      },
+    );
 
     return PayloadSigningResult(
       signature: PayloadSignature(
@@ -231,7 +244,14 @@ class PayloadSigner {
       return _invalidVerificationResult;
     }
     final frameData = _frameDataForIsolate(frame);
-    final result = await compute(_verifyFrameIsolate, (frameData, key, signature.value));
+    final result = await _workPool.submit<Map<String, Object>>(
+      TransportWorkOperation.hmacVerify,
+      <String, Object>{
+        'frame': frameData,
+        'key': key,
+        'signature': signature.value,
+      },
+    );
     return PayloadVerificationResult(
       isValid: result['isValid']! as bool,
       metrics: PayloadSigningMetrics(
@@ -323,60 +343,4 @@ class PayloadSigner {
     }
     return active;
   }
-}
-
-Map<String, Object> _signFrameIsolate((Map<String, dynamic>, Uint8List, String) args) {
-  final (frameData, key, keyId) = args;
-  final frame = PayloadFrame.fromJson(frameData);
-  final canonicalizeStopwatch = Stopwatch()..start();
-  final canonicalBytes = PayloadSigningCanonicalizer.canonicalizeFrame(frame);
-  canonicalizeStopwatch.stop();
-  final signStopwatch = Stopwatch()..start();
-  final value = base64Encode(Hmac(sha256, key).convert(canonicalBytes).bytes);
-  signStopwatch.stop();
-  return <String, Object>{
-    'value': value,
-    'keyId': keyId,
-    'canonicalizeDurationUs': canonicalizeStopwatch.elapsedMicroseconds,
-    'signDurationUs': signStopwatch.elapsedMicroseconds,
-  };
-}
-
-Map<String, Object> _verifyFrameIsolate((Map<String, dynamic>, Uint8List, String) args) {
-  final (frameData, key, suppliedSignature) = args;
-  final frame = PayloadFrame.fromJson(frameData);
-  final canonicalizeStopwatch = Stopwatch()..start();
-  final canonicalBytes = PayloadSigningCanonicalizer.canonicalizeFrame(frame);
-  canonicalizeStopwatch.stop();
-  final verifyStopwatch = Stopwatch()..start();
-  final expected = base64Encode(Hmac(sha256, key).convert(canonicalBytes).bytes);
-  final isValid = _constantTimeEqualsIsolate(expected, suppliedSignature);
-  verifyStopwatch.stop();
-  return <String, Object>{
-    'isValid': isValid,
-    'canonicalizeDurationUs': canonicalizeStopwatch.elapsedMicroseconds,
-    'verifyDurationUs': verifyStopwatch.elapsedMicroseconds,
-  };
-}
-
-bool _constantTimeEqualsIsolate(String expected, String actual) {
-  try {
-    final expectedBytes = base64Decode(_padBase64Isolate(expected));
-    final actualBytes = base64Decode(_padBase64Isolate(actual));
-    final length = expectedBytes.length > actualBytes.length ? expectedBytes.length : actualBytes.length;
-    var difference = expectedBytes.length ^ actualBytes.length;
-    for (var index = 0; index < length; index++) {
-      difference |=
-          (index < expectedBytes.length ? expectedBytes[index] : 0) ^
-          (index < actualBytes.length ? actualBytes[index] : 0);
-    }
-    return difference == 0;
-  } on FormatException {
-    return false;
-  }
-}
-
-String _padBase64Isolate(String value) {
-  final remainder = value.length % 4;
-  return remainder == 0 ? value : '$value${'=' * (4 - remainder)}';
 }

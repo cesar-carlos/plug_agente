@@ -51,6 +51,7 @@ void registerPlugStartupServices(
       () => SetTrayBehaviorPreference(
         getIt<IStartupPreferencesRepository>(),
         windowManagerService: getIt.isRegistered<IWindowManagerService>() ? getIt<IWindowManagerService>() : null,
+        trayService: getIt.isRegistered<ITrayService>() ? getIt<ITrayService>() : null,
       ),
     );
 
@@ -61,5 +62,6 @@ void registerPlugStartupServices(
     );
     getIt.registerLazySingleton<WindowManagerService>(WindowManagerService.new);
     getIt.registerLazySingleton<IWindowManagerService>(() => getIt<WindowManagerService>());
+    getIt.registerLazySingleton<IDesktopWindowService>(() => getIt<WindowManagerService>());
   }
 }

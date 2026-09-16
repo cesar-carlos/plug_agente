@@ -12,8 +12,14 @@ class NoopTrayManagerService implements ITrayService {
   bool _didLogUnavailable = false;
 
   @override
+  TrayAvailability get availability => TrayAvailability.unsupported;
+
+  @override
+  bool get isReady => false;
+
+  @override
   Future<void> initialize({
-    void Function(TrayMenuAction)? onMenuAction,
+    TrayMenuActionHandler? onMenuAction,
     String showWindowLabel = 'Open Plug Database',
     String exitLabel = 'Exit',
   }) async {
@@ -37,7 +43,7 @@ class NoopTrayManagerService implements ITrayService {
   }
 
   @override
-  void dispose() {
+  Future<void> dispose() async {
     // Noop
   }
 }

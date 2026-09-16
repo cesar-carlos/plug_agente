@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/set_tray_behavior_preference.dart';
 import 'package:plug_agente/core/services/i_startup_service.dart';
+import 'package:plug_agente/core/services/i_tray_service.dart';
 import 'package:plug_agente/core/services/i_window_manager_service.dart';
 import 'package:plug_agente/core/settings/app_settings_keys.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
@@ -17,6 +18,8 @@ import 'package:result_dart/result_dart.dart';
 class MockWindowManagerService extends Mock implements IWindowManagerService {}
 
 class MockStartupService extends Mock implements IStartupService {}
+
+class MockTrayService extends Mock implements ITrayService {}
 
 class FailingAppSettingsStore extends InMemoryAppSettingsStore {
   FailingAppSettingsStore([super.initialValues]);
@@ -31,6 +34,7 @@ SystemSettingsProvider createSystemSettingsProvider({
   required IAppSettingsStore prefs,
   IStartupService? startupService,
   IWindowManagerService? windowManagerService,
+  ITrayService? trayService,
 }) {
   final repository = StartupPreferencesRepository(
     prefs,
@@ -41,6 +45,7 @@ SystemSettingsProvider createSystemSettingsProvider({
     setTrayBehaviorPreference: SetTrayBehaviorPreference(
       repository,
       windowManagerService: windowManagerService,
+      trayService: trayService,
     ),
   );
 }
@@ -51,11 +56,20 @@ void main() {
   late InMemoryAppSettingsStore prefs;
   late MockWindowManagerService mockWindowManager;
   late MockStartupService mockStartupService;
+  late MockTrayService mockTrayService;
 
   setUp(() async {
     prefs = InMemoryAppSettingsStore();
     mockWindowManager = MockWindowManagerService();
     mockStartupService = MockStartupService();
+    mockTrayService = MockTrayService();
+    when(() => mockTrayService.isReady).thenReturn(true);
+    when(() => mockWindowManager.setMinimizeToTray(value: any(named: 'value'))).thenAnswer(
+      (_) async => const Success(unit),
+    );
+    when(() => mockWindowManager.setCloseToTray(value: any(named: 'value'))).thenAnswer(
+      (_) async => const Success(unit),
+    );
 
     when(
       () => mockStartupService.isEnabled(),
@@ -237,6 +251,7 @@ void main() {
         final provider = createSystemSettingsProvider(
           prefs: prefs,
           windowManagerService: mockWindowManager,
+          trayService: mockTrayService,
         );
 
         await provider.setMinimizeToTray(false);
@@ -255,6 +270,7 @@ void main() {
         final provider = createSystemSettingsProvider(
           prefs: prefs,
           windowManagerService: mockWindowManager,
+          trayService: mockTrayService,
         );
 
         await provider.setCloseToTray(false);
@@ -265,14 +281,15 @@ void main() {
       },
     );
 
-    test('should not call WindowManagerService when it is null', () async {
+    test('should keep tray preferences unchanged when runtime services are unavailable', () async {
       final provider = createSystemSettingsProvider(prefs: prefs);
 
       await provider.setMinimizeToTray(false);
       await provider.setCloseToTray(false);
 
-      check(provider.minimizeToTray).equals(false);
-      check(provider.closeToTray).equals(false);
+      check(provider.minimizeToTray).equals(true);
+      check(provider.closeToTray).equals(true);
+      check(provider.preferenceError!.code).equals(SystemSettingsErrorCode.trayUnavailable);
     });
 
     test('should sync startup status with system on initialization', () async {
@@ -550,17 +567,19 @@ void main() {
       check(provider.startupNotice).isNull();
     });
 
-    test('should not apply minimizeToTray runtime change when persistence fails', () async {
+    test('should roll back minimizeToTray runtime change when persistence fails', () async {
       final failingPrefs = FailingAppSettingsStore();
       final provider = createSystemSettingsProvider(
         prefs: failingPrefs,
         windowManagerService: mockWindowManager,
+        trayService: mockTrayService,
       );
 
       await provider.setMinimizeToTray(false);
 
       check(provider.minimizeToTray).equals(true);
-      verifyNever(() => mockWindowManager.setMinimizeToTray(value: false));
+      verify(() => mockWindowManager.setMinimizeToTray(value: false)).called(1);
+      verify(() => mockWindowManager.setMinimizeToTray(value: true)).called(1);
       check(provider.preferenceError!.code).equals(SystemSettingsErrorCode.settingsPersistenceFailed);
     });
 

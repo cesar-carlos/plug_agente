@@ -6,6 +6,9 @@ base mixin MetricsCollectorAuthDomain on MetricsCollectorCore {
   int get authDecisionCacheMissCount => store.counterValue(MetricsCounterNames.authDecisionCacheMissCounter);
   int get authPolicyCacheHitCount => store.counterValue(MetricsCounterNames.authPolicyCacheHitCounter);
   int get authPolicyCacheMissCount => store.counterValue(MetricsCounterNames.authPolicyCacheMissCounter);
+  int get authPolicyResolutionStartedCount =>
+      store.counterValue(MetricsCounterNames.authPolicyResolutionStartedCounter);
+  int get authPolicyResolutionJoinedCount => store.counterValue(MetricsCounterNames.authPolicyResolutionJoinedCounter);
   int get rpcClientTokenGetPolicySuccessCount =>
       store.counterValue(MetricsCounterNames.rpcClientTokenGetPolicySuccessCounter);
   int get rpcClientTokenGetPolicyFailureCount =>
@@ -20,6 +23,12 @@ base mixin MetricsCollectorAuthDomain on MetricsCollectorCore {
   void recordAuthPolicyCacheHit() => _incrementEventCounter(MetricsCounterNames.authPolicyCacheHitCounter);
 
   void recordAuthPolicyCacheMiss() => _incrementEventCounter(MetricsCounterNames.authPolicyCacheMissCounter);
+
+  void recordAuthPolicyResolutionStarted() =>
+      _incrementEventCounter(MetricsCounterNames.authPolicyResolutionStartedCounter);
+
+  void recordAuthPolicyResolutionJoined() =>
+      _incrementEventCounter(MetricsCounterNames.authPolicyResolutionJoinedCounter);
 
   void recordClientTokenGetPolicySuccess() =>
       _incrementEventCounter(MetricsCounterNames.rpcClientTokenGetPolicySuccessCounter);

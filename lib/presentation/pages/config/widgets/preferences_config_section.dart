@@ -21,6 +21,10 @@ class PreferencesConfigSection extends StatelessWidget {
     required this.onCopyStartupDiagnostic,
     this.startupSupported = true,
     this.trayBehaviorSupported = true,
+    this.startupUsesTray = true,
+    this.isChangingStartWithWindows = false,
+    this.isChangingMinimizeToTray = false,
+    this.isChangingCloseToTray = false,
     this.startupError,
     this.preferenceError,
     this.themeError,
@@ -41,6 +45,10 @@ class PreferencesConfigSection extends StatelessWidget {
   final VoidCallback onCopyStartupDiagnostic;
   final bool startupSupported;
   final bool trayBehaviorSupported;
+  final bool startupUsesTray;
+  final bool isChangingStartWithWindows;
+  final bool isChangingMinimizeToTray;
+  final bool isChangingCloseToTray;
   final SystemSettingsErrorState? startupError;
   final SystemSettingsErrorState? preferenceError;
   final SystemSettingsErrorState? themeError;
@@ -78,7 +86,8 @@ class PreferencesConfigSection extends StatelessWidget {
               label: l10n.gsToggleStartWithWindows,
               description: startupSupported ? l10n.gsToggleStartWithWindowsAdminHint : null,
               value: startWithWindows,
-              onChanged: startupSupported ? onStartWithWindowsChanged : null,
+              onChanged: startupSupported && !isChangingStartWithWindows ? onStartWithWindowsChanged : null,
+              isLoading: isChangingStartWithWindows,
             ),
             if (startupError != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -92,12 +101,8 @@ class PreferencesConfigSection extends StatelessWidget {
                 onAction: _showsRepairOnStartupError(startupError!)
                     ? onRepairStartupLaunchConfiguration
                     : onOpenStartupSettings,
-                secondaryActionLabel: _showsRepairOnStartupError(startupError!)
-                    ? l10n.gsButtonOpenSettings
-                    : null,
-                onSecondaryAction: _showsRepairOnStartupError(startupError!)
-                    ? onOpenStartupSettings
-                    : null,
+                secondaryActionLabel: _showsRepairOnStartupError(startupError!) ? l10n.gsButtonOpenSettings : null,
+                onSecondaryAction: _showsRepairOnStartupError(startupError!) ? onOpenStartupSettings : null,
               ),
             ] else if (startupNotice != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -115,7 +120,9 @@ class PreferencesConfigSection extends StatelessWidget {
             ] else if (startupSupported && startWithWindows) ...[
               const SizedBox(height: AppSpacing.sm),
               _SystemSettingsFeedbackMessage(
-                message: l10n.gsToggleStartWithWindowsOpenStartupAppsHint,
+                message: startupUsesTray
+                    ? l10n.gsToggleStartWithWindowsOpenStartupAppsHint
+                    : l10n.gsToggleStartWithWindowsNoTrayHint,
                 tone: AppFeedbackTone.info,
                 icon: FluentIcons.info,
                 actionLabel: l10n.gsButtonOpenSettings,
@@ -127,14 +134,16 @@ class PreferencesConfigSection extends StatelessWidget {
               label: l10n.gsToggleMinimizeToTray,
               description: trayBehaviorSupported ? null : l10n.gsToggleStartMinimizedRequiresTray,
               value: minimizeToTray,
-              onChanged: trayBehaviorSupported ? onMinimizeToTrayChanged : null,
+              onChanged: trayBehaviorSupported && !isChangingMinimizeToTray ? onMinimizeToTrayChanged : null,
+              isLoading: isChangingMinimizeToTray,
             ),
             const SizedBox(height: AppSpacing.md),
             SettingsToggleTile(
               label: l10n.gsToggleCloseToTray,
               description: trayBehaviorSupported ? null : l10n.gsToggleStartMinimizedRequiresTray,
               value: closeToTray,
-              onChanged: trayBehaviorSupported ? onCloseToTrayChanged : null,
+              onChanged: trayBehaviorSupported && !isChangingCloseToTray ? onCloseToTrayChanged : null,
+              isLoading: isChangingCloseToTray,
             ),
             if (preferenceError != null) ...[
               const SizedBox(height: AppSpacing.md),
@@ -250,6 +259,8 @@ String _translateError(AppLocalizations l10n, SystemSettingsErrorState error) {
     SystemSettingsErrorCode.startupServiceUnavailable => l10n.gsErrorStartupServiceUnavailable,
     SystemSettingsErrorCode.startupOpenSystemSettingsFailed => l10n.gsErrorStartupOpenSystemSettingsFailed,
     SystemSettingsErrorCode.settingsPersistenceFailed => l10n.gsErrorSettingsPersistenceFailed,
+    SystemSettingsErrorCode.trayUnavailable => l10n.gsErrorTrayUnavailable,
+    SystemSettingsErrorCode.trayBehaviorApplyFailed => l10n.gsErrorTrayBehaviorApplyFailed,
   };
   if (error.code == SystemSettingsErrorCode.startupToggleFailed) {
     return _appendStartupFailureHint(l10n, base, error.startupFailureCode);

@@ -29,21 +29,26 @@ class RpcInboundResponseEmitter {
   Future<void> emit(
     dynamic responseData, {
     Map<Object?, String> methodsById = const <Object?, String>{},
+    void Function()? onCompleted,
   }) async {
     _concurrencySlots.releaseDeferredIfPresent();
     // Hub sql.execute must not block the socket handler on outbound encode/emit.
     unawaited(
       _emitRpcResponse(
-        responseData,
-        methodsById: methodsById,
-      ).catchError((Object error, StackTrace stackTrace) {
-        _metricsCollector?.recordRpcResponseEmitFailure();
-        AppLogger.error(
-          'Failed to emit inbound rpc:response',
-          error,
-          stackTrace,
-        );
-      }),
+            responseData,
+            methodsById: methodsById,
+          )
+          .catchError((Object error, StackTrace stackTrace) {
+            _metricsCollector?.recordRpcResponseEmitFailure();
+            AppLogger.error(
+              'Failed to emit inbound rpc:response',
+              error,
+              stackTrace,
+            );
+          })
+          .whenComplete(() {
+            onCompleted?.call();
+          }),
     );
   }
 }

@@ -3582,6 +3582,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Confira se o Plug Agente está ativado em Inicialização do Windows. No login, o app inicia na bandeja.';
 
   @override
+  String get gsToggleStartWithWindowsNoTrayHint =>
+      'A inicialização com o Windows está ativa. Como a bandeja não está disponível nesta sessão, o app abrirá a janela no login.';
+
+  @override
   String get gsToggleMinimizeToTray => 'Minimizar para bandeja';
 
   @override
@@ -3663,6 +3667,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gsErrorSettingsPersistenceFailed => 'Falha ao salvar preferência local';
+
+  @override
+  String get gsErrorTrayUnavailable =>
+      'A bandeja não está disponível nesta sessão. As preferências foram preservadas para a próxima inicialização.';
+
+  @override
+  String get gsErrorTrayBehaviorApplyFailed => 'Não foi possível aplicar o comportamento da janela para a bandeja';
 
   @override
   String gsErrorWithDetail(String message, String detail) {

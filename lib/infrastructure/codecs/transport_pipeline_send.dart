@@ -1,12 +1,14 @@
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/codecs/adaptive_compression_cache.dart';
 import 'package:plug_agente/infrastructure/codecs/compression_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_codec.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/rpc_chunk_transport_policy.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_helpers.dart';
-import 'package:plug_agente/infrastructure/codecs/transport_pipeline_isolate.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline_metrics.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_work_pool.dart';
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
@@ -21,6 +23,8 @@ mixin TransportPipelineSend {
   String get schemaVersion;
   String get protocol;
   ProtocolMetricsCollector? get metricsCollector;
+  AdaptiveCompressionCache? get adaptiveCompressionCache;
+  TransportWorkPool get workPool;
   Uuid get pipelineUuid;
 
   /// Prepares a payload for sending.
@@ -47,7 +51,7 @@ mixin TransportPipelineSend {
       encodeStopwatch.stop();
       final originalSize = encodedBytes.length;
 
-      final shouldCompress = RpcChunkTransportPolicy.shouldCompressPayload(
+      final requestedCompression = RpcChunkTransportPolicy.shouldCompressPayload(
         compressionMode: compression,
         originalSize: originalSize,
         compressionThreshold: RpcChunkTransportPolicy.compressionThresholdBytes(
@@ -57,6 +61,14 @@ mixin TransportPipelineSend {
         metricEventName: metricEventName,
         payload: data,
       );
+      final shouldCompress =
+          requestedCompression &&
+          (compression != 'auto' ||
+              !(adaptiveCompressionCache?.shouldSkip(
+                    eventName: metricEventName,
+                    originalSize: originalSize,
+                  ) ??
+                  false));
 
       Uint8List finalBytes;
       String finalCompression;
@@ -80,6 +92,13 @@ mixin TransportPipelineSend {
           compressedBytes.length,
           maxInflationRatio,
         );
+        if (compression == 'auto') {
+          adaptiveCompressionCache?.recordAttempt(
+            eventName: metricEventName,
+            originalSize: originalSize,
+            reduced: compressedBytes.length < originalSize && !inflationExceeded,
+          );
+        }
         if ((compression == 'auto' && compressedBytes.length >= originalSize) || inflationExceeded) {
           finalBytes = encodedBytes;
           finalCompression = 'none';
@@ -138,7 +157,7 @@ mixin TransportPipelineSend {
     }
   }
 
-  /// Async variant: uses [compute] for gzip when payload exceeds
+  /// Async variant: uses the bounded transport worker pool for gzip when payload exceeds
   /// [gzipIsolateThresholdBytes] to avoid jank on the main isolate.
   Future<Result<PayloadFrame>> prepareSendAsync(
     dynamic data, {
@@ -161,7 +180,7 @@ mixin TransportPipelineSend {
           )) {
         usedJsonEncodeIsolate = true;
         try {
-          encodedBytes = await compute(jsonUtf8EncodePayloadInIsolate, data);
+          encodedBytes = await workPool.submit<Uint8List>(TransportWorkOperation.jsonEncode, data);
         } on Object catch (error) {
           return Failure(
             domain.CompressionFailure.withContext(
@@ -180,7 +199,7 @@ mixin TransportPipelineSend {
       }
       encodeStopwatch.stop();
       final originalSize = encodedBytes.length;
-      final shouldCompress = RpcChunkTransportPolicy.shouldCompressPayload(
+      final requestedCompression = RpcChunkTransportPolicy.shouldCompressPayload(
         compressionMode: compression,
         originalSize: originalSize,
         compressionThreshold: RpcChunkTransportPolicy.compressionThresholdBytes(
@@ -190,6 +209,14 @@ mixin TransportPipelineSend {
         metricEventName: metricEventName,
         payload: data,
       );
+      final shouldCompress =
+          requestedCompression &&
+          (compression != 'auto' ||
+              !(adaptiveCompressionCache?.shouldSkip(
+                    eventName: metricEventName,
+                    originalSize: originalSize,
+                  ) ??
+                  false));
 
       Uint8List finalBytes;
       String finalCompression;
@@ -208,7 +235,7 @@ mixin TransportPipelineSend {
         final compressStopwatch = Stopwatch()..start();
         if (useIsolate) {
           usedGzipCompressIsolate = true;
-          compressedBytes = await compute(compressGzipInIsolate, encodedBytes);
+          compressedBytes = await workPool.submit<Uint8List>(TransportWorkOperation.gzipCompress, encodedBytes);
         } else {
           final gzipCodec = CompressionCodecFactory.getCodec('gzip');
           final compressResult = gzipCodec.compress(encodedBytes);
@@ -224,6 +251,13 @@ mixin TransportPipelineSend {
           compressedBytes.length,
           maxInflationRatio,
         );
+        if (compression == 'auto') {
+          adaptiveCompressionCache?.recordAttempt(
+            eventName: metricEventName,
+            originalSize: originalSize,
+            reduced: compressedBytes.length < originalSize && !inflationExceeded,
+          );
+        }
         if ((compression == 'auto' && compressedBytes.length >= originalSize) || inflationExceeded) {
           finalBytes = encodedBytes;
           finalCompression = 'none';

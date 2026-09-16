@@ -46,8 +46,10 @@ Playground SQL devem continuar funcionando quando o runtime permitir.
 - Updates silenciosos passam `/MERGETASKS="!desktopicon,!startup"` e **não**
   re-solicitam auto-start.
 - Login com `--autostart` permanece na bandeja (tray) quando o tray está
-  disponível. Não há toggle de "iniciar minimizado" em Configurações;
-  lançamentos manuais abrem a janela.
+  operacional. Se a inicialização da bandeja falhar ou o ambiente não a
+  suportar, o app revela a janela como fallback seguro e preserva as
+  preferências de bandeja para a próxima sessão. Não há toggle de "iniciar
+  minimizado" em Configurações; lançamentos manuais abrem a janela.
 - Se o usuário desligar o app em **Gerenciador de Tarefas > Aplicativos de
   inicialização**, o agente persiste `startWithWindows=false` e **não**
   repara a entrada sozinho.

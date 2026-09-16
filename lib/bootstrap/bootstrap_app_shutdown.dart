@@ -9,6 +9,7 @@ import 'package:plug_agente/bootstrap/bootstrap_odbc_worker_locator.dart';
 import 'package:plug_agente/core/di/get_it.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
+import 'package:plug_agente/infrastructure/codecs/transport_work_pool.dart';
 
 bool _appCloseActionsDispatched = false;
 
@@ -37,6 +38,7 @@ void resetShutdownStateForTesting() {
 /// 10. Close local database (Drift), metrics, and ODBC event bridge
 /// 11. Dispose tray service
 /// 12. Shut down ODBC worker
+/// 13. Stop reusable transport CPU workers
 Future<void> shutdownApp() async {
   await _launchPendingSilentUpdateHelperIfReady();
 
@@ -47,6 +49,7 @@ Future<void> shutdownApp() async {
     shutdownOdbcWorker: shutdownOdbcWorker,
     resetShutdownStateForTesting: resetShutdownStateForTesting,
   );
+  await TransportWorkPool.shared.dispose();
 }
 
 Future<void> _runEarlyShutdownCoordinator() async {
