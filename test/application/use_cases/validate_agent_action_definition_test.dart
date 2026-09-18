@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
 import 'package:plug_agente/application/use_cases/validate_agent_action_definition.dart';
-import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
+import 'package:plug_agente/core/constants/agent_action_command_line_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -212,7 +212,7 @@ void main() {
       expect(result.exceptionOrNull(), isA<ActionValidationFailure>());
     });
 
-    test('should fail validation when referenced secret is missing', () async {
+    test('should reject a secret placeholder in a free-form command before secret lookup', () async {
       final useCase = ValidateAgentActionDefinition(
         AgentActionAdapterRegistry([
           FakeCommandLineActionAdapter(),
@@ -237,7 +237,7 @@ void main() {
       final failure = result.exceptionOrNull()! as ActionValidationFailure;
       expect(
         failure.context,
-        containsPair('reason', AgentActionGateConstants.secretUnavailableReason),
+        containsPair('reason', AgentActionCommandLineConstants.secretPlaceholderForbiddenReason),
       );
     });
 

@@ -8,7 +8,6 @@ import 'package:plug_agente/presentation/pages/agent_actions/agent_actions_ui_pr
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_action_presenter_labels.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_definition_filters.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/agent_actions_definition_row.dart';
-import 'package:plug_agente/presentation/providers/agent_actions/agent_actions_provider_filter_helpers.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_action_risk_labels.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_empty_state.dart';
@@ -49,16 +48,7 @@ class AgentActionsList extends StatelessWidget {
       );
     }
 
-    final visibleDefinitions = provider.filteredDefinitions
-        .where(
-          (definition) => agentActionsMatchesDefinitionListFilter(
-            definition: definition,
-            typeFilter: provider.definitionTypeFilter,
-            stateFilter: provider.definitionStateFilter,
-            searchQuery: provider.definitionSearchQuery,
-          ),
-        )
-        .toList(growable: false);
+    final visibleDefinitions = provider.filteredDefinitions;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -313,9 +303,7 @@ class _AgentActionsDefinitionGridState extends State<_AgentActionsDefinitionGrid
             editorUnsupported: !isAgentActionTypeEditableInUi(definition.type),
             needsValidation: definition.state == AgentActionState.needsValidation,
             secretPlaceholderNames: provider.secretPlaceholderNamesFor(definition),
-            triggers: definition.id == provider.selectedActionId
-                ? provider.triggers
-                : const <AgentActionTrigger>[],
+            triggers: definition.id == provider.selectedActionId ? provider.triggers : const <AgentActionTrigger>[],
           );
           return [
             AgentActionDefinitionNameCell(definition: definition, l10n: l10n),

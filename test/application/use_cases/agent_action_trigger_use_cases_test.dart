@@ -1,5 +1,9 @@
 import '../../helpers/agent_action_use_case_test_support.dart';
 
+const _structuredTestConfig = ExecutableActionConfig(
+  executablePath: AgentActionPathReference(originalPath: r'C:\\tools\\test.exe'),
+);
+
 void main() {
   late FakeAgentActionRepository repository;
   late FeatureFlags featureFlags;
@@ -16,7 +20,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
       );
     });
 
@@ -88,7 +92,7 @@ void main() {
         id: 'action-1',
         name: 'Remote ready',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -119,7 +123,7 @@ void main() {
         id: 'action-1',
         name: 'Elevated command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           elevated: AgentActionElevatedPolicy(runElevated: true),
         ),
@@ -147,7 +151,7 @@ void main() {
         id: 'action-1',
         name: 'Remote stale',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -333,6 +337,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Success(
               AgentActionProcessResult(
                 status: AgentActionExecutionStatus.succeeded,
@@ -376,7 +381,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
       );
       repository.triggers['trigger-1'] = const AgentActionTrigger(
         id: 'trigger-1',
@@ -390,6 +395,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Success(
               AgentActionProcessResult(
                 status: AgentActionExecutionStatus.succeeded,
@@ -432,6 +438,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Failure(ActionRuntimeFailure('Should not run')),
           ),
         ]),
@@ -452,7 +459,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -472,6 +479,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Success(
               AgentActionProcessResult(
                 status: AgentActionExecutionStatus.succeeded,
@@ -523,7 +531,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -543,6 +551,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Success(
               AgentActionProcessResult(
                 status: AgentActionExecutionStatus.succeeded,
@@ -592,6 +601,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Failure(ActionRuntimeFailure('Should not run')),
           ),
         ]),

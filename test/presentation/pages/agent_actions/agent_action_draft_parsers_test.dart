@@ -15,6 +15,18 @@ void main() {
     });
   });
 
+  group('AgentActionDraftParsers.nonNegativeInt', () {
+    test('should accept zero and positive integers', () {
+      expect(AgentActionDraftParsers.nonNegativeInt('0'), 0);
+      expect(AgentActionDraftParsers.nonNegativeInt(' 42 '), 42);
+    });
+
+    test('should reject negative integers and invalid input', () {
+      expect(AgentActionDraftParsers.nonNegativeInt('-1'), isNull);
+      expect(AgentActionDraftParsers.nonNegativeInt('abc'), isNull);
+    });
+  });
+
   group('AgentActionDraftParsers.commaSeparatedTokens', () {
     test('should split, trim and drop empty tokens', () {
       expect(

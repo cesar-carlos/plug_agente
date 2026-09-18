@@ -18,6 +18,7 @@ AgentActionDraft _commandLineDraft({String command = 'echo hi', String name = 'R
   draft.identity.name.text = name;
   draft.commandLine.command.text = command;
   draft.executionPolicy.acceptedExitCodes.text = '0';
+  draft.executionPolicy.maxRuntimeMinutes.text = '30';
   return draft;
 }
 
@@ -142,6 +143,32 @@ void main() {
 
       final invalid = result as DraftValidationInvalid;
       expect(invalid.field, DraftValidationField.queueLimits);
+    });
+
+    test('accepts zero for the maximum queued executions', () {
+      final draft = _commandLineDraft();
+      draft.executionPolicy.maxQueued.text = '0';
+
+      final result = const AgentActionDraftValidators().validatePolicies(
+        draft,
+        l10n: l10n,
+      );
+
+      expect(result, isA<DraftValidationValid>());
+    });
+
+    test('flags an invalid maximum runtime instead of reusing a previous value', () {
+      final draft = _commandLineDraft();
+      draft.executionPolicy.maxRuntimeMinutes.text = '0';
+
+      final result = const AgentActionDraftValidators().validatePolicies(
+        draft,
+        l10n: l10n,
+      );
+
+      final invalid = result as DraftValidationInvalid;
+      expect(invalid.field, DraftValidationField.maxRuntime);
+      expect(invalid.message, l10n.agentActionsFormInvalidMaxRuntime);
     });
   });
 }

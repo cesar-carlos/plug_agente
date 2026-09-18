@@ -75,10 +75,6 @@ final class OdbcReadOnlyBatchParallelExecutor {
     final safePoolParallelism = safeParallelismForPoolSize(poolSize);
     _parallelSemaphore.resize(safePoolParallelism);
     final parallelism = options.maxParallelReadOnlyBatchItems.clamp(1, safePoolParallelism);
-    final acquireOptions = _optionsResolver.forTimeout(
-      OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
-    );
-
     _metrics.recordReadOnlyBatchParallel(
       requestedParallelism: options.maxParallelReadOnlyBatchItems,
       effectiveParallelism: parallelism,
@@ -93,64 +89,58 @@ final class OdbcReadOnlyBatchParallelExecutor {
       },
     );
 
-    final workerConnections = <String>[];
-    for (var workerIndex = 0; workerIndex < parallelism; workerIndex++) {
-      if (cancellationToken?.isCancelled ?? false) {
-        await _releaseWorkerConnections(workerConnections);
-        return Failure(
-          domain.QueryExecutionFailure('Batch SQL execution was cancelled before worker pool warm-up'),
-        );
-      }
-      final remainingTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
-      if (remainingTimeout != null && remainingTimeout <= Duration.zero) {
-        await _releaseWorkerConnections(workerConnections);
-        return Failure(
-          domain.QueryExecutionFailure.withContext(
-            message: 'Batch SQL execution timeout before worker pool warm-up',
-            context: {
-              'timeout': true,
-              'timeout_stage': 'sql',
-              'stage': 'batch',
-              'reason': RpcSqlDiagnosticsConstants.readOnlyParallelGlobalWaitTimeoutReason,
-            },
-          ),
-        );
-      }
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(
+        domain.QueryExecutionFailure('Batch SQL execution was cancelled before worker pool warm-up'),
+      );
+    }
+    if (OdbcExecutionDeadline.remainingFromDeadline(deadline) case final remaining? when remaining <= Duration.zero) {
+      return Failure(_warmupTimeoutFailure());
+    }
 
-      final poolResult = allowNativeCompatibleAcquire
-          ? await _connectionManager.acquireNativeCompatiblePooledConnection(
-              connectionString,
-              leaseFallbackOptions: acquireOptions,
-              deadline: deadline,
-              context: {
-                'operation': 'read_only_batch_parallel_worker',
-                'worker_index': workerIndex,
-              },
-            )
-          : await _connectionManager.acquirePooledConnection(
-              connectionString,
-              options: acquireOptions,
-              deadline: deadline,
-              context: {
-                'operation': 'read_only_batch_parallel_worker',
-                'worker_index': workerIndex,
-              },
-            );
-      if (poolResult.isError()) {
-        await _releaseWorkerConnections(workerConnections);
-        final error = poolResult.exceptionOrNull()!;
-        _recordInfrastructureFailure(
-          originalSql: batchSqlPreview,
-          errorMessage: error is domain.Failure ? error.message : error.toString(),
-          rpcRequestId: sourceRpcRequestId,
-        );
-        return Failure(
-          error is domain.Failure
-              ? error
-              : domain.ConnectionFailure('Failed to acquire pooled worker connection for read-only batch'),
-        );
+    // Start all permitted acquires together. Every task uses the same deadline,
+    // and Future.wait guarantees already-started work has settled before leases
+    // are released on a failed warm-up.
+    final warmupResults = await Future.wait(
+      List<Future<Result<String>>>.generate(
+        parallelism,
+        (workerIndex) => _acquireWorkerConnection(
+          workerIndex: workerIndex,
+          connectionString: connectionString,
+          timeout: timeout,
+          deadline: deadline,
+          allowNativeCompatibleAcquire: allowNativeCompatibleAcquire,
+          cancellationToken: cancellationToken,
+        ),
+        growable: false,
+      ),
+    );
+    final workerConnections = warmupResults
+        .where((result) => result.isSuccess())
+        .map((result) => result.getOrThrow())
+        .toList(growable: false);
+    Object? warmupFailure;
+    for (final result in warmupResults) {
+      final error = result.exceptionOrNull();
+      if (error != null) {
+        warmupFailure = error;
+        break;
       }
-      workerConnections.add(poolResult.getOrThrow());
+    }
+    if (warmupFailure != null || (cancellationToken?.isCancelled ?? false)) {
+      await _releaseWorkerConnections(workerConnections);
+      final error =
+          warmupFailure ?? domain.QueryExecutionFailure('Batch SQL execution was cancelled before worker pool warm-up');
+      _recordInfrastructureFailure(
+        originalSql: batchSqlPreview,
+        errorMessage: error is domain.Failure ? error.message : error.toString(),
+        rpcRequestId: sourceRpcRequestId,
+      );
+      return Failure(
+        error is domain.Failure
+            ? error
+            : domain.ConnectionFailure('Failed to acquire pooled worker connection for read-only batch'),
+      );
     }
 
     final results = List<SqlCommandResult?>.filled(commands.length, null);
@@ -307,6 +297,57 @@ final class OdbcReadOnlyBatchParallelExecutor {
       await _connectionManager.releaseConnectionSafely(connectionId);
     }
   }
+
+  Future<Result<String>> _acquireWorkerConnection({
+    required int workerIndex,
+    required String connectionString,
+    required Duration? timeout,
+    required DateTime? deadline,
+    required bool allowNativeCompatibleAcquire,
+    required CancellationToken? cancellationToken,
+  }) async {
+    if (cancellationToken?.isCancelled ?? false) {
+      return Failure(domain.QueryExecutionFailure('Batch SQL execution was cancelled before worker pool warm-up'));
+    }
+    final remainingTimeout = OdbcExecutionDeadline.remainingFromDeadline(deadline);
+    if (remainingTimeout != null && remainingTimeout <= Duration.zero) {
+      return Failure(_warmupTimeoutFailure());
+    }
+    final options = _optionsResolver.forTimeout(remainingTimeout ?? timeout);
+    try {
+      return allowNativeCompatibleAcquire
+          ? await _connectionManager.acquireNativeCompatiblePooledConnection(
+              connectionString,
+              leaseFallbackOptions: options,
+              deadline: deadline,
+              context: {
+                'operation': 'read_only_batch_parallel_worker',
+                'worker_index': workerIndex,
+              },
+            )
+          : await _connectionManager.acquirePooledConnection(
+              connectionString,
+              options: options,
+              deadline: deadline,
+              context: {
+                'operation': 'read_only_batch_parallel_worker',
+                'worker_index': workerIndex,
+              },
+            );
+    } on Object catch (_) {
+      return Failure(domain.ConnectionFailure('Failed to acquire pooled worker connection for read-only batch'));
+    }
+  }
+
+  domain.QueryExecutionFailure _warmupTimeoutFailure() => domain.QueryExecutionFailure.withContext(
+    message: 'Batch SQL execution timeout before worker pool warm-up',
+    context: {
+      'timeout': true,
+      'timeout_stage': 'sql',
+      'stage': 'batch',
+      'reason': RpcSqlDiagnosticsConstants.readOnlyParallelGlobalWaitTimeoutReason,
+    },
+  );
 
   bool _isInvalidConnectionIdError(Object error) {
     return OdbcErrorInspector.isInvalidConnectionId(error);

@@ -1,5 +1,14 @@
 import '../../helpers/agent_action_use_case_test_support.dart';
 
+const _structuredTestConfig = ExecutableActionConfig(
+  executablePath: AgentActionPathReference(originalPath: r'C:\\tools\\test.exe'),
+);
+
+const _dangerousStructuredTestConfig = ExecutableActionConfig(
+  executablePath: AgentActionPathReference(originalPath: r'C:\\tools\\test.exe'),
+  arguments: ['format C: /Y'],
+);
+
 void main() {
   late FakeAgentActionRepository repository;
 
@@ -521,7 +530,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -529,7 +538,9 @@ void main() {
           ),
         ),
       );
-      final runner = ControlledAgentActionLocalRunner();
+      final runner = ControlledAgentActionLocalRunner(
+        actionType: AgentActionType.executable,
+      );
       final useCase = RunAgentActionLocally(
         repository,
         AgentActionLocalRunnerRegistry([runner]),
@@ -591,7 +602,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         definitionSnapshotHash: 'snap-validate-clean',
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
@@ -607,6 +618,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Failure(ActionRuntimeFailure('validate must not invoke runner')),
           ),
         ]),
@@ -626,7 +638,7 @@ void main() {
       expect(result.isSuccess(), isTrue);
       final summary = result.getOrThrow();
       expect(summary.actionId, 'action-1');
-      expect(summary.actionType, AgentActionType.commandLine);
+      expect(summary.actionType, AgentActionType.executable);
       expect(summary.definitionSnapshotHash, 'snap-validate-clean');
       expect(summary.wouldReplayExistingExecution, isFalse);
       expect(summary.existingExecutionId, isNull);
@@ -638,7 +650,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         definitionSnapshotHash: 'snap-validate-replay',
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
@@ -651,7 +663,7 @@ void main() {
       repository.executions['exec-prior'] = AgentActionExecution(
         id: 'exec-prior',
         actionId: 'action-1',
-        actionType: AgentActionType.commandLine,
+        actionType: AgentActionType.executable,
         status: AgentActionExecutionStatus.succeeded,
         requestedAt: DateTime(2026, 5, 15, 7),
         source: AgentActionRequestSource.remoteHub,
@@ -664,6 +676,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Failure(ActionRuntimeFailure('validate must not invoke runner')),
           ),
         ]),
@@ -693,7 +706,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -708,6 +721,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Failure(ActionRuntimeFailure('validate must not invoke runner')),
           ),
         ]),
@@ -734,7 +748,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -748,6 +762,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Failure(ActionRuntimeFailure('validate must not invoke runner')),
           ),
         ]),
@@ -778,7 +793,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -792,6 +807,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Success(
               AgentActionProcessResult(
                 status: AgentActionExecutionStatus.succeeded,
@@ -830,7 +846,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -853,6 +869,7 @@ void main() {
         now: () => DateTime.utc(2026, 5, 18, 12),
       );
       final runner = FakeAgentActionLocalRunner(
+        actionType: AgentActionType.executable,
         result: Success(
           AgentActionProcessResult(
             status: AgentActionExecutionStatus.succeeded,
@@ -902,7 +919,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         definitionSnapshotHash: 'snap-in-flight',
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
@@ -914,7 +931,9 @@ void main() {
       );
       final flags = FeatureFlags(InMemoryAppSettingsStore());
       await flags.setEnableRemoteAgentActions(true);
-      final runner = ControlledAgentActionLocalRunner();
+      final runner = ControlledAgentActionLocalRunner(
+        actionType: AgentActionType.executable,
+      );
       final useCase = RunAgentActionLocally(
         repository,
         AgentActionLocalRunnerRegistry([runner]),
@@ -1900,7 +1919,7 @@ void main() {
         id: 'action-adhoc',
         name: 'Remote ad-hoc',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -1945,7 +1964,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -1991,7 +2010,10 @@ void main() {
         id: 'action-1',
         name: 'Secret action',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: r'echo ${secret:api}'),
+        config: ExecutableActionConfig(
+          executablePath: AgentActionPathReference(originalPath: r'C:\\tools\\test.exe'),
+          arguments: [r'--token=${secret:api}'],
+        ),
       );
       final approvedFingerprints = await fingerprinter.fingerprintsFor(baseDefinition);
       final approvedDefinition = baseDefinition.copyWith(
@@ -2049,7 +2071,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
       );
       final flags = FeatureFlags(InMemoryAppSettingsStore());
       await flags.setEnableRemoteAgentActions(true);
@@ -2082,7 +2104,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -2447,7 +2469,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -2491,7 +2513,7 @@ void main() {
         id: 'action-dangerous',
         name: 'Dangerous',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'format C: /Y'),
+        config: _dangerousStructuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -2531,7 +2553,7 @@ void main() {
         id: 'action-dangerous',
         name: 'Dangerous',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'format C: /Y'),
+        config: _dangerousStructuredTestConfig,
       );
       final flags = FeatureFlags(InMemoryAppSettingsStore());
       await flags.setEnableAgentActionDangerousCommandWarnMode(true);
@@ -2625,12 +2647,55 @@ void main() {
       expect(execution.status, AgentActionExecutionStatus.succeeded);
     });
 
+    test('should recheck a dangerous command after resolving a secret placeholder', () async {
+      repository.definitions['action-dangerous-secret'] = const AgentActionDefinition(
+        id: 'action-dangerous-secret',
+        name: 'Dangerous secret',
+        state: AgentActionState.active,
+        config: ExecutableActionConfig(
+          executablePath: AgentActionPathReference(originalPath: r'C:\\tools\\test.exe'),
+          arguments: [r'--token=${secret:command_fragment}'],
+        ),
+      );
+      final secretStore = InMemoryAgentActionSecretStoreForRunTests();
+      await secretStore.saveSecret('command_fragment', 'format C: /Y');
+      final flags = FeatureFlags(InMemoryAppSettingsStore());
+      await flags.setEnableAgentActionDangerousCommandWarnMode(true);
+      final useCase = runUseCaseWithDangerousCommandPolicy(
+        repository: repository,
+        featureFlags: flags,
+        runnerResult: Failure(ActionRuntimeFailure('Runner must not start.')),
+        runners: <AgentActionLocalRunner>[
+          FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
+            result: Failure(ActionRuntimeFailure('Runner must not start.')),
+          ),
+        ],
+        secretPlaceholderResolver: AgentActionSecretPlaceholderResolver(secretStore: secretStore),
+      );
+
+      final result = await useCase(
+        const AgentActionExecutionRequest(
+          actionId: 'action-dangerous-secret',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(failure.context['confirmation_required'], isTrue);
+      expect(
+        failure.context['reason'],
+        AgentActionCommandSafetyConstants.dangerousCommandPatternReason,
+      );
+    });
+
     test('should reject dangerous commands on validateRemoteRun', () async {
       repository.definitions['action-dangerous'] = AgentActionDefinition(
         id: 'action-dangerous',
         name: 'Dangerous',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'format C: /Y'),
+        config: _dangerousStructuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,

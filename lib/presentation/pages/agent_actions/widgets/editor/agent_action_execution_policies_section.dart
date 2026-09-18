@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
@@ -65,6 +66,10 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final retryLimit = AgentActionPolicyDefaults.maxRetryAttempts;
+    final visibleRetryLimit = maxAttempts > retryLimit ? maxAttempts : retryLimit;
+    final hasLegacyRetryLimitViolation = maxAttempts > retryLimit;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -86,11 +91,12 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
                 helpMessage: l10n.agentActionsHelpMaxAttemptsMessage,
                 value: maxAttempts,
                 items: List<ComboBoxItem<int>>.generate(
-                  5,
+                  visibleRetryLimit,
                   (index) {
                     final attempts = index + 1;
                     return ComboBoxItem<int>(
                       value: attempts,
+                      enabled: attempts <= retryLimit,
                       child: Text('$attempts'),
                     );
                   },
@@ -121,6 +127,15 @@ class AgentActionExecutionPoliciesSection extends StatelessWidget {
             ),
           ],
         ),
+        if (hasLegacyRetryLimitViolation) ...[
+          const SizedBox(height: AppSpacing.xs),
+          InfoBar(
+            title: Text(l10n.agentActionsFormMaxAttempts),
+            content: Text(l10n.agentActionsFormMaxAttemptsExceedsLimit(retryLimit)),
+            severity: InfoBarSeverity.warning,
+            isLong: true,
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: AppSpacing.lg,

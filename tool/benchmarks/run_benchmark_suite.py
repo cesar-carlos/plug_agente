@@ -50,6 +50,8 @@ for _entry in (str(_ROOT), str(_TOOL_DIR)):
 import argparse
 import json
 import os
+import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -72,18 +74,24 @@ from tool.py.benchmark_common import (
     odbc_dsn_configured,
     parse_gateway_encoding_metrics,
     parse_plug_agente_stack_metrics,
+    parse_odbc_streaming_benchmark_metrics,
     parse_transport_json_metrics,
     parse_transport_markdown_metrics,
     resolve_dart_odbc_fast_root,
     run_id_now,
     write_json,
 )
-from tool.py.odbc_benchmark_runner import run_odbc_async_benchmark, run_odbc_streaming_benchmark
-from tool.py.script_utils import PROJECT_ROOT, resolve_env_path, run_streaming
+from tool.py.odbc_benchmark_runner import (
+    resolve_benchmark_driver_family,
+    run_odbc_async_benchmark,
+    run_odbc_streaming_benchmark,
+)
+from tool.py.script_utils import PROJECT_ROOT, get_dsn_driver_family, resolve_env_path, run_streaming
 
 TRANSPORT_TEST = "test/infrastructure/codecs/transport_pipeline_benchmark_test.dart"
 PLUG_AGENTE_STACK_TEST = "test/tool/plug_agente_stack_benchmark_test.dart"
 GATEWAY_ENCODING_TEST = "test/tool/odbc_gateway_encoding_benchmark_test.dart"
+ODBC_HOT_PATHS_TEST = "test/tool/odbc_hot_paths_benchmark_test.dart"
 TRANSPORT_DART_TOOL = "tool/benchmarks/benchmark_transport_pipeline.dart"
 GATEWAY_ENCODING_TOOL = "tool/benchmarks/benchmark_odbc_gateway_encoding.dart"
 
@@ -147,6 +155,14 @@ def build_suite_plans() -> list[dict[str, Any]]:
                 "--tags",
                 "perf",
             ],
+            "cwd": PROJECT_ROOT,
+        },
+        {
+            "id": "odbc_hot_paths",
+            "kind": "flutter_test",
+            "enabled": os.environ.get("BENCHMARK_ODBC_HOT_PATHS", "").strip().lower() in {"1", "true", "yes"},
+            "skip_reason": "set BENCHMARK_ODBC_HOT_PATHS=1 to run the local ODBC hot-path benchmark",
+            "command": ["flutter", "test", ODBC_HOT_PATHS_TEST, "--tags", "perf"],
             "cwd": PROJECT_ROOT,
         },
         {
@@ -272,6 +288,12 @@ def run_gateway_encoding_flutter_test(log_path: Path) -> dict[str, Any]:
         status = "error"
     if exit_code == 0 and not metrics and "Skipping:" in output:
         status = "skipped"
+    package_root = resolve_dart_odbc_fast_root()
+    comparison_identity = _odbc_fast_comparison_identity(package_root)
+    comparison_identity["benchmark_profile"] = "gateway_encoding_v1"
+    comparison_identity["driver_family"] = get_dsn_driver_family(
+        os.environ.get("ODBC_TEST_DSN", os.environ.get("ODBC_DSN", "")),
+    )
     return {
         "id": "odbc_gateway_encoding",
         "kind": "flutter_test",
@@ -280,6 +302,7 @@ def run_gateway_encoding_flutter_test(log_path: Path) -> dict[str, Any]:
         "exit_code": exit_code,
         "log_file": log_path.name,
         "metrics": metrics,
+        "comparison_identity": comparison_identity,
         **({"reason": "ODBC DSN not configured in test env"} if status == "skipped" else {}),
     }
 
@@ -299,6 +322,41 @@ def run_plug_agente_stack_flutter_test(log_path: Path) -> dict[str, Any]:
         "id": "plug_agente_stack",
         "kind": "flutter_test",
         "status": status,
+        "wall_ms": round(wall_ms, 2),
+        "exit_code": exit_code,
+        "log_file": log_path.name,
+        "metrics": metrics,
+    }
+
+
+def run_odbc_hot_paths_flutter_test(log_path: Path) -> dict[str, Any]:
+    started = time.perf_counter()
+    exit_code = run_streaming(
+        ["flutter", "test", ODBC_HOT_PATHS_TEST, "--tags", "perf"],
+        cwd=PROJECT_ROOT,
+        log_path=log_path,
+    )
+    wall_ms = (time.perf_counter() - started) * 1000.0
+    output = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
+    metrics: dict[str, float] = {}
+    for line in output.splitlines():
+        try:
+            payload = json.loads(line.strip())
+        except json.JSONDecodeError:
+            continue
+        if payload.get("benchmark") != "odbc_hot_paths":
+            continue
+        for scenario in payload.get("scenarios", []):
+            if not isinstance(scenario, dict) or not isinstance(scenario.get("scenario"), str):
+                continue
+            for key in ("p50_us", "p95_us", "p99_us", "input_payload_bytes"):
+                value = scenario.get(key)
+                if isinstance(value, (int, float)):
+                    metrics[f"{scenario['scenario']}.{key}"] = float(value)
+    return {
+        "id": "odbc_hot_paths",
+        "kind": "flutter_test",
+        "status": "pass" if exit_code == 0 else "fail",
         "wall_ms": round(wall_ms, 2),
         "exit_code": exit_code,
         "log_file": log_path.name,
@@ -438,7 +496,23 @@ def run_transport_json_tool(log_path: Path) -> dict[str, Any]:
 
 def run_odbc_suite(suite_id: str, package_root: Path, log_path: Path) -> dict[str, Any]:
     runner = run_odbc_async_benchmark if suite_id == "odbc_async" else run_odbc_streaming_benchmark
-    exit_code, metrics, _output = runner(package_root=package_root, log_path=log_path)
+    exit_code, metrics, output = runner(package_root=package_root, log_path=log_path)
+    if suite_id == "odbc_streaming":
+        metrics.update(parse_odbc_streaming_benchmark_metrics(output))
+    package_metrics = _odbc_fast_package_metrics(package_root)
+    metrics.update(package_metrics)
+    comparison_identity = _odbc_fast_comparison_identity(package_root)
+    comparison_identity["driver_family"] = resolve_benchmark_driver_family()
+    if suite_id == "odbc_streaming":
+        comparison_identity["benchmark_profile"] = "streaming_example_v1"
+        for key in (
+            "streamQueryBatched.rows",
+            "streamQueryBatched.fetch_size",
+            "streamQueryBatched.chunk_size",
+        ):
+            value = metrics.get(key)
+            if isinstance(value, (int, float)):
+                comparison_identity[key] = str(int(value))
     status = "pass" if exit_code == 0 else "fail"
     return {
         "id": suite_id,
@@ -448,7 +522,46 @@ def run_odbc_suite(suite_id: str, package_root: Path, log_path: Path) -> dict[st
         "exit_code": exit_code,
         "log_file": log_path.name,
         "metrics": metrics,
+        "comparison_identity": comparison_identity,
     }
+
+
+def _odbc_fast_package_metrics(package_root: Path) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    pubspec = package_root / "pubspec.yaml"
+    if pubspec.is_file():
+        match = re.search(r"^version:\s*([^\s#]+)", pubspec.read_text(encoding="utf-8"), re.MULTILINE)
+        if match is not None:
+            metadata["package_version"] = match.group(1)
+
+    try:
+        revision = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=package_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if revision.returncode == 0 and revision.stdout.strip():
+            metadata["package_revision"] = revision.stdout.strip()
+    except OSError:
+        pass
+    return metadata
+
+
+def _odbc_fast_comparison_identity(package_root: Path | None) -> dict[str, str]:
+    if package_root is None:
+        return {"package_source": "unresolved"}
+
+    metadata = _odbc_fast_package_metrics(package_root)
+    identity = {"package_source": "odbc_fast"}
+    for key in ("package_version", "package_revision"):
+        value = metadata.get(key)
+        if value is not None:
+            identity[key] = value
+    return identity
 
 
 def skipped_suite(suite_id: str, kind: str, reason: str) -> dict[str, Any]:
@@ -566,6 +679,8 @@ def main(argv: list[str] | None = None) -> int:
             suite = run_transport_flutter_test(log_path)
         elif suite_id == "plug_agente_stack":
             suite = run_plug_agente_stack_flutter_test(log_path)
+        elif suite_id == "odbc_hot_paths":
+            suite = run_odbc_hot_paths_flutter_test(log_path)
         elif suite_id == "transport_pipeline_json":
             suite = run_transport_json_tool(log_path)
         elif suite_id == "odbc_gateway_encoding":

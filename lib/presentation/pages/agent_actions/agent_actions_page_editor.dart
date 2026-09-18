@@ -121,20 +121,33 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   }
 
   void _onDraftChanged() {
+    if (_draft.applyingLoadedDefinition || _draft.isDraftModifiedSinceLoad) {
+      return;
+    }
+    setState(_markDraftModified);
+  }
+
+  void _markDraftModified({bool invalidatePreflight = true}) {
     if (_draft.applyingLoadedDefinition) {
       return;
     }
-    if (_draft.isDraftModifiedSinceLoad) {
-      return;
-    }
-
-    setState(() {
+    if (invalidatePreflight && !_draft.isDraftModifiedSinceLoad) {
       _draft.isDraftModifiedSinceLoad = true;
       if (_draft.state == AgentActionState.active) {
         _draft.state = AgentActionState.needsValidation;
       }
-    });
+    }
     widget.dirtyNotifier?.value = true;
+  }
+
+  void _updateDraft(
+    VoidCallback update, {
+    bool invalidatePreflight = true,
+  }) {
+    setState(() {
+      update();
+      _markDraftModified(invalidatePreflight: invalidatePreflight);
+    });
   }
 
   void _resetVisibleDialogSections() {
@@ -386,10 +399,13 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           }
           return;
         }
-        setState(() {
-          _draft.state = value;
-          _draft.validationMessage = null;
-        });
+        _updateDraft(
+          () {
+            _draft.state = value;
+            _draft.validationMessage = null;
+          },
+          invalidatePreflight: false,
+        );
       },
       preflightInfoBar: preflightInfoBar,
       actionTypeDropdownKey: AgentActionEditorKeys.actionTypeDropdown,
@@ -606,28 +622,23 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           showProductionPathAllowlistWarning: _shouldShowProductionPathAllowlistWarning,
           visibleSections: _isDialogSectionVisible,
           executionCallbacks: AgentActionExecutionPoliciesCallbacks(
-            onMaxAttemptsChanged: (value) => setState(() => _draft.maxAttempts = value),
-            onMaxRuntimeMinutesChanged: (value) {
-              final parsed = int.tryParse(value.trim());
-              if (parsed != null && parsed > 0) {
-                setState(() => _draft.maxRuntimeMinutes = parsed);
-              }
-            },
-            onKillOnTimeoutChanged: (value) => setState(() => _draft.killMainProcessOnTimeout = value),
-            onAllowRemoteRetryChanged: (value) => setState(() => _draft.allowRemoteRetry = value),
+            onMaxAttemptsChanged: (value) => _updateDraft(() => _draft.maxAttempts = value),
+            onMaxRuntimeMinutesChanged: (_) => _markDraftModified(),
+            onKillOnTimeoutChanged: (value) => _updateDraft(() => _draft.killMainProcessOnTimeout = value),
+            onAllowRemoteRetryChanged: (value) => _updateDraft(() => _draft.allowRemoteRetry = value),
             onRunElevatedChanged: (value) => unawaited(_onRunElevatedChanged(value)),
-            onContextInjectionModeChanged: (value) => setState(() => _draft.contextInjectionMode = value),
-            onPathChangePolicyChanged: (value) => setState(() => _draft.pathChangePolicy = value),
+            onContextInjectionModeChanged: (value) => _updateDraft(() => _draft.contextInjectionMode = value),
+            onPathChangePolicyChanged: (value) => _updateDraft(() => _draft.pathChangePolicy = value),
           ),
           runtimeCallbacks: AgentActionRuntimePoliciesCallbacks(
-            onConcurrencyBehaviorChanged: (value) => setState(() => _draft.concurrencyBehavior = value),
-            onProcessWindowModeChanged: (value) => setState(() => _draft.processWindowMode = value),
-            onCaptureStdoutChanged: (value) => setState(() => _draft.captureStdout = value),
-            onCaptureStderrChanged: (value) => setState(() => _draft.captureStderr = value),
-            onRedactBeforePersistingChanged: (value) => setState(() => _draft.redactBeforePersisting = value),
-            onStdoutEncodingModeChanged: (value) => setState(() => _draft.stdoutEncodingMode = value),
-            onStderrEncodingModeChanged: (value) => setState(() => _draft.stderrEncodingMode = value),
-            onOnAppExitChanged: (value) => setState(() => _draft.onAppExit = value),
+            onConcurrencyBehaviorChanged: (value) => _updateDraft(() => _draft.concurrencyBehavior = value),
+            onProcessWindowModeChanged: (value) => _updateDraft(() => _draft.processWindowMode = value),
+            onCaptureStdoutChanged: (value) => _updateDraft(() => _draft.captureStdout = value),
+            onCaptureStderrChanged: (value) => _updateDraft(() => _draft.captureStderr = value),
+            onRedactBeforePersistingChanged: (value) => _updateDraft(() => _draft.redactBeforePersisting = value),
+            onStdoutEncodingModeChanged: (value) => _updateDraft(() => _draft.stdoutEncodingMode = value),
+            onStderrEncodingModeChanged: (value) => _updateDraft(() => _draft.stderrEncodingMode = value),
+            onOnAppExitChanged: (value) => _updateDraft(() => _draft.onAppExit = value),
           ),
           onRemoteEnabledChanged: (value) => unawaited(_onRemoteEnabledChanged(value)),
           onRemoteAdHocChanged: (value) => unawaited(_onRemoteAdHocChanged(value)),
@@ -655,11 +666,11 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     l10n: widget.l10n,
     definition: widget.definition,
     enabled: enabled,
-    onEnable: () => setState(() {
+    onEnable: () => _updateDraft(() {
       _draft.remoteEnabled = true;
       _draft.remoteApprovalGranted = true;
     }),
-    onDisable: () => setState(() {
+    onDisable: () => _updateDraft(() {
       _draft.remoteEnabled = false;
       _draft.remoteAdHoc = false;
       _draft.remoteApprovalGranted = false;
@@ -670,15 +681,15 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     context: context,
     l10n: widget.l10n,
     enabled: enabled,
-    onApply: () => setState(() => _draft.remoteAdHoc = enabled),
+    onApply: () => _updateDraft(() => _draft.remoteAdHoc = enabled),
   );
 
   Future<void> _onRunElevatedChanged(bool enabled) => AgentActionEditorPolicyConfirmations.handleRunElevatedChanged(
     context: context,
     l10n: widget.l10n,
     enabled: enabled,
-    onEnable: () => setState(() => _draft.runElevated = true),
-    onDisable: () => setState(() => _draft.runElevated = false),
+    onEnable: () => _updateDraft(() => _draft.runElevated = true),
+    onDisable: () => _updateDraft(() => _draft.runElevated = false),
   );
 
   void _applyDeveloperConnectionSelection(String? connectionId) {

@@ -108,7 +108,6 @@ class AgentActionDraftMapper {
     draft.notifyOnTimeout = false;
     draft.maxAttempts = 1;
     draft.allowRemoteRetry = false;
-    draft.maxRuntimeMinutes = 30;
     draft.executionPolicy.maxRuntimeMinutes.text = '30';
     draft.killMainProcessOnTimeout = true;
     draft.executionPolicy.allowedProfiles.clear();
@@ -182,8 +181,8 @@ class AgentActionDraftMapper {
     draft.allowRemoteRetry = retry.allowRemote;
 
     final timeout = definition.policies.timeout;
-    draft.maxRuntimeMinutes = timeout.maxRuntime.inMinutes < 1 ? 1 : timeout.maxRuntime.inMinutes;
-    draft.executionPolicy.maxRuntimeMinutes.text = '${draft.maxRuntimeMinutes}';
+    draft.executionPolicy.maxRuntimeMinutes.text =
+        '${timeout.maxRuntime.inMinutes < 1 ? 1 : timeout.maxRuntime.inMinutes}';
     draft.killMainProcessOnTimeout = timeout.killMainProcessOnTimeout;
 
     final environment = definition.policies.environment;

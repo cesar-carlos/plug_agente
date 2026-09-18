@@ -63,7 +63,7 @@ final class HomogeneousInsertBatchPlanner {
       columnNames.length,
       (index) => BulkInsertColumn(
         name: columnNames![index],
-        type: _inferColumnType(columnNames[index], rows.map((row) => row[index]).toList(growable: false)),
+        type: _inferColumnType(columnNames[index], rows, index),
       ),
       growable: false,
     );
@@ -237,13 +237,17 @@ final class HomogeneousInsertBatchPlanner {
     return _unparsedToken;
   }
 
-  static BulkInsertColumnType _inferColumnType(String columnName, List<dynamic> values) {
+  static BulkInsertColumnType _inferColumnType(
+    String columnName,
+    List<List<dynamic>> rows,
+    int columnIndex,
+  ) {
     final normalizedName = columnName.toLowerCase();
     if (normalizedName.startsWith('is_') || normalizedName.endsWith('_flag')) {
       return BulkInsertColumnType.i32;
     }
     if (normalizedName == 'id' || normalizedName.endsWith('_id')) {
-      return _valuesFitI32(values) ? BulkInsertColumnType.i32 : BulkInsertColumnType.i64;
+      return _rowsFitI32(rows, columnIndex) ? BulkInsertColumnType.i32 : BulkInsertColumnType.i64;
     }
     if (normalizedName.contains('amt') ||
         normalizedName.contains('amount') ||
@@ -258,17 +262,34 @@ final class HomogeneousInsertBatchPlanner {
       return BulkInsertColumnType.timestamp;
     }
 
-    if (values.every((value) => value == null || value is int)) {
-      return _valuesFitI32(values.whereType<int>()) ? BulkInsertColumnType.i32 : BulkInsertColumnType.i64;
+    var allNullOrInt = true;
+    var allNullOrNumeric = true;
+    var fitsI32 = true;
+    for (final row in rows) {
+      final value = row[columnIndex];
+      if (value == null) {
+        continue;
+      }
+      if (value is! int) {
+        allNullOrInt = false;
+      } else if (value < -0x80000000 || value > 0x7fffffff) {
+        fitsI32 = false;
+      }
+      if (value is! int && value is! double) {
+        allNullOrNumeric = false;
+      }
+      if (!allNullOrInt && !allNullOrNumeric) {
+        return BulkInsertColumnType.text;
+      }
     }
-    if (values.every((value) => value == null || value is int || value is double)) {
-      return BulkInsertColumnType.decimal;
-    }
+    if (allNullOrInt) return fitsI32 ? BulkInsertColumnType.i32 : BulkInsertColumnType.i64;
+    if (allNullOrNumeric) return BulkInsertColumnType.decimal;
     return BulkInsertColumnType.text;
   }
 
-  static bool _valuesFitI32(Iterable<dynamic> values) {
-    for (final value in values) {
+  static bool _rowsFitI32(List<List<dynamic>> rows, int columnIndex) {
+    for (final row in rows) {
+      final value = row[columnIndex];
       if (value is! int) {
         continue;
       }

@@ -80,6 +80,7 @@ class RunAgentActionLocally {
              metrics: metrics,
              notifyExecution: notifyExecution,
              secretPlaceholderResolver: secretPlaceholderResolver,
+             dangerousCommandPolicyEnforcer: dangerousCommandPolicyEnforcer,
              elevatedExecutionService: elevatedExecutionService,
              remoteLifecycleAudit: remoteLifecycleAudit,
              runtimeStateGuard: runtimeStateGuard,

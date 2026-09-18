@@ -72,7 +72,7 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
     String mode = 'unknown',
   }) {
     _recordDurationSample(store.sqlExecutionTimes, executionTime);
-    final samples = store.sqlExecutionTimesByMode.putIfAbsent(mode, ListQueue<Duration>.new);
+    final samples = store.sqlExecutionTimesByMode.putIfAbsent(mode, store.newDurationSamples);
     _recordDurationSample(samples, executionTime);
     final timestamps = store.sqlExecutionTimestampsByMode.putIfAbsent(mode, ListQueue<DateTime>.new);
     _recordTimestampSample(timestamps, DateTime.now());

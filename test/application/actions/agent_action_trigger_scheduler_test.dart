@@ -18,6 +18,10 @@ import 'package:result_dart/result_dart.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:uuid/uuid.dart';
 
+const _structuredTestConfig = ExecutableActionConfig(
+  executablePath: AgentActionPathReference(originalPath: r'C:\tools\test.exe'),
+);
+
 class _HeldSchedulerInstanceLock implements IAgentActionSchedulerInstanceLock {
   @override
   bool get isHeld => true;
@@ -286,7 +290,7 @@ class FakeAgentActionLocalRunner implements AgentActionLocalRunner {
   int runCount = 0;
 
   @override
-  AgentActionType get type => AgentActionType.commandLine;
+  AgentActionType get type => AgentActionType.executable;
 
   @override
   Future<Result<AgentActionProcessResult>> run({
@@ -564,7 +568,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
       );
     });
 
@@ -794,7 +798,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           timeout: AgentActionTimeoutPolicy(
             maxRuntime: Duration(seconds: 1),
@@ -843,7 +847,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           timeout: AgentActionTimeoutPolicy(
             maxRuntime: Duration(seconds: 1),
@@ -889,7 +893,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           timeout: AgentActionTimeoutPolicy(
             maxRuntime: Duration(seconds: 1),
@@ -917,7 +921,7 @@ void main() {
         id: 'action-1',
         name: 'Elevated command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           elevated: AgentActionElevatedPolicy(runElevated: true),
           timeout: AgentActionTimeoutPolicy(
@@ -947,7 +951,7 @@ void main() {
         id: 'action-1',
         name: 'Remote-ready',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -980,7 +984,7 @@ void main() {
         id: 'action-1',
         name: 'Remote stale',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -1031,7 +1035,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           timeout: AgentActionTimeoutPolicy(
             maxRuntime: Duration.zero,
@@ -1170,7 +1174,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           timeout: AgentActionTimeoutPolicy(
             maxRuntime: Duration(seconds: 1),

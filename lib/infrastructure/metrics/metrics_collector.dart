@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
+import 'package:plug_agente/core/constants/metrics_sampling_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_diagnostics_constants.dart';
 import 'package:plug_agente/domain/actions/action_enums.dart';
@@ -19,6 +20,7 @@ import 'package:plug_agente/infrastructure/metrics/agent_action_execution_metric
 import 'package:plug_agente/infrastructure/metrics/auto_update_metrics_collector_impl.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector_snapshot_builder.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_counter_constants.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_duration_samples.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_event_store.dart';
 import 'package:plug_agente/infrastructure/metrics/sql_execution_queue_metrics_collector_impl.dart';
 
@@ -38,7 +40,7 @@ final class MetricsCollector extends MetricsCollectorCore
         SqlExecutionQueueMetricsCollector,
         ActionExecutionQueueMetricsCollector,
         AgentActionExecutionMetricsCollector {
-  MetricsCollector() {
+  MetricsCollector({super.latencySampleCapacity, super.now}) {
     sqlQueueMetrics = SqlExecutionQueueMetricsCollectorImpl(store);
     actionQueueMetrics = ActionExecutionQueueMetricsCollectorImpl(store);
     agentActionMetrics = AgentActionExecutionMetricsCollectorImpl(store);
@@ -48,11 +50,25 @@ final class MetricsCollector extends MetricsCollectorCore
 
 /// Query metrics ring buffer and shared event store for domain collectors.
 class MetricsCollectorCore {
-  MetricsCollectorCore();
+  MetricsCollectorCore({
+    int? latencySampleCapacity,
+    DateTime Function()? now,
+  }) : store = MetricsEventStore(
+         latencySampleCapacity: _clampLatencySampleCapacity(
+           latencySampleCapacity ?? MetricsSamplingConstants.latencySampleCapacity,
+         ),
+       ),
+       _snapshotBuilder = MetricsCollectorSnapshotBuilder(now: now);
 
   static const int _maxMetrics = 10000;
 
-  final MetricsEventStore store = MetricsEventStore();
+  static int _clampLatencySampleCapacity(int value) => value.clamp(
+    MetricsSamplingConstants.minLatencySampleCapacity,
+    MetricsSamplingConstants.maxLatencySampleCapacity,
+  );
+
+  final MetricsEventStore store;
+  final MetricsCollectorSnapshotBuilder _snapshotBuilder;
 
   late final SqlExecutionQueueMetricsCollectorImpl sqlQueueMetrics;
   late final ActionExecutionQueueMetricsCollectorImpl actionQueueMetrics;
@@ -60,7 +76,10 @@ class MetricsCollectorCore {
   late final AutoUpdateMetricsCollectorImpl autoUpdateMetrics;
 
   final ListQueue<QueryMetrics> _metrics = ListQueue<QueryMetrics>();
+  late final MetricsDurationSamples _queryLatencySamples = store.newDurationSamples();
   final _metricsController = StreamController<QueryMetrics>.broadcast();
+  var _recordedQueryCount = 0;
+  var _recordedQueryErrorCount = 0;
 
   Stream<QueryMetrics> get metricsStream => _metricsController.stream;
 
@@ -118,7 +137,11 @@ class MetricsCollectorCore {
 
   void clear() {
     _metrics.clear();
+    _queryLatencySamples.clear();
+    _recordedQueryCount = 0;
+    _recordedQueryErrorCount = 0;
     store.clearCountersAndSamples();
+    _snapshotBuilder.clear();
   }
 
   void recordQueueAdded(int currentSize) => sqlQueueMetrics.recordQueueAdded(currentSize);
@@ -217,6 +240,20 @@ class MetricsCollectorCore {
   void recordElevatedStatusFileTerminalRead() => agentActionMetrics.recordElevatedStatusFileTerminalRead();
 
   void recordElevatedStatusFileWaitTimeout() => agentActionMetrics.recordElevatedStatusFileWaitTimeout();
+
+  void recordProcessStarted(Duration startDuration) => agentActionMetrics.recordProcessStarted(startDuration);
+
+  void recordProcessSpawnFailure() => agentActionMetrics.recordProcessSpawnFailure();
+
+  void recordProcessTimeout() => agentActionMetrics.recordProcessTimeout();
+
+  void recordProcessTreeTermination() => agentActionMetrics.recordProcessTreeTermination();
+
+  void recordProcessTreeAttachFailure() => agentActionMetrics.recordProcessTreeAttachFailure();
+
+  void recordCommandLinePolicyRejected() => agentActionMetrics.recordCommandLinePolicyRejected();
+
+  void recordCommandLinePlaceholderFailure() => agentActionMetrics.recordCommandLinePlaceholderFailure();
 
   void recordWorkerStarted(int activeCount) => sqlQueueMetrics.recordWorkerStarted(activeCount);
 
@@ -347,6 +384,11 @@ class MetricsCollectorCore {
   }
 
   void _addMetric(QueryMetrics metric) {
+    _recordedQueryCount++;
+    if (!metric.success) {
+      _recordedQueryErrorCount++;
+    }
+    _recordDurationSample(_queryLatencySamples, metric.executionDuration);
     _metrics.addLast(metric);
     while (_metrics.length > _maxMetrics) {
       _metrics.removeFirst();
@@ -368,7 +410,8 @@ class MetricsCollectorCore {
 
   void _incrementEventCounter(String counter) => store.incrementEventCounter(counter);
 
-  void _recordDurationSample(ListQueue<Duration> samples, Duration value) => store.recordDurationSample(samples, value);
+  void _recordDurationSample(MetricsDurationSamples samples, Duration value) =>
+      store.recordDurationSample(samples, value);
 
   void _recordTimestampSample(ListQueue<DateTime> samples, DateTime value) =>
       store.recordTimestampSample(samples, value);
@@ -376,11 +419,11 @@ class MetricsCollectorCore {
   List<Map<String, dynamic>> exportToJson() => _metrics.map((m) => m.toMap()).toList();
 
   Map<String, Object> getSnapshot() {
-    return MetricsCollectorSnapshotBuilder.build(
-      queryMetrics: _metrics,
+    return _snapshotBuilder.build(
+      queryLatencySamples: _queryLatencySamples,
+      queryCount: _recordedQueryCount,
+      queryErrorCount: _recordedQueryErrorCount,
       store: store,
-      p95QueueWaitTime: p95QueueWaitTime,
-      maxRecentQueueWaitTime: maxRecentQueueWaitTime,
       sqlQueueRejectionCount: sqlQueueRejectionCount,
       sqlQueueTimeoutCount: sqlQueueTimeoutCount,
       sqlQueueTimeoutAfterWorkerStartedCount: sqlQueueTimeoutAfterWorkerStartedCount,

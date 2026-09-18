@@ -1164,7 +1164,12 @@ void main() {
       id: 'action-1',
       name: 'Export me',
       state: AgentActionState.active,
-      config: CommandLineActionConfig(command: r'echo ${secret:api_key}'),
+      config: CommandLineActionConfig(command: 'echo export'),
+      policies: AgentActionDefinitionPolicies(
+        environment: AgentActionEnvironmentPolicy(
+          variables: <String, String>{'API_KEY': r'${secret:api_key}'},
+        ),
+      ),
     );
     repository.triggers['trigger-1'] = const AgentActionTrigger(
       id: 'trigger-1',

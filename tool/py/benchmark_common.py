@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Collection, Mapping
 
 from tool.py.script_utils import PROJECT_ROOT, get_dsn_driver_family, import_dotenv_if_present
 
@@ -34,6 +34,15 @@ SAFE_ENV_KEYS = (
 
 TIMING_TRIPLE_RE = re.compile(
     r"(?P<p50>[0-9.]+(?:ms|us)?)\s*/\s*(?P<p95>[0-9.]+(?:ms|us)?)\s*/\s*(?P<p99>[0-9.]+(?:ms|us)?)"
+)
+
+STREAMING_BENCHMARK_RESULT_RE = re.compile(
+    r"(?P<label>streamQueryBatched|streamQuery):\s*"
+    r"(?P<elapsed_ms>[0-9.]+)\s*ms,\s*"
+    r"rows=(?P<rows>\d+),\s*chunks=(?P<chunks>\d+),\s*"
+    r"rowsPerSecond=(?P<rows_per_second>[0-9.]+),\s*"
+    r"fetchSize=(?P<fetch_size>\d+),\s*chunkSize=(?P<chunk_size>\d+)",
+    re.IGNORECASE,
 )
 
 
@@ -148,6 +157,9 @@ def resolve_dart_odbc_fast_root() -> Path | None:
     env_root = os.environ.get("DART_ODBC_FAST_ROOT", "").strip()
     if env_root:
         candidates.append(Path(env_root))
+    locked_version = _resolve_locked_odbc_fast_version()
+    if locked_version:
+        candidates.extend(_published_odbc_fast_candidates(locked_version))
     candidates.extend(
         [
             Path(r"D:\Developer\dart_odbc_fast"),
@@ -158,6 +170,40 @@ def resolve_dart_odbc_fast_root() -> Path | None:
         if (candidate / "pubspec.yaml").is_file():
             return candidate.resolve()
     return None
+
+
+def _resolve_locked_odbc_fast_version() -> str | None:
+    lockfile = PROJECT_ROOT / "pubspec.lock"
+    if not lockfile.is_file():
+        return None
+
+    in_odbc_fast_section = False
+    for line in lockfile.read_text(encoding="utf-8").splitlines():
+        if line.startswith("  odbc_fast:"):
+            in_odbc_fast_section = True
+            continue
+        if in_odbc_fast_section and line.startswith("  ") and not line.startswith("    "):
+            break
+        if in_odbc_fast_section and line.strip().startswith("version:"):
+            return line.split(":", 1)[1].strip().strip('"').strip("'")
+    return None
+
+
+def _published_odbc_fast_candidates(version: str) -> list[Path]:
+    cache_roots: list[Path] = []
+    configured_cache = os.environ.get("PUB_CACHE", "").strip()
+    if configured_cache:
+        cache_roots.append(Path(configured_cache))
+    local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
+    if local_app_data:
+        cache_roots.append(Path(local_app_data) / "Pub" / "Cache")
+    try:
+        cache_roots.append(Path.home() / ".pub-cache")
+    except RuntimeError:
+        pass
+
+    package_name = f"odbc_fast-{version}"
+    return [cache_root / "hosted" / "pub.dev" / package_name for cache_root in cache_roots]
 
 
 def strip_shell_log_prefix(line: str) -> str:
@@ -370,6 +416,19 @@ def parse_odbc_benchmark_metrics(output: str) -> dict[str, float]:
     return metrics
 
 
+def parse_odbc_streaming_benchmark_metrics(output: str) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for match in STREAMING_BENCHMARK_RESULT_RE.finditer(output):
+        label = match.group("label")
+        metrics[f"{label}.elapsed_ms"] = float(match.group("elapsed_ms"))
+        metrics[f"{label}.rows"] = float(match.group("rows"))
+        metrics[f"{label}.chunks"] = float(match.group("chunks"))
+        metrics[f"{label}.rows_per_second"] = float(match.group("rows_per_second"))
+        metrics[f"{label}.fetch_size"] = float(match.group("fetch_size"))
+        metrics[f"{label}.chunk_size"] = float(match.group("chunk_size"))
+    return metrics
+
+
 def _timing_to_micros(value: str) -> float:
     text = value.strip().lower()
     if text.endswith("ms"):
@@ -379,12 +438,63 @@ def _timing_to_micros(value: str) -> float:
     return float(text) * 1000.0
 
 
-def flatten_suite_metrics(summary: Mapping[str, Any]) -> dict[str, float]:
+def incompatible_benchmark_suite_reasons(
+    baseline_summary: Mapping[str, Any],
+    current_summary: Mapping[str, Any],
+) -> dict[str, str]:
+    """Return ODBC suites that cannot be compared safely across two runs.
+
+    ODBC timing depends on the package build and workload shape. Legacy
+    summaries have no identity metadata, so treating them as a baseline would
+    turn environmental drift into a product regression.
+    """
+
+    def suites_by_id(summary: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+        return {
+            str(suite.get("id")): suite
+            for suite in summary.get("suites", [])
+            if isinstance(suite, Mapping) and isinstance(suite.get("id"), str)
+        }
+
+    def comparison_identity(suite: Mapping[str, Any]) -> dict[str, str] | None:
+        raw_identity = suite.get("comparison_identity")
+        if not isinstance(raw_identity, Mapping):
+            return None
+        identity = {
+            key: value
+            for key, value in raw_identity.items()
+            if isinstance(key, str) and isinstance(value, str) and value
+        }
+        return identity or None
+
+    baseline_suites = suites_by_id(baseline_summary)
+    current_suites = suites_by_id(current_summary)
+    reasons: dict[str, str] = {}
+    for suite_id in sorted(set(baseline_suites) & set(current_suites)):
+        if not suite_id.startswith("odbc_"):
+            continue
+        baseline_identity = comparison_identity(baseline_suites[suite_id])
+        current_identity = comparison_identity(current_suites[suite_id])
+        if baseline_identity is None or current_identity is None:
+            reasons[suite_id] = "missing comparison identity"
+        elif baseline_identity != current_identity:
+            reasons[suite_id] = "comparison identity differs"
+    return reasons
+
+
+def flatten_suite_metrics(
+    summary: Mapping[str, Any],
+    *,
+    excluded_suite_ids: Collection[str] = (),
+) -> dict[str, float]:
     flattened: dict[str, float] = {}
+    excluded = set(excluded_suite_ids)
     for suite in summary.get("suites", []):
         if not isinstance(suite, dict):
             continue
         suite_id = str(suite.get("id", "unknown"))
+        if suite_id in excluded:
+            continue
         metrics = suite.get("metrics")
         if not isinstance(metrics, dict):
             continue
@@ -398,13 +508,15 @@ def flatten_suite_metrics(summary: Mapping[str, Any]) -> dict[str, float]:
 
 def metric_lower_is_better(metric_key: str) -> bool:
     lower = metric_key.lower()
-    if any(token in lower for token in ("rows_per_sec", "ops_per_sec", "throughput", "ops/s", "rows/s")):
-        return False
-    if any(
-        token in lower
-        for token in ("_ms", "_us", "_s", "wall_ms", "latency", "duration", "p50", "p95", "p99")
+    if lower.endswith(("_ms", "_us")) or any(
+        token in lower for token in ("latency", "duration", "median_us", "p50", "p95", "p99")
     ):
         return True
+    if any(
+        token in lower
+        for token in ("rows_per_sec", "ops_per_sec", "throughput", "ops/s", "rows/s", "speedup")
+    ):
+        return False
     return True
 
 

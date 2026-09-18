@@ -80,6 +80,11 @@
         "exit_code": { "type": "integer" },
         "log_file": { "type": "string" },
         "reason": { "type": "string" },
+        "comparison_identity": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Non-sensitive package and workload identity required for comparable benchmarks"
+        },
         "metrics": {
           "type": "object",
           "additionalProperties": {

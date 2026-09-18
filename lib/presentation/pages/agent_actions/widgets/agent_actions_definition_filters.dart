@@ -14,6 +14,7 @@ void clearAgentActionDefinitionListFilters({
   required AgentActionsProvider provider,
   required AgentActionsUiPreferences uiPreferences,
 }) {
+  uiPreferences.cancelScheduledPersistString(AgentActionsUiPreferenceKeys.definitionSearch);
   provider.clearDefinitionFilters();
   unawaited(
     uiPreferences.removeKeys([
@@ -130,8 +131,9 @@ class AgentActionsDefinitionFiltersState extends State<AgentActionsDefinitionFil
             controller: _searchController,
             onChanged: (query) {
               provider.setDefinitionSearchQuery(query);
-              unawaited(
-                widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.definitionSearch, query.trim()),
+              widget.uiPreferences.schedulePersistString(
+                AgentActionsUiPreferenceKeys.definitionSearch,
+                query.trim(),
               );
             },
             textInputAction: TextInputAction.search,
@@ -140,9 +142,9 @@ class AgentActionsDefinitionFiltersState extends State<AgentActionsDefinitionFil
         Button(
           onPressed: provider.hasDefinitionListFilters
               ? () => clearAgentActionDefinitionListFilters(
-                    provider: provider,
-                    uiPreferences: widget.uiPreferences,
-                  )
+                  provider: provider,
+                  uiPreferences: widget.uiPreferences,
+                )
               : null,
           child: Text(l10n.ctButtonClearFilters),
         ),

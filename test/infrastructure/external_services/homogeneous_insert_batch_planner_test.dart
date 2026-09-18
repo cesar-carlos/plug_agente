@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/external_services/homogeneous_insert_batch_planner.dart';
@@ -26,6 +27,26 @@ void main() {
       expect(plan.request.columns, hasLength(2));
       expect(plan.request.rows, hasLength(50));
       expect(plan.request.rows.first, [0, 'c0']);
+    });
+
+    test('preserves inferred integer and decimal types without per-column copies', () {
+      final commands = List<SqlCommand>.generate(
+        50,
+        (index) => SqlCommand(
+          sql:
+              'INSERT INTO customers (customer_id, amount, nullable_value) '
+              'VALUES (${0x80000000 + index}, ${index + 0.5}, NULL)',
+        ),
+      );
+
+      final plan = HomogeneousInsertBatchPlanner.tryPlan(commands);
+
+      expect(plan, isNotNull);
+      expect(plan!.request.columns.map((column) => column.type), [
+        BulkInsertColumnType.i64,
+        BulkInsertColumnType.decimal,
+        BulkInsertColumnType.i32,
+      ]);
     });
 
     test('rejects mixed tables and non-insert commands', () {

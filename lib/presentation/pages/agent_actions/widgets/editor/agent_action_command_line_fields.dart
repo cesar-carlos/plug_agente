@@ -26,13 +26,18 @@ class AgentActionCommandLineFields extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        InfoBar(
+          title: Text(l10n.agentActionsTypeCommandLine),
+          content: Text(l10n.agentActionsCommandLineLegacyWarning(r'${context_path}')),
+          severity: InfoBarSeverity.warning,
+        ),
+        const SizedBox(height: AppSpacing.sm),
         AppTextField(
           label: l10n.agentActionsFormCommand,
           helpTitle: l10n.agentActionsHelpCommandTitle,
-          helpMessage: l10n.agentActionsHelpCommandMessage,
+          helpMessage: l10n.agentActionsHelpCommandMessage(r'${context_path}'),
           controller: commandController,
           enabled: enabled,
-          maxLines: 2,
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.sm),

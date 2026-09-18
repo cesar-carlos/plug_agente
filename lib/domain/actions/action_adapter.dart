@@ -23,6 +23,7 @@ class AgentActionPreparedExecution {
     required this.redactedCommandPreview,
     this.workingDirectory,
     this.contextHash,
+    this.validatedContextPath,
     this.redactedDiagnostics = const {},
   });
 
@@ -30,6 +31,9 @@ class AgentActionPreparedExecution {
   final String redactedCommandPreview;
   final String? workingDirectory;
   final String? contextHash;
+
+  /// Canonical context path retained only for process setup.
+  final String? validatedContextPath;
   final Map<String, Object?> redactedDiagnostics;
 }
 

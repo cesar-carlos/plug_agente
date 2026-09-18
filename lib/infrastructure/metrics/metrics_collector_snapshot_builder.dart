@@ -1,18 +1,28 @@
 import 'dart:collection';
 
-import 'package:plug_agente/domain/entities/query_metrics.dart';
+import 'package:plug_agente/core/constants/metrics_sampling_constants.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_counter_constants.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_duration_samples.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_event_store.dart';
 
-/// Builds health/monitoring snapshots from query metrics and the event store.
+/// Builds health snapshots while caching the sorting-heavy latency aggregates.
 final class MetricsCollectorSnapshotBuilder {
-  const MetricsCollectorSnapshotBuilder._();
+  MetricsCollectorSnapshotBuilder({DateTime Function()? now}) : _now = now ?? DateTime.now;
 
-  static Map<String, Object> build({
-    required Iterable<QueryMetrics> queryMetrics,
+  final DateTime Function() _now;
+  DateTime? _expensiveSnapshotExpiresAt;
+  Map<String, Object>? _cachedExpensiveSnapshot;
+
+  void clear() {
+    _expensiveSnapshotExpiresAt = null;
+    _cachedExpensiveSnapshot = null;
+  }
+
+  Map<String, Object> build({
+    required MetricsDurationSamples queryLatencySamples,
+    required int queryCount,
+    required int queryErrorCount,
     required MetricsEventStore store,
-    required Duration? p95QueueWaitTime,
-    required Duration? maxRecentQueueWaitTime,
     required int sqlQueueRejectionCount,
     required int sqlQueueTimeoutCount,
     required int sqlQueueTimeoutAfterWorkerStartedCount,
@@ -20,25 +30,24 @@ final class MetricsCollectorSnapshotBuilder {
     required int sqlQueueSaturation90Count,
     required int sqlQueueWorkersEqualPoolCount,
   }) {
-    final metrics = queryMetrics.isNotEmpty ? queryMetrics : <QueryMetrics>[];
-    final totalQueries = metrics.length;
-    final successfulQueries = metrics.where((m) => m.success).length;
-    final errorQueries = totalQueries - successfulQueries;
+    final now = _now();
+    final cached = _cachedExpensiveSnapshot;
+    final expensive =
+        cached != null && _expensiveSnapshotExpiresAt != null && now.isBefore(_expensiveSnapshotExpiresAt!)
+        ? cached
+        : _refreshExpensiveSnapshot(
+            queryLatencySamples,
+            queryCount,
+            queryErrorCount,
+            store,
+            now,
+          );
 
-    final latencies = metrics.map((m) => m.executionDuration.inMilliseconds).toList()..sort();
-
-    final avgLatency = latencies.isNotEmpty ? latencies.reduce((a, b) => a + b) / latencies.length : 0.0;
-
-    final p95Latency = latencies.isNotEmpty ? latencies[(latencies.length * 0.95).floor()] : 0;
-
-    final p99Latency = latencies.isNotEmpty ? latencies[(latencies.length * 0.99).floor()] : 0;
-
+    // Counters and gauges intentionally stay outside the cached aggregate.
     return {
-      'query_count': totalQueries,
-      'query_error_count': errorQueries,
-      'query_avg_latency_ms': avgLatency,
-      'query_p95_latency_ms': p95Latency,
-      'query_p99_latency_ms': p99Latency,
+      ...expensive,
+      'query_count': queryCount,
+      'query_error_count': queryErrorCount,
       'sql_queue_rejection_count': sqlQueueRejectionCount,
       'sql_queue_timeout_count': sqlQueueTimeoutCount,
       'sql_queue_timeout_after_worker_started_count': sqlQueueTimeoutAfterWorkerStartedCount,
@@ -56,25 +65,6 @@ final class MetricsCollectorSnapshotBuilder {
       'sql_queue_max_workers': store.maxActiveWorkers,
       'rpc_outbound_response_active': store.outboundResponseActive,
       'rpc_outbound_response_max_active': store.outboundResponseMaxActive,
-      'sql_queue_avg_wait_time_ms': store.queueWaitTimes.isEmpty
-          ? 0.0
-          : store.queueWaitTimes.fold<int>(0, (sum, d) => sum + d.inMilliseconds) / store.queueWaitTimes.length,
-      'sql_queue_p95_wait_time_ms': p95QueueWaitTime?.inMilliseconds ?? 0,
-      'sql_queue_max_recent_wait_time_ms': maxRecentQueueWaitTime?.inMilliseconds ?? 0,
-      ..._durationStatsSnapshot('agent_action_queue_wait', store.agentActionQueueWaitTimes),
-      ..._durationStatsSnapshot('rpc_outbound_response_wait', store.outboundResponseWaitTimes),
-      ..._durationStatsSnapshot('agent_action_execution', store.agentActionExecutionDurations),
-      ..._durationStatsSnapshot('pool_wait', store.poolWaitTimes),
-      ..._durationStatsSnapshot('direct_connection_wait', store.directConnectionWaitTimes),
-      ..._durationStatsSnapshot('read_only_batch_parallel_wait', store.readOnlyBatchParallelWaitTimes),
-      ..._durationStatsSnapshot('streaming_worker_hold', store.streamingWorkerHoldTimes),
-      ..._durationStatsSnapshot('connect', store.connectTimes),
-      ..._durationStatsSnapshot('sql_execution', store.sqlExecutionTimes),
-      ..._durationStatsSnapshot('auto_update_probe', store.autoUpdateProbeTimes),
-      ..._durationStatsSnapshot('auto_update_download', store.autoUpdateDownloadTimes),
-      ..._sqlExecutionModeStatsSnapshot(store),
-      'sql_execution_by_mode': _sqlExecutionModeNestedStatsSnapshot(store),
-      ..._durationStatsSnapshot('prepared_prepare', store.preparedPrepareTimes),
       'rpc_sql_execute_db_streaming_skip_reasons': Map<String, int>.unmodifiable(store.streamingSkipReasons),
       'odbc_native_fallback_reasons': Map<String, int>.unmodifiable(store.odbcNativeFallbackReasons),
       'odbc_query_timeout_by_stage': Map<String, int>.unmodifiable(store.odbcQueryTimeoutByStage),
@@ -85,50 +75,93 @@ final class MetricsCollectorSnapshotBuilder {
       'read_only_batch_parallel_last_requested': store.readOnlyBatchParallelLastRequested,
       'read_only_batch_parallel_last_effective': store.readOnlyBatchParallelLastEffective,
       'recent_diagnostic_reasons': List<String>.unmodifiable(store.recentDiagnosticReasons),
-      'top_recent_diagnostic_reasons': _topRecentDiagnosticReasons(store.recentDiagnosticReasons),
       ...store.eventCounters,
     };
   }
 
-  static Map<String, Object> _durationStatsSnapshot(
-    String prefix,
-    Iterable<Duration> samples,
+  Map<String, Object> _refreshExpensiveSnapshot(
+    MetricsDurationSamples queryLatencySamples,
+    int queryCount,
+    int queryErrorCount,
+    MetricsEventStore store,
+    DateTime now,
   ) {
-    if (samples.isEmpty) {
-      return {
-        '${prefix}_avg_time_ms': 0.0,
-        '${prefix}_p95_time_ms': 0,
-        '${prefix}_p99_time_ms': 0,
-        '${prefix}_max_recent_time_ms': 0,
-        '${prefix}_sample_count': 0,
-      };
-    }
+    final values = <String, Object>{
+      ..._queryStatsSnapshot(
+        queryLatencySamples,
+        queryCount,
+        queryErrorCount,
+      ),
+      ..._sqlQueueWaitStats(store),
+      ..._durationStatsSnapshot('agent_action_queue_wait', store.agentActionQueueWaitTimes),
+      ..._durationStatsSnapshot('rpc_outbound_response_wait', store.outboundResponseWaitTimes),
+      ..._durationStatsSnapshot('agent_action_execution', store.agentActionExecutionDurations),
+      ..._durationStatsSnapshot('agent_action_process_start', store.agentActionProcessStartDurations),
+      ..._durationStatsSnapshot('pool_wait', store.poolWaitTimes),
+      ..._durationStatsSnapshot('direct_connection_wait', store.directConnectionWaitTimes),
+      ..._durationStatsSnapshot('read_only_batch_parallel_wait', store.readOnlyBatchParallelWaitTimes),
+      ..._durationStatsSnapshot('streaming_worker_hold', store.streamingWorkerHoldTimes),
+      ..._durationStatsSnapshot('connect', store.connectTimes),
+      ..._durationStatsSnapshot('sql_execution', store.sqlExecutionTimes),
+      ..._durationStatsSnapshot('auto_update_probe', store.autoUpdateProbeTimes),
+      ..._durationStatsSnapshot('auto_update_download', store.autoUpdateDownloadTimes),
+      ..._durationStatsSnapshot('prepared_prepare', store.preparedPrepareTimes),
+      ..._sqlExecutionModeStatsSnapshot(store),
+      'sql_execution_by_mode': _sqlExecutionModeNestedStatsSnapshot(store),
+      'top_recent_diagnostic_reasons': _topRecentDiagnosticReasons(store.recentDiagnosticReasons),
+    };
+    _cachedExpensiveSnapshot = Map<String, Object>.unmodifiable(values);
+    _expensiveSnapshotExpiresAt = now.add(MetricsSamplingConstants.percentileSnapshotCacheTtl);
+    return _cachedExpensiveSnapshot!;
+  }
 
-    final sorted = samples.map((d) => d.inMilliseconds).toList()..sort();
+  Map<String, Object> _queryStatsSnapshot(
+    Iterable<Duration> queryLatencySamples,
+    int queryCount,
+    int queryErrorCount,
+  ) {
+    final latencies = queryLatencySamples.map((sample) => sample.inMilliseconds).toList()..sort();
+    final totalLatency = latencies.fold<int>(0, (sum, value) => sum + value);
+    return {
+      'query_count': queryCount,
+      'query_error_count': queryErrorCount,
+      'query_avg_latency_ms': latencies.isEmpty ? 0.0 : totalLatency / latencies.length,
+      'query_p95_latency_ms': _percentile(latencies, 0.95),
+      'query_p99_latency_ms': _percentile(latencies, 0.99),
+    };
+  }
+
+  Map<String, Object> _sqlQueueWaitStats(MetricsEventStore store) {
+    final sorted = store.queueWaitTimes.map((sample) => sample.inMilliseconds).toList()..sort();
     final total = sorted.fold<int>(0, (sum, value) => sum + value);
     return {
-      '${prefix}_avg_time_ms': total / sorted.length,
-      '${prefix}_p95_time_ms': sorted[(sorted.length * 0.95).floor()],
-      '${prefix}_p99_time_ms': sorted[(sorted.length * 0.99).floor()],
-      '${prefix}_max_recent_time_ms': sorted.last,
+      'sql_queue_avg_wait_time_ms': sorted.isEmpty ? 0.0 : total / sorted.length,
+      'sql_queue_p95_wait_time_ms': _percentile(sorted, 0.95),
+      'sql_queue_max_recent_wait_time_ms': sorted.isEmpty ? 0 : sorted.last,
+    };
+  }
+
+  Map<String, Object> _durationStatsSnapshot(String prefix, Iterable<Duration> samples) {
+    final sorted = samples.map((sample) => sample.inMilliseconds).toList()..sort();
+    final total = sorted.fold<int>(0, (sum, value) => sum + value);
+    return {
+      '${prefix}_avg_time_ms': sorted.isEmpty ? 0.0 : total / sorted.length,
+      '${prefix}_p95_time_ms': _percentile(sorted, 0.95),
+      '${prefix}_p99_time_ms': _percentile(sorted, 0.99),
+      '${prefix}_max_recent_time_ms': sorted.isEmpty ? 0 : sorted.last,
       '${prefix}_sample_count': sorted.length,
     };
   }
 
-  static Map<String, Object> _sqlExecutionModeStatsSnapshot(MetricsEventStore store) {
+  Map<String, Object> _sqlExecutionModeStatsSnapshot(MetricsEventStore store) {
     final values = <String, Object>{};
     for (final entry in store.sqlExecutionTimesByMode.entries) {
-      values.addAll(
-        _durationStatsSnapshot(
-          'sql_execution_${entry.key}',
-          entry.value,
-        ),
-      );
+      values.addAll(_durationStatsSnapshot('sql_execution_${entry.key}', entry.value));
     }
     return values;
   }
 
-  static Map<String, Object> _sqlExecutionModeNestedStatsSnapshot(MetricsEventStore store) {
+  Map<String, Object> _sqlExecutionModeNestedStatsSnapshot(MetricsEventStore store) {
     final values = <String, Object>{};
     for (final entry in store.sqlExecutionTimesByMode.entries) {
       final stats = _durationStatsSnapshot('', entry.value);
@@ -144,30 +177,26 @@ final class MetricsCollectorSnapshotBuilder {
     return values;
   }
 
-  static double _opsPerSecondForMode(MetricsEventStore store, String mode) {
+  int _percentile(List<int> sorted, double percentile) =>
+      sorted.isEmpty ? 0 : sorted[(sorted.length * percentile).floor()];
+
+  double _opsPerSecondForMode(MetricsEventStore store, String mode) {
     final timestamps = store.sqlExecutionTimestampsByMode[mode];
-    if (timestamps == null || timestamps.isEmpty) {
-      return 0;
-    }
-    if (timestamps.length == 1) {
-      return 1;
-    }
+    if (timestamps == null || timestamps.isEmpty) return 0;
+    if (timestamps.length == 1) return 1;
     final windowSeconds = timestamps.last.difference(timestamps.first).inMilliseconds / 1000;
-    if (windowSeconds <= 0) {
-      return timestamps.length.toDouble();
-    }
-    return timestamps.length / windowSeconds;
+    return windowSeconds <= 0 ? timestamps.length.toDouble() : timestamps.length / windowSeconds;
   }
 
-  static Map<String, int> _topRecentDiagnosticReasons(Queue<String> recentDiagnosticReasons) {
+  Map<String, int> _topRecentDiagnosticReasons(Queue<String> reasons) {
     final counts = <String, int>{};
-    for (final reason in recentDiagnosticReasons) {
+    for (final reason in reasons) {
       counts[reason] = (counts[reason] ?? 0) + 1;
     }
     final entries = counts.entries.toList()
-      ..sort((a, b) {
-        final byCount = b.value.compareTo(a.value);
-        return byCount == 0 ? a.key.compareTo(b.key) : byCount;
+      ..sort((left, right) {
+        final byCount = right.value.compareTo(left.value);
+        return byCount == 0 ? left.key.compareTo(right.key) : byCount;
       });
     return Map<String, int>.fromEntries(entries.take(10));
   }

@@ -74,5 +74,26 @@ void main() {
       expect(snapshot['agent_action_elevated_status_file_terminal'], 1);
       expect(snapshot['agent_action_elevated_status_file_wait_timeout'], 1);
     });
+
+    test('should export process-tree and policy metrics without sensitive dimensions', () {
+      final metrics = MetricsCollector()
+        ..recordProcessStarted(const Duration(milliseconds: 12))
+        ..recordProcessSpawnFailure()
+        ..recordProcessTimeout()
+        ..recordProcessTreeTermination()
+        ..recordProcessTreeAttachFailure()
+        ..recordCommandLinePolicyRejected()
+        ..recordCommandLinePlaceholderFailure();
+
+      final snapshot = metrics.getSnapshot();
+      expect(snapshot['agent_action_process_started'], 1);
+      expect(snapshot['agent_action_process_spawn_failure'], 1);
+      expect(snapshot['agent_action_process_timeout'], 1);
+      expect(snapshot['agent_action_process_tree_termination'], 1);
+      expect(snapshot['agent_action_process_tree_attach_failure'], 1);
+      expect(snapshot['agent_action_command_line_policy_rejected'], 1);
+      expect(snapshot['agent_action_command_line_placeholder_failure'], 1);
+      expect(snapshot['agent_action_process_start_avg_time_ms'], 12.0);
+    });
   });
 }

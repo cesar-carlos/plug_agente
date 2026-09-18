@@ -224,6 +224,7 @@ void _registerActionsUseCases(GetIt getIt) {
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         secretPlaceholderResolver: getIt<AgentActionSecretPlaceholderResolver>(),
         dangerousCommandPolicyEnforcer: getIt<AgentActionDangerousCommandPolicyEnforcer>(),
+        metrics: getIt<MetricsCollector>(),
         elevatedRunnerReadiness: getIt<ElevatedActionRunnerReadinessService>(),
         elevatedExecutionService: getIt<ElevatedAgentActionExecutionService>(),
         definitionSnapshotter: getIt<AgentActionDefinitionSnapshotter>(),

@@ -104,6 +104,10 @@ abstract final class AgentActionFailureCode {
   static const appCloseRuntimeTooLong = 'ACTION_APP_CLOSE_RUNTIME_TOO_LONG';
   static const cancelNotRunning = 'ACTION_CANCEL_NOT_RUNNING';
   static const contextPathNotFound = 'ACTION_CONTEXT_PATH_NOT_FOUND';
+  static const commandLineContextPlaceholderInvalid = 'ACTION_COMMAND_LINE_CONTEXT_PLACEHOLDER_INVALID';
+  static const commandLineContextPlaceholderRequired = 'ACTION_COMMAND_LINE_CONTEXT_PLACEHOLDER_REQUIRED';
+  static const commandLineLocalOnly = 'ACTION_COMMAND_LINE_LOCAL_ONLY';
+  static const commandLineSecretPlaceholderForbidden = 'ACTION_COMMAND_LINE_SECRET_PLACEHOLDER_FORBIDDEN';
   static const environmentProfileDenied = 'ACTION_ENVIRONMENT_PROFILE_DENIED';
   static const executableNotFound = 'ACTION_EXECUTABLE_NOT_FOUND';
   static const executionCancelled = 'ACTION_CANCELLED';
@@ -127,6 +131,7 @@ abstract final class AgentActionFailureCode {
   static const processIdentityMismatch = 'ACTION_PROCESS_IDENTITY_MISMATCH';
   static const processIdentityUnavailable = 'ACTION_PROCESS_IDENTITY_UNAVAILABLE';
   static const processNotActive = 'ACTION_PROCESS_NOT_ACTIVE';
+  static const processTreeAttachFailed = 'ACTION_PROCESS_TREE_ATTACH_FAILED';
   static const queueCancelled = 'ACTION_QUEUE_CANCELLED';
   static const queueConcurrencyRejected = 'ACTION_QUEUE_CONCURRENCY_REJECTED';
   static const queueDisposed = 'ACTION_QUEUE_DISPOSED';

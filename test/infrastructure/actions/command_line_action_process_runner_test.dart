@@ -116,12 +116,25 @@ void main() {
     });
 
     test('should return context hash when request has context file', () async {
+      late List<String> capturedArguments;
       final runner = CommandLineActionProcessRunner(
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
         adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
-        processStarter: _starterFor(_FakeProcess(pid: 1234, exitCode: 0)),
+        processStarter:
+            (
+              _,
+              arguments, {
+              workingDirectory,
+              environment,
+              includeParentEnvironment = true,
+              runInShell = false,
+              mode = ProcessStartMode.normal,
+            }) async {
+              capturedArguments = arguments;
+              return _FakeProcess(pid: 1234, exitCode: 0);
+            },
       );
 
       final result = await runner.run(
@@ -130,7 +143,7 @@ void main() {
           id: 'action-1',
           name: 'Command',
           state: AgentActionState.active,
-          config: CommandLineActionConfig(command: 'echo ok'),
+          config: CommandLineActionConfig(command: r'echo ${context_path}'),
         ),
         request: const AgentActionExecutionRequest(
           actionId: 'action-1',
@@ -141,6 +154,7 @@ void main() {
 
       expect(result.isSuccess(), isTrue);
       expect(result.getOrThrow().contextHash, startsWith('sha256:'));
+      expect(capturedArguments, <String>['/C', r'echo "C:\Temp\context.json"']);
     });
 
     test('should kill only main process when command times out', () async {
@@ -161,7 +175,7 @@ void main() {
           state: AgentActionState.active,
           config: CommandLineActionConfig(command: 'timeout'),
           policies: AgentActionDefinitionPolicies(
-            timeout: AgentActionTimeoutPolicy(maxRuntime: Duration(milliseconds: 1)),
+            timeout: AgentActionTimeoutPolicy(maxRuntime: Duration(milliseconds: 20)),
           ),
         ),
         request: const AgentActionExecutionRequest(
@@ -177,6 +191,46 @@ void main() {
       expect(output.timedOut, isTrue);
       expect(output.killed, isTrue);
       expect(output.pid, 4321);
+    });
+
+    test('should retain cancellation ownership after a timeout configured not to kill', () async {
+      final process = _FakeProcess.pendingExit(pid: 4321);
+      final runner = CommandLineActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
+        processStarter: _starterFor(process),
+      );
+
+      final runFuture = runner.run(
+        executionId: 'execution-1',
+        definition: const AgentActionDefinition(
+          id: 'action-1',
+          name: 'Command',
+          state: AgentActionState.active,
+          config: CommandLineActionConfig(command: 'timeout'),
+          policies: AgentActionDefinitionPolicies(
+            timeout: AgentActionTimeoutPolicy(
+              maxRuntime: Duration(milliseconds: 20),
+              killMainProcessOnTimeout: false,
+            ),
+          ),
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      final cancellation = await runner.cancel(executionId: 'execution-1');
+      final result = await runFuture;
+
+      expect(cancellation.isSuccess(), isTrue);
+      expect(process.killCalled, isTrue);
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrThrow().status, AgentActionExecutionStatus.killed);
     });
 
     test('should not capture output when capture policy disables it', () async {
@@ -239,7 +293,7 @@ void main() {
               runInShell = false,
               mode = ProcessStartMode.normal,
             }) async {
-              throw const ProcessException('cmd.exe', <String>['/C', 'missing']);
+              throw const ProcessException('cmd.exe', <String>['/C', 'SUPER_SECRET']);
             },
       );
 
@@ -267,7 +321,8 @@ void main() {
       expect(failure.context, containsPair('phase', 'start_process'));
       expect(failure.context, containsPair('executable', 'cmd.exe'));
       expect(failure.context, containsPair('command_preview', 'cmd.exe /C [REDACTED_COMMAND]'));
-      expect(failure.context.toString(), isNot(contains('missing')));
+      expect(failure.context.toString(), isNot(contains('SUPER_SECRET')));
+      expect(failure.toString(), isNot(contains('SUPER_SECRET')));
     });
 
     test('should reject execution preflight when working directory drift is detected', () async {

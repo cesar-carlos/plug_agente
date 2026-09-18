@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
@@ -27,6 +29,8 @@ class AgentActionsUiPreferences {
   AgentActionsUiPreferences(this._resolveStore);
 
   final IAppSettingsStore? Function() _resolveStore;
+  final Map<String, Timer> _scheduledStringWrites = <String, Timer>{};
+  final Map<String, String?> _scheduledStringValues = <String, String?>{};
 
   IAppSettingsStore? get _store => _resolveStore();
 
@@ -88,6 +92,37 @@ class AgentActionsUiPreferences {
       return;
     }
     await store.setString(key, value);
+  }
+
+  void schedulePersistString(
+    String key,
+    String? value, {
+    Duration delay = const Duration(milliseconds: 300),
+  }) {
+    _scheduledStringValues[key] = value;
+    _scheduledStringWrites.remove(key)?.cancel();
+    _scheduledStringWrites[key] = Timer(delay, () {
+      _scheduledStringWrites.remove(key);
+      final pendingValue = _scheduledStringValues.remove(key);
+      unawaited(persistString(key, pendingValue));
+    });
+  }
+
+  void cancelScheduledPersistString(String key) {
+    _scheduledStringWrites.remove(key)?.cancel();
+    _scheduledStringValues.remove(key);
+  }
+
+  void flushScheduledStringWrites() {
+    final pendingValues = Map<String, String?>.from(_scheduledStringValues);
+    for (final timer in _scheduledStringWrites.values) {
+      timer.cancel();
+    }
+    _scheduledStringWrites.clear();
+    _scheduledStringValues.clear();
+    for (final entry in pendingValues.entries) {
+      unawaited(persistString(entry.key, entry.value));
+    }
   }
 
   Future<void> removeKeys(List<String> keys) async {

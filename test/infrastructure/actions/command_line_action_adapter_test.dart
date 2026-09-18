@@ -161,7 +161,7 @@ void main() {
           name: 'Secret command',
           state: AgentActionState.active,
           config: CommandLineActionConfig(
-            command: r'echo ${secret:token} | findstr ok',
+            command: r'echo ${context_path} | findstr ok',
             workingDirectory: AgentActionPathReference(
               originalPath: r'C:\Data7',
             ),

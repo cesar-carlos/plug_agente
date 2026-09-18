@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
@@ -151,6 +153,42 @@ void main() {
       final items = result.getOrThrow();
       expect(items.every((item) => item.ok), isTrue);
       expect(items.length, 3);
+    });
+
+    test('warms workers concurrently and releases acquired leases after a warm-up failure', () async {
+      const connectionString = 'DSN=Prod';
+      final firstAcquire = Completer<Result<String>>();
+      final secondAcquire = Completer<Result<String>>();
+      var acquireCount = 0;
+      when(() => pool.acquire(connectionString, options: any(named: 'options'))).thenAnswer((_) {
+        acquireCount++;
+        return acquireCount == 1 ? firstAcquire.future : secondAcquire.future;
+      });
+      when(() => pool.release('worker-1')).thenAnswer((_) async => const Success(unit));
+
+      final execution = executor.execute(
+        agentId: 'agent',
+        commands: const [
+          SqlCommand(sql: 'SELECT 1'),
+          SqlCommand(sql: 'SELECT 2'),
+        ],
+        connectionString: connectionString,
+        databaseConfig: databaseConfig,
+        options: const SqlExecutionOptions(maxParallelReadOnlyBatchItems: 2),
+        timeout: const Duration(seconds: 5),
+        batchSqlPreview: 'SELECT 1; SELECT 2',
+        poolSize: 4,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(acquireCount, 2);
+      firstAcquire.complete(const Success('worker-1'));
+      secondAcquire.complete(Failure(domain.ConnectionFailure('unavailable')));
+
+      final result = await execution;
+      expect(result.isError(), isTrue);
+      verify(() => pool.release('worker-1')).called(1);
+      verifyNever(() => service.executeQuery(any(), connectionId: any(named: 'connectionId')));
     });
 
     test('returns Success with per-item failures for partial command errors', () async {

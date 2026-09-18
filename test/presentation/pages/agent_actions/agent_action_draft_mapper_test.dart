@@ -46,7 +46,6 @@ void main() {
       expect(draft.executionPolicy.maxQueued.text, '100');
       expect(draft.executionPolicy.maxRuntimeMinutes.text, '30');
       expect(draft.maxAttempts, 1);
-      expect(draft.maxRuntimeMinutes, 30);
       expect(draft.notifyOnSuccess, isFalse);
       expect(draft.notifyOnFailure, isFalse);
       expect(draft.notifyOnTimeout, isFalse);

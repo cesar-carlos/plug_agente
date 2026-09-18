@@ -32,11 +32,10 @@ final class OdbcQueryResponseFactory {
     final rawData = OdbcGatewayQueryResultMapper.convertQueryResultToMaps(
       queryResult,
     );
-    final paginationResponse = OdbcGatewayQueryResultMapper.buildPaginationResponse(
+    final materialized = OdbcGatewayQueryResultMapper.materializePagination(
       request.pagination,
       rawData,
     );
-    final data = paginationResponse == null ? rawData : rawData.take(request.pagination!.pageSize).toList();
 
     final isDml = isDmlQuery(request.query);
     final finishedAt = DateTime.now();
@@ -44,7 +43,7 @@ final class OdbcQueryResponseFactory {
       id: _uuid.v4(),
       requestId: request.id,
       agentId: request.agentId,
-      data: data,
+      data: materialized.data,
       // rowCount carries SQLRowCount for DML (affected rows) and rows-fetched
       // for SELECT; data.length is always 0 for plain DML without OUTPUT/RETURNING.
       affectedRows: isDml ? queryResult.rowCount : null,
@@ -53,7 +52,7 @@ final class OdbcQueryResponseFactory {
       columnMetadata: OdbcGatewayQueryResultMapper.buildColumnMetadata(
         queryResult,
       ),
-      pagination: paginationResponse,
+      pagination: materialized.pagination,
     );
   }
 

@@ -544,8 +544,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsHelpCommandTitle => 'Command';
 
   @override
-  String get agentActionsHelpCommandMessage =>
-      'Line sent directly to the command-line runner. Include the executable and arguments as they would be called on Windows; secret placeholders stay in text for secure runtime resolution.';
+  String agentActionsHelpCommandMessage(Object context_path) {
+    return 'Advanced local-only mode. Prefer Executable with structured arguments. To include a context file, use exactly \\\$$context_path; secrets are not allowed in the command.';
+  }
+
+  @override
+  String agentActionsCommandLineLegacyWarning(Object context_path) {
+    return 'Command line is an advanced local-only mode. Prefer Executable with structured arguments; use \\\$$context_path exactly once when a context file is provided.';
+  }
 
   @override
   String get agentActionsHelpPowerShellModeTitle => 'PowerShell mode';
@@ -945,7 +951,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsFormMaxQueued => 'Max queued runs';
 
   @override
-  String get agentActionsFormInvalidQueueLimits => 'Enter positive integers for max concurrent and max queued runs.';
+  String get agentActionsFormInvalidQueueLimits =>
+      'Enter a positive integer for maximum concurrency and a non-negative integer for the queue.';
+
+  @override
+  String get agentActionsFormInvalidMaxRuntime => 'Enter a positive integer for maximum runtime.';
+
+  @override
+  String agentActionsFormMaxAttemptsExceedsLimit(int limit) {
+    return 'This action has more attempts than the current agent limit ($limit). Choose an allowed value before saving.';
+  }
 
   @override
   String get agentActionsFormConcurrencyBehavior => 'When limit is reached';

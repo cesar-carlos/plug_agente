@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/entities/query_metrics.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
+import 'package:plug_agente/infrastructure/metrics/metrics_duration_samples.dart';
 
 void main() {
   group('MetricsCollector', () {
@@ -61,6 +64,44 @@ void main() {
         expect(metrics.length, 1);
         expect(metrics.first.success, isTrue);
       });
+    });
+
+    test('caches percentile aggregates while keeping counters and gauges live', () {
+      var now = DateTime(2026);
+      final cachedCollector = MetricsCollector(now: () => now);
+      addTearDown(cachedCollector.dispose);
+      cachedCollector.recordQueueWaitTime(const Duration(milliseconds: 10));
+      final first = cachedCollector.getSnapshot();
+
+      cachedCollector.recordQueueWaitTime(const Duration(milliseconds: 200));
+      cachedCollector.recordQueueRejection();
+      cachedCollector.recordSuccess(
+        queryId: 'cached-query',
+        query: 'SELECT 1',
+        executionDuration: const Duration(milliseconds: 20),
+        rowsAffected: 1,
+        columnCount: 1,
+      );
+      final withinCacheWindow = cachedCollector.getSnapshot();
+
+      expect(withinCacheWindow['sql_queue_p95_wait_time_ms'], first['sql_queue_p95_wait_time_ms']);
+      expect(withinCacheWindow['sql_queue_rejection_count'], 1);
+      expect(withinCacheWindow['query_count'], 1);
+
+      now = now.add(const Duration(seconds: 1));
+      final refreshed = cachedCollector.getSnapshot();
+      expect(refreshed['sql_queue_p95_wait_time_ms'], 200);
+    });
+
+    test('uses a bounded latency reservoir while retaining the observed count', () {
+      final samples = MetricsDurationSamples(capacity: 2, random: _FixedRandom());
+      samples.add(const Duration(milliseconds: 1));
+      samples.add(const Duration(milliseconds: 2));
+      samples.add(const Duration(milliseconds: 3));
+
+      expect(samples, hasLength(2));
+      expect(samples.observedCount, 3);
+      expect(samples.map((sample) => sample.inMilliseconds), [3, 2]);
     });
 
     group('recordFailure', () {
@@ -572,4 +613,15 @@ void main() {
       });
     });
   });
+}
+
+final class _FixedRandom implements math.Random {
+  @override
+  bool nextBool() => false;
+
+  @override
+  double nextDouble() => 0;
+
+  @override
+  int nextInt(int max) => 0;
 }

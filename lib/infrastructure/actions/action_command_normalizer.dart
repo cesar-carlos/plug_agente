@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/agent_action_command_line_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_command_safety_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_executable_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_jar_constants.dart';
@@ -71,6 +72,38 @@ class ActionCommandNormalizer {
       );
     }
 
+    if (_containsUnsupportedControlCharacter(normalizedCommand)) {
+      return Failure(
+        ActionValidationFailure.withContext(
+          message: 'Command line action command contains unsupported control characters.',
+          context: {
+            'action_id': actionId,
+            'field': 'command',
+            'phase': phase,
+            'reason': AgentActionCommandLineConstants.invalidCommandCharactersReason,
+            'user_message': 'Use uma unica linha de comando, sem quebras de linha ou caracteres nulos.',
+          },
+        ),
+      );
+    }
+
+    if (normalizedCommand.length > AgentActionCommandLineConstants.maxCommandCharacters) {
+      return Failure(
+        ActionValidationFailure.withContext(
+          message: 'Command line action command exceeds the Windows command length limit.',
+          context: {
+            'action_id': actionId,
+            'field': 'command',
+            'phase': phase,
+            'reason': AgentActionCommandLineConstants.commandTooLongReason,
+            'max_length': AgentActionCommandLineConstants.maxCommandCharacters,
+            'actual_length': normalizedCommand.length,
+            'user_message': 'O comando excede o limite suportado pela linha de comando do Windows.',
+          },
+        ),
+      );
+    }
+
     final safetyFailure = _commandSafetyValidator.validate(
       actionId: actionId,
       command: normalizedCommand,
@@ -93,6 +126,10 @@ class ActionCommandNormalizer {
         normalizedCommandLength: normalizedCommand.length,
       ),
     );
+  }
+
+  bool _containsUnsupportedControlCharacter(String value) {
+    return value.contains('\r') || value.contains('\n') || value.contains('\u0000');
   }
 
   Result<AgentActionCommandInvocation> normalizeExecutable({

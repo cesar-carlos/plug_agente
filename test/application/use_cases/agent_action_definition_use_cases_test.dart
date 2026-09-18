@@ -183,7 +183,10 @@ void main() {
         id: 'action-secret',
         name: 'Secret cmd',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: r'echo ${secret:api}'),
+        config: ExecutableActionConfig(
+          executablePath: AgentActionPathReference(originalPath: r'C:\\tools\\test.exe'),
+          arguments: [r'--token=${secret:api}'],
+        ),
       );
       final approvedAt = DateTime.utc(2026, 5, 20, 9);
       final initialFingerprints = await fingerprinter.fingerprintsFor(base);

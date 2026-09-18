@@ -190,7 +190,8 @@
   "agentActionsHelpStateTitle": "Estado da ação",
   "agentActionsHelpStateMessage": "Controla se a ação pode executar. Ações que precisam validar aparecem na lista, mas não devem ser executadas automaticamente até serem revisadas.",
   "agentActionsHelpCommandTitle": "Comando",
-  "agentActionsHelpCommandMessage": "Linha enviada diretamente ao runner de linha de comando. Inclua o executável e argumentos como seriam chamados no Windows; placeholders de segredo permanecem em texto para resolução segura no runtime.",
+  "agentActionsHelpCommandMessage": "Modo avançado e local. Prefira Executável com argumentos estruturados. Para anexar um arquivo de contexto, use exatamente \\${context_path}; segredos não são permitidos no comando.",
+  "agentActionsCommandLineLegacyWarning": "Linha de comando é um modo avançado e somente local. Prefira Executável com argumentos estruturados; use \\${context_path} exatamente uma vez quando houver arquivo de contexto.",
   "agentActionsHelpPowerShellModeTitle": "Modo PowerShell",
   "agentActionsHelpPowerShellModeMessage": "Comando salva um wrapper de PowerShell como linha de comando. Script .ps1 salva como ação de script, reaproveitando o runner de scripts.",
   "agentActionsHelpPowerShellExecutableTitle": "Executável PowerShell",
@@ -315,7 +316,16 @@
   "agentActionsFormQueuePolicyDescription": "Limites de execução concorrente e comportamento da fila desta definição.",
   "agentActionsFormMaxConcurrent": "Máximo de execuções concorrentes",
   "agentActionsFormMaxQueued": "Máximo na fila",
-  "agentActionsFormInvalidQueueLimits": "Informe inteiros positivos para concorrência máxima e fila máxima.",
+  "agentActionsFormInvalidQueueLimits": "Informe um inteiro positivo para concorrência máxima e um inteiro não negativo para a fila.",
+  "agentActionsFormInvalidMaxRuntime": "Informe um inteiro positivo para o tempo máximo.",
+  "agentActionsFormMaxAttemptsExceedsLimit": "Esta ação tem mais tentativas que o limite atual do agente ({limit}). Escolha um valor permitido antes de salvar.",
+  "@agentActionsFormMaxAttemptsExceedsLimit": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
   "agentActionsFormConcurrencyBehavior": "Quando o limite for atingido",
   "agentActionsFormConcurrencyAllowParallel": "Permitir paralelo (sem limite)",
   "agentActionsFormConcurrencyEnqueue": "Enfileirar e aguardar",

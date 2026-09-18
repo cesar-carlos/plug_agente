@@ -61,7 +61,6 @@ class AgentActionDraft {
   bool notifyOnTimeout = false;
   int maxAttempts = 1;
   bool allowRemoteRetry = false;
-  int maxRuntimeMinutes = 30;
   bool killMainProcessOnTimeout = true;
   AgentActionOnAppExitBehavior onAppExit = AgentActionOnAppExitBehavior.killMainProcess;
   AgentActionProcessWindowMode processWindowMode = AgentActionProcessWindowMode.normal;
@@ -165,7 +164,9 @@ class AgentActionDraft {
 
   AgentActionTimeoutPolicy timeoutPolicy() {
     return AgentActionTimeoutPolicy(
-      maxRuntime: Duration(minutes: maxRuntimeMinutes),
+      maxRuntime: Duration(
+        minutes: AgentActionDraftParsers.positiveInt(executionPolicy.maxRuntimeMinutes.text) ?? 0,
+      ),
       killMainProcessOnTimeout: killMainProcessOnTimeout,
     );
   }
@@ -218,7 +219,7 @@ class AgentActionDraft {
   AgentActionQueuePolicy queuePolicy() {
     return AgentActionQueuePolicy(
       maxConcurrent: AgentActionDraftParsers.positiveInt(executionPolicy.maxConcurrent.text) ?? 1,
-      maxQueued: AgentActionDraftParsers.positiveInt(executionPolicy.maxQueued.text) ?? 100,
+      maxQueued: AgentActionDraftParsers.nonNegativeInt(executionPolicy.maxQueued.text) ?? 0,
       concurrencyBehavior: concurrencyBehavior,
     );
   }

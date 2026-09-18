@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -9,8 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tool.py.benchmark_common import (
     is_dart_ffi_compile_failure,
+    parse_odbc_streaming_benchmark_metrics,
     parse_plug_agente_stack_metrics,
     parse_transport_markdown_metrics,
+    resolve_dart_odbc_fast_root,
 )
 from tool.benchmarks.run_benchmark_suite import (
     DART_TOOL_SKIP_REASON,
@@ -112,6 +115,35 @@ Shell: | small_sql_repetitive | async | auto | true | gzip | 1.0KB | 512B | 512B
         self.assertIn("columnar_stream_emitter.wire_only.median_us", metrics)
         self.assertEqual(metrics["columnar_stream_emitter.wire_only.median_us"], 1200.0)
         self.assertAlmostEqual(metrics["columnar_stream_emitter.wire_only.speedup"], 4.5)
+
+    def test_parse_odbc_streaming_metrics_includes_workload_shape(self) -> None:
+        metrics = parse_odbc_streaming_benchmark_metrics(
+            "streamQueryBatched: 174.96 ms, rows=2011, chunks=3, "
+            "rowsPerSecond=11494, fetchSize=1000, chunkSize=1048576"
+        )
+
+        self.assertEqual(metrics["streamQueryBatched.elapsed_ms"], 174.96)
+        self.assertEqual(metrics["streamQueryBatched.rows"], 2011.0)
+        self.assertEqual(metrics["streamQueryBatched.chunks"], 3.0)
+        self.assertEqual(metrics["streamQueryBatched.fetch_size"], 1000.0)
+        self.assertEqual(metrics["streamQueryBatched.chunk_size"], 1048576.0)
+
+    def test_resolve_odbc_fast_prefers_locked_published_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_root = root / "project"
+            project_root.mkdir()
+            (project_root / "pubspec.lock").write_text(
+                'packages:\n  odbc_fast:\n    version: "4.5.1"\n',
+                encoding="utf-8",
+            )
+            package_root = root / "pub-cache" / "hosted" / "pub.dev" / "odbc_fast-4.5.1"
+            package_root.mkdir(parents=True)
+            (package_root / "pubspec.yaml").write_text("name: odbc_fast\n", encoding="utf-8")
+
+            with patch("tool.py.benchmark_common.PROJECT_ROOT", project_root):
+                with patch.dict("os.environ", {"PUB_CACHE": str(root / "pub-cache")}, clear=True):
+                    self.assertEqual(resolve_dart_odbc_fast_root(), package_root)
 
 
 if __name__ == "__main__":

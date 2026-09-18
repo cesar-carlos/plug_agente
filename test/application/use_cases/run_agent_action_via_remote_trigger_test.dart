@@ -12,6 +12,10 @@ import 'package:uuid/uuid.dart';
 import '../../helpers/agent_action_use_case_test_support.dart'
     show FakeAgentActionLocalRunner, FakeAgentActionRepository;
 
+const _structuredTestConfig = ExecutableActionConfig(
+  executablePath: AgentActionPathReference(originalPath: r'C:\\tools\\test.exe'),
+);
+
 void main() {
   group('RunAgentActionViaRemoteTrigger', () {
     test('should dispatch the sole enabled remote trigger for the action', () async {
@@ -20,7 +24,7 @@ void main() {
         id: 'action-1',
         name: 'Remote action',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
           remote: AgentActionRemotePolicy(
             isEnabled: true,
@@ -42,6 +46,7 @@ void main() {
         repository,
         AgentActionLocalRunnerRegistry([
           FakeAgentActionLocalRunner(
+            actionType: AgentActionType.executable,
             result: Success(
               AgentActionProcessResult(
                 status: AgentActionExecutionStatus.succeeded,
@@ -85,7 +90,7 @@ void main() {
         id: 'action-1',
         name: 'Remote action',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
       );
       final useCase = RunAgentActionViaRemoteTrigger(
         repository,
@@ -95,6 +100,7 @@ void main() {
             repository,
             AgentActionLocalRunnerRegistry([
               FakeAgentActionLocalRunner(
+                actionType: AgentActionType.executable,
                 result: Failure(ActionRuntimeFailure('should not run')),
               ),
             ]),
@@ -123,7 +129,7 @@ void main() {
         id: 'action-1',
         name: 'Remote action',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: _structuredTestConfig,
       );
       repository.triggers['remote-1'] = const AgentActionTrigger(
         id: 'remote-1',
@@ -138,6 +144,7 @@ void main() {
             repository,
             AgentActionLocalRunnerRegistry([
               FakeAgentActionLocalRunner(
+                actionType: AgentActionType.executable,
                 result: Failure(ActionRuntimeFailure('should not run')),
               ),
             ]),

@@ -1079,8 +1079,14 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpCommandMessage.
   ///
   /// In en, this message translates to:
-  /// **'Line sent directly to the command-line runner. Include the executable and arguments as they would be called on Windows; secret placeholders stay in text for secure runtime resolution.'**
-  String get agentActionsHelpCommandMessage;
+  /// **'Advanced local-only mode. Prefer Executable with structured arguments. To include a context file, use exactly \\\${context_path}; secrets are not allowed in the command.'**
+  String agentActionsHelpCommandMessage(Object context_path);
+
+  /// No description provided for @agentActionsCommandLineLegacyWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Command line is an advanced local-only mode. Prefer Executable with structured arguments; use \\\${context_path} exactly once when a context file is provided.'**
+  String agentActionsCommandLineLegacyWarning(Object context_path);
 
   /// No description provided for @agentActionsHelpPowerShellModeTitle.
   ///
@@ -1787,8 +1793,20 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormInvalidQueueLimits.
   ///
   /// In en, this message translates to:
-  /// **'Enter positive integers for max concurrent and max queued runs.'**
+  /// **'Enter a positive integer for maximum concurrency and a non-negative integer for the queue.'**
   String get agentActionsFormInvalidQueueLimits;
+
+  /// No description provided for @agentActionsFormInvalidMaxRuntime.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a positive integer for maximum runtime.'**
+  String get agentActionsFormInvalidMaxRuntime;
+
+  /// No description provided for @agentActionsFormMaxAttemptsExceedsLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'This action has more attempts than the current agent limit ({limit}). Choose an allowed value before saving.'**
+  String agentActionsFormMaxAttemptsExceedsLimit(int limit);
 
   /// No description provided for @agentActionsFormConcurrencyBehavior.
   ///

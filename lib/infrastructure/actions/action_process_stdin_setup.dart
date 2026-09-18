@@ -7,6 +7,7 @@ import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/actions/i_agent_action_secret_placeholder_resolver.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_process_failure_cause.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Configures child-process stdin: closed by default, or payload when injection mode is stdin.
@@ -28,12 +29,25 @@ class ActionProcessStdinSetup {
     required String actionId,
     Map<String, Object?> diagnostics = const {},
     String phase = AgentActionProcessConstants.executionPreflightPhase,
+    Duration? ioTimeout,
   }) async {
+    final effectiveTimeout = _effectiveTimeout(ioTimeout);
+    if (effectiveTimeout <= Duration.zero) {
+      return Failure(
+        _timeoutFailure(
+          actionId: actionId,
+          diagnostics: diagnostics,
+          phase: phase,
+          reason: AgentActionProcessConstants.stdinCloseFailedReason,
+        ),
+      );
+    }
     if (definition.policies.context.injectionMode != AgentActionContextInjectionMode.stdin) {
       return _closeStdin(
         actionId: actionId,
         process: process,
         diagnostics: diagnostics,
+        timeout: effectiveTimeout,
       );
     }
 
@@ -85,14 +99,17 @@ class ActionProcessStdinSetup {
 
     try {
       process.stdin.add(encoded);
-      await process.stdin.flush().timeout(stdinIoTimeout);
-      await process.stdin.close().timeout(stdinIoTimeout);
+      await process.stdin.flush().timeout(effectiveTimeout);
+      await process.stdin.close().timeout(effectiveTimeout);
       return const Success(unit);
     } on TimeoutException catch (error) {
       return Failure(
         ActionTimeoutFailure.withContext(
           message: 'Timed out writing stdin payload to the child process.',
-          cause: error,
+          cause: AgentActionProcessFailureCause.fromException(
+            phase: 'stdin_setup',
+            error: error,
+          ),
           code: AgentActionFailureCode.executionTimedOut,
           context: {
             'action_id': actionId,
@@ -100,7 +117,7 @@ class ActionProcessStdinSetup {
             'phase': 'stdin_setup',
             'pid': process.pid,
             'payload_bytes': encoded.length,
-            'timeout_ms': stdinIoTimeout.inMilliseconds,
+            'timeout_ms': effectiveTimeout.inMilliseconds,
             'reason': AgentActionProcessConstants.stdinWriteFailedReason,
             'user_message': 'O processo nao leu a entrada padrao a tempo. A execucao foi interrompida.',
           },
@@ -110,7 +127,10 @@ class ActionProcessStdinSetup {
       return Failure(
         ActionRuntimeFailure.withContext(
           message: 'Failed to write stdin payload to the child process.',
-          cause: error,
+          cause: AgentActionProcessFailureCause.fromException(
+            phase: 'stdin_setup',
+            error: error,
+          ),
           context: {
             'action_id': actionId,
             ...diagnostics,
@@ -129,22 +149,26 @@ class ActionProcessStdinSetup {
     required String actionId,
     required Process process,
     required Map<String, Object?> diagnostics,
+    required Duration timeout,
   }) async {
     try {
-      await process.stdin.close().timeout(stdinIoTimeout);
+      await process.stdin.close().timeout(timeout);
       return const Success(unit);
     } on TimeoutException catch (error) {
       return Failure(
         ActionTimeoutFailure.withContext(
           message: 'Timed out closing process stdin.',
-          cause: error,
+          cause: AgentActionProcessFailureCause.fromException(
+            phase: 'stdin_setup',
+            error: error,
+          ),
           code: AgentActionFailureCode.executionTimedOut,
           context: {
             'action_id': actionId,
             ...diagnostics,
             'phase': 'stdin_setup',
             'pid': process.pid,
-            'timeout_ms': stdinIoTimeout.inMilliseconds,
+            'timeout_ms': timeout.inMilliseconds,
             'reason': AgentActionProcessConstants.stdinCloseFailedReason,
             'user_message': 'Nao foi possivel preparar a entrada padrao do processo a tempo.',
           },
@@ -154,7 +178,10 @@ class ActionProcessStdinSetup {
       return Failure(
         ActionRuntimeFailure.withContext(
           message: 'Failed to close process stdin.',
-          cause: error,
+          cause: AgentActionProcessFailureCause.fromException(
+            phase: 'stdin_setup',
+            error: error,
+          ),
           context: {
             'action_id': actionId,
             ...diagnostics,
@@ -166,5 +193,31 @@ class ActionProcessStdinSetup {
         ),
       );
     }
+  }
+
+  Duration _effectiveTimeout(Duration? requested) {
+    if (requested == null || requested > stdinIoTimeout) {
+      return stdinIoTimeout;
+    }
+    return requested;
+  }
+
+  ActionTimeoutFailure _timeoutFailure({
+    required String actionId,
+    required Map<String, Object?> diagnostics,
+    required String phase,
+    required String reason,
+  }) {
+    return ActionTimeoutFailure.withContext(
+      message: 'The execution deadline elapsed before process stdin setup.',
+      code: AgentActionFailureCode.executionTimedOut,
+      context: {
+        'action_id': actionId,
+        ...diagnostics,
+        'phase': phase,
+        'reason': reason,
+        'user_message': 'O tempo maximo da execucao foi atingido antes de preparar a entrada padrao.',
+      },
+    );
   }
 }

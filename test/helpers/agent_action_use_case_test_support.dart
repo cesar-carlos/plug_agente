@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:plug_agente/application/actions/agent_action_dangerous_command_policy_enforcer.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
+import 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
 import 'package:plug_agente/application/use_cases/run_agent_action_locally.dart';
 import 'package:plug_agente/application/use_cases/save_agent_action_definition.dart';
 import 'package:plug_agente/application/use_cases/save_agent_action_execution.dart';
@@ -28,6 +29,7 @@ export 'package:plug_agente/application/actions/agent_action_dangerous_command_p
 export 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
 export 'package:plug_agente/application/actions/agent_action_remote_lifecycle_audit_recorder.dart';
 export 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
+export 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
 export 'package:plug_agente/application/actions/agent_action_secret_reference_fingerprinter.dart';
 export 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 export 'package:plug_agente/application/actions/elevated_action_status_file_syncer.dart';
@@ -107,12 +109,14 @@ Future<Result<AgentActionDefinition>> saveDefinitionForTest(
 class FakeCommandLineActionAdapter implements AgentActionAdapter {
   const FakeCommandLineActionAdapter({
     this.normalizedDefinitionFactory,
+    this.actionType = AgentActionType.commandLine,
   });
 
   final AgentActionDefinition Function(AgentActionDefinition definition)? normalizedDefinitionFactory;
+  final AgentActionType actionType;
 
   @override
-  AgentActionType get type => AgentActionType.commandLine;
+  AgentActionType get type => actionType;
 
   @override
   Future<Result<AgentActionPreflight>> validateDefinition(
@@ -448,6 +452,7 @@ class FakeAgentActionLocalRunner implements AgentActionLocalRunner {
   FakeAgentActionLocalRunner({
     required this.result,
     Result<AgentActionCancellationResult>? cancelResult,
+    this.actionType = AgentActionType.commandLine,
   }) : cancelResult =
            cancelResult ??
            const Success(
@@ -462,13 +467,14 @@ class FakeAgentActionLocalRunner implements AgentActionLocalRunner {
 
   final Result<AgentActionProcessResult> result;
   final Result<AgentActionCancellationResult> cancelResult;
+  final AgentActionType actionType;
   int? lastExpectedPid;
   String? lastExpectedProcessExecutable;
   DateTime? lastExpectedProcessStartedAt;
   int cancelInvocationCount = 0;
 
   @override
-  AgentActionType get type => AgentActionType.commandLine;
+  AgentActionType get type => actionType;
 
   @override
   Future<Result<AgentActionProcessResult>> run({
@@ -556,13 +562,16 @@ class RetryThenSucceedAgentActionLocalRunner implements AgentActionLocalRunner {
 }
 
 class ControlledAgentActionLocalRunner implements AgentActionLocalRunner {
+  ControlledAgentActionLocalRunner({this.actionType = AgentActionType.commandLine});
+
+  final AgentActionType actionType;
   final List<Completer<Result<AgentActionProcessResult>>> completions = <Completer<Result<AgentActionProcessResult>>>[];
   final List<Completer<void>> starts = <Completer<void>>[];
 
   int get startedCount => starts.length;
 
   @override
-  AgentActionType get type => AgentActionType.commandLine;
+  AgentActionType get type => actionType;
 
   @override
   Future<Result<AgentActionProcessResult>> run({
@@ -604,6 +613,7 @@ RunAgentActionLocally runUseCaseWithDangerousCommandPolicy({
   required Result<AgentActionProcessResult> runnerResult,
   List<AgentActionLocalRunner>? runners,
   DateTime Function()? now,
+  AgentActionSecretPlaceholderResolver? secretPlaceholderResolver,
 }) {
   final dangerousCommandPolicyEnforcer = AgentActionDangerousCommandPolicyEnforcer(
     commandSafetyAssessor: const ActionCommandSafetyValidator(),
@@ -620,6 +630,7 @@ RunAgentActionLocally runUseCaseWithDangerousCommandPolicy({
     const Uuid(),
     featureFlags: featureFlags,
     dangerousCommandPolicyEnforcer: dangerousCommandPolicyEnforcer,
+    secretPlaceholderResolver: secretPlaceholderResolver,
     now: now,
   );
 }
@@ -696,6 +707,7 @@ void setUpAgentActionUseCaseTests() {
   agentActionUseCaseValidateDefinition = ValidateAgentActionDefinition(
     AgentActionAdapterRegistry([
       const FakeCommandLineActionAdapter(),
+      const FakeCommandLineActionAdapter(actionType: AgentActionType.executable),
     ]),
   );
 }

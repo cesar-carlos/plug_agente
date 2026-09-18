@@ -190,7 +190,8 @@
   "agentActionsHelpStateTitle": "Action state",
   "agentActionsHelpStateMessage": "Controls whether the action can run. Actions that need validation remain visible, but should not run automatically until reviewed.",
   "agentActionsHelpCommandTitle": "Command",
-  "agentActionsHelpCommandMessage": "Line sent directly to the command-line runner. Include the executable and arguments as they would be called on Windows; secret placeholders stay in text for secure runtime resolution.",
+  "agentActionsHelpCommandMessage": "Advanced local-only mode. Prefer Executable with structured arguments. To include a context file, use exactly \\${context_path}; secrets are not allowed in the command.",
+  "agentActionsCommandLineLegacyWarning": "Command line is an advanced local-only mode. Prefer Executable with structured arguments; use \\${context_path} exactly once when a context file is provided.",
   "agentActionsHelpPowerShellModeTitle": "PowerShell mode",
   "agentActionsHelpPowerShellModeMessage": "Command saves a generated PowerShell wrapper as a command line action. Script .ps1 saves as a script action and reuses the script runner.",
   "agentActionsHelpPowerShellExecutableTitle": "PowerShell executable",
@@ -315,7 +316,16 @@
   "agentActionsFormQueuePolicyDescription": "Limits concurrent runs and queue behavior for this action definition.",
   "agentActionsFormMaxConcurrent": "Max concurrent runs",
   "agentActionsFormMaxQueued": "Max queued runs",
-  "agentActionsFormInvalidQueueLimits": "Enter positive integers for max concurrent and max queued runs.",
+  "agentActionsFormInvalidQueueLimits": "Enter a positive integer for maximum concurrency and a non-negative integer for the queue.",
+  "agentActionsFormInvalidMaxRuntime": "Enter a positive integer for maximum runtime.",
+  "agentActionsFormMaxAttemptsExceedsLimit": "This action has more attempts than the current agent limit ({limit}). Choose an allowed value before saving.",
+  "@agentActionsFormMaxAttemptsExceedsLimit": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
   "agentActionsFormConcurrencyBehavior": "When limit is reached",
   "agentActionsFormConcurrencyAllowParallel": "Allow parallel (no limit)",
   "agentActionsFormConcurrencyEnqueue": "Enqueue and wait",

@@ -540,8 +540,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsHelpCommandTitle => 'Comando';
 
   @override
-  String get agentActionsHelpCommandMessage =>
-      'Linha enviada diretamente ao runner de linha de comando. Inclua o executável e argumentos como seriam chamados no Windows; placeholders de segredo permanecem em texto para resolução segura no runtime.';
+  String agentActionsHelpCommandMessage(Object context_path) {
+    return 'Modo avançado e local. Prefira Executável com argumentos estruturados. Para anexar um arquivo de contexto, use exatamente \\\$$context_path; segredos não são permitidos no comando.';
+  }
+
+  @override
+  String agentActionsCommandLineLegacyWarning(Object context_path) {
+    return 'Linha de comando é um modo avançado e somente local. Prefira Executável com argumentos estruturados; use \\\$$context_path exatamente uma vez quando houver arquivo de contexto.';
+  }
 
   @override
   String get agentActionsHelpPowerShellModeTitle => 'Modo PowerShell';
@@ -942,7 +948,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get agentActionsFormMaxQueued => 'Máximo na fila';
 
   @override
-  String get agentActionsFormInvalidQueueLimits => 'Informe inteiros positivos para concorrência máxima e fila máxima.';
+  String get agentActionsFormInvalidQueueLimits =>
+      'Informe um inteiro positivo para concorrência máxima e um inteiro não negativo para a fila.';
+
+  @override
+  String get agentActionsFormInvalidMaxRuntime => 'Informe um inteiro positivo para o tempo máximo.';
+
+  @override
+  String agentActionsFormMaxAttemptsExceedsLimit(int limit) {
+    return 'Esta ação tem mais tentativas que o limite atual do agente ($limit). Escolha um valor permitido antes de salvar.';
+  }
 
   @override
   String get agentActionsFormConcurrencyBehavior => 'Quando o limite for atingido';

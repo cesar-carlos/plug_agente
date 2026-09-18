@@ -17,14 +17,14 @@ abstract final class AgentActionPolicyDefaults {
   static const int defaultMaxAgentActionReadRpcMethodsPerBatch = 32;
   static const int defaultPreflightValidityDays = 30;
 
-  static int get maxConcurrentActions => _positiveInt(
+  static int get maxConcurrentActions => _boundedInt(
     'AGENT_ACTION_MAX_CONCURRENT',
     defaultMaxConcurrentActions,
     min: 1,
     max: 64,
   );
 
-  static int get maxQueuedActions => _positiveInt(
+  static int get maxQueuedActions => _boundedInt(
     'AGENT_ACTION_MAX_QUEUED',
     defaultMaxQueuedActions,
     min: 0,
@@ -32,7 +32,7 @@ abstract final class AgentActionPolicyDefaults {
   );
 
   static Duration get defaultQueueTimeout => Duration(
-    seconds: _positiveInt(
+    seconds: _boundedInt(
       'AGENT_ACTION_QUEUE_TIMEOUT_SECONDS',
       defaultQueueTimeoutSeconds,
       min: 1,
@@ -41,7 +41,7 @@ abstract final class AgentActionPolicyDefaults {
   );
 
   static Duration get defaultMaxRuntime => Duration(
-    seconds: _positiveInt(
+    seconds: _boundedInt(
       'AGENT_ACTION_MAX_RUNTIME_SECONDS',
       defaultMaxRuntimeSeconds,
       min: 1,
@@ -49,28 +49,28 @@ abstract final class AgentActionPolicyDefaults {
     ),
   );
 
-  static int get maxRetryAttempts => _positiveInt(
+  static int get maxRetryAttempts => _boundedInt(
     'AGENT_ACTION_MAX_RETRIES',
     defaultMaxRetryAttempts,
     min: 1,
     max: 32,
   );
 
-  static int get maxContextBytes => _positiveInt(
+  static int get maxContextBytes => _boundedInt(
     'AGENT_ACTION_MAX_CONTEXT_BYTES',
     defaultMaxContextBytes,
     min: 1024,
     max: 16 * 1024 * 1024,
   );
 
-  static int get maxCapturedOutputBytes => _positiveInt(
+  static int get maxCapturedOutputBytes => _boundedInt(
     'AGENT_ACTION_MAX_CAPTURED_OUTPUT_BYTES',
     defaultMaxCapturedOutputBytes,
     min: 1024,
     max: 16 * 1024 * 1024,
   );
 
-  static int get maxAgentActionReadRpcMethodsPerBatch => _positiveInt(
+  static int get maxAgentActionReadRpcMethodsPerBatch => _boundedInt(
     'AGENT_ACTION_MAX_READ_RPC_PER_BATCH',
     defaultMaxAgentActionReadRpcMethodsPerBatch,
     min: 1,
@@ -78,7 +78,7 @@ abstract final class AgentActionPolicyDefaults {
   );
 
   static Duration get preflightValidityDuration => Duration(
-    days: _positiveInt(
+    days: _boundedInt(
       'AGENT_ACTION_PREFLIGHT_VALIDITY_DAYS',
       defaultPreflightValidityDays,
       min: 1,
@@ -112,14 +112,14 @@ abstract final class AgentActionPolicyDefaults {
     };
   }
 
-  static int _positiveInt(
+  static int _boundedInt(
     String envKey,
     int fallback, {
     required int min,
     required int max,
   }) {
     final parsed = int.tryParse(AppEnvironment.get(envKey) ?? '');
-    final value = (parsed == null || parsed <= 0) ? fallback : parsed;
+    final value = (parsed == null || parsed < min) ? fallback : parsed;
     return value.clamp(min, max);
   }
 }

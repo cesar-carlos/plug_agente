@@ -1,5 +1,15 @@
 # E2E - Actions (`agent.action.*`)
 
+## Linha de comando (Windows)
+
+`commandLine` e uma superficie local avancada: Hub, scheduler e lifecycle nao
+devem inicia-la. Em homologacao Windows, valide cancelamento e timeout com um
+processo-filho observavel: o Job Object deve encerrar a arvore inteira. Quando
+fornecer contexto, a definicao deve conter exatamente `${context_path}`; testes
+tambem devem confirmar que nenhum path, PID, comando ou segredo aparece no
+snapshot de health. Para automacao prefira o tipo `executable` com argumentos
+estruturados.
+
 Cobre setup local de homologacao para acoes agendadas: stub COM, retencao de
 historico/auditoria e runner elevado Windows. Para o canal Hub Socket.IO
 (handshake assinado, contrato remoto), ver [e2e_hub.md](e2e_hub.md).

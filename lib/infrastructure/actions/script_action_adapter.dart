@@ -120,6 +120,7 @@ class ScriptActionAdapter implements AgentActionAdapter {
         workingDirectory:
             resolved.workingDirectoryValidation.path?.canonicalPath ?? config.workingDirectory?.displayPath,
         contextHash: contextValidation.getOrThrow().path?.contentHash,
+        validatedContextPath: contextValidation.getOrThrow().path?.canonicalPath,
         redactedDiagnostics: {
           ...redactedDiagnostics,
           'argument_count': resolved.invocation.arguments.length,

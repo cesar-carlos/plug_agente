@@ -164,7 +164,10 @@ class AgentActionsHistoryFiltersState extends State<AgentActionsHistoryFilters> 
             controller: _searchController,
             onChanged: (query) {
               provider.setHistorySearchQuery(query);
-              unawaited(widget.uiPreferences.persistString(AgentActionsUiPreferenceKeys.historySearch, query.trim()));
+              widget.uiPreferences.schedulePersistString(
+                AgentActionsUiPreferenceKeys.historySearch,
+                query.trim(),
+              );
             },
             textInputAction: TextInputAction.search,
           ),
@@ -172,6 +175,9 @@ class AgentActionsHistoryFiltersState extends State<AgentActionsHistoryFilters> 
         Button(
           onPressed: provider.hasHistoryFilters
               ? () {
+                  widget.uiPreferences.cancelScheduledPersistString(
+                    AgentActionsUiPreferenceKeys.historySearch,
+                  );
                   _searchController.clear();
                   provider.clearHistoryFilters();
                   unawaited(

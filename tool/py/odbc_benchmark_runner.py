@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
+from typing import Mapping
 
 from tool.py.benchmark_common import parse_odbc_benchmark_metrics
 from tool.py.odbc_benchmark_gate import (
@@ -10,40 +11,50 @@ from tool.py.odbc_benchmark_gate import (
     enforce_streaming_benchmark_gates,
     _benchmark_gates_enabled,
 )
-from tool.py.script_utils import get_long_query_for_driver, resolve_benchmark_package, run_streaming
+from tool.py.script_utils import (
+    get_dsn_driver_family,
+    get_long_query_for_driver,
+    resolve_benchmark_package,
+    run_streaming,
+)
 
 DEFAULT_ASYNC_BENCHMARK = "example/async_concurrency_benchmark.dart"
 DEFAULT_STREAMING_BENCHMARK = "example/streaming_performance_benchmark.dart"
 
 
-def _resolve_benchmark_dsn() -> str:
+def _resolve_benchmark_dsn(environment: Mapping[str, str]) -> str:
     for key in (
         "ODBC_TEST_DSN_SQL_SERVER",
         "ODBC_DSN_SQL_SERVER",
         "ODBC_TEST_DSN",
         "ODBC_DSN",
     ):
-        value = os.environ.get(key, "").strip()
+        value = environment.get(key, "").strip()
         if value:
             return value
     return ""
 
 
-def _apply_benchmark_dsn_preference() -> str:
+def _apply_benchmark_dsn_preference(environment: dict[str, str]) -> str:
     """Prefer SQL Server DSN for ODBC example benchmarks when configured."""
-    dsn = _resolve_benchmark_dsn()
+    dsn = _resolve_benchmark_dsn(environment)
     if dsn:
-        os.environ["ODBC_TEST_DSN"] = dsn
+        environment["ODBC_TEST_DSN"] = dsn
     return dsn
 
 
-def _prepare_async_query(dsn: str) -> str:
-    if os.environ.get("ODBC_BENCH_QUERY", "").strip():
+def resolve_benchmark_driver_family(environment: Mapping[str, str] | None = None) -> str:
+    """Return the non-sensitive driver family selected by the benchmark DSN policy."""
+
+    selected_environment = os.environ if environment is None else environment
+    return get_dsn_driver_family(_resolve_benchmark_dsn(selected_environment))
+
+
+def _prepare_async_query(dsn: str, environment: dict[str, str]) -> str:
+    if environment.get("ODBC_BENCH_QUERY", "").strip():
         return "explicit"
     if not dsn:
         return "benchmark_default"
-    from tool.py.script_utils import get_dsn_driver_family
-
     driver_family = get_dsn_driver_family(dsn)
     long_query = get_long_query_for_driver(driver_family)
     if long_query and _benchmark_gates_enabled() and driver_family == "SQL Server":
@@ -52,7 +63,7 @@ def _prepare_async_query(dsn: str) -> str:
             "FROM sys.objects ORDER BY object_id"
         )
     if long_query:
-        os.environ["ODBC_BENCH_QUERY"] = long_query
+        environment["ODBC_BENCH_QUERY"] = long_query
         return f"ODBC_INTEGRATION_LONG_QUERY ({driver_family})"
     return "benchmark_default"
 
@@ -62,13 +73,11 @@ def _reset_benchmark_log(log_path: Path) -> None:
     log_path.write_text("", encoding="utf-8")
 
 
-def _prepare_stream_query(dsn: str) -> str:
-    if os.environ.get("ODBC_STREAM_BENCH_QUERY", "").strip():
+def _prepare_stream_query(dsn: str, environment: dict[str, str]) -> str:
+    if environment.get("ODBC_STREAM_BENCH_QUERY", "").strip():
         return "explicit"
     if not dsn:
         return "benchmark_default"
-    from tool.py.script_utils import get_dsn_driver_family
-
     driver_family = get_dsn_driver_family(dsn)
     long_query = get_long_query_for_driver(driver_family)
     if long_query and _benchmark_gates_enabled() and driver_family == "SQL Server":
@@ -77,7 +86,7 @@ def _prepare_stream_query(dsn: str) -> str:
             "FROM sys.objects ORDER BY object_id"
         )
     if long_query:
-        os.environ["ODBC_STREAM_BENCH_QUERY"] = long_query
+        environment["ODBC_STREAM_BENCH_QUERY"] = long_query
         return f"ODBC_INTEGRATION_LONG_QUERY ({driver_family})"
     return "benchmark_default"
 
@@ -95,8 +104,9 @@ def run_odbc_async_benchmark(
     log_path: Path,
     extra_args: list[str] | None = None,
 ) -> tuple[int, dict[str, float], str]:
-    dsn = _apply_benchmark_dsn_preference()
-    query_source = _prepare_async_query(dsn)
+    benchmark_environment = os.environ.copy()
+    dsn = _apply_benchmark_dsn_preference(benchmark_environment)
+    query_source = _prepare_async_query(dsn, benchmark_environment)
     benchmark_file = _resolve_benchmark_file(package_root, DEFAULT_ASYNC_BENCHMARK)
     _, _, relative_path = resolve_benchmark_package(benchmark_file)
     _reset_benchmark_log(log_path)
@@ -104,6 +114,7 @@ def run_odbc_async_benchmark(
     exit_code = run_streaming(
         ["dart", "run", relative_path, *(extra_args or [])],
         cwd=package_root,
+        env=benchmark_environment,
         log_path=log_path,
     )
     wall_ms = (time.perf_counter() - started) * 1000.0
@@ -115,11 +126,12 @@ def run_odbc_async_benchmark(
         if gate_exit != 0:
             return gate_exit, metrics, output
     elif query_source != "explicit":
-        os.environ.pop("ODBC_BENCH_QUERY", None)
+        benchmark_environment.pop("ODBC_BENCH_QUERY", None)
         started = time.perf_counter()
         exit_code = run_streaming(
             ["dart", "run", relative_path, *(extra_args or [])],
             cwd=package_root,
+            env=benchmark_environment,
             log_path=log_path,
         )
         output = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
@@ -139,8 +151,9 @@ def run_odbc_streaming_benchmark(
     log_path: Path,
     extra_args: list[str] | None = None,
 ) -> tuple[int, dict[str, float], str]:
-    dsn = _apply_benchmark_dsn_preference()
-    query_source = _prepare_stream_query(dsn)
+    benchmark_environment = os.environ.copy()
+    dsn = _apply_benchmark_dsn_preference(benchmark_environment)
+    query_source = _prepare_stream_query(dsn, benchmark_environment)
     benchmark_file = _resolve_benchmark_file(package_root, DEFAULT_STREAMING_BENCHMARK)
     _, _, relative_path = resolve_benchmark_package(benchmark_file)
     _reset_benchmark_log(log_path)
@@ -148,15 +161,17 @@ def run_odbc_streaming_benchmark(
     exit_code = run_streaming(
         ["dart", "run", relative_path, *(extra_args or [])],
         cwd=package_root,
+        env=benchmark_environment,
         log_path=log_path,
     )
     output = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
     if exit_code != 0 and query_source != "explicit":
-        os.environ.pop("ODBC_STREAM_BENCH_QUERY", None)
+        benchmark_environment.pop("ODBC_STREAM_BENCH_QUERY", None)
         started = time.perf_counter()
         exit_code = run_streaming(
             ["dart", "run", relative_path, *(extra_args or [])],
             cwd=package_root,
+            env=benchmark_environment,
             log_path=log_path,
         )
         output = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""

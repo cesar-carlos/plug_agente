@@ -1,8 +1,33 @@
 import 'dart:collection';
 
+import 'dart:math' as math;
+
+import 'package:plug_agente/infrastructure/metrics/metrics_duration_samples.dart';
+
 /// Shared mutable metrics state used by domain collectors and the aggregator.
 final class MetricsEventStore {
-  static const int maxWaitTimeSamples = 1000;
+  MetricsEventStore({required int latencySampleCapacity, math.Random? random})
+    : _latencySampleCapacity = latencySampleCapacity,
+      _random = random {
+    queueWaitTimes = _newDurationSamples();
+    agentActionQueueWaitTimes = _newDurationSamples();
+    agentActionExecutionDurations = _newDurationSamples();
+    agentActionProcessStartDurations = _newDurationSamples();
+    poolWaitTimes = _newDurationSamples();
+    directConnectionWaitTimes = _newDurationSamples();
+    readOnlyBatchParallelWaitTimes = _newDurationSamples();
+    streamingWorkerHoldTimes = _newDurationSamples();
+    connectTimes = _newDurationSamples();
+    sqlExecutionTimes = _newDurationSamples();
+    preparedPrepareTimes = _newDurationSamples();
+    autoUpdateProbeTimes = _newDurationSamples();
+    autoUpdateDownloadTimes = _newDurationSamples();
+    outboundResponseWaitTimes = _newDurationSamples();
+  }
+
+  final int _latencySampleCapacity;
+  final math.Random? _random;
+
   static const int maxRecentDiagnosticReasons = 50;
 
   final Map<String, int> eventCounters = <String, int>{};
@@ -15,18 +40,19 @@ final class MetricsEventStore {
   int maxActiveWorkers = 0;
   int outboundResponseActive = 0;
   int outboundResponseMaxActive = 0;
-  final ListQueue<Duration> queueWaitTimes = ListQueue<Duration>();
-  final ListQueue<Duration> agentActionQueueWaitTimes = ListQueue<Duration>();
-  final ListQueue<Duration> agentActionExecutionDurations = ListQueue<Duration>();
-  final ListQueue<Duration> poolWaitTimes = ListQueue<Duration>();
-  final ListQueue<Duration> directConnectionWaitTimes = ListQueue<Duration>();
-  final ListQueue<Duration> readOnlyBatchParallelWaitTimes = ListQueue<Duration>();
-  final ListQueue<Duration> streamingWorkerHoldTimes = ListQueue<Duration>();
-  final ListQueue<Duration> connectTimes = ListQueue<Duration>();
-  final ListQueue<Duration> sqlExecutionTimes = ListQueue<Duration>();
-  final Map<String, ListQueue<Duration>> sqlExecutionTimesByMode = <String, ListQueue<Duration>>{};
+  late final MetricsDurationSamples queueWaitTimes;
+  late final MetricsDurationSamples agentActionQueueWaitTimes;
+  late final MetricsDurationSamples agentActionExecutionDurations;
+  late final MetricsDurationSamples agentActionProcessStartDurations;
+  late final MetricsDurationSamples poolWaitTimes;
+  late final MetricsDurationSamples directConnectionWaitTimes;
+  late final MetricsDurationSamples readOnlyBatchParallelWaitTimes;
+  late final MetricsDurationSamples streamingWorkerHoldTimes;
+  late final MetricsDurationSamples connectTimes;
+  late final MetricsDurationSamples sqlExecutionTimes;
+  final Map<String, MetricsDurationSamples> sqlExecutionTimesByMode = <String, MetricsDurationSamples>{};
   final Map<String, ListQueue<DateTime>> sqlExecutionTimestampsByMode = <String, ListQueue<DateTime>>{};
-  final ListQueue<Duration> preparedPrepareTimes = ListQueue<Duration>();
+  late final MetricsDurationSamples preparedPrepareTimes;
   final Map<String, int> streamingSkipReasons = <String, int>{};
   final Map<String, int> odbcNativeFallbackReasons = <String, int>{};
   final Map<String, int> odbcQueryTimeoutByStage = <String, int>{};
@@ -37,9 +63,9 @@ final class MetricsEventStore {
   int readOnlyBatchParallelLastRequested = 0;
   int readOnlyBatchParallelLastEffective = 0;
   final Queue<String> recentDiagnosticReasons = Queue<String>();
-  final ListQueue<Duration> autoUpdateProbeTimes = ListQueue<Duration>();
-  final ListQueue<Duration> autoUpdateDownloadTimes = ListQueue<Duration>();
-  final ListQueue<Duration> outboundResponseWaitTimes = ListQueue<Duration>();
+  late final MetricsDurationSamples autoUpdateProbeTimes;
+  late final MetricsDurationSamples autoUpdateDownloadTimes;
+  late final MetricsDurationSamples outboundResponseWaitTimes;
 
   int counterValue(String counter) => eventCounters[counter] ?? 0;
 
@@ -52,19 +78,21 @@ final class MetricsEventStore {
     eventCounters[counter] = (eventCounters[counter] ?? 0) + amount;
   }
 
-  void recordDurationSample(ListQueue<Duration> samples, Duration value) {
+  MetricsDurationSamples newDurationSamples() => _newDurationSamples();
+
+  void recordDurationSample(MetricsDurationSamples samples, Duration value) => samples.add(value);
+
+  void recordTimestampSample(ListQueue<DateTime> samples, DateTime value) {
     samples.addLast(value);
-    if (samples.length > maxWaitTimeSamples) {
+    if (samples.length > _latencySampleCapacity) {
       samples.removeFirst();
     }
   }
 
-  void recordTimestampSample(ListQueue<DateTime> samples, DateTime value) {
-    samples.addLast(value);
-    if (samples.length > maxWaitTimeSamples) {
-      samples.removeFirst();
-    }
-  }
+  MetricsDurationSamples _newDurationSamples() => MetricsDurationSamples(
+    capacity: _latencySampleCapacity,
+    random: _random,
+  );
 
   void recordDiagnosticReason({
     required String category,
@@ -96,6 +124,7 @@ final class MetricsEventStore {
     outboundResponseWaitTimes.clear();
     agentActionQueueWaitTimes.clear();
     agentActionExecutionDurations.clear();
+    agentActionProcessStartDurations.clear();
     poolWaitTimes.clear();
     directConnectionWaitTimes.clear();
     readOnlyBatchParallelWaitTimes.clear();

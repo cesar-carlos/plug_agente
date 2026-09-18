@@ -115,6 +115,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         environmentResolver: getIt<ActionEnvironmentResolver>(),
         operationalProfileResolver: const AgentOperationalProfileResolver(),
         stdinSetup: getIt<ActionProcessStdinSetup>(),
+        metrics: getIt<MetricsCollector>(),
       ),
     )
     ..registerLazySingleton<ExecutableActionProcessRunner>(

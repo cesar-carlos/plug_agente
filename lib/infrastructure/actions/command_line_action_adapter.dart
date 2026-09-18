@@ -4,20 +4,24 @@ import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_preflight_metadata.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
+import 'package:plug_agente/infrastructure/actions/command_line_context_template_resolver.dart';
 import 'package:result_dart/result_dart.dart';
 
 class CommandLineActionAdapter implements AgentActionAdapter {
   CommandLineActionAdapter({
     ActionCommandNormalizer commandNormalizer = const ActionCommandNormalizer(),
     ActionPathValidator? pathValidator,
+    CommandLineContextTemplateResolver contextTemplateResolver = const CommandLineContextTemplateResolver(),
     DateTime Function()? now,
   }) : _commandNormalizer = commandNormalizer,
        _pathValidator = pathValidator ?? ActionPathValidator(),
+       _contextTemplateResolver = contextTemplateResolver,
        _now = now ?? DateTime.now;
 
   final ActionCommandNormalizer _commandNormalizer;
   final ActionPathValidator _pathValidator;
   final DateTime Function() _now;
+  final CommandLineContextTemplateResolver _contextTemplateResolver;
 
   @override
   AgentActionType get type => AgentActionType.commandLine;
@@ -143,6 +147,15 @@ class CommandLineActionAdapter implements AgentActionAdapter {
     if (contextValidation.isError()) {
       return Failure(contextValidation.exceptionOrNull()!);
     }
+    final templateResult = _contextTemplateResolver.resolve(
+      actionId: definition.id,
+      command: config.command,
+      injectionMode: definition.policies.context.injectionMode,
+      validatedContextPath: contextValidation.getOrThrow().path?.canonicalPath,
+    );
+    if (templateResult.isError()) {
+      return Failure(templateResult.exceptionOrNull()!);
+    }
 
     return Success(
       AgentActionPreparedExecution(
@@ -151,6 +164,7 @@ class CommandLineActionAdapter implements AgentActionAdapter {
         workingDirectory:
             workingDirectoryValidation.getOrThrow().path?.canonicalPath ?? config.workingDirectory?.displayPath,
         contextHash: contextValidation.getOrThrow().path?.contentHash,
+        validatedContextPath: contextValidation.getOrThrow().path?.canonicalPath,
         redactedDiagnostics: {
           ...redactedDiagnostics,
           'context_path_extension': extensionOf(request.contextPath),
@@ -171,6 +185,7 @@ class CommandLineActionAdapter implements AgentActionAdapter {
   Future<Result<AgentActionCommandInvocation>> resolveInvocationCommand(
     AgentActionDefinition definition, {
     String phase = 'execution_preflight',
+    String? validatedContextPath,
   }) async {
     final config = definition.config;
     if (config is! CommandLineActionConfig) {
@@ -189,9 +204,17 @@ class CommandLineActionAdapter implements AgentActionAdapter {
       );
     }
 
-    return _commandNormalizer.normalizeCommandLine(
+    final templateResult = _contextTemplateResolver.resolve(
       actionId: definition.id,
       command: config.command,
+      injectionMode: definition.policies.context.injectionMode,
+      validatedContextPath: validatedContextPath,
+      phase: phase,
+    );
+    if (templateResult.isError()) return Failure(templateResult.exceptionOrNull()!);
+    return _commandNormalizer.normalizeCommandLine(
+      actionId: definition.id,
+      command: templateResult.getOrThrow(),
       phase: phase,
     );
   }

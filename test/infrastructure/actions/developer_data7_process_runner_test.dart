@@ -7,12 +7,15 @@ import 'package:plug_agente/application/actions/agent_operational_profile_resolv
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_process_lifecycle.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_process_tree_controller.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_action_adapter.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_config_locator.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_connection_catalog.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_definition_resolver.dart';
 import 'package:plug_agente/infrastructure/actions/developer_data7_process_runner.dart';
+import 'package:result_dart/result_dart.dart';
 
 import 'agent_action_process_runner_test_support.dart';
 
@@ -184,11 +187,9 @@ void main() {
     test('should kill only the main process on cancel', () async {
       final processRegistered = Completer<void>();
       final process = _FakeProcess.pendingExit(pid: 4321);
-      final runner = DeveloperData7ProcessRunner(
-        environmentResolver: kTestActionEnvironmentResolver,
-        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+      final lifecycle = AgentActionProcessLifecycle(
         stdinSetup: kTestActionProcessStdinSetup,
-        adapterRegistry: _adapterRegistryForCatalog(),
+        processTreeController: const _NoopProcessTreeController(),
         processStarter:
             (
               executable,
@@ -207,6 +208,13 @@ void main() {
               return process;
             },
       );
+      final runner = DeveloperData7ProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
+        adapterRegistry: _adapterRegistryForCatalog(),
+        lifecycle: lifecycle,
+      );
 
       final runFuture = runner.run(
         executionId: 'execution-1',
@@ -217,6 +225,9 @@ void main() {
         ),
       );
       await processRegistered.future;
+      // The starter has returned, but the lifecycle registers ownership only
+      // after its post-start guards complete.
+      await Future<void>.delayed(Duration.zero);
 
       final cancelResult = await runner.cancel(executionId: 'execution-1');
       final runResult = await runFuture;
@@ -425,4 +436,27 @@ class _FakeIOSink implements IOSink {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NoopProcessTreeController implements AgentActionProcessTreeController {
+  const _NoopProcessTreeController();
+
+  @override
+  bool get requiresAttachment => false;
+
+  @override
+  Future<Result<AgentActionProcessTreeLease>> attach(Process process) async => const Success(_NoopProcessTreeLease());
+
+  @override
+  Future<void> release(AgentActionProcessTreeLease lease) async {}
+
+  @override
+  Future<Result<void>> terminate(AgentActionProcessTreeLease lease) async => const Success(unit);
+}
+
+class _NoopProcessTreeLease implements AgentActionProcessTreeLease {
+  const _NoopProcessTreeLease();
+
+  @override
+  bool get supportsTreeTermination => false;
 }

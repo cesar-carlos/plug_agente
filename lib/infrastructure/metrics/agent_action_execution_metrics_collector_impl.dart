@@ -136,4 +136,35 @@ final class AgentActionExecutionMetricsCollectorImpl implements AgentActionExecu
   void recordElevatedStatusFileWaitTimeout() {
     _store.incrementEventCounter(MetricsCounterNames.agentActionElevatedStatusFileWaitTimeoutCounter);
   }
+
+  @override
+  void recordProcessStarted(Duration startDuration) {
+    _store.incrementEventCounter(MetricsCounterNames.agentActionProcessStartedCounter);
+    if (!startDuration.isNegative) {
+      _store.recordDurationSample(_store.agentActionProcessStartDurations, startDuration);
+    }
+  }
+
+  @override
+  void recordProcessSpawnFailure() =>
+      _store.incrementEventCounter(MetricsCounterNames.agentActionProcessSpawnFailureCounter);
+
+  @override
+  void recordProcessTimeout() => _store.incrementEventCounter(MetricsCounterNames.agentActionProcessTimeoutCounter);
+
+  @override
+  void recordProcessTreeTermination() =>
+      _store.incrementEventCounter(MetricsCounterNames.agentActionProcessTreeTerminationCounter);
+
+  @override
+  void recordProcessTreeAttachFailure() =>
+      _store.incrementEventCounter(MetricsCounterNames.agentActionProcessTreeAttachFailureCounter);
+
+  @override
+  void recordCommandLinePolicyRejected() =>
+      _store.incrementEventCounter(MetricsCounterNames.agentActionCommandLinePolicyRejectedCounter);
+
+  @override
+  void recordCommandLinePlaceholderFailure() =>
+      _store.incrementEventCounter(MetricsCounterNames.agentActionCommandLinePlaceholderFailureCounter);
 }

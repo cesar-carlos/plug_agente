@@ -1,6 +1,7 @@
 export 'action_environment_resolver.dart';
 export 'action_execution_queue.dart';
 export 'action_trigger_schedule_calculator.dart';
+export 'agent_action_command_line_policy_validator.dart';
 export 'agent_action_definition_snapshotter.dart';
 export 'agent_action_execution_metrics_collector.dart';
 export 'agent_action_execution_support_export.dart';

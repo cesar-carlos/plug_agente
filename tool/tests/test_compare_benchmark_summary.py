@@ -9,14 +9,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tool.benchmarks.compare_benchmark_summary import compare_metrics, format_table, main
-from tool.py.benchmark_common import flatten_suite_metrics, metric_lower_is_better
+from tool.py.benchmark_common import (
+    flatten_suite_metrics,
+    incompatible_benchmark_suite_reasons,
+    metric_lower_is_better,
+)
 
 
 class CompareBenchmarkSummaryTests(unittest.TestCase):
     def test_metric_direction_heuristics(self) -> None:
         self.assertTrue(metric_lower_is_better("transport_pipeline.wall_ms"))
         self.assertTrue(metric_lower_is_better("odbc_async.p95_ms"))
+        self.assertTrue(metric_lower_is_better("odbc_gateway_encoding.median_us_highThroughput_columnar"))
         self.assertFalse(metric_lower_is_better("odbc_async.rows_per_sec"))
+        self.assertFalse(metric_lower_is_better("plug_agente_stack.config_cache.speedup"))
 
     def test_compare_metrics_detects_timing_regression(self) -> None:
         diffs = compare_metrics(
@@ -57,6 +63,55 @@ class CompareBenchmarkSummaryTests(unittest.TestCase):
         }
         flattened = flatten_suite_metrics(summary)
         self.assertEqual(flattened, {"transport_pipeline.wall_ms": 10.0})
+
+    def test_odbc_metrics_are_excluded_when_comparison_identity_is_missing(self) -> None:
+        baseline = {
+            "suites": [
+                {"id": "odbc_streaming", "metrics": {"wall_ms": 42.0}},
+                {"id": "transport_pipeline", "metrics": {"wall_ms": 100.0}},
+            ]
+        }
+        current = {
+            "suites": [
+                {
+                    "id": "odbc_streaming",
+                    "comparison_identity": {"package_version": "4.5.1"},
+                    "metrics": {"wall_ms": 183.0},
+                },
+                {"id": "transport_pipeline", "metrics": {"wall_ms": 100.0}},
+            ]
+        }
+
+        excluded = incompatible_benchmark_suite_reasons(baseline, current)
+
+        self.assertEqual(excluded, {"odbc_streaming": "missing comparison identity"})
+        self.assertEqual(
+            flatten_suite_metrics(current, excluded_suite_ids=excluded),
+            {"transport_pipeline.wall_ms": 100.0},
+        )
+
+    def test_odbc_metrics_are_excluded_when_workload_identity_differs(self) -> None:
+        baseline = {
+            "suites": [
+                {
+                    "id": "odbc_streaming",
+                    "comparison_identity": {"package_version": "4.5.1", "rows": "100"},
+                }
+            ]
+        }
+        current = {
+            "suites": [
+                {
+                    "id": "odbc_streaming",
+                    "comparison_identity": {"package_version": "4.5.1", "rows": "200"},
+                }
+            ]
+        }
+
+        self.assertEqual(
+            incompatible_benchmark_suite_reasons(baseline, current),
+            {"odbc_streaming": "comparison identity differs"},
+        )
 
     def test_cli_exit_code_on_regression(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

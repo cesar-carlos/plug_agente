@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart';
@@ -222,8 +221,7 @@ class AgentMetadataRpcMethodHandlerOperations {
       }
     }
 
-    final raw = await _healthService.getHealthStatusAsync();
-    final result = json.decode(json.encode(raw)) as Map<String, dynamic>;
+    final result = await _healthService.getHealthStatusAsync();
     return RpcResponse.success(
       id: request.id,
       result: result,

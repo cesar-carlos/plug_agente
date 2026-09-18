@@ -104,6 +104,10 @@ etapas rodar.
    Transaction control: `test/tool/odbc_transaction_control_benchmark_test.dart`.
    Pool modes: `ODBC_BENCH_CONNECTION_STRING`. Gateway encoding:
    `BENCHMARK_GATEWAY_ENCODING=1` via a suite, nao `flutter test` cru.
+   Para os caminhos locais de health, materializacao de pagina e planejamento
+   de bulk insert, use `BENCHMARK_ODBC_HOT_PATHS=1`; ele publica p50/p95/p99
+   e bytes de entrada como proxy portavel de pressao de alocacao. Esse eixo e
+   observacional, nao e gate de CI.
 
 ## Como ler o snapshot de health
 
@@ -132,6 +136,12 @@ Campos mais relevantes (nomes atuais do contrato `agent.getHealth`):
   `active_non_query_workers` (e respectivos `max_*`)
 - `queries.p95_latency_ms`, `queries.p99_latency_ms`
 - `timeouts.pool_total`, `timeouts.cancel_success_total`
+
+Os percentis de latencia usam uma amostra adaptativa limitada (padrao 256,
+configuravel por `METRICS_LATENCY_SAMPLE_CAP`, limitado a 64–1000). Contadores
+e gauges continuam atuais em toda leitura; apenas os agregados de duracao sao
+reutilizados por ate um segundo. Isso reduz o custo de `agent.getHealth` sem
+alterar seu shape ou schema.
 
 `async_worker_pool.near_pending_limit=true` (quando presente no payload ODBC
 nativo) indica que o worker pool interno do `odbc_fast` esta proximo do teto

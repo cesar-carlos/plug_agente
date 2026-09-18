@@ -15,6 +15,49 @@ void main() {
       expect(info, isNull);
     });
 
+    test('reuses the raw rows when pagination does not need a look-ahead trim', () {
+      const pagination = QueryPaginationRequest(
+        page: 1,
+        pageSize: 2,
+        queryHash: 'qh',
+      );
+      final rawData = <Map<String, dynamic>>[
+        {'id': 1},
+        {'id': 2},
+      ];
+
+      final materialized = OdbcGatewayQueryResultMapper.materializePagination(
+        pagination,
+        rawData,
+      );
+
+      expect(identical(materialized.data, rawData), isTrue);
+      expect(materialized.pagination!.returnedRows, 2);
+      expect(materialized.pagination!.hasNextPage, isFalse);
+    });
+
+    test('materializes one trimmed page for a look-ahead row', () {
+      const pagination = QueryPaginationRequest(
+        page: 1,
+        pageSize: 2,
+        queryHash: 'qh',
+      );
+      final rawData = <Map<String, dynamic>>[
+        {'id': 1},
+        {'id': 2},
+        {'id': 3},
+      ];
+
+      final materialized = OdbcGatewayQueryResultMapper.materializePagination(
+        pagination,
+        rawData,
+      );
+
+      expect(identical(materialized.data, rawData), isFalse);
+      expect(materialized.data, rawData.take(2));
+      expect(materialized.pagination!.hasNextPage, isTrue);
+    });
+
     test('should map rows and column metadata from QueryResult', () {
       const result = QueryResult(
         columns: ['id', 'name'],

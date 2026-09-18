@@ -14,6 +14,39 @@ use cases em `lib/application/use_cases/`. Tabela de auditoria append-only:
 Drift `agent_action_remote_audit`. Capability:
 `AgentActionsRemoteCapabilityBuilder`.
 
+## Execucao local de processos
+
+- Acoes de linha de comando executam uma unica linha por `cmd.exe /C`; quebras
+  de linha, caracteres nulos e comandos acima do limite do Windows sao
+  rejeitados no preflight. Use uma acao de script para fluxos multiline.
+- Acoes `commandLine` sao um modo legado/avancado e somente podem ser iniciadas
+  manualmente pela UI local; Hub, scheduler e lifecycle as rejeitam mesmo que a
+  acao esteja aprovada para remoto. Prefira `executable` com argumentos
+  estruturados.
+- Para contexto em `commandLine`, os modos `argument` e `file` exigem exatamente
+  um `${context_path}` no comando. O arquivo e canonicalizado antes da
+  substituicao, o caminho resolvido nunca entra em preview/log/resposta, e
+  definicoes legadas que dependiam de anexo implicito falham com mensagem de
+  migracao. `environment` e `stdin` continuam com seus contratos proprios.
+- `${secret:...}` nao e permitido na linha de comando livre. Use stdin ou uma
+  variavel de ambiente autorizada; os demais tipos estruturados preservam seus
+  placeholders de segredo e a rechecagem de padroes perigosos apos resolucao.
+- No Windows cada processo local e associado a um Job Object antes de ser
+  publicado como ativo. Cancelamento, timeout e falha de stdin encerram a arvore
+  inteira; falha de associacao encerra o processo e falha de forma segura.
+- O timeout cobre a criacao do processo, preparo de stdin, execucao e drenagem
+  de saida. Se a politica optar por nao encerrar o processo no timeout, a
+  execucao permanece sob controle para cancelamento e nao recebe retry ate que
+  o processo realmente termine.
+- A verificacao de padroes perigosos roda novamente apos resolver placeholders
+  de segredo. Fluxos remotos, agendados e de ciclo de vida sempre bloqueiam
+  correspondencias; o modo de aviso e restrito a execucao local confirmada.
+  Diagnosticos e logs usam apenas previews e causas redigidas, nunca a linha de
+  comando resolvida.
+- `agent.getHealth` expoe apenas contadores agregados de spawn, timeout,
+  terminacao/associacao da arvore, rejeicao de politica e falha de placeholder;
+  nao expoe PID, paths, comando ou segredo.
+
 ## Metodo `agent.action.run`
 
 - **Onde roda:** tratado no `RpcMethodDispatcher` e encaminhado a

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:plug_agente/application/actions/action_execution_queue.dart';
+import 'package:plug_agente/application/actions/agent_action_dangerous_command_policy_enforcer.dart';
 import 'package:plug_agente/application/actions/agent_action_execution_gate_chain.dart';
 import 'package:plug_agente/application/actions/agent_action_execution_metrics_collector.dart';
 import 'package:plug_agente/application/actions/agent_action_failure_process_metadata.dart';
@@ -41,6 +42,7 @@ class AgentActionExecutionOrchestrator {
     AgentActionExecutionMetricsCollector? metrics,
     NotifyAgentActionExecutionIfConfigured? notifyExecution,
     AgentActionSecretPlaceholderResolver? secretPlaceholderResolver,
+    AgentActionDangerousCommandPolicyEnforcer? dangerousCommandPolicyEnforcer,
     ElevatedAgentActionExecutionService? elevatedExecutionService,
     AgentActionRemoteLifecycleAuditRecorder? remoteLifecycleAudit,
     AgentActionRuntimeStateGuard? runtimeStateGuard,
@@ -52,6 +54,7 @@ class AgentActionExecutionOrchestrator {
        _metrics = metrics,
        _notifyExecution = notifyExecution,
        _secretPlaceholderResolver = secretPlaceholderResolver ?? const AgentActionSecretPlaceholderResolver(),
+       _dangerousCommandPolicyEnforcer = dangerousCommandPolicyEnforcer,
        _elevatedExecutionService = elevatedExecutionService,
        _remoteLifecycleAudit = remoteLifecycleAudit,
        _runtimeStateGuard = runtimeStateGuard,
@@ -66,6 +69,7 @@ class AgentActionExecutionOrchestrator {
   final AgentActionExecutionMetricsCollector? _metrics;
   final NotifyAgentActionExecutionIfConfigured? _notifyExecution;
   final AgentActionSecretPlaceholderResolver _secretPlaceholderResolver;
+  final AgentActionDangerousCommandPolicyEnforcer? _dangerousCommandPolicyEnforcer;
   final ElevatedAgentActionExecutionService? _elevatedExecutionService;
   final AgentActionRemoteLifecycleAuditRecorder? _remoteLifecycleAudit;
   final AgentActionRuntimeStateGuard? _runtimeStateGuard;
@@ -489,6 +493,14 @@ class AgentActionExecutionOrchestrator {
       }
 
       final resolvedDefinition = resolvedDefinitionResult.getOrThrow();
+      final resolvedCommandSafetyResult = _dangerousCommandPolicyEnforcer?.enforce(
+        definition: resolvedDefinition,
+        request: request,
+        phase: 'resolved_execution_preflight',
+      );
+      if (resolvedCommandSafetyResult != null && resolvedCommandSafetyResult.isError()) {
+        return Failure(resolvedCommandSafetyResult.exceptionOrNull()!);
+      }
       final executionRequest = _executionRequestWithPreparedCache(
         definition: resolvedDefinition,
         request: request,

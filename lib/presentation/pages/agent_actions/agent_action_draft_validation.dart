@@ -39,6 +39,7 @@ enum DraftValidationField {
   contextSchema,
   environment,
   queueLimits,
+  maxRuntime,
   remoteApproval,
   preflightActiveState,
   powerShellMode,
@@ -124,6 +125,9 @@ class AgentActionDraftValidators {
     final environmentResult = _validateEnvironment(draft, l10n);
     if (environmentResult is DraftValidationInvalid) return environmentResult;
 
+    final timeoutResult = _validateTimeout(draft, l10n);
+    if (timeoutResult is DraftValidationInvalid) return timeoutResult;
+
     final queueResult = _validateQueue(draft, l10n);
     if (queueResult is DraftValidationInvalid) return queueResult;
 
@@ -166,13 +170,23 @@ class AgentActionDraftValidators {
 
   DraftValidationResult _validateQueue(AgentActionDraft draft, AppLocalizations l10n) {
     if (AgentActionDraftParsers.positiveInt(draft.executionPolicy.maxConcurrent.text) == null ||
-        AgentActionDraftParsers.positiveInt(draft.executionPolicy.maxQueued.text) == null) {
+        AgentActionDraftParsers.nonNegativeInt(draft.executionPolicy.maxQueued.text) == null) {
       return DraftValidationInvalid(
         field: DraftValidationField.queueLimits,
         message: l10n.agentActionsFormInvalidQueueLimits,
       );
     }
     return const DraftValidationValid();
+  }
+
+  DraftValidationResult _validateTimeout(AgentActionDraft draft, AppLocalizations l10n) {
+    if (AgentActionDraftParsers.positiveInt(draft.executionPolicy.maxRuntimeMinutes.text) != null) {
+      return const DraftValidationValid();
+    }
+    return DraftValidationInvalid(
+      field: DraftValidationField.maxRuntime,
+      message: l10n.agentActionsFormInvalidMaxRuntime,
+    );
   }
 
   List<String> _missingRequiredFieldLabels(AgentActionDraft draft, AppLocalizations l10n) {

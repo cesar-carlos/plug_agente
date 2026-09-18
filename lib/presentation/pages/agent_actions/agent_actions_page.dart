@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fluent_ui/fluent_ui.dart';
@@ -50,6 +50,12 @@ class _AgentActionsPageState extends State<AgentActionsPage> {
   bool _restoredUiPreferences = false;
   bool _isExclusiveUiFlowPendingOrOpen = false;
   late final AgentActionsUiPreferences _uiPreferences;
+
+  @override
+  void dispose() {
+    _uiPreferences.flushScheduledStringWrites();
+    super.dispose();
+  }
 
   @override
   void initState() {

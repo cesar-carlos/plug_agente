@@ -148,6 +148,13 @@ abstract final class MetricsCounterNames {
   static const String agentActionElevatedStatusFileTerminalCounter = 'agent_action_elevated_status_file_terminal';
   static const String agentActionElevatedStatusFileWaitTimeoutCounter =
       'agent_action_elevated_status_file_wait_timeout';
+  static const String agentActionProcessStartedCounter = 'agent_action_process_started';
+  static const String agentActionProcessSpawnFailureCounter = 'agent_action_process_spawn_failure';
+  static const String agentActionProcessTimeoutCounter = 'agent_action_process_timeout';
+  static const String agentActionProcessTreeTerminationCounter = 'agent_action_process_tree_termination';
+  static const String agentActionProcessTreeAttachFailureCounter = 'agent_action_process_tree_attach_failure';
+  static const String agentActionCommandLinePolicyRejectedCounter = 'agent_action_command_line_policy_rejected';
+  static const String agentActionCommandLinePlaceholderFailureCounter = 'agent_action_command_line_placeholder_failure';
   static const String rpcRemoteAgentActionGetExecutionSuccessCounter = 'rpc_remote_agent_action_get_execution_success';
   static const String rpcRemoteAgentActionGetExecutionErrorCounter = 'rpc_remote_agent_action_get_execution_error';
   static const String rpcRemoteAgentActionRunNotificationRejectedCounter =

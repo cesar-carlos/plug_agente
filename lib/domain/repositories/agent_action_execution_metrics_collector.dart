@@ -54,4 +54,18 @@ abstract class AgentActionExecutionMetricsCollector {
   void recordElevatedStatusFileTerminalRead();
 
   void recordElevatedStatusFileWaitTimeout();
+
+  void recordProcessStarted(Duration startDuration);
+
+  void recordProcessSpawnFailure();
+
+  void recordProcessTimeout();
+
+  void recordProcessTreeTermination();
+
+  void recordProcessTreeAttachFailure();
+
+  void recordCommandLinePolicyRejected();
+
+  void recordCommandLinePlaceholderFailure();
 }

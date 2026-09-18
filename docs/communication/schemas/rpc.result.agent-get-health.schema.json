@@ -348,6 +348,13 @@
             "terminal_timed_out_total": { "type": "integer", "minimum": 0 },
             "terminal_interrupted_total": { "type": "integer", "minimum": 0 },
             "terminal_unknown_total": { "type": "integer", "minimum": 0 },
+            "process_started_total": { "type": "integer", "minimum": 0 },
+            "process_spawn_failure_total": { "type": "integer", "minimum": 0 },
+            "process_timeout_total": { "type": "integer", "minimum": 0 },
+            "process_tree_termination_total": { "type": "integer", "minimum": 0 },
+            "process_tree_attach_failure_total": { "type": "integer", "minimum": 0 },
+            "command_line_policy_rejected_total": { "type": "integer", "minimum": 0 },
+            "command_line_placeholder_failure_total": { "type": "integer", "minimum": 0 },
             "remote_permission_denied_total": { "type": "integer", "minimum": 0 },
             "local_authorization_denied_total": { "type": "integer", "minimum": 0 },
             "remote_rate_limited_total": { "type": "integer", "minimum": 0 },
@@ -374,6 +381,17 @@
         "execution_duration_ms": {
           "type": "object",
           "description": "Recent samples of local action execution duration (process start to finish).",
+          "additionalProperties": false,
+          "properties": {
+            "avg_time_ms": { "type": "number", "minimum": 0 },
+            "p95_time_ms": { "type": "integer", "minimum": 0 },
+            "p99_time_ms": { "type": "integer", "minimum": 0 },
+            "max_recent_time_ms": { "type": "integer", "minimum": 0 },
+            "sample_count": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "process_start_duration_ms": {
+          "type": "object",
           "additionalProperties": false,
           "properties": {
             "avg_time_ms": { "type": "number", "minimum": 0 },

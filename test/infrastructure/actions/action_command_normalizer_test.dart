@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plug_agente/core/constants/agent_action_command_line_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_normalizer.dart';
 
@@ -157,6 +158,34 @@ void main() {
       expect(failure, isA<ActionValidationFailure>());
       expect(failure.context, containsPair('field', 'command'));
       expect(failure.context, containsPair('phase', 'execution_preflight'));
+    });
+
+    test('should reject command lines containing control characters', () {
+      final result = normalizer.normalizeCommandLine(
+        actionId: 'action-1',
+        command: 'echo first\nsecond',
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(
+        failure.context,
+        containsPair('reason', AgentActionCommandLineConstants.invalidCommandCharactersReason),
+      );
+    });
+
+    test('should reject command lines above the Windows command limit', () {
+      final result = normalizer.normalizeCommandLine(
+        actionId: 'action-1',
+        command: 'x' * (AgentActionCommandLineConstants.maxCommandCharacters + 1),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as ActionValidationFailure;
+      expect(
+        failure.context,
+        containsPair('reason', AgentActionCommandLineConstants.commandTooLongReason),
+      );
     });
   });
 }

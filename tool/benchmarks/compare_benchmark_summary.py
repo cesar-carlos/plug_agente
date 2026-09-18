@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tool.py.benchmark_common import (
     ensure_on_path,
     flatten_suite_metrics,
+    incompatible_benchmark_suite_reasons,
     load_summary,
     metric_lower_is_better,
 )
@@ -149,12 +150,23 @@ def main(argv: list[str] | None = None) -> int:
 
     baseline_summary = load_summary(args.baseline)
     current_summary = load_summary(current_path)
-    baseline_metrics = flatten_suite_metrics(baseline_summary)
-    current_metrics = flatten_suite_metrics(current_summary)
+    excluded_suites = incompatible_benchmark_suite_reasons(baseline_summary, current_summary)
+    baseline_metrics = flatten_suite_metrics(
+        baseline_summary,
+        excluded_suite_ids=excluded_suites,
+    )
+    current_metrics = flatten_suite_metrics(
+        current_summary,
+        excluded_suite_ids=excluded_suites,
+    )
 
     print(f"Baseline: {args.baseline}")
     print(f"Current:  {current_path}")
     print(f"Threshold: {args.threshold * 100:.0f}%")
+    if excluded_suites:
+        print("Skipped non-comparable suites:")
+        for suite_id, reason in excluded_suites.items():
+            print(f"  - {suite_id}: {reason}")
     print()
 
     diffs = compare_metrics(baseline_metrics, current_metrics, threshold=args.threshold)

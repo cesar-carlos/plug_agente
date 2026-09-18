@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/actions/agent_action_command_line_policy_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_scanner.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
@@ -52,6 +53,10 @@ class AgentActionSecretPlaceholderResolver implements IAgentActionSecretPlacehol
   Future<Result<AgentActionDefinition>> resolveForExecution(
     AgentActionDefinition definition,
   ) async {
+    final commandLinePolicyResult = const AgentActionCommandLinePolicyValidator().validateDefinition(definition);
+    if (commandLinePolicyResult.isError()) {
+      return Failure(commandLinePolicyResult.exceptionOrNull()!);
+    }
     final ensureResult = await ensureResolvable(definition);
     if (ensureResult.isError()) {
       return Failure(ensureResult.exceptionOrNull()!);

@@ -1,8 +1,12 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/constants/agent_action_policy_defaults.dart';
 
 void main() {
   group('AgentActionPolicyDefaults', () {
+    setUp(dotenv.clean);
+    tearDown(dotenv.clean);
+
     test('should use conservative defaults when env is unset', () {
       expect(AgentActionPolicyDefaults.maxConcurrentActions, 1);
       expect(AgentActionPolicyDefaults.maxQueuedActions, 100);
@@ -20,6 +24,12 @@ void main() {
       expect(queue['maxConcurrent'], AgentActionPolicyDefaults.maxConcurrentActions);
       expect(queue['maxQueued'], AgentActionPolicyDefaults.maxQueuedActions);
       expect(queue['queueTimeoutMs'], AgentActionPolicyDefaults.defaultQueueTimeoutMs);
+    });
+
+    test('accepts zero as the configured maximum queued actions', () {
+      dotenv.loadFromString(envString: 'AGENT_ACTION_MAX_QUEUED=0');
+
+      expect(AgentActionPolicyDefaults.maxQueuedActions, 0);
     });
   });
 }

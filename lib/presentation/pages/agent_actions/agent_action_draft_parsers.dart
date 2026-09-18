@@ -17,6 +17,15 @@ abstract final class AgentActionDraftParsers {
     return parsed;
   }
 
+  /// Parses a non-negative integer, returning `null` when invalid.
+  static int? nonNegativeInt(String input) {
+    final parsed = int.tryParse(input.trim());
+    if (parsed == null || parsed < 0) {
+      return null;
+    }
+    return parsed;
+  }
+
   /// Splits a comma-separated list into a set of non-empty trimmed tokens.
   static Set<String> commaSeparatedTokens(String input) {
     if (input.trim().isEmpty) {

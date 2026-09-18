@@ -52,8 +52,7 @@ final class AgentActionsHealthSectionBuilder {
     final snapshot = _agentActionRuntimeStateGuard?.snapshot;
     final supportedTypes = _supportedTypeNames();
     final unavailableTypes =
-        snapshot?.unavailableActionTypes.map((type) => type.name).toList(growable: false) ??
-        const <String>[];
+        snapshot?.unavailableActionTypes.map((type) => type.name).toList(growable: false) ?? const <String>[];
     final String statusName;
     if (!enabled) {
       statusName = AgentActionSubsystemStatus.disabled.name;
@@ -153,6 +152,16 @@ final class AgentActionsHealthSectionBuilder {
         metrics,
         'agent_action_elevated_status_file_wait_timeout',
       ),
+      'process_started_total': healthMetricInt(metrics, 'agent_action_process_started'),
+      'process_spawn_failure_total': healthMetricInt(metrics, 'agent_action_process_spawn_failure'),
+      'process_timeout_total': healthMetricInt(metrics, 'agent_action_process_timeout'),
+      'process_tree_termination_total': healthMetricInt(metrics, 'agent_action_process_tree_termination'),
+      'process_tree_attach_failure_total': healthMetricInt(metrics, 'agent_action_process_tree_attach_failure'),
+      'command_line_policy_rejected_total': healthMetricInt(metrics, 'agent_action_command_line_policy_rejected'),
+      'command_line_placeholder_failure_total': healthMetricInt(
+        metrics,
+        'agent_action_command_line_placeholder_failure',
+      ),
     };
 
     final executionDurationMs = <String, Object?>{
@@ -161,6 +170,13 @@ final class AgentActionsHealthSectionBuilder {
       'p99_time_ms': healthMetricInt(metrics, 'agent_action_execution_p99_time_ms'),
       'max_recent_time_ms': healthMetricInt(metrics, 'agent_action_execution_max_recent_time_ms'),
       'sample_count': healthMetricInt(metrics, 'agent_action_execution_sample_count'),
+    };
+    final processStartDurationMs = <String, Object?>{
+      'avg_time_ms': (metrics['agent_action_process_start_avg_time_ms'] as num?)?.toDouble() ?? 0.0,
+      'p95_time_ms': healthMetricInt(metrics, 'agent_action_process_start_p95_time_ms'),
+      'p99_time_ms': healthMetricInt(metrics, 'agent_action_process_start_p99_time_ms'),
+      'max_recent_time_ms': healthMetricInt(metrics, 'agent_action_process_start_max_recent_time_ms'),
+      'sample_count': healthMetricInt(metrics, 'agent_action_process_start_sample_count'),
     };
 
     return <String, Object?>{
@@ -184,6 +200,7 @@ final class AgentActionsHealthSectionBuilder {
       'queue_wait_ms': queueWait,
       'execution_counters': executionCounters,
       'execution_duration_ms': executionDurationMs,
+      'process_start_duration_ms': processStartDurationMs,
       'remote_rpc_counters': remoteRpc,
       if (_buildRetentionHealth() case final Map<String, Object?> retention) 'retention': retention,
       if (_buildSchedulerHealth() case final Map<String, Object?> scheduler) 'scheduler': scheduler,

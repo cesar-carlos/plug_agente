@@ -12,27 +12,39 @@ class OdbcGatewayQueryResultMapper {
     QueryPaginationRequest? pagination,
     List<Map<String, dynamic>> rawData,
   ) {
+    return materializePagination(pagination, rawData).pagination;
+  }
+
+  /// Shapes the response page once, reusing that list for the response and
+  /// cursor. The extra look-ahead row is omitted only when it exists.
+  static OdbcPaginatedMaterialization materializePagination(
+    QueryPaginationRequest? pagination,
+    List<Map<String, dynamic>> rawData,
+  ) {
     if (pagination == null) {
-      return null;
+      return OdbcPaginatedMaterialization(data: rawData, pagination: null);
     }
 
     final rawRowCount = rawData.length;
     final hasNextPage = rawRowCount > pagination.pageSize;
     final returnedRows = hasNextPage ? pagination.pageSize : rawRowCount;
-    final pageData = rawData.take(returnedRows).toList();
-    return QueryPaginationInfo(
-      page: pagination.page,
-      pageSize: pagination.pageSize,
-      returnedRows: returnedRows,
-      hasNextPage: hasNextPage,
-      hasPreviousPage: pagination.page > 1,
-      currentCursor: pagination.cursor,
-      nextCursor: hasNextPage
-          ? OdbcPaginatedSqlBuilder.buildNextCursorToken(
-              pagination: pagination,
-              pageData: pageData,
-            )
-          : null,
+    final pageData = hasNextPage ? rawData.take(returnedRows).toList(growable: false) : rawData;
+    return OdbcPaginatedMaterialization(
+      data: pageData,
+      pagination: QueryPaginationInfo(
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        returnedRows: returnedRows,
+        hasNextPage: hasNextPage,
+        hasPreviousPage: pagination.page > 1,
+        currentCursor: pagination.cursor,
+        nextCursor: hasNextPage
+            ? OdbcPaginatedSqlBuilder.buildNextCursorToken(
+                pagination: pagination,
+                pageData: pageData,
+              )
+            : null,
+      ),
     );
   }
 
@@ -73,4 +85,15 @@ class OdbcGatewayQueryResultMapper {
     }
     return buildColumnMetadataFromNames(result.columns);
   }
+}
+
+/// Internal result for a one-pass paginated materialization.
+final class OdbcPaginatedMaterialization {
+  const OdbcPaginatedMaterialization({
+    required this.data,
+    required this.pagination,
+  });
+
+  final List<Map<String, dynamic>> data;
+  final QueryPaginationInfo? pagination;
 }

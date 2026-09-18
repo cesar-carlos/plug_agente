@@ -76,7 +76,7 @@ void main() {
       expect(config.arguments, <String>['--token', 'resolved-token']);
     });
 
-    test('should resolve command line definition for execution', () async {
+    test('should reject a secret placeholder in a command line definition', () async {
       final resolver = AgentActionSecretPlaceholderResolver(
         secretStore: _InMemoryAgentActionSecretStore(
           values: {'db_password': 'p@ss'},
@@ -90,9 +90,11 @@ void main() {
 
       final result = await resolver.resolveForExecution(definition);
 
-      expect(result.isSuccess(), isTrue);
-      final config = result.getOrThrow().config as CommandLineActionConfig;
-      expect(config.command, 'echo p@ss');
+      expect(result.isError(), isTrue);
+      expect(
+        (result.exceptionOrNull()! as ActionFailure).code,
+        AgentActionFailureCode.commandLineSecretPlaceholderForbidden,
+      );
     });
 
     test('should resolve executable path for execution', () async {

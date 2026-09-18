@@ -1,7 +1,9 @@
+import 'package:plug_agente/core/constants/agent_action_command_line_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_process_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/actions/i_action_environment_resolver.dart';
 import 'package:plug_agente/domain/actions/i_agent_operational_profile_resolver.dart';
+import 'package:plug_agente/domain/repositories/agent_action_execution_metrics_collector.dart';
 import 'package:plug_agente/infrastructure/actions/action_process_stdin_setup.dart';
 import 'package:plug_agente/infrastructure/actions/action_process_window_mode_resolver.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_prepare_execution_resolver.dart';
@@ -19,20 +21,24 @@ class CommandLineActionProcessRunner implements AgentActionLocalRunner {
     AgentActionProcessStarter? processStarter,
     AgentActionProcessLifecycle? lifecycle,
     AgentActionRedactor redactor = const AgentActionRedactor(),
+    AgentActionExecutionMetricsCollector? metrics,
   }) : _adapterRegistry = adapterRegistry,
        _environmentResolver = environmentResolver,
        _operationalProfileResolver = operationalProfileResolver,
+       _metrics = metrics,
        _lifecycle =
            lifecycle ??
            AgentActionProcessLifecycle(
              stdinSetup: stdinSetup,
              processStarter: processStarter,
              redactor: redactor,
+             metrics: metrics,
            );
 
   final AgentActionAdapterRegistry _adapterRegistry;
   final IActionEnvironmentResolver _environmentResolver;
   final IAgentOperationalProfileResolver _operationalProfileResolver;
+  final AgentActionExecutionMetricsCollector? _metrics;
   final AgentActionProcessLifecycle _lifecycle;
 
   @override
@@ -85,12 +91,17 @@ class CommandLineActionProcessRunner implements AgentActionLocalRunner {
       request: request,
     );
     if (preparedResult.isError()) {
+      _recordPlaceholderFailure(preparedResult.exceptionOrNull());
       return Failure(preparedResult.exceptionOrNull()!);
     }
     final prepared = preparedResult.getOrThrow();
 
-    final invocationResult = await adapter.resolveInvocationCommand(definition);
+    final invocationResult = await adapter.resolveInvocationCommand(
+      definition,
+      validatedContextPath: prepared.validatedContextPath,
+    );
     if (invocationResult.isError()) {
+      _recordPlaceholderFailure(invocationResult.exceptionOrNull());
       return Failure(invocationResult.exceptionOrNull()!);
     }
 
@@ -137,5 +148,14 @@ class CommandLineActionProcessRunner implements AgentActionLocalRunner {
       expectedProcessExecutable: expectedProcessExecutable,
       expectedProcessStartedAt: expectedProcessStartedAt,
     );
+  }
+
+  void _recordPlaceholderFailure(Exception? failure) {
+    if (failure is! ActionFailure) return;
+    final reason = failure.context['reason'];
+    if (reason == AgentActionCommandLineConstants.contextPlaceholderRequiredReason ||
+        reason == AgentActionCommandLineConstants.contextPlaceholderInvalidReason) {
+      _metrics?.recordCommandLinePlaceholderFailure();
+    }
   }
 }

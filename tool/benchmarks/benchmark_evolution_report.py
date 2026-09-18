@@ -17,6 +17,7 @@ from tool.py.benchmark_common import (
     RESULTS_DIR,
     ensure_on_path,
     flatten_suite_metrics,
+    incompatible_benchmark_suite_reasons,
     load_summary,
 )
 
@@ -30,6 +31,7 @@ class RunReport:
     metric_count: int
     regression_count: int
     diffs: list
+    excluded_suite_reasons: dict[str, str]
 
 
 def discover_summaries(root: Path) -> list[Path]:
@@ -43,9 +45,18 @@ def discover_summaries(root: Path) -> list[Path]:
     )
 
 
-def build_run_report(summary_path: Path, baseline_metrics: dict[str, float], threshold: float) -> RunReport:
+def build_run_report(
+    summary_path: Path,
+    baseline_metrics: dict[str, float],
+    threshold: float,
+    *,
+    excluded_suite_reasons: dict[str, str] | None = None,
+) -> RunReport:
     summary = load_summary(summary_path)
-    current_metrics = flatten_suite_metrics(summary)
+    current_metrics = flatten_suite_metrics(
+        summary,
+        excluded_suite_ids=(excluded_suite_reasons or {}),
+    )
     diffs = compare_metrics(baseline_metrics, current_metrics, threshold=threshold)
     regressions = [diff for diff in diffs if diff.regression]
     return RunReport(
@@ -56,6 +67,7 @@ def build_run_report(summary_path: Path, baseline_metrics: dict[str, float], thr
         metric_count=len(diffs),
         regression_count=len(regressions),
         diffs=diffs,
+        excluded_suite_reasons=excluded_suite_reasons or {},
     )
 
 
@@ -127,9 +139,21 @@ def main(argv: list[str] | None = None) -> int:
 
     total_regressions = 0
     for summary_path in summaries:
-        report = build_run_report(summary_path, baseline_metrics, args.threshold)
+        current_summary = load_summary(summary_path)
+        excluded_suite_reasons = incompatible_benchmark_suite_reasons(
+            baseline_summary,
+            current_summary,
+        )
+        report = build_run_report(
+            summary_path,
+            flatten_suite_metrics(baseline_summary, excluded_suite_ids=excluded_suite_reasons),
+            args.threshold,
+            excluded_suite_reasons=excluded_suite_reasons,
+        )
         total_regressions += report.regression_count
         print(format_run_header(report))
+        for suite_id, reason in report.excluded_suite_reasons.items():
+            print(f"  skipped {suite_id}: {reason}")
         if args.details and report.diffs:
             print(format_table(report.diffs))
             print()
@@ -154,4 +178,3 @@ _ROOT = _TOOL_DIR.parent
 for _entry in (str(_ROOT), str(_TOOL_DIR)):
     if _entry not in sys.path:
         sys.path.insert(0, _entry)
-

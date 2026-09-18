@@ -1,5 +1,6 @@
 import 'package:json_schema/json_schema.dart';
 import 'package:plug_agente/application/actions/action_environment_resolver.dart';
+import 'package:plug_agente/application/actions/agent_action_command_line_policy_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_execution_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_resolver.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_placeholder_scanner.dart';
@@ -15,18 +16,25 @@ class ValidateAgentActionDefinition {
     AgentActionSecretPlaceholderResolver? secretPlaceholderResolver,
     AgentActionRuntimeExecutionValidator? runtimeExecutionValidator,
     ActionEnvironmentResolver? environmentResolver,
+    AgentActionCommandLinePolicyValidator commandLinePolicyValidator = const AgentActionCommandLinePolicyValidator(),
   }) : _secretPlaceholderResolver = secretPlaceholderResolver,
        _runtimeExecutionValidator = runtimeExecutionValidator ?? const AgentActionRuntimeExecutionValidator(),
-       _environmentResolver = environmentResolver ?? const ActionEnvironmentResolver();
+       _environmentResolver = environmentResolver ?? const ActionEnvironmentResolver(),
+       _commandLinePolicyValidator = commandLinePolicyValidator;
 
   final AgentActionAdapterRegistry _adapterRegistry;
   final AgentActionSecretPlaceholderResolver? _secretPlaceholderResolver;
   final AgentActionRuntimeExecutionValidator _runtimeExecutionValidator;
   final ActionEnvironmentResolver _environmentResolver;
+  final AgentActionCommandLinePolicyValidator _commandLinePolicyValidator;
 
   Future<Result<AgentActionPreflight>> call(
     AgentActionDefinition definition,
   ) async {
+    final commandLinePolicyResult = _commandLinePolicyValidator.validateDefinition(definition);
+    if (commandLinePolicyResult.isError()) {
+      return Failure(commandLinePolicyResult.exceptionOrNull()!);
+    }
     final basicValidationFailure = _validateBasicDefinition(definition);
     if (basicValidationFailure != null) {
       return Failure(basicValidationFailure);

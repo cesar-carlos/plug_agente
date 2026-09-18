@@ -1681,6 +1681,9 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
     await harness.pumpPage(tester);
 
+    // A selected saved action remains visible while filters change. Use a
+    // stale selection to exercise the actual empty-filter state.
+    harness.provider.selectAction('missing-action');
     harness.provider.setDefinitionSearchQuery('zz-no-match');
     await tester.pumpAndSettle();
 

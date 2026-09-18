@@ -1,3 +1,4 @@
+import 'package:plug_agente/application/actions/agent_action_command_line_policy_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_dangerous_command_policy_enforcer.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_execution_validator.dart';
@@ -12,6 +13,7 @@ import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/repositories/agent_action_execution_metrics_collector.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -39,6 +41,8 @@ class AgentActionExecutionGateChain {
     AgentOperationalProfileResolver? operationalProfileResolver,
     AgentActionSecretPlaceholderResolver? secretPlaceholderResolver,
     AgentActionDangerousCommandPolicyEnforcer? dangerousCommandPolicyEnforcer,
+    AgentActionCommandLinePolicyValidator commandLinePolicyValidator = const AgentActionCommandLinePolicyValidator(),
+    AgentActionExecutionMetricsCollector? metrics,
     ElevatedActionRunnerReadinessService? elevatedRunnerReadiness,
     ElevatedAgentActionExecutionService? elevatedExecutionService,
     AgentActionDefinitionSnapshotter? definitionSnapshotter,
@@ -52,6 +56,8 @@ class AgentActionExecutionGateChain {
        _operationalProfileResolver = operationalProfileResolver,
        _secretPlaceholderResolver = secretPlaceholderResolver ?? const AgentActionSecretPlaceholderResolver(),
        _dangerousCommandPolicyEnforcer = dangerousCommandPolicyEnforcer,
+       _commandLinePolicyValidator = commandLinePolicyValidator,
+       _metrics = metrics,
        _elevatedRunnerReadiness = elevatedRunnerReadiness,
        _elevatedExecutionService = elevatedExecutionService,
        _definitionSnapshotter = definitionSnapshotter,
@@ -66,6 +72,8 @@ class AgentActionExecutionGateChain {
   final AgentOperationalProfileResolver? _operationalProfileResolver;
   final AgentActionSecretPlaceholderResolver _secretPlaceholderResolver;
   final AgentActionDangerousCommandPolicyEnforcer? _dangerousCommandPolicyEnforcer;
+  final AgentActionCommandLinePolicyValidator _commandLinePolicyValidator;
+  final AgentActionExecutionMetricsCollector? _metrics;
   final ElevatedActionRunnerReadinessService? _elevatedRunnerReadiness;
   final ElevatedAgentActionExecutionService? _elevatedExecutionService;
   final AgentActionDefinitionSnapshotter? _definitionSnapshotter;
@@ -104,6 +112,17 @@ class AgentActionExecutionGateChain {
           },
         ),
       );
+    }
+
+    final commandLinePolicyResult = _commandLinePolicyValidator.validateExecution(
+      definition: definition,
+      request: request,
+    );
+    if (commandLinePolicyResult.isError()) {
+      _metrics?.recordCommandLinePolicyRejected();
+      final failure = commandLinePolicyResult.exceptionOrNull()!;
+      _recordAuthorizationDenied(onAuthorizationDenied, failure);
+      return Failure(failure);
     }
 
     final remoteRiskResult = await _ensureRemoteRiskFingerprintCurrent(definition: definition);
