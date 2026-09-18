@@ -983,9 +983,9 @@ Quebrar em subdocs so quando revisao por PR ficar impraticavel (~5k linhas).
 
 Subdocs (indice; regra canonica permanece aqui):
 
-- [`docs/implemente/acoes/contrato_remoto.md`](acoes/contrato_remoto.md) — 2026-05-20
-- [`docs/implemente/acoes/ui_acoes.md`](acoes/ui_acoes.md) — 2026-05-20
-- [`docs/implemente/acoes/seguranca_acoes.md`](acoes/seguranca_acoes.md) — 2026-05-20
+- [`docs/implemente/acoes/contrato_remoto.md`](../implemente/acoes/contrato_remoto.md) — 2026-05-20
+- [`docs/implemente/acoes/ui_acoes.md`](../implemente/acoes/ui_acoes.md) — 2026-05-20
+- [`docs/implemente/acoes/seguranca_acoes.md`](../implemente/acoes/seguranca_acoes.md) — 2026-05-20
 - `docs/implemente/acoes/runner_local.md` (planejado)
 - `docs/implemente/acoes/runner_elevado.md` (planejado)
 - `docs/implemente/acoes/tipos_de_acao.md`
@@ -1189,7 +1189,7 @@ no app ou `E2E_HUB_USERNAME`/`PASSWORD` no `.env` antes de
 `fetch_e2e_hub_token --apply-token --force`; `sync_e2e_hub_env_from_local.dart`
 falha com `dart:ui` fora do Flutter — use credenciais manuais ou app instalado;
 `suggest_e2e_hub_from_local_config.dart --apply-url --apply-agent-id` preenche URL/id
-sem imprimir segredos. Detalhes: [`acoes/seguranca_acoes.md`](acoes/seguranca_acoes.md).
+sem imprimir segredos. Detalhes: [`acoes/seguranca_acoes.md`](../implemente/acoes/seguranca_acoes.md).
 
 Opcionais: `E2E_HUB_EXPECT_AGENT_ACTIONS_CAPABILITY=true`,
 `E2E_HUB_EXPECT_AGENT_ACTION_RPC=true` (hub deve emitir `agent.action.*` apos ready).
@@ -3309,7 +3309,7 @@ UI `prepareElevatedRunner`. Itens abaixo marcados conforme o codigo atual.
 
 ### Fase 6 - Socket.IO e JSON-RPC
 
-Indice resumido: [`docs/implemente/acoes/contrato_remoto.md`](acoes/contrato_remoto.md).
+Indice resumido: [`docs/implemente/acoes/contrato_remoto.md`](../implemente/acoes/contrato_remoto.md).
 
 **Nota (alinhamento implementacao vs plano):** contrato, bordas e **roteamento no
 agente** existem: schemas em `docs/communication/schemas/`, `openrpc.json`,

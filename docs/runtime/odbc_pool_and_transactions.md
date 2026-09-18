@@ -134,6 +134,17 @@ caller:
   `ValidationError` since `odbc_fast 3.9.0` (still true in 4.5.1) —
   pool connections must always go back through the pool API.
 
+Discard is deliberately stronger than release. Before returning the logical
+checkout, the agent quarantines its native pool. New native checkouts fail with
+a retryable `native_pool_quarantined` reason, so the adaptive pool can use its
+safe lease/direct fallback instead of reusing a connection that may still have
+driver state from an aborted command. After the final checkout drains, the
+agent closes and recreates the native pool. Recovery is single-scheduled per
+connection string, uses exponential backoff from 250 ms up to 30 s, and stops
+after five unsuccessful attempts in that quarantine cycle. A failed release is
+treated the same way; a successful `poolReleaseConnection` by itself never
+proves that a discarded native connection was physically reset.
+
 ## Transaction control
 
 Production `beginTransaction` call sites:
@@ -300,9 +311,10 @@ agent's single entry point for runtime observability emitted by
 The bridge does three things on each event:
 
 1. **Structured log** through `developer.log` with `name:
-   'odbc_event_bridge'`, including relevant payload (`connection_id`,
-   `attempt`/`max_attempts`, `pool_id`/`old_size`/`new_size`,
-   `duration_ms`, truncated SQL preview for slow queries).
+   'odbc_event_bridge'`, using only stable event kind/reason, attempt counts,
+   pool-size deltas, duration and a SQL verb classification for slow queries.
+   It never includes SQL text, parameters, connection strings, native IDs or
+   raw driver messages.
 2. **Counter** on `MetricsCollector`. Exposed in the diagnostics
    snapshot under the keys:
    - `odbc_event_connection_lost`
@@ -339,6 +351,10 @@ for the diagnostics dashboard. It aggregates:
 - `runtime_tuning` — current `OdbcRuntimeTuning` values.
 - `sql_queue` — counters from the application-level queue.
 - `recent_odbc_events` — bridge ring buffer.
+
+The event ring is redacted by the bridge before it reaches health: it contains
+only event kind, timestamp and low-cardinality operational fields. Treat it as
+incident correlation data, not a query or connection diagnostic channel.
 
 Async worker pool saturation (pending requests > 80% of cap) is logged
 once per saturation episode to avoid log spam.
@@ -428,6 +444,11 @@ ODBC are:
 - Native-compatible acquire:
   - `odbc_native_compatible_acquire_attempt`,
     `odbc_native_compatible_acquire_success`
+- Quarantine and recovery:
+  - `native_quarantined_pool_count`,
+    `native_quarantine_recovery_scheduled` (pool diagnostics)
+  - `pool_recycle`, `pool_recycle_failure`,
+    `odbc_worker_recovery_invalidation`
 - Direct connection:
   - `direct_connection_acquire_timeout`, `direct_connection_fallback`
 - ODBC runtime events (via `OdbcEventBridge`):
@@ -438,6 +459,9 @@ ODBC are:
   - `transactional_batch_readonly_inference` — read-only hint fired
   - `transactional_batch_deadline_near_stall` — batch ≥80% of deadline
     on commit
+- Disconnect cancellation:
+  - `sql_disconnect_abort_attempt`, `sql_disconnect_abort_requested`,
+    `sql_disconnect_abort_armed`, `sql_disconnect_abort_failure`
 
 ## Decision log
 
@@ -465,8 +489,10 @@ ODBC are:
 - **Do not reuse SQL Anywhere / SQL Server streaming sessions.**
   `odbc_fast` 4.5.1 does not document that as safe. PostgreSQL may reuse
   idle streaming connections; cancel/timeout/evict always disconnect.
-- **Defer cancellation tokens on batches.** No evidence that abandoned
-  RPC clients are a frequent cause of stuck locks today.
+- **Cancel all active SQL work on transport disconnect.** The dispatcher keeps
+  request ownership independent of ODBC statement registration, arms a
+  best-effort abort for every active SQL request, and never emits a late
+  cancellation response into a newer socket session.
 
 ## Benchmarks
 
@@ -483,6 +509,12 @@ python tool/benchmarks/run_benchmark_suite.py
 - Gateway encoding: opt-in with `BENCHMARK_GATEWAY_ENCODING=1` **through
   the suite**. Raw `flutter test` does not inject `.env` into
   `Platform.environment` before skip checks.
+- ODBC suites record a `comparison_identity` (resolved `odbc_fast` source and
+  version, driver family, benchmark profile and, for streaming, workload
+  shape). The comparator skips an ODBC baseline when that identity is missing
+  or differs; this prevents a driver/package/workload change from being
+  reported as an application regression. Promote a baseline only after three
+  stable runs with the same identity.
 - Operational wrappers
   (`odbc_async_benchmark.py`, `odbc_streaming_benchmark.py`,
   `odbc_driver_matrix_benchmark.py`) remain valid for a single axis.

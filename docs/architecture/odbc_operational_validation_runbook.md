@@ -109,6 +109,14 @@ etapas rodar.
    e bytes de entrada como proxy portavel de pressao de alocacao. Esse eixo e
    observacional, nao e gate de CI.
 
+   Antes de comparar resultados ODBC, confirme que `comparison_identity` e
+   igual nos dois `summary.json`: versao/origem resolvida de `odbc_fast`,
+   familia do driver, perfil e dimensoes do workload de streaming. O comparador
+   pula suites sem essa identidade ou com identidade divergente. Isso e
+   intencional: nao trate uma troca de driver, pacote ou volume de linhas como
+   regressao do agente. Promova baseline apenas apos tres execucoes estaveis
+   com a mesma identidade.
+
 ## Como ler o snapshot de health
 
 Campos mais relevantes (nomes atuais do contrato `agent.getHealth`):
@@ -136,6 +144,13 @@ Campos mais relevantes (nomes atuais do contrato `agent.getHealth`):
   `active_non_query_workers` (e respectivos `max_*`)
 - `queries.p95_latency_ms`, `queries.p99_latency_ms`
 - `timeouts.pool_total`, `timeouts.cancel_success_total`
+- `pool.native_quarantined_pool_count` e
+  `pool.native_quarantine_recovery_scheduled` — native pool isolado apos
+  abortamento/erro de release; acompanhe tambem `pool_recycle_failure`.
+- `sql_disconnect_abort_attempt`, `sql_disconnect_abort_requested`,
+  `sql_disconnect_abort_armed`, `sql_disconnect_abort_failure` — cancelamento
+  best-effort de SQL ativo quando a sessao Socket.IO termina. Esses totais nao
+  confirmam rollback de um efeito ja aceito pelo banco.
 
 Os percentis de latencia usam uma amostra adaptativa limitada (padrao 256,
 configuravel por `METRICS_LATENCY_SAMPLE_CAP`, limitado a 64–1000). Contadores
@@ -158,6 +173,10 @@ Regras praticas:
   esperados, sem sinal de gargalo no banco.
 - Aumente `ODBC_POOL_SIZE` e `SQL_QUEUE_MAX_WORKERS` apenas se houver
   beneficio real em throughput **e** sem piorar p95/p99.
+- Se a quarentena nativa crescer ou ficar agendada por muito tempo, investigue
+  o driver e as causas de timeout/cancelamento antes de aumentar concorrencia.
+  O fallback lease/direto preserva seguranca e disponibilidade, mas nao e uma
+  justificativa para reutilizar o pool suspeito.
 - Use `batch.bulk_insert_recommended_total` para identificar batches grandes
   de `INSERT` que devem migrar para `sql.bulkInsert` antes de aumentar
   concorrencia.

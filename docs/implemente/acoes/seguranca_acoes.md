@@ -10,7 +10,7 @@ Indice de flags, riscos aceitos, threat model e rollback. Plano completo:
 | --- | --- | --- |
 | `enableAgentActions` | **true** | Habilita UI, scheduler, fila e RPC `agent.action.*`; desligar so via rollback explicito |
 | `enableRemoteAgentActions` | off | RPC `agent.action.*` + capability |
-| `enableRemoteAdHocAgentActions` | **false** (RA-08) | Comando livre remoto |
+| `enableRemoteAdHocAgentActions` | **false** (RA-08) | Permite ad-hoc somente aos tipos que o runtime autoriza; nunca libera `commandLine`, que e manual e local |
 | `enableElevatedAgentActions` | false | Pipeline elevado |
 | `enableAgentActionsMaintenanceMode` | **false** | Bloqueia remoto/agendado |
 | `enableAgentActionRemoteAudit` | **true** | Auditoria append-only |
@@ -61,6 +61,11 @@ no plano mestre.
 - **Auditoria:** Drift `agent_action_remote_audit` append-only; purge por
   retencao configuravel.
 - **Paths:** `ActionPathValidator`, allowlists, snapshot/hash no cadastro.
+- **Linha de comando:** superficie legado/avancada apenas para execucao manual
+  local. Hub, scheduler e lifecycle a rejeitam; no Windows o Job Object
+  encerra a arvore de processos em cancelamento, timeout ou falha de stdin.
+  `${context_path}` e obrigatorio uma vez para contexto `argument`/`file`, e
+  `${secret:...}` e proibido no comando livre.
 
 ## Live Hub — pre-requisitos (RA-05)
 

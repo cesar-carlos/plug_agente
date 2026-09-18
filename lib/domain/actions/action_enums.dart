@@ -8,6 +8,15 @@ enum AgentActionType {
   developer,
 }
 
+/// Execution-surface constraints that are intrinsic to an action type.
+extension AgentActionTypeExecutionScope on AgentActionType {
+  /// Free-form shell commands stay confined to confirmed manual local runs.
+  bool get isManualLocalOnly => this == AgentActionType.commandLine;
+
+  /// Whether the type can be advertised to a Hub as remotely executable.
+  bool get isRemoteCapable => !isManualLocalOnly;
+}
+
 enum AgentActionState {
   active,
   paused,

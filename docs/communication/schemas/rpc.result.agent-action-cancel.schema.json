@@ -7,7 +7,7 @@
   "properties": {
     "cancelled": {
       "type": "boolean",
-      "description": "True when the queued item was cancelled or the main process was killed/cancelled."
+      "description": "True when the queued item was cancelled or the running process was cancelled. On Windows, a Job Object-backed action terminates its attached process tree."
     },
     "execution_id": { "type": "string", "minLength": 1 },
     "status": {

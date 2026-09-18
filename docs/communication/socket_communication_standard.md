@@ -91,7 +91,7 @@ Cross-references:
 | Metodo `agent.getHealth`                                             | implemented                                                                                                                |
 | Metodo `agent.action.run`                                            | implemented (via feature flag `enableRemoteAgentActions`; enfileira apenas acao salva/aprovada, com idempotencia obrigatoria) |
 | Metodo `agent.action.validateRun`                                    | implemented (via feature flag `enableRemoteAgentActions`; preflight remoto sem persistir execucao nem iniciar processo; mesma `idempotency_key` que `run`) |
-| Metodo `agent.action.cancel`                                         | implemented (via feature flag `enableRemoteAgentActions`; cancela fila ou mata apenas processo principal)                  |
+| Metodo `agent.action.cancel`                                         | implemented (via feature flag `enableRemoteAgentActions`; cancela fila ou encerra a arvore de processo local quando houver Job Object) |
 | Metodo `agent.action.getExecution`                                   | implemented (via feature flag `enableRemoteAgentActions`; leitura redigida de execucao de acao)                            |
 | Metodo `client_token.getPolicy`                                      | implemented                                                                                                                |
 | Catalogo de erros RPC                                                | implemented                                                                                                                |
@@ -1191,12 +1191,12 @@ Quando o cancelamento aborta uma execucao ODBC materializada registrada
 
 **Nota**: O cancelamento cobre (1) execucoes em streaming rastreadas pelo
 `SqlStreamingCoordinator` e (2) execucoes ODBC materializadas ainda registradas
-no abort in-flight, quando `enableSocketCancelMethod` esta ativo. Sucesso no
-caminho (2) exige que o handle esteja registrado; IDs desconhecidos continuam
-como `-32109` / `execution_not_found`. Respostas chunked geradas apos
-materializacao sem registro in-flight nao sao cancelaveis por este metodo. O
-ownership de `client_token` aplica-se ao caminho streaming; o abort in-flight
-nao inventa checagem de owner quando o registry nao guarda token.
+no abort in-flight, quando `enableSocketCancelMethod` esta ativo. O registro de
+proprietario e reservado antes do dispatch e preserva somente o hash normalizado
+da credencial; por isso o mesmo gate de `client_token` cobre streaming,
+materializacao, batch e trabalho enfileirado. IDs desconhecidos continuam como
+`-32109` / `execution_not_found`. Respostas chunked geradas apos materializacao
+sem registro in-flight nao sao cancelaveis por este metodo.
 
 Uma request SQL pode possuir varios handles ODBC, como em batch somente-leitura
 paralelo. O cancelamento interno e por proprietario da request e tenta todos os
@@ -1697,7 +1697,7 @@ o modo efetivo perde `cursor-offset`).
         "agent.action.cancel",
         "agent.action.getExecution"
       ],
-      "supportedTypes": ["commandLine"],
+      "supportedTypes": ["executable", "script", "jar"],
       "supportsRun": true,
       "supportsValidateRun": true,
       "supportsDryRun": true,
@@ -1762,6 +1762,12 @@ Extensoes de performance (`clientRequestIdEcho`, `agentPhaseTimings`,
 `healthPiggyback`) sao anunciadas pelo agente em
 `ProtocolCapabilities.defaultCapabilities`. Detalhe de consumo no hub:
 [`docs/plug_server/01_transport_extensions.md`](../plug_server/01_transport_extensions.md).
+
+`agentActions.supportedTypes` e uma fotografia filtrada dos adapters registrados
+elegiveis para remoto e pode variar por instalacao. Ele nao substitui os gates
+de admissao: `agent.action.validateRun` e a fonte de verdade para saber se uma
+acao concreta pode ser iniciada. Em especial, `commandLine` permanece somente
+local/manual e nunca e anunciado como tipo remoto.
 
 Hints de backpressure (`recommendedStreamPullWindowSize`,
 `maxStreamPullWindowSize`) tambem entram no anuncio padrao; o hub so usa

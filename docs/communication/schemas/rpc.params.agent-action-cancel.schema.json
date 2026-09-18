@@ -8,7 +8,7 @@
     "execution_id": {
       "type": "string",
       "minLength": 1,
-      "description": "Agent action execution identifier to cancel. Only the main process registered by the agent is targeted."
+      "description": "Agent action execution identifier to cancel. For Windows local processes, cancellation targets the Job Object process tree when one is attached; otherwise the runtime uses its explicit platform fallback."
     },
     "trace_id": {
       "type": "string",

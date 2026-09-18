@@ -1,6 +1,7 @@
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/config/outbound_compression_mode.dart';
 import 'package:plug_agente/core/constants/rpc_batch_negotiation.dart';
+import 'package:plug_agente/domain/actions/action_enums.dart';
 import 'package:plug_agente/domain/actions/action_local_runner.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_agent_actions_remote_capability_provider.dart';
@@ -75,9 +76,11 @@ final class TransportLocalCapabilitiesBuilder {
   List<String> _agentActionSupportedTypeNames() {
     final registry = _agentActionLocalRunnerRegistry;
     if (registry == null) {
-      return const <String>['commandLine'];
+      return const <String>[];
     }
-    final names = registry.supportedTypes.map((type) => type.name).toList(growable: false);
-    return names.isEmpty ? const <String>['commandLine'] : names;
+    return registry.supportedTypes
+        .where((type) => type.isRemoteCapable)
+        .map((type) => type.name)
+        .toList(growable: false);
   }
 }

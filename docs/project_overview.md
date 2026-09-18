@@ -62,7 +62,7 @@ quais contratos ele honra.
 | `agent.getHealth` | Nao | Pool, fila, runtime tuning, scheduler, retention |
 | `agent.action.run` | Sim | Enfileira acao salva e aprovada (idempotency_key obrigatorio) |
 | `agent.action.validateRun` | Nao | Preflight remoto (sem persistir nem iniciar) |
-| `agent.action.cancel` | Sim | Cancela fila ou processo principal |
+| `agent.action.cancel` | Sim | Cancela fila ou, no Windows, a arvore de processo associada ao Job Object |
 | `agent.action.getExecution` | Nao | Leitura redigida da execucao |
 | `client_token.getPolicy` | Nao | Politica de autorizacao do token |
 | `rpc.discover` | Nao | OpenRPC do agente |

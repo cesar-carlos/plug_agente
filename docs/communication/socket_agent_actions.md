@@ -252,8 +252,9 @@ propagam para execucao e auditoria via params (opcional) ou `meta` do envelope R
 - **Onde roda:** tratado no `RpcMethodDispatcher` e encaminhado ao use case
 local `CancelAgentActionExecution`.
 - **Objetivo:** cancelar uma execucao de acao `queued` ou `running` ja
-registrada no Plug Agente. Para processos, o cancelamento mira somente o
-processo principal registrado pelo agente.
+registrada no Plug Agente. No Windows, processos locais associados a um Job
+Object sao encerrados como arvore; em plataformas sem esse suporte, aplica-se o
+fallback explicito do runtime ao processo controlado.
 - **Feature flag:** `enableRemoteAgentActions`. Quando desligada, o metodo
 responde `-32002` com `reason` `agent_actions_remote_disabled`.
 - **Params:** objeto obrigatorio com `execution_id`. Aceita `client_token` ou

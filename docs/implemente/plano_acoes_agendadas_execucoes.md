@@ -75,7 +75,7 @@ idempotencia; auditoria append-only; runner elevado com request/nonce/ACL.
 
 | Tipo | Superficie | Gate remoto/elevado |
 | --- | --- | --- |
-| `commandLine` | Shell | Remoto so acao salva + aprovacao; ad-hoc off; elevado opcional |
+| `commandLine` | Shell legado/avancado | Somente manual local; Hub, scheduler e lifecycle rejeitam. Preferir `executable` com argumentos estruturados. |
 | `executable` | CreateProcess + snapshot/hash | Idem |
 | `script` | Interpreter + script paths | Idem |
 | `jar` | Java + JAR | Idem |

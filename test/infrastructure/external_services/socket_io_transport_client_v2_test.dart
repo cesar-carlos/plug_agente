@@ -428,7 +428,7 @@ void main() {
       expect(agentActions['methods'], AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered);
       expect(agentActions['supportedMethods'], AgentActionRpcConstants.remotePublishedRpcMethodNamesOrdered);
       expect(agentActions['authorizationScopes'], AgentActionRpcConstants.remotePublishedAuthorizationScopesOrdered);
-      expect(agentActions['supportedTypes'], ['commandLine', 'developer']);
+      expect(agentActions['supportedTypes'], ['developer']);
       expect(agentActions['version'], 1);
       expect(agentActions['unavailableTypes'], isEmpty);
       expect(

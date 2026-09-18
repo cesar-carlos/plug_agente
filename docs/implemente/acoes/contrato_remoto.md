@@ -22,7 +22,7 @@ depende de RA-01 / RA-02 / RA-05.
 | --- | --- | --- |
 | `agent.action.run` | Sim | `idempotency_key` obrigatorio; gatilho `remote` habilitado antes do rate limit |
 | `agent.action.validateRun` | Nao | Preflight sem persistir/iniciar; mesmo gate de gatilho `remote` |
-| `agent.action.cancel` | Sim | Fila ou processo principal; rate limit / auditoria por `action_id` da execucao |
+| `agent.action.cancel` | Sim | Fila ou arvore de processo local quando houver Job Object; rate limit / auditoria por `action_id` da execucao |
 | `agent.action.getExecution` | Nao | Leitura redigida; janela UTF-8; prefetch sem hidratar output |
 
 Constantes: `lib/core/constants/agent_action_rpc_constants.dart`.

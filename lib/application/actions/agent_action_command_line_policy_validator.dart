@@ -33,7 +33,7 @@ class AgentActionCommandLinePolicyValidator {
   }) {
     final definitionResult = validateDefinition(definition);
     if (definitionResult.isError()) return definitionResult;
-    if (definition.type != AgentActionType.commandLine || request.source == AgentActionRequestSource.localUi) {
+    if (!definition.type.isManualLocalOnly || request.source == AgentActionRequestSource.localUi) {
       return const Success(unit);
     }
     return Failure(
