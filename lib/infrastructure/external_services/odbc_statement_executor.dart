@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
@@ -244,13 +246,25 @@ final class OdbcStatementExecutor {
               return Failure(result.exceptionOrNull()!);
             }
             return Failure(
-              Exception(
-                'Async SQL request completed with status $status without error payload',
+              domain.QueryExecutionFailure.withContext(
+                message: 'Async SQL request completed with status $status without error payload',
+                context: {
+                  'reason': OdbcContextConstants.asyncRequestNoErrorPayloadReason,
+                  'async_status': status,
+                  'operation': 'async_get_result',
+                },
               ),
             );
           default:
             return Failure(
-              Exception('Unexpected async SQL request status: $status'),
+              domain.QueryExecutionFailure.withContext(
+                message: 'Unexpected async SQL request status: $status',
+                context: {
+                  'reason': OdbcContextConstants.asyncRequestUnexpectedStatusReason,
+                  'async_status': status,
+                  'operation': 'async_poll',
+                },
+              ),
             );
         }
       }

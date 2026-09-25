@@ -92,6 +92,7 @@ abstract class Failure implements Exception {
       ...additionalContext,
       'operation': ?operation,
     };
+    merged.remove('user_message');
     if (merged.isEmpty) {
       return null;
     }

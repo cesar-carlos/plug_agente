@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_lost_session_failure.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
@@ -191,13 +192,15 @@ final class DirectOdbcQueryExecutor {
                 errorMessage: OdbcQueryExecutionPolicies.odbcErrorMessage(error),
                 executedInDb: true,
               );
-              return Failure(
-                OdbcFailureMapper.mapQueryError(
-                  error,
-                  operation: 'execute_query_direct',
-                  context: {'query_id': request.id},
-                ),
+              final failure = OdbcFailureMapper.mapQueryError(
+                error,
+                operation: 'execute_query_direct',
+                context: {'query_id': request.id},
               );
+              if (OdbcLostSessionFailure.matches(failure)) {
+                await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(connectionString);
+              }
+              return Failure(failure);
             }
 
             final response = outcome.response!;
@@ -265,7 +268,7 @@ final class DirectOdbcQueryExecutor {
             await cleanupOwnedConnection();
           }
         },
-        (error) {
+        (error) async {
           if (OdbcQueryExecutionPolicies.looksLikeTimeoutError(error)) {
             _metrics.recordConnectTimeout();
           }
@@ -282,13 +285,15 @@ final class DirectOdbcQueryExecutor {
             errorMessage: OdbcQueryExecutionPolicies.odbcErrorMessage(error),
             executedInDb: false,
           );
-          return Failure(
-            OdbcFailureMapper.mapConnectionError(
-              error,
-              operation: 'connect_direct',
-              context: {'query_id': request.id},
-            ),
+          final failure = OdbcFailureMapper.mapConnectionError(
+            error,
+            operation: 'connect_direct',
+            context: {'query_id': request.id},
           );
+          if (OdbcLostSessionFailure.matches(failure)) {
+            await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(connectionString);
+          }
+          return Failure(failure);
         },
       );
     } finally {

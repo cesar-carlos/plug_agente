@@ -27,6 +27,22 @@ class AppLogger {
     _instance.i(message, error: error, stackTrace: stackTrace);
   }
 
+  static void operational(
+    String message, {
+    required Map<String, dynamic> context,
+  }) {
+    final sink = _structuredSink;
+    if (sink != null) {
+      sink.logStructured(
+        level: 'INFO',
+        message: message,
+        context: _sanitizeContext(context),
+      );
+      return;
+    }
+    _instance.i(_withContext(message, context));
+  }
+
   static void warning(
     String message, [
     dynamic error,
@@ -44,7 +60,7 @@ class AppLogger {
       );
       return;
     }
-    _instance.w(message, error: error, stackTrace: stackTrace);
+    _instance.w(_withContext(message, context), error: error, stackTrace: stackTrace);
   }
 
   static void error(
@@ -64,7 +80,7 @@ class AppLogger {
       );
       return;
     }
-    _instance.e(message, error: error, stackTrace: stackTrace);
+    _instance.e(_withContext(message, context), error: error, stackTrace: stackTrace);
   }
 
   static void logQuery(String query, Map<String, dynamic>? parameters) {
@@ -81,6 +97,14 @@ class AppLogger {
       final sanitized = data is Map<String, dynamic> ? LogSanitizer.sanitizeParameters(data) : data.toString();
       _instance.d('Data: $sanitized');
     }
+  }
+
+  static String _withContext(String message, Map<String, dynamic>? context) {
+    final sanitized = _sanitizeContext(context);
+    if (sanitized == null) {
+      return message;
+    }
+    return '$message | context=$sanitized';
   }
 
   static Map<String, dynamic>? _sanitizeContext(Map<String, dynamic>? context) {

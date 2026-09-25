@@ -15,7 +15,7 @@ void main() {
       expect(
         BulkInsertParallelPolicy.shouldUseParallel(
           databaseType: DatabaseType.sqlServer,
-          requestRowCount: 50000,
+          requestRowCount: 1000,
           poolSize: 8,
         ),
         isTrue,
@@ -23,7 +23,7 @@ void main() {
       expect(
         BulkInsertParallelPolicy.shouldUseParallel(
           databaseType: DatabaseType.sqlServer,
-          requestRowCount: 1000,
+          requestRowCount: 999,
           poolSize: 8,
         ),
         isFalse,

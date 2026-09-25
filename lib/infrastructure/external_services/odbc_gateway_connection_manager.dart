@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
+import 'package:plug_agente/infrastructure/logging/odbc_resilience_log.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.dart';
 import 'package:result_dart/result_dart.dart';
@@ -37,7 +38,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
   final int Function()? _directConnectionMaxProvider;
   final Duration _inflightDiscardStaleThreshold;
   final PoolSemaphore _discardSemaphore;
-  final Set<String> _connectionsToDiscard = <String>{};
+  final Map<String, PoolDiscardReason> _connectionsToDiscard = <String, PoolDiscardReason>{};
   final Map<String, DateTime> _lastRecycleAttempt = <String, DateTime>{};
   final Map<String, DateTime> _inflightDiscards = <String, DateTime>{};
 
@@ -241,13 +242,13 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
   }
 
   Future<void> releaseConnectionSafely(String connectionId) async {
-    final shouldDiscard = _connectionsToDiscard.remove(connectionId);
-    if (shouldDiscard) {
+    final discardReason = _connectionsToDiscard.remove(connectionId);
+    if (discardReason != null) {
       await _discardSemaphore.acquire();
       _inflightDiscards[connectionId] = DateTime.now();
       _metrics.recordPoolDiscardInflightStarted();
       unawaited(
-        _discardConnectionSafely(connectionId).whenComplete(() {
+        _discardConnectionSafely(connectionId, discardReason).whenComplete(() {
           _inflightDiscards.remove(connectionId);
           _metrics.recordPoolDiscardInflightCompleted();
           _discardSemaphore.release();
@@ -270,8 +271,15 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     );
   }
 
-  void markConnectionForDiscard(String connectionId) {
-    _connectionsToDiscard.add(connectionId);
+  void markConnectionForDiscard(
+    String connectionId, {
+    PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
+  }) {
+    final current = _connectionsToDiscard[connectionId];
+    if (current == PoolDiscardReason.poisonedPool) {
+      return;
+    }
+    _connectionsToDiscard[connectionId] = reason;
   }
 
   void recordPooledExecutionFailure({
@@ -311,7 +319,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     }
   }
 
-  Future<void> tryRecoverPoolAfterInvalidConnectionId(
+  Future<void> tryRecycleIdlePoolAfterConnectionLoss(
     String connectionString,
   ) async {
     final now = DateTime.now();
@@ -352,20 +360,18 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     final recycleResult = await _connectionPool.recycle(connectionString);
     if (recycleResult.isSuccess()) {
       _metrics.recordPoolRecycle();
-      developer.log(
-        'Pool recycled after invalid connection id',
-        name: 'database_gateway',
-        level: 800,
+      OdbcResilienceLog.operational(
+        event: 'pool_recycled',
+        connectionString: connectionString,
       );
       return;
     }
 
     _metrics.recordPoolRecycleFailure();
-    developer.log(
-      'Failed to recycle pool after invalid connection id',
-      name: 'database_gateway',
-      level: 900,
-      error: const <String, Object?>{'reason': 'pool_recycle_failed'},
+    OdbcResilienceLog.warning(
+      event: 'pool_recycle_failed',
+      connectionString: connectionString,
+      reason: 'pool_recycle_failed',
     );
   }
 
@@ -399,8 +405,11 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     }
   }
 
-  Future<void> _discardConnectionSafely(String connectionId) async {
-    final discardResult = await _connectionPool.discard(connectionId);
+  Future<void> _discardConnectionSafely(
+    String connectionId,
+    PoolDiscardReason reason,
+  ) async {
+    final discardResult = await _connectionPool.discard(connectionId, reason: reason);
     if (discardResult.isSuccess()) {
       return;
     }

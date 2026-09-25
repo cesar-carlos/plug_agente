@@ -409,13 +409,13 @@ void main() {
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.streamQueryMulti(
+          () => mockService.streamQueryMultiBatches(
             pooledConnectionId,
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSize: any(named: 'chunkSize'),
           ),
-        ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
+        ).thenAnswer((_) => const Stream<Result<QueryResultMultiBatchItem>>.empty());
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
         ).thenAnswer((_) async {
@@ -429,16 +429,16 @@ void main() {
           );
         });
         when(
-          () => mockService.streamQueryMulti(
+          () => mockService.streamQueryMultiBatches(
             directConnectionId,
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSize: any(named: 'chunkSize'),
           ),
         ).thenAnswer((_) {
-          return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
+          return Stream<Result<QueryResultMultiBatchItem>>.fromIterable(const [
             Success(
-              QueryResultMultiItem.resultSet(
+              QueryResultMultiBatchItem.resultSet(
                 QueryResult(
                   columns: ['a'],
                   rows: [
@@ -449,7 +449,7 @@ void main() {
               ),
             ),
             Success(
-              QueryResultMultiItem.resultSet(
+              QueryResultMultiBatchItem.resultSet(
                 QueryResult(
                   columns: ['b'],
                   rows: [
@@ -479,10 +479,10 @@ void main() {
         expect(response.resultSets, hasLength(2));
         expect(response.data.single['a'], 1);
         verify(
-          () => mockService.streamQueryMulti(pooledConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
+          () => mockService.streamQueryMultiBatches(pooledConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
         ).called(1);
         verify(
-          () => mockService.streamQueryMulti(directConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
+          () => mockService.streamQueryMultiBatches(directConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         expect(metrics.multiResultPoolVacuousFallbackCount, 1);

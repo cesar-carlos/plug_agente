@@ -1,6 +1,7 @@
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_connection_settings.dart';
+import 'package:plug_agente/infrastructure/config/odbc_native_pool_session_reset_config.dart';
 import 'package:plug_agente/infrastructure/config/odbc_native_pool_test_on_checkout_config.dart';
 
 const _keyPoolSize = 'odbc_pool_size';
@@ -10,6 +11,7 @@ const _keyMaxResultBufferMb = 'odbc_max_result_buffer_mb';
 const _keyStreamingChunkSizeKb = 'odbc_streaming_chunk_size_kb';
 const _keyUseNativeOdbcPool = 'odbc_use_native_pool';
 const _keyNativePoolTestOnCheckout = 'odbc_native_pool_test_on_checkout';
+const _keyNativePoolSessionResetOnCheckout = 'odbc_native_pool_session_reset_on_checkout';
 
 /// Implementacao de [IOdbcConnectionSettings] com store global de configuracoes.
 class OdbcConnectionSettings implements IOdbcConnectionSettings {
@@ -39,7 +41,8 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   int _maxResultBufferMb = ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024);
   int _streamingChunkSizeKb = ConnectionConstants.defaultStreamingChunkSizeKb;
   bool _useNativeOdbcPool = false;
-  bool _nativePoolTestOnCheckout = true;
+  bool _nativePoolTestOnCheckout = false;
+  bool? _nativePoolSessionResetOnCheckout;
 
   @override
   int get poolSize => _poolSize;
@@ -60,6 +63,9 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   bool get nativePoolTestOnCheckout => _nativePoolTestOnCheckout;
 
   @override
+  bool? get nativePoolSessionResetOnCheckout => _nativePoolSessionResetOnCheckout;
+
+  @override
   Future<void> load() async {
     // Clamp values on load so manually edited settings.json or legacy imports
     // can never drive the pool semaphore or connection options out of range.
@@ -75,7 +81,9 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
     );
     _useNativeOdbcPool = _prefs.getBool(_keyUseNativeOdbcPool) ?? false;
     _nativePoolTestOnCheckout =
-        readOdbcNativePoolTestOnCheckoutOverride() ?? _prefs.getBool(_keyNativePoolTestOnCheckout) ?? true;
+        readOdbcNativePoolTestOnCheckoutOverride() ?? _prefs.getBool(_keyNativePoolTestOnCheckout) ?? false;
+    _nativePoolSessionResetOnCheckout =
+        readOdbcNativePoolSessionResetOnCheckoutOverride() ?? _prefs.getBool(_keyNativePoolSessionResetOnCheckout);
   }
 
   Future<int> _loadPoolSize() async {
@@ -137,5 +145,15 @@ class OdbcConnectionSettings implements IOdbcConnectionSettings {
   Future<void> setNativePoolTestOnCheckout(bool value) async {
     await _prefs.setBool(_keyNativePoolTestOnCheckout, value);
     _nativePoolTestOnCheckout = value;
+  }
+
+  @override
+  Future<void> setNativePoolSessionResetOnCheckout(bool? value) async {
+    if (value == null) {
+      await _prefs.remove(_keyNativePoolSessionResetOnCheckout);
+    } else {
+      await _prefs.setBool(_keyNativePoolSessionResetOnCheckout, value);
+    }
+    _nativePoolSessionResetOnCheckout = value;
   }
 }

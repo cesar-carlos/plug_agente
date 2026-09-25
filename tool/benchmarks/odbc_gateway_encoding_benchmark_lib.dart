@@ -88,10 +88,7 @@ Future<Map<String, Object?>?> _runScenario({
     }
     final connectionId = connect.getOrThrow().id;
 
-    final executor = OdbcResultEncodingExecutor(
-      service,
-      usageProfile: scenario.profile ?? resolveOdbcUsageProfile(),
-    );
+    final executor = OdbcResultEncodingExecutor(service);
     final encoding = resolveEffectiveOdbcResultEncoding(
       databaseType: DatabaseType.sqlServer,
       usageProfile: scenario.profile,

@@ -59,7 +59,16 @@ class OdbcStreamingGateway
     OdbcStreamingQueryStreamOpener? queryStreamOpener,
     OdbcRuntimeLifecycle? runtimeLifecycle,
     OdbcStreamingSessionCache? streamingSessionCache,
+    ConnectionCircuitBreakerCache? circuitBreakers,
   }) : _inFlightRegistry = inFlightExecutionRegistry,
+       _circuitBreakers =
+           circuitBreakers ??
+           ConnectionCircuitBreakerCache(
+             factory: () => ConnectionCircuitBreaker(
+               failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
+               resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
+             ),
+           ),
        _directConnectionLimiter =
            directConnectionLimiter ??
            DirectOdbcConnectionLimiter(
@@ -83,29 +92,22 @@ class OdbcStreamingGateway
              metricsCollector: metricsCollector,
              cancelDisconnectTimeout: cancelDisconnectTimeout,
            ),
-       _connectPhase =
-           connectPhase ??
-           OdbcStreamingConnectPhase(
-             service: _service,
-             circuitBreakers: _sharedCircuitBreakerCache,
-             directConnectionLimiter:
-                 directConnectionLimiter ??
-                 DirectOdbcConnectionLimiter(
-                   maxConcurrent: ConnectionConstants.directOdbcConnectionConcurrency(
-                     _settings.poolSize,
-                   ),
-                   acquireTimeout: ConnectionConstants.defaultPoolAcquireTimeout,
-                   metricsCollector: metricsCollector,
-                 ),
-             sessionCache: streamingSessionCache,
-           ),
        _queryStreamOpener =
            queryStreamOpener ??
            OdbcStreamingQueryStreamOpener(
              service: _service,
              batchedQuerySource: batchedQuerySource,
            ),
-       _runtimeLifecycle = runtimeLifecycle ?? OdbcRuntimeLifecycle(_service);
+       _runtimeLifecycle = runtimeLifecycle ?? OdbcRuntimeLifecycle(_service) {
+    _connectPhase =
+        connectPhase ??
+        OdbcStreamingConnectPhase(
+          service: _service,
+          circuitBreakers: _circuitBreakers,
+          directConnectionLimiter: _directConnectionLimiter,
+          sessionCache: streamingSessionCache,
+        );
+  }
   final OdbcService _service;
   final IOdbcConnectionSettings _settings;
   final DirectOdbcConnectionLimiter _directConnectionLimiter;
@@ -113,17 +115,11 @@ class OdbcStreamingGateway
   final OdbcInFlightExecutionRegistry? _inFlightRegistry;
   final OdbcStreamingConnectionOptionsBuilder _connectionOptionsBuilder;
   final OdbcStreamingCancelCoordinator _cancelCoordinator;
-  final OdbcStreamingConnectPhase _connectPhase;
+  late final OdbcStreamingConnectPhase _connectPhase;
   final OdbcStreamingQueryStreamOpener _queryStreamOpener;
   final OdbcRuntimeLifecycle _runtimeLifecycle;
   final Map<String, OdbcStreamingActiveConnection> _activeStreams = <String, OdbcStreamingActiveConnection>{};
-  static final ConnectionCircuitBreakerCache _sharedCircuitBreakerCache = ConnectionCircuitBreakerCache(
-    factory: () => ConnectionCircuitBreaker(
-      failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
-      resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
-    ),
-  );
-  final ConnectionCircuitBreakerCache _circuitBreakers = _sharedCircuitBreakerCache;
+  final ConnectionCircuitBreakerCache _circuitBreakers;
   static const Duration _defaultCancelDisconnectTimeout = Duration(seconds: 8);
   final OdbcAdaptiveBufferCache _adaptiveBufferCache = OdbcAdaptiveBufferCache();
 
@@ -331,8 +327,11 @@ class OdbcStreamingGateway
     var nativeChunkCount = 0;
     var streamCompletedSuccessfully = false;
     final prefersRowMajorStreaming = connectionStringPrefersRowMajorStreaming(connectionString);
+    // Columnar fetch only pays off when the hub chunk stays columnar.
+    // Otherwise the native matrix is rebuilt into row maps.
+    final useColumnarStream = emitColumnarWire && !prefersRowMajorStreaming;
     try {
-      if (prefersRowMajorStreaming) {
+      if (!useColumnarStream) {
         final lazyStrings = connectionStringBenefitsFromLazyStrings(connectionString);
         final queryStream = _queryStreamOpener.openRowMajor(
           connectionId: connection.id,
@@ -588,9 +587,9 @@ class OdbcStreamingGateway
 
     var streamCompletedSuccessfully = false;
     try {
-      var resultSetIndex = 0;
+      var resultSetIndex = -1;
       var itemIndex = 0;
-      await for (final itemResult in _service.streamQueryMulti(
+      await for (final itemResult in _service.streamQueryMultiBatches(
         connection.id,
         query,
         fetchSize: nativeStreamingOptions.fetchSize,
@@ -614,6 +613,9 @@ class OdbcStreamingGateway
           (item) async {
             final currentItemIndex = itemIndex++;
             if (item.resultSet != null) {
+              if (!item.isContinuationBatch || resultSetIndex < 0) {
+                resultSetIndex++;
+              }
               final rows = OdbcGatewayQueryResultMapper.convertQueryResultToMaps(item.resultSet!);
               await onWireChunk(
                 StreamingWireChunk(
@@ -622,7 +624,6 @@ class OdbcStreamingGateway
                   multiResultItemIndex: currentItemIndex,
                 ),
               );
-              resultSetIndex++;
               return;
             }
 

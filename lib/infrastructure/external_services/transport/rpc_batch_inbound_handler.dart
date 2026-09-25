@@ -560,7 +560,7 @@ class RpcBatchInboundHandler {
   bool _isSelectOnlySqlExecuteBatch(List<RpcRequest> requests) {
     for (final request in requests) {
       final sql = _extractSqlFromRpcParams(request.params);
-      if (sql == null || SqlValidator.validateSelectQuery(sql).isError()) {
+      if (sql == null || !SqlValidator.isReadOnlyQuery(sql)) {
         return false;
       }
     }

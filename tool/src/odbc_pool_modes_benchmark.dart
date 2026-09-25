@@ -61,7 +61,6 @@ Future<void> main(List<String> args) async {
   final nativeNoCheckoutSettings = _BenchmarkConnectionSettings(
     poolSize: poolSize,
     useNativeOdbcPool: true,
-    nativePoolTestOnCheckout: false,
   );
   final adaptiveFlags = FeatureFlags(InMemoryAppSettingsStore());
   await adaptiveFlags.setEnableOdbcExperimentalDriverAdaptivePooling(true);
@@ -725,7 +724,6 @@ class _BenchmarkConnectionSettings implements IOdbcConnectionSettings {
   const _BenchmarkConnectionSettings({
     this.poolSize = 8,
     this.useNativeOdbcPool = false,
-    this.nativePoolTestOnCheckout = true,
   });
 
   @override
@@ -744,7 +742,10 @@ class _BenchmarkConnectionSettings implements IOdbcConnectionSettings {
   final bool useNativeOdbcPool;
 
   @override
-  final bool nativePoolTestOnCheckout;
+  bool get nativePoolTestOnCheckout => false;
+
+  @override
+  bool? get nativePoolSessionResetOnCheckout => null;
 
   @override
   Future<void> load() async {}
@@ -757,6 +758,9 @@ class _BenchmarkConnectionSettings implements IOdbcConnectionSettings {
 
   @override
   Future<void> setNativePoolTestOnCheckout(bool value) async {}
+
+  @override
+  Future<void> setNativePoolSessionResetOnCheckout(bool? value) async {}
 
   @override
   Future<void> setPoolSize(int value) async {}

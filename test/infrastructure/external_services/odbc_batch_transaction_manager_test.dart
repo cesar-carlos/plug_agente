@@ -143,6 +143,53 @@ void main() {
       expect(failure.context['reason'], OdbcContextConstants.unsupportedOdbcFeatureReason);
       expect(failure.context['retryable'], isFalse);
       expect(failure.message, contains('not supported'));
+      verify(
+        () => service.beginTransaction(
+          any(),
+          savepointDialect: any(named: 'savepointDialect'),
+          accessMode: any(named: 'accessMode'),
+          lockTimeout: any(named: 'lockTimeout'),
+        ),
+      ).called(2);
+    });
+
+    test('retries begin without options after UnsupportedFeatureError', () async {
+      var calls = 0;
+      when(
+        () => service.beginTransaction(
+          any(),
+          savepointDialect: any(named: 'savepointDialect'),
+          accessMode: any(named: 'accessMode'),
+          lockTimeout: any(named: 'lockTimeout'),
+        ),
+      ).thenAnswer((invocation) async {
+        calls++;
+        if (calls == 1) {
+          return const Failure(UnsupportedFeatureError(message: 'access mode unsupported'));
+        }
+        return const Success(77);
+      });
+
+      final result = await manager.beginIfNeeded(
+        connectionId: 'c1',
+        connectionString: 'DSN=Plain',
+        transactionEnabled: true,
+        lockTimeout: const Duration(seconds: 5),
+        accessMode: TransactionAccessMode.readOnly,
+      );
+
+      expect(result.getOrNull()?.transactionId, 77);
+      expect(metrics.transactionOptionsUnsupportedCount, 1);
+
+      final cached = await manager.beginIfNeeded(
+        connectionId: 'c1',
+        connectionString: 'DSN=Plain',
+        transactionEnabled: true,
+        lockTimeout: const Duration(seconds: 5),
+        accessMode: TransactionAccessMode.readOnly,
+      );
+      expect(cached.getOrNull()?.transactionId, 77);
+      expect(calls, 3);
     });
   });
 
@@ -176,6 +223,33 @@ void main() {
       expect(result.isError(), isTrue);
       expect((result.exceptionOrNull()! as domain.Failure).context['operation'], 'transaction_commit');
       verify(() => service.rollbackTransaction('c1', 11)).called(1);
+    });
+
+    test('marks commit timeout as unconfirmed without rolling back', () async {
+      final discarded = <String>[];
+      manager = OdbcBatchTransactionManager(
+        service: service,
+        metrics: metrics,
+        onRollbackUnconfirmed: discarded.add,
+      );
+      when(() => service.commitTransaction('c1', 12)).thenAnswer(
+        (_) => Completer<Result<void>>().future,
+      );
+      final guard = BatchTransactionGuard(12);
+
+      final result = await manager.commit(
+        connectionId: 'c1',
+        guard: guard,
+        deadline: DateTime.now().add(const Duration(milliseconds: 30)),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      expect(failure.context['reason'], OdbcContextConstants.transactionCommitUnconfirmedReason);
+      expect(failure.context['timeout'], isTrue);
+      expect(discarded, ['c1']);
+      expect(guard.isActive, isTrue);
+      verifyNever(() => service.rollbackTransaction(any(), any()));
     });
   });
 

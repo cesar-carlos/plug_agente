@@ -46,7 +46,7 @@ class OdbcConnectionOptionsBuilder {
       queryTimeout: queryTimeout,
       maxResultBufferBytes: maxBytes,
       initialResultBufferBytes: initialBytes,
-      autoReconnectOnConnectionLost: true,
+      autoReconnectOnConnectionLost: false,
       maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
       reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
     );

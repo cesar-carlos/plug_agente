@@ -75,9 +75,7 @@ class OdbcFailureMapperConnection {
           'connectionFailed': true,
           'timeout': true,
           'timeout_stage': 'connect',
-          // Not directly retryable at RetryManager level; the gateway handles
-          // its own reconnect logic for connection timeouts.
-          'retryable': false,
+          'retryable': true,
           'reason': OdbcContextConstants.connectionTimeoutReason,
           'user_message':
               'The database connection took longer than expected. '

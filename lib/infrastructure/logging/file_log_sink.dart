@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:plug_agente/core/constants/error_log_constants.dart';
+import 'package:plug_agente/domain/errors/failures.dart';
 import 'package:plug_agente/domain/logging/i_structured_log_sink.dart';
 import 'package:plug_agente/domain/utils/log_sanitizer.dart';
 
@@ -76,7 +77,7 @@ class FileLogSink implements IStructuredLogSink {
       if (error != null) {
         buffer
           ..write(' | error=')
-          ..write(error);
+          ..write(error is Failure ? '[${error.code}] ${error.message}' : error);
       }
       if (stackTrace != null) {
         buffer

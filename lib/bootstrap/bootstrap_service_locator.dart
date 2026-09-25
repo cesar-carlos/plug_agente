@@ -106,7 +106,7 @@ void _logOdbcRuntimeTuningWarnings(OdbcRuntimeTuning tuning) {
   if (tuning.asyncMaxPendingRequests < sqlQueueMaxWorkers) {
     developer.log(
       'ODBC async pending limit is lower than SQL queue worker count — '
-      'failFast may reject dispatched requests '
+        'waitForSlot may hold dispatched requests until the backpressure timeout '
       '(asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests}, '
       'sqlQueueMaxWorkers: $sqlQueueMaxWorkers)',
       name: 'bootstrap_service_locator',
@@ -121,7 +121,7 @@ void _logOdbcRuntimeTuningWarnings(OdbcRuntimeTuning tuning) {
   )) {
     developer.log(
       'SQL queue max size exceeds ODBC async pending limit — '
-      'queued requests may be rejected by failFast before workers drain '
+        'queued requests may wait on waitForSlot until the backpressure timeout '
       '(sqlQueueMaxSize: $sqlQueueMaxSize, '
       'asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests})',
       name: 'bootstrap_service_locator',
@@ -259,7 +259,7 @@ Future<void> setupDependencies({
     useAsync: true,
     asyncWorkerCount: odbcRuntimeTuning.asyncWorkerCount,
     asyncMaxPendingRequests: odbcRuntimeTuning.asyncMaxPendingRequests,
-    asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
+    asyncBackpressureMode: odbc.AsyncBackpressureMode.waitForSlot,
   );
   getIt.registerSingleton<OdbcProfileRecommendedOptions>(
     OdbcProfileRecommendedOptions(

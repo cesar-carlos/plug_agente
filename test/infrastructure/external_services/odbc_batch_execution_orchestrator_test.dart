@@ -10,6 +10,7 @@ import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
@@ -340,6 +341,47 @@ void main() {
         expect(metrics.transactionalBatchDirectPathCount, 1);
       },
     );
+
+    test('reports sql timeout when the batch deadline is already exhausted', () async {
+      const connectionString = 'Driver={ODBC Driver};Server=localhost;';
+      const ownedId = 'owned-deadline-1';
+      final config = _buildConfig(connectionString);
+      resolveActiveConfigFn = () async => Success(config);
+
+      when(() => mockService.connect(any(), options: any(named: 'options'))).thenAnswer((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        return Success(
+          Connection(
+            id: ownedId,
+            connectionString: connectionString,
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(
+        () => mockService.beginTransaction(
+          ownedId,
+          savepointDialect: any(named: 'savepointDialect'),
+          accessMode: any(named: 'accessMode'),
+          lockTimeout: any(named: 'lockTimeout'),
+        ),
+      ).thenAnswer((_) async => const Success(1));
+      when(() => mockService.disconnect(ownedId)).thenAnswer((_) async => const Success(unit));
+
+      final result = await orchestrator.execute(
+        agentId: config.agentId,
+        commands: const [SqlCommand(sql: 'SELECT 1'), SqlCommand(sql: 'SELECT 2')],
+        options: const SqlExecutionOptions(transaction: true),
+        timeout: const Duration(milliseconds: 15),
+      );
+
+      expect(result.isError(), isTrue);
+      final failure = result.exceptionOrNull()! as domain.Failure;
+      expect(failure.message, isNot('Batch execution failed unexpectedly'));
+      expect(failure.context['timeout'], isTrue);
+      expect(failure.context['timeout_stage'], 'sql');
+    });
 
     test(
       'should recover non-transactional batch command after invalid pooled connection id',

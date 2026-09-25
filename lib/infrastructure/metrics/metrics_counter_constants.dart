@@ -4,6 +4,8 @@ abstract final class MetricsCounterNames {
   static const String timeoutCancelFailureCounter = 'timeout_cancel_failure';
   static const String transactionRollbackFailureCounter = 'transaction_rollback_failure';
   static const String transactionRollbackAttemptCounter = 'transaction_rollback_attempt';
+  static const String transactionCommitUnconfirmedCounter = 'transaction_commit_unconfirmed';
+  static const String transactionOptionsUnsupportedCounter = 'transaction_options_unsupported';
   static const String idempotencyFingerprintMismatchCounter = 'idempotency_fingerprint_mismatch';
   static const String multiResultPoolVacuousFallbackCounter = 'multi_result_pool_vacuous_fallback';
   static const String multiResultDirectStillVacuousCounter = 'multi_result_direct_still_vacuous';

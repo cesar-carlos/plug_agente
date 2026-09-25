@@ -181,7 +181,10 @@ class OdbcConnectionPool
   }
 
   @override
-  Future<Result<void>> discard(String connectionId) async {
+  Future<Result<void>> discard(
+    String connectionId, {
+    PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
+  }) async {
     return _disconnectLeasedConnection(
       connectionId,
       operation: 'pool_discard',

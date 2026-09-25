@@ -96,7 +96,7 @@ final class OdbcRuntimeReloader implements IOdbcRuntimeReloader {
         useAsync: true,
         asyncWorkerCount: newTuning.asyncWorkerCount,
         asyncMaxPendingRequests: newTuning.asyncMaxPendingRequests,
-        asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
+        asyncBackpressureMode: odbc.AsyncBackpressureMode.waitForSlot,
       );
       if (_getIt.isRegistered<OdbcProfileRecommendedOptions>()) {
         _getIt.unregister<OdbcProfileRecommendedOptions>();
@@ -198,7 +198,7 @@ final class OdbcRuntimeReloader implements IOdbcRuntimeReloader {
     if (tuning.asyncMaxPendingRequests < sqlQueueMaxWorkers) {
       developer.log(
         'ODBC async pending limit is lower than SQL queue worker count — '
-        'failFast may reject dispatched requests '
+        'waitForSlot may hold dispatched requests until the backpressure timeout '
         '(asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests}, '
         'sqlQueueMaxWorkers: $sqlQueueMaxWorkers)',
         name: 'service_locator',
@@ -213,7 +213,7 @@ final class OdbcRuntimeReloader implements IOdbcRuntimeReloader {
     )) {
       developer.log(
         'SQL queue max size exceeds ODBC async pending limit — '
-        'queued requests may be rejected by failFast before workers drain '
+        'queued requests may wait on waitForSlot until the backpressure timeout '
         '(sqlQueueMaxSize: $sqlQueueMaxSize, '
         'asyncMaxPendingRequests: ${tuning.asyncMaxPendingRequests})',
         name: 'service_locator',

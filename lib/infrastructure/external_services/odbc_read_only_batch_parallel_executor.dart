@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'dart:math' as math;
 
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_diagnostics_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
@@ -55,7 +55,7 @@ final class OdbcReadOnlyBatchParallelExecutor {
   final ReadOnlyBatchInfrastructureFailureRecorder _recordInfrastructureFailure;
 
   static int safeParallelismForPoolSize(int poolSize) {
-    return math.max(1, poolSize ~/ 2);
+    return ConnectionConstants.readOnlyBatchParallelismForPoolSize(poolSize);
   }
 
   Future<Result<List<SqlCommandResult>>> execute({

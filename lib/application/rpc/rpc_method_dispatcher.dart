@@ -23,6 +23,7 @@ import 'package:plug_agente/application/use_cases/run_agent_action_via_remote_tr
 import 'package:plug_agente/application/use_cases/slice_agent_action_captured_output.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
+import 'package:plug_agente/core/logging/log_correlation.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
 import 'package:plug_agente/domain/protocol/protocol.dart';
@@ -213,7 +214,10 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
       _activeSqlRequestIds.add(sqlRequestId);
     }
     try {
-      return await handler.handle(
+      return await LogCorrelation.run(
+        rpcRequestId: request.id?.toString(),
+        rpcMethod: request.method,
+        body: () => handler.handle(
         request,
         RpcDispatchContext(
           agentId: agentId,
@@ -222,6 +226,7 @@ class RpcMethodDispatcher implements IRpcRequestDispatcher {
           limits: limits ?? _defaultLimits,
           negotiatedExtensions: negotiatedExtensions,
         ),
+      ),
       );
     } finally {
       if (sqlRequestId != null) {

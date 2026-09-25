@@ -5,8 +5,11 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_process_lifecycle.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_process_tree_controller.dart';
 import 'package:plug_agente/infrastructure/actions/jar_action_process_runner.dart';
+import 'package:result_dart/result_dart.dart';
 
 import 'agent_action_process_runner_test_support.dart';
 
@@ -160,12 +163,18 @@ void main() {
 
     test('should mark timed out and kill main process when maxRuntime exceeded', () async {
       final process = _FakeProcess.pendingExit(pid: 4321);
+      final frozenNow = DateTime.utc(2026);
       final runner = JarActionProcessRunner(
         environmentResolver: kTestActionEnvironmentResolver,
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
         adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
-        processStarter: _starterFor(process),
+        lifecycle: AgentActionProcessLifecycle(
+          stdinSetup: kTestActionProcessStdinSetup,
+          processStarter: _starterFor(process),
+          processTreeController: const _NoopProcessTreeController(),
+          now: () => frozenNow,
+        ),
       );
 
       final result = await runner.run(
@@ -178,7 +187,7 @@ void main() {
             jarPath: AgentActionPathReference(originalPath: r'C:\Apps\job.jar'),
           ),
           policies: AgentActionDefinitionPolicies(
-            timeout: AgentActionTimeoutPolicy(maxRuntime: Duration(milliseconds: 1)),
+            timeout: AgentActionTimeoutPolicy(maxRuntime: Duration(milliseconds: 20)),
           ),
         ),
         request: const AgentActionExecutionRequest(
@@ -387,4 +396,31 @@ class _FakeIOSink implements IOSink {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NoopProcessTreeController implements AgentActionProcessTreeController {
+  const _NoopProcessTreeController();
+
+  @override
+  bool get requiresAttachment => false;
+
+  @override
+  Future<Result<AgentActionProcessTreeLease>> attach(Process process) async {
+    return const Success(_NoopProcessTreeLease());
+  }
+
+  @override
+  Future<void> release(AgentActionProcessTreeLease lease) async {}
+
+  @override
+  Future<Result<void>> terminate(AgentActionProcessTreeLease lease) async {
+    return const Success(unit);
+  }
+}
+
+class _NoopProcessTreeLease implements AgentActionProcessTreeLease {
+  const _NoopProcessTreeLease();
+
+  @override
+  bool get supportsTreeTermination => false;
 }

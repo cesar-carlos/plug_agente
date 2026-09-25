@@ -406,9 +406,9 @@ void main() {
         operation: 'connect',
       );
 
-      // Connect timeout is marked non-retryable; isTransient must agree.
-      expect(timeout.context['retryable'], isFalse);
-      expect(timeout.isTransient, isFalse);
+      // Connect timeout is retryable within the coordinator budget; isTransient must agree.
+      expect(timeout.context['retryable'], isTrue);
+      expect(timeout.isTransient, isTrue);
     });
 
     test('ConnectionFailure without an explicit retryable flag remains transient', () {

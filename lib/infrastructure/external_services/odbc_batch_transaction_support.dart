@@ -17,7 +17,7 @@ final class OdbcBatchTransactionSupport {
       return TransactionAccessMode.readWrite;
     }
     for (final command in commands) {
-      if (SqlValidator.validateSelectQuery(command.sql).isError()) {
+      if (!SqlValidator.isReadOnlyQuery(command.sql)) {
         return TransactionAccessMode.readWrite;
       }
     }

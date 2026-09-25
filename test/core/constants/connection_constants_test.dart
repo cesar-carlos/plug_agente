@@ -234,11 +234,11 @@ void main() {
       );
     });
 
-    test('should reserve half of pool for read-only batch parallelism by default', () {
-      expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(7), 3);
+    test('should keep one pool slot free for read-only batch parallelism', () {
+      expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(7), 6);
       expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(1), 1);
       expect(ConnectionConstants.readOnlyBatchParallelismForPoolSize(0), 1);
-      expect(ConnectionConstants.bulkInsertParallelismForPoolSize(8), 4);
+      expect(ConnectionConstants.bulkInsertParallelismForPoolSize(8), 7);
     });
 
     test('should default benchmark-tuned ODBC pool and bulk insert settings', () {
@@ -246,7 +246,7 @@ void main() {
       expect(ConnectionConstants.defaultSqlQueueMaxSize, 16);
       expect(ConnectionConstants.bulkInsertParallelEnabled, isTrue);
       expect(ConnectionConstants.nativeWarmUpEnabled, isTrue);
-      expect(ConnectionConstants.bulkInsertParallelRowThreshold, 50000);
+      expect(ConnectionConstants.bulkInsertParallelRowThreshold, 1000);
       expect(ConnectionConstants.bulkInsertChunkRowCount, 10000);
       expect(ConnectionConstants.batchBulkInsertRouteThreshold, 50);
     });

@@ -159,6 +159,30 @@ class SqlValidator {
     return const Success(unit);
   }
 
+  /// True only for a single read query: `SELECT` or `WITH ... SELECT`, without
+  /// a top-level locking clause (`FOR UPDATE` / `FOR SHARE` / `FOR KEY SHARE` /
+  /// `FOR NO KEY UPDATE`) and without a CTE whose main statement writes.
+  static bool isReadOnlyQuery(String query) {
+    final normalized = _sqlForClauseScan(query);
+    if (normalized.isEmpty || sqlContainsTopLevelDangerousPatterns(normalized)) {
+      return false;
+    }
+
+    final upper = normalized.toUpperCase();
+    if (upper.startsWith('SELECT')) {
+      return !_containsTopLevelLockingClause(normalized);
+    }
+    if (!upper.startsWith('WITH')) {
+      return false;
+    }
+
+    final mainKeyword = _mainKeywordAfterCtes(normalized);
+    if (mainKeyword != 'select') {
+      return false;
+    }
+    return !_containsTopLevelLockingClause(normalized);
+  }
+
   static Result<SqlPaginationPlan> validatePaginationQuery(String query) {
     final selectValidation = validateSelectQuery(query);
     if (selectValidation.isError()) {
@@ -480,6 +504,158 @@ class SqlValidator {
     }
     return trimmed;
   }
+
+  static bool _containsTopLevelLockingClause(String sql) {
+    const clauses = <String>[
+      'for update',
+      'for share',
+      'for key share',
+      'for no key update',
+    ];
+    for (final clause in clauses) {
+      if (_containsTopLevelKeyword(sql, clause)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static String? _mainKeywordAfterCtes(String sql) {
+    final lower = sql.toLowerCase();
+    var index = _skipSqlWhitespace(lower, 0);
+    if (!_keywordAt(lower, index, 'with')) {
+      return null;
+    }
+    index = _skipSqlWhitespace(lower, index + 4);
+    if (_keywordAt(lower, index, 'recursive')) {
+      index = _skipSqlWhitespace(lower, index + 9);
+    }
+
+    while (index < lower.length) {
+      index = _skipSqlIdentifier(sql, index);
+      index = _skipSqlWhitespace(lower, index);
+      if (index < sql.length && sql[index] == '(') {
+        final afterColumns = _skipBalancedSqlParens(sql, index);
+        if (afterColumns < 0) {
+          return null;
+        }
+        index = _skipSqlWhitespace(lower, afterColumns);
+      }
+      if (!_keywordAt(lower, index, 'as')) {
+        return null;
+      }
+      index = _skipSqlWhitespace(lower, index + 2);
+      if (index >= sql.length || sql[index] != '(') {
+        return null;
+      }
+      final afterBody = _skipBalancedSqlParens(sql, index);
+      if (afterBody < 0) {
+        return null;
+      }
+      index = _skipSqlWhitespace(lower, afterBody);
+      if (index < sql.length && sql[index] == ',') {
+        index = _skipSqlWhitespace(lower, index + 1);
+        continue;
+      }
+      break;
+    }
+
+    index = _skipSqlWhitespace(lower, index);
+    return _readSqlKeyword(lower, index);
+  }
+
+  static bool _keywordAt(String lower, int index, String keyword) {
+    if (index < 0 || index + keyword.length > lower.length) {
+      return false;
+    }
+    if (!lower.startsWith(keyword, index)) {
+      return false;
+    }
+    return _isWordBoundary(lower, index - 1) && _isWordBoundary(lower, index + keyword.length);
+  }
+
+  static int _skipSqlWhitespace(String sql, int index) {
+    var cursor = index;
+    while (cursor < sql.length) {
+      final char = sql[cursor];
+      if (char != ' ' && char != '\t' && char != '\n' && char != '\r') {
+        break;
+      }
+      cursor++;
+    }
+    return cursor;
+  }
+
+  static int _skipSqlIdentifier(String sql, int index) {
+    if (index >= sql.length) {
+      return index;
+    }
+    final start = sql[index];
+    if (start == '[' || start == '"') {
+      final end = start == '[' ? ']' : '"';
+      final close = sql.indexOf(end, index + 1);
+      return close < 0 ? sql.length : close + 1;
+    }
+    var cursor = index;
+    while (cursor < sql.length && _wordBoundaryChar.hasMatch(sql[cursor])) {
+      cursor++;
+    }
+    return cursor;
+  }
+
+  static int _skipBalancedSqlParens(String sql, int openIndex) {
+    var depth = 0;
+    var inSingleQuote = false;
+    var inDoubleQuote = false;
+    var inBracketQuote = false;
+    for (var i = openIndex; i < sql.length; i++) {
+      final current = sql[i];
+      if (!inDoubleQuote && !inBracketQuote && current == "'") {
+        inSingleQuote = !inSingleQuote;
+        continue;
+      }
+      if (!inSingleQuote && !inBracketQuote && current == '"') {
+        inDoubleQuote = !inDoubleQuote;
+        continue;
+      }
+      if (!inSingleQuote && !inDoubleQuote && current == '[') {
+        inBracketQuote = true;
+        continue;
+      }
+      if (inBracketQuote && current == ']') {
+        inBracketQuote = false;
+        continue;
+      }
+      if (inSingleQuote || inDoubleQuote || inBracketQuote) {
+        continue;
+      }
+      if (current == '(') {
+        depth++;
+        continue;
+      }
+      if (current == ')') {
+        depth--;
+        if (depth == 0) {
+          return i + 1;
+        }
+      }
+    }
+    return -1;
+  }
+
+  static String? _readSqlKeyword(String lower, int index) {
+    if (index >= lower.length || !_isAsciiLetter(lower.codeUnitAt(index))) {
+      return null;
+    }
+    var cursor = index;
+    while (cursor < lower.length && _wordBoundaryChar.hasMatch(lower[cursor])) {
+      cursor++;
+    }
+    return lower.substring(index, cursor);
+  }
+
+  static bool _isAsciiLetter(int codeUnit) =>
+      (codeUnit >= 0x41 && codeUnit <= 0x5a) || (codeUnit >= 0x61 && codeUnit <= 0x7a);
 
   static bool _isWordBoundary(String value, int index) {
     if (index < 0 || index >= value.length) {

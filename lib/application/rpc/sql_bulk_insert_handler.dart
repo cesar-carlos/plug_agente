@@ -2,6 +2,7 @@ import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_execute_result_mapper.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_failure_reporter.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_odbc_budget_runner.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
@@ -108,6 +109,11 @@ class SqlBulkInsertHandler {
             failure,
             instance: request.id?.toString(),
             useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+          );
+          SqlRpcFailureReporter.report(
+            failure: failure,
+            rpcError: rpcError,
+            rpcMethod: 'sql.bulkInsert',
           );
           return RpcResponse.error(id: request.id, error: rpcError);
         }

@@ -17,7 +17,7 @@ odbc.ServiceLocator createAsyncOdbcServiceLocatorForSettings(
     asyncWorkerCount: tuning.asyncWorkerCount,
     asyncMaxPendingRequests: tuning.asyncMaxPendingRequests,
     // Keep E2E harnesses aligned with the production ODBC tuning contract.
-    asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
+    asyncBackpressureMode: odbc.AsyncBackpressureMode.waitForSlot,
   );
 }
 
@@ -28,7 +28,8 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
     this.maxResultBufferMb = ConnectionConstants.defaultMaxResultBufferBytes ~/ (1024 * 1024),
     this.streamingChunkSizeKb = 1024,
     this.useNativeOdbcPool = false,
-    this.nativePoolTestOnCheckout = true,
+    this.nativePoolTestOnCheckout = false,
+    this.nativePoolSessionResetOnCheckout,
   });
 
   @override
@@ -50,6 +51,9 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
   bool nativePoolTestOnCheckout;
 
   @override
+  bool? nativePoolSessionResetOnCheckout;
+
+  @override
   Future<void> load() async {}
 
   @override
@@ -69,4 +73,7 @@ class MockOdbcConnectionSettings implements IOdbcConnectionSettings {
 
   @override
   Future<void> setNativePoolTestOnCheckout(bool value) async => nativePoolTestOnCheckout = value;
+
+  @override
+  Future<void> setNativePoolSessionResetOnCheckout(bool? value) async => nativePoolSessionResetOnCheckout = value;
 }

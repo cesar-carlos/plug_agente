@@ -4,6 +4,7 @@ import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart
 import 'package:plug_agente/application/mappers/sql_command_wire_mapper.dart';
 import 'package:plug_agente/application/rpc/idempotency_fingerprint.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_failure_reporter.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/use_cases/execute_sql_batch.dart';
 import 'package:plug_agente/application/use_cases/validate_sql_batch.dart';
@@ -174,6 +175,11 @@ class SqlBatchHandler {
         instance: request.id?.toString(),
         useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
       );
+      SqlRpcFailureReporter.report(
+        failure: failure,
+        rpcError: rpcError,
+        rpcMethod: 'sql.executeBatch',
+      );
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
@@ -224,6 +230,11 @@ class SqlBatchHandler {
             failure,
             instance: request.id?.toString(),
             useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+          );
+          SqlRpcFailureReporter.report(
+            failure: failure,
+            rpcError: rpcError,
+            rpcMethod: 'sql.executeBatch',
           );
           return RpcResponse.error(id: request.id, error: rpcError);
         }

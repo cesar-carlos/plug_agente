@@ -137,6 +137,55 @@ void main() {
         );
       });
 
+      test('retries a read-only query after connection loss', () async {
+        var calls = 0;
+        final result = await coordinator.executeQueryWithRetry<int>(
+          (_) async {
+            calls++;
+            if (calls == 1) {
+              return Failure(
+                domain.QueryExecutionFailure.withContext(
+                  message: 'link lost',
+                  context: const {
+                    'connectionFailed': true,
+                    'retryable': true,
+                    'reason': OdbcContextConstants.connectionLostDuringQueryReason,
+                  },
+                ),
+              );
+            }
+            return const Success(1);
+          },
+          timeout: const Duration(seconds: 2),
+          initialDelayMs: 1,
+          retryConnectionLossForReadOnly: true,
+        );
+        expect(result.getOrNull(), 1);
+        expect(calls, 2);
+      });
+
+      test('does not retry a write after connection loss', () async {
+        var calls = 0;
+        final result = await coordinator.executeQueryWithRetry<int>(
+          (_) async {
+            calls++;
+            return Failure(
+              domain.QueryExecutionFailure.withContext(
+                message: 'link lost',
+                context: const {
+                  'connectionFailed': true,
+                  'retryable': true,
+                },
+              ),
+            );
+          },
+          timeout: const Duration(seconds: 2),
+          initialDelayMs: 1,
+        );
+        expect(result.isError(), isTrue);
+        expect(calls, 1);
+      });
+
       test('executeQueryWithRetry forwards defaults', () async {
         final result = await coordinator.executeQueryWithRetry<int>(
           (_) async => const Success(7),

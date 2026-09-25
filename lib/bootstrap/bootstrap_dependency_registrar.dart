@@ -249,6 +249,8 @@ import 'package:plug_agente/infrastructure/bootstrap/infrastructure_shutdown_por
 import 'package:plug_agente/infrastructure/bootstrap/odbc_runtime_reloader.dart';
 import 'package:plug_agente/infrastructure/cache/client_token_policy_memory_cache.dart';
 import 'package:plug_agente/infrastructure/cache/odbc_connection_string_ttl_cache.dart';
+import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
+import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
 import 'package:plug_agente/infrastructure/datasources/client_token_local_data_source.dart';
 import 'package:plug_agente/infrastructure/datasources/socket_data_source.dart';

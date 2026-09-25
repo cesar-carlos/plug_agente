@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -7,6 +5,7 @@ import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/validation/config_validator.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/entities/query_pagination.dart';
@@ -342,8 +341,9 @@ void main() {
 
         expect(result.isError(), isTrue);
         expect(result.exceptionOrNull(), isA<domain.ConnectionFailure>());
-        expect(metrics.connectTimeoutCount, 1);
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        expect(metrics.connectTimeoutCount, 3);
+        verify(() => mockService.connect(any(), options: any(named: 'options'))).called(3);
+        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(3);
         verify(() => mockConnectionPool.recycle(any())).called(1);
       },
     );
@@ -779,7 +779,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       ).called(1);
     });
 
-    test('should route opt-in result encoding through typed columnar execution', () async {
+    test('keeps QueryResult execution row-major when columnar encoding is configured', () async {
       dotenv.loadFromString(envString: 'ODBC_RESULT_ENCODING=columnarCompressed');
       const pooledConnectionId = 'pool-columnar-named';
       const connectionString = 'Driver={ODBC Driver};Server=localhost;';
@@ -810,20 +810,17 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         return const Success(pooledConnectionId);
       });
       when(
-        () => mockService.executeQueryColumnarParamValues(
+        () => mockService.executeQueryNamed(
           pooledConnectionId,
           any(),
-          params: any(named: 'params'),
+          any(),
         ),
       ).thenAnswer((_) async {
-        return Success(
-          TypedColumnarResult(
-            columns: [
-              TypedColumnInt32(
-                name: 'id',
-                values: Int32List.fromList([42]),
-                nullBitmap: Uint8List(1),
-              ),
+        return const Success(
+          QueryResult(
+            columns: ['id'],
+            rows: [
+              [42],
             ],
             rowCount: 1,
           ),
@@ -836,41 +833,18 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       final result = await gateway.executeQuery(request);
 
       expect(result.isSuccess(), isTrue);
-      final captured = verify(
-        () => mockService.executeQueryColumnarParamValues(
-          pooledConnectionId,
-          captureAny(),
-          params: captureAny(named: 'params'),
-        ),
-      ).captured;
-      expect(
-        captured[0],
-        contains('WHERE id = ? OR parent_id = ? OR label = ? OR alias = ?'),
-      );
-      final params = captured[1] as List<ParamValue>?;
-      expect(params, isNotNull);
-      expect(params!.length, 4);
-      expect(params[0], isA<ParamValueInt32>());
-      expect((params[0] as ParamValueInt32).value, 42);
-      expect(params[1], isA<ParamValueInt32>());
-      expect((params[1] as ParamValueInt32).value, 42);
-      expect(params[2], isA<ParamValueString>());
-      expect((params[2] as ParamValueString).value, 'active');
-      expect(params[3], isA<ParamValueString>());
-      expect((params[3] as ParamValueString).value, 'active');
-      verifyNever(
+      verify(
         () => mockService.executeQueryNamed(
-          any(),
-          any(),
-          any(),
+          pooledConnectionId,
+          sql,
+          parameters,
         ),
-      );
+      ).called(1);
       verifyNever(
-        () => mockService.executeQueryParamValues(
+        () => mockService.executeQueryColumnarParamValues(
           any(),
           any(),
-          any(),
-          resultEncoding: any(named: 'resultEncoding'),
+          params: any(named: 'params'),
         ),
       );
     });
@@ -1724,16 +1698,16 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         return const Success(pooledConnectionId);
       });
       when(
-        () => mockService.streamQueryMulti(
+        () => mockService.streamQueryMultiBatches(
             pooledConnectionId,
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSize: any(named: 'chunkSize'),
           ),
       ).thenAnswer((_) {
-        return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
+        return Stream<Result<QueryResultMultiBatchItem>>.fromIterable(const [
           Success(
-            QueryResultMultiItem.resultSet(
+            QueryResultMultiBatchItem.resultSet(
               QueryResult(
                 columns: ['first_value'],
                 rows: [
@@ -1743,9 +1717,9 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
               ),
             ),
           ),
-          Success(QueryResultMultiItem.rowCount(3)),
+          Success(QueryResultMultiBatchItem.rowCount(3)),
           Success(
-            QueryResultMultiItem.resultSet(
+            QueryResultMultiBatchItem.resultSet(
               QueryResult(
                 columns: ['second_value'],
                 rows: [
@@ -1775,7 +1749,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         {'name': 'first_value'},
       ]);
       verify(
-        () => mockService.streamQueryMulti(
+        () => mockService.streamQueryMultiBatches(
             pooledConnectionId,
             request.query,
             fetchSize: any(named: 'fetchSize'),
@@ -1812,13 +1786,13 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.streamQueryMulti(
+          () => mockService.streamQueryMultiBatches(
             pooledConnectionId,
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSize: any(named: 'chunkSize'),
           ),
-        ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
+        ).thenAnswer((_) => const Stream<Result<QueryResultMultiBatchItem>>.empty());
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
         ).thenAnswer((_) async {
@@ -1832,16 +1806,16 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           );
         });
         when(
-          () => mockService.streamQueryMulti(
+          () => mockService.streamQueryMultiBatches(
             directConnectionId,
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSize: any(named: 'chunkSize'),
           ),
         ).thenAnswer((_) {
-          return Stream<Result<QueryResultMultiItem>>.fromIterable(const [
+          return Stream<Result<QueryResultMultiBatchItem>>.fromIterable(const [
             Success(
-              QueryResultMultiItem.resultSet(
+              QueryResultMultiBatchItem.resultSet(
                 QueryResult(
                   columns: ['a'],
                   rows: [
@@ -1852,7 +1826,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
               ),
             ),
             Success(
-              QueryResultMultiItem.resultSet(
+              QueryResultMultiBatchItem.resultSet(
                 QueryResult(
                   columns: ['b'],
                   rows: [
@@ -1882,10 +1856,10 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         expect(response.resultSets, hasLength(2));
         expect(response.data.single['a'], 1);
         verify(
-          () => mockService.streamQueryMulti(pooledConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
+          () => mockService.streamQueryMultiBatches(pooledConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
         ).called(1);
         verify(
-          () => mockService.streamQueryMulti(directConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
+          () => mockService.streamQueryMultiBatches(directConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         expect(metrics.multiResultPoolVacuousFallbackCount, 1);
@@ -1921,13 +1895,13 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           return const Success(pooledConnectionId);
         });
         when(
-          () => mockService.streamQueryMulti(
+          () => mockService.streamQueryMultiBatches(
             pooledConnectionId,
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSize: any(named: 'chunkSize'),
           ),
-        ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
+        ).thenAnswer((_) => const Stream<Result<QueryResultMultiBatchItem>>.empty());
         when(
           () => mockService.connect(any(), options: any(named: 'options')),
         ).thenAnswer((_) async {
@@ -1941,13 +1915,13 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
           );
         });
         when(
-          () => mockService.streamQueryMulti(
+          () => mockService.streamQueryMultiBatches(
             directConnectionId,
             any(),
             fetchSize: any(named: 'fetchSize'),
             chunkSize: any(named: 'chunkSize'),
           ),
-        ).thenAnswer((_) => const Stream<Result<QueryResultMultiItem>>.empty());
+        ).thenAnswer((_) => const Stream<Result<QueryResultMultiBatchItem>>.empty());
         when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((
           _,
         ) async {
@@ -3001,13 +2975,13 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         );
 
         expect(result.isSuccess(), isTrue);
-        expect(peakExecutions, 2);
+        expect(peakExecutions, ConnectionConstants.readOnlyBatchParallelismForPoolSize(4));
         expect(metrics.readOnlyBatchParallelCount, 1);
         expect(metrics.readOnlyBatchParallelCappedCount, 1);
         final items = result.getOrNull()!;
         expect(items.map((item) => item.rows?.single['sql']), ['SELECT 1', 'SELECT 2', 'SELECT 3']);
-        verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(2);
-        verify(() => mockConnectionPool.release(any())).called(2);
+        verify(() => mockConnectionPool.acquire(connectionString, options: any(named: 'options'))).called(3);
+        verify(() => mockConnectionPool.release(any())).called(3);
       },
     );
 
@@ -3083,7 +3057,7 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         final results = await Future.wait([batchA, batchB]);
 
         expect(results.every((result) => result.isSuccess()), isTrue);
-        expect(peakExecutions, 2);
+        expect(peakExecutions, ConnectionConstants.readOnlyBatchParallelismForPoolSize(4));
         expect(metrics.readOnlyBatchParallelCount, 2);
         expect(metrics.readOnlyBatchParallelCappedCount, 2);
         expect(metrics.getSnapshot()['read_only_batch_parallel_wait_sample_count'], 8);

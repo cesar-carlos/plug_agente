@@ -46,10 +46,9 @@ class OdbcStreamingNativeOptions {
   static const int hubStreamingChunkSizeBytes =
       ConnectionConstants.defaultStreamingChunkSizeKb * 1024;
 
-  /// Materialized multi-result RPC (`streamQueryMulti` via query runner).
-  /// Keeps the odbc_fast package default (64 KiB) for non-Hub aggregation.
-  static const int materializedMultiResultChunkSizeBytes =
-      odbcFastDefaultNativeChunkSizeBytes;
+  /// Materialized multi-result RPC. Same 1 MiB seed as hub streaming so
+  /// `streamQueryMultiBatches` does not start on the 64 KiB package default.
+  static const int materializedMultiResultChunkSizeBytes = hubStreamingChunkSizeBytes;
 
   final int fetchSize;
   final int nativeChunkSizeBytes;

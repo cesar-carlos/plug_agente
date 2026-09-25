@@ -12,6 +12,7 @@ include: package:very_good_analysis/analysis_options.yaml
 # Matches VS Code dart.lineLength and `dart format` (project-wide page width).
 formatter:
   page_width: 120
+  trailing_commas: preserve
 
 linter:
   rules:
@@ -33,6 +34,7 @@ linter:
     # Allow fire-and-forget for modals and UI
     discarded_futures: false
     unawaited_futures: false
+    async_return_with_no_await: false
 
     # Allow repetition for clarity in MultiProvider
     cascade_invocations: false

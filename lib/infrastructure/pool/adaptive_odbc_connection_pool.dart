@@ -1,10 +1,9 @@
-import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:crypto/crypto.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
+import 'package:plug_agente/core/security/odbc_connection_fingerprint.dart';
 import 'package:plug_agente/domain/entities/config.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_agent_config_repository.dart';
@@ -30,6 +29,7 @@ final class AdaptiveOdbcConnectionPool
         INativeCompatibleConnectionPoolAcquire,
         IConnectionPoolDiagnostics,
         IConnectionPoolWarmUp,
+        IConnectionPoolLiveProbe,
         IAdaptivePoolFeedback {
   AdaptiveOdbcConnectionPool({
     required OdbcConnectionPool leasePool,
@@ -276,12 +276,15 @@ final class AdaptiveOdbcConnectionPool
   }
 
   @override
-  Future<Result<void>> discard(String connectionId) async {
+  Future<Result<void>> discard(
+    String connectionId, {
+    PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
+  }) async {
     final owner = _connectionOwners.remove(connectionId);
     _connectionCircuitKeys.remove(connectionId);
     _connectionAcquireStrings.remove(connectionId);
     _decrementOwnerActiveCount(owner);
-    final result = await _discardFromOwnerPool(connectionId, owner);
+    final result = await _discardFromOwnerPool(connectionId, owner, reason);
     await _maybeCompleteConfigDrain();
     return result;
   }
@@ -313,6 +316,7 @@ final class AdaptiveOdbcConnectionPool
   Future<Result<void>> _discardFromOwnerPool(
     String connectionId,
     _AdaptivePoolOwner? owner,
+    PoolDiscardReason reason,
   ) async {
     if (owner == null) {
       developer.log(
@@ -320,12 +324,19 @@ final class AdaptiveOdbcConnectionPool
         name: 'adaptive_odbc_connection_pool',
         level: 900,
       );
-      return _leasePool.isTracked(connectionId) ? _leasePool.discard(connectionId) : _nativePool.discard(connectionId);
+      return _leasePool.isTracked(connectionId)
+          ? _leasePool.discard(connectionId, reason: reason)
+          : _nativePool.discard(connectionId, reason: reason);
     }
     return switch (owner) {
-      _AdaptivePoolOwner.native => _nativePool.discard(connectionId),
-      _AdaptivePoolOwner.lease => _leasePool.discard(connectionId),
+      _AdaptivePoolOwner.native => _nativePool.discard(connectionId, reason: reason),
+      _AdaptivePoolOwner.lease => _leasePool.discard(connectionId, reason: reason),
     };
+  }
+
+  @override
+  Future<Result<void>> probeLiveConnections() {
+    return _nativePool.probeLiveConnections();
   }
 
   @override
@@ -503,7 +514,7 @@ final class AdaptiveOdbcConnectionPool
     required String connectionString,
     required _AdaptiveDriverInfo? driverInfo,
   }) {
-    return '${driverInfo?.driverType ?? 'unknown'}:${_shortStableHash(connectionString)}';
+    return '${driverInfo?.driverType ?? 'unknown'}:${OdbcConnectionFingerprint.hash(connectionString)}';
   }
 
   bool _isNativeCircuitOpen(String key) {
@@ -658,12 +669,8 @@ final class AdaptiveOdbcConnectionPool
       config.id,
       config.driverName,
       config.odbcDriverName,
-      _shortStableHash(config.connectionString),
+      OdbcConnectionFingerprint.hash(config.connectionString),
     ].join('|');
-  }
-
-  String _shortStableHash(String value) {
-    return sha256.convert(utf8.encode(value)).toString().substring(0, 16);
   }
 
   app_db.DatabaseType? _mapDriverNameToDatabaseType(String driverName) {

@@ -36,7 +36,7 @@ abstract final class SqlQueueConstants {
     final effectivePoolSize = poolSize > 0 ? poolSize : 1;
     // Must cover at least as many slots as the SQL queue dispatches concurrently.
     // If SQL_QUEUE_MAX_WORKERS is raised above the default (poolSize), the ODBC
-    // pending limit must keep up or failFast will reject dispatched requests.
+    // pending limit must keep up or waitForSlot holds requests until timeout.
     return math.max(
       effectivePoolSize * 4,
       sqlQueueMaxWorkersForPoolSize(effectivePoolSize),

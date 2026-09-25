@@ -10,11 +10,16 @@ abstract class IOdbcConnectionSettings {
   bool get useNativeOdbcPool;
   bool get nativePoolTestOnCheckout;
 
+  /// `null` leaves checkout session reset at the odbc_fast default (`true`).
+  /// Checkin reset stays unconditional either way.
+  bool? get nativePoolSessionResetOnCheckout;
+
   Future<void> setPoolSize(int value);
   Future<void> setLoginTimeoutSeconds(int value);
   Future<void> setMaxResultBufferMb(int value);
   Future<void> setStreamingChunkSizeKb(int value);
   Future<void> setUseNativeOdbcPool(bool value);
   Future<void> setNativePoolTestOnCheckout(bool value);
+  Future<void> setNativePoolSessionResetOnCheckout(bool? value);
   Future<void> load();
 }

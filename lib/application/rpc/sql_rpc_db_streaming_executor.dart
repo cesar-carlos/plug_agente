@@ -2,6 +2,7 @@ import 'package:plug_agente/application/mappers/failure_to_rpc_error_mapper.dart
 import 'package:plug_agente/application/rpc/sql_db_streaming_auto_policy.dart';
 import 'package:plug_agente/application/rpc/sql_db_streaming_try_result.dart';
 import 'package:plug_agente/application/rpc/sql_execute_result_mapper.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_failure_reporter.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_stream_terminal_emitter.dart';
@@ -343,6 +344,12 @@ class SqlRpcDbStreamingExecutor {
           instance: request.id?.toString(),
           useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
         );
+        SqlRpcFailureReporter.report(
+          failure: failure,
+          rpcError: rpcError,
+          rpcMethod: 'sql.execute',
+          sql: sql,
+        );
         return SqlDbStreamingTryResult(
           response: RpcResponse.error(id: request.id, error: rpcError),
         );
@@ -559,14 +566,18 @@ class SqlRpcDbStreamingExecutor {
           totalRows: totalRows,
           status: StreamTerminalStatus.error,
         );
-        return RpcResponse.error(
-          id: request.id,
-          error: FailureToRpcErrorMapper.map(
-            failure,
-            instance: request.id?.toString(),
-            useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
-          ),
+        final rpcError = FailureToRpcErrorMapper.map(
+          failure,
+          instance: request.id?.toString(),
+          useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
         );
+        SqlRpcFailureReporter.report(
+          failure: failure,
+          rpcError: rpcError,
+          rpcMethod: 'sql.execute',
+          sql: sql,
+        );
+        return RpcResponse.error(id: request.id, error: rpcError);
       }
 
       final startedAtIso = SqlExecuteResultMapper.executionTimestampUtcIso(queryRequest.timestamp.toUtc());

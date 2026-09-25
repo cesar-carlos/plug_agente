@@ -1,6 +1,10 @@
 /// Stable `failure.context['reason']` / metrics diagnostic strings for ODBC,
 /// connection pools, streaming, and related infrastructure paths.
 abstract final class OdbcContextConstants {
+  static const String asyncRequestNoErrorPayloadReason = 'async_request_no_error_payload';
+
+  static const String asyncRequestUnexpectedStatusReason = 'async_request_unexpected_status';
+
   static const String authenticationFailedReason = 'authentication_failed';
 
   static const String bufferTooSmallReason = 'buffer_too_small';
@@ -39,6 +43,8 @@ abstract final class OdbcContextConstants {
 
   static const String poolErrorReason = 'pool_error';
 
+  static const String prepareStatementFailedReason = 'prepare_statement_failed';
+
   static const String poolExhaustedReason = 'pool_exhausted';
 
   static const String poolNotCreatedReason = 'pool_not_created';
@@ -64,6 +70,8 @@ abstract final class OdbcContextConstants {
   static const String streamDuplicateExecutionIdReason = 'stream_duplicate_execution_id';
 
   static const String transactionFailedReason = 'transaction_failed';
+
+  static const String transactionCommitUnconfirmedReason = 'commit_unconfirmed';
 
   static const String transactionRollbackFailedReason = 'transaction_rollback_failed';
 

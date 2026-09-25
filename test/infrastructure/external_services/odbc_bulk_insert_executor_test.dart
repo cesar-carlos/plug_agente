@@ -2,6 +2,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/entities/bulk_insert_request.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
@@ -290,7 +291,16 @@ void main() {
       expect(result.getOrNull(), 1000);
       verify(() => parallelPool.ensurePoolId('DSN=sqlserver')).called(1);
       verify(
-        () => service.bulkInsertParallel(42, any(), any(), any(), any(), parallelism: 4),
+        () => service.bulkInsertParallel(
+          42,
+          any(),
+          any(),
+          any(),
+          any(),
+          parallelism: ConnectionConstants.bulkInsertParallelismForPoolSize(
+            MockOdbcConnectionSettings().poolSize,
+          ),
+        ),
       ).called(1);
       verifyNever(() => service.connect(any(), options: any(named: 'options')));
       expect(metrics.bulkInsertParallelCount, 1);

@@ -273,9 +273,9 @@ via `ConnectionAcquireOptionsMapper`:
 
 | Path | Builder method | `autoReconnect` | `queryTimeout` |
 |---|---|---|---|
-| Standard pooled query | `forQueryExecution` / `forQueryExecutionWithTimeout` | `true` | `defaultQueryTimeout` = 60 s, or caller-provided |
-| Transactional batch | `forTransactionalBatch` | `false` (intentional) | `defaultTransactionalBatchTimeout` = 60 s |
-| Streaming | `OdbcStreamingConnectionOptionsBuilder.build` | `true` | `defaultStreamingQueryTimeout` = 5 min |
+| Standard pooled query | `forQueryExecution` / `forQueryExecutionWithTimeout` | `false` | `defaultQueryTimeout` = 60 s, or caller-provided |
+| Transactional batch | `forTransactionalBatch` | `false` | `defaultTransactionalBatchTimeout` = 60 s |
+| Streaming | `OdbcStreamingConnectionOptionsBuilder.build` | `false` | `defaultStreamingQueryTimeout` = 5 min |
 
 When no ODBC profile overrides options, lease checkout and streaming
 connect set `blockFetchBatchSize` to
@@ -374,7 +374,15 @@ Shared policy:
   buffer (columnar batched has no params API);
 - chunk size is set by the caller; the gateway clamps
   `initialResultBufferBytes` and `maxResultBufferBytes`;
-- streaming connections opt into `autoReconnectOnConnectionLost` with
+- streaming connections keep `autoReconnectOnConnectionLost` off. Read-only
+  queries that lose the session are retried by `OdbcGatewayRetryCoordinator`.
+  Writes are not retried. Dead pooled sessions are discarded and an idle pool
+  is recycled at most once every 5 seconds. After five fast quarantine retries
+  the native pool keeps trying every 30 seconds. Those events, plus SQL
+  failures returned to the hub, are written to `plug_agente_errors.log` with a
+  DSN fingerprint and the RPC request id. The log never includes SQL text,
+  parameters, or the connection string.
+- streaming previously opted into `autoReconnectOnConnectionLost` with
   bounded retry because streaming queries are idempotent reads;
 - connect/lease without a profile uses `blockFetchBatchSize: 256`.
 
@@ -465,12 +473,14 @@ ODBC are:
 
 ## Decision log
 
-- **Stay on `failFast` instead of `waitForSlot`.** `SqlExecutionQueue`
-  is already the application-level admission controller.
-- **Keep `nativePoolTestOnCheckout = true` by default.** Hub-facing
-  failures are more expensive than a `SELECT 1` per checkout.
-- **Keep `autoReconnectOnConnectionLost = false` on transactional
-  batches.** A silent reconnect would corrupt the transaction state.
+- **Use `waitForSlot` for native async backpressure.** The SQL queue still
+  admits work; the native side waits for a worker instead of failing fast.
+- **Keep `nativePoolTestOnCheckout = false` by default.** A lost session is
+  discarded and the idle pool is recycled instead of probing every checkout.
+- **Keep `autoReconnectOnConnectionLost = false` on every path.** The
+  application retries only read-only statements after a dropped session.
+  A driver reconnect would re-run writes and, on a pooled handle, connect to
+  `pool://id`.
 - **Keep `runInTransaction<T>` of the package out of the agent for
   batch flow.** The batch needs deadline-aware rollback timeouts,
   partial command-result reporting and native-pool fallback that the

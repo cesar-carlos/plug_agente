@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
+import 'package:plug_agente/infrastructure/logging/odbc_resilience_log.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Gerenciador de retries com exponential backoff.
@@ -63,9 +63,12 @@ class RetryManager implements IRetryManager {
         }
 
         final jitteredDelay = _applyJitter(delayMs);
-        AppLogger.info(
-          'resilience: connect_attempt attempt=$attempts max=$maxAttempts '
-          'delay_ms=$jitteredDelay base_ms=$delayMs',
+        OdbcResilienceLog.warning(
+          event: 'retry_scheduled',
+          attempt: attempts,
+          maxAttempts: maxAttempts,
+          delayMs: jitteredDelay,
+          retryable: true,
         );
         await Future<void>.delayed(Duration(milliseconds: jitteredDelay));
         delayMs = (delayMs * backoffMultiplier).toInt();
@@ -90,9 +93,12 @@ class RetryManager implements IRetryManager {
       }
 
       final jitteredDelay = _applyJitter(delayMs);
-      AppLogger.info(
-        'resilience: connect_attempt attempt=$attempts max=$maxAttempts '
-        'delay_ms=$jitteredDelay base_ms=$delayMs',
+      OdbcResilienceLog.warning(
+        event: 'retry_scheduled',
+        attempt: attempts,
+        maxAttempts: maxAttempts,
+        delayMs: jitteredDelay,
+        retryable: true,
       );
       await Future<void>.delayed(Duration(milliseconds: jitteredDelay));
       delayMs = (delayMs * backoffMultiplier).toInt();

@@ -9,6 +9,7 @@ import 'package:plug_agente/application/rpc/sql_options_resolver.dart';
 import 'package:plug_agente/application/rpc/sql_pagination_resolver.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_client_token_gate.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_db_streaming_executor.dart';
+import 'package:plug_agente/application/rpc/sql_rpc_failure_reporter.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_handler_support.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_materialized_streaming_executor.dart';
 import 'package:plug_agente/application/rpc/sql_rpc_negotiated_capabilities.dart';
@@ -174,6 +175,12 @@ class SqlExecuteHandler {
         instance: request.id?.toString(),
         useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
       );
+      SqlRpcFailureReporter.report(
+        failure: failure,
+        rpcError: rpcError,
+        rpcMethod: 'sql.execute',
+        sql: sql,
+      );
       return RpcResponse.error(id: request.id, error: rpcError);
     }
 
@@ -281,6 +288,12 @@ class SqlExecuteHandler {
               instance: request.id?.toString(),
               useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
             );
+            SqlRpcFailureReporter.report(
+              failure: domainFailure,
+              rpcError: rpcError,
+              rpcMethod: 'sql.execute',
+              sql: sql,
+            );
             return RpcResponse.error(id: request.id, error: rpcError);
           }
         }
@@ -375,6 +388,12 @@ class SqlExecuteHandler {
                   instance: request.id?.toString(),
                   useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
                 );
+                SqlRpcFailureReporter.report(
+                  failure: domainFailure,
+                  rpcError: rpcError,
+                  rpcMethod: 'sql.execute',
+                  sql: sql,
+                );
                 return RpcResponse.error(id: request.id, error: rpcError);
               }
 
@@ -417,6 +436,12 @@ class SqlExecuteHandler {
               domainFailure,
               instance: request.id?.toString(),
               useTimeoutByStage: _featureFlags.enableSocketTimeoutByStage,
+            );
+            SqlRpcFailureReporter.report(
+              failure: domainFailure,
+              rpcError: rpcError,
+              rpcMethod: 'sql.execute',
+              sql: sql,
             );
             return RpcResponse.error(id: request.id, error: rpcError);
           },

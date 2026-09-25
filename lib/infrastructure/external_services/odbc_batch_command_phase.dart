@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
+import 'package:plug_agente/core/security/odbc_connection_fingerprint.dart';
 import 'package:plug_agente/core/utils/sql_row_truncation.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
@@ -127,41 +128,42 @@ final class OdbcBatchCommandPhase {
           sql: command.sql,
           parameters: command.params,
         );
-        final remainingTimeout = _remainingTimeout(context.deadline);
-
-        Future<QueryExecutionOutcome> executeCurrentCommand() async {
-          final currentConnectionId = connectionState.connectionId;
-          if (currentConnectionId == null) {
-            return QueryExecutionOutcome.failure(
-              StateError('batch_connection_unavailable'),
-            );
-          }
-
-          final key = OdbcQueryRunner.preparedStatementKeyFor(preparedExecution);
-          final usePrepared = repeatedPreparedKeys.contains(key);
-          return usePrepared
-              ? _queryRunner.runPreparedBatch(
-                  connectionId: currentConnectionId,
-                  request: commandRequest,
-                  preparedExecution: preparedExecution,
-                  preparedStatements: preparedStatements,
-                  statementKey: key,
-                  timeout: remainingTimeout,
-                  cancellationToken: cancellationToken,
-                )
-              : _queryRunner.runWithTimeout(
-                  connId: currentConnectionId,
-                  request: commandRequest,
-                  preparedExecution: preparedExecution,
-                  connectionString: context.connectionString,
-                  timeout: remainingTimeout,
-                  preferPreparedTimeout: options.transaction,
-                  executionMode: options.transaction ? 'batch_transaction' : 'batch',
-                  cancellationToken: cancellationToken,
-                );
-        }
 
         try {
+          final remainingTimeout = _remainingTimeout(context.deadline);
+
+          Future<QueryExecutionOutcome> executeCurrentCommand() async {
+            final currentConnectionId = connectionState.connectionId;
+            if (currentConnectionId == null) {
+              return QueryExecutionOutcome.failure(
+                StateError('batch_connection_unavailable'),
+              );
+            }
+
+            final key = OdbcQueryRunner.preparedStatementKeyFor(preparedExecution);
+            final usePrepared = repeatedPreparedKeys.contains(key);
+            return usePrepared
+                ? _queryRunner.runPreparedBatch(
+                    connectionId: currentConnectionId,
+                    request: commandRequest,
+                    preparedExecution: preparedExecution,
+                    preparedStatements: preparedStatements,
+                    statementKey: key,
+                    timeout: remainingTimeout,
+                    cancellationToken: cancellationToken,
+                  )
+                : _queryRunner.runWithTimeout(
+                    connId: currentConnectionId,
+                    request: commandRequest,
+                    preparedExecution: preparedExecution,
+                    connectionString: context.connectionString,
+                    timeout: remainingTimeout,
+                    preferPreparedTimeout: options.transaction,
+                    executionMode: options.transaction ? 'batch_transaction' : 'batch',
+                    cancellationToken: cancellationToken,
+                  );
+          }
+
           var outcome = await executeCurrentCommand();
 
           if (!outcome.isSuccess) {
@@ -215,6 +217,8 @@ final class OdbcBatchCommandPhase {
                 connectionState: connectionState,
                 preparedStatements: preparedStatements,
                 failure: failure,
+                commandSql: command.sql,
+                failedIndex: i,
                 executeCommand: executeCurrentCommand,
               );
               if (outcome.isSuccess) {
@@ -335,6 +339,8 @@ final class OdbcBatchCommandPhase {
     required BatchConnectionState connectionState,
     required Map<String, int> preparedStatements,
     required domain.Failure failure,
+    required String commandSql,
+    required int failedIndex,
     required Future<QueryExecutionOutcome> Function() executeCommand,
   }) async {
     final currentConnectionId = connectionState.connectionId;
@@ -359,9 +365,25 @@ final class OdbcBatchCommandPhase {
     );
     await _connectionManager.releaseConnectionSafely(currentConnectionId);
     connectionState.connectionId = null;
+    await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(context.connectionString);
 
-    if (_failureMapper.queryFailureIndicatesInvalidConnectionId(failure)) {
-      await _connectionManager.tryRecoverPoolAfterInvalidConnectionId(context.connectionString);
+    final commandNeverRan = _failureMapper.queryFailureIndicatesInvalidConnectionId(failure);
+    if (!commandNeverRan && !SqlValidator.isReadOnlyQuery(commandSql)) {
+      return QueryExecutionOutcome.failure(
+        domain.QueryExecutionFailure.withContext(
+          message:
+              'The database connection dropped while a write command was running. '
+              'The command may already have been applied.',
+          cause: failure,
+          context: {
+            'reason': OdbcContextConstants.connectionLostDuringQueryReason,
+            'executed_state': 'unknown',
+            'failedIndex': failedIndex,
+            'connectionFailed': true,
+            'operation': 'execute_batch_item',
+          },
+        ),
+      );
     }
 
     final reacquireResult = await _connectionManager.acquirePooledConnection(
@@ -384,7 +406,7 @@ final class OdbcBatchCommandPhase {
       name: 'database_gateway',
       level: 800,
       error: {
-        'connection_string': context.connectionString,
+        'dsn': OdbcConnectionFingerprint.of(context.connectionString),
         'failed_reason': failure.context['reason'] ?? failure.message,
       },
     );

@@ -3,7 +3,9 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
+import 'package:plug_agente/core/security/odbc_connection_fingerprint.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/logging/odbc_resilience_log.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Circuit breaker states following the classic pattern.
@@ -105,7 +107,7 @@ class ConnectionCircuitBreaker {
             name: 'circuit_breaker',
             level: 900,
             error: {
-              'connection_string': _maskConnectionString(connectionString),
+              'connection_string': OdbcConnectionFingerprint.of(connectionString),
               'elapsed_seconds': elapsed.inSeconds,
               'reset_timeout_seconds': _resetTimeout.inSeconds,
               'consecutive_failures': _consecutiveFailures,
@@ -137,7 +139,7 @@ class ConnectionCircuitBreaker {
         name: 'circuit_breaker',
         level: 800,
         error: {
-          'connection_string': _maskConnectionString(connectionString),
+          'connection_string': OdbcConnectionFingerprint.of(connectionString),
         },
       );
     }
@@ -220,7 +222,7 @@ class ConnectionCircuitBreaker {
         name: 'circuit_breaker',
         level: 800,
         error: {
-          'connection_string': _maskConnectionString(connectionString),
+          'connection_string': OdbcConnectionFingerprint.of(connectionString),
           'previous_failures': _consecutiveFailures,
         },
       );
@@ -231,12 +233,16 @@ class ConnectionCircuitBreaker {
 
     if (_state == CircuitState.halfOpen) {
       _state = CircuitState.closed;
+      OdbcResilienceLog.operational(
+        event: 'circuit_closed',
+        connectionString: connectionString,
+      );
       developer.log(
         'Circuit breaker CLOSED',
         name: 'circuit_breaker',
         level: 800,
         error: {
-          'connection_string': _maskConnectionString(connectionString),
+          'connection_string': OdbcConnectionFingerprint.of(connectionString),
         },
       );
     }
@@ -256,13 +262,21 @@ class ConnectionCircuitBreaker {
     if (_consecutiveFailures >= _failureThreshold && _state != CircuitState.open) {
       _state = CircuitState.open;
       _openedAt = DateTime.now();
+      OdbcResilienceLog.warning(
+        event: 'circuit_opened',
+        connectionString: connectionString,
+        reason: failure.context['reason']?.toString(),
+        failureCode: failure.code,
+        attempt: _consecutiveFailures,
+        maxAttempts: _failureThreshold,
+      );
 
       developer.log(
         'Circuit breaker OPENED after $_consecutiveFailures failures',
         name: 'circuit_breaker',
         level: 1000,
         error: {
-          'connection_string': _maskConnectionString(connectionString),
+          'connection_string': OdbcConnectionFingerprint.of(connectionString),
           'consecutive_failures': _consecutiveFailures,
           'threshold': _failureThreshold,
           'reset_timeout_seconds': _resetTimeout.inSeconds,
@@ -275,7 +289,7 @@ class ConnectionCircuitBreaker {
         name: 'circuit_breaker',
         level: 900,
         error: {
-          'connection_string': _maskConnectionString(connectionString),
+          'connection_string': OdbcConnectionFingerprint.of(connectionString),
           'consecutive_failures': _consecutiveFailures,
           'threshold': _failureThreshold,
         },
@@ -300,12 +314,4 @@ class ConnectionCircuitBreaker {
     );
   }
 
-  /// Masks sensitive parts of connection string for logging.
-  String _maskConnectionString(String connectionString) {
-    // Mask password if present
-    return connectionString.replaceAllMapped(
-      RegExp('PWD=([^;]+)', caseSensitive: false),
-      (match) => 'PWD=***',
-    );
-  }
 }

@@ -82,7 +82,7 @@ final class OdbcBatchRoutingPhases {
       return false;
     }
     return commands.every(
-      (command) => SqlValidator.validateSelectQuery(command.sql).isSuccess(),
+      (command) => SqlValidator.isReadOnlyQuery(command.sql),
     );
   }
 
@@ -188,12 +188,14 @@ final class OdbcBatchRoutingPhases {
       try {
         final beginResult = await _txManager.beginIfNeeded(
           connectionId: connectionState.connectionId!,
+          connectionString: context.connectionString,
           transactionEnabled: true,
           lockTimeout: _transactionSupport.transactionLockTimeout(
             options: options,
             timeout: timeout,
           ),
           accessMode: TransactionAccessMode.readWrite,
+          deadline: context.deadline,
         );
         if (beginResult.isError()) {
           final beginFailure = beginResult.exceptionOrNull()! as domain.Failure;
@@ -215,10 +217,11 @@ final class OdbcBatchRoutingPhases {
           }
         } else {
           transaction = BatchTransactionGuard(beginResult.getOrNull()!.transactionId);
+          final remainingTimeout = _remainingTimeout(context.deadline);
           final bulkResult = await _bulkInsertExecutor.executeOnConnection(
             connectionId: connectionState.connectionId!,
             request: plan.request,
-            timeout: _remainingTimeout(context.deadline) ?? timeout,
+            timeout: remainingTimeout ?? timeout,
             deadline: context.deadline,
             cancellationToken: cancellationToken,
             sourceRpcRequestId: sourceRpcRequestId,
@@ -261,6 +264,25 @@ final class OdbcBatchRoutingPhases {
 
           return Success(_syntheticBulkInsertBatchResults(commands));
         }
+      } on TimeoutException catch (error) {
+        await _rollbackActiveTransaction(
+          transaction: transaction,
+          connectionId: connectionState.connectionId,
+          deadline: context.deadline,
+        );
+        return Failure(
+          domain.QueryExecutionFailure.withContext(
+            message: 'Bulk-insert batch execution timed out',
+            cause: error,
+            context: {
+              'reason': OdbcContextConstants.transactionFailedReason,
+              'operation': 'bulk_insert_batch_timeout',
+              'transaction': true,
+              'timeout': true,
+              'timeout_stage': 'sql',
+            },
+          ),
+        );
       } on Object catch (error, stackTrace) {
         await _rollbackActiveTransaction(
           transaction: transaction,
@@ -318,7 +340,7 @@ final class OdbcBatchRoutingPhases {
 
       if (recycleAfterRelease) {
         if (!context.ownedConnection) {
-          await _connectionManager.tryRecoverPoolAfterInvalidConnectionId(
+          await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(
             context.connectionString,
           );
         }

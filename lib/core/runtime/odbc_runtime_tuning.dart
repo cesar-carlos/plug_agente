@@ -12,7 +12,7 @@ final class OdbcRuntimeTuning {
   factory OdbcRuntimeTuning.forPoolSize({
     required int poolSize,
     required int processorCount,
-    String asyncBackpressureMode = 'failFast',
+    String asyncBackpressureMode = 'waitForSlot',
   }) {
     return OdbcRuntimeTuning(
       poolSize: poolSize,

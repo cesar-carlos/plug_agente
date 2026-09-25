@@ -20,6 +20,15 @@ class ConnectionAcquireOptions {
   final Duration? reconnectBackoff;
 }
 
+/// Why a pooled connection must not be reused as-is.
+enum PoolDiscardReason {
+  /// Timeout, cancel, or an unconfirmed rollback. Checkin reset is enough.
+  suspectConnection,
+
+  /// The native pool itself may be poisoned and should be recycled.
+  poisonedPool,
+}
+
 /// Interface para pool de conexoes ODBC.
 abstract class IConnectionPool {
   /// Adquire uma conexao do pool ou cria uma nova se necessario.
@@ -38,7 +47,13 @@ abstract class IConnectionPool {
   ///
   /// Use quando timeout, cancelamento ou erro de handle deixa a conexao em
   /// estado incerto. Implementacoes devem liberar qualquer vaga local associada.
-  Future<Result<void>> discard(String connectionId);
+  /// [PoolDiscardReason.suspectConnection] returns the handle without
+  /// quarantining the pool. [PoolDiscardReason.poisonedPool] marks the DSN
+  /// for recycle.
+  Future<Result<void>> discard(
+    String connectionId, {
+    PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
+  });
 
   /// Fecha todas as conexoes do pool.
   Future<Result<void>> closeAll();
@@ -96,4 +111,10 @@ abstract class IAdaptivePoolFeedback {
 /// Optional diagnostics surface for health reporting.
 abstract class IConnectionPoolDiagnostics {
   Map<String, Object?> getHealthDiagnostics();
+}
+
+/// User-triggered live probe. Frequent health uses [IConnectionPool.healthCheckAll],
+/// which must not checkout a real connection.
+abstract class IConnectionPoolLiveProbe {
+  Future<Result<void>> probeLiveConnections();
 }

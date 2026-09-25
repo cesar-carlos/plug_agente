@@ -95,8 +95,8 @@ void main() {
   });
 
   group('OdbcReadOnlyBatchParallelExecutor', () {
-    test('safeParallelismForPoolSize uses half the pool rounded down', () {
-      expect(OdbcReadOnlyBatchParallelExecutor.safeParallelismForPoolSize(4), 2);
+    test('safeParallelismForPoolSize keeps one pool slot free', () {
+      expect(OdbcReadOnlyBatchParallelExecutor.safeParallelismForPoolSize(4), 3);
       expect(OdbcReadOnlyBatchParallelExecutor.safeParallelismForPoolSize(1), 1);
     });
 
@@ -148,8 +148,8 @@ void main() {
       );
 
       expect(result.isSuccess(), isTrue);
-      expect(acquireCount, 2);
-      expect(peakExecutions, 2);
+      expect(acquireCount, 3);
+      expect(peakExecutions, 3);
       final items = result.getOrThrow();
       expect(items.every((item) => item.ok), isTrue);
       expect(items.length, 3);

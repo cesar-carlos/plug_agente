@@ -24,7 +24,10 @@ class _FakeConnectionPool implements IConnectionPool, IConnectionPoolDiagnostics
   Future<Result<void>> closeAll() async => const Success(unit);
 
   @override
-  Future<Result<void>> discard(String connectionId) async => const Success(unit);
+  Future<Result<void>> discard(
+    String connectionId, {
+    PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
+  }) async => const Success(unit);
 
   @override
   Future<Result<int>> getActiveCount({String? connectionString}) async => const Success(0);
@@ -78,7 +81,6 @@ void main() {
       final settings = MockOdbcConnectionSettings(
         poolSize: 3,
         useNativeOdbcPool: true,
-        nativePoolTestOnCheckout: false,
       );
       final reloadOdbcRuntime = ReloadOdbcRuntimeDependencies(
         _RecordingOdbcRuntimeReloader(() async {

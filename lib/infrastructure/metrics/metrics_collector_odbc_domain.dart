@@ -6,6 +6,10 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
   int get timeoutCancelFailureCount => store.counterValue(MetricsCounterNames.timeoutCancelFailureCounter);
   int get transactionRollbackFailureCount => store.counterValue(MetricsCounterNames.transactionRollbackFailureCounter);
   int get transactionRollbackAttemptCount => store.counterValue(MetricsCounterNames.transactionRollbackAttemptCounter);
+  int get transactionCommitUnconfirmedCount =>
+      store.counterValue(MetricsCounterNames.transactionCommitUnconfirmedCounter);
+  int get transactionOptionsUnsupportedCount =>
+      store.counterValue(MetricsCounterNames.transactionOptionsUnsupportedCounter);
   int get multiResultPoolVacuousFallbackCount =>
       store.counterValue(MetricsCounterNames.multiResultPoolVacuousFallbackCounter);
   int get multiResultDirectStillVacuousCount =>
@@ -91,6 +95,12 @@ base mixin MetricsCollectorOdbcDomain on MetricsCollectorCore {
 
   void recordTransactionRollbackAttempt() =>
       _incrementEventCounter(MetricsCounterNames.transactionRollbackAttemptCounter);
+
+  void recordTransactionCommitUnconfirmed() =>
+      _incrementEventCounter(MetricsCounterNames.transactionCommitUnconfirmedCounter);
+
+  void recordTransactionOptionsUnsupported() =>
+      _incrementEventCounter(MetricsCounterNames.transactionOptionsUnsupportedCounter);
 
   void recordTransactionRollbackFailure() =>
       _incrementEventCounter(MetricsCounterNames.transactionRollbackFailureCounter);

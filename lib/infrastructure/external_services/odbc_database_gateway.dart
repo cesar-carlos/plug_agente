@@ -24,12 +24,12 @@ import 'package:plug_agente/domain/repositories/i_query_config_source.dart';
 import 'package:plug_agente/domain/repositories/i_retry_manager.dart';
 import 'package:plug_agente/domain/repositories/i_sql_in_flight_execution_abort_port.dart';
 import 'package:plug_agente/domain/repositories/i_sql_investigation_collector.dart';
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/cache/odbc_connection_string_ttl_cache.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker.dart';
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/config/database_config.dart';
 import 'package:plug_agente/infrastructure/config/odbc_driver_database_type_mapper.dart';
-import 'package:plug_agente/infrastructure/config/odbc_usage_profile_config.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_batch_execution_orchestrator.dart';
@@ -81,6 +81,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     OdbcRuntimeLifecycle? runtimeLifecycle,
     IActiveConfigQueryCache? configQueryCache,
     OdbcConnectionStringTtlCache? connectionStringCache,
+    ConnectionCircuitBreakerCache? circuitBreakers,
   }) : _inFlightRegistry = inFlightExecutionRegistry ?? OdbcInFlightExecutionRegistry(),
        _runtimeLifecycle = runtimeLifecycle ?? OdbcRuntimeLifecycle(_service),
        _configQueryCache = configQueryCache,
@@ -108,10 +109,15 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
        _readOnlyBatchParallelSemaphore = PoolSemaphore(_safeReadOnlyBatchParallelism(_settings.poolSize)),
        _nativeCompatiblePolicy = NativeCompatibleAcquirePolicy(featureFlags: featureFlags),
        _optionsResolver = OdbcConnectionOptionsResolver(_settings),
-       _resultEncodingExecutor = OdbcResultEncodingExecutor(
-         _service,
-         usageProfile: resolveOdbcUsageProfile(),
-       ),
+       _resultEncodingExecutor = OdbcResultEncodingExecutor(_service),
+       _circuitBreakers =
+           circuitBreakers ??
+           ConnectionCircuitBreakerCache(
+             factory: () => ConnectionCircuitBreaker(
+               failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
+               resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
+             ),
+           ),
        _uuid = const Uuid() {
     _txManager = OdbcBatchTransactionManager(
       service: _service,
@@ -182,6 +188,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       resolveConnectionString: _resolveCachedConnectionString,
       recordInfrastructureFailure: _investigationRecorder.recordBatchInfrastructureFailure,
       recordExecutionFailure: _investigationRecorder.recordExecutionFailure,
+      circuitBreakers: _circuitBreakers,
     );
     _nonQueryExecutionOrchestrator = OdbcNonQueryExecutionOrchestrator(
       connectionManager: _connectionManager,
@@ -229,15 +236,22 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
   final OdbcRuntimeLifecycle _runtimeLifecycle;
   final IActiveConfigQueryCache? _configQueryCache;
   final OdbcConnectionStringTtlCache _connectionStringCache;
-  final ConnectionCircuitBreakerCache _circuitBreakers = ConnectionCircuitBreakerCache(
-    factory: () => ConnectionCircuitBreaker(
-      failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
-      resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
-    ),
-  );
+  final ConnectionCircuitBreakerCache _circuitBreakers;
 
   static int _safeReadOnlyBatchParallelism(int poolSize) {
     return OdbcReadOnlyBatchParallelExecutor.safeParallelismForPoolSize(poolSize);
+  }
+
+  domain.Failure _configurationLoadFailure(Object cause, {String? configId}) {
+    return domain.ConfigurationFailure.withContext(
+      message: 'Failed to load database configuration',
+      cause: cause,
+      context: {
+        'reason': OdbcContextConstants.configurationLoadFailedReason,
+        'operation': 'resolve_config_for_query',
+        'config_id': ?configId,
+      },
+    );
   }
 
   ConnectionCircuitBreaker _getCircuitBreaker(String connectionString) {
@@ -376,19 +390,12 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
                   cancellationToken: cancellationToken,
                 ),
                 timeout: timeout,
+                retryConnectionLossForReadOnly: SqlValidator.isReadOnlyQuery(request.query),
               ),
             );
           },
           (domainFailure) => Failure(
-            domain.ConfigurationFailure.withContext(
-              message: 'Failed to load database configuration',
-              cause: domainFailure,
-              context: {
-                'reason': OdbcContextConstants.configurationLoadFailedReason,
-                'operation': 'resolve_config_for_query',
-                if (request.configId != null) 'config_id': request.configId,
-              },
-            ),
+            _configurationLoadFailure(domainFailure, configId: request.configId),
           ),
         );
       },
@@ -450,7 +457,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
               databaseOverride: database,
             );
 
-            return _retryCoordinator.executeQueryWithRetry(
+            final breaker = _getCircuitBreaker(connectionString);
+            return breaker.execute(
+              connectionString,
+              () => _retryCoordinator.executeQueryWithRetry(
               (remainingTimeout) => _nonQueryExecutionOrchestrator.execute(
                 query,
                 parameters,
@@ -460,13 +470,10 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
                 sourceRpcRequestId: sourceRpcRequestId,
               ),
               timeout: timeout,
+            ),
             );
           },
-          (domainFailure) => Failure(
-            domain.ConfigurationFailure(
-              'Failed to get config: $domainFailure',
-            ),
-          ),
+          (domainFailure) => Failure(_configurationLoadFailure(domainFailure)),
         );
       },
       Failure.new,
@@ -498,13 +505,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
               localConfig,
               databaseOverride: database,
             );
-            return _bulkInsertExecutor.executeDirect(
+            return _getCircuitBreaker(connectionString).execute(
+              connectionString,
+              () => _bulkInsertExecutor.executeDirect(
               request,
               connectionString,
               timeout: timeout,
               databaseType: localConfig.databaseType,
               cancellationToken: cancellationToken,
               sourceRpcRequestId: sourceRpcRequestId,
+            ),
             );
           },
           (domainFailure) => Failure(

@@ -78,7 +78,10 @@ class _OdbcConnectionPoolSectionState extends State<OdbcConnectionPoolSection> {
       _isLoading = false;
     });
     final pool = getIt<IConnectionPool>();
-    final healthResult = await pool.healthCheckAll();
+    final healthResult = switch (pool) {
+      final IConnectionPoolLiveProbe probe => await probe.probeLiveConnections(),
+      _ => await pool.healthCheckAll(),
+    };
     healthResult.fold(
       (_) => AppLogger.info('Connection pool health check passed'),
       (failure) => AppLogger.warning(

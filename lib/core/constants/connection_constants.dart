@@ -84,6 +84,10 @@ abstract final class ConnectionConstants {
       OdbcConnectionConstants.sqlExecuteMaterializedEstimatedBytesPerRow;
   static int leasePoolNativeHandshakeConcurrency(int poolSize) =>
       OdbcConnectionConstants.leasePoolNativeHandshakeConcurrency(poolSize);
+  static int nativePoolCheckoutConcurrency(int poolSize) =>
+      OdbcConnectionConstants.nativePoolCheckoutConcurrency(poolSize);
+  static int nativePoolReturnConcurrency(int poolSize) =>
+      OdbcConnectionConstants.nativePoolReturnConcurrency(poolSize);
   static int directOdbcConnectionConcurrency(int poolSize) =>
       OdbcConnectionConstants.directOdbcConnectionConcurrency(poolSize);
   static int directOdbcOperationClassCap(DirectOdbcOperationClass operationClass, int globalMaxConcurrent) =>

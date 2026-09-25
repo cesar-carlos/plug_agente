@@ -1,3 +1,7 @@
+// tray_manager 0.7 moved the 0.5 API to legacy.dart. The native TrayIcon
+// API is a separate rewrite; this bridge stays until that migration.
+// ignore_for_file: deprecated_member_use
+
 import 'dart:async';
 import 'dart:io';
 
@@ -6,7 +10,7 @@ import 'package:logger/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:plug_agente/core/constants/window_timings.dart';
 import 'package:plug_agente/core/services/i_tray_service.dart';
-import 'package:tray_manager/tray_manager.dart';
+import 'package:tray_manager/legacy.dart';
 
 class TrayManagerService with TrayListener implements ITrayService {
   factory TrayManagerService() => _instance;

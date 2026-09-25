@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:odbc_fast/odbc_fast.dart' show TransactionAccessMode;
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
 import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/homogeneous_insert_batch_planner.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
@@ -50,6 +52,7 @@ final class OdbcBatchExecutionOrchestrator {
     required BatchResolveConnectionString resolveConnectionString,
     required BatchInfrastructureFailureRecorder recordInfrastructureFailure,
     required BatchSqlExecutionFailureRecorder recordExecutionFailure,
+    ConnectionCircuitBreakerCache? circuitBreakers,
   }) {
     final failureMapper = OdbcBatchFailureMapper(
       connectionManager: connectionManager,
@@ -101,6 +104,10 @@ final class OdbcBatchExecutionOrchestrator {
         resolveConnectionString: resolveConnectionString,
         poolSize: poolSize,
       ),
+      circuitBreakers: circuitBreakers,
+      resolveActiveConfig: resolveActiveConfig,
+      buildDatabaseConfig: buildDatabaseConfig,
+      resolveConnectionString: resolveConnectionString,
     );
   }
 
@@ -113,6 +120,10 @@ final class OdbcBatchExecutionOrchestrator {
     required OdbcBatchConnectionPhase connectionPhase,
     required OdbcBatchCommandPhase commandPhase,
     required OdbcBatchRoutingPhases routingPhases,
+    required ConnectionCircuitBreakerCache? circuitBreakers,
+    required BatchResolveActiveConfig resolveActiveConfig,
+    required BatchBuildDatabaseConfig buildDatabaseConfig,
+    required BatchResolveConnectionString resolveConnectionString,
   }) : _connectionManager = connectionManager,
        _txManager = txManager,
        _metrics = metrics,
@@ -120,7 +131,11 @@ final class OdbcBatchExecutionOrchestrator {
        _transactionSupport = transactionSupport,
        _connectionPhase = connectionPhase,
        _commandPhase = commandPhase,
-       _routingPhases = routingPhases;
+       _routingPhases = routingPhases,
+       _circuitBreakers = circuitBreakers,
+       _resolveActiveConfig = resolveActiveConfig,
+       _buildDatabaseConfig = buildDatabaseConfig,
+       _resolveConnectionString = resolveConnectionString;
 
   final OdbcGatewayConnectionManager _connectionManager;
   final OdbcBatchTransactionManager _txManager;
@@ -130,10 +145,61 @@ final class OdbcBatchExecutionOrchestrator {
   final OdbcBatchConnectionPhase _connectionPhase;
   final OdbcBatchCommandPhase _commandPhase;
   final OdbcBatchRoutingPhases _routingPhases;
+  final ConnectionCircuitBreakerCache? _circuitBreakers;
+  final BatchResolveActiveConfig _resolveActiveConfig;
+  final BatchBuildDatabaseConfig _buildDatabaseConfig;
+  final BatchResolveConnectionString _resolveConnectionString;
 
   static const int _batchSqlInvestigationPreviewMaxChars = 2000;
 
   Future<Result<List<SqlCommandResult>>> execute({
+    required String agentId,
+    required List<SqlCommand> commands,
+    String? database,
+    SqlExecutionOptions options = const SqlExecutionOptions(),
+    Duration? timeout,
+    String? sourceRpcRequestId,
+    CancellationToken? cancellationToken,
+  }) async {
+    final breakers = _circuitBreakers;
+    if (breakers == null) {
+      return _executeUnlocked(
+        agentId: agentId,
+        commands: commands,
+        database: database,
+        options: options,
+        timeout: timeout,
+        sourceRpcRequestId: sourceRpcRequestId,
+        cancellationToken: cancellationToken,
+      );
+    }
+
+    final configResult = await _resolveActiveConfig();
+    if (configResult.isError()) {
+      return Failure(configResult.exceptionOrNull()!);
+    }
+    final config = configResult.getOrThrow();
+    final localConfig = _buildDatabaseConfig(config);
+    final connectionString = _resolveConnectionString(
+      config,
+      localConfig,
+      databaseOverride: database,
+    );
+    return breakers.getOrCreate(connectionString).execute(
+      connectionString,
+      () => _executeUnlocked(
+        agentId: agentId,
+        commands: commands,
+        database: database,
+        options: options,
+        timeout: timeout,
+        sourceRpcRequestId: sourceRpcRequestId,
+        cancellationToken: cancellationToken,
+      ),
+    );
+  }
+
+  Future<Result<List<SqlCommandResult>>> _executeUnlocked({
     required String agentId,
     required List<SqlCommand> commands,
     String? database,
@@ -196,15 +262,19 @@ final class OdbcBatchExecutionOrchestrator {
       var recycleAfterRelease = false;
       BatchTransactionGuard? transaction;
       try {
-        final batchAccessMode = _transactionSupport.inferBatchAccessMode(commands);
+        final batchAccessMode = options.transaction
+            ? _transactionSupport.inferBatchAccessMode(commands)
+            : TransactionAccessMode.readWrite;
         final beginResult = await _txManager.beginIfNeeded(
           connectionId: connectionState.connectionId!,
+          connectionString: context.connectionString,
           transactionEnabled: options.transaction,
           lockTimeout: _transactionSupport.transactionLockTimeout(
             options: options,
             timeout: effectiveTimeout,
           ),
           accessMode: batchAccessMode,
+          deadline: context.deadline,
         );
         if (beginResult.isError()) {
           final beginFailure = beginResult.exceptionOrNull()! as domain.Failure;
@@ -362,7 +432,7 @@ final class OdbcBatchExecutionOrchestrator {
 
       if (recycleAfterRelease) {
         if (!context.ownedConnection) {
-          await _connectionManager.tryRecoverPoolAfterInvalidConnectionId(
+          await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(
             context.connectionString,
           );
         }

@@ -93,7 +93,7 @@ void main() {
         expect(createdPools, 1);
         verify(
           () => mockService.poolCreate(
-            'DSN=Test;PoolTestOnCheckout=true',
+            'DSN=Test;PoolTestOnCheckout=false',
             any(),
             options: any(named: 'options'),
             connectionOptions: any(named: 'connectionOptions'),
@@ -167,7 +167,7 @@ void main() {
       final capturedOptions =
           verify(
                 () => mockService.poolCreate(
-                  'DSN=Options;PoolTestOnCheckout=true',
+                  'DSN=Options;PoolTestOnCheckout=false',
                   any(),
                   options: captureAny(named: 'options'),
                   connectionOptions: any(named: 'connectionOptions'),
@@ -232,7 +232,7 @@ void main() {
       expect(result.isError(), isTrue);
       verify(
         () => mockService.poolCreate(
-          'DSN=Bad;PoolTestOnCheckout=true',
+          'DSN=Bad;PoolTestOnCheckout=false',
           any(),
           options: any(named: 'options'),
           connectionOptions: any(named: 'connectionOptions'),
@@ -586,7 +586,7 @@ void main() {
       // odbc_fast 3.9.0: poolHealthCheck returns Failure(ConnectionError) for
       // unhealthy pools; Success(false) is no longer emitted by the runtime.
       when(
-        () => mockService.poolHealthCheck(31),
+        () => mockService.poolGetStateDetailed(31),
       ).thenAnswer(
         (_) async => const Failure(
           ConnectionError(message: 'Pool is unhealthy'),
@@ -624,7 +624,7 @@ void main() {
         ),
       );
       when(
-        () => mockService.poolHealthCheck(41),
+        () => mockService.poolGetStateDetailed(41),
       ).thenAnswer(
         (_) async => const Failure(
           ConnectionError(message: 'hc_failed'),
@@ -697,8 +697,8 @@ void main() {
       when(() => mockService.poolGetState(71)).thenAnswer(
         (_) async => const Success(PoolState(size: 8, idle: 3)),
       );
-      when(() => mockService.poolHealthCheck(71)).thenAnswer(
-        (_) async => const Success(true),
+      when(() => mockService.poolGetStateDetailed(71)).thenAnswer(
+        (_) async => const Success(<String, Object?>{'size': 8, 'idle': 3}),
       );
 
       await pool.acquire('DSN=Reconcile');
@@ -779,6 +779,101 @@ void main() {
               as ConnectionOptions;
       expect(checkoutOptions.queryTimeout, acquireOptions.queryTimeout);
       expect(checkoutOptions.maxResultBufferBytes, acquireOptions.maxResultBufferBytes);
+    });
+
+    test('suspect discard does not quarantine the pool', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(81));
+      var checkout = 0;
+      when(() => mockService.poolGetConnection(81)).thenAnswer((_) async {
+        checkout++;
+        return Success(
+          Connection(
+            id: 'keep-$checkout',
+            connectionString: 'DSN=Keep',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(() => mockService.poolReleaseConnection(any())).thenAnswer((_) async => const Success(unit));
+
+      final first = await pool.acquire('DSN=Keep');
+      final discarded = await pool.discard(first.getOrThrow());
+      final second = await pool.acquire('DSN=Keep');
+
+      expect(discarded.isSuccess(), isTrue);
+      expect(second.isSuccess(), isTrue);
+      expect(pool.getHealthDiagnostics()['native_quarantined_pool_count'], 0);
+    });
+
+    test('unknown discard schedules quarantine recovery', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(82));
+      when(() => mockService.poolGetConnection(82)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'known',
+            connectionString: 'DSN=UnknownOwner',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.poolReleaseConnection(any())).thenAnswer((_) async => const Success(unit));
+
+      when(() => mockService.poolClose(any())).thenAnswer((_) async => const Success(unit));
+
+      await pool.acquire('DSN=UnknownOwner');
+      await pool.release('known');
+      await pool.discard('missing-owner');
+
+      expect(pool.getHealthDiagnostics()['native_quarantine_recovery_scheduled'], 1);
+      await pool.closeAll();
+    });
+
+    test('getActiveCount reuses a short state snapshot', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(83));
+      when(() => mockService.poolGetConnection(83)).thenAnswer(
+        (_) async => Success(
+          Connection(
+            id: 'state-cache',
+            connectionString: 'DSN=Cache',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        ),
+      );
+      when(() => mockService.poolGetState(83)).thenAnswer(
+        (_) async => const Success(PoolState(size: 4, idle: 1)),
+      );
+
+      await pool.acquire('DSN=Cache');
+      final first = await pool.getActiveCount();
+      final second = await pool.getActiveCount();
+
+      expect(first.getOrThrow(), 3);
+      expect(second.getOrThrow(), 3);
+      verify(() => mockService.poolGetState(83)).called(1);
     });
   });
 }

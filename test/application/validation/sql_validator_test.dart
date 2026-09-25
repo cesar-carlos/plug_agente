@@ -165,6 +165,32 @@ void main() {
       });
     });
 
+    group('isReadOnlyQuery', () {
+      test('accepts a CTE whose main statement is SELECT', () {
+        expect(
+          SqlValidator.isReadOnlyQuery('WITH cte AS (SELECT 1 AS id) SELECT id FROM cte'),
+          isTrue,
+        );
+      });
+
+      test('rejects a CTE whose main statement writes', () {
+        expect(
+          SqlValidator.isReadOnlyQuery('WITH cte AS (SELECT 1 AS id) DELETE FROM users'),
+          isFalse,
+        );
+        expect(
+          SqlValidator.isReadOnlyQuery('WITH cte AS (SELECT 1 AS id) INSERT INTO users (id) SELECT id FROM cte'),
+          isFalse,
+        );
+      });
+
+      test('rejects SELECT FOR UPDATE and FOR SHARE', () {
+        expect(SqlValidator.isReadOnlyQuery('SELECT * FROM users FOR UPDATE'), isFalse);
+        expect(SqlValidator.isReadOnlyQuery('SELECT * FROM users FOR SHARE'), isFalse);
+        expect(SqlValidator.isReadOnlyQuery("SELECT * FROM users WHERE name = 'for update'"), isTrue);
+      });
+    });
+
     group('validateSqlForExecution', () {
       test('should accept UPDATE', () {
         final r = SqlValidator.validateSqlForExecution(

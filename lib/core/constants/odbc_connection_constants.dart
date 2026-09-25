@@ -19,7 +19,8 @@ abstract final class OdbcConnectionConstants {
   static const int defaultSqlExecuteMaterializedMaxRows = 10000;
   static const int defaultSqlExecuteMaterializedMaxEstimatedBytes = 32 * 1024 * 1024;
   static const int defaultSqlExecuteMaterializedEstimatedBytesPerRow = 512;
-  static const int defaultInitialResultBufferBytes = 256 * 1024;
+  /// Matches the odbc_fast server preset (`balancedServer` / `highThroughput`).
+  static const int defaultInitialResultBufferBytes = 1024 * 1024;
   static const int defaultStreamingChunkSizeKb = 1024;
 
   /// Matches `odbc_fast` native default (`ODBC_FAST_BLOCK_FETCH_BATCH`).
@@ -94,20 +95,43 @@ abstract final class OdbcConnectionConstants {
       defaultSqlExecuteMaterializedEstimatedBytesPerRow;
 
   /// Caps parallel connect/disconnect RPCs from the lease ODBC pool into
-  /// odbc_fast. Unbounded bursts can queue past the worker's reply deadline.
+  /// odbc_fast. The cap follows the async workers and half the pool so a
+  /// multi-core machine can open several leases without exceeding the worker
+  /// reply budget.
   static int leasePoolNativeHandshakeConcurrency(int poolSize) {
-    // The ODBC async worker stays more reliable when connect/disconnect
-    // handshakes are bounded to a small fan-out instead of matching the full
-    // app-level pool concurrency.
-    // Formula: min(max(2, poolSize ~/ 5), 4) — scales gently with pool size:
-    //   pool  1-9  → 2  (same as before)
-    //   pool 10-14 → 2
-    //   pool 15-19 → 3
-    //   pool 20    → 4
     if (poolSize < 1) {
       return 1;
     }
-    return math.min(math.max(2, poolSize ~/ 5), 4);
+    final workers = odbcAsyncWorkerCountForPoolSize(
+      poolSize,
+      io.Platform.numberOfProcessors,
+    );
+    final halfPool = math.max(2, poolSize ~/ 2);
+    return math.max(1, math.min(workers, halfPool));
+  }
+
+  /// Concurrent native-pool checkouts (`poolGetConnection` / `poolCreate`).
+  ///
+  /// Checkout borrows an r2d2 handle; it is not an ODBC login, so the cap
+  /// follows the async worker count instead of the lease handshake limit.
+  static int nativePoolCheckoutConcurrency(int poolSize) {
+    final effectivePoolSize = poolSize > 0 ? poolSize : 1;
+    final workers = odbcAsyncWorkerCountForPoolSize(
+      effectivePoolSize,
+      io.Platform.numberOfProcessors,
+    );
+    return math.min(effectivePoolSize, math.max(1, workers));
+  }
+
+  /// Concurrent native-pool returns (`poolReleaseConnection` / `poolClose`).
+  ///
+  /// Kept separate from checkout so a blocked `poolGetConnection` cannot stall
+  /// giving a handle back to the pool.
+  static int nativePoolReturnConcurrency(int poolSize) {
+    if (poolSize < 1) {
+      return 1;
+    }
+    return poolSize;
   }
 
   static int directOdbcConnectionConcurrency(int poolSize) {
@@ -137,7 +161,8 @@ abstract final class OdbcConnectionConstants {
   }
 
   static const int defaultBulkInsertChunkRowCount = 10000;
-  static const int defaultBulkInsertParallelRowThreshold = 50000;
+  /// Package map: parallel bulk above about 1k rows. Atomic requests stay sequential.
+  static const int defaultBulkInsertParallelRowThreshold = 1000;
   static const bool defaultBulkInsertParallelEnabled = true;
   static const bool defaultReadOnlyBatchNativePoolEnabled = false;
   static const bool defaultNativeWarmUpEnabled = true;
@@ -232,10 +257,14 @@ abstract final class OdbcConnectionConstants {
 
   /// Safe parallel fan-out for homogeneous read-only ODBC / JSON-RPC batch work.
   ///
-  /// Matches read-only ODBC batch parallelism (`poolSize ~/ 2`, minimum 1).
+  /// Uses every pooled connection except one, so the rest of the agent still
+  /// has a slot. A pool of one stays at one.
   static int readOnlyBatchParallelismForPoolSize(int poolSize) {
     final effectivePoolSize = poolSize > 0 ? poolSize : 1;
-    return math.max(1, effectivePoolSize ~/ 2);
+    if (effectivePoolSize <= 1) {
+      return 1;
+    }
+    return effectivePoolSize - 1;
   }
 
   static String directOdbcConnectionCapacityStrategy() {

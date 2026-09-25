@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_lost_session_failure.dart';
 import 'package:plug_agente/infrastructure/external_services/direct_odbc_query_executor.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
@@ -161,7 +162,7 @@ final class PooledOdbcQueryExecutor {
           _connectionManager.markConnectionForDiscard(connId);
           await _connectionManager.releaseConnectionSafely(connId);
           releasedConnectionEarly = true;
-          await _connectionManager.tryRecoverPoolAfterInvalidConnectionId(connectionString);
+          await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(connectionString);
           _metrics.recordOdbcInvalidConnectionRecycle();
           _metrics.recordDirectConnectionFallback();
           developer.log(
@@ -177,6 +178,39 @@ final class PooledOdbcQueryExecutor {
             timeout: timeout,
             cancellationToken: cancellationToken,
           );
+        }
+
+        final lostSession = OdbcFailureMapper.mapQueryError(
+          error,
+          operation: 'execute_query',
+          context: {'query_id': request.id},
+        );
+        if (OdbcLostSessionFailure.matches(lostSession)) {
+          _connectionManager.recordPooledExecutionFailure(
+            connectionString: connectionString,
+            connectionId: connId,
+            error: error,
+            stage: 'query',
+          );
+          _connectionManager.markConnectionForDiscard(connId);
+          await _connectionManager.releaseConnectionSafely(connId);
+          releasedConnectionEarly = true;
+          await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(connectionString);
+          stopwatch.stop();
+          final msg = OdbcQueryExecutionPolicies.odbcErrorMessage(error);
+          _metrics.recordFailure(
+            queryId: request.id,
+            query: request.query,
+            executionDuration: stopwatch.elapsed,
+            errorMessage: msg,
+          );
+          _investigationRecorder.recordExecutionFailure(
+            request: request,
+            preparedExecution: preparedExecution,
+            errorMessage: msg,
+            executedInDb: true,
+          );
+          return Failure(lostSession);
         }
 
         if (allowAdaptiveRetry && _optionsResolver.isBufferTooSmallError(error)) {

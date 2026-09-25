@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_worker_runtime_recovery_port.dart';
+import 'package:plug_agente/infrastructure/logging/odbc_resilience_log.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 
 /// Maximum number of recent events kept in the ring buffer exposed by
@@ -55,6 +56,7 @@ final class OdbcEventBridge {
     switch (event) {
       case ConnectionLost(:final timestamp):
         _metrics?.recordOdbcEventConnectionLost();
+        OdbcResilienceLog.warning(event: 'connection_lost', reason: 'connection_lost');
         developer.log(
           'ODBC connection lost',
           name: _logName,
@@ -73,6 +75,7 @@ final class OdbcEventBridge {
         );
       case WorkerRecovered(:final timestamp):
         _metrics?.recordOdbcEventWorkerRecovered();
+        OdbcResilienceLog.operational(event: 'worker_recovered');
         unawaited(() async {
           try {
             if (_isDisposed) {

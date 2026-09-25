@@ -89,11 +89,55 @@ void main() {
       expect(diagnostics['native_eligible'], isTrue);
       expect(metrics.odbcNativePoolFallbackCount, 0);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
       ).called(1);
       verifyNever(() => service.connect(any()));
       verify(() => service.poolReleaseConnection('native-1')).called(1);
       verify(() => configRepository.getCurrentConfigMetadata()).called(1);
+    });
+
+    test('suspect discard does not open the native circuit', () async {
+      when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
+        (_) async => Success(_sqlServerConfig()),
+      );
+      when(
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(44));
+      var checkout = 0;
+      when(() => service.poolGetConnection(44)).thenAnswer((_) async {
+        checkout++;
+        return Success(
+          Connection(
+            id: 'native-$checkout',
+            connectionString: 'DSN=Prod',
+            createdAt: DateTime.now(),
+            isActive: true,
+          ),
+        );
+      });
+      when(() => service.poolReleaseConnection(any())).thenAnswer((_) async => const Success(unit));
+
+      final pool = _buildPool(
+        service: service,
+        settings: settings,
+        flags: flags,
+        metrics: metrics,
+        configRepository: configRepository,
+        nativeCircuitBreakThreshold: 1,
+      );
+
+      final first = await pool.acquire('DSN=Prod');
+      await pool.discard(first.getOrThrow());
+      final second = await pool.acquire('DSN=Prod');
+
+      expect(second.getOrThrow(), 'native-2');
+      expect(pool.getHealthDiagnostics()['native_circuit_open'], isFalse);
+      verifyNever(() => service.connect(any(), options: any(named: 'options')));
     });
 
     test('routes eligible SQL Server driver to native pool with custom acquire options', () async {
@@ -222,7 +266,7 @@ void main() {
       expect(metrics.odbcNativeCompatibleAcquireAttemptCount, 1);
       expect(metrics.odbcNativeCompatibleAcquireSuccessCount, 0);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
       ).called(1);
       final captured =
           verify(() => service.connect('DSN=Prod', options: captureAny(named: 'options'))).captured.single
@@ -497,7 +541,7 @@ void main() {
       expect(diagnostics['native_circuit_failures'], 2);
       expect(metrics.odbcNativePoolFallbackCount, 2);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
       ).called(2);
       verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(3);
       verify(() => configRepository.getCurrentConfigMetadata()).called(1);
@@ -546,7 +590,7 @@ void main() {
       expect(diagnostics['native_warmup_enabled'], isTrue);
       expect(diagnostics['native_circuit_open'], isFalse);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
       ).called(1);
       verify(() => service.poolGetConnection(51)).called(2);
       verify(() => service.poolReleaseConnection(any())).called(2);
@@ -640,7 +684,7 @@ void main() {
       expect(diagnostics['native_circuit_open'], isFalse);
       expect(diagnostics['native_circuit_failures'], 0);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
       ).called(1);
       verify(() => service.poolGetConnection(51)).called(2);
       verify(() => service.poolReleaseConnection(any())).called(2);
@@ -755,7 +799,7 @@ void main() {
       expect(diagnostics['driver_type'], 'sybaseAnywhere');
       expect(diagnostics['native_eligible'], isFalse);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=true', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
       ).called(1);
       verify(() => service.connect('DSN=SQLAnywhere', options: any(named: 'options'))).called(1);
     });
@@ -867,7 +911,7 @@ void main() {
       when(() => service.poolGetState(41)).thenAnswer(
         (_) async => const Success(PoolState(size: 4, idle: 3)),
       );
-      when(() => service.poolHealthCheck(41)).thenAnswer(
+      when(() => service.poolGetStateDetailed(41)).thenAnswer(
         (_) async => const Failure(
           ConnectionError(message: 'native health failed'),
         ),
@@ -908,8 +952,8 @@ void main() {
       when(() => service.poolGetState(41)).thenAnswer(
         (_) async => const Success(PoolState(size: 4, idle: 1)),
       );
-      when(() => service.poolHealthCheck(41)).thenAnswer(
-        (_) async => const Success(true),
+      when(() => service.poolGetStateDetailed(41)).thenAnswer(
+        (_) async => const Success(<String, Object?>{'size': 4, 'idle': 1}),
       );
       when(
         () => service.connect(

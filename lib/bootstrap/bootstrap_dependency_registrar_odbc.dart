@@ -56,6 +56,14 @@ void _registerOdbc(
     ..registerLazySingleton<OdbcRuntimeLifecycle>(
       () => OdbcRuntimeLifecycle(getIt<odbc.OdbcService>()),
     )
+    ..registerLazySingleton<ConnectionCircuitBreakerCache>(
+      () => ConnectionCircuitBreakerCache(
+        factory: () => ConnectionCircuitBreaker(
+          failureThreshold: ConnectionConstants.circuitBreakerFailureThreshold,
+          resetTimeout: ConnectionConstants.circuitBreakerResetTimeout,
+        ),
+      ),
+    )
     ..registerLazySingleton<OdbcDatabaseGateway>(
       () => OdbcDatabaseGateway(
         getIt<ActiveConfigResolver>(),
@@ -72,6 +80,7 @@ void _registerOdbc(
         runtimeLifecycle: getIt<OdbcRuntimeLifecycle>(),
         configQueryCache: getIt<IActiveConfigQueryCache>(),
         connectionStringCache: getIt<OdbcConnectionStringTtlCache>(),
+        circuitBreakers: getIt<ConnectionCircuitBreakerCache>(),
       ),
     )
     ..registerLazySingleton<ISqlInFlightExecutionAbortPort>(
@@ -145,6 +154,7 @@ void _registerOdbc(
         inFlightExecutionRegistry: getIt<OdbcInFlightExecutionRegistry>(),
         runtimeLifecycle: getIt<OdbcRuntimeLifecycle>(),
         streamingSessionCache: getIt<OdbcStreamingSessionCache>(),
+        circuitBreakers: getIt<ConnectionCircuitBreakerCache>(),
       ),
     )
     ..registerLazySingleton<IOdbcWorkerRuntimeRecoveryPort>(

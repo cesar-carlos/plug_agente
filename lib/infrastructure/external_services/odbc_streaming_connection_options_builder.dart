@@ -45,7 +45,7 @@ final class OdbcStreamingConnectionOptionsBuilder {
       queryTimeout: queryTimeout ?? ConnectionConstants.defaultStreamingQueryTimeout,
       maxResultBufferBytes: resolvedMaxResultBufferBytes,
       initialResultBufferBytes: initialResultBufferBytes,
-      autoReconnectOnConnectionLost: true,
+      autoReconnectOnConnectionLost: false,
       maxReconnectAttempts: ConnectionConstants.defaultMaxReconnectAttempts,
       reconnectBackoff: ConnectionConstants.defaultReconnectBackoff,
     );
@@ -65,7 +65,7 @@ final class OdbcStreamingConnectionOptionsBuilder {
       initialResultBufferBytes: plugAcquireOptions.initialResultBufferBytes,
       streamChunkSizeBytes: normalizedChunkSize,
       blockFetchBatchSize: ConnectionConstants.defaultBlockFetchBatchSize,
-      autoReconnectOnConnectionLost: plugAcquireOptions.autoReconnectOnConnectionLost ?? true,
+      autoReconnectOnConnectionLost: plugAcquireOptions.autoReconnectOnConnectionLost ?? false,
       maxReconnectAttempts: plugAcquireOptions.maxReconnectAttempts,
       reconnectBackoff: plugAcquireOptions.reconnectBackoff,
       lazyStrings: lazyStrings,

@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
+import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_lost_session_failure.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
@@ -124,7 +126,7 @@ class OdbcNonQueryExecutionOrchestrator {
           _connectionManager.markConnectionForDiscard(connId);
           await _connectionManager.releaseConnectionSafely(connId);
           releasedConnectionEarly = true;
-          await _connectionManager.tryRecoverPoolAfterInvalidConnectionId(connectionString);
+          await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(connectionString);
           _metrics.recordOdbcInvalidConnectionRecycle();
           _metrics.recordDirectConnectionFallback();
           developer.log(
@@ -142,17 +144,31 @@ class OdbcNonQueryExecutionOrchestrator {
             sourceRpcRequestId: sourceRpcRequestId,
           );
         }
+
+        final lostSession = error is domain.Failure
+            ? error
+            : OdbcFailureMapper.mapQueryError(
+                error,
+                operation: 'execute_non_query',
+              );
+        if (OdbcLostSessionFailure.matches(lostSession)) {
+          _connectionManager.recordPooledExecutionFailure(
+            connectionString: connectionString,
+            connectionId: connId,
+            error: error,
+            stage: 'non_query',
+          );
+          _connectionManager.markConnectionForDiscard(connId);
+          await _connectionManager.releaseConnectionSafely(connId);
+          releasedConnectionEarly = true;
+          await _connectionManager.tryRecycleIdlePoolAfterConnectionLoss(connectionString);
+          return Failure(lostSession);
+        }
+
+        return Failure(lostSession);
       }
 
-      return await result.fold(
-        (queryResult) => Success(queryResult.rowCount),
-        (error) => Failure(
-          OdbcFailureMapper.mapQueryError(
-            error,
-            operation: 'execute_non_query',
-          ),
-        ),
-      );
+      return Success(result.getOrThrow().rowCount);
     } on TimeoutException catch (error) {
       return Failure(
         domain.QueryExecutionFailure.withContext(
@@ -239,8 +255,19 @@ class OdbcNonQueryExecutionOrchestrator {
         );
         if (stmtId.isError()) {
           final error = stmtId.exceptionOrNull();
-          final failure = error is Exception ? error : Exception('prepare_statement_failed');
-          return Failure(failure);
+          if (error is domain.Failure) {
+            return Failure(error);
+          }
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Failed to prepare the SQL statement',
+              cause: error,
+              context: {
+                'reason': OdbcContextConstants.prepareStatementFailedReason,
+                'operation': 'prepare_statement',
+              },
+            ),
+          );
         }
 
         return await _statementExecutor.executePreparedStatementWithTimeout(
