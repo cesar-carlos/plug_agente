@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
@@ -39,6 +40,22 @@ void main() {
       check(command).contains('-Verb RunAs');
       check(command).contains('${WindowsElevatedRegistryExecutor.uacCancelledExitCode}');
       check(command).contains('${WindowsElevatedRegistryExecutor.accessDeniedExitCode}');
+    });
+
+    test('should report an unanswered UAC prompt as cancelled after the timeout', () async {
+      final neverCompletes = Completer<ProcessResult>();
+      final executor = WindowsElevatedRegistryExecutor(
+        processRunner: (executable, arguments) => neverCompletes.future,
+        elevationTimeout: const Duration(milliseconds: 10),
+      );
+
+      final result = await executor.deleteRunValue(
+        scope: StartupRegistryScope.localMachine,
+        valueName: 'Plug Agente',
+      );
+
+      check(WindowsElevatedRegistryExecutor.isUacCancelled(result)).isTrue();
+      check('${result.stderr}').contains('not answered');
     });
 
     test('isUacCancelled should prefer exit code over localized text', () {

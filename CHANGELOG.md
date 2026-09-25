@@ -9,8 +9,35 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 - Installer handshake marker so an elevated setup can register HKCU auto-start
   for the interactive user on first launch (`autostart-requested`).
+- Windows Error Reporting relaunches the agent into the tray (`--autostart`)
+  after a crash or hang once it ran for 60s (`RegisterApplicationRestart`,
+  Release only; patch and reboot excluded). `setup.iss` sets
+  `RestartApplications=no` so Restart Manager never starts a second instance.
+- Startup diagnostic (Settings copy) includes stored preference, last
+  `--autostart` launch, pending installer request, boot validation outcome,
+  and raw `StartupApproved` bytes. A registry read failure is written into
+  the report instead of blocking the copy.
+- Opt-in live registry test (`RUN_LIVE_STARTUP_REGISTRY_TESTS=true`) uses a
+  temporary HKCU value and never touches the installed `Plug Agente` entry.
 - ODBC transaction-control benchmark and streaming disconnect tracker for
   timed-out native `disconnect` (handle is discarded, never returned to cache).
+- Outbound response capacity gate
+  (`reason: outbound_response_capacity_exceeded`); `agent.getHealth` exposes
+  occupancy plus agent-action process counters (no PID, path, command, or
+  secret). Benchmark suite adds opt-in `odbc_hot_paths` and
+  `comparison_identity`.
+- Adaptive `auto`-GZIP skip cache (30s TTL) and shared `TransportWorkPool`
+  (`TRANSPORT_WORKER_POOL_SIZE`, default 2, clamped 1..4). Large materialized
+  `SELECT` results promote to streaming above min(512 KiB, a quarter of
+  `max_decoded_payload_bytes`).
+- Client-token runtime restrictions (`payload.database`, agent-action
+  scopes/allowlist) are validated in Settings and rotate the opaque secret
+  when they change authorization.
+- Inbound `PayloadFrame` bounds checks run before HMAC (negative sizes, binary
+  length vs `compressedSize`, negotiated limits, gzip inflation →
+  `invalid_payload` / `compressionFailed`).
+- Installer installs Visual C++ Redistributable x64 when missing and registers
+  `plugdb://` under HKLM (removed on uninstall).
 
 ### Changed
 
@@ -25,10 +52,18 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   before rate-limit and enqueue. `cancel` / `getExecution` rate-limit by
   the execution `action_id`. Captured-output RPC/UI windows are UTF-8
   aligned and slice Drift chunks without loading the full stream.
+- Handshake `agentActions.supportedTypes` advertises only remote adapters
+  (`executable`, `script`, `jar`). Free-form `commandLine` is local-UI only
+  (Hub/scheduler/lifecycle rejected); preflight rejects newlines, over-length
+  commands, and `${secret:...}` in the command text. Local Windows runs attach
+  a Job Object; `agent.action.cancel` targets that process tree.
 - Elevated helper build uses `dart build cli` (sqlite3 3.x native hooks)
   instead of `dart compile exe`.
 - Windows login with `--autostart` stays in the tray; the unused
-  “start minimized” preference was removed from Settings.
+  “start minimized” preference was removed from Settings. Disabling auto-start
+  deletes machine-scope Run values before HKCU (declined UAC leaves the
+  toggle intact). `StartupApproved` uses the low bit (odd = disabled);
+  unclassifiable overlays count as a user choice and are not overwritten.
 - User-initiated silent install (`Instalar agora`) no longer waits on quiet
   hours or automatic failure cooldown.
 - Inno silent updates wait for the app pre-close budget (helper PID wait ≥ 70s)
@@ -42,6 +77,45 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 - Streaming/lease ODBC connections now send `blockFetchBatchSize: 256` when no
   profile overrides it. Transactional bulk uses one connection (sequential
   chunks); parallel/BCP is refused when atomicity is required.
+- ODBC session recovery: driver `autoReconnect` is off; only read-only
+  statements retry after a lost session. Dead pooled sessions are discarded
+  and an idle pool is recycled at most every 5s; after five fast quarantine
+  retries the native pool keeps trying every 30s. One circuit breaker cache
+  is shared across gateway, streaming, batch, and bulk. Failures go to
+  `plug_agente_errors.log` with request id and DSN fingerprint (never SQL,
+  parameters, or the connection string). Read-only batch and bulk parallelism
+  scale with pool size; `ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD` defaults to
+  1000 (was 50000).
+- `sql.execute` parses once into `PreparedSql` and reuses the comment-stripped
+  form for validation, classification, auth, and streaming policy; the original
+  SQL is still sent to ODBC. Default query-stage budget follows the ODBC
+  query timeout (60s, total 65s).
+- SQL cancel ownership is a credential hash for streaming, materialized,
+  batched, and queued work. Mismatch is `-32002` `unauthorized` /
+  `cancel_token_mismatch` (was `-32602`). Duplicate active `request_id` is
+  `active_sql_request_id_conflict`. Auth logs cover `agent.action.*`; only
+  `token_revoked` refreshes hub credentials.
+- Disconnect and L0 reconnect invalidate `transportSessionGeneration` before
+  re-register (capabilities, pipeline cache, inbound ACKs, prior-generation
+  work). `hub:heartbeat_ack` is accepted only for the active `trace_id` and
+  epoch. Large HMAC sign/verify runs in an isolate; protocol health adds
+  `hmac_sign_isolate_operations` / `hmac_verify_isolate_operations`.
+- Streaming disconnect cleanup uses a bounded, deduplicated queue; when
+  saturated, new cleanup is refused with a retryable failure. Cached streaming
+  sessions keep their direct-limiter reservation.
+- Tray preferences apply at runtime before persisting (rollback on save
+  failure); Settings gates toggles on `ITrayService.isReady`. A tray init
+  failure shows the window for that session and keeps stored preferences.
+  Client-token policy cache uses single-flight resolution; revoke/rotate drops
+  pending lookups.
+- Inno wizard: Brazilian Portuguese first, branded images, `lzma2/ultra64`,
+  `Se7e Sistemas` publisher info. Release signing passes `SignTool` to ISCC
+  (`SignedUninstaller=yes`); `CloseApplications=force` for a running
+  `plug_agente.exe`.
+- CI: Flutter workflow split into `analyze`, `test`, `agent-actions-gate`,
+  `verify-code-generation`, and `iss-syntax`; `workflow-sanity` validates CI
+  configuration; Dependabot for GitHub Actions; appcast signing tests run in
+  CI.
 
 ### Fixed
 
@@ -81,9 +155,16 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   value; `cancel` / `getExecution` audit rows include `action_id` and skip
   hydrating captured output during authorization prefetch; remote-audit
   append logs no longer include `idempotencyKey`.
-- Windows auto-start: rollback failed Run/StartupApproved writes, heal HKCU
-  from the installer marker, honor Task Manager disable without self-heal,
-  and keep debug/`flutter run` executables out of the Run key.
+- Windows auto-start: failed Run/StartupApproved writes roll back; the
+  installer marker heals HKCU; Task Manager disable is honored without
+  self-heal; debug/`flutter run` paths stay out of the Run key. A
+  `--autostart` bootstrap failure reveals the hidden window instead of
+  holding the single-instance mutex. Auto-start errors (including a locked
+  marker) no longer abort boot. Unanswered UAC times out after 2 minutes.
+  An explicit Settings toggle clears a pending installer request. Machine
+  delete elevates directly (no localized `reg.exe` parsing). Uninstall
+  removes HKLM Run (64/32-bit), `StartupApproved`, and Run values of
+  signed-in `HKEY_USERS` profiles.
 - Silent update: cancelled UAC leaves the download Ready (localized retry
   banner) instead of treating apply as success; local helper/IO failures map
   to `ConfigurationFailure` rather than generic `ServerFailure`; HTTPS
@@ -93,11 +174,22 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   disconnects evicted sessions; cancel on the last chunk does not reuse a
   dirty session; parallel/BCP failures are `Failure` (possible partial
   writes called out). SQL Anywhere / SQL Server streaming still does not
-  reuse sessions (`odbc_fast` 4.5.1 does not document that as safe).
+  reuse sessions (`odbc_fast` 4.5.1 does not document that as safe). One RPC
+  can own several handles (parallel read-only batch / bulk); cancel aborts
+  all of them and quarantines that DSN until recycle recovers.
 - Empty DB streams no longer leak streaming slots; `LazyString` ODBC cells
   are materialized before `rpc:response` encoding.
-- Hub reconnect ownership, offline retry budgets, Socket.IO/RPC signing,
-  cancel, and idempotency hardening after 1.8.6.
+- SQL documentation comments (`--`, `/* */`) no longer fail validation; they
+  are stripped before prefix and dangerous-pattern checks. Client tokens with
+  global table/view scope ignore per-resource deny rules, matching the UI.
+- GZIP receive decompresses incrementally under `maxOutputBytes`; excess
+  expansion, size mismatch, or invalid gzip returns `CompressionFailure`
+  without tearing down the socket.
+- `agent.getHealth` and ODBC recent-event snapshots expose only stable codes,
+  command class, and duration (never SQL, parameters, connection strings,
+  native ids, or raw driver messages).
+- Tray icon activation reacts to mouse-up only, avoiding duplicate window
+  restores.
 
 ## 1.8.6 - 2026-07-07
 

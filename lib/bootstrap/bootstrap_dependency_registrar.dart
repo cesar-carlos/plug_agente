@@ -81,6 +81,7 @@ import 'package:plug_agente/application/services/startup_configuration_session_s
 import 'package:plug_agente/application/use_cases/apply_agent_action_on_app_exit_policies.dart';
 import 'package:plug_agente/application/use_cases/authorize_sql_operation.dart';
 import 'package:plug_agente/application/use_cases/backfill_agent_action_execution_correlation.dart';
+import 'package:plug_agente/application/use_cases/build_startup_diagnostic_report.dart';
 import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';

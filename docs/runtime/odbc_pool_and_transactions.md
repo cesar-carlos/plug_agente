@@ -1,7 +1,7 @@
 # ODBC Pool, Transactions and Runtime Tuning
 
 This document is the source of truth for how `plug_agente` uses
-[`odbc_fast`](https://pub.dev/packages/odbc_fast) **4.5.1** at runtime. It
+[`odbc_fast`](https://pub.dev/packages/odbc_fast) **4.6.0** at runtime. It
 covers pool sizing and lifecycle, transaction control, async backpressure,
 lock-safety, streaming session reuse, bulk insert atomicity, and
 observability hooks. Defaults, decisions and trade-offs are documented
@@ -10,7 +10,9 @@ releases.
 
 Cross-references:
 
-- `lib/core/di/service_locator.dart` — boot/reload/shutdown wiring.
+- `lib/bootstrap/bootstrap_service_locator.dart` — boot wiring;
+  `lib/core/di/odbc_runtime_helpers.dart` — reload;
+  `lib/bootstrap/bootstrap_app_shutdown.dart` — shutdown.
 - `lib/core/constants/odbc_connection_constants.dart` — numeric defaults
   (re-exported via `connection_constants.dart`).
 - `lib/infrastructure/pool/odbc_native_connection_pool.dart` — native
@@ -33,14 +35,20 @@ Cross-references:
 The agent always boots the async backend.
 
 ```dart
-_odbcLocator.initialize(
+odbcWorkerLocator.initialize(
+  profile: odbcUsageProfile,
   useAsync: true,
   asyncWorkerCount: odbcRuntimeTuning.asyncWorkerCount,
   asyncMaxPendingRequests: odbcRuntimeTuning.asyncMaxPendingRequests,
-  asyncBackpressureMode: odbc.AsyncBackpressureMode.failFast,
+  asyncBackpressureMode: odbc.AsyncBackpressureMode.waitForSlot,
 );
 ```
 
+- `profile` — `ODBC_USAGE_PROFILE` (`balancedServer` default,
+  `highThroughput`). `ODBC_PERFORMANCE_PRESET=aggressive` fills unset
+  profile/encoding/streaming env flags; explicit env values still win.
+  Profile connection/pool recommendations only fill fields the agent does
+  not set (`OdbcRecommendedOptionsMerger`).
 - `useAsync: true` — non-blocking calls through the worker isolate. The
   agent is a long-lived desktop process and the UI/Hub paths must not
   block on ODBC drivers.
@@ -52,11 +60,11 @@ _odbcLocator.initialize(
 - `asyncMaxPendingRequests` — `poolSize * 4` (or aligned to the SQL
   queue worker count, whichever is larger) so the async pool never
   bottlenecks behind the application-level queue.
-- `asyncBackpressureMode: failFast` — **intentional**. The application
-  already owns admission control through `SqlExecutionQueue`
-  (fairness, timeouts, observability). The ODBC async pool rejects
-  overflow immediately so the queue stays the single source of truth
-  for backpressure decisions. `waitForSlot` is not used.
+- `asyncBackpressureMode: waitForSlot` — `SqlExecutionQueue` still owns
+  admission (fairness, queue-wait timeout, observability); once a request
+  is admitted, the native side waits for a worker slot instead of failing
+  fast. The pending cap tracks the SQL queue worker count so admitted work
+  does not sit on the backpressure timeout.
 
 The `OdbcRuntimeTuning` class is recomputed on every reload
 (`reloadOdbcRuntimeDependencies`) so changes to `IOdbcConnectionSettings`
@@ -83,28 +91,25 @@ PoolOptions get _poolOptions => const PoolOptions(
   outside.
 - **`connectionTimeout = 30 s`** — also used as `defaultPoolAcquireTimeout`.
 
-Pool size is `ConnectionConstants.poolSize` (default `8`, env
-`ODBC_POOL_SIZE`). The number of pools created at once is capped at
-`ConnectionConstants.maxConnectionPools` to prevent runaway allocations
+Pool size is `IOdbcConnectionSettings.poolSize`, clamped to 1–20. A value
+persisted from the app settings wins; without it the agent uses
+`ConnectionConstants.poolSize` (default `8`, env `ODBC_POOL_SIZE`). The
+number of pools created at once is capped at
+`ConnectionConstants.maxConnectionPools` (64) to prevent runaway allocations
 when many connection strings rotate through the agent.
 
 ### Checkout validation
 
-`PoolTestOnCheckout` is **on by default** (`settings.nativePoolTestOnCheckout
-= true`). Each checkout pays a `SELECT 1` round-trip in exchange for never
-handing out a half-dead connection. The default favors correctness over
-raw throughput because:
+`PoolTestOnCheckout` is **off by default** (`settings.nativePoolTestOnCheckout
+= false`). A checkout does not pay a probe round-trip; a session that turns
+out to be dead is discarded and the idle pool recycled instead (see
+"Connection loss and recovery").
 
-- the agent already serializes SQL behind `SqlExecutionQueue`, so the
-  micro-latency rarely shows up in client-perceived response time;
-- a stale connection produces failures that bubble all the way to the
-  Hub and ultimately to user-facing error messages.
-
-The default can be overridden either per connection string
-(`...;PoolTestOnCheckout=false;`) or globally via the
-`ODBC_POOL_TEST_ON_CHECKOUT` environment variable, following the package's
-contract. Override only after measuring that checkout validation is a
-real bottleneck in production.
+Enable it globally with `ODBC_NATIVE_POOL_TEST_ON_CHECKOUT=true` (or the
+persisted setting), or per connection string with `...;PoolTestOnCheckout=true;`
+— an explicit value in the connection string is never overridden.
+`ODBC_NATIVE_POOL_SESSION_RESET_ON_CHECKOUT` overrides the engine default
+(`true`) for checkout session reset; checkin reset stays unconditional.
 
 ### Recycle, warmup and orphan handling
 
@@ -115,7 +120,7 @@ real bottleneck in production.
   freshly-created pool is closed immediately to avoid a leak and the
   caller receives a retryable failure.
 - `IConnectionPoolWarmUp.warmUp(connectionString, warmUpCount)` is
-  invoked from `AppInitializer._warmUpConnectionPool()` so the first
+  invoked from `DeferredBootPhaseRunner._warmUpConnectionPool()` so the first
   Hub-driven query does not pay the full handshake cost.
 - When adaptive pooling is active, eligible drivers (SQL Server,
   PostgreSQL) warm the native pool by default
@@ -131,19 +136,34 @@ caller:
   package rolls back leftover local work before returning the slot).
 - `discard(connectionId)` → also calls `poolReleaseConnection`. Direct
   `disconnect()` for pool-owned connections returns
-  `ValidationError` since `odbc_fast 3.9.0` (still true in 4.5.1) —
+  `ValidationError` since `odbc_fast 3.9.0` (still true in 4.6.0) —
   pool connections must always go back through the pool API.
 
-Discard is deliberately stronger than release. Before returning the logical
-checkout, the agent quarantines its native pool. New native checkouts fail with
-a retryable `native_pool_quarantined` reason, so the adaptive pool can use its
-safe lease/direct fallback instead of reusing a connection that may still have
-driver state from an aborted command. After the final checkout drains, the
-agent closes and recreates the native pool. Recovery is single-scheduled per
-connection string, uses exponential backoff from 250 ms up to 30 s, and stops
-after five unsuccessful attempts in that quarantine cycle. A failed release is
-treated the same way; a successful `poolReleaseConnection` by itself never
-proves that a discarded native connection was physically reset.
+`PoolDiscardReason.suspectConnection` (default: timeout, cancel, unconfirmed
+rollback) relies on the checkin reset. The native pool is **quarantined**
+when discard uses `PoolDiscardReason.poisonedPool`, when the connection id is
+unknown (every native pool is quarantined), or when checkin itself fails.
+While quarantined, new native checkouts fail with a retryable
+`native_pool_quarantined` reason, so the adaptive pool uses its safe
+lease/direct fallback. After the final checkout drains, the agent closes and
+recreates the native pool. Recovery is single-scheduled per connection string:
+five fast attempts with exponential backoff from 250 ms, then one attempt
+every 30 s until it succeeds (`native_quarantine_slow_recovery` is logged once
+and counted in pool diagnostics).
+
+### Connection loss and recovery
+
+- `autoReconnectOnConnectionLost` is off on pooled, batch and streaming
+  connections (see "Connection options per call path").
+- `OdbcGatewayRetryCoordinator` retries a statement after a lost session
+  only when it is read-only (`SqlValidator.isReadOnlyQuery`). Writes are
+  not retried.
+- The dead pooled session is discarded. The gateway then recycles the idle
+  pool for that DSN only when no other lease is active, and at most once
+  every 5 seconds (`tryRecycleIdlePoolAfterConnectionLoss`).
+- Recovery events and SQL failures returned to the hub are written to
+  `plug_agente_errors.log` with a DSN fingerprint and the RPC request id.
+  The log never includes SQL text, parameters, or the connection string.
 
 ## Transaction control
 
@@ -374,25 +394,18 @@ Shared policy:
   buffer (columnar batched has no params API);
 - chunk size is set by the caller; the gateway clamps
   `initialResultBufferBytes` and `maxResultBufferBytes`;
-- streaming connections keep `autoReconnectOnConnectionLost` off. Read-only
-  queries that lose the session are retried by `OdbcGatewayRetryCoordinator`.
-  Writes are not retried. Dead pooled sessions are discarded and an idle pool
-  is recycled at most once every 5 seconds. After five fast quarantine retries
-  the native pool keeps trying every 30 seconds. Those events, plus SQL
-  failures returned to the hub, are written to `plug_agente_errors.log` with a
-  DSN fingerprint and the RPC request id. The log never includes SQL text,
-  parameters, or the connection string.
-- streaming previously opted into `autoReconnectOnConnectionLost` with
-  bounded retry because streaming queries are idempotent reads;
+- streaming connections keep `autoReconnectOnConnectionLost` off; loss
+  handling follows "Connection loss and recovery";
 - connect/lease without a profile uses `blockFetchBatchSize: 256`.
 
 ### Session cache (`OdbcStreamingSessionCache`)
 
 Idle streaming connections may be cached briefly for the same connection
 string when reuse is enabled (`ODBC_STREAMING_CONNECT_REUSE_*`, default
-on). **SQL Anywhere and SQL Server do not reuse streaming sessions** —
-`odbc_fast` 4.5.1 does not document that as safe after a finished
-stream. **PostgreSQL may reuse** (columnar streaming family).
+on). **SQL Anywhere and SQL Server do not reuse streaming sessions**
+(row-major family; `connectionStringEligibleForStreamingConnectReuse`) —
+`odbc_fast` does not document that as safe after a finished stream.
+**PostgreSQL may reuse** (columnar streaming family).
 
 Lifecycle:
 
@@ -406,7 +419,7 @@ Lifecycle:
 - cancel on the last chunk does **not** reuse a dirty session
   (`reuseEligible` requires a successful complete and no cancel).
 
-`odbc_fast` 4.5.1 exposes `disconnect(connectionId)` and
+`odbc_fast` 4.6.0 exposes `disconnect(connectionId)` and
 `cancelStream(streamId)` only. High-level `streamQuery*` APIs do not
 return a stream id, and disconnect has no force-close argument. A Dart
 `.timeout()` must not abandon the native future; the tracker keeps it.
@@ -419,11 +432,12 @@ chunks above `ODBC_BULK_INSERT_CHUNK_ROWS` (default 10k) run inside
 begin/commit. `requireAtomic` forces that sequential transactional path
 and **refuses parallel/BCP**.
 
-Large SQL Server loads (row count above
-`ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD`, default 50k) may use
+SQL Server loads with at least
+`ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD` rows (default 1000) may use
 `bulkInsertParallel` on the adaptive pool `poolId` when
-`ODBC_BULK_INSERT_PARALLEL_ENABLED=true` (default) **and atomicity is
-not required**. Parallel/BCP failure is a typed `Failure` with
+`ODBC_BULK_INSERT_PARALLEL_ENABLED=true` (default), the pool allows a
+fan-out above 1 (`poolSize - 1`) **and atomicity is not required**
+(`BulkInsertParallelPolicy`). Parallel/BCP failure is a typed `Failure` with
 `partial_writes: true` — some rows may already have been committed and
 are not rolled back as a single transaction.
 
@@ -454,7 +468,10 @@ ODBC are:
     `odbc_native_compatible_acquire_success`
 - Quarantine and recovery:
   - `native_quarantined_pool_count`,
-    `native_quarantine_recovery_scheduled` (pool diagnostics)
+    `native_quarantine_recovery_scheduled`,
+    `native_quarantine_slow_recovery` (`OdbcNativeConnectionPool`
+    diagnostics; the adaptive pool diagnostics and `agent.getHealth` do
+    not surface them)
   - `pool_recycle`, `pool_recycle_failure`,
     `odbc_worker_recovery_invalidation`
 - Direct connection:
@@ -490,14 +507,14 @@ ODBC are:
   maps to Hub row-maps. Changing the JSON-RPC schema/dashboard contract
   to expose `TypedColumnarResult` is still deferred.
 - **Gate `bulkInsertParallel` on row threshold and SQL Server only, and
-  refuse it when atomicity is required.** Parallel fan-out uses half the
-  pool size; disable via `ODBC_BULK_INSERT_PARALLEL_ENABLED=false` when
-  profiling shows regressions on a specific driver build. Parallel
+  refuse it when atomicity is required.** Parallel fan-out uses every
+  pooled connection but one (`poolSize - 1`); disable via
+  `ODBC_BULK_INSERT_PARALLEL_ENABLED=false` when profiling shows regressions on a specific driver build. Parallel
   failure is a `Failure` that may leave partial writes.
 - **Rollback transactional batches before pool release.** Do not return
   a connection with an open or unconfirmed transaction to the pool.
 - **Do not reuse SQL Anywhere / SQL Server streaming sessions.**
-  `odbc_fast` 4.5.1 does not document that as safe. PostgreSQL may reuse
+  `odbc_fast` does not document that as safe. PostgreSQL may reuse
   idle streaming connections; cancel/timeout/evict always disconnect.
 - **Cancel all active SQL work on transport disconnect.** The dispatcher keeps
   request ownership independent of ODBC statement registration, arms a

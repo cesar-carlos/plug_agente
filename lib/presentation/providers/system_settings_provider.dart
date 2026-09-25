@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
+import 'package:plug_agente/application/use_cases/build_startup_diagnostic_report.dart';
 import 'package:plug_agente/application/use_cases/set_start_with_windows.dart';
 import 'package:plug_agente/application/use_cases/set_tray_behavior_preference.dart';
 import 'package:plug_agente/application/use_cases/startup_launch_configuration_mapper.dart';
@@ -22,10 +23,12 @@ class SystemSettingsProvider extends ChangeNotifier {
     SyncStartupStatus? syncStartupStatus,
     SetStartWithWindows? setStartWithWindows,
     SetTrayBehaviorPreference? setTrayBehaviorPreference,
+    BuildStartupDiagnosticReport? buildStartupDiagnosticReport,
   }) : _repository = repository,
        _syncStartupStatus = syncStartupStatus ?? SyncStartupStatus(repository),
        _setStartWithWindows = setStartWithWindows ?? SetStartWithWindows(repository),
-       _setTrayBehaviorPreference = setTrayBehaviorPreference ?? SetTrayBehaviorPreference(repository) {
+       _setTrayBehaviorPreference = setTrayBehaviorPreference ?? SetTrayBehaviorPreference(repository),
+       _buildStartupDiagnosticReport = buildStartupDiagnosticReport ?? BuildStartupDiagnosticReport(repository) {
     _startWithWindows = repository.startWithWindows;
     _minimizeToTray = repository.minimizeToTray;
     _closeToTray = repository.closeToTray;
@@ -47,6 +50,7 @@ class SystemSettingsProvider extends ChangeNotifier {
   final SyncStartupStatus _syncStartupStatus;
   final SetStartWithWindows _setStartWithWindows;
   final SetTrayBehaviorPreference _setTrayBehaviorPreference;
+  final BuildStartupDiagnosticReport _buildStartupDiagnosticReport;
 
   late bool _startWithWindows;
   late bool _minimizeToTray;
@@ -196,17 +200,35 @@ class SystemSettingsProvider extends ChangeNotifier {
       return false;
     }
 
-    final result = await _repository.buildStartupDiagnosticReport();
+    final result = await _buildStartupDiagnosticReport();
     if (_isDisposed) {
       return false;
     }
 
     return result.fold(
       (report) async {
-        await Clipboard.setData(ClipboardData(text: report));
-        return true;
+        try {
+          await Clipboard.setData(ClipboardData(text: report));
+          return true;
+        } on Object catch (error, stackTrace) {
+          developer.log(
+            'Failed to copy startup diagnostic to clipboard',
+            name: 'system_settings_provider',
+            level: 900,
+            error: error,
+            stackTrace: stackTrace,
+          );
+          return false;
+        }
       },
-      (_) => false,
+      (failure) {
+        developer.log(
+          'Failed to build startup diagnostic: $failure',
+          name: 'system_settings_provider',
+          level: 900,
+        );
+        return false;
+      },
     );
   }
 

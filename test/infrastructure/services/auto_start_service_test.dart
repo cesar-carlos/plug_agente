@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,7 @@ import 'package:plug_agente/core/services/i_startup_service.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
 import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/startup_registry_entry.dart';
+import 'package:plug_agente/infrastructure/services/windows_elevated_registry_executor.dart';
 import 'package:plug_agente/infrastructure/services/windows_startup_approved_store.dart';
 import 'package:plug_agente/infrastructure/services/windows_startup_run_value_reader.dart';
 import 'package:plug_agente/infrastructure/services/windows_startup_run_value_writer.dart';
@@ -394,7 +396,6 @@ void main() {
         );
         final calls = <_ProcessInvocation>[];
         final results = Queue<ProcessResult>.from([
-          ProcessResult(1, 1, '', 'ERROR: Access is denied.'),
           ProcessResult(2, 0, '', ''),
         ]);
 
@@ -430,8 +431,7 @@ void main() {
         machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
       );
       final results = Queue<ProcessResult>.from([
-        ProcessResult(1, 1, '', 'ERROR: Access is denied.'),
-        ProcessResult(2, 1, '', 'ERROR: Access is denied.'),
+        ProcessResult(2, WindowsElevatedRegistryExecutor.accessDeniedExitCode, '', ''),
       ]);
 
       final service = _makeService(
@@ -489,7 +489,6 @@ void main() {
         machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
       );
       final results = Queue<ProcessResult>.from([
-        ProcessResult(2, 1, '', 'ERROR: Access is denied.'),
         ProcessResult(3, 0, '', ''),
       ]);
 
@@ -509,8 +508,10 @@ void main() {
 
       check(result.isSuccess()).isTrue();
       check(writer.deleteCalls).length.equals(2);
-      check(writer.deleteCalls.first.scope).equals(StartupRegistryScope.currentUser);
+      check(writer.deleteCalls.first.scope).equals(StartupRegistryScope.localMachine);
+      check(writer.deleteCalls.last.scope).equals(StartupRegistryScope.currentUser);
       check(calls.where((call) => call.executable == 'powershell').length).equals(1);
+      check(calls.any((call) => call.executable == 'reg')).isFalse();
       check(calls.where((call) => call.arguments.join(' ').contains('-Verb RunAs')).length).equals(1);
     });
 
@@ -561,7 +562,6 @@ void main() {
         machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
       );
       final results = Queue<ProcessResult>.from([
-        ProcessResult(2, 5, '', 'ERROR: Access is denied.'),
         ProcessResult(3, 1223, '', ''),
       ]);
 
@@ -586,6 +586,9 @@ void main() {
           check((failure as StartupServiceFailure).startupCode).equals(StartupServiceFailureCode.uacCancelled);
         },
       );
+      check(
+        writer.deleteCalls.any((call) => call.scope == StartupRegistryScope.currentUser),
+      ).isFalse();
     });
 
     test('should classify localized UAC cancellation with accents', () async {
@@ -593,7 +596,6 @@ void main() {
         machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
       );
       final results = Queue<ProcessResult>.from([
-        ProcessResult(2, 1, '', 'ERRO: Acesso negado.'),
         ProcessResult(3, 1, '', 'A operação foi cancelada pelo usuário.'),
       ]);
 
@@ -647,7 +649,6 @@ void main() {
           machineDeleteResult: const StartupRunValueWriteResult.accessDenied(5),
         );
         final results = Queue<ProcessResult>.from([
-          ProcessResult(2, 1, '', 'ERROR: Access is denied.'),
           ProcessResult(3, 1, '', 'The operation was canceled by the user.'),
         ]);
 
@@ -1134,7 +1135,9 @@ void main() {
           ),
         ]),
         startupApprovedStore: _FakeStartupApprovedStore(
-          readResult: const StartupApprovedReadResult.disabled(),
+          readResult: StartupApprovedReadResult.disabled(
+            Uint8List.fromList(const <int>[0x03, 0x00, 0x00, 0x00, 0xab]),
+          ),
         ),
       );
       final result = await service.buildStartupDiagnosticReport();
@@ -1147,6 +1150,7 @@ void main() {
           check(report).contains('Read denied');
           check(report).contains('StartupApproved (HKCU): disabled');
           check(report).contains('StartupApproved blocked by Startup Apps: true');
+          check(report).contains('StartupApproved raw bytes: 03 00 00 00 ab');
           check(report).contains('Needs repair: true');
         },
         (_) => fail('Expected success'),
@@ -1200,7 +1204,7 @@ void main() {
       check(writer.setCalls).isEmpty();
     });
 
-    test('should report Startup Apps user-disable only for a clear disabled overlay', () async {
+    test('should report Startup Apps user-disable for disabled and unclassifiable overlays', () async {
       final disabledService = _makeService(
         startupApprovedStore: _FakeStartupApprovedStore(
           readResult: const StartupApprovedReadResult.disabled(),
@@ -1223,7 +1227,7 @@ void main() {
 
       check(disabled.getOrThrow()).isTrue();
       check(accessDenied.getOrThrow()).isFalse();
-      check(unknown.getOrThrow()).isFalse();
+      check(unknown.getOrThrow()).isTrue();
     });
 
     test('should refuse to enable auto-start for a Flutter release build-tree executable', () async {

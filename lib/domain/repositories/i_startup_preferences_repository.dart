@@ -10,7 +10,11 @@ abstract interface class IStartupPreferencesRepository {
 
   bool get isStartupServiceAvailable;
 
+  DateTime? get lastAutostartLaunchAt;
+
   Future<Result<Unit>> persistStartWithWindows(bool value);
+
+  Future<Result<Unit>> persistLastAutostartLaunchAt(DateTime value);
 
   Future<Result<Unit>> persistMinimizeToTray(bool value);
 
@@ -18,7 +22,8 @@ abstract interface class IStartupPreferencesRepository {
 
   Future<Result<bool>> readSystemStartupEnabled();
 
-  /// True only when Windows Startup Apps shows a clear user-disabled overlay.
+  /// True when Windows Startup Apps blocks the entry, including overlays that
+  /// cannot be classified; boot and sync must not overwrite either case.
   Future<Result<bool>> readStartupDisabledByUser();
 
   Future<Result<Unit>> enableSystemStartup();

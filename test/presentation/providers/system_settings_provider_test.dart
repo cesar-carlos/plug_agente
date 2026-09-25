@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:checks/checks.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/use_cases/set_tray_behavior_preference.dart';
@@ -688,10 +689,32 @@ void main() {
       verify(() => mockStartupService.buildStartupDiagnosticReport()).called(1);
     });
 
-    test('copyStartupDiagnosticToClipboard returns false when build fails', () async {
+    test('copyStartupDiagnosticToClipboard copies a partial report when the registry section fails', () async {
       when(
         () => mockStartupService.buildStartupDiagnosticReport(),
       ).thenAnswer((_) async => Failure(Exception('diagnostic build failed')));
+      String? clipboardText;
+      _mockClipboard((text) => clipboardText = text);
+
+      final provider = createSystemSettingsProvider(
+        prefs: prefs,
+        startupService: mockStartupService,
+      );
+
+      final copied = await provider.copyStartupDiagnosticToClipboard();
+
+      check(copied).equals(true);
+      check(clipboardText).isNotNull()
+        ..contains('[App state]')
+        ..contains('Registry diagnostic unavailable')
+        ..contains('diagnostic build failed');
+    });
+
+    test('copyStartupDiagnosticToClipboard returns false when the clipboard write fails', () async {
+      when(
+        () => mockStartupService.buildStartupDiagnosticReport(),
+      ).thenAnswer((_) async => const Success('registry section'));
+      _mockClipboard((_) => throw PlatformException(code: 'clipboard_unavailable'));
 
       final provider = createSystemSettingsProvider(
         prefs: prefs,
@@ -703,4 +726,23 @@ void main() {
       check(copied).equals(false);
     });
   });
+}
+
+void _mockClipboard(void Function(String? text) onSetData) {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (methodCall) async {
+      if (methodCall.method == 'Clipboard.setData') {
+        final args = methodCall.arguments as Map<dynamic, dynamic>;
+        onSetData(args['text'] as String?);
+      }
+      return null;
+    },
+  );
+  addTearDown(
+    () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
 }

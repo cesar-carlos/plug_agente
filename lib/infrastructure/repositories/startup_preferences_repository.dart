@@ -27,13 +27,28 @@ class StartupPreferencesRepository implements IStartupPreferencesRepository {
   bool get isStartupServiceAvailable => _startupService != null;
 
   @override
-  Future<Result<Unit>> persistStartWithWindows(bool value) => _persistBool(AppSettingsKeys.startWithWindows, value);
+  DateTime? get lastAutostartLaunchAt {
+    final raw = _settings.getString(AppSettingsKeys.lastAutostartLaunchAt);
+    return raw == null ? null : DateTime.tryParse(raw);
+  }
 
   @override
-  Future<Result<Unit>> persistMinimizeToTray(bool value) => _persistBool(AppSettingsKeys.minimizeToTray, value);
+  Future<Result<Unit>> persistStartWithWindows(bool value) =>
+      _persist(AppSettingsKeys.startWithWindows, () => _settings.setBool(AppSettingsKeys.startWithWindows, value));
 
   @override
-  Future<Result<Unit>> persistCloseToTray(bool value) => _persistBool(AppSettingsKeys.closeToTray, value);
+  Future<Result<Unit>> persistLastAutostartLaunchAt(DateTime value) => _persist(
+    AppSettingsKeys.lastAutostartLaunchAt,
+    () => _settings.setString(AppSettingsKeys.lastAutostartLaunchAt, value.toUtc().toIso8601String()),
+  );
+
+  @override
+  Future<Result<Unit>> persistMinimizeToTray(bool value) =>
+      _persist(AppSettingsKeys.minimizeToTray, () => _settings.setBool(AppSettingsKeys.minimizeToTray, value));
+
+  @override
+  Future<Result<Unit>> persistCloseToTray(bool value) =>
+      _persist(AppSettingsKeys.closeToTray, () => _settings.setBool(AppSettingsKeys.closeToTray, value));
 
   @override
   Future<Result<bool>> readSystemStartupEnabled() {
@@ -128,9 +143,9 @@ class StartupPreferencesRepository implements IStartupPreferencesRepository {
     return startupService.buildStartupDiagnosticReport();
   }
 
-  Future<Result<Unit>> _persistBool(String key, bool value) async {
+  Future<Result<Unit>> _persist(String key, Future<void> Function() write) async {
     try {
-      await _settings.setBool(key, value);
+      await write();
       return const Success(unit);
     } on Object catch (error) {
       return Failure(

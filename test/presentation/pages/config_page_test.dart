@@ -739,7 +739,9 @@ void main() {
     await tester.tap(find.text(ptL10n.gsButtonCopyStartupDiagnostic));
     await tester.pumpAndSettle();
 
-    expect(clipboardPayload, 'Plug Agente startup diagnostic\nscope: user');
+    expect(clipboardPayload, startsWith('Plug Agente startup diagnostic'));
+    expect(clipboardPayload, contains('[App state]'));
+    expect(clipboardPayload, contains('scope: user'));
     expect(find.byType(ContentDialog), findsOneWidget);
     expect(
       find.descendant(
@@ -766,7 +768,22 @@ void main() {
     ).thenAnswer((_) async => const Success(StartupLaunchConfigurationStatus.needsRepair));
     when(
       mockStartup.buildStartupDiagnosticReport,
-    ).thenAnswer((_) async => Failure(Exception('diagnostic build failed')));
+    ).thenAnswer((_) async => const Success('registry section'));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (methodCall) async {
+        if (methodCall.method == 'Clipboard.setData') {
+          throw PlatformException(code: 'clipboard_unavailable');
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
 
     final orchestrator = FakeAutoUpdateOrchestrator(isAvailable: true);
     await pumpPage(tester, orchestrator: orchestrator, startupService: mockStartup);

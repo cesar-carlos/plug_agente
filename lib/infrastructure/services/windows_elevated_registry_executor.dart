@@ -12,7 +12,9 @@ typedef ProcessRunner =
 class WindowsElevatedRegistryExecutor {
   WindowsElevatedRegistryExecutor({
     ProcessRunner? processRunner,
-  }) : _processRunner = processRunner ?? Process.run;
+    Duration elevationTimeout = defaultElevationTimeout,
+  }) : _processRunner = processRunner ?? Process.run,
+       _elevationTimeout = elevationTimeout;
 
   /// Win32 `ERROR_ACCESS_DENIED`.
   static const int accessDeniedExitCode = 5;
@@ -20,7 +22,11 @@ class WindowsElevatedRegistryExecutor {
   /// Win32 `ERROR_CANCELLED` (typical UAC decline).
   static const int uacCancelledExitCode = 1223;
 
+  /// Upper bound for an unanswered UAC prompt so callers never wait forever.
+  static const Duration defaultElevationTimeout = Duration(minutes: 2);
+
   final ProcessRunner _processRunner;
+  final Duration _elevationTimeout;
 
   Future<ProcessResult> deleteRunValue({
     required StartupRegistryScope scope,
@@ -89,7 +95,18 @@ try {
       '-NonInteractive',
       '-Command',
       launcher,
-    ]);
+    ]).timeout(_elevationTimeout, onTimeout: _unansweredElevationResult);
+  }
+
+  // The launcher keeps running behind the UAC prompt; treating the timeout as
+  // a declined authorization lets the UI recover while the prompt is pending.
+  ProcessResult _unansweredElevationResult() {
+    return ProcessResult(
+      0,
+      uacCancelledExitCode,
+      '',
+      'UAC authorization was not answered within ${_elevationTimeout.inSeconds}s.',
+    );
   }
 
   static List<int> encodeUtf16Le(String value) {

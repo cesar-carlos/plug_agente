@@ -142,6 +142,9 @@ Handlers SQL foram modularizados em `lib/application/rpc/`:
 
 - Janela controlada por `window_manager`; tray por `tray_manager`.
 - Single-instance por mutex global (uma instancia por maquina).
+- Auto-start HKCU (`--autostart` na bandeja): SoT em
+  `docs/install/requirements.md`; desinstalacao em
+  `docs/install/installation_guide.md`.
 - Auto-update silencioso com helper assinado.
 
 ## Funcionalidades alvo
@@ -171,6 +174,6 @@ Detalhes vivos em:
 - `docs/communication/socket_communication_standard.md`
 - `docs/communication/socket_communication_roadmap.md` (changelog)
 - `docs/communication/socket_communication_backlog.md` (pendencias)
-- `docs/architecture/performance_reliability_improvements.md`
+- `docs/runtime/odbc_pool_and_transactions.md`
 - `docs/implemente/plano_acoes_agendadas_execucoes.md`
 - `docs/implemente/plano_auto_update_evolution.md`

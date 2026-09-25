@@ -81,6 +81,7 @@ void main(List<String> args) {
   final e2eRequireMulti = get('ODBC_E2E_REQUIRE_MULTI_RESULT') == 'true';
   final e2eTxBatch = get('ODBC_E2E_TRANSACTIONAL_BATCH') == 'true';
   final runLockContention = get('ODBC_RUN_LOCK_CONTENTION_TESTS') == 'true';
+  final runLiveStartupRegistry = get('RUN_LIVE_STARTUP_REGISTRY_TESTS') == 'true';
   final runLiveHub = get('RUN_LIVE_HUB_TESTS') == 'true';
   final e2eHubUrl = get('E2E_HUB_URL');
   final e2eHubToken = get('E2E_HUB_TOKEN');
@@ -106,6 +107,16 @@ void main(List<String> args) {
   } else {
     print('  -> api_test: será executado');
   }
+
+  print('');
+  print(
+    'RUN_LIVE_STARTUP_REGISTRY_TESTS: ${runLiveStartupRegistry ? "OK (true)" : "não definido ou false"}',
+  );
+  print(
+    runLiveStartupRegistry
+        ? '  -> windows_startup_registry_live_e2e_test: será executado (somente Windows)'
+        : '  -> windows_startup_registry_live_e2e_test: testes serão ignorados',
+  );
 
   print('');
   print(

@@ -19,8 +19,10 @@ Indice central (pre-requisitos, preflight, como rodar, familias):
 ## Opt-in
 
 Testes com API/ODBC/Hub reais sao opt-in via `RUN_LIVE_*` / `RUN_ODBC_*` /
-`ODBC_E2E_*`. Helper: `test/helpers/e2e_env.dart` (`E2EEnv`). Sem variaveis →
-`skip` com mensagem clara.
+`ODBC_E2E_*`. Registro Windows real:
+`RUN_LIVE_STARTUP_REGISTRY_TESTS` (secao em [e2e_setup.md](e2e_setup.md)).
+Helper: `test/helpers/e2e_env.dart` (`E2EEnv`). Sem variaveis → `skip` com
+mensagem clara.
 
 Atalhos: `dart run tool/e2e/check_e2e_env.dart`,
 `python tool/agent_actions/run_agent_actions_operational_gate.py`,

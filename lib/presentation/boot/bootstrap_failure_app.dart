@@ -1,20 +1,28 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
+import 'package:plug_agente/presentation/boot/desktop_shell_bootstrap.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
 
 class BootstrapFailureApp extends StatelessWidget {
   const BootstrapFailureApp({
     required this.error,
     this.stackTrace,
+    this.revealNativeWindow = showNativeRuntimeWindow,
     super.key,
   });
 
   final Object error;
   final StackTrace? stackTrace;
+
+  /// `--autostart` launches create the native window hidden; the failure modal
+  /// must reveal it or the process lingers invisibly holding the single-instance
+  /// mutex.
+  final NativeWindowVisibilityFallback revealNativeWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +34,7 @@ class BootstrapFailureApp extends StatelessWidget {
       home: _BootstrapFailurePage(
         error: error,
         stackTrace: stackTrace,
+        revealNativeWindow: revealNativeWindow,
       ),
     );
   }
@@ -34,11 +43,13 @@ class BootstrapFailureApp extends StatelessWidget {
 class _BootstrapFailurePage extends StatefulWidget {
   const _BootstrapFailurePage({
     required this.error,
+    required this.revealNativeWindow,
     this.stackTrace,
   });
 
   final Object error;
   final StackTrace? stackTrace;
+  final NativeWindowVisibilityFallback revealNativeWindow;
 
   @override
   State<_BootstrapFailurePage> createState() => _BootstrapFailurePageState();
@@ -56,11 +67,29 @@ class _BootstrapFailurePageState extends State<_BootstrapFailurePage> {
     });
   }
 
+  Future<void> _revealNativeWindow() async {
+    try {
+      await widget.revealNativeWindow();
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Failed to reveal native window for bootstrap failure',
+        name: 'bootstrap_failure_app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   Future<void> _showStartupErrorDialog() async {
     if (_dialogShown || !mounted) {
       return;
     }
     _dialogShown = true;
+    await _revealNativeWindow();
+    if (!mounted) {
+      return;
+    }
 
     final l10n = AppLocalizations.of(context)!;
     final userMessage = BootstrapFailureMessageBuilder.userMessage(

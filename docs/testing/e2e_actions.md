@@ -1,20 +1,21 @@
 # E2E - Actions (`agent.action.*`)
 
-## Linha de comando (Windows)
-
-`commandLine` e uma superficie local avancada: Hub, scheduler e lifecycle nao
-devem inicia-la. Em homologacao Windows, valide cancelamento e timeout com um
-processo-filho observavel: o Job Object deve encerrar a arvore inteira. Quando
-fornecer contexto, a definicao deve conter exatamente `${context_path}`; testes
-tambem devem confirmar que nenhum path, PID, comando ou segredo aparece no
-snapshot de health. Para automacao prefira o tipo `executable` com argumentos
-estruturados.
-
-Cobre setup local de homologacao para acoes agendadas: stub COM, retencao de
-historico/auditoria e runner elevado Windows. Para o canal Hub Socket.IO
-(handshake assinado, contrato remoto), ver [e2e_hub.md](e2e_hub.md).
+Cobre setup local de homologacao para acoes agendadas: linha de comando,
+stub COM, retencao de historico/auditoria e runner elevado Windows. Para o
+canal Hub Socket.IO (handshake assinado, contrato remoto), ver
+[e2e_hub.md](e2e_hub.md).
 
 Index geral: [e2e_setup.md](e2e_setup.md).
+
+## Linha de comando (Windows)
+
+`commandLine` so roda por execucao manual na UI local; Hub, scheduler e
+lifecycle a rejeitam (regras de contexto e segredos em
+[socket_agent_actions.md](../communication/socket_agent_actions.md#execucao-local-de-processos)).
+Em homologacao Windows, valide cancelamento e timeout com um processo-filho
+observavel: o Job Object deve encerrar a arvore inteira. Confirme tambem que
+nenhum path, PID, comando ou segredo aparece no snapshot de health. Para
+automacao prefira o tipo `executable` com argumentos estruturados.
 
 ## COM actions (homologation stub)
 
@@ -53,9 +54,9 @@ Chaves persistidas na instalacao (via `IAppSettingsStore`):
 `agent_action_remote_audit_retention_days`,
 `agent_action_captured_output_retention_hours`.
 
-**Timestamps (wire):** `agent.action.getExecution` expoe `requested_at`,
-`trigger.scheduled_at` / `triggered_at` e `timestamps.*` em UTC (`...Z`). A
-UI local formata com `toLocal()`.
+Timestamps de `agent.action.getExecution` saem em UTC no wire
+([socket_agent_actions.md](../communication/socket_agent_actions.md)); a UI
+local formata com `toLocal()`.
 
 ## Elevated action runner (Windows, homologacao manual)
 
@@ -76,7 +77,8 @@ Artefatos bridge sob o diretorio de dados do app:
 
 ## Cross-references
 
-- Contrato remoto e capability: `docs/implemente/acoes/contrato_remoto.md`
-- Threat model + flags + RA: `docs/implemente/acoes/seguranca_acoes.md`
-- UI: `docs/implemente/acoes/ui_acoes.md`
-- Plano canonico: `docs/implemente/plano_acoes_agendadas_execucoes.md`
+- Contrato wire: [socket_agent_actions.md](../communication/socket_agent_actions.md)
+- Entry-point RPC no agente: [contrato_remoto.md](../implemente/acoes/contrato_remoto.md)
+- Flags, rollback, controles: [seguranca_acoes.md](../implemente/acoes/seguranca_acoes.md)
+- UI: [ui_acoes.md](../implemente/acoes/ui_acoes.md)
+- Plano vivo (status, RA, threat baseline): [plano_acoes_agendadas_execucoes.md](../implemente/plano_acoes_agendadas_execucoes.md)

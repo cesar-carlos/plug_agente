@@ -59,7 +59,7 @@ AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 
 | Variavel | Default | Faixa / efeito |
 | --- | --- | --- |
-| `AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS` | `300` | minimo 60. Timeout do `HttpClient` durante o download do instalador. |
+| `AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS` | `300` | minimo 60. Timeout de inatividade (stall) do download do instalador: aborta quando nenhum byte chega nesse intervalo, nao pelo tempo total. |
 | `AUTO_UPDATE_DOWNLOAD_RESUME` | `true` | quando `false` desliga `HTTP Range`; use apenas em proxies que nao honram `Range`. |
 | `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` | `30` | 0 desliga o aviso pre-fechamento; max 120. Tempo de espera apos a notificacao "fechando para atualizar" antes do `exit`. O helper espera o PID do app por no minimo **70 s** (`resolveAutoUpdateWaitPidTimeoutSeconds` = pre-close + 25 s de grace de exit + 15 s de buffer, teto 180 s), alinhado a essa janela. |
 | `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela onde **novos** downloads automaticos (boot/timer) retornam `skippedByQuietHours`. Pending ja *staged* ainda pode auto-aplicar / permanecer Ready. `Instalar agora` (user-initiated) nao espera essa janela. Suporta janelas que cruzam meia-noite. |
@@ -120,6 +120,14 @@ python tool/appcast/generate_appcast_signing_key.py
 A saida traz `APPCAST_SIGNING_PRIVATE_KEY` (guarde em GitHub Actions
 Secrets) e `AUTO_UPDATE_FEED_PUBLIC_KEY` (distribua nos builds de release
 via `--dart-define` ou `.env`).
+
+Configuracao no GitHub Actions:
+
+| Nome | Tipo | Consumido por |
+| --- | --- | --- |
+| `APPCAST_SIGNING_PRIVATE_KEY` | secret | `update-appcast.yml` (assina o item) |
+| `AUTO_UPDATE_FEED_PUBLIC_KEY` | secret | `release.yml` / `release-preflight.yml` (`--dart-define` + `--feed-public-key` do preflight) e `feed-smoke.yml` |
+| `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE` | variable | `release.yml` / `release-preflight.yml` (default `false`) |
 
 Assinatura durante a publicacao:
 
@@ -261,12 +269,15 @@ O helper usa politica conservadora:
 Todos os updates automaticos passam:
 
 ```text
-/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /LAUNCHAFTERUPDATE=1 /MERGETASKS="!desktopicon,!startup" /DIR="<pasta atual>"
+/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS /LAUNCHAFTERUPDATE=1 /MERGETASKS="!desktopicon,!startup" /DIR="<pasta atual>" /LOG="<log>"
 ```
 
 O relaunch pos-update fica so no `[Run]` com `/LAUNCHAFTERUPDATE=1`. Nao use
 `/RESTARTAPPLICATIONS` junto: se o helper precisar do `/CLOSEAPPLICATIONS`
-(app ainda aberto), os dois caminhos lancariam duas instancias.
+(app ainda aberto), os dois caminhos lancariam duas instancias. Pelo mesmo
+motivo o `setup.iss` define `RestartApplications=no`; o app registra
+`RegisterApplicationRestart` apenas para crash/hang
+(`RESTART_NO_PATCH | RESTART_NO_REBOOT`), nao para patch nem reboot.
 
 `/MERGETASKS="!desktopicon,!startup"` impede o update silencioso de
 re-selecionar o atalho da area de trabalho e a task **Iniciar com o
@@ -388,22 +399,21 @@ Teste local rapido do tooling Python:
 python -m unittest \
   tool.appcast.test_appcast_manager \
   tool.appcast.test_validate_release \
-  tool.test_appcast_signing \
-  tool.test_validate_launcher_status \
+  tool.appcast.test_appcast_signing \
+  tool.appcast.test_validate_launcher_status \
   -v
 ```
 
-`tool.test_appcast_signing` exige `cryptography>=42.0.0` instalado. Workflows
-do CI falham explicitamente se essa suite reportar `skipped=N`, evitando
-regressao silenciosa do gate de assinatura.
+`tool.appcast.test_appcast_signing` exige `cryptography>=42.0.0` instalado.
+Os workflows de appcast e o `release_preflight.py --appcast-tooling` falham
+explicitamente se essa suite reportar `skipped=N`, evitando regressao
+silenciosa do gate de assinatura.
 
 ## Workflow de Publicacao
 
 1. Publique a versao pelo workflow manual **Publish Windows Release** seguindo
-   [release_guide.md](release_guide.md). O workflow tambem expoe
-   `require_valid_update_signature` (vire para `true` somente apos Authenticode
-   verde em helper e installer) e `skip_authenticode_check` (rebuild manual
-   sem certificado; uso restrito).
+   [release_guide.md](release_guide.md) (inputs e secrets do workflow estao
+   la).
 2. O workflow cria a tag, gera o instalador e publica a GitHub Release.
 3. O workflow **Update Appcast on Release** valida tag, versao e asset.
 4. O workflow calcula SHA-256 do asset publicado.
@@ -472,13 +482,8 @@ PlugAgente-Setup-{MAJOR.MINOR.PATCH}.exe
      a UI registra `automaticCooldown`;
    - com falha: a UI mostra detalhes tecnicos copiaveis.
 
-Validacao manual recomendada:
-
-```bash
-python tool/appcast/validate_release.py \
-  --tag v1.2.7 \
-  --feed-url https://cesar-carlos.github.io/plug_agente/appcast.xml
-```
+Para cruzar a GitHub Release com o feed publicado, use
+`tool/appcast/validate_release.py` conforme [release_guide.md](release_guide.md).
 
 Os comandos `inspect-url` e `smoke-validate-url` de `tool/appcast/appcast_manager.py`
 adicionam `cb=` por padrao. Use `--no-cache-bust` apenas quando precisar
@@ -507,11 +512,8 @@ reproduzir exatamente a URL original.
 ### Versao fora de sincronia
 
 - `pubspec.yaml`, `installer/setup.iss` e
-  `lib/core/constants/app_version.g.dart` divergem.
-- Rode `python installer/update_version.py`, revise o diff e commite antes da
-  tag.
-- Rode `python tool/release/release_preflight.py --version <versao> --require-iscc`
-  para checar sincronizacao, tag e ferramentas antes de publicar.
+  `lib/core/constants/app_version.g.dart` divergem; veja **Versao e Tags** em
+  [release_guide.md](release_guide.md).
 
 ### Feed publicado nao reflete a release
 

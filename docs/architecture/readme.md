@@ -2,11 +2,12 @@
 
 Documentos sobre arquitetura de execucao, performance e confiabilidade do
 agente. Foco no eixo ODBC + fila SQL + circuit breaker + observabilidade.
+Comportamento e defaults: `docs/runtime/odbc_pool_and_transactions.md`.
+Tuning e troubleshooting: [QUICKSTART.md](QUICKSTART.md).
 
 | Arquivo | Quando consultar |
 | --- | --- |
 | [QUICKSTART.md](QUICKSTART.md) | Tuning operacional rapido (`.env`), verificar logs e snapshots de health, troubleshooting de fila/pool/circuit breaker. |
-| [performance_reliability_improvements.md](performance_reliability_improvements.md) | Status table do eixo ODBC + validacao; detalhes de pool/workers no runtime. |
 | [odbc_worker_evaluation_criteria.md](odbc_worker_evaluation_criteria.md) | Quando ajustar `ODBC_ASYNC_*`, criterios para benchmark e por que multi-`ServiceLocator` ainda esta fora de escopo. |
 | [odbc_operational_validation_runbook.md](odbc_operational_validation_runbook.md) | Validacao operacional pos-deploy: smoke, burst, benchmark e snapshots de health. |
 

@@ -24,7 +24,6 @@ typedef NativeWindowVisibilityFallback = Future<void> Function();
 
 const MethodChannel _runtimeChannel = MethodChannel('plug_agente/runtime');
 
-@visibleForTesting
 Future<void> showNativeRuntimeWindow() async {
   await _runtimeChannel.invokeMethod<bool>('showWindow');
 }

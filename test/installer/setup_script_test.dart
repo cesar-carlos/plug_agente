@@ -92,6 +92,16 @@ void main() {
       expect(setupScript, contains('SetupMutex=PlugAgenteSetup'));
       expect(setupScript, contains('CloseApplications=force'));
       expect(setupScript, contains('CloseApplicationsFilter=plug_agente.exe'));
+      expect(setupScript, contains('RestartApplications=no'));
+    });
+
+    test('runner registers crash restart into the tray without patch or reboot restarts', () {
+      final runnerSource = File('windows/runner/main.cpp').readAsStringSync();
+
+      expect(runnerSource, contains('RegisterApplicationRestart('));
+      expect(runnerSource, contains('RESTART_NO_PATCH | RESTART_NO_REBOOT'));
+      expect(runnerSource, contains('plug_agente::kAutostartArg'));
+      expect(runnerSource.indexOf('RegisterCrashRestart();'), greaterThan(runnerSource.indexOf('window.Create(')));
     });
 
     test('localizes startup task copy and removes staged update artifacts on uninstall', () {
@@ -138,6 +148,30 @@ void main() {
           contains(
             r'Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"',
           ),
+        ),
+      );
+    });
+
+    test('uninstall removes legacy machine Run values and the StartupApproved overlay', () {
+      final setupScript = File('installer/setup.iss').readAsStringSync();
+      final constantsScript = File('installer/constants.iss').readAsStringSync();
+
+      expect(setupScript, contains('procedure CurUninstallStepChanged'));
+      expect(setupScript, contains("DeleteAutostartRegistryValue(HKLM64, 'HKLM64', '{#RunKeyPath}')"));
+      expect(setupScript, contains("DeleteAutostartRegistryValue(HKLM32, 'HKLM32', '{#RunKeyPath}')"));
+      expect(setupScript, contains("DeleteAutostartRegistryValue(HKCU, 'HKCU', '{#StartupApprovedRunKeyPath}')"));
+      expect(setupScript, contains("RegGetSubkeyNames(HKU, '', Sids)"));
+      expect(setupScript, contains("Pos('S-1-5-21-', Sids[I]) = 1"));
+      expect(setupScript, contains(r"DeleteAutostartRegistryValue(HKU, 'HKU', Sids[I] + '\{#RunKeyPath}')"));
+      expect(
+        setupScript,
+        contains(r"DeleteAutostartRegistryValue(HKU, 'HKU', Sids[I] + '\{#StartupApprovedRunKeyPath}')"),
+      );
+      expect(constantsScript, contains(r'#define RunKeyPath "Software\Microsoft\Windows\CurrentVersion\Run"'));
+      expect(
+        constantsScript,
+        contains(
+          r'#define StartupApprovedRunKeyPath "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"',
         ),
       );
     });

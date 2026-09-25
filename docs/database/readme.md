@@ -27,7 +27,7 @@ Detalhes E2E e prioridade entre DSNs: `docs/testing/e2e_odbc.md`
 
 Defaults e regras de `ODBC_POOL_SIZE`, `ODBC_ASYNC_*` e
 `ODBC_RESULT_ENCODING`: `docs/runtime/odbc_pool_and_transactions.md`.
-Status do eixo ODBC: `docs/architecture/performance_reliability_improvements.md`.
+Tuning operacional: `docs/architecture/QUICKSTART.md`.
 
 ## Pool adaptativo
 

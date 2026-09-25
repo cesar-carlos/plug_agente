@@ -292,6 +292,40 @@ void main() {
     expect(desktopShellInitialized, isTrue);
   });
 
+  test('keeps booting when startup launch configuration throws', () async {
+    bool? desktopAutostartFlag;
+
+    final initializer = AppInitializer(
+      runtimeProbe: _FakeWindowsRuntimeProbe(
+        result: const Success(
+          WindowsVersionInfo(
+            majorVersion: 10,
+            minorVersion: 0,
+            buildNumber: 26200,
+            isServer: false,
+            productName: 'Windows 11 Pro',
+          ),
+        ),
+      ),
+      setupDependenciesOverride:
+          ({
+            required capabilities,
+            runtimeDetectionDiagnostics,
+          }) async {},
+      bootstrapPhasesOverride: () async {},
+      ensureStartupLaunchConfigurationOverride: (args) async {
+        throw const FileSystemException('Access denied');
+      },
+      initializeDesktopFeaturesOverride: (capabilities, isAutostartLaunch) async {
+        desktopAutostartFlag = isAutostartLaunch;
+      },
+    );
+
+    await initializer.initialize(const <String>[LaunchArgsConstants.autostartArg]);
+
+    expect(desktopAutostartFlag, isTrue);
+  });
+
   test('bootstrap source should not invoke PrepareElevatedActionRunner', () {
     final orchestratorSource = File(
       p.join('lib', 'application', 'bootstrap', 'app_bootstrap_orchestrator.dart'),

@@ -1,8 +1,8 @@
 # E2E - Hub Socket.IO
 
 Smoke e homologacao do canal Socket.IO entre agente e hub. Cobre handshake
-basico, `PayloadFrame` assinado e contrato `agent.action.*` quando o hub
-emitir RPC.
+basico, `PayloadFrame` assinado, contrato `agent.action.*` quando o hub
+emitir RPC e o push de diagnostico de auto-update.
 
 Index geral: [e2e_setup.md](e2e_setup.md). Para `agent.action.*` local/CI sem
 hub, ver tambem [e2e_actions.md](e2e_actions.md).
@@ -49,9 +49,10 @@ Imprime checklist `[ok]`/`[ ]` sem expor segredos.
 | `1` | Variaveis em falta **ou** preflight bloqueante (JWT expirado; `e2e-dev` + Hub remoto com `RUN_LIVE_HUB_SIGNING_TESTS=true`; etc.). |
 | `2` | Variaveis ok; ha avisos nao bloqueantes (ex.: JWT expira em breve; `e2e-dev` + remoto quando assinatura live esta desligada). |
 
-CI: o job principal (`flutter_ci.yml`, `release-preflight.yml`, `release.yml`)
-roda `flutter test --exclude-tags "live || slow || perf"`. O job opcional
-`live-hub-e2e` roda os testes live com secrets do repositorio.
+CI: `flutter_ci.yml` (e os workflows de release via
+`tool/release/release_preflight.py`) roda
+`flutter test --exclude-tags "live || slow || perf"`. Nenhum workflow roda os
+testes live do Hub; eles sao opt-in local via `.env`.
 
 Nao coloque o token em logs.
 
@@ -190,7 +191,7 @@ nem dispara execucao real no agente alem do que o hub enviar quando
 flutter test test/integration/hub_agent_action_rpc_live_e2e_test.dart --tags live
 ```
 
-### Runners PowerShell
+### Runners (Python)
 
 ```powershell
 python tool/agent_actions/run_agent_actions_operational_gate.py
@@ -204,8 +205,9 @@ python tool/agent_actions/homologate_hub_agent_actions.py --prepare-live-env --v
 
 - `preflight_agent_actions_production.py` roda checks estaticos de
   producao (COM handler registry, consistencia live `.env` quando
-  `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true`). Use `-StrictCom` antes de
-  deploy quando `comObject` nao deve depender do stub.
+  `RUN_LIVE_HUB_AGENT_ACTION_RPC_TESTS=true`). Use `--strict-com` antes de
+  deploy quando `comObject` nao deve depender do stub (tambem aceito por
+  `run_agent_actions_operational_gate.py`).
 - `--run-contract-tests` roda o manifesto de contrato
   (`tool/agent_actions/manifests/agent_actions_contract_test_paths.txt`) e o manifesto UI
   (`tool/agent_actions/manifests/agent_actions_ui_test_paths.txt`) sem hub. Validacao dos
@@ -223,23 +225,22 @@ python tool/agent_actions/homologate_hub_agent_actions.py --prepare-live-env --v
 - `--validate-live-env` roda `validate_live_hub_agent_actions_env.dart` antes
   de `--run-live-tests`.
 
-CI: os mesmos arquivos rodam no **Agent actions homologation gate**
-(`.github/workflows/flutter_ci.yml`). Live Hub `agent.action.*` rodam apenas
-em manual `workflow_dispatch` de `live-hub-e2e` quando os secrets do
-repositorio estao configurados.
+CI: os mesmos manifestos rodam no job `agent-actions-gate`
+(`.github/workflows/flutter_ci.yml`, passo **Agent actions homologation
+gate**). Live Hub `agent.action.*` nao roda em CI.
 
-### Rollback operacional
+Rollback operacional (flags, nao `.env`) e checklist de PR por tipo:
+[seguranca_acoes.md](../implemente/acoes/seguranca_acoes.md). Riscos aceitos e
+roteiro: [plano_acoes_agendadas_execucoes.md](../implemente/plano_acoes_agendadas_execucoes.md#riscos-aceitos-mvp-agente)
+e [Roteiro operacional](../implemente/plano_acoes_agendadas_execucoes.md#roteiro-operacional).
 
-`Operational rollback (agent only, not .env):` desligar rollout remoto via
-`FeatureFlags` (`disableAgentActionsRemoteRollout()` ou toggles na UI),
-depois maintenance mode, depois `enableAgentActions=false`. Ver
-[plano_acoes_agendadas_execucoes.md](../implemente/plano_acoes_agendadas_execucoes.md#riscos-aceitos-mvp-agente)
-e
-[Roteiro operacional pos-MVP](../implemente/plano_acoes_agendadas_execucoes.md#roteiro-operacional-pos-mvp-agente).
+## Push de diagnostico de auto-update (`test/live/auto_update_diagnostics_push_e2e_test.dart`)
 
-### PR security checklist por tipo
+Smoke opt-in (tag `live`) que envia o payload de diagnostico de auto-update
+ao hub por HTTP e verifica a janela de throttle. Usa `RUN_LIVE_HUB_TESTS`,
+`E2E_HUB_URL` e `E2E_HUB_TOKEN` (mesmas variaveis do smoke acima); o hub
+precisa implementar o endpoint.
 
 ```bash
-dart run tool/agent_actions/agent_action_security_gate_checklist.dart
-dart run tool/agent_actions/agent_action_security_gate_checklist.dart commandLine
+flutter test test/live/auto_update_diagnostics_push_e2e_test.dart --tags live
 ```

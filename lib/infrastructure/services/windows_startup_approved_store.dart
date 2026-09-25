@@ -42,8 +42,7 @@ class StartupApprovedReadResult {
   const StartupApprovedReadResult.accessDenied(int nativeStatus)
     : this._(StartupApprovedStatus.accessDenied, nativeStatus, null);
 
-  const StartupApprovedReadResult.failed(int nativeStatus)
-    : this._(StartupApprovedStatus.failed, nativeStatus, null);
+  const StartupApprovedReadResult.failed(int nativeStatus) : this._(StartupApprovedStatus.failed, nativeStatus, null);
 
   final StartupApprovedStatus status;
   final int? nativeStatus;
@@ -52,8 +51,7 @@ class StartupApprovedReadResult {
   bool get isEffectivelyEnabled =>
       status == StartupApprovedStatus.notPresent || status == StartupApprovedStatus.enabled;
 
-  bool get isEffectivelyDisabled =>
-      status == StartupApprovedStatus.disabled || status == StartupApprovedStatus.unknown;
+  bool get isEffectivelyDisabled => status == StartupApprovedStatus.disabled || status == StartupApprovedStatus.unknown;
 }
 
 enum StartupApprovedWriteStatus {
@@ -70,8 +68,7 @@ class StartupApprovedWriteResult {
   const StartupApprovedWriteResult.accessDenied(int nativeStatus)
     : this._(StartupApprovedWriteStatus.accessDenied, nativeStatus);
 
-  const StartupApprovedWriteResult.failed(int nativeStatus)
-    : this._(StartupApprovedWriteStatus.failed, nativeStatus);
+  const StartupApprovedWriteResult.failed(int nativeStatus) : this._(StartupApprovedWriteStatus.failed, nativeStatus);
 
   final StartupApprovedWriteStatus status;
   final int? nativeStatus;
@@ -105,16 +102,18 @@ class StartupApprovedBinary {
     0x00,
   ]);
 
+  /// `0x02` (enabled) and `0x03` (disabled) are the common values; variants
+  /// such as `0x06` keep the low bit as the disable flag, so classification
+  /// relies on that bit instead of an exact match.
   static StartupApprovedStatus classify(Uint8List bytes) {
     if (bytes.length < 4) {
       return StartupApprovedStatus.unknown;
     }
     final statusDword = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
-    return switch (statusDword) {
-      0x02 || 0x06 => StartupApprovedStatus.enabled,
-      0x03 => StartupApprovedStatus.disabled,
-      _ => StartupApprovedStatus.unknown,
-    };
+    if (statusDword == 0) {
+      return StartupApprovedStatus.unknown;
+    }
+    return statusDword.isOdd ? StartupApprovedStatus.disabled : StartupApprovedStatus.enabled;
   }
 }
 
@@ -122,8 +121,7 @@ class StartupApprovedBinary {
 class Win32StartupApprovedStore implements IStartupApprovedStore {
   const Win32StartupApprovedStore();
 
-  static const String _subKeyPath =
-      r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';
+  static const String _subKeyPath = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';
 
   @override
   StartupApprovedReadResult read({required String valueName}) {
@@ -221,9 +219,7 @@ class Win32StartupApprovedStore implements IStartupApprovedStore {
         final valueNamePtr = valueName.toPcwstr();
         try {
           final status = RegDeleteValue(hKey, valueNamePtr);
-          if (status == ERROR_SUCCESS ||
-              status == ERROR_FILE_NOT_FOUND ||
-              status == ERROR_PATH_NOT_FOUND) {
+          if (status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND) {
             return const StartupApprovedWriteResult.success();
           }
           return _writeResultFromStatus(status);

@@ -34,6 +34,7 @@ calculos do runtime da app:
 
 | Variavel | Obrigatoria | Descricao |
 | -------- | ----------- | --------- |
+| `ODBC_POOL_SIZE` | Nao | Tamanho do pool nos harnesses E2E (default `ConnectionConstants.defaultPoolSize`, limite 1-20) |
 | `ODBC_ASYNC_WORKER_COUNT` | Nao | Override positivo para workers assincronos; limitado a `min(poolSize, CPU cores)` |
 | `ODBC_ASYNC_MAX_PENDING_REQUESTS` | Nao | Override positivo para requests pendentes no worker pool interno; default `poolSize * 4` |
 | `ODBC_RESULT_ENCODING` | Nao | Opt-in para `rowMajor`, `columnar` ou `columnarCompressed` em queries parametrizadas; default `rowMajor` |
@@ -137,6 +138,15 @@ estaveis sao `transactional_batch_native_pool_path`,
 `ODBC_E2E_TRANSACTIONAL_BATCH` (desligado por omissao no `.env.example` para
 `flutter test` verde).
 
+## Smokes RPC adicionais
+
+Usam o mesmo DSN que o E2E RPC (`E2EEnv.odbcE2eRpcConnectionString`):
+
+| Teste | Gate | Descricao |
+| ----- | ---- | --------- |
+| `odbc_queued_gateway_smoke_live_e2e_test.dart` | So DSN | Smoke do `QueuedDatabaseGateway` com `ODBC_INTEGRATION_SMOKE_QUERY` |
+| `odbc_sql_execute_codcliente_live_e2e_test.dart` | `ODBC_E2E_CODCLIENTE_TESTS=true` + DSN | Probe `sql.execute`; query em `ODBC_E2E_CODCLIENTE_QUERY` (default `SELECT TOP 1 CodCliente FROM Cliente ORDER BY CodCliente`) |
+
 ## ODBC DML performance (`odbc_dml_perf_live_e2e_test.dart`)
 
 Mede o tempo de parede (cliente) para: **lote de INSERTs**
@@ -169,6 +179,7 @@ falha paralela e `Failure` e pode deixar writes parciais. Depois:
 | -------- | ----------- | --------- |
 | `ODBC_E2E_DML_BULK_TESTS` | Sim | `true` para correr |
 | `ODBC_E2E_DML_BULK_ROW_COUNT` | Nao | Total de linhas (default 50000, limite 10k-200k) |
+| `ODBC_E2E_DML_BULK_CHUNK_SIZE` | Nao | Tamanho maximo de lote do gateway no teste (default 1000, limite 32-2000) |
 | `ODBC_E2E_DML_BULK_MAX_MS_CREATE` | Nao | Teto (ms) para CREATE (opcional) |
 | `ODBC_E2E_DML_BULK_MAX_MS_INSERT` | Nao | Teto (ms) para toda a fase de insert (default interno: 30000) |
 | `ODBC_E2E_DML_BULK_MAX_MS_UPDATE` | Nao | Teto (ms) para UPDATE em massa |
@@ -193,10 +204,11 @@ valida contagem de linhas e ausencia de leases no pool, e faz **DROP** no
 | `ODBC_E2E_DML_STRESS_TESTS` | Sim | `true` para correr |
 | `ODBC_E2E_DML_STRESS_ROW_COUNT` | Nao | Linhas por iteracao (default 100, limite 100-100k) |
 | `ODBC_E2E_DML_STRESS_ITERATIONS` | Nao | Ciclos insert/update/delete (default 1, limite 1-50) |
-| `ODBC_E2E_DML_STRESS_CONCURRENCY` | Nao | Workers paralelos por fase (default 4, limite 1-32) |
+| `ODBC_E2E_DML_STRESS_CONCURRENCY` | Nao | Workers paralelos por fase (default 8, limite 1-32) |
 | `ODBC_E2E_DML_STRESS_BATCH_CHUNK_SIZE` | Nao | Comandos por `sql.executeBatch` (default 1000, limite 32-2000) |
-| `ODBC_E2E_DML_STRESS_QUEUE_SIZE` | Nao | Fila do gateway enfileirado (default 8) |
-| `ODBC_E2E_DML_STRESS_WORKERS` | Nao | Workers do gateway enfileirado (default 4) |
+| `ODBC_E2E_DML_STRESS_QUEUE_SIZE` | Nao | Fila do gateway enfileirado (default 16, limite 4-100) |
+| `ODBC_E2E_DML_STRESS_WORKERS` | Nao | Workers do gateway enfileirado (default 8, limite 1-32) |
+| `ODBC_E2E_DML_STRESS_ENQUEUE_TIMEOUT_MS` | Nao | Timeout de enfileiramento no cenario enfileirado (default 30000ms) |
 | `ODBC_E2E_DML_STRESS_MAX_MS_PER_ITERATION` | Nao | Teto (ms) por iteracao completa (opcional) |
 
 O cenario com `QueuedDatabaseGateway` limita a 2000 linhas (ou menos, se
@@ -249,6 +261,10 @@ flutter test test/integration/odbc_sql_anywhere_top_start_at_live_test.dart
 
 # RPC (sql.execute / sql.executeBatch)
 flutter test test/integration/odbc_rpc_execute_coverage_live_e2e_test.dart
+
+# Smokes RPC adicionais
+flutter test test/integration/odbc_queued_gateway_smoke_live_e2e_test.dart
+flutter test test/integration/odbc_sql_execute_codcliente_live_e2e_test.dart
 
 # DML performance (opt-in)
 flutter test test/integration/odbc_dml_perf_live_e2e_test.dart

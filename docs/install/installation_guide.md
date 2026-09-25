@@ -6,14 +6,9 @@ Este guia passo a passo ajuda a instalar o **Plug Agente** no Windows.
 
 ## Pré-requisitos
 
-Compatibilidade detalhada: [requirements.md](requirements.md).
-
-Antes de comecar, certifique-se de ter:
-
-1. **Windows 10 ou superior** (64 bits)
-2. **Permissoes de Administrador** para instalacao
-3. **Conexao com a Internet** (o setup baixa o Visual C++ Redistributable x64 se ele nao estiver instalado; tambem e usada para atualizacoes)
-4. **Espaco em disco** suficiente (minimo 500 MB)
+Antes de comecar, confira [requirements.md](requirements.md): Windows 10+ 64
+bits, permissao de administrador, internet na primeira instalacao (Visual C++
+Redistributable x64) e driver ODBC 64 bits do banco.
 
 ---
 
@@ -48,7 +43,7 @@ A tela de boas-vindas fica desligada. O assistente começa pela pasta de instala
 O instalador mostra opções para:
 
 - **Criar um atalho na área de trabalho**
-- **Iniciar com o Windows**: o aplicativo inicia no login (`--autostart`, na bandeja quando ela estiver operacional). Se a bandeja não estiver disponível, a janela é exibida como fallback seguro. Não há opção de "iniciar minimizado".
+- **Iniciar com o Windows**: o aplicativo inicia no login do usuário que instalou, na bandeja quando ela estiver operacional. Detalhes em **Inicialização com o Windows** em [requirements.md](requirements.md).
 
 Se o Microsoft Visual C++ Redistributable x64 não estiver presente, o setup baixa e instala o runtime da Microsoft antes de copiar os arquivos. Sem internet essa etapa falha e a instalação é abortada.
 
@@ -80,16 +75,22 @@ O instalador requer administrador. Se o Visual C++ Redistributable x64 não
 estiver instalado, o setup tenta baixá-lo e instalá-lo; sem internet a
 instalação silenciosa falha.
 
+Sem `/TASKS` ou `/MERGETASKS`, as tarefas **Criar um atalho na área de
+trabalho** e **Iniciar com o Windows** ficam selecionadas. Para desmarcar,
+use por exemplo `/MERGETASKS="!desktopicon,!startup"`.
+
 ---
 
 ## Passo 4: Monitor de Portas (Opcional)
 
 Se você utilizar o **Monitor de Portas** (PlugPortMon) para impressão:
 
-1. Execute o script `install_monitor.bat` como administrador (na pasta de instalação ou na raiz do projeto)
-2. Se precisar usar ferramentas de linha de comando do banco, revise a seção
-   **PATH e ferramentas CLI (opcional)** em [requirements.md](requirements.md)
-3. Crie a impressora no Windows apontando para a porta `PlugPortMon`
+1. Execute `install_monitor.bat` como administrador a partir da raiz do
+   repositório, depois de compilar `native\PlugPortMon` (o script espera
+   `native\PlugPortMon\build\Release\PlugPortMon.dll`). O instalador do
+   Plug Agente não distribui esse script nem a DLL.
+2. Crie a impressora no Windows apontando para a porta `PlugPortMon`
+   (o script imprime o passo a passo ao final)
 
 ---
 
@@ -121,6 +122,9 @@ desinstalar o aplicativo principal.
 - Atalhos e ícones
 - Cache de updates em `C:\ProgramData\PlugAgente\updates`
 - Marker de auto-start `C:\ProgramData\PlugAgente\autostart-requested`
+- Entrada **Iniciar com o Windows**: HKCU Run, entradas legadas em HKLM
+  (64/32 bits), o overlay `StartupApproved` e o valor Run de cada perfil com
+  sessão aberta (perfis deslogados podem manter uma entrada órfã inofensiva)
 - Registro do protocolo `plugdb://`
 
 **NÃO remove**: Logs e demais configurações (permanecem em `C:\ProgramData\PlugAgente\`)
@@ -150,7 +154,7 @@ desinstalar o aplicativo principal.
 ### "Driver ODBC ou ferramenta do banco não foi encontrada"
 
 1. Confirme se o driver ODBC está instalado em **Fontes de Dados ODBC (64 bits)**
-2. Revise a seção **PATH e ferramentas CLI (opcional)** em [requirements.md](requirements.md)
+2. Revise a seção **PATH e Ferramentas CLI** em [requirements.md](requirements.md)
 3. Reabra o terminal ou a sessão do Windows após alterar o PATH
 
 ---

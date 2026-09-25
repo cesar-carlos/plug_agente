@@ -93,6 +93,21 @@ class E2EEnv {
     return null;
   }
 
+  /// Whether the real Windows registry auto-start tests should run
+  /// (`RUN_LIVE_STARTUP_REGISTRY_TESTS=true`).
+  static bool get runLiveStartupRegistryTests => _get('RUN_LIVE_STARTUP_REGISTRY_TESTS') == 'true';
+
+  /// Skip reason for the real registry auto-start tests; `null` when they can run.
+  static String? get liveStartupRegistrySkipMessage {
+    if (!Platform.isWindows) {
+      return 'Windows registry auto-start tests only run on Windows.';
+    }
+    if (!runLiveStartupRegistryTests) {
+      return 'Set RUN_LIVE_STARTUP_REGISTRY_TESTS=true in .env to run Windows registry auto-start tests.';
+    }
+    return null;
+  }
+
   /// Whether live hub Socket.IO tests should run (RUN_LIVE_HUB_TESTS=true).
   static bool get runLiveHubTests => _get('RUN_LIVE_HUB_TESTS') == 'true';
 

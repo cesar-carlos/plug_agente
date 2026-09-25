@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
 import 'package:plug_agente/application/services/startup_configuration_session_state.dart';
+import 'package:plug_agente/application/use_cases/installer_autostart_request_cleanup.dart';
 import 'package:plug_agente/application/use_cases/startup_launch_configuration_mapper.dart';
 import 'package:plug_agente/core/utils/launch_args.dart';
 import 'package:plug_agente/domain/repositories/i_installer_autostart_request_store.dart';
@@ -22,23 +23,45 @@ class EnsureStartupLaunchConfigurationAtBoot {
     this._repository, {
     StartupConfigurationSessionState? sessionState,
     IInstallerAutostartRequestStore? installerAutostartRequestStore,
+    DateTime Function()? now,
   }) : _sessionState = sessionState,
-       _installerAutostartRequestStore = installerAutostartRequestStore;
+       _installerAutostartRequestStore = installerAutostartRequestStore,
+       _now = now ?? DateTime.now;
+
+  static const String _logName = 'ensure_startup_launch_configuration_at_boot';
 
   final IStartupPreferencesRepository _repository;
   final StartupConfigurationSessionState? _sessionState;
   final IInstallerAutostartRequestStore? _installerAutostartRequestStore;
+  final DateTime Function() _now;
 
   Future<EnsureStartupLaunchConfigurationAtBootOutcome> call({
     required List<String> launchArgs,
   }) async {
     final isAutostart = isAutostartLaunch(launchArgs);
-    StartupLaunchConfigurationOutcome? launchConfiguration;
+    if (isAutostart) {
+      await _recordAutostartLaunch();
+    }
 
-    if (!_repository.isStartupServiceAvailable) {
-      return EnsureStartupLaunchConfigurationAtBootOutcome(
+    final validation = await _validateLaunchConfiguration();
+    _sessionState?.recordBootDiagnostics(
+      StartupBootDiagnostics(
         isAutostartLaunch: isAutostart,
-      );
+        launchConfigurationValidated: validation.validated,
+        launchConfiguration: validation.outcome,
+      ),
+    );
+
+    return EnsureStartupLaunchConfigurationAtBootOutcome(
+      isAutostartLaunch: isAutostart,
+      launchConfiguration: validation.outcome,
+    );
+  }
+
+  Future<({bool validated, StartupLaunchConfigurationOutcome? outcome})> _validateLaunchConfiguration() async {
+    const skipped = (validated: false, outcome: null);
+    if (!_repository.isStartupServiceAvailable) {
+      return skipped;
     }
 
     // Prefer the stored preference to avoid an extra registry read when we
@@ -48,34 +71,41 @@ class EnsureStartupLaunchConfigurationAtBoot {
     final installerRequested = await _applyInstallerAutostartRequest();
     if (!installerRequested && await _readUserDisabledStartup()) {
       await _persistUserDisabledStartup();
-      return EnsureStartupLaunchConfigurationAtBootOutcome(
-        isAutostartLaunch: isAutostart,
-      );
+      return skipped;
     }
 
-    final shouldValidate =
-        installerRequested || _repository.startWithWindows || await _readSystemEnabled();
-    if (shouldValidate) {
-      // ensureLaunchConfiguration now self-heals missing HKCU (writes Run key)
-      // and repairs stale/missing --autostart without UAC.
-      launchConfiguration = await StartupLaunchConfigurationMapper.validate(
-        _repository,
-        allowElevation: false,
-      );
-      if (launchConfiguration != null) {
-        developer.log(
-          'Startup launch configuration at boot: ${launchConfiguration.type.name}',
-          name: 'ensure_startup_launch_configuration_at_boot',
-          level: 800,
-        );
-      }
-      // Cache even when unchanged (null) so sync skips a second ensure pass.
-      _sessionState?.setBootLaunchConfiguration(launchConfiguration);
+    final shouldValidate = installerRequested || _repository.startWithWindows || await _readSystemEnabled();
+    if (!shouldValidate) {
+      return skipped;
     }
 
-    return EnsureStartupLaunchConfigurationAtBootOutcome(
-      isAutostartLaunch: isAutostart,
-      launchConfiguration: launchConfiguration,
+    // ensureLaunchConfiguration self-heals missing HKCU (writes Run key)
+    // and repairs stale/missing --autostart without UAC.
+    final launchConfiguration = await StartupLaunchConfigurationMapper.validate(
+      _repository,
+      allowElevation: false,
+    );
+    if (launchConfiguration != null) {
+      developer.log(
+        'Startup launch configuration at boot: ${launchConfiguration.type.name}',
+        name: _logName,
+        level: 800,
+      );
+    }
+    // Cache even when unchanged (null) so sync skips a second ensure pass.
+    _sessionState?.setBootLaunchConfiguration(launchConfiguration);
+    return (validated: true, outcome: launchConfiguration);
+  }
+
+  Future<void> _recordAutostartLaunch() async {
+    final persistResult = await _repository.persistLastAutostartLaunchAt(_now());
+    persistResult.fold(
+      (_) {},
+      (failure) => developer.log(
+        'Failed to record the --autostart launch time: $failure',
+        name: _logName,
+        level: 900,
+      ),
     );
   }
 
@@ -85,14 +115,13 @@ class EnsureStartupLaunchConfigurationAtBoot {
       return false;
     }
 
-    final pending = await store.hasPendingRequest();
-    if (!pending) {
+    if (!await _hasPendingInstallerRequest(store)) {
       return false;
     }
 
     developer.log(
       'Installer requested per-user auto-start; registering HKCU for the current user',
-      name: 'ensure_startup_launch_configuration_at_boot',
+      name: _logName,
       level: 800,
     );
 
@@ -100,7 +129,7 @@ class EnsureStartupLaunchConfigurationAtBoot {
     if (enableResult.isError()) {
       developer.log(
         'Failed to honor installer auto-start request for the current user: ${enableResult.exceptionOrNull()}',
-        name: 'ensure_startup_launch_configuration_at_boot',
+        name: _logName,
         level: 900,
       );
       return false;
@@ -110,14 +139,29 @@ class EnsureStartupLaunchConfigurationAtBoot {
     if (persistResult.isError()) {
       developer.log(
         'Enabled installer auto-start but failed to persist preference: ${persistResult.exceptionOrNull()}',
-        name: 'ensure_startup_launch_configuration_at_boot',
+        name: _logName,
         level: 900,
       );
       return true;
     }
 
-    await store.clearPendingRequest();
+    await clearInstallerAutostartRequestBestEffort(store, logName: _logName);
     return true;
+  }
+
+  Future<bool> _hasPendingInstallerRequest(IInstallerAutostartRequestStore store) async {
+    try {
+      return await store.hasPendingRequest();
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Failed to read installer auto-start request',
+        name: _logName,
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
   }
 
   Future<bool> _readUserDisabledStartup() async {
@@ -127,7 +171,7 @@ class EnsureStartupLaunchConfigurationAtBoot {
       (failure) {
         developer.log(
           'Failed to read Startup Apps disable state at boot: $failure',
-          name: 'ensure_startup_launch_configuration_at_boot',
+          name: _logName,
           level: 900,
         );
         return false;
@@ -142,7 +186,7 @@ class EnsureStartupLaunchConfigurationAtBoot {
 
     developer.log(
       'Startup Apps disabled the entry; persisting startWithWindows=false without repairing',
-      name: 'ensure_startup_launch_configuration_at_boot',
+      name: _logName,
       level: 800,
     );
     final persistResult = await _repository.persistStartWithWindows(false);
@@ -151,7 +195,7 @@ class EnsureStartupLaunchConfigurationAtBoot {
       (failure) {
         developer.log(
           'Failed to persist startWithWindows=false after Startup Apps disable: $failure',
-          name: 'ensure_startup_launch_configuration_at_boot',
+          name: _logName,
           level: 900,
         );
       },
@@ -165,7 +209,7 @@ class EnsureStartupLaunchConfigurationAtBoot {
       (failure) {
         developer.log(
           'Failed to read system startup status at boot: $failure',
-          name: 'ensure_startup_launch_configuration_at_boot',
+          name: _logName,
           level: 900,
         );
         return false;

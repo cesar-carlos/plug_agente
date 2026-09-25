@@ -50,6 +50,9 @@ MinVersion=10.0
 SetupMutex=PlugAgenteSetup
 CloseApplications=force
 CloseApplicationsFilter=plug_agente.exe
+; The app registers crash restart only; the update helper relaunches it via
+; LAUNCHAFTERUPDATE, so Restart Manager must not start a second instance.
+RestartApplications=no
 SetupLogging=yes
 #ifdef SIGN_INSTALLER
 SignTool=mysigntool
@@ -157,6 +160,57 @@ var
 begin
   MarkerPath := ExpandConstant('{commonappdata}\PlugAgente\{#AutostartRequestMarker}');
   SaveStringToFile(MarkerPath, '1', False);
+end;
+
+procedure DeleteAutostartRegistryValue(const RootKey: Integer; const RootLabel, SubKeyName: String);
+begin
+  if RegValueExists(RootKey, SubKeyName, '{#MyAppName}') then
+  begin
+    if RegDeleteValue(RootKey, SubKeyName, '{#MyAppName}') then
+      Log('Removed auto-start value from ' + RootLabel + '\' + SubKeyName)
+    else
+      Log('Failed to remove auto-start value from ' + RootLabel + '\' + SubKeyName);
+  end;
+end;
+
+// Uninstall runs elevated, so HKCU may belong to the admin rather than the
+// user who enabled auto-start. Every signed-in user's hive is loaded under
+// HKEY_USERS; profiles of signed-out users are not reachable without loading
+// their NTUSER.DAT and keep a harmless stale entry.
+procedure RemoveLoadedUserProfileAutostartValues;
+var
+  Sids: TArrayOfString;
+  I: Integer;
+begin
+  if not RegGetSubkeyNames(HKU, '', Sids) then
+  begin
+    Log('Could not enumerate HKEY_USERS for auto-start cleanup');
+    Exit;
+  end;
+  for I := 0 to GetArrayLength(Sids) - 1 do
+  begin
+    if (Pos('S-1-5-21-', Sids[I]) = 1) and (Pos('_Classes', Sids[I]) = 0) then
+    begin
+      DeleteAutostartRegistryValue(HKU, 'HKU', Sids[I] + '\{#RunKeyPath}');
+      DeleteAutostartRegistryValue(HKU, 'HKU', Sids[I] + '\{#StartupApprovedRunKeyPath}');
+    end;
+  end;
+end;
+
+// Legacy builds wrote machine-wide Run values; the app itself only writes HKCU
+// and the StartupApproved overlay, which [UninstallRun] does not cover.
+procedure RemoveAutostartRegistryValues;
+begin
+  DeleteAutostartRegistryValue(HKLM64, 'HKLM64', '{#RunKeyPath}');
+  DeleteAutostartRegistryValue(HKLM32, 'HKLM32', '{#RunKeyPath}');
+  DeleteAutostartRegistryValue(HKCU, 'HKCU', '{#StartupApprovedRunKeyPath}');
+  RemoveLoadedUserProfileAutostartValues;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    RemoveAutostartRegistryValues;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

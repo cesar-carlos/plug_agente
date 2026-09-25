@@ -230,6 +230,30 @@ void LogSingleInstanceMutexDiagnostics(
   }
 }
 
+// Windows Error Reporting relaunches the agent after a crash or hang once it
+// has run for 60s, so a failure after login does not leave it offline until
+// the next logon. Installer updates and reboots are excluded: the update
+// helper and the Run key already relaunch the app, and a second instance
+// would hit the single-instance mutex.
+void RegisterCrashRestart() {
+#ifdef NDEBUG
+  const std::wstring restart_args(plug_agente::kAutostartArg,
+                                  plug_agente::kAutostartArg +
+                                      sizeof(plug_agente::kAutostartArg) - 1);
+  const HRESULT hr = ::RegisterApplicationRestart(
+      restart_args.c_str(), RESTART_NO_PATCH | RESTART_NO_REBOOT);
+  if (FAILED(hr)) {
+    wchar_t buffer[128];
+    if (::swprintf_s(buffer,
+                     L"[plug_agente] RegisterApplicationRestart failed "
+                     L"hr=0x%08lx\n",
+                     static_cast<unsigned long>(hr)) > 0) {
+      ::OutputDebugStringW(buffer);
+    }
+  }
+#endif
+}
+
 }  // namespace
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
@@ -279,6 +303,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
+  RegisterCrashRestart();
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {

@@ -2,3 +2,6 @@
 #define AutostartArg "--autostart"
 ; Handshake file consumed by the app to register HKCU for the interactive user.
 #define AutostartRequestMarker "autostart-requested"
+; Registry paths for auto-start cleanup (must match startup_registry_entry.dart).
+#define RunKeyPath "Software\Microsoft\Windows\CurrentVersion\Run"
+#define StartupApprovedRunKeyPath "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"

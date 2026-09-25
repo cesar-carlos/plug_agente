@@ -16,7 +16,6 @@ docs/
 |- architecture/
 |  |- readme.md
 |  |- QUICKSTART.md
-|  |- performance_reliability_improvements.md
 |  |- odbc_worker_evaluation_criteria.md
 |  \- odbc_operational_validation_runbook.md
 |- communication/
@@ -41,6 +40,8 @@ docs/
 |     |- contrato_remoto.md
 |     |- ui_acoes.md
 |     \- seguranca_acoes.md
+|- backup/
+|  \- local_backup_manifest.schema.json
 |- runtime/
 |  \- odbc_pool_and_transactions.md
 |- install/

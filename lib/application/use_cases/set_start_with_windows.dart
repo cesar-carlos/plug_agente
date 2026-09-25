@@ -1,15 +1,21 @@
 import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
+import 'package:plug_agente/application/use_cases/installer_autostart_request_cleanup.dart';
 import 'package:plug_agente/application/use_cases/startup_launch_configuration_mapper.dart';
 import 'package:plug_agente/domain/errors/startup_service_failure.dart';
+import 'package:plug_agente/domain/repositories/i_installer_autostart_request_store.dart';
 import 'package:plug_agente/domain/repositories/i_startup_preferences_repository.dart';
 import 'package:result_dart/result_dart.dart';
 
 class SetStartWithWindows {
-  SetStartWithWindows(this._repository);
+  SetStartWithWindows(
+    this._repository, {
+    IInstallerAutostartRequestStore? installerAutostartRequestStore,
+  }) : _installerAutostartRequestStore = installerAutostartRequestStore;
 
   final IStartupPreferencesRepository _repository;
+  final IInstallerAutostartRequestStore? _installerAutostartRequestStore;
 
   Future<Result<SetStartWithWindowsOutcome>> call(bool value) async {
     StartupLaunchConfigurationOutcome? launchConfiguration;
@@ -51,6 +57,15 @@ class SetStartWithWindows {
 
     final persistResult = await _repository.persistStartWithWindows(value);
     if (persistResult.isSuccess()) {
+      // An explicit user choice supersedes a pending installer request, which
+      // would otherwise re-enable auto-start on the next boot.
+      final installerRequestStore = _installerAutostartRequestStore;
+      if (installerRequestStore != null) {
+        await clearInstallerAutostartRequestBestEffort(
+          installerRequestStore,
+          logName: 'set_start_with_windows',
+        );
+      }
       return Success(
         SetStartWithWindowsOutcome(
           change: value ? StartupChangeOutcome.enabled : StartupChangeOutcome.disabled,
@@ -87,9 +102,7 @@ class SetStartWithWindows {
   }
 
   Future<Result<Unit>> _rollbackSystemStartup({required bool enabled}) async {
-    final rollbackResult = enabled
-        ? await _repository.disableSystemStartup()
-        : await _repository.enableSystemStartup();
+    final rollbackResult = enabled ? await _repository.disableSystemStartup() : await _repository.enableSystemStartup();
     rollbackResult.fold(
       (_) {
         developer.log(

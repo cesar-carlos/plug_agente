@@ -36,7 +36,7 @@ instalacao, ataques fisicos a maquina.
 | D15 | icacls hardening | Restringe ACLs do `ProgramData\PlugAgente\updates` | Tampering por outro processo local sem admin |
 | D16 | Drain window de listener WinSparkle | 30s | Estado tardio do WinSparkle confundindo background |
 | D17 | Cancellation token | Coordinator e installer respondem a cancel | Estado consistente quando user muda preferencia mid-flight |
-| D18 | UAC gate (currentUserThenElevated) | Estratrgia documentada em `auto_update_setup.md` | Tentativa de privilege escalation por atacante local |
+| D18 | UAC gate (currentUserThenElevated) | Estrategia documentada em `auto_update_setup.md` | Tentativa de privilege escalation por atacante local |
 | D19 | Helper SHA-256 capturado | Diagnostic-only `helperSha256` | Detectar drift do helper entre installs (audit, nao bloqueio) |
 | D20 | TLS pinning de GitHub Pages | Implicito (Windows root store) | Atacante que controla CA root no sistema (improvavel sem admin) |
 
@@ -149,13 +149,12 @@ Mitigacoes operacionais:
 - Branch protection: `main` requer review (pelo menos 1 aprovador).
 - `signtool` gate (D7) e Ed25519 (D9): se atacante interno publica direto
   pelo workflow, ainda precisa dos secrets.
-- Audit do GitHub Actions: workflows nao podem rodar sem trigger humano
-  (`workflow_dispatch`).
+- Audit do GitHub Actions: `Publish Windows Release` so roda por trigger
+  humano (`workflow_dispatch`).
 
 **Residual**: developer com PR aprovado pode introduzir backdoor sutil
 que passa review. Mitigacao = code review serio + threat model como
-input para checklist de PR sensiveis (este documento + secao 2.3 do
-plano).
+input para checklist de PR sensiveis (secao abaixo).
 
 ## Matriz what-if
 
@@ -184,7 +183,7 @@ linha = ator. Resultado = severidade + defesa que ainda mitiga.
    substituir DLLs antes do build sem detectar.
 
 3. **Rollback de versao com regressao depende de operador**: nao ha
-   restore automatico (planejado em Fase 8 do plano de evolucao).
+   restore automatico (Fase 8 do plano de evolucao, diferida).
 
 4. **Helper Authenticode probe e best-effort**: PowerShell pode falhar
    por motivos operacionais (timeout, ausencia, politicas). Quando
@@ -195,7 +194,8 @@ linha = ator. Resultado = severidade + defesa que ainda mitiga.
 5. **Sem auditoria centralizada de telemetria**: status de update e
    visivel apenas localmente. Operador nao sabe se 10% da frota esta
    em `feedSignatureStatus: invalid` sem coletar diagnostics manualmente.
-   Planejado em Fase 7 do plano de evolucao.
+   Fase 7 do plano de evolucao: gateway cliente existe, mas o transporte e
+   no-op ate o hub aceitar `agent.autoUpdate.diagnostics.push`.
 
 ## Checklist de revisao de PR sensiveis
 
@@ -221,4 +221,4 @@ Use ao revisar PR que toca os componentes abaixo:
 - Plano de evolucao: [docs/implemente/plano_auto_update_evolution.md](../implemente/plano_auto_update_evolution.md)
 - Schema do helper status:
   `docs/communication/schemas/silent_update_launcher_status.schema.json`
-  (planejado em Fase 6B)
+  (validado no workflow Release Preflight)

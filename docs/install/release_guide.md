@@ -84,8 +84,17 @@ Authenticode (nao e mais necessario marcar `skip_authenticode_check=true`).
 Secrets recomendados:
 
 - `RELEASE_PUBLISH_TOKEN`: PAT classico com escopo `repo` para o appcast disparar
-  sozinho apos a release. Sem ele, o workflow **Publish Windows Release** dispara
-  **Update Appcast on Release** como fallback.
+  sozinho apos a release. Releases criadas com o `GITHUB_TOKEN` padrao nao
+  propagam `release.published`; sem o PAT, o step **Dispatch appcast update
+  without PAT** do **Publish Windows Release** dispara **Update Appcast on
+  Release** como fallback. Para criar o PAT: GitHub > Settings > Developer
+  settings > Personal access tokens > Tokens (classic), escopo `repo` apenas,
+  expiracao curta (ex.: 90 dias); depois Settings > Secrets and variables >
+  Actions > New repository secret `RELEASE_PUBLISH_TOKEN`.
+
+Secrets e variables do feed assinado (`AUTO_UPDATE_FEED_PUBLIC_KEY`,
+`APPCAST_SIGNING_PRIVATE_KEY`, `vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE`)
+ficam em [auto_update_setup.md](auto_update_setup.md).
 
 ## Processo Local Manual
 
@@ -100,6 +109,7 @@ version: 1.2.7+2
 ### 2. Gerar build Windows e instalador
 
 ```bash
+python installer/update_version.py
 python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --require-iscc --check-pages
 python installer/build_installer.py
 python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --check-installer \
@@ -108,17 +118,20 @@ python tool/release/release_preflight.py --version 1.2.7 --allow-dirty --check-i
 
 O `installer/build_installer.py` executa:
 
-1. `installer/update_version.py`
-2. `flutter build windows --release`
-3. `python tool/elevated/build_elevated_runner.py` (`dart build cli`, copia
+1. Recusa o build se `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE` resolver para
+   `true` (default quando ausente) sem assinatura configurada; para build local
+   sem certificado, defina `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false`
+2. `installer/update_version.py` somente com `--sync-version`
+3. `flutter build windows --release`
+4. `python tool/elevated/build_elevated_runner.py` (`dart build cli`, copia
    `plug_agente_elevated_runner.exe` e sidecars nativos para o bundle
    Release/Debug; obrigatorio)
-4. Validacao de presenca de `plug_agente.exe`, `plug_update_helper.exe` e
+5. Validacao de presenca de `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe` no bundle Release
-5. Assinatura opcional de `plug_agente.exe`, `plug_update_helper.exe` e
+6. Assinatura opcional de `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe`
-6. `ISCC installer/setup.iss` (com `SignTool` + `SignedUninstaller` quando o
-   certificado estiver configurado)
+7. `ISCC installer/setup.iss` (com `SignTool` + `SignedUninstaller` quando o
+   certificado estiver configurado) e `signtool verify` do instalador assinado
 
 A segunda chamada do preflight (`--check-installer --feed-public-key`)
 confirma que a chave publica Ed25519 esta embutida no `.exe` gerado; sem isso,
@@ -166,45 +179,16 @@ git push origin v1.2.7
 ### 6. Validar automacao
 
 Apos publicar, confira o workflow **Update Appcast on Release** em GitHub
-Actions. Ele valida tag, versao, nome do asset, atualiza `appcast.xml` e roda
-o smoke check do feed publicado usando `tool/appcast/appcast_manager.py`.
+Actions (os dois runs: o de `release.published` e o redespacho que publica o
+Pages; detalhes em [auto_update_setup.md](auto_update_setup.md)). Se ele nao
+disparar, rode manualmente:
 
-> **IMPORTANTE — Trigger automatico do update-appcast.**
->
-> O `update-appcast.yml` so dispara automaticamente quando o GitHub Release e
-> criado com um Personal Access Token (PAT). Releases publicadas com o
-> `GITHUB_TOKEN` padrao nao propagam o evento `release.published` (protecao
-> contra recursao de workflows) e exigem disparo manual:
->
-> ```bash
-> gh workflow run update-appcast.yml --ref main \
->   -f release_tag=v1.2.7 \
->   -f rollout_percentage=100 \
->   -f channel=stable
-> ```
->
-> Para automatizar, crie um PAT classico com escopo `repo` e configure-o como
-> o segredo de repositorio `RELEASE_PUBLISH_TOKEN`. O `release.yml` ja prioriza
-> esse segredo quando ele existe e cai para `GITHUB_TOKEN` (emitindo um
-> `::warning::`) quando ausente.
->
-> Passos:
->
-> 1. GitHub > Settings > Developer settings > Personal access tokens > Tokens
->    (classic) > Generate new token (classic).
-> 2. Escopo minimo: `repo` (apenas). Expiracao curta recomendada
->    (90 dias, com renovacao agendada).
-> 3. No repositorio: Settings > Secrets and variables > Actions > New
->    repository secret > nome `RELEASE_PUBLISH_TOKEN`, valor = o PAT gerado.
-
-Feed oficial:
-
-```text
-https://cesar-carlos.github.io/plug_agente/appcast.xml
+```bash
+gh workflow run update-appcast.yml --ref main \
+  -f release_tag=v1.2.7 \
+  -f rollout_percentage=100 \
+  -f channel=stable
 ```
-
-Validacoes detalhadas do feed e do update ficam em
-[auto_update_setup.md](auto_update_setup.md).
 
 Validacao manual da release publicada:
 
@@ -222,20 +206,11 @@ python tool/appcast/validate_release.py \
   --feed-url https://cesar-carlos.github.io/plug_agente/appcast.xml
 ```
 
-## Fonte de Verdade do Appcast
+## Tooling do Appcast
 
-O arquivo `tool/appcast/appcast_manager.py` concentra:
-
-- geracao do item mais recente do `appcast.xml`;
-- validacao estrutural do feed;
-- smoke check do feed publicado;
-- testes Python do fluxo de appcast.
-
-Antes de mexer no workflow de update, atualize primeiro esse script e rode:
-
-```bash
-python -m unittest tool.appcast.test_appcast_manager -v
-```
+Modulos Python, workflows e testes do appcast estao em **Fonte de Verdade do
+Appcast** em [auto_update_setup.md](auto_update_setup.md). Antes de mexer no
+workflow de update, atualize primeiro o tooling e rode os testes listados la.
 
 ## Fluxo Manual para Depuracao
 
@@ -244,8 +219,12 @@ Use apenas quando precisar isolar uma etapa:
 ```bash
 python installer/update_version.py
 flutter build windows --release
+python tool/elevated/build_elevated_runner.py
 ISCC installer/setup.iss
 ```
+
+Para validar so a sintaxe do `setup.iss` (sem payload Flutter), use
+`python tool/release/release_preflight.py --compile-iss`.
 
 Preflight local completo antes de publicar manualmente:
 
@@ -265,16 +244,18 @@ python tool/release/release_preflight.py --version 1.2.7 --require-iscc --check-
   PFX. Use `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar
   explicitamente quando a assinatura nao estiver configurada.
 - O workflow `Publish Windows Release` roda `signtool verify /pa /v` sobre
-  instalador e `plug_update_helper.exe` apos o build. Esse gate falha o
-  release quando qualquer dos dois nao tem cadeia confiavel. Use o input
-  `skip_authenticode_check=true` apenas em rebuild manual sem certificado.
+  instalador e `plug_update_helper.exe` apos o build quando ha certificado.
+  Esse gate falha o release quando qualquer dos dois nao tem cadeia
+  confiavel. Sem certificado o gate e pulado automaticamente; o input
+  `skip_authenticode_check=true` so e necessario para pular o gate mesmo com
+  certificado (uso restrito).
 - O workflow tambem expoe o input `require_valid_update_signature`: quando
   `true`, compila o release com `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true` e
-  forca `WINDOWS_CODE_SIGNING_REQUIRED=true`. Use somente depois que
-  Authenticode estiver verde no helper e no instalador em duas releases.
-- A retencao do `appcast.xml` e limitada pelo workflow para evitar crescimento
-  indefinido do feed.
-- O feed oficial e publicado via GitHub Pages usando Actions artifact; habilite
-  `Settings` > `Pages` > `GitHub Actions` uma vez no repositorio.
+  forca `WINDOWS_CODE_SIGNING_REQUIRED=true`. Criterio de promocao em
+  [auto_update_setup.md](auto_update_setup.md).
+- A retencao do `appcast.xml` e limitada pelo workflow (`MAX_APPCAST_ITEMS=10`)
+  para evitar crescimento indefinido do feed.
+- O feed oficial e publicado via GitHub Pages; a configuracao unica esta em
+  [auto_update_setup.md](auto_update_setup.md).
 - O CI executa `actionlint` nos workflows para detectar problemas de sintaxe,
   expressoes e scripts inline antes de usar o fluxo de release.

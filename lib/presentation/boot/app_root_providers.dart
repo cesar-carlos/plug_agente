@@ -12,6 +12,7 @@ import 'package:plug_agente/application/services/config_service.dart';
 import 'package:plug_agente/application/services/hub_access_token_refresh_gate.dart';
 import 'package:plug_agente/application/services/hub_access_token_renewer.dart';
 import 'package:plug_agente/application/services/hub_session_coordinator.dart';
+import 'package:plug_agente/application/use_cases/build_startup_diagnostic_report.dart';
 import 'package:plug_agente/application/use_cases/cancel_agent_action_execution.dart';
 import 'package:plug_agente/application/use_cases/cancel_all_notifications.dart';
 import 'package:plug_agente/application/use_cases/cancel_notification.dart';
@@ -103,6 +104,7 @@ List<SingleChildWidget> buildAppRootProviders() {
         syncStartupStatus: getIt<SyncStartupStatus>(),
         setStartWithWindows: getIt<SetStartWithWindows>(),
         setTrayBehaviorPreference: getIt<SetTrayBehaviorPreference>(),
+        buildStartupDiagnosticReport: getIt<BuildStartupDiagnosticReport>(),
       ),
     ),
     if (getIt.isRegistered<IAutoUpdateOrchestrator>())

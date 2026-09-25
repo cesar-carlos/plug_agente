@@ -1,7 +1,7 @@
 # ODBC Operational Validation Runbook
 
 Este runbook descreve **como validar** o eixo ODBC/performance apos rollout.
-Nao guarde resultados aqui — o wrapper PowerShell ja gera uma worksheet
+Nao guarde resultados aqui — o wrapper Python ja gera uma worksheet
 timestampada e versionada por execucao em `artifacts/odbc_validation/`.
 
 ## Quando rodar
@@ -55,8 +55,9 @@ contendo:
 | `driver_matrix_*.log` | Benchmark async + streaming por driver configurado |
 | `health_burst_*_before/after.json` | Snapshots reais de `agent.getHealth` antes/depois do burst |
 
-Sem `-All`, o wrapper executa preflight e gera o template; voce decide quais
-etapas rodar.
+Sem `--all`, o wrapper executa preflight e gera o template; etapas isoladas:
+`--run-smoke`, `--run-burst`, `--run-benchmark`, `--run-streaming-benchmark`,
+`--run-driver-matrix-benchmark`.
 
 ## Passos manuais (apenas se o wrapper nao for opcao)
 
@@ -144,13 +145,15 @@ Campos mais relevantes (nomes atuais do contrato `agent.getHealth`):
   `active_non_query_workers` (e respectivos `max_*`)
 - `queries.p95_latency_ms`, `queries.p99_latency_ms`
 - `timeouts.pool_total`, `timeouts.cancel_success_total`
-- `pool.native_quarantined_pool_count` e
-  `pool.native_quarantine_recovery_scheduled` — native pool isolado apos
-  abortamento/erro de release; acompanhe tambem `pool_recycle_failure`.
-- `sql_disconnect_abort_attempt`, `sql_disconnect_abort_requested`,
-  `sql_disconnect_abort_armed`, `sql_disconnect_abort_failure` — cancelamento
-  best-effort de SQL ativo quando a sessao Socket.IO termina. Esses totais nao
-  confirmam rollback de um efeito ja aceito pelo banco.
+
+Fora do `agent.getHealth` (contadores do diagnostico ODBC / logs; lista em
+`docs/runtime/odbc_pool_and_transactions.md`, secao "Counters and metric keys"):
+
+- quarentena do pool nativo — eventos `native_quarantine_slow_recovery` e
+  `quarantine_recovered` no log; acompanhe tambem `pool_recycle_failure`.
+- `sql_disconnect_abort_*` — cancelamento best-effort de SQL ativo quando a
+  sessao Socket.IO termina. Esses totais nao confirmam rollback de um efeito ja
+  aceito pelo banco.
 
 Os percentis de latencia usam uma amostra adaptativa limitada (padrao 256,
 configuravel por `METRICS_LATENCY_SAMPLE_CAP`, limitado a 64–1000). Contadores
@@ -173,7 +176,7 @@ Regras praticas:
   esperados, sem sinal de gargalo no banco.
 - Aumente `ODBC_POOL_SIZE` e `SQL_QUEUE_MAX_WORKERS` apenas se houver
   beneficio real em throughput **e** sem piorar p95/p99.
-- Se a quarentena nativa crescer ou ficar agendada por muito tempo, investigue
+- Se a quarentena nativa entrar em recuperacao lenta (retry a cada 30 s), investigue
   o driver e as causas de timeout/cancelamento antes de aumentar concorrencia.
   O fallback lease/direto preserva seguranca e disponibilidade, mas nao e uma
   justificativa para reutilizar o pool suspeito.
@@ -189,7 +192,6 @@ Regras praticas:
 ## Cross-references
 
 - Tuning vigente (runtime): `docs/runtime/odbc_pool_and_transactions.md`
-- Status do eixo: `performance_reliability_improvements.md`
 - Criterios de avaliacao do worker pool: `odbc_worker_evaluation_criteria.md`
 - Quick start operacional: `QUICKSTART.md`
 - Concorrencia da fila SQL: `docs/testing/sql_queue_concurrency_tests.md`

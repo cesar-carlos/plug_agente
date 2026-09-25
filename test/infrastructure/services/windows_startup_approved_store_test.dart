@@ -27,9 +27,17 @@ void main() {
       ).equals(StartupApprovedStatus.disabled);
     });
 
-    test('classifies unknown and truncated payloads as unknown', () {
+    test('classifies odd status variants as disabled', () {
+      for (final status in const <int>[0x01, 0x07, 0x09]) {
+        check(
+          StartupApprovedBinary.classify(Uint8List.fromList(<int>[status, 0x00, 0x00, 0x00])),
+        ).equals(StartupApprovedStatus.disabled);
+      }
+    });
+
+    test('classifies zero status and truncated payloads as unknown', () {
       check(
-        StartupApprovedBinary.classify(Uint8List.fromList(const <int>[0x09, 0x00, 0x00, 0x00])),
+        StartupApprovedBinary.classify(Uint8List.fromList(const <int>[0x00, 0x00, 0x00, 0x00])),
       ).equals(StartupApprovedStatus.unknown);
       check(
         StartupApprovedBinary.classify(Uint8List.fromList(const <int>[0x02, 0x00])),

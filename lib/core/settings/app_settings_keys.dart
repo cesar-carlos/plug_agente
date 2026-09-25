@@ -4,6 +4,10 @@ class AppSettingsKeys {
   static const String isDarkModeEnabled = 'settings.is_dark_mode_enabled';
   static const String startWithWindows = 'settings.start_with_windows';
 
+  /// UTC ISO-8601 timestamp of the last `--autostart` launch, used by the
+  /// startup diagnostic to tell whether Windows actually launched the agent.
+  static const String lastAutostartLaunchAt = 'settings.last_autostart_launch_at';
+
   /// Leftover `settings.json` key from the removed "start minimized" toggle.
   /// Boot and UI ignore it. Do not wipe on upgrade.
   static const String startMinimized = 'settings.start_minimized';

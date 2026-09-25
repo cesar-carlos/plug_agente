@@ -140,16 +140,30 @@ class AppBootstrapOrchestrator {
   Future<EnsureStartupLaunchConfigurationAtBootOutcome> _ensureStartupLaunchConfiguration(
     List<String> args,
   ) async {
-    final override = ensureStartupLaunchConfigurationOverride;
-    if (override != null) {
-      return override(args);
-    }
-    if (getIt.isRegistered<EnsureStartupLaunchConfigurationAtBoot>()) {
-      return getIt<EnsureStartupLaunchConfigurationAtBoot>()(launchArgs: args);
-    }
-    return EnsureStartupLaunchConfigurationAtBootOutcome(
+    final fallbackOutcome = EnsureStartupLaunchConfigurationAtBootOutcome(
       isAutostartLaunch: isAutostartLaunch(args),
     );
+    try {
+      final override = ensureStartupLaunchConfigurationOverride;
+      if (override != null) {
+        return await override(args);
+      }
+      if (getIt.isRegistered<EnsureStartupLaunchConfigurationAtBoot>()) {
+        return await getIt<EnsureStartupLaunchConfigurationAtBoot>()(launchArgs: args);
+      }
+      return fallbackOutcome;
+    } on Object catch (error, stackTrace) {
+      // Auto-start self-healing is secondary: it must never keep the agent
+      // from booting and serving the hub.
+      dev.log(
+        'Startup launch configuration failed at boot; continuing without it',
+        name: 'app_bootstrap_orchestrator',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return fallbackOutcome;
+    }
   }
 
   Future<RuntimeCapabilities> _resolveRuntimeCapabilities() async {

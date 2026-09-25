@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/models/startup_preferences_outcomes.dart';
@@ -17,6 +19,10 @@ void main() {
   late StartupConfigurationSessionState sessionState;
   late EnsureStartupLaunchConfigurationAtBoot useCase;
 
+  setUpAll(() {
+    registerFallbackValue(DateTime.utc(2026));
+  });
+
   setUp(() {
     repository = _MockStartupPreferencesRepository();
     sessionState = StartupConfigurationSessionState();
@@ -27,6 +33,61 @@ void main() {
     when(() => repository.readStartupDisabledByUser()).thenAnswer(
       (_) async => const Success(false),
     );
+    when(() => repository.persistLastAutostartLaunchAt(any())).thenAnswer(
+      (_) async => const Success(unit),
+    );
+  });
+
+  group('boot diagnostics', () {
+    test('records the --autostart launch time and the validated outcome', () async {
+      final launchedAt = DateTime.utc(2026, 9, 25, 8, 30);
+      useCase = EnsureStartupLaunchConfigurationAtBoot(
+        repository,
+        sessionState: sessionState,
+        now: () => launchedAt,
+      );
+      when(() => repository.isStartupServiceAvailable).thenReturn(true);
+      when(() => repository.startWithWindows).thenReturn(true);
+      when(
+        () => repository.ensureLaunchConfiguration(allowElevation: false),
+      ).thenAnswer(
+        (_) async => const Success(StartupLaunchConfigurationStatus.repaired),
+      );
+
+      await useCase(launchArgs: const <String>[LaunchArgsConstants.autostartArg]);
+
+      verify(() => repository.persistLastAutostartLaunchAt(launchedAt)).called(1);
+      final diagnostics = sessionState.bootDiagnostics;
+      expect(diagnostics?.isAutostartLaunch, isTrue);
+      expect(diagnostics?.launchConfigurationValidated, isTrue);
+      expect(diagnostics?.launchConfiguration?.type, StartupLaunchConfigurationOutcomeType.repaired);
+    });
+
+    test('does not record a launch time for manual launches and marks skipped validation', () async {
+      when(() => repository.isStartupServiceAvailable).thenReturn(true);
+      when(() => repository.startWithWindows).thenReturn(false);
+      when(() => repository.readSystemStartupEnabled()).thenAnswer(
+        (_) async => const Success(false),
+      );
+
+      await useCase(launchArgs: const <String>[]);
+
+      verifyNever(() => repository.persistLastAutostartLaunchAt(any()));
+      expect(sessionState.bootDiagnostics?.isAutostartLaunch, isFalse);
+      expect(sessionState.bootDiagnostics?.launchConfigurationValidated, isFalse);
+    });
+
+    test('keeps booting when the launch time cannot be persisted', () async {
+      when(() => repository.persistLastAutostartLaunchAt(any())).thenAnswer(
+        (_) async => Failure(StartupServiceFailure(message: 'settings write failed')),
+      );
+      when(() => repository.isStartupServiceAvailable).thenReturn(false);
+
+      final outcome = await useCase(launchArgs: const <String>[LaunchArgsConstants.autostartArg]);
+
+      expect(outcome.isAutostartLaunch, isTrue);
+      expect(sessionState.bootDiagnostics?.launchConfigurationValidated, isFalse);
+    });
   });
 
   test('does not treat unhealthy registry entry as autostart without --autostart arg', () async {
@@ -243,6 +304,62 @@ void main() {
     verify(() => repository.persistStartWithWindows(true)).called(1);
   });
 
+  test('continues boot validation when the installer request cannot be read', () async {
+    final requestStore = _FakeInstallerAutostartRequestStore(pending: true)
+      ..readError = const FileSystemException('Access denied');
+    useCase = EnsureStartupLaunchConfigurationAtBoot(
+      repository,
+      sessionState: sessionState,
+      installerAutostartRequestStore: requestStore,
+    );
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(true);
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
+    );
+
+    final outcome = await useCase(launchArgs: const <String>[LaunchArgsConstants.autostartArg]);
+
+    expect(outcome.isAutostartLaunch, isTrue);
+    verifyNever(() => repository.enableSystemStartup());
+    verify(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).called(1);
+  });
+
+  test('honors the installer request even when the marker cannot be deleted', () async {
+    final requestStore = _FakeInstallerAutostartRequestStore(pending: true)
+      ..clearError = const FileSystemException('File in use');
+    useCase = EnsureStartupLaunchConfigurationAtBoot(
+      repository,
+      sessionState: sessionState,
+      installerAutostartRequestStore: requestStore,
+    );
+    when(() => repository.isStartupServiceAvailable).thenReturn(true);
+    when(() => repository.startWithWindows).thenReturn(false);
+    when(() => repository.enableSystemStartup()).thenAnswer(
+      (_) async => const Success(unit),
+    );
+    when(() => repository.persistStartWithWindows(true)).thenAnswer(
+      (_) async => const Success(unit),
+    );
+    when(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).thenAnswer(
+      (_) async => const Success(StartupLaunchConfigurationStatus.unchanged),
+    );
+
+    await useCase(launchArgs: const <String>[]);
+
+    expect(requestStore.pending, isTrue);
+    verify(() => repository.enableSystemStartup()).called(1);
+    verify(
+      () => repository.ensureLaunchConfiguration(allowElevation: false),
+    ).called(1);
+  });
+
   test('persists startWithWindows=false when Startup Apps disabled the entry', () async {
     when(() => repository.isStartupServiceAvailable).thenReturn(true);
     when(() => repository.startWithWindows).thenReturn(true);
@@ -291,12 +408,24 @@ class _FakeInstallerAutostartRequestStore implements IInstallerAutostartRequestS
   _FakeInstallerAutostartRequestStore({required this.pending});
 
   bool pending;
+  Exception? readError;
+  Exception? clearError;
 
   @override
-  Future<bool> hasPendingRequest() async => pending;
+  Future<bool> hasPendingRequest() async {
+    final error = readError;
+    if (error != null) {
+      throw error;
+    }
+    return pending;
+  }
 
   @override
   Future<void> clearPendingRequest() async {
+    final error = clearError;
+    if (error != null) {
+      throw error;
+    }
     pending = false;
   }
 }

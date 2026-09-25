@@ -37,7 +37,23 @@ void registerPlugStartupServices(
         sessionState: getIt<StartupConfigurationSessionState>(),
       ),
     )
-    ..registerLazySingleton(() => SetStartWithWindows(getIt<IStartupPreferencesRepository>()))
+    ..registerLazySingleton(
+      () => SetStartWithWindows(
+        getIt<IStartupPreferencesRepository>(),
+        installerAutostartRequestStore: getIt.isRegistered<IInstallerAutostartRequestStore>()
+            ? getIt<IInstallerAutostartRequestStore>()
+            : null,
+      ),
+    )
+    ..registerLazySingleton(
+      () => BuildStartupDiagnosticReport(
+        getIt<IStartupPreferencesRepository>(),
+        sessionState: getIt<StartupConfigurationSessionState>(),
+        installerAutostartRequestStore: getIt.isRegistered<IInstallerAutostartRequestStore>()
+            ? getIt<IInstallerAutostartRequestStore>()
+            : null,
+      ),
+    )
     ..registerLazySingleton(
       () => EnsureStartupLaunchConfigurationAtBoot(
         getIt<IStartupPreferencesRepository>(),
