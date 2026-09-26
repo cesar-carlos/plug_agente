@@ -52,7 +52,7 @@ class AuthorizeSqlOperation {
             .map(
               (resource) => _decisionCacheKey(
                 tokenHash: tokenHash,
-                operation: classification.operation.name,
+                operation: resource.operation.name,
                 resource: resource.normalizedName,
                 requestDatabase: normalizedRequestDatabase,
               ),
@@ -61,12 +61,13 @@ class AuthorizeSqlOperation {
 
         final cache = _decisionCache;
         final missIndices = <int>[];
-        final deniedNames = <String>{};
+        final deniedAccesses = <ClassifiedSqlResource>{};
         final reasonByDeniedName = <String, String>{};
         String? clientIdFromCache;
 
         for (var i = 0; i < resources.length; i++) {
-          final name = resources[i].normalizedName;
+          final access = resources[i];
+          final name = access.normalizedName;
           if (cache == null) {
             missIndices.add(i);
             continue;
@@ -80,7 +81,7 @@ class AuthorizeSqlOperation {
           if (entry.allowed) {
             continue;
           }
-          deniedNames.add(name);
+          deniedAccesses.add(access);
           if (clientIdFromCache == null && entry.clientId != null && entry.clientId!.isNotEmpty) {
             clientIdFromCache = entry.clientId;
           }
@@ -92,14 +93,14 @@ class AuthorizeSqlOperation {
         }
 
         if (missIndices.isEmpty) {
-          if (deniedNames.isEmpty) {
+          if (deniedAccesses.isEmpty) {
             return const Success(unit);
           }
           return Failure(
             _buildAuthorizationFailure(
               classification: classification,
               policy: null,
-              deniedNames: deniedNames,
+              deniedAccesses: deniedAccesses,
               reasonByDeniedName: reasonByDeniedName,
               clientIdFromCache: clientIdFromCache,
             ),
@@ -139,14 +140,14 @@ class AuthorizeSqlOperation {
                   method: method,
                 );
               }
-              if (deniedNames.isEmpty) {
+              if (deniedAccesses.isEmpty) {
                 return const Success(unit);
               }
               return Failure(
                 _buildAuthorizationFailure(
                   classification: classification,
                   policy: policy,
-                  deniedNames: deniedNames,
+                  deniedAccesses: deniedAccesses,
                   reasonByDeniedName: reasonByDeniedName,
                   clientIdFromCache: clientIdFromCache,
                 ),
@@ -154,10 +155,10 @@ class AuthorizeSqlOperation {
             }
 
             for (final i in missIndices) {
-              final resource = resources[i];
+              final access = resources[i];
               final allowed = policy.isAllowed(
-                operation: classification.operation,
-                resource: resource,
+                operation: access.operation,
+                resource: access.resource,
               );
               if (allowed) {
                 _cacheDecision(
@@ -168,7 +169,7 @@ class AuthorizeSqlOperation {
                   method: method,
                 );
               } else {
-                final name = resource.normalizedName;
+                final name = access.normalizedName;
                 final reason = policy.isRevoked
                     ? AuthorizationContextConstants.tokenRevokedReason
                     : AuthorizationContextConstants.missingPermissionReason;
@@ -180,7 +181,7 @@ class AuthorizeSqlOperation {
                   requestId: requestId,
                   method: method,
                 );
-                deniedNames.add(name);
+                deniedAccesses.add(access);
                 _recordReasonForName(
                   reasonByDeniedName: reasonByDeniedName,
                   name: name,
@@ -188,14 +189,14 @@ class AuthorizeSqlOperation {
                 );
               }
             }
-            if (deniedNames.isEmpty) {
+            if (deniedAccesses.isEmpty) {
               return const Success(unit);
             }
             return Failure(
               _buildAuthorizationFailure(
                 classification: classification,
                 policy: policy,
-                deniedNames: deniedNames,
+                deniedAccesses: deniedAccesses,
                 reasonByDeniedName: reasonByDeniedName,
                 clientIdFromCache: clientIdFromCache,
               ),
@@ -227,17 +228,8 @@ class AuthorizeSqlOperation {
           },
         );
       },
-      (_) async {
-        return Failure(
-          domain.ConfigurationFailure.withContext(
-            message: 'Authorization denied: unsupported SQL classification',
-            context: {
-              'authorization': true,
-              'reason': AuthorizationContextConstants.invalidPolicyReason,
-              'user_message': 'Comando SQL nao suportado para autorizacao. Revise a consulta enviada.',
-            },
-          ),
-        );
+      (failure) async {
+        return Failure(_buildUnsupportedSqlFailure(failure));
       },
     );
   }
@@ -249,11 +241,11 @@ class AuthorizeSqlOperation {
     if (policy.isRevoked || !policy.usesGlobalScope) {
       return false;
     }
-    if (!policy.globalPermissions.allows(classification.operation)) {
-      return false;
-    }
-    for (final resource in classification.resources) {
-      final supported = switch (resource.resourceType) {
+    for (final access in classification.resources) {
+      if (!policy.globalPermissions.allows(access.operation)) {
+        return false;
+      }
+      final supported = switch (access.resourceType) {
         DatabaseResourceType.table => policy.allTables,
         DatabaseResourceType.view => policy.allViews,
         DatabaseResourceType.unknown => policy.allTables || policy.allViews,
@@ -284,11 +276,19 @@ class AuthorizeSqlOperation {
   domain.ConfigurationFailure _buildAuthorizationFailure({
     required SqlOperationClassification classification,
     required ClientTokenPolicy? policy,
-    required Set<String> deniedNames,
+    required Set<ClassifiedSqlResource> deniedAccesses,
     required Map<String, String> reasonByDeniedName,
     String? clientIdFromCache,
   }) {
-    final sorted = deniedNames.toList()..sort();
+    final sortedAccesses = deniedAccesses.toList()
+      ..sort((left, right) {
+        final byName = left.normalizedName.compareTo(right.normalizedName);
+        if (byName != 0) {
+          return byName;
+        }
+        return left.operation.name.compareTo(right.operation.name);
+      });
+    final sortedNames = sortedAccesses.map((access) => access.normalizedName).toSet().toList()..sort();
     final topReason = _resolveTopLevelReason(
       reasonByDeniedName: reasonByDeniedName,
       policy: policy,
@@ -297,8 +297,9 @@ class AuthorizeSqlOperation {
       policy: policy,
       clientIdFromCache: clientIdFromCache,
     );
-    final opName = classification.operation.name;
-    final resourceList = _formatNameListForMessage(sorted);
+    final primary = sortedAccesses.first;
+    final opName = primary.operation.name;
+    final resourceList = _formatNameListForMessage(sortedNames);
     final userMessage = switch (topReason) {
       AuthorizationContextConstants.tokenRevokedReason =>
         'Token revogado. Gere um novo token para continuar. Recursos na consulta: $resourceList.',
@@ -306,24 +307,38 @@ class AuthorizeSqlOperation {
         'Este token exige que a request informe o database configurado no payload antes de ${_operationLabel(classification.operation)}: $resourceList.',
       AuthorizationContextConstants.databaseMismatchReason =>
         'O database enviado na request nao corresponde ao database configurado no token para ${_operationLabel(classification.operation)}: $resourceList.',
-      _ => 'Acesso negado para ${_operationLabel(classification.operation)} nos recursos: $resourceList.',
+      _ => _userMessageForMissingPermission(sortedAccesses),
     };
 
     return domain.ConfigurationFailure.withContext(
-      message: _formatTechnicalMessage(
-        operation: opName,
-        resourceNames: sorted,
-      ),
+      message: _formatTechnicalMessage(sortedAccesses),
       context: {
         'authorization': true,
         'reason': topReason,
         'client_id': ?clientId,
         'operation': opName,
-        'resource': sorted.first,
-        'denied_resources': sorted,
+        'resource': primary.normalizedName,
+        'denied_resources': sortedNames,
         'user_message': userMessage,
       },
     );
+  }
+
+  String _userMessageForMissingPermission(List<ClassifiedSqlResource> deniedAccesses) {
+    final namesByOperation = <SqlOperation, List<String>>{};
+    for (final access in deniedAccesses) {
+      namesByOperation.putIfAbsent(access.operation, () => <String>[]).add(access.normalizedName);
+    }
+    final parts = <String>[];
+    for (final operation in SqlOperation.values) {
+      final names = namesByOperation[operation];
+      if (names == null || names.isEmpty) {
+        continue;
+      }
+      final unique = names.toSet().toList()..sort();
+      parts.add('Acesso negado para ${_operationLabel(operation)} nos recursos: ${unique.join(', ')}.');
+    }
+    return parts.join(' ');
   }
 
   String _resolveTopLevelReason({
@@ -362,19 +377,30 @@ class AuthorizeSqlOperation {
     return sorted.join(', ');
   }
 
-  String _formatTechnicalMessage({
-    required String operation,
-    required List<String> resourceNames,
-  }) {
-    if (resourceNames.isEmpty) {
-      return 'Authorization denied for $operation';
+  String _formatTechnicalMessage(List<ClassifiedSqlResource> deniedAccesses) {
+    if (deniedAccesses.isEmpty) {
+      return 'Authorization denied';
     }
-    if (resourceNames.length <= _kMaxResourceNamesInTechnicalMessage) {
-      return 'Authorization denied for $operation on ${resourceNames.join(', ')}';
+    final namesByOperation = <SqlOperation, List<String>>{};
+    for (final access in deniedAccesses) {
+      namesByOperation.putIfAbsent(access.operation, () => <String>[]).add(access.normalizedName);
     }
-    final head = resourceNames.take(_kMaxResourceNamesInTechnicalMessage).join(', ');
-    final rest = resourceNames.length - _kMaxResourceNamesInTechnicalMessage;
-    return 'Authorization denied for $operation on $head (+$rest more)';
+    final parts = <String>[];
+    for (final operation in SqlOperation.values) {
+      final names = namesByOperation[operation];
+      if (names == null || names.isEmpty) {
+        continue;
+      }
+      final unique = names.toSet().toList()..sort();
+      if (unique.length <= _kMaxResourceNamesInTechnicalMessage) {
+        parts.add('${operation.name} on ${unique.join(', ')}');
+        continue;
+      }
+      final head = unique.take(_kMaxResourceNamesInTechnicalMessage).join(', ');
+      final rest = unique.length - _kMaxResourceNamesInTechnicalMessage;
+      parts.add('${operation.name} on $head (+$rest more)');
+    }
+    return 'Authorization denied for ${parts.join('; ')}';
   }
 
   void _cacheDecision({
@@ -481,6 +507,38 @@ class AuthorizeSqlOperation {
       return false;
     }
     return failure.isTransient;
+  }
+
+  domain.ConfigurationFailure _buildUnsupportedSqlFailure(Object failure) {
+    final original = failure is domain.Failure ? failure : null;
+    final classificationReason = original?.context['reason'] as String?;
+    return domain.ConfigurationFailure.withContext(
+      message: original?.message ?? 'Authorization denied: unsupported SQL classification',
+      cause: original,
+      context: {
+        'authorization': true,
+        'reason': AuthorizationContextConstants.unsupportedSqlReason,
+        'user_message': _userMessageForClassification(classificationReason),
+        'classification_reason': ?classificationReason,
+      },
+    );
+  }
+
+  String _userMessageForClassification(String? classificationReason) {
+    return switch (classificationReason) {
+      SqlClassificationReasons.emptySql => 'Comando SQL vazio. Envie uma consulta valida.',
+      SqlClassificationReasons.multipleStatements =>
+        'Varios comandos SQL na mesma requisicao nao sao suportados para autorizacao. Envie um comando por vez.',
+      SqlClassificationReasons.unsupportedOperation =>
+        'Comando SQL nao suportado para autorizacao. Revise a consulta enviada.',
+      SqlClassificationReasons.noTargetResources =>
+        'Nao foi possivel identificar as tabelas da consulta para autorizacao. Revise a consulta enviada.',
+      SqlClassificationReasons.nestingLimit =>
+        'A consulta tem subconsultas demais para autorizacao. Simplifique o aninhamento.',
+      SqlClassificationReasons.unclosedConstruct =>
+        'A consulta tem aspas ou parenteses sem fechamento. Revise o SQL enviado.',
+      _ => 'Comando SQL nao suportado para autorizacao. Revise a consulta enviada.',
+    };
   }
 
   String? _normalizeDatabaseName(String? rawValue) {

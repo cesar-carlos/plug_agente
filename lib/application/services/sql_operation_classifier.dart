@@ -1,8 +1,35 @@
+import 'package:meta/meta.dart';
 import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/value_objects/client_permission_set.dart';
 import 'package:plug_agente/domain/value_objects/database_resource.dart';
 import 'package:result_dart/result_dart.dart';
+
+@immutable
+class ClassifiedSqlResource {
+  const ClassifiedSqlResource({
+    required this.resource,
+    required this.operation,
+  });
+
+  final DatabaseResource resource;
+  final SqlOperation operation;
+
+  String get normalizedName => resource.normalizedName;
+
+  DatabaseResourceType get resourceType => resource.resourceType;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ClassifiedSqlResource && other.resource == resource && other.operation == operation;
+  }
+
+  @override
+  int get hashCode => Object.hash(resource, operation);
+}
 
 class SqlOperationClassification {
   const SqlOperationClassification({
@@ -11,10 +38,21 @@ class SqlOperationClassification {
   });
 
   final SqlOperation operation;
-  final List<DatabaseResource> resources;
+  final List<ClassifiedSqlResource> resources;
+}
+
+abstract final class SqlClassificationReasons {
+  static const String emptySql = 'empty_sql';
+  static const String multipleStatements = 'multiple_statements';
+  static const String unsupportedOperation = 'unsupported_operation';
+  static const String noTargetResources = 'no_target_resources';
+  static const String nestingLimit = 'nesting_limit';
+  static const String unclosedConstruct = 'unclosed_construct';
 }
 
 class SqlOperationClassifier {
+  static const int maxDerivedTableDepth = 16;
+
   static final RegExp _identifierStart = RegExp('[a-z_]', caseSensitive: false);
   static final RegExp _identifierPart = RegExp(
     r'[a-z0-9_$#]',
@@ -27,54 +65,80 @@ class SqlOperationClassifier {
 
   Result<SqlOperationClassification> classifyPrepared(PreparedSql prepared) {
     if (prepared.trimmed.isEmpty) {
-      return Failure(domain.ValidationFailure('SQL cannot be empty'));
+      return Failure(
+        _classificationFailure(
+          message: 'SQL cannot be empty',
+          reason: SqlClassificationReasons.emptySql,
+        ),
+      );
     }
 
     if (prepared.hasMultipleStatements) {
       return Failure(
-        domain.ValidationFailure.withContext(
+        _classificationFailure(
           message: 'Multiple SQL statements are not supported',
-          context: {
-            'operation': 'sql_classification',
-          },
+          reason: SqlClassificationReasons.multipleStatements,
         ),
       );
     }
 
     final normalized = prepared.stripped.toLowerCase();
     if (normalized.isEmpty) {
-      return Failure(domain.ValidationFailure('SQL cannot be empty'));
+      return Failure(
+        _classificationFailure(
+          message: 'SQL cannot be empty',
+          reason: SqlClassificationReasons.emptySql,
+        ),
+      );
     }
 
     final operation = _detectOperation(normalized);
     if (operation == null) {
       return Failure(
-        domain.ValidationFailure.withContext(
+        _classificationFailure(
           message: 'Unsupported SQL operation',
-          context: {
-            'operation': 'sql_classification',
-          },
+          reason: SqlClassificationReasons.unsupportedOperation,
         ),
       );
     }
 
-    final resources = _extractResources(normalized, operation);
-    if (resources.isEmpty) {
+    try {
+      final resources = _extractResources(normalized, operation);
+      if (resources.isEmpty) {
+        return Failure(
+          _classificationFailure(
+            message: 'Unable to determine SQL target resources',
+            reason: SqlClassificationReasons.noTargetResources,
+          ),
+        );
+      }
+
+      return Success(
+        SqlOperationClassification(
+          operation: operation,
+          resources: resources,
+        ),
+      );
+    } on _SqlClassificationAbort catch (error) {
       return Failure(
-        domain.ValidationFailure.withContext(
-          message: 'Unable to determine SQL target resources',
-          context: {
-            'operation': 'sql_classification',
-          },
+        _classificationFailure(
+          message: error.message,
+          reason: error.reason,
         ),
       );
     }
+  }
 
-    return Success(
-      SqlOperationClassification(
-        operation: operation,
-        resources: resources,
-      ),
+  domain.ValidationFailure _classificationFailure({
+    required String message,
+    required String reason,
+  }) {
+    return domain.ValidationFailure.withContext(
+      message: message,
+      context: {
+        'operation': 'sql_classification',
+        'reason': reason,
+      },
     );
   }
 
@@ -97,42 +161,76 @@ class SqlOperationClassifier {
     return null;
   }
 
-  List<DatabaseResource> _extractResources(
+  List<ClassifiedSqlResource> _extractResources(
     String sql,
     SqlOperation operation,
   ) {
-    final resources = <DatabaseResource>{};
+    final accesses = <ClassifiedSqlResource>{};
     final cteAliases = _extractCteAliases(sql);
 
+    void addAll(Iterable<DatabaseResource> resources, SqlOperation requiredOperation) {
+      for (final resource in resources) {
+        if (_isCteAliasReference(resource, cteAliases)) {
+          continue;
+        }
+        accesses.add(
+          ClassifiedSqlResource(
+            resource: resource,
+            operation: requiredOperation,
+          ),
+        );
+      }
+    }
+
     if (operation == SqlOperation.read) {
-      resources.addAll(_extractByKeywords(sql, const ['from', 'join', 'apply']));
+      addAll(_extractByKeywords(sql, const ['from', 'join', 'apply']), SqlOperation.read);
     } else if (operation == SqlOperation.update) {
       if (sql.startsWith('update ')) {
         final updateTarget = _extractUpdateTarget(sql);
         if (updateTarget != null) {
-          resources.add(
-            DatabaseResource(
-              resourceType: DatabaseResourceType.unknown,
-              name: updateTarget,
-            ),
+          addAll(
+            [
+              DatabaseResource(
+                resourceType: DatabaseResourceType.unknown,
+                name: updateTarget,
+              ),
+            ],
+            SqlOperation.update,
           );
         }
-        resources.addAll(_extractByKeywords(sql, const ['from', 'join', 'apply']));
+        addAll(_extractByKeywords(sql, const ['from', 'join', 'apply']), SqlOperation.update);
       } else if (sql.startsWith('insert ')) {
-        resources.addAll(_extractByKeywords(sql, const ['into']));
+        addAll(_extractByKeywords(sql, const ['into']), SqlOperation.update);
+        addAll(_extractByKeywords(sql, const ['from', 'join', 'apply']), SqlOperation.read);
       } else if (sql.startsWith('merge ')) {
-        resources.addAll(_extractByKeywords(sql, const ['merge', 'into']));
+        final mergeTarget = _extractMergeTarget(sql);
+        if (mergeTarget != null) {
+          addAll(
+            [
+              DatabaseResource(
+                resourceType: DatabaseResourceType.unknown,
+                name: mergeTarget,
+              ),
+            ],
+            SqlOperation.update,
+          );
+        }
+        addAll(_extractByKeywords(sql, const ['using', 'from', 'join', 'apply']), SqlOperation.read);
       }
     } else if (operation == SqlOperation.delete) {
-      resources.addAll(_extractByKeywords(sql, const ['from']));
+      addAll(_extractByKeywords(sql, const ['from']), SqlOperation.delete);
+      addAll(_extractByKeywords(sql, const ['join', 'apply']), SqlOperation.read);
     } else if (operation == SqlOperation.ddl) {
       final ddlTarget = _extractDdlTarget(sql);
       if (ddlTarget != null) {
-        resources.add(ddlTarget);
+        addAll([ddlTarget], SqlOperation.ddl);
+        if (ddlTarget.resourceType == DatabaseResourceType.view) {
+          addAll(_extractByKeywords(sql, const ['from', 'join', 'apply']), SqlOperation.read);
+        }
       }
     }
 
-    return resources.where((resource) => !_isCteAliasReference(resource, cteAliases)).toList();
+    return accesses.toList();
   }
 
   DatabaseResource? _extractDdlTarget(String sql) {
@@ -237,30 +335,40 @@ class SqlOperationClassifier {
     int subqueryDepth = 0,
   }) {
     final extracted = <DatabaseResource>{};
-    final lowerSql = sql.toLowerCase();
+    final cteAliases = _extractCteAliases(sql);
 
     for (final keyword in keywords) {
       var searchIndex = 0;
       while (searchIndex < sql.length) {
-        final keywordIndex = _findKeyword(lowerSql, keyword, searchIndex);
+        final keywordIndex = _findKeyword(sql, keyword, searchIndex);
         if (keywordIndex < 0) {
           break;
         }
         searchIndex = keywordIndex + keyword.length;
         final afterKeyword = _skipWhitespace(sql, searchIndex);
         if (afterKeyword < sql.length && sql[afterKeyword] == '(') {
-          final close = _findClosingParenthesis(sql, afterKeyword);
-          if (close > afterKeyword && subqueryDepth < 1) {
-            final inner = sql.substring(afterKeyword + 1, close);
-            extracted.addAll(
-              _extractByKeywords(
-                inner,
-                const ['from', 'join', 'apply'],
-                subqueryDepth: subqueryDepth + 1,
-              ),
+          if (subqueryDepth >= maxDerivedTableDepth) {
+            throw const _SqlClassificationAbort(
+              reason: SqlClassificationReasons.nestingLimit,
+              message: 'SQL derived-table nesting exceeds the classification limit',
             );
           }
-          searchIndex = close >= 0 ? close + 1 : searchIndex;
+          final close = _findClosingParenthesis(sql, afterKeyword);
+          if (close < 0) {
+            throw const _SqlClassificationAbort(
+              reason: SqlClassificationReasons.unclosedConstruct,
+              message: 'Unclosed SQL parenthesis',
+            );
+          }
+          final inner = sql.substring(afterKeyword + 1, close);
+          extracted.addAll(
+            _extractByKeywords(
+              inner,
+              const ['from', 'join', 'apply'],
+              subqueryDepth: subqueryDepth + 1,
+            ),
+          );
+          searchIndex = close + 1;
           continue;
         }
         final identifier = _readQualifiedIdentifier(sql, searchIndex);
@@ -276,7 +384,7 @@ class SqlOperationClassifier {
       }
     }
 
-    return extracted;
+    return extracted.where((resource) => !_isCteAliasReference(resource, cteAliases)).toSet();
   }
 
   String? _extractUpdateTarget(String sql) {
@@ -293,6 +401,22 @@ class SqlOperationClassifier {
     final hasFromClause =
         _findKeyword(lowerSql, 'from', parsed.nextIndex) >= 0 || _findKeyword(lowerSql, 'join', parsed.nextIndex) >= 0;
     if (hasFromClause && _looksLikeAlias(parsed.value)) {
+      return null;
+    }
+    return parsed.value;
+  }
+
+  String? _extractMergeTarget(String sql) {
+    final mergeIndex = _findKeyword(sql, 'merge', 0);
+    if (mergeIndex < 0) {
+      return null;
+    }
+    var index = _skipWhitespace(sql, mergeIndex + 'merge'.length);
+    if (_isKeywordAt(sql, 'into', index)) {
+      index = _skipWhitespace(sql, index + 'into'.length);
+    }
+    final parsed = _readQualifiedIdentifier(sql, index);
+    if (parsed == null || parsed.value.trim().isEmpty) {
       return null;
     }
     return parsed.value;
@@ -337,7 +461,10 @@ class SqlOperationClassifier {
       if (index < sql.length && sql[index] == '(') {
         final closeColumnList = _findClosingParenthesis(sql, index);
         if (closeColumnList < 0) {
-          break;
+          throw const _SqlClassificationAbort(
+            reason: SqlClassificationReasons.unclosedConstruct,
+            message: 'Unclosed SQL parenthesis',
+          );
         }
         index = _skipWhitespace(sql, closeColumnList + 1);
       }
@@ -351,7 +478,10 @@ class SqlOperationClassifier {
       }
       final closeBody = _findClosingParenthesis(sql, index);
       if (closeBody < 0) {
-        break;
+        throw const _SqlClassificationAbort(
+          reason: SqlClassificationReasons.unclosedConstruct,
+          message: 'Unclosed SQL parenthesis',
+        );
       }
       index = _skipWhitespace(sql, closeBody + 1);
       if (index >= sql.length || sql[index] != ',') {
@@ -375,17 +505,18 @@ class SqlOperationClassifier {
     return parts.isNotEmpty && cteAliases.contains(parts.last);
   }
 
-  int _findKeyword(String lowerSql, String keyword, int start) {
+  int _findKeyword(String sql, String keyword, int start) {
     var index = start;
-    while (index < lowerSql.length) {
-      final candidate = lowerSql.indexOf(keyword, index);
-      if (candidate < 0) {
-        return -1;
+    while (index < sql.length) {
+      final skipped = _skipQuotedRegion(sql, index);
+      if (skipped > index) {
+        index = skipped;
+        continue;
       }
-      if (_isKeywordAt(lowerSql, keyword, candidate)) {
-        return candidate;
+      if (_isKeywordAt(sql, keyword, index)) {
+        return index;
       }
-      index = candidate + 1;
+      index++;
     }
     return -1;
   }
@@ -444,7 +575,10 @@ class SqlOperationClassifier {
     if (current == '[') {
       final closeIndex = sql.indexOf(']', start + 1);
       if (closeIndex < 0) {
-        return null;
+        throw const _SqlClassificationAbort(
+          reason: SqlClassificationReasons.unclosedConstruct,
+          message: 'Unclosed SQL identifier',
+        );
       }
       return _ParsedIdentifier(
         value: sql.substring(start, closeIndex + 1),
@@ -452,9 +586,12 @@ class SqlOperationClassifier {
       );
     }
     if (current == '"' || current == '`') {
-      final closeIndex = sql.indexOf(current, start + 1);
+      final closeIndex = _findClosingDelimiter(sql, start, current);
       if (closeIndex < 0) {
-        return null;
+        throw const _SqlClassificationAbort(
+          reason: SqlClassificationReasons.unclosedConstruct,
+          message: 'Unclosed SQL identifier',
+        );
       }
       return _ParsedIdentifier(
         value: sql.substring(start, closeIndex + 1),
@@ -497,59 +634,59 @@ class SqlOperationClassifier {
     return !_isIdentifierPart(sql[index]);
   }
 
+  int _skipQuotedRegion(String sql, int index) {
+    if (index >= sql.length) {
+      return index;
+    }
+    final char = sql[index];
+    if (char == "'" || char == '"' || char == '`') {
+      final close = _findClosingDelimiter(sql, index, char);
+      if (close < 0) {
+        throw const _SqlClassificationAbort(
+          reason: SqlClassificationReasons.unclosedConstruct,
+          message: 'Unclosed SQL literal',
+        );
+      }
+      return close + 1;
+    }
+    if (char == '[') {
+      final close = sql.indexOf(']', index + 1);
+      if (close < 0) {
+        throw const _SqlClassificationAbort(
+          reason: SqlClassificationReasons.unclosedConstruct,
+          message: 'Unclosed SQL identifier',
+        );
+      }
+      return close + 1;
+    }
+    return index;
+  }
+
+  int _findClosingDelimiter(String sql, int openIndex, String delimiter) {
+    var i = openIndex + 1;
+    while (i < sql.length) {
+      if (sql[i] == delimiter) {
+        if (i + 1 < sql.length && sql[i + 1] == delimiter) {
+          i += 2;
+          continue;
+        }
+        return i;
+      }
+      i++;
+    }
+    return -1;
+  }
+
   int _findClosingParenthesis(String sql, int openIndex) {
     var depth = 0;
-    var inSingleQuote = false;
-    var inDoubleQuote = false;
-    var inBracketQuote = false;
     var i = openIndex;
     while (i < sql.length) {
+      final skipped = _skipQuotedRegion(sql, i);
+      if (skipped > i) {
+        i = skipped;
+        continue;
+      }
       final char = sql[i];
-      if (inSingleQuote) {
-        // Handle SQL-style escaped single quote: '' inside a string literal
-        if (char == "'" && i + 1 < sql.length && sql[i + 1] == "'") {
-          i += 2;
-          continue;
-        }
-        if (char == "'") {
-          inSingleQuote = false;
-        }
-        i++;
-        continue;
-      }
-      if (inDoubleQuote) {
-        if (char == '"' && i + 1 < sql.length && sql[i + 1] == '"') {
-          i += 2;
-          continue;
-        }
-        if (char == '"') {
-          inDoubleQuote = false;
-        }
-        i++;
-        continue;
-      }
-      if (inBracketQuote) {
-        if (char == ']') {
-          inBracketQuote = false;
-        }
-        i++;
-        continue;
-      }
-      if (char == "'") {
-        inSingleQuote = true;
-        i++;
-        continue;
-      }
-      if (char == '"') {
-        inDoubleQuote = true;
-        i++;
-        continue;
-      }
-      if (char == '[') {
-        inBracketQuote = true;
-        i++;
-        continue;
-      }
       if (char == '(') {
         depth++;
       } else if (char == ')') {
@@ -582,4 +719,14 @@ class _DdlObjectKeyword {
 
   final String keyword;
   final int index;
+}
+
+class _SqlClassificationAbort implements Exception {
+  const _SqlClassificationAbort({
+    required this.reason,
+    required this.message,
+  });
+
+  final String reason;
+  final String message;
 }

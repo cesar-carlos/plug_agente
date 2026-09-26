@@ -16,6 +16,10 @@ import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/infrastructure/external_services/jwt_jwks_verifier.dart';
 import 'package:result_dart/result_dart.dart';
 
+const String _tokenRevokedUserMessage = 'Token revogado. Gere um novo token para continuar.';
+const String _localStoreReadUserMessage =
+    'Nao foi possivel ler a politica do token no armazenamento local. Tente novamente.';
+
 class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
   AuthorizationPolicyResolver(
     this._featureFlags, {
@@ -46,7 +50,11 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
     if (rawToken.isEmpty) {
       final failure = domain.ConfigurationFailure.withContext(
         message: 'Missing client token',
-        context: {'authentication': true},
+        context: {
+          'authentication': true,
+          'reason': AuthorizationContextConstants.unauthorizedReason,
+          'user_message': 'Informe o token de cliente na requisicao para executar esta operacao.',
+        },
       );
       await _recordAuthorizationDeniedAudit(failure);
       return Failure(failure);
@@ -60,6 +68,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
         context: {
           'authorization': true,
           'reason': AuthorizationContextConstants.tokenRevokedReason,
+          'user_message': _tokenRevokedUserMessage,
         },
       );
       await _recordAuthorizationDeniedAudit(failure);
@@ -167,6 +176,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           context: {
             'authentication': true,
             'reason': AuthorizationContextConstants.unauthorizedReason,
+            'user_message': _localStoreReadUserMessage,
           },
         ),
       );
@@ -187,6 +197,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           'reason': AuthorizationContextConstants.tokenRevokedReason,
           'client_id': summary.clientId,
           'token_id': summary.id,
+          'user_message': _tokenRevokedUserMessage,
         },
       );
       _addToRevokedStoreIfNeeded(rawToken, failure);
@@ -234,6 +245,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
             'authentication': true,
             'reason': AuthorizationContextConstants.unauthorizedReason,
             'operation': failure.context['operation'],
+            'user_message': _localStoreReadUserMessage,
           },
         ),
       );
@@ -248,6 +260,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
       context: {
         'authentication': true,
         'reason': AuthorizationContextConstants.invalidTokenSignatureReason,
+        'user_message': 'A verificacao da assinatura do token e obrigatoria. Confira a configuracao JWKS do agente.',
       },
     );
   }
@@ -279,6 +292,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
           context: {
             'authentication': true,
             'reason': AuthorizationContextConstants.invalidPolicyReason,
+            'user_message': 'Politica do token invalida: client_id e obrigatorio.',
           },
         ),
       );
@@ -292,6 +306,7 @@ class AuthorizationPolicyResolver implements IAuthorizationPolicyResolver {
             'authorization': true,
             'reason': AuthorizationContextConstants.tokenRevokedReason,
             'client_id': merged.clientId,
+            'user_message': _tokenRevokedUserMessage,
           },
         ),
       );

@@ -1054,6 +1054,7 @@
   "wsSqlInvestigationRpcId": "ID da requisição",
   "wsSqlInvestigationInternalId": "ID interno de execução",
   "wsSqlInvestigationReason": "Motivo",
+  "wsSqlInvestigationReasonCode": "Código",
   "wsSqlInvestigationOriginalSql": "SQL recebida",
   "wsSqlInvestigationEffectiveSql": "SQL enviada ao banco",
   "wsSqlInvestigationNotExecuted": "Não executada no banco",

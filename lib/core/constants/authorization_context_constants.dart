@@ -8,6 +8,8 @@ abstract final class AuthorizationContextConstants {
 
   static const String invalidPolicyReason = 'invalid_policy';
 
+  static const String unsupportedSqlReason = 'unsupported_sql';
+
   static const String unauthorizedReason = 'unauthorized';
 
   static const String jwksCircuitOpenReason = 'jwks_circuit_open';

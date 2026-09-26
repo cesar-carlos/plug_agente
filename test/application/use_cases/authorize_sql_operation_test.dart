@@ -164,6 +164,7 @@ INNER JOIN Cliente c ON c.CodCliente = cr.CodCliente
           final um = authFailure.context['user_message'] as String?;
           expect(um, isNotNull);
           expect(um, contains('dbo.users'));
+          expect(um, contains('excluir'));
         },
       );
     });
@@ -443,6 +444,147 @@ INNER JOIN Cliente c ON c.CodCliente = cr.CodCliente
       expect(second.isSuccess(), isTrue);
       verify(() => resolver.resolvePolicy(any())).called(1);
     });
+
+    test('should authorize nested CTE lookup when global read is enabled', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer((_) async => Success(_buildFullAccessPolicy()));
+
+      final result = await useCase.call(
+        token: 'bearer-token',
+        sql: _municipioLookupSql,
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test(
+      'should deny nested CTE lookup when the token only allows another table',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildAllowedPolicy()));
+
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: _municipioLookupSql,
+        );
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final authFailure = failure as ConfigurationFailure;
+            expect(
+              authFailure.context['reason'],
+              equals(AuthorizationContextConstants.missingPermissionReason),
+            );
+            expect(authFailure.context['denied_resources'], equals(<String>['municipio']));
+          },
+        );
+      },
+    );
+
+    test('should deny unclassifiable SQL with unsupported_sql instead of invalid_policy', () async {
+      final result = await useCase.call(
+        token: 'bearer-token',
+        sql: 'SELECT * FROM users; DELETE FROM users WHERE id = 1',
+      );
+
+      expect(result.isError(), isTrue);
+      verifyNever(() => resolver.resolvePolicy(any()));
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) {
+          final authFailure = failure as ConfigurationFailure;
+          expect(
+            authFailure.context['reason'],
+            equals(AuthorizationContextConstants.unsupportedSqlReason),
+          );
+          expect(
+            authFailure.context['reason'],
+            isNot(equals(AuthorizationContextConstants.invalidPolicyReason)),
+          );
+          expect(
+            authFailure.context['classification_reason'],
+            equals(SqlClassificationReasons.multipleStatements),
+          );
+          expect(authFailure.context['user_message'], isNotEmpty);
+        },
+      );
+    });
+
+    test('should deny SQL above the derived-table nesting limit with unsupported_sql', () async {
+      final result = await useCase.call(
+        token: 'bearer-token',
+        sql: _wrapDerivedTables(
+          depth: SqlOperationClassifier.maxDerivedTableDepth + 1,
+          inner: 'SELECT * FROM Municipio',
+        ),
+      );
+
+      expect(result.isError(), isTrue);
+      verifyNever(() => resolver.resolvePolicy(any()));
+      result.fold(
+        (_) => fail('Expected failure'),
+        (failure) {
+          final authFailure = failure as ConfigurationFailure;
+          expect(
+            authFailure.context['reason'],
+            equals(AuthorizationContextConstants.unsupportedSqlReason),
+          );
+          expect(
+            authFailure.context['classification_reason'],
+            equals(SqlClassificationReasons.nestingLimit),
+          );
+        },
+      );
+    });
+
+    test('should authorize INSERT SELECT when global scope grants update and read', () async {
+      when(
+        () => resolver.resolvePolicy(any()),
+      ).thenAnswer((_) async => Success(_buildFullAccessPolicy()));
+
+      final result = await useCase.call(
+        token: 'bearer-token',
+        sql: 'INSERT INTO dbo.target (id) SELECT id FROM dbo.source',
+      );
+
+      expect(result.isSuccess(), isTrue);
+    });
+
+    test(
+      'should deny INSERT SELECT source when the token only allows update on the target',
+      () async {
+        when(
+          () => resolver.resolvePolicy(any()),
+        ).thenAnswer((_) async => Success(_buildUpdateOnlyTargetPolicy()));
+
+        final result = await useCase.call(
+          token: 'bearer-token',
+          sql: 'INSERT INTO dbo.target (id) SELECT id FROM dbo.source',
+        );
+
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (failure) {
+            final authFailure = failure as ConfigurationFailure;
+            expect(
+              authFailure.context['reason'],
+              equals(AuthorizationContextConstants.missingPermissionReason),
+            );
+            expect(authFailure.context['denied_resources'], equals(<String>['dbo.source']));
+            expect(authFailure.context['operation'], equals('read'));
+            final userMessage = authFailure.context['user_message'] as String;
+            expect(userMessage, contains('consultar'));
+            expect(userMessage, contains('dbo.source'));
+            expect(userMessage, isNot(contains('alterar')));
+          },
+        );
+      },
+    );
   });
 }
 
@@ -453,6 +595,29 @@ ClientTokenPolicy _buildFullAccessPolicy() {
     allViews: true,
     globalPermissions: ClientPermissionSet.fullAccess,
     rules: <ClientTokenRule>[],
+  );
+}
+
+ClientTokenPolicy _buildUpdateOnlyTargetPolicy() {
+  return const ClientTokenPolicy(
+    clientId: 'client-acme',
+    allTables: false,
+    allViews: false,
+    allPermissions: false,
+    rules: <ClientTokenRule>[
+      ClientTokenRule(
+        resource: DatabaseResource(
+          resourceType: DatabaseResourceType.unknown,
+          name: 'dbo.target',
+        ),
+        permissions: ClientPermissionSet(
+          canRead: false,
+          canUpdate: true,
+          canDelete: false,
+        ),
+        effect: ClientTokenRuleEffect.allow,
+      ),
+    ],
   );
 }
 
@@ -559,3 +724,44 @@ ClientTokenPolicy _buildDatabaseScopedPolicy() {
     ],
   );
 }
+
+String _wrapDerivedTables({required int depth, required String inner}) {
+  var sql = inner;
+  for (var i = 0; i < depth; i++) {
+    sql = 'SELECT * FROM ($sql) q$i';
+  }
+  return sql;
+}
+
+const _municipioLookupSql = '''
+WITH Parametros AS (
+  SELECT CAST(:limit AS INTEGER) AS MaxRows,
+         CAST(:searchPattern AS VARCHAR(255)) AS SearchPattern
+),
+Base AS (
+  SELECT DISTINCT NomeMunicipio FROM (
+    SELECT UPPER(REPLACE(LTRIM(RTRIM(COALESCE(NomeOriginal, ''))), CHAR(39), '')) AS NomeMunicipio
+    FROM (
+      SELECT b.Nome AS NomeOriginal
+      FROM Municipio b
+      WHERE b.Nome IS NOT NULL AND LTRIM(RTRIM(b.Nome)) <> ''
+    ) Origem
+  ) N
+),
+Filtered AS (
+  SELECT b.NomeMunicipio
+  FROM Base b
+  CROSS JOIN Parametros p
+  WHERE LEN(b.NomeMunicipio) > 3
+    AND (p.SearchPattern IS NULL OR b.NomeMunicipio LIKE p.SearchPattern)
+),
+Numbered AS (
+  SELECT f.NomeMunicipio, ROW_NUMBER() OVER (ORDER BY f.NomeMunicipio) AS Rn
+  FROM Filtered f
+)
+SELECT n.NomeMunicipio
+FROM Numbered n
+CROSS JOIN Parametros p
+WHERE n.Rn <= p.MaxRows
+ORDER BY n.Rn
+''';

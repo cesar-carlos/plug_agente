@@ -84,9 +84,7 @@ class SqlRpcClientTokenGate {
         authorizedFingerprints.add(fingerprint);
       }
 
-      final preparedSql = preparedList == null || i >= preparedList.length
-          ? null
-          : preparedList[i];
+      final preparedSql = preparedList == null || i >= preparedList.length ? null : preparedList[i];
       final authStopwatch = Stopwatch()..start();
       final authResult = await _support.authorizeWithBudget(
         token: clientToken,
@@ -150,12 +148,14 @@ class SqlRpcClientTokenGate {
     }
 
     var reason = explicitReason;
+    String? userMessage;
     String? clientId;
     String? operation;
     String? resource;
     if (failure != null) {
       final ctx = failure.context;
       reason ??= ctx['reason'] as String?;
+      userMessage = ctx['user_message'] as String?;
       clientId = ctx['client_id'] as String?;
       operation = ctx['operation'] as String?;
       resource = ctx['resource'] as String?;
@@ -166,6 +166,7 @@ class SqlRpcClientTokenGate {
       originalSql: sql,
       rpcRequestId: request.id?.toString(),
       reason: reason,
+      userMessage: userMessage,
       clientId: clientId,
       operation: operation,
       resource: resource,

@@ -7,6 +7,7 @@ import 'package:plug_agente/core/constants/rpc_client_token_constants.dart';
 import 'package:plug_agente/core/utils/prepared_sql.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
+import 'package:plug_agente/infrastructure/metrics/sql_investigation_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
 class MockFeatureFlags extends Mock implements FeatureFlags {}
@@ -256,6 +257,64 @@ void main() {
 
       expect(response, isNull);
       expect(identical(receivedPrepared, prepared), isTrue);
+    });
+
+    test('should copy user_message from authorization failure into the investigation feed', () async {
+      when(() => mockFeatureFlags.enableClientTokenAuthorization).thenReturn(true);
+      when(() => mockFeatureFlags.enableDashboardSqlInvestigationFeed).thenReturn(true);
+
+      final collector = SqlInvestigationCollector(maxEvents: 10);
+      const userMessage =
+          'Nao foi possivel identificar as tabelas da consulta para autorizacao. Revise a consulta enviada.';
+      final gate = SqlRpcClientTokenGate(
+        featureFlags: mockFeatureFlags,
+        sqlInvestigation: collector,
+        support: _support(
+          authorizeWithBudget:
+              ({
+                required token,
+                required sql,
+                required requestDatabase,
+                required requestId,
+                required method,
+                required deadline,
+                preparedSql,
+              }) async {
+                return Failure(
+                  domain.ConfigurationFailure.withContext(
+                    message: 'Unable to determine SQL target resources',
+                    context: {
+                      'authorization': true,
+                      'reason': 'unsupported_sql',
+                      'user_message': userMessage,
+                      'classification_reason': 'no_target_resources',
+                    },
+                  ),
+                );
+              },
+        ),
+      );
+
+      final response = await gate.enforce(
+        request: const RpcRequest(
+          jsonrpc: '2.0',
+          method: 'sql.execute',
+          id: 'req-classify',
+          params: {'sql': 'SELECT 1'},
+        ),
+        clientToken: 'token',
+        sqlStatements: const ['SELECT 1'],
+        investigationSqlOnDeny: 'SELECT 1',
+        requestDatabase: null,
+        deadline: DateTime.now().add(const Duration(seconds: 30)),
+      );
+
+      expect(response, isNotNull);
+      expect(collector.events, hasLength(1));
+      expect(collector.events.single.reason, equals('unsupported_sql'));
+      expect(collector.events.single.userMessage, equals(userMessage));
+
+      collector.dispose();
     });
   });
 }

@@ -388,6 +388,7 @@ class RpcMethodHandlerIdempotencyOrchestrator {
       context: {
         'authentication': true,
         'reason': RpcClientTokenConstants.missingClientTokenReason,
+        'user_message': 'Informe o token de cliente na requisicao para executar esta operacao.',
       },
     );
   }

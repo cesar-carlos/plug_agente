@@ -2686,6 +2686,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wsSqlInvestigationReason => 'Reason';
 
   @override
+  String get wsSqlInvestigationReasonCode => 'Code';
+
+  @override
   String get wsSqlInvestigationOriginalSql => 'SQL received';
 
   @override

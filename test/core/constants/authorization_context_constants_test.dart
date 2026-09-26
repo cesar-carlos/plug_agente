@@ -9,6 +9,7 @@ void main() {
         AuthorizationContextConstants.tokenNotFoundReason,
         AuthorizationContextConstants.invalidTokenSignatureReason,
         AuthorizationContextConstants.invalidPolicyReason,
+        AuthorizationContextConstants.unsupportedSqlReason,
         AuthorizationContextConstants.unauthorizedReason,
         AuthorizationContextConstants.jwksCircuitOpenReason,
         AuthorizationContextConstants.invalidJwksConfigReason,

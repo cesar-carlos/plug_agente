@@ -14,6 +14,7 @@ class SqlInvestigationEvent {
     this.rpcRequestId,
     this.internalQueryId,
     this.reason,
+    this.userMessage,
     this.clientId,
     this.operation,
     this.resource,
@@ -29,6 +30,7 @@ class SqlInvestigationEvent {
   final String? rpcRequestId;
   final String? internalQueryId;
   final String? reason;
+  final String? userMessage;
   final String? clientId;
   final String? operation;
   final String? resource;

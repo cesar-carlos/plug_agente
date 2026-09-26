@@ -532,6 +532,62 @@ void main() {
       },
     );
 
+    test('should keep specific user_message and odbc_reason for revoked token', () {
+      final failure = ConfigurationFailure.withContext(
+        message: 'Token revoked',
+        context: {
+          'authorization': true,
+          'reason': AuthorizationContextConstants.tokenRevokedReason,
+          'user_message': 'Token revogado. Gere um novo token para continuar.',
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.unauthorized));
+      expect(data['reason'], equals('unauthorized'));
+      expect(data['odbc_reason'], equals(AuthorizationContextConstants.tokenRevokedReason));
+      expect(data['user_message'], equals('Token revogado. Gere um novo token para continuar.'));
+    });
+
+    test('should keep specific user_message and odbc_reason for invalid policy', () {
+      final failure = ConfigurationFailure.withContext(
+        message: 'Invalid policy payload: client_id is required',
+        context: {
+          'authentication': true,
+          'reason': AuthorizationContextConstants.invalidPolicyReason,
+          'user_message': 'Politica do token invalida: client_id e obrigatorio.',
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.authenticationFailed));
+      expect(data['reason'], equals('authentication_failed'));
+      expect(data['odbc_reason'], equals(AuthorizationContextConstants.invalidPolicyReason));
+      expect(data['user_message'], equals('Politica do token invalida: client_id e obrigatorio.'));
+    });
+
+    test('should keep generic RPC user_message when context user_message is blank', () {
+      final failure = ConfigurationFailure.withContext(
+        message: 'Token revoked',
+        context: {
+          'authorization': true,
+          'reason': AuthorizationContextConstants.tokenRevokedReason,
+          'user_message': '   ',
+        },
+      );
+
+      final rpcError = FailureToRpcErrorMapper.map(failure);
+      final data = rpcError.data as Map<String, dynamic>;
+
+      expect(rpcError.code, equals(RpcErrorCode.unauthorized));
+      expect(data['user_message'], equals(RpcErrorCode.getUserMessage(RpcErrorCode.unauthorized)));
+      expect(data['user_message']?.toString().trim(), isNotEmpty);
+    });
+
     test(
       'should map sql_permission_denied query failure to unauthorized preserving denied resources',
       () {

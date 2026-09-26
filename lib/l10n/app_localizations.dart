@@ -4982,6 +4982,12 @@ abstract class AppLocalizations {
   /// **'Reason'**
   String get wsSqlInvestigationReason;
 
+  /// No description provided for @wsSqlInvestigationReasonCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Code'**
+  String get wsSqlInvestigationReasonCode;
+
   /// No description provided for @wsSqlInvestigationOriginalSql.
   ///
   /// In en, this message translates to:

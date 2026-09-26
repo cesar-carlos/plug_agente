@@ -64,5 +64,21 @@ void main() {
       await sub.cancel();
       collector.dispose();
     });
+
+    test('should keep userMessage from authorization denial', () {
+      final collector = SqlInvestigationCollector(maxEvents: 10);
+      collector.recordAuthorizationDenied(
+        method: 'sql.execute',
+        originalSql: 'SELECT * FROM Municipio',
+        reason: 'unsupported_sql',
+        userMessage: 'Nao foi possivel identificar as tabelas da consulta para autorizacao. Revise a consulta enviada.',
+      );
+
+      check(collector.events.single.reason).equals('unsupported_sql');
+      check(collector.events.single.userMessage).isNotNull();
+      check(collector.events.single.userMessage!).contains('tabelas da consulta');
+
+      collector.dispose();
+    });
   });
 }

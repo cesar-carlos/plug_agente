@@ -233,6 +233,8 @@ class FailureToRpcErrorMapper {
     contextForExtra.remove(_odbcMessageContextKey);
     final clientDetail = OdbcMessageSanitizer.sanitize(failure.message);
     final rawContextReason = contextForExtra.remove('reason');
+    final rawUserMessage = contextForExtra.remove('user_message');
+    final trimmedUserMessage = rawUserMessage is String ? rawUserMessage.trim() : null;
     final domainReason = _stringifyOptionalReason(rawContextReason);
     final timeoutReason = _getTimeoutReasonOverride(
       failure,
@@ -264,6 +266,7 @@ class FailureToRpcErrorMapper {
       timestamp: failure.timestamp,
       retryable: _resolveRetryable(failure, code),
       category: _categoryForFailure(failure),
+      userMessage: trimmedUserMessage != null && trimmedUserMessage.isNotEmpty ? trimmedUserMessage : null,
       extra: extra,
     );
   }

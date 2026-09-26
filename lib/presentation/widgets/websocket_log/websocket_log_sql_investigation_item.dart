@@ -29,6 +29,30 @@ class WebSocketLogSqlInvestigationItem extends StatelessWidget {
         '${t.second.toString().padLeft(2, '0')}';
   }
 
+  String? _investigationReasonLabel() {
+    final userMessage = event.userMessage?.trim();
+    if (userMessage != null && userMessage.isNotEmpty) {
+      return userMessage;
+    }
+    final reason = event.reason?.trim();
+    if (reason != null && reason.isNotEmpty) {
+      return reason;
+    }
+    return null;
+  }
+
+  String? _investigationReasonCode() {
+    final code = event.reason?.trim();
+    if (code == null || code.isEmpty) {
+      return null;
+    }
+    final phrase = _investigationReasonLabel();
+    if (phrase == null || phrase == code) {
+      return null;
+    }
+    return code;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
@@ -83,8 +107,12 @@ class WebSocketLogSqlInvestigationItem extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            if (event.reason != null && event.reason!.isNotEmpty) ...[
-              WebSocketLogMetaRow(label: l10n.wsSqlInvestigationReason, value: event.reason!),
+            if (_investigationReasonLabel() case final String reason) ...[
+              WebSocketLogMetaRow(label: l10n.wsSqlInvestigationReason, value: reason),
+              const SizedBox(height: AppSpacing.xs),
+            ],
+            if (_investigationReasonCode() case final String code) ...[
+              WebSocketLogMetaRow(label: l10n.wsSqlInvestigationReasonCode, value: code),
               const SizedBox(height: AppSpacing.xs),
             ],
             if (event.rpcRequestId != null && event.rpcRequestId!.isNotEmpty) ...[

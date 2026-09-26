@@ -149,6 +149,7 @@ class AgentActionRemoteAuthorizationService {
         'authentication': true,
         'reason': RpcClientTokenConstants.missingClientTokenReason,
         'method': request.method,
+        'user_message': 'Informe o token de cliente na requisicao para executar esta operacao.',
       },
     );
     return RpcResponse.error(

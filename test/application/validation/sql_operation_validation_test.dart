@@ -481,7 +481,7 @@ INNER JOIN Cliente c ON c.CodCliente = cr.CodCliente
         );
       });
 
-      test('should classify CREATE VIEW as ddl targeting view', () {
+      test('should classify CREATE VIEW as ddl targeting view and read source tables', () {
         final r = classifier.classify(
           'CREATE VIEW dbo.active_users AS SELECT * FROM dbo.users',
         );
@@ -489,8 +489,11 @@ INNER JOIN Cliente c ON c.CodCliente = cr.CodCliente
         r.fold(
           (c) {
             expect(c.operation, equals(SqlOperation.ddl));
-            expect(c.resources.single.resourceType, equals(DatabaseResourceType.view));
-            expect(c.resources.single.normalizedName, equals('dbo.active_users'));
+            final view = c.resources.where((resource) => resource.operation == SqlOperation.ddl).single;
+            expect(view.resourceType, equals(DatabaseResourceType.view));
+            expect(view.normalizedName, equals('dbo.active_users'));
+            final reads = c.resources.where((resource) => resource.operation == SqlOperation.read);
+            expect(reads.map((resource) => resource.normalizedName), contains('dbo.users'));
           },
           (_) => fail('Expected success'),
         );

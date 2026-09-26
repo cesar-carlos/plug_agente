@@ -14,6 +14,7 @@ abstract class ISqlInvestigationCollector {
     required String originalSql,
     String? rpcRequestId,
     String? reason,
+    String? userMessage,
     String? clientId,
     String? operation,
     String? resource,
