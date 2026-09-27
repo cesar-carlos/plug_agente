@@ -5,6 +5,11 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Changed
+
+- `docs/plug_server/` deixa de descrever implementacao ja entregue no hub. Extensoes apontam para os ADRs 0009, 0011 e 0012; o poll de health existe e fica desligado por defeito. O checklist de 2026-06 ficou so como nota de arquivo.
+- Visao geral e roadmap de comunicacao sem a secao e a linha que repetiam health e o estado atual.
+
 ### Added
 
 - Installer handshake marker so an elevated setup can register HKCU auto-start

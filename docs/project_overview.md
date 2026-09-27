@@ -147,14 +147,6 @@ Handlers SQL foram modularizados em `lib/application/rpc/`:
   `docs/install/installation_guide.md`.
 - Auto-update silencioso com helper assinado.
 
-## Funcionalidades alvo
-
-- Execucao remota de SQL (com pool ODBC, fila bounded e circuit breaker).
-- Execucao agendada e remota de acoes locais.
-- Streaming chunked com backpressure.
-- Auto-update assinado com appcast.
-- Observabilidade via `agent.getHealth`.
-
 ## Estado atual
 
 Implementado e em homologacao:
