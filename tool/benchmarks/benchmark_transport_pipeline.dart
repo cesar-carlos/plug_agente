@@ -139,6 +139,46 @@ Future<void> main(List<String> args) async {
   );
 }
 
+Future<Map<String, dynamic>> buildRepeatedTransportBenchmark({int iterations = 20, int repeats = 9}) async {
+  final threshold = ConnectionConstants.gzipIsolateThresholdBytes;
+  await _buildBenchmarkResults(
+    iterations: 2,
+    threshold: defaultTransportCompressionThresholdBytes,
+    path: 'async',
+    gzipIsolateThresholdBytes: threshold,
+  );
+  final repetitions = <List<Map<String, dynamic>>>[];
+  final elapsed = <int>[];
+  var peakRss = ProcessInfo.currentRss;
+  for (var index = 0; index < repeats; index++) {
+    final timer = Stopwatch()..start();
+    repetitions.add(
+      await _buildBenchmarkResults(
+        iterations: iterations,
+        threshold: defaultTransportCompressionThresholdBytes,
+        path: 'async',
+        gzipIsolateThresholdBytes: threshold,
+      ),
+    );
+    elapsed.add(timer.elapsedMicroseconds);
+    peakRss = peakRss > ProcessInfo.currentRss ? peakRss : ProcessInfo.currentRss;
+  }
+  return <String, dynamic>{
+    'harness_version': 1,
+    'dart_version': Platform.version,
+    'platform': Platform.operatingSystem,
+    'config': {
+      'iterations': iterations,
+      'repeats': repeats,
+      'gzip_threshold': threshold,
+      'workers': ConnectionConstants.transportWorkerPoolSize,
+    },
+    'repetitions': repetitions,
+    'elapsed_us': elapsed,
+    'rss_peak_bytes': peakRss,
+  };
+}
+
 Future<String> buildTransportPipelineBenchmarkReport({
   int iterations = 20,
   int warmupIterations = 1,

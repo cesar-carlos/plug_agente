@@ -22,6 +22,9 @@ Map<String, dynamic>? _loadCatalog() {
         );
   final catalogFile = File(p.join(fixtureDir, 'agent_inbound_catalog.json'));
   if (!catalogFile.existsSync()) {
+    if (Platform.environment['REQUIRE_PLUG_SERVER_CONTRACT'] == 'true') {
+      throw StateError('Required plug_server catalog is unavailable: ${catalogFile.path}');
+    }
     return null;
   }
   return jsonDecode(catalogFile.readAsStringSync()) as Map<String, dynamic>;
@@ -34,9 +37,7 @@ PayloadFrameCodec buildCodec({
 }) {
   final flags = _MockFeatureFlags();
   when(() => flags.outboundCompressionMode).thenReturn(
-    protocol.compression == 'gzip'
-        ? OutboundCompressionMode.gzip
-        : OutboundCompressionMode.none,
+    protocol.compression == 'gzip' ? OutboundCompressionMode.gzip : OutboundCompressionMode.none,
   );
   when(() => flags.compressionThreshold).thenReturn(protocol.compressionThreshold);
   final cache = TransportPipelineCache(

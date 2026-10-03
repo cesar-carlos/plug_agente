@@ -72,14 +72,31 @@ RpcInboundBestEffortRequestIdentity extractBestEffortRequestIdentityForRateLimit
   }
 }
 
+Future<RpcInboundBestEffortRequestIdentity> extractBestEffortRequestIdentityForRateLimitAsync(
+  dynamic payload, {
+  required PayloadFrameCodec frameCodec,
+}) async {
+  if (!requiresPayloadAsyncDecode(payload) || !frameCodec.looksLikePayloadFrame(payload)) {
+    return extractBestEffortRequestIdentityForRateLimit(payload, frameCodec: frameCodec);
+  }
+  try {
+    final result = await frameCodec.decodeIncomingAsync(payload, sourceEvent: 'rpc:request');
+    final decoded = result.getOrNull();
+    if (decoded is Map<String, dynamic>) {
+      return RpcInboundBestEffortRequestIdentity(id: decoded['id'], method: decoded['method']);
+    }
+  } on Object catch (error, stack) {
+    AppLogger.warning('Failed to extract request identity while building rate-limited response', error, stack);
+  }
+  return const RpcInboundBestEffortRequestIdentity();
+}
+
 dynamic extractRequestIdFromRpcWirePayload(
   dynamic payload, {
   required PayloadFrameCodec frameCodec,
 }) {
   if (frameCodec.looksLikePayloadFrame(payload)) {
-    final map = payload is Map<String, dynamic>
-        ? payload
-        : Map<String, dynamic>.from(payload as Map);
+    final map = payload is Map<String, dynamic> ? payload : Map<String, dynamic>.from(payload as Map);
     return map['requestId'];
   }
   if (payload is Map<String, dynamic>) {

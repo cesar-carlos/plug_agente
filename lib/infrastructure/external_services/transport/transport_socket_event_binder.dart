@@ -260,11 +260,16 @@ class TransportSocketEventBinder {
       if (_hasMessageCallback()) {
         _logMessage('RECEIVED', 'rpc:request', data);
       }
+      final inboundSessionGeneration = _transportSessionGenerationProvider();
       if (!_inboundHandler.tryAcquireSlot()) {
-        unawaited(_inboundHandler.emitConcurrencyLimitedError(data));
+        unawaited(
+          runZoned(
+            () => _inboundHandler.emitConcurrencyLimitedError(data),
+            zoneValues: <Symbol, Object>{#transportRequestGeneration: inboundSessionGeneration},
+          ),
+        );
         return;
       }
-      final inboundSessionGeneration = _transportSessionGenerationProvider();
       // Defer hub sql.execute dispatch out of the socket listener turn, keeping
       // Socket.IO I/O free to process ACKs, pulls and disconnects promptly.
       Timer.run(() {

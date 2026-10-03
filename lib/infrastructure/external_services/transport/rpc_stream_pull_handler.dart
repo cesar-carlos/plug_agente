@@ -7,6 +7,7 @@ import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/domain/repositories/i_rpc_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/payload_frame_codec.dart';
 import 'package:plug_agente/infrastructure/external_services/transport/stream_emitter_registry.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/transport_control_decode_sequence.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/streaming/backpressure_stream_emitter.dart';
 import 'package:plug_agente/infrastructure/validation/rpc_contract_validator.dart';
@@ -22,6 +23,8 @@ class RpcStreamPullHandler {
     required Future<bool> Function(String event, dynamic logicalPayload) emitEventAsync,
     required void Function(String direction, String event, dynamic data) logMessage,
     MetricsCollector? metricsCollector,
+    int Function()? sessionGeneration,
+    bool Function()? isConnected,
   }) : _featureFlags = featureFlags,
        _frameCodec = frameCodec,
        _contractValidator = contractValidator,
@@ -33,7 +36,18 @@ class RpcStreamPullHandler {
          hardCeiling: ConnectionConstants.maxConcurrentRpcStreams,
          idleTtl: ConnectionConstants.rpcStreamEmitterMaxIdle,
          capProvider: () => protocolProvider().effectiveLimits.maxConcurrentStreams,
-       );
+       ) {
+    _pullSequence = TransportControlDecodeSequence(
+      decode: (data) => _frameCodec.decodeIncoming(data, sourceEvent: 'rpc:stream.pull').getOrThrow(),
+      decodeAsync: (data) async =>
+          (await _frameCodec.decodeIncomingAsync(data, sourceEvent: 'rpc:stream.pull')).getOrThrow(),
+      needsAsync: requiresPayloadAsyncDecode,
+      apply: _applyPull,
+      sessionGeneration: sessionGeneration ?? () => 0,
+      isConnected: isConnected ?? () => true,
+      onError: (error, stack) => AppLogger.warning('Failed to handle rpc:stream.pull', error, stack),
+    );
+  }
 
   final FeatureFlags _featureFlags;
   final PayloadFrameCodec _frameCodec;
@@ -44,12 +58,20 @@ class RpcStreamPullHandler {
   final MetricsCollector? _metricsCollector;
   final StreamEmitterRegistry _streamEmitters;
   final LogRateLimiter _pullWarningLimiter = LogRateLimiter();
+  late final TransportControlDecodeSequence _pullSequence;
+  int get pendingPullDecodes => _pullSequence.waiting;
+  Map<String, int> get streamDiagnostics => {
+    ..._streamEmitters.diagnostics,
+    'pending_pull_decodes': pendingPullDecodes,
+    'async_pull_decodes': _pullSequence.asyncDecodes,
+  };
 
   IRpcStreamEmitter createStreamEmitter() {
     if (!_featureFlags.enableSocketBackpressure) {
       return _PassthroughRpcStreamEmitter(_emitValidatedStreamEvent);
     }
-    return BackpressureStreamEmitter(
+    late final BackpressureStreamEmitter emitter;
+    return emitter = BackpressureStreamEmitter(
       initialSendCredit: ConnectionConstants.recommendedStreamPullWindowSize,
       emit: _emitValidatedStreamEvent,
       onRegister: (streamId, emitter) {
@@ -67,18 +89,14 @@ class RpcStreamPullHandler {
         }
         return accepted;
       },
-      onUnregister: _streamEmitters.unregister,
+      onUnregister: (streamId) => _streamEmitters.unregister(streamId, emitter: emitter),
     );
   }
 
-  void handlePull(dynamic data) {
+  void handlePull(dynamic data) => _pullSequence.accept(data);
+
+  void _applyPull(dynamic payload) {
     try {
-      final payload = _frameCodec
-          .decodeIncoming(
-            data,
-            sourceEvent: 'rpc:stream.pull',
-          )
-          .getOrThrow();
       if (payload is! Map<String, dynamic>) {
         _metricsCollector?.recordRpcStreamPullInvalid();
         AppLogger.warning('Ignoring rpc:stream.pull with non-object payload');
@@ -112,6 +130,7 @@ class RpcStreamPullHandler {
   }
 
   void dispose() {
+    _pullSequence.reset();
     _streamEmitters.dispose();
   }
 

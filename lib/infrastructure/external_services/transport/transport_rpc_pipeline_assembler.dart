@@ -209,6 +209,8 @@ final class TransportRpcPipelineAssembler {
       emitEventAsync: deps.emitEventAsync,
       logMessage: deps.logMessage,
       metricsCollector: deps.metricsCollector,
+      sessionGeneration: deps.transportSessionGeneration,
+      isConnected: () => deps.activeSocket()?.connected ?? false,
     );
     final requestGuard = RpcRequestGuard();
     const schemaValidator = RpcRequestSchemaValidator();

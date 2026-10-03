@@ -35,16 +35,17 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   // unreliable. Future [emitChunk] calls return `false` so the caller falls
   // back to its overflow handling (typically cancelling the active stream).
   bool _isFaulted = false;
+  bool _completed = false;
+  bool _completionRequested = false;
   int _sendCredit;
 
-  // Serializes _flush calls so concurrent releaseChunks + emitChunk invocations
-  // cannot reorder chunk_index on the wire. Each caller chains onto the
-  // previous in-flight future; only one flush body runs at a time.
-  Future<void> _flushInFlight = Future<void>.value();
-
-  // Serializes queue admission (overflow check + enqueue) without waiting for
-  // the full wire flush, so producers can pipeline chunk submission.
-  Future<void> _admissionChain = Future<void>.value();
+  // One drain observes arrivals and new credit across its awaits. Callers do
+  // not allocate a continuation chain for every request to resume flushing.
+  Future<void>? _flushInFlight;
+  int _queuedPeak = 0;
+  int get queuedChunks => _chunkQueue.length;
+  int get queuedChunksPeak => _queuedPeak;
+  int get availableCredit => _sendCredit;
 
   /// Whether the emitter has stopped trying to deliver chunks because a
   /// previous emit threw. Exposed for diagnostics and tests.
@@ -62,17 +63,32 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
   }
 
   void releaseChunks(int windowSize) {
-    if (windowSize <= 0 || _isFaulted) return;
+    if (windowSize <= 0 || _isFaulted || _completed) return;
     _sendCredit += windowSize;
     _scheduleFlush();
   }
 
-  void _scheduleFlush() {
-    // Chain through `.then(...)` so flushes serialize; recover via
-    // `.catchError(...)` so a single failure does not poison every future
-    // continuation. We still mark the emitter as faulted inside _flushBody so
-    // new emitChunk/releaseChunks calls short-circuit at the public surface.
-    _flushInFlight = _flushInFlight.then((_) => _flushBody()).catchError(_handleFlushError);
+  Future<void> _scheduleFlush() {
+    if (_flushInFlight case final pending?) return pending;
+    final gate = Completer<void>();
+    _flushInFlight = gate.future;
+    // Admission is synchronous; one drain observes arrivals during its await.
+    scheduleMicrotask(() async {
+      try {
+        await _flushBody();
+      } on Object catch (error, stack) {
+        await _handleFlushError(error, stack);
+      } finally {
+        _flushInFlight = null;
+        gate.complete();
+        if (!_isFaulted &&
+            !_completed &&
+            ((_sendCredit > 0 && _chunkQueue.isNotEmpty) || (_pendingComplete != null && _chunkQueue.isEmpty))) {
+          unawaited(_scheduleFlush());
+        }
+      }
+    });
+    return gate.future;
   }
 
   Future<void> _handleFlushError(Object error, StackTrace stackTrace) async {
@@ -94,14 +110,15 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
 
   Future<void> _flushBody() async {
     if (_isFaulted) return;
-    while (_sendCredit > 0 && _chunkQueue.isNotEmpty) {
+    while (!_isFaulted && !_completed && _sendCredit > 0 && _chunkQueue.isNotEmpty) {
       final chunk = _chunkQueue.removeFirst();
+      _sendCredit--;
       final payload = chunk.toJson();
       final emitted = await _emit('rpc:chunk', payload);
       if (!emitted) {
         throw StateError('rpc stream chunk emit returned false');
       }
-      _sendCredit--;
+      if (_isFaulted) return;
     }
     await _maybeEmitComplete();
   }
@@ -112,6 +129,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
     }
     final complete = _pendingComplete!;
     _pendingComplete = null;
+    _completed = true;
     final payload = complete.toJson();
     try {
       final emitted = await _emit('rpc:complete', payload);
@@ -122,7 +140,8 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
       // Always free the registry slot. Negotiated max_concurrent_streams can
       // be 1 (hub advertisement); a leaked emitter blocks the next streaming
       // RPC until idle TTL (300s) — matching Colmeia E2E tag timeouts.
-      if (_streamId != null) {
+      if (_streamId != null && _registered) {
+        _registered = false;
         _onUnregister(_streamId!);
       }
     }
@@ -130,7 +149,7 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
 
   @override
   Future<bool> emitChunk(RpcStreamChunk chunk) async {
-    if (_isFaulted) {
+    if (_isFaulted || _completionRequested || _completed) {
       return false;
     }
     if (!_registered) {
@@ -142,35 +161,20 @@ class BackpressureStreamEmitter implements IRpcStreamEmitter {
       _registered = true;
     }
 
-    final previousAdmission = _admissionChain;
-    final admissionGate = Completer<void>();
-    _admissionChain = admissionGate.future;
-    await previousAdmission;
-
-    try {
-      if (_isFaulted) {
-        return false;
-      }
-      if (_chunkQueue.length >= _maxQueueSize && _sendCredit == 0) {
-        return false;
-      }
-      _chunkQueue.add(chunk);
-      _scheduleFlush();
-    } finally {
-      admissionGate.complete();
-    }
-
-    await _flushInFlight;
+    if (_chunkQueue.length >= _maxQueueSize) return false;
+    _chunkQueue.add(chunk);
+    if (_chunkQueue.length > _queuedPeak) _queuedPeak = _chunkQueue.length;
+    await _scheduleFlush();
     return !_isFaulted;
   }
 
   @override
   Future<void> emitComplete(RpcStreamComplete complete) async {
-    if (_isFaulted) {
+    if (_isFaulted || _completionRequested || _completed) {
       return;
     }
+    _completionRequested = true;
     _pendingComplete = complete;
-    _scheduleFlush();
-    await _flushInFlight;
+    await _scheduleFlush();
   }
 }

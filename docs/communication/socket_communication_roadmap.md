@@ -13,6 +13,14 @@ itens.
 
 ## Itens concluidos
 
+Communication implementation corrections (2026-10-03, profile **2.11.2**):
+active pool cancellation and fatal-worker handling; emitter expiry/identity;
+bounded FIFO admission and one drain; nonoverlapping heartbeat preparation;
+ordered asynchronous pull/ACK decoding and overload identity extraction.
+The compatible hub normalizes columnar chunks for existing consumers. These
+entries describe source implementation, not completed production rollout;
+operational validation remains in the backlog.
+
 | Item                                                              | Concluido em |
 | ----------------------------------------------------------------- | ------------ |
 | Extensoes de `agent.getHealth` (secure_storage, global_storage, streaming path/worker_hold, sql_queue por tipo de worker e timeouts_after_worker_started, direct_connections.by_operation_class, prepared/timeouts/diagnostics, sql_execution_by_mode, cancelamento cooperativo); `sql.cancel` com client_token e ownership; schemas alinhados | pos-v2.11.2 |

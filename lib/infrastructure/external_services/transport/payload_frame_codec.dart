@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/core/logger/log_rate_limiter.dart';
+import 'package:plug_agente/core/utils/json_payload_size_heuristic.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/protocol/protocol.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
@@ -10,6 +11,18 @@ import 'package:plug_agente/infrastructure/external_services/transport/transport
 import 'package:plug_agente/infrastructure/metrics/protocol_metrics.dart';
 import 'package:plug_agente/infrastructure/security/payload_signer.dart';
 import 'package:result_dart/result_dart.dart';
+
+bool requiresPayloadAsyncDecode(dynamic payload) {
+  if (payload is! Map) return false;
+  if (payload['cmp'] == 'gzip') return true;
+  final size = payload['originalSize'];
+  final compressed = payload['compressedSize'];
+  final signingLimit = ConnectionConstants.signingIsolateThresholdBytes;
+  final limit = signingLimit < jsonPayloadIsolateEncodeThresholdBytes
+      ? signingLimit
+      : jsonPayloadIsolateEncodeThresholdBytes;
+  return (size is num && size >= limit) || (compressed is num && compressed >= limit);
+}
 
 /// Encodes outgoing logical payloads into [PayloadFrame] envelopes and decodes
 /// incoming envelopes back into the application-level Map/List structure.
@@ -191,6 +204,8 @@ class PayloadFrameCodec {
       protocol.signatureAlgorithms.contains(PayloadSigner.supportedAlgorithm);
 
   /// Synchronous decode used in hot paths (e.g. heartbeat ack).
+  bool requiresAsyncDecode(dynamic payload) => requiresPayloadAsyncDecode(payload);
+
   Result<dynamic> decodeIncoming(dynamic payload, {String? sourceEvent}) {
     return _decodeIncoming(
       payload,

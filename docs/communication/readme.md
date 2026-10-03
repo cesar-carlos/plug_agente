@@ -30,7 +30,25 @@ separate validation; see the backlog.
 - Hub inbound fixture catalog with none/GZIP/HMAC:
   `flutter test test/infrastructure/external_services/transport/hub_inbound_catalog_codec_test.dart`.
   Requires `PLUG_SERVER_FIXTURE_DIR` or the sibling `plug_server` fixture
-  directory; the suite skips when the catalog is unavailable.
+  directory. Set `REQUIRE_PLUG_SERVER_CONTRACT=true` in mandatory cross-project
+  gates: a missing catalog fails rather than skipping. The dedicated CI job
+  checks out both repositories and records their exact revisions.
+
+- Production typed columnar fixture:
+  `flutter test test/docs/communication/columnar_codec_fixture_test.dart`.
+  The hub checks the shared JSON against agent schemas and equivalent row maps.
+- Lifecycle regressions use controlled clocks and send gates for workers,
+  emitter expiry/identity, queue admission, heartbeat preparation and ordered
+  control decode. Their aggregate diagnostics must drain to zero.
+- Nine repeated codec profiles:
+  `flutter test test/infrastructure/codecs/transport_repeated_benchmark_test.dart`.
+  Set `AGENT_TRANSPORT_BENCH_OUTPUT` to keep base and candidate reports separate.
+  This measures codecs; hub transport and real ODBC require separate runs.
+  Compare identical reports with `python tool/benchmarks/compare_transport_repetitions.py
+  --base BASE.json --candidate CANDIDATE.json --output COMPARISON.json`.
+  Scenario/configuration mismatches fail before applying p95 (+5%) and throughput
+  (85% minimum) gates. RSS does not substitute for a Dart heap measurement;
+  the report explicitly records the pending heap gate.
 
 ## Convencao de manutencao
 

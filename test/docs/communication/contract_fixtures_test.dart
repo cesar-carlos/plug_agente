@@ -105,10 +105,7 @@ void main() {
         expect(file.existsSync(), isTrue, reason: 'Fixture not found: $fixturePath');
         final json = jsonDecode(await file.readAsString()) as Object;
 
-        if (!validator.isLoaded(schemaId)) {
-          // Schema not loaded in this environment; skip silently.
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: json);
         expect(
@@ -149,9 +146,7 @@ void main() {
         final params = root['params'];
         expect(params, isA<Map<String, dynamic>>(), reason: 'Fixture $fixtureName must include params object');
 
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: params);
         expect(
@@ -172,9 +167,7 @@ void main() {
         final payload = root['result'];
         expect(payload, isA<Map<String, dynamic>>(), reason: 'Fixture $fixtureName must include result object');
 
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -199,9 +192,7 @@ void main() {
         expect(data['reason'], AgentActionRpcConstants.remoteAgentActionNotificationNotAllowedRpcReason);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -227,9 +218,7 @@ void main() {
         expect(data['method'], AgentActionRpcConstants.agentActionRunRpcMethodName);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -256,9 +245,7 @@ void main() {
         expect(data['action_id'], 'action-1');
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -286,9 +273,7 @@ void main() {
         expect(data['field'], 'context_json');
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -315,9 +300,7 @@ void main() {
         expect(data['retry_after_ms'], isA<int>());
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -343,9 +326,7 @@ void main() {
         expect(data['method'], AgentActionRpcConstants.agentActionRunRpcMethodName);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -370,9 +351,7 @@ void main() {
       expect(data['method'], AgentActionRpcConstants.agentActionRunRpcMethodName);
 
       const schemaId = TransportSchemaIds.rpcError;
-      if (!validator.isLoaded(schemaId)) {
-        return;
-      }
+      expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
       final result = validator.validate(schemaId: schemaId, payload: payload);
       expect(
@@ -396,9 +375,7 @@ void main() {
         expect(data['reason'], AgentActionRpcConstants.agentActionsFeatureDisabledErrorReason);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -425,9 +402,7 @@ void main() {
         expect(data['field'], 'idempotency_key');
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -454,9 +429,7 @@ void main() {
         expect(data['action_id'], 'action-1');
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -483,9 +456,7 @@ void main() {
         expect(data['trigger_ids'], ['remote-1', 'remote-2']);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -509,9 +480,7 @@ void main() {
       expect(data['category'], RpcErrorCode.categoryAction);
 
       const schemaId = TransportSchemaIds.rpcError;
-      if (!validator.isLoaded(schemaId)) {
-        return;
-      }
+      expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
       final result = validator.validate(schemaId: schemaId, payload: payload);
       expect(
@@ -536,9 +505,7 @@ void main() {
         expect(data['category'], RpcErrorCode.categoryAction);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -566,9 +533,7 @@ void main() {
         expect(data['method'], AgentActionRpcConstants.agentActionRunRpcMethodName);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -594,9 +559,7 @@ void main() {
         expect(data['category'], RpcErrorCode.categoryAction);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -623,9 +586,7 @@ void main() {
         expect(data['failure_code'], 'ACTION_REMOTE_NOT_APPROVED');
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -651,9 +612,7 @@ void main() {
         expect(data['category'], RpcErrorCode.categoryAction);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -679,9 +638,7 @@ void main() {
         expect(data['method'], AgentActionRpcConstants.agentActionRunRpcMethodName);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -708,9 +665,7 @@ void main() {
         expect(data['limit'], AgentActionPolicyDefaults.maxAgentActionReadRpcMethodsPerBatch);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(
@@ -736,9 +691,7 @@ void main() {
         expect(data['category'], RpcErrorCode.categoryAction);
 
         const schemaId = TransportSchemaIds.rpcError;
-        if (!validator.isLoaded(schemaId)) {
-          return;
-        }
+        expect(validator.isLoaded(schemaId), isTrue, reason: 'Required schema missing: $schemaId');
 
         final result = validator.validate(schemaId: schemaId, payload: payload);
         expect(

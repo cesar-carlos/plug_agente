@@ -1,5 +1,6 @@
 import 'package:plug_agente/core/logger/app_logger.dart';
 import 'package:plug_agente/infrastructure/external_services/socket_io_heartbeat_controller.dart';
+import 'package:plug_agente/infrastructure/external_services/transport/transport_control_decode_sequence.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 
 /// Heartbeat emit/ack wiring extracted from the Socket.IO transport client.
@@ -12,13 +13,29 @@ final class SocketIoTransportHeartbeatBridge {
     required void Function(String direction, String event, dynamic data) logMessage,
     required dynamic Function(dynamic data, {required String sourceEvent}) decodeIncomingPayload,
     MetricsCollector? metricsCollector,
+    Future<dynamic> Function(dynamic data, {required String sourceEvent})? decodeIncomingPayloadAsync,
+    bool Function(dynamic)? shouldDecodeAsync,
+    int Function()? sessionGeneration,
+    bool Function()? isConnected,
   }) : _heartbeat = heartbeat,
        _agentIdProvider = agentIdProvider,
        _protocolNameProvider = protocolNameProvider,
        _emitEventAsync = emitEventAsync,
        _logMessage = logMessage,
        _decodeIncomingPayload = decodeIncomingPayload,
-       _metricsCollector = metricsCollector;
+       _metricsCollector = metricsCollector {
+    _ackSequence = TransportControlDecodeSequence(
+      decode: (data) => _decodeIncomingPayload(data, sourceEvent: 'hub:heartbeat_ack'),
+      decodeAsync: (data) async => decodeIncomingPayloadAsync != null
+          ? decodeIncomingPayloadAsync(data, sourceEvent: 'hub:heartbeat_ack')
+          : _decodeIncomingPayload(data, sourceEvent: 'hub:heartbeat_ack'),
+      needsAsync: shouldDecodeAsync ?? (_) => false,
+      apply: _applyHeartbeatAck,
+      sessionGeneration: sessionGeneration ?? () => 0,
+      isConnected: isConnected ?? () => true,
+      onError: (error, stack) => AppLogger.warning('Invalid hub:heartbeat_ack payload', error, stack),
+    );
+  }
 
   final SocketIoHeartbeatController _heartbeat;
   final String Function() _agentIdProvider;
@@ -27,6 +44,15 @@ final class SocketIoTransportHeartbeatBridge {
   final void Function(String direction, String event, dynamic data) _logMessage;
   final dynamic Function(dynamic data, {required String sourceEvent}) _decodeIncomingPayload;
   final MetricsCollector? _metricsCollector;
+  late final TransportControlDecodeSequence _ackSequence;
+  void reset() => _ackSequence.reset();
+  Map<String, int> get diagnostics => {
+    'pending_ack_decodes': _ackSequence.waiting,
+    'async_ack_decodes': _ackSequence.asyncDecodes,
+    'preparing': _heartbeat.isPreparing ? 1 : 0,
+    'skipped_preparation_ticks': _heartbeat.skippedPreparationTicks,
+    'preparation_failures': _heartbeat.preparationFailures,
+  };
 
   SocketIoHeartbeatController get heartbeat => _heartbeat;
 
@@ -53,21 +79,9 @@ final class SocketIoTransportHeartbeatBridge {
     _logMessage(direction, event, enriched);
   }
 
-  void handleHeartbeatAck(dynamic data) {
-    dynamic payload = data;
-    try {
-      payload = _decodeIncomingPayload(
-        data,
-        sourceEvent: 'hub:heartbeat_ack',
-      );
-    } on Object catch (error, stackTrace) {
-      AppLogger.warning(
-        'Invalid hub:heartbeat_ack payload',
-        error,
-        stackTrace,
-      );
-      return;
-    }
+  void handleHeartbeatAck(dynamic data) => _ackSequence.accept(data);
+
+  void _applyHeartbeatAck(dynamic payload) {
     final traceId = payload is Map<String, dynamic> ? payload['trace_id'] : null;
     final normalizedTraceId = traceId?.toString();
     final rejectionReason = _heartbeat.ackRejectionReason(normalizedTraceId);

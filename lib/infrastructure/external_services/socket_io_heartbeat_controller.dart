@@ -46,9 +46,14 @@ final class SocketIoHeartbeatController {
   int _missedHeartbeats = 0;
   int _heartbeatEpoch = 0;
   String? _expectedTraceId;
+  int? _preparingEpoch;
+  int skippedPreparationTicks = 0;
+  int preparationFailures = 0;
+  bool get isPreparing => _preparingEpoch != null;
 
   void resetTransientState() {
     _heartbeatEpoch++;
+    _preparingEpoch = null;
     _missedHeartbeats = 0;
     _waitingAck = false;
     _expectedTraceId = null;
@@ -65,6 +70,7 @@ final class SocketIoHeartbeatController {
 
   void stop() {
     _heartbeatEpoch++;
+    _preparingEpoch = null;
     _periodicTimer?.cancel();
     _periodicTimer = null;
     _ackTimer?.cancel();
@@ -118,33 +124,47 @@ final class SocketIoHeartbeatController {
     if (_waitingAck) {
       return;
     }
-
+    if (_preparingEpoch != null) {
+      skippedPreparationTicks++;
+      return;
+    }
+    _preparingEpoch = _heartbeatEpoch;
     unawaited(_emitAndArmAck(_heartbeatEpoch));
   }
 
   Future<void> _emitAndArmAck(int heartbeatEpoch) async {
-    final emitted = await (emitHeartbeatWithEpoch?.call(heartbeatEpoch) ?? emitHeartbeat());
-    if (heartbeatEpoch != _heartbeatEpoch) {
-      return;
-    }
-    if (!emitted) {
-      _expectedTraceId = null;
-      logMessage('ERROR', 'heartbeat_emit_failed', {
-        'missed_heartbeats': _missedHeartbeats,
-      });
-      return;
-    }
-    if (!isConnected()) {
-      _expectedTraceId = null;
-      return;
-    }
-    _waitingAck = true;
-    _ackTimer?.cancel();
-    _ackTimer = Timer(_ackTimeout, () {
-      if (heartbeatEpoch == _heartbeatEpoch) {
-        _handleTimeout();
+    try {
+      final emitted = await (emitHeartbeatWithEpoch?.call(heartbeatEpoch) ?? emitHeartbeat());
+      if (heartbeatEpoch != _heartbeatEpoch) {
+        return;
       }
-    });
+      if (!emitted) {
+        preparationFailures++;
+        _expectedTraceId = null;
+        logMessage('ERROR', 'heartbeat_emit_failed', {
+          'missed_heartbeats': _missedHeartbeats,
+        });
+        return;
+      }
+      if (!isConnected()) {
+        _expectedTraceId = null;
+        return;
+      }
+      _waitingAck = true;
+      _ackTimer?.cancel();
+      _ackTimer = Timer(_ackTimeout, () {
+        if (heartbeatEpoch == _heartbeatEpoch) {
+          _handleTimeout();
+        }
+      });
+    } on Object catch (_) {
+      if (heartbeatEpoch != _heartbeatEpoch) return;
+      preparationFailures++;
+      _expectedTraceId = null;
+      logMessage('ERROR', 'heartbeat_emit_failed', {'missed_heartbeats': _missedHeartbeats});
+    } finally {
+      if (_preparingEpoch == heartbeatEpoch) _preparingEpoch = null;
+    }
   }
 
   void _handleTimeout() {

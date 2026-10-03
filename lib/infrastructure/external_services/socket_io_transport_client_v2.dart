@@ -150,7 +150,10 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
         supportsProtocolReadyAck: _supportsProtocolReadyAck,
         emitAgentReady: _emitAgentReady,
         startHeartbeat: () => _heartbeat.start(),
-        stopHeartbeat: () => _heartbeat.stop(),
+        stopHeartbeat: () {
+          _heartbeat.stop();
+          _heartbeatBridge.reset();
+        },
         resetHeartbeatTransient: () => _heartbeat.resetTransientState(),
         publishPayloadSigningDiagnostic: _publishPayloadSigningDiagnostic,
         publishLargeResponseAdvice: _publishLargeResponseAdvice,
@@ -177,7 +180,10 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
       streamPullHandler: pipeline.streamPullHandler,
       authorizationDecisionLogger: pipeline.authorizationDecisionLogger,
       rpcDispatcher: _rpcDispatcher,
-      heartbeatStop: () => _heartbeat.stop(),
+      heartbeatStop: () {
+        _heartbeat.stop();
+        _heartbeatBridge.reset();
+      },
       resilienceLogPrefix: _resilienceLogPrefix,
       onHubLifecycle: (notification) => _onHubLifecycle?.call(notification),
       onReconnectionNeeded: () => _onReconnectionNeeded?.call(),
@@ -202,6 +208,11 @@ final class SocketIOTransportClientV2 extends _SocketIoTransportHost
       emitEventAsync: _emitEventAsync,
       logMessage: _logMessage,
       decodeIncomingPayload: _decodeIncomingPayloadOrThrow,
+      decodeIncomingPayloadAsync: (data, {required sourceEvent}) async =>
+          (await pipeline.frameCodec.decodeIncomingAsync(data, sourceEvent: sourceEvent)).getOrThrow(),
+      shouldDecodeAsync: pipeline.frameCodec.requiresAsyncDecode,
+      sessionGeneration: () => _lifecycle.transportSessionGeneration,
+      isConnected: () => _lifecycle.isConnected,
       metricsCollector: _metricsCollector,
     );
     _payloadSigningDiagnosticPublisher = TransportPayloadSigningDiagnosticPublisher(

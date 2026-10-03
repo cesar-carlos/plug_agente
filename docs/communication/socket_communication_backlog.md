@@ -22,6 +22,16 @@ comando.
 
 ## Proximos itens (quando priorizado)
 
+- Communication lifecycle fixes and hub columnar normalization are implemented
+  without changing profile 2.11.2. Deployment validation remains separate:
+  run real ODBC fixtures and equal 15-minute staging windows; stop promotion on
+  contract regressions, loss/duplication, errors/timeouts or retained state.
+- Benchmark evidence must distinguish codec microbenchmarks, loopback transport,
+  the production Dart transport with a deterministic gateway, and real ODBC.
+  Use the same harness/configuration and nine repetitions for base/candidate;
+  newly accepted columnar cases have correctness/capacity gates, not a speedup
+  percentage against previously rejected frames.
+
 - Spec RPC `agent.autoUpdate.diagnostics.push` — schema agente entregue
   (`docs/communication/schemas/auto_update_diagnostics.schema.json`); transport
   outbound ainda no-op ate Decisao 3 / consumo no hub

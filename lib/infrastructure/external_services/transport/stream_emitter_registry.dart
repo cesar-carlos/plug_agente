@@ -23,6 +23,26 @@ class StreamEmitterRegistry {
   final int Function() _capProvider;
   final Map<String, BackpressureStreamEmitter> _emitters = {};
   final Map<String, Timer> _idleTimers = {};
+  int expiredEmitters = 0;
+  int _queuePeak = 0;
+  int get activeTimers => _idleTimers.length;
+
+  // Internal diagnostics are sampled outside the frame path and never added
+  // to agent.getHealth or other public protocol snapshots.
+  Map<String, int> get diagnostics => {
+    'active_emitters': activeCount,
+    'active_timers': activeTimers,
+    'expired_emitters': expiredEmitters,
+    'queued_chunks': _emitters.values.fold(0, (sum, emitter) => sum + emitter.queuedChunks),
+    'queue_peak': _emitters.values.fold(
+      _queuePeak,
+      (peak, emitter) => emitter.queuedChunksPeak > peak ? emitter.queuedChunksPeak : peak,
+    ),
+  };
+
+  void _recordPeak(BackpressureStreamEmitter emitter) {
+    if (emitter.queuedChunksPeak > _queuePeak) _queuePeak = emitter.queuedChunksPeak;
+  }
 
   /// Currently effective cap: `min(negotiated, hardCeiling)`, lower-bounded by
   /// `hardCeiling` whenever the negotiated cap is non-positive (defensive).
@@ -34,6 +54,11 @@ class StreamEmitterRegistry {
 
   bool tryRegister(String streamId, BackpressureStreamEmitter emitter) {
     if (_emitters.containsKey(streamId)) {
+      final previous = _emitters[streamId]!;
+      if (!identical(previous, emitter)) {
+        _recordPeak(previous);
+        previous.onTransportLoss();
+      }
       _emitters[streamId] = emitter;
       _scheduleIdleTimer(streamId);
       return true;
@@ -54,8 +79,10 @@ class StreamEmitterRegistry {
     }
   }
 
-  void unregister(String streamId) {
-    _emitters.remove(streamId);
+  void unregister(String streamId, {BackpressureStreamEmitter? emitter}) {
+    if (emitter != null && !identical(_emitters[streamId], emitter)) return;
+    final removed = _emitters.remove(streamId);
+    if (removed != null) _recordPeak(removed);
     _idleTimers.remove(streamId)?.cancel();
   }
 
@@ -68,6 +95,7 @@ class StreamEmitterRegistry {
     // `_registered == true` after soft reconnect frees the slots.
     final emitters = List<BackpressureStreamEmitter>.of(_emitters.values);
     for (final emitter in emitters) {
+      _recordPeak(emitter);
       emitter.onTransportLoss();
     }
     _emitters.clear();
@@ -77,14 +105,19 @@ class StreamEmitterRegistry {
 
   void _scheduleIdleTimer(String streamId) {
     _idleTimers.remove(streamId)?.cancel();
+    final emitter = _emitters[streamId];
     _idleTimers[streamId] = Timer(idleTtl, () {
-      if (_emitters.remove(streamId) != null) {
+      if (emitter != null && identical(_emitters[streamId], emitter)) {
+        _recordPeak(emitter);
+        emitter.onTransportLoss();
+        _emitters.remove(streamId);
+        expiredEmitters++;
         AppLogger.warning(
           'rpc stream emitter evicted by idle TTL '
           '(${idleTtl.inSeconds}s). stream_id=$streamId',
         );
+        _idleTimers.remove(streamId);
       }
-      _idleTimers.remove(streamId);
     });
   }
 }

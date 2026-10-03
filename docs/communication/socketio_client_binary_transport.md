@@ -169,6 +169,35 @@ default; opt in with `RPC_CHUNK_COLUMNAR_GZIP_ENABLED` when appropriate.
 
 ## Handshake e capabilities
 
+### Worker, stream and control lifecycle (profile 2.11.2)
+
+`dispose()` stops admission immediately, fails queued and active pool jobs,
+closes reply channels/listeners and kills isolates. Late startup or replies
+cannot reactivate the pool. Startup failures and unexpected exits fault that
+instance permanently; there is no automatic retry or synchronous fallback.
+Internal diagnostics expose aggregate active/queued/failed/cancelled counts,
+worker occupancy and queue wait without changing public snapshots.
+
+Each emitter has one drain. It reserves credit before awaiting a send, caps
+all queued admission (excluding the chunk in flight), and returns the existing
+`false` result on overflow. Completion is emitted once after accepted chunks.
+Disconnect or idle expiry faults the producer and releases buffered state;
+identity checks prevent old callbacks from deleting a replacement stream.
+
+Heartbeat preparation and ACK waiting are separate. A tick cannot overlap
+pending preparation. Failed/false sends do not start the ACK timeout; async
+exceptions are handled. Preparation, traces and timers belong to a session
+epoch. Pull and heartbeat-ACK decoding use independent ordered sequences:
+small uncompressed frames remain synchronous when idle; heavy gzip/HMAC/JSON
+work uses the existing asynchronous decoder and thresholds. Effects after
+awaits require the same live connection and generation, including overload
+identity extraction. No new control-frame limits are introduced.
+
+The hub reconstructs row maps from valid columnar chunks and reencodes/resigns
+the consumer frame; original signed bytes cannot be reused after that change.
+Conventional chunks retain their byte forwarding path. See the standard for
+representation precedence and rollout order.
+
 O handshake continua sendo um payload logico, mas o transporte fisico deve
 seguir o `PayloadFrame`.
 

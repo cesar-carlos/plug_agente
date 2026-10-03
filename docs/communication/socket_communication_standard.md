@@ -355,9 +355,19 @@ When `ODBC_STREAM_COLUMNAR_WIRE` is enabled, a chunk can carry `rows: []` and
 types are `int32`, `int64`, `float64`, and `object`. Use `columnar.row_count`
 and the column arrays to reconstruct rows; an empty `rows` array alone does
 not mean an empty chunk. `ODBC_STREAM_WIRE_ONLY` overrides the negotiated
-`columnarWireOnly` preference when explicitly configured. Enable this path
-only with a consumer that supports the columnar format; it remains JSON UTF-8
-inside `PayloadFrame`.
+`columnarWireOnly` preference when explicitly configured. Columnar emission
+alone can already omit row maps; this is not exclusive to wire-only mode.
+The compatible hub normalizes columnar chunks into row maps before REST
+materialization, `agents:command`, or relay delivery. Deploy that hub first,
+then enable columnar emission gradually. Transport remains JSON UTF-8 inside
+`PayloadFrame`; no new capability or profile version is introduced.
+
+When both representations are present, nonempty `rows` take precedence without
+duplication. The hub checks `row_count`, column types and vector lengths, and
+the existing row/byte budgets before expansion. It removes `columnar` from
+consumer chunks and reencodes/resigns transformed frames. Untransformed row-map
+chunks retain their existing forwarding path. Typed codec fixtures cover
+`int32`, `int64`, `float64`, `object`, nulls, Unicode and equivalent row maps.
 
 ## Garantia de entrega (`enableSocketDeliveryGuarantees`, default ON)
 
@@ -2194,10 +2204,12 @@ nao expuser `streamingResults`.
   nomes simples (`users`) e nomes qualificados (`public.users`), separados por
   virgula. CTEs, joins e subqueries exigem `options.prefer_db_streaming=true`
   para evitar roteamento automatico por heuristica parcial.
-- Backpressure: `enableSocketBackpressure` (default **on**); o hub envia
-`rpc:stream.pull` com `window_size` para controlar quantos chunks o agente
-envia por vez; credito inicial de 1 chunk. Desligue a flag apenas se o hub
-nao emitir pulls e o passthrough unbounded for aceitavel.
+- Backpressure: `enableSocketBackpressure` defaults **on**. The hub grants
+  `window_size` credits with `rpc:stream.pull`. The handler starts with the
+  agent's recommended window, default **12** (`AGENT_STREAM_PULL_WINDOW_RECOMMENDED`);
+  the standalone emitter constructor retains its default of 1. The hub clamps
+  subsequent pulls to the existing negotiated ceilings. Disable this flag only
+  when the hub does not grant credit and unbounded passthrough is acceptable.
 - `api_version`/`meta` disponiveis via feature flag `enableSocketApiVersionMeta`;
 contrato formal na secao "api_version e meta".
 - `agent:ready` e enviado apos `agent:capabilities` como ack explicito de

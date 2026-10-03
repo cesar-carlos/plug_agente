@@ -25,7 +25,7 @@ class RpcInboundRateLimitResponder {
   Future<void> emitConcurrencyLimitedError(dynamic rawData) async {
     final wirePayload = unwrapRpcInboundWirePayload(rawData);
     try {
-      final identity = extractBestEffortRequestIdentityForRateLimit(
+      final identity = await extractBestEffortRequestIdentityForRateLimitAsync(
         wirePayload.payload,
         frameCodec: _frameCodec,
       );

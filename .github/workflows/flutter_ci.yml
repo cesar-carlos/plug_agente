@@ -97,6 +97,56 @@ jobs:
       - name: Installer setup script test
         run: flutter test test/installer/setup_script_test.dart
 
+  communication-contract:
+    runs-on: ubuntu-latest
+    env:
+      REQUIRE_PLUG_SERVER_CONTRACT: "true"
+      REQUIRE_PLUG_AGENTE_CONTRACT: "true"
+      PLUG_SERVER_FIXTURE_DIR: ${{ github.workspace }}/plug_server/tests/fixtures/socket
+      PLUG_AGENTE_ROOT: ${{ github.workspace }}
+    steps:
+      - name: Checkout agent
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Checkout required hub contract
+        uses: actions/checkout@v6
+        with:
+          repository: cesar-carlos/plug_server
+          ref: main
+          token: ${{ secrets.PLUG_SERVER_CHECKOUT_TOKEN || github.token }}
+          path: plug_server
+          persist-credentials: false
+      - name: Record cross-project revisions
+        run: |
+          mkdir -p artifacts/communication
+          printf 'agent=%s\nhub=%s\n' "$(git rev-parse HEAD)" "$(git -C plug_server rev-parse HEAD)" | tee artifacts/communication/revisions.txt
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Agent contract and production codec fixtures
+        run: |
+          flutter pub get
+          flutter test test/docs/openrpc_contract_test.dart test/docs/communication test/infrastructure/external_services/transport/hub_inbound_catalog_codec_test.dart
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: plug_server/.nvmrc
+      - name: Hub contract fixtures
+        working-directory: plug_server
+        run: |
+          npm ci --ignore-scripts
+          npm run db:generate
+          npx vitest run tests/contract
+      - name: Upload contract revisions
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: communication-revisions
+          path: artifacts/communication/revisions.txt
+
   agent-actions-gate:
     runs-on: ubuntu-latest
     steps:
@@ -292,6 +342,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Resolve comparison revision
+        shell: bash
+        run: echo "TRANSPORT_BASE_REVISION=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
+
+      - name: Checkout transport comparison
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TRANSPORT_BASE_REVISION }}
+          path: transport-base
+          persist-credentials: false
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -306,6 +369,18 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Measure identical base and candidate codec harnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/benchmark transport-base/tool/benchmarks transport-base/test/infrastructure/codecs
+          printf 'base=%s\ncandidate=%s\n' "$(git -C transport-base rev-parse HEAD)" "$(git rev-parse HEAD)" > artifacts/benchmark/transport-revisions.txt
+          cp tool/benchmarks/benchmark_transport_pipeline.dart transport-base/tool/benchmarks/
+          cp test/infrastructure/codecs/transport_repeated_benchmark_test.dart transport-base/test/infrastructure/codecs/
+          (cd transport-base && flutter pub get && AGENT_TRANSPORT_BENCH_OUTPUT="$GITHUB_WORKSPACE/artifacts/benchmark/transport-base.json" flutter test test/infrastructure/codecs/transport_repeated_benchmark_test.dart)
+          AGENT_TRANSPORT_BENCH_OUTPUT="$GITHUB_WORKSPACE/artifacts/benchmark/transport-candidate.json" flutter test test/infrastructure/codecs/transport_repeated_benchmark_test.dart
+          python tool/benchmarks/compare_transport_repetitions.py --base artifacts/benchmark/transport-base.json --candidate artifacts/benchmark/transport-candidate.json --output artifacts/benchmark/transport-comparison.json | tee artifacts/benchmark/transport-comparison.log
 
       - name: Run transport benchmark suite
         shell: bash
