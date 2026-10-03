@@ -11,14 +11,16 @@ comportamento que clientes devem seguir no contrato de transporte em producao.
 
 ## Regra principal
 
-Todo evento de aplicacao deve trafegar em um `PayloadFrame`.
+Registration, capabilities, heartbeat, RPC, ACK and streaming payloads must
+travel in `PayloadFrame`. Hub control events `agent:register_error` and
+`agent:session.superseded` use plain JSON and must be handled separately.
 
 O payload logico JSON-RPC nao deve ser emitido diretamente como objeto JSON em
 producao.
 
 ## Eventos cobertos
 
-O padrao abaixo se aplica a todos os eventos de aplicacao:
+The frame contract applies to these events:
 
 - `agent:register`
 - `agent:capabilities`
@@ -35,6 +37,13 @@ O padrao abaixo se aplica a todos os eventos de aplicacao:
 
 Eventos internos do proprio Socket.IO, como `connect`, `disconnect`,
 `connect_error` e `error`, nao usam este envelope.
+
+`connection:ready` is an informational hub event documented as a frame; the
+current agent does not consume it and emits `agent:register` on Socket.IO
+`connect`. The old hub `raw_json` compatibility deadline was 2026-09-30;
+this repository review does not verify whether deployed hubs removed it.
+The optional hub profile socket channel also uses frames, while this agent
+synchronizes profiles through REST.
 
 ## Envelope de transporte
 
@@ -87,7 +96,8 @@ usar naquele envio.
 
 Representacao de `payload` por plataforma:
 
-- Dart/Flutter: `Uint8List` ou `List<int>`
+- Dart/Flutter: `ByteBuffer`, `Uint8List` or `List<int>`; production emits
+  `PayloadFrame.toSocketPayload()` to keep Socket.IO debug formatting bounded.
 - Node.js: `Buffer`
 - Browser: `Uint8Array` ou `ArrayBuffer`
 
@@ -138,11 +148,24 @@ Ao receber qualquer evento de aplicacao:
 ### Implementacao de referencia (Plug Agente, Dart)
 
 - **Wire / `PayloadFrame`:** `TransportPipeline` em `lib/infrastructure/codecs/transport_pipeline.dart`. Para emissao em producao, usar **`prepareSendAsync`** em vez de `prepareSend`, para JSON e gzip grandes poderem correr em isolate.
-- **GZIP:** primitivas em `lib/infrastructure/codecs/compression_codec.dart` via **`package:archive`** (`GZipEncoder`/`GZipDecoder`), partilhadas com o pipeline e com o compressor de linhas. Para payloads acima de 32 KiB, `TransportPipeline.prepareSendAsync` delega a compressão a um isolate via `compute` (comparando o tamanho UTF-8 **antes** da compressão). Na recepção, `receiveProcessAsync` usa o mesmo limiar comparando `PayloadFrame.originalSize` (tamanho decodificado esperado), nao o tamanho comprimido em `payload`.
+- **GZIP:** `lib/infrastructure/codecs/compression_codec.dart` uses
+  `package:archive`. Generic send/receive GZIP operations use reusable
+  `TransportWorkPool` workers from 32 KiB: send compares pre-compression UTF-8
+  size; receive compares `PayloadFrame.originalSize`, rather than wire size.
 - **JSON em isolate:** o runtime atual so offloada encode/decode JSON quando o
   tamanho UTF-8 estimado passa de ~384 KiB; abaixo disso, o caminho padrao
   permanece no isolate principal.
 - **Segundo formato (nao e o frame):** respostas SQL podem usar `GzipCompressor` (`lib/infrastructure/compression/gzip_compressor.dart`): lista de maps com `compressed_data` (base64) e `is_compressed`; e independente do envelope `PayloadFrame` acima.
+
+JSON, GZIP and HMAC share a lazily started pool of two workers by default;
+`TRANSPORT_WORKER_POOL_SIZE` clamps to 1..4. Generic HMAC sign/verify offload
+starts at 64 KiB (`TRANSPORT_SIGNING_ISOLATE_THRESHOLD_BYTES`). Streaming
+`rpc:chunk`/`rpc:complete` uses dedicated thresholds: JSON/GZIP worker offload
+at 16 KiB, JSON row-count offload at 32 rows, and compression from 2048 bytes.
+Overrides are `RPC_CHUNK_JSON_ISOLATE_THRESHOLD_BYTES`,
+`RPC_CHUNK_GZIP_ISOLATE_THRESHOLD_BYTES`, `RPC_CHUNK_ROW_ISOLATE_THRESHOLD`,
+and `RPC_CHUNK_COMPRESSION_THRESHOLD_BYTES`. Columnar chunks skip GZIP by
+default; opt in with `RPC_CHUNK_COLUMNAR_GZIP_ENABLED` when appropriate.
 
 ## Handshake e capabilities
 
@@ -231,9 +254,7 @@ Para clientes, a regra pratica permanece:
 
 ## Assinatura e validacao logica
 
-Para a distincao entre assinatura de frame (`PayloadFrame.signature`) e
-assinatura legada no JSON logico, ver "Frame vs logical signing (hub
-implementer)" em `docs/communication/socket_communication_standard.md`.
+For signing policy, see [Assinatura opcional de transporte/payload](socket_communication_standard.md#assinatura-opcional-de-transportepayload).
 
 As regras de schema validation, autorizacao e JSON-RPC continuam valendo sobre
 o payload logico apos decode.
@@ -242,14 +263,17 @@ A assinatura possui duas camadas possiveis:
 
 - camada principal atual: `frame.signature`, cobrindo metadados do
   `PayloadFrame` e os bytes do payload;
-- compatibilidade legada: assinatura no envelope logico JSON, usada apenas
-  quando o modo binario estiver desativado.
+- legacy logical-envelope signing remains in internal compatibility helpers;
+  production binary transport is mandatory, so it does not replace frame HMAC.
 
 Canonicalizacao obrigatoria para `frame.signature`:
 
 - monte um objeto sem o campo `signature`;
 - inclua `schemaVersion`, `enc`, `cmp`, `contentType`, `originalSize`,
   `compressedSize`, `traceId`, `requestId` e `payload`;
+- Include `traceId: null` and `requestId: null` in the canonical object when
+  either optional field is absent on the wire. Omitting these keys changes
+  the HMAC and fails verification against the Dart canonicalizer.
 - represente `payload` como base64 dos bytes efetivamente transmitidos;
 - serialize como JSON UTF-8 sem espacos, ordenando chaves de objetos
   lexicograficamente em todos os niveis;
@@ -299,6 +323,12 @@ Regras para clientes:
 
 ## Exemplo em Node.js
 
+This example covers JSON/frame encoding and bounded decoding. Pass the
+negotiated limits and a frame-signature verifier for signed sessions; add the
+frame HMAC after encoding and before emitting. Control events using plain JSON
+must bypass this decoder. The verifier must implement the canonicalization
+above and use the configured key for `signature.key_id`.
+
 ```js
 import { gzipSync, gunzipSync } from "node:zlib";
 
@@ -306,18 +336,26 @@ const MAX_INFLATION_RATIO = 10;
 
 function encodeFrame(
   message,
-  { requestId, traceId, compressionThreshold = 4096 },
+  {
+    requestId, traceId, compressionThreshold = 4096,
+    maxCompressedBytes = 10 * 1024 * 1024,
+    maxDecodedBytes = 10 * 1024 * 1024,
+    maxInflationRatio = MAX_INFLATION_RATIO,
+  } = {},
 ) {
   const plainBytes = Buffer.from(JSON.stringify(message), "utf8");
+  if (plainBytes.length > maxDecodedBytes) throw new Error("decoded payload limit exceeded");
   let cmp = "none";
   let wireBytes = plainBytes;
   if (plainBytes.length >= compressionThreshold) {
     const gz = gzipSync(plainBytes);
-    if (gz.length < plainBytes.length && plainBytes.length / gz.length <= MAX_INFLATION_RATIO) {
+    if (gz.length < plainBytes.length && plainBytes.length / gz.length <= maxInflationRatio) {
       cmp = "gzip";
       wireBytes = gz;
     }
   }
+
+  if (wireBytes.length > maxCompressedBytes) throw new Error("wire payload limit exceeded");
 
   return {
     schemaVersion: "1.0",
@@ -332,18 +370,46 @@ function encodeFrame(
   };
 }
 
-function decodeFrame(frame) {
+function decodeFrame(frame, {
+  maxCompressedBytes = 10 * 1024 * 1024,
+  maxDecodedBytes = 10 * 1024 * 1024,
+  maxInflationRatio = MAX_INFLATION_RATIO,
+  signatureRequired = false,
+  verifySignature,
+} = {}) {
+  if (frame.schemaVersion !== "1.0") throw new Error("unsupported frame version");
   if (frame.enc !== "json") throw new Error("unsupported encoding");
+  if (frame.contentType !== "application/json") throw new Error("unsupported content type");
   if (frame.cmp !== "gzip" && frame.cmp !== "none") {
     throw new Error("unsupported compression");
   }
 
-  const binary = Buffer.from(frame.payload);
-  const plainBytes = frame.cmp === "gzip" ? gunzipSync(binary) : binary;
-  if (binary.length > 0 && plainBytes.length / binary.length > MAX_INFLATION_RATIO) {
+  for (const size of [frame.originalSize, frame.compressedSize]) {
+    if (!Number.isSafeInteger(size) || size < 0) throw new Error("invalid frame size");
+  }
+  if (frame.compressedSize > maxCompressedBytes || frame.originalSize > maxDecodedBytes) {
+    throw new Error("payload limit exceeded");
+  }
+  const binary = typeof frame.payload === "string"
+    ? Buffer.from(frame.payload, "base64")
+    : Buffer.from(frame.payload);
+  if (binary.length !== frame.compressedSize) throw new Error("compressed size mismatch");
+  if (frame.signature != null) {
+    if (!verifySignature || verifySignature(frame) !== true) throw new Error("invalid signature");
+  } else if (signatureRequired) {
+    throw new Error("missing signature");
+  }
+  const outputLimit = Math.min(
+    frame.originalSize, maxDecodedBytes, Math.floor(binary.length * maxInflationRatio),
+  );
+  if (frame.cmp === "gzip" && (outputLimit < 1 || frame.originalSize > outputLimit)) {
     throw new Error("payload inflation ratio exceeded");
   }
-  return JSON.parse(plainBytes.toString("utf8"));
+  const plainBytes = frame.cmp === "gzip"
+    ? gunzipSync(binary, { maxOutputLength: outputLimit })
+    : binary;
+  if (plainBytes.length !== frame.originalSize) throw new Error("original size mismatch");
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(plainBytes));
 }
 ```
 
@@ -352,23 +418,53 @@ O exemplo acima segue o modo **automatico** do contrato: acima do limiar, `gzip`
 ## Exemplo em Dart
 
 ```dart
+// `protocol` is the negotiated ProtocolConfig; `signer` is the configured
+// PayloadSigner? for this session. Use PayloadFrameCodec in the runtime for
+// full frame/version/content-type validation and pre-handshake signing policy.
 final pipeline = TransportPipeline(
   encoding: 'json',
-  compression: 'gzip',
-  compressionThreshold: 4096,
+  compression: protocol.compression == 'gzip' ? 'auto' : 'none',
+  compressionThreshold: protocol.compressionThreshold,
+  maxInflationRatio: protocol.maxInflationRatio,
 );
 
-final frame = pipeline.prepareSend(
+var frame = (await pipeline.prepareSendAsync(
   request.toJson(),
   requestId: request.id?.toString(),
   traceId: request.meta?.traceId,
-).getOrThrow();
+)).getOrThrow();
+if (protocol.signatureRequired && signer == null) {
+  throw StateError('A signer is required for this session');
+}
+if (signer != null) {
+  final signed = await signer.signFrameAsync(frame);
+  frame = frame.copyWith(signature: signed.signature.toJson());
+}
+if (frame.compressedSize > protocol.effectiveLimits.maxCompressedPayloadBytes ||
+    frame.originalSize > protocol.effectiveLimits.maxDecodedPayloadBytes) {
+  throw StateError('Payload exceeds negotiated limits');
+}
 
-socket.emit('rpc:request', frame.toJson());
+socket.emit('rpc:request', frame.toSocketPayload());
 
-socket.on('rpc:response', (data) {
+socket.on('rpc:response', (data) async {
   final frame = PayloadFrame.fromJson(Map<String, dynamic>.from(data));
-  final responseJson = pipeline.receiveProcess(frame).getOrThrow();
+  final signature = frame.signature;
+  if (signature != null) {
+    if (signer == null ||
+        !(await signer.verifyFrameAsyncWithMetrics(
+          frame, PayloadSignature.fromJson(signature),
+        )).isValid) {
+      throw StateError('Invalid frame signature');
+    }
+  } else if (protocol.signatureRequired) {
+    throw StateError('Missing frame signature');
+  }
+  final responseJson = (await pipeline.receiveProcessAsync(
+    frame,
+    maxCompressedBytes: protocol.effectiveLimits.maxCompressedPayloadBytes,
+    maxOriginalBytes: protocol.effectiveLimits.maxDecodedPayloadBytes,
+  )).getOrThrow();
   // processa o envelope logico aqui
 });
 ```

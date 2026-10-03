@@ -12,8 +12,8 @@ Plug JSON-RPC.
 
 ## Politica futura: execution_mode em sql.executeBatch
 
-- Em v2.5, `sql.executeBatch` nao suporta `execution_mode`; todos os comandos rodam
-em modo managed implicito.
+- In the current profile (**2.11.2**), `sql.executeBatch` still does not support
+`execution_mode`; commands use implicit managed mode.
 - Opcoes para evolucao futura: (A) manter assim; (B) adicionar
 `options.execution_mode` no batch (aplicado a todos os comandos); (C) adicionar
 `commands[*].execution_mode` por comando.

@@ -7,8 +7,8 @@
   "properties": {
     "status": {
       "type": "string",
-      "const": "healthy",
-      "description": "Liveness indicator for the agent process"
+      "enum": ["healthy", "degraded"],
+      "description": "Overall runtime health. Degraded covers native circuit failures, queue saturation, timeouts after a worker starts, and unavailable secure storage."
     },
     "timestamp": {
       "type": "string",
@@ -46,16 +46,28 @@
         "hub_auth_available": { "type": "boolean" },
         "client_tokens_available": { "type": "boolean" },
         "degraded": { "type": "boolean" },
+        "runtime_probe_ok": { "type": "boolean", "description": "Result of the latest secure-storage canary write/read/delete probe, when available." },
+        "last_probe_at": { "type": "string", "format": "date-time" },
+        "last_probe_error": { "type": "string", "description": "Technical diagnostic from the latest failed canary probe, when available." },
         "unavailable": {
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["odbc", "hub_auth", "client_tokens"]
+            "enum": ["odbc", "hub_auth", "client_tokens", "runtime_probe"]
           },
           "minItems": 1,
           "uniqueItems": true
         }
       }
+    },
+    "legacy_database_migration": {
+      "type": "object",
+      "description": "Latest failed migration of the legacy local SQLite database, when recorded by the runtime.",
+      "required": ["last_failure"],
+      "properties": {
+        "last_failure": { "type": "string" }
+      },
+      "additionalProperties": false
     },
     "agent_runtime": {
       "type": "object",

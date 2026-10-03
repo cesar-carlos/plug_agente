@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugagente.dev/schemas/payload-frame.v1.json",
   "title": "PayloadFrame",
-  "description": "Transport envelope wrapping every Socket.IO app event payload. All agent and hub app events must carry their logical payload inside this frame.",
+  "description": "Transport envelope for framed Socket.IO events, including registration, capabilities, heartbeat, RPC, ACKs and streaming. Hub control events agent:register_error and agent:session.superseded use plain JSON instead; connection:ready is informational and is not consumed by the current agent runtime.",
   "type": "object",
   "required": ["schemaVersion", "enc", "cmp", "contentType", "originalSize", "compressedSize", "payload"],
   "properties": {
@@ -37,7 +37,7 @@
       "description": "Size in bytes of the payload after compression."
     },
     "payload": {
-      "description": "The encoded (and optionally compressed) payload. May be a base64 string, binary buffer, or structured JSON depending on transport and encoding."
+      "description": "Encoded JSON UTF-8 bytes, optionally compressed. Socket.IO transports them as a binary attachment; equivalent base64 strings are accepted. Raw structured logical JSON is not a supported frame payload."
     },
     "traceId": {
       "type": "string",

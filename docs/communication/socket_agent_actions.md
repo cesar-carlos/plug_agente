@@ -9,6 +9,11 @@ Todos os metodos abaixo dependem da feature flag
 `enableRemoteAgentActions`. Quando desligada, qualquer metodo `agent.action.*`
 responde `-32002` com `reason` `agent_actions_remote_disabled`.
 
+All `agent.action.*` methods require a non-null JSON-RPC `id`. Notifications
+are rejected before execution with internal reason
+`notification_not_allowed`; with the strict notification contract
+enabled, no `rpc:response` is emitted. Send an `id` to receive the outcome.
+
 Implementacao no agente: `lib/application/rpc/rpc_method_dispatcher.dart` +
 use cases em `lib/application/use_cases/`. Tabela de auditoria append-only:
 Drift `agent_action_remote_audit`. Capability:
@@ -243,9 +248,14 @@ em Drift (sem segredos) para diagnostico do Hub:
   `lifecycle_cancel_requested` (cancel) e `lifecycle_finished` (status terminal
   em `reason_code`), somente para execucoes com origem `remoteHub`.
 
-`trace_id`, `requested_by` e `idempotency_key` (quando presente em `run`/`validateRun`)
-propagam para execucao e auditoria via params (opcional) ou `meta` do envelope RPC
-(`trace_id`/`requested_by` apenas em `meta`; idempotencia de negocio vem de params).
+For `run`/`validateRun`, `params.trace_id` takes precedence over
+`meta.trace_id`, then the trace ID extracted from `meta.traceparent`.
+`params.requested_by` takes precedence over the requester derived from
+`meta.request_id`, `meta.agent_id`, the JSON-RPC `id`, then `remote`.
+There is no published `meta.requested_by` field. Business idempotency comes
+from `params.idempotency_key`. These resolved values propagate to execution
+and audit records; `getExecution`/`cancel` use envelope metadata for their audit
+correlation rather than accepting extra correlation params.
 
 ## Metodo `agent.action.cancel`
 

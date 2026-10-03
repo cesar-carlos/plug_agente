@@ -1,3 +1,4 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:plug_agente/application/actions/agent_action_runtime_state_guard.dart';
@@ -5,11 +6,13 @@ import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.d
 import 'package:plug_agente/application/actions/elevated_action_runner_readiness_service.dart';
 import 'package:plug_agente/application/gateway/queued_database_gateway.dart';
 import 'package:plug_agente/application/queue/sql_execution_queue.dart';
+import 'package:plug_agente/application/services/health/secure_storage_runtime_probe.dart';
 import 'package:plug_agente/application/services/health_service.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_rpc_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
+import 'package:plug_agente/core/diagnostics/legacy_database_migration_status.dart';
 import 'package:plug_agente/core/runtime/agent_runtime_identity.dart';
 import 'package:plug_agente/core/runtime/odbc_runtime_tuning.dart';
 import 'package:plug_agente/core/settings/agent_action_retention_settings.dart';
@@ -18,6 +21,9 @@ import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_scheduler_instance_lock.dart';
 import 'package:plug_agente/domain/repositories/i_database_gateway.dart';
+import 'package:plug_agente/domain/repositories/i_hub_auth_secret_store.dart';
+import 'package:plug_agente/domain/repositories/i_odbc_credential_secret_store.dart';
+import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/infrastructure/health/global_storage_health_snapshot_builder.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
@@ -26,6 +32,14 @@ import 'package:plug_agente/infrastructure/validation/json_schema_validator.dart
 import 'package:plug_agente/infrastructure/validation/schema_loader.dart';
 
 class _MockDatabaseGateway extends Mock implements IDatabaseGateway {}
+
+class _MockOdbcCredentialSecretStore extends Mock implements IOdbcCredentialSecretStore {}
+
+class _MockHubAuthSecretStore extends Mock implements IHubAuthSecretStore {}
+
+class _MockTokenSecretStore extends Mock implements ITokenSecretStore {}
+
+class _MockFlutterSecureStorage extends Mock implements FlutterSecureStorage {}
 
 class _MockAgentActionTriggerScheduler extends Mock implements AgentActionTriggerScheduler {}
 
@@ -40,6 +54,71 @@ void main() {
       loader = TransportSchemaLoader();
       await loader.loadAll();
       validator = JsonSchemaContractValidator(loader: loader);
+    });
+
+    for (final probeOk in <bool>[true, false]) {
+      test('should validate health snapshot when secure storage runtime probe returns $probeOk', () async {
+        expect(validator.isLoaded(TransportSchemaIds.resultAgentGetHealth), isTrue);
+        final storage = _MockFlutterSecureStorage();
+        when(
+          () => storage.write(
+            key: any(named: 'key'),
+            value: any(named: 'value'),
+          ),
+        ).thenAnswer((_) async {});
+        when(() => storage.read(key: any(named: 'key'))).thenAnswer((_) async => probeOk ? 'probe' : 'mismatch');
+        when(() => storage.delete(key: any(named: 'key'))).thenAnswer((_) async {});
+        final probe = SecureStorageRuntimeProbe(secureStorage: storage);
+        final odbcStore = _MockOdbcCredentialSecretStore();
+        when(() => odbcStore.isAvailable).thenReturn(true);
+        final hubAuthStore = _MockHubAuthSecretStore();
+        when(() => hubAuthStore.isAvailable).thenReturn(true);
+        final tokenStore = _MockTokenSecretStore();
+        when(() => tokenStore.isAvailable).thenReturn(true);
+        final service = HealthService(
+          metricsCollector: MetricsCollector(),
+          gateway: _MockDatabaseGateway(),
+          odbcCredentialSecretStore: odbcStore,
+          hubAuthSecretStore: hubAuthStore,
+          tokenSecretStore: tokenStore,
+          secureStorageRuntimeProbe: probe,
+        );
+
+        final snapshot = await service.getHealthStatusAsync();
+
+        expect(snapshot['status'], probeOk ? 'healthy' : 'degraded');
+        final secureStorage = snapshot['secure_storage']! as Map<String, Object?>;
+        expect(secureStorage['runtime_probe_ok'], probeOk);
+        expect(secureStorage['last_probe_at'], isA<String>());
+        if (!probeOk) {
+          expect(secureStorage['unavailable'], contains('runtime_probe'));
+          expect(secureStorage['last_probe_error'], 'canary read mismatch');
+        }
+        final validation = validator.validate(
+          schemaId: TransportSchemaIds.resultAgentGetHealth,
+          payload: snapshot,
+        );
+        expect(validation.isSuccess(), isTrue, reason: validation.exceptionOrNull()?.toString());
+      });
+    }
+
+    test('should validate health snapshot when a legacy database migration failure is recorded', () {
+      expect(validator.isLoaded(TransportSchemaIds.resultAgentGetHealth), isTrue);
+      addTearDown(LegacyDatabaseMigrationStatus.clear);
+      LegacyDatabaseMigrationStatus.recordFailure('Legacy migration failed');
+      final service = HealthService(
+        metricsCollector: MetricsCollector(),
+        gateway: _MockDatabaseGateway(),
+      );
+
+      final snapshot = service.getHealthStatus();
+
+      expect(snapshot['legacy_database_migration'], <String, Object?>{'last_failure': 'Legacy migration failed'});
+      final validation = validator.validate(
+        schemaId: TransportSchemaIds.resultAgentGetHealth,
+        payload: snapshot,
+      );
+      expect(validation.isSuccess(), isTrue, reason: validation.exceptionOrNull()?.toString());
     });
 
     test('should validate health snapshot with agent_actions blocks against published schema', () {

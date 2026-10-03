@@ -11,8 +11,8 @@ aberto nesta lista.
 Nao use esta pagina como guia de PR. O texto anterior repetia arquivos,
 testes e checkboxes `[x]` que ja estao nos ADRs.
 
-- Resumo: [`docs/plug_server/readme.md`](../plug_server/readme.md)
-- Contrato: [`docs/plug_server/01_transport_extensions.md`](../plug_server/01_transport_extensions.md)
+- Current contract: [`docs/communication/socket_communication_standard.md`](../communication/socket_communication_standard.md).
+- Negotiated extensions: [Capabilities](../communication/socket_communication_standard.md#capabilities-negociacao-atual).
 - ADRs no hub: `0009` (`clientRequestIdEcho`), `0011` (health piggyback),
   `0012` (`agentPhaseTimings`). ADR `0010` e presenca Redis, nao esta onda.
 - Aberto, fora deste checklist: compressao brotli (roadmap item 10 no hub).

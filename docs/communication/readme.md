@@ -2,6 +2,13 @@
 
 Documentos do contrato Socket.IO / Plug JSON-RPC entre o agente e o hub.
 
+Reviewed on **2026-10-03** against repository HEAD `abbbf9a4` and the local
+runtime sources. Protocol and OpenRPC remain **2.11.2**. The review covers
+event framing exceptions, stream arrival order and columnar chunks, admission
+limits/reasons, SQL source-read authorization, health schemas, and client
+examples. Live hub deployment settings and pending E2E rollout items require
+separate validation; see the backlog.
+
 | Arquivo | Quando consultar |
 | --- | --- |
 | [socket_communication_standard.md](socket_communication_standard.md) | Fonte de verdade do contrato implementado: eventos, handshake, heartbeat, RPC, streaming, errors, batch, signing, schemas. Tem TOC de navegacao no topo. |
@@ -18,6 +25,12 @@ Documentos do contrato Socket.IO / Plug JSON-RPC entre o agente e o hub.
 - Fixtures de fio (envelope + params + result + error) versus schemas:
   `flutter test test/docs/communication/contract_fixtures_test.dart`.
 - Fixtures vivem em `test/fixtures/rpc/`.
+- Runtime health snapshots versus the published schema:
+  `flutter test test/application/services/agent_get_health_result_schema_test.dart`.
+- Hub inbound fixture catalog with none/GZIP/HMAC:
+  `flutter test test/infrastructure/external_services/transport/hub_inbound_catalog_codec_test.dart`.
+  Requires `PLUG_SERVER_FIXTURE_DIR` or the sibling `plug_server` fixture
+  directory; the suite skips when the catalog is unavailable.
 
 ## Convencao de manutencao
 
