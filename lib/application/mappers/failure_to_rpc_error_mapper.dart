@@ -508,11 +508,13 @@ class FailureToRpcErrorMapper {
   }
 
   static Map<String, dynamic> _sanitizeContext(Map<String, dynamic> context) {
+    final odbcContext = context.keys.any((key) => key.startsWith('odbc_'));
     return Map.fromEntries(
       context.entries
           .where(
             (e) =>
                 !_isSensitiveKey(e.key) &&
+                !(odbcContext && const {'error', 'exception', 'detail', 'diagnostic_message'}.contains(e.key)) &&
                 e.key != _odbcMessageContextKey &&
                 !const {
                   'odbc_stack_trace',

@@ -533,13 +533,23 @@ class OdbcNativeConnectionPool
 
   @override
   Future<Result<void>> recycle(String connectionString) async {
+    if (_unconfirmedConnections.any((id) => _connectionOwners[id] == connectionString)) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError('Pool completion is unconfirmed'),
+          operation: 'pool_recycle',
+          context: const {'outcome_unknown': true, 'retryable': false},
+        ),
+      );
+    }
     _invalidatePoolGeneration(connectionString);
-    final poolId = _pools.remove(connectionString);
+    final poolId = _pools[connectionString];
     _poolStateCache.remove(poolId);
     _poolCreationFutures.remove(connectionString);
     if (poolId == null) {
       return const Success(unit);
     }
+    _quarantinedConnectionStrings.add(connectionString);
     _metrics?.recordPoolRecycle();
 
     developer.log(
@@ -564,7 +574,15 @@ class OdbcNativeConnectionPool
 
     late Result<void> closeResult;
     try {
-      closeResult = await _service.poolClose(poolId);
+      closeResult = await _service.poolClose(poolId).timeout(ConnectionConstants.defaultPoolAcquireTimeout);
+    } on Object catch (error) {
+      closeResult = Failure(
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: 'pool_recycle',
+          context: const {'outcome_unknown': true, 'retryable': false},
+        ),
+      );
     } finally {
       if (handshakeHeld) {
         _nativeReturnSemaphore.release();
@@ -572,13 +590,18 @@ class OdbcNativeConnectionPool
     }
 
     return closeResult.fold(
-      (_) => const Success(unit),
+      (_) {
+        if (_pools[connectionString] == poolId) _pools.remove(connectionString);
+        _quarantinedConnectionStrings.remove(connectionString);
+        return const Success(unit);
+      },
       (error) => Failure(
         () {
           _metrics?.recordPoolRecycleFailure();
           return OdbcFailureMapper.mapPoolError(
             error,
             operation: 'pool_recycle',
+            context: const {'outcome_unknown': true, 'retryable': false},
           );
         }(),
       ),

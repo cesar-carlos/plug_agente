@@ -68,6 +68,7 @@ final class OdbcBatchCommandPhase {
     final repeatedPreparedKeys = OdbcQueryRunner.collectRepeatedPreparedKeys(commands);
     final preparedStatements = <String, int>{};
     Result<void> cleanup = const Success(unit);
+    var commandPending = false;
     Future<Result<List<SqlCommandResult>>> execute() async {
       try {
         for (var i = 0; i < commands.length; i++) {
@@ -144,7 +145,8 @@ final class OdbcBatchCommandPhase {
 
               final key = OdbcQueryRunner.preparedStatementKeyFor(preparedExecution);
               final usePrepared = repeatedPreparedKeys.contains(key);
-              return usePrepared
+              commandPending = true;
+              final outcome = await (usePrepared
                   ? _queryRunner.runPreparedBatch(
                       connectionId: currentConnectionId,
                       request: commandRequest,
@@ -163,7 +165,9 @@ final class OdbcBatchCommandPhase {
                       preferPreparedTimeout: options.transaction,
                       executionMode: options.transaction ? 'batch_transaction' : 'batch',
                       cancellationToken: cancellationToken,
-                    );
+                    ));
+              commandPending = !outcome.isSuccess && OdbcErrorInspector.outcomeUnknown(outcome.error!);
+              return outcome;
             }
 
             var outcome = await executeCurrentCommand();
@@ -362,7 +366,27 @@ final class OdbcBatchCommandPhase {
     try {
       primary = await execute();
     } on Object catch (error) {
-      primary = Failure(OdbcFailureMapper.mapQueryError(error, operation: 'batch_execute'));
+      if (commandPending || OdbcErrorInspector.outcomeUnknown(error)) {
+        transaction.markUnconfirmed();
+        final id = connectionState.connectionId;
+        if (id != null) _connectionManager.markConnectionOutcomeUnknown(id);
+      } else {
+        await transaction.rollback((id) => _txManager.rollbackIfNeeded(context.connectionId, id));
+      }
+      primary = Failure(
+        OdbcFailureMapper.mapQueryError(
+          error,
+          operation: 'batch_execute',
+          context: {
+            if (transaction.state == BatchTransactionState.unconfirmed) 'outcome_unknown': true,
+            'retryable': false,
+            if (transaction.rollbackError != null)
+              'secondary_errors': [
+                OdbcFailureMapper.mapQueryError(transaction.rollbackError!).context,
+              ],
+          },
+        ),
+      );
     }
     if (cleanup.isError()) {
       final cleanupError = cleanup.exceptionOrNull()!;

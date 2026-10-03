@@ -583,8 +583,12 @@ The 4.6.0 baseline passed 109 selected ODBC tests. The local 5.0.0 suite passed
 regression suite covers structured timeout, uncertain commit/rollback,
 explicit native-pool statements, deferred close, duplicate release,
 quarantine, exhausted dispatch budget and stale-generation completion.
-Live checks use explicit SQL Server and SQL Anywhere DSNs, not first-available
-selection, with disposable fixtures and confirmed teardown.
+Fourteen live checks passed, seven per driver, with explicit SQL Server and
+SQL Anywhere DSNs, disposable fixtures and confirmed teardown. They covered
+queries, Unicode parameters, 20 lease/native pool cycles each, 20 slow-consumer
+streaming cycles each, commit/rollback, atomic bulk and multi-result continuations.
+The Windows Release build also passed. A subsequent affected ODBC/RPC/retry run
+passed 581 tests after the final cleanup corrections.
 
 Migration remains pending the complete timeout/cancel/contention/recovery and
 data/encoding matrix, resource stability under failure, Windows release smoke,

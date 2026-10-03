@@ -106,11 +106,18 @@ void main() {
     final failure = domain.QueryExecutionFailure.withContext(
       message: 'Unknown result',
       cause: uncertain,
-      context: const {'outcome_unknown': true, 'retryable': true, 'odbc_stack_trace': 'private stack'},
+      context: const {
+        'outcome_unknown': true,
+        'retryable': true,
+        'odbc_stack_trace': 'private stack',
+        'odbc_error_code': 'query',
+        'error': 'private SQL parameter value',
+      },
     );
     final rpc = FailureToRpcErrorMapper.map(failure);
     expect((rpc.data! as Map<String, dynamic>)['retryable'], isFalse);
     expect(rpc.data.toString(), isNot(contains('private stack')));
+    expect(rpc.data.toString(), isNot(contains('private SQL parameter value')));
   });
 
   test('uncertain commit never rolls back in subsequent cleanup', () async {

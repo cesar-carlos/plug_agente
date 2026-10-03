@@ -3567,7 +3567,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
     );
 
     test(
-      'should rollback transactional batch when execution throws unexpectedly',
+      'should quarantine transactional batch after unconfirmed driver interruption',
       () async {
         const connectionString = 'Driver={ODBC Driver};Server=localhost;';
         const ownedId = 'owned-throw-1';
@@ -3623,9 +3623,10 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         expect(result.isError(), isTrue);
         final failure = result.exceptionOrNull();
         expect(failure, isA<domain.QueryExecutionFailure>());
-        verify(() => mockService.rollbackTransaction(ownedId, 99)).called(1);
-        verify(() => mockService.disconnect(ownedId)).called(1);
-        expect(metrics.transactionRollbackAttemptCount, 1);
+        verifyNever(() => mockService.rollbackTransaction(ownedId, 99));
+        verifyNever(() => mockService.disconnect(ownedId));
+        expect(metrics.transactionRollbackAttemptCount, 0);
+        expect((failure! as domain.Failure).context['outcome_unknown'], isTrue);
       },
     );
 
