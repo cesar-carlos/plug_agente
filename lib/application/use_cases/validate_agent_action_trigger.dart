@@ -20,6 +20,13 @@ class ValidateAgentActionTrigger {
   }
 
   ActionValidationFailure? _validate(AgentActionTrigger trigger) {
+    if (!trigger.isExecutionEventTrigger && trigger.schedule.sourceActionId != null) {
+      return _failure(
+        field: 'schedule.sourceActionId',
+        reason: 'event_source_not_supported',
+        userMessage: 'A origem de evento so pode ser usada em gatilhos de sucesso ou falha de outra acao.',
+      );
+    }
     if (trigger.id.trim().isEmpty) {
       return ActionValidationFailure.withContext(
         message: 'Action trigger id is required.',
@@ -52,6 +59,7 @@ class ValidateAgentActionTrigger {
       AgentActionTriggerType.daily => _validateDaily(trigger),
       AgentActionTriggerType.weekly => _validateWeekly(trigger),
       AgentActionTriggerType.monthly => _validateMonthly(trigger),
+      AgentActionTriggerType.actionSucceeded || AgentActionTriggerType.actionFailed => _validateExecutionEvent(trigger),
       AgentActionTriggerType.manual ||
       AgentActionTriggerType.remote ||
       AgentActionTriggerType.appStart ||
@@ -86,6 +94,18 @@ class ValidateAgentActionTrigger {
     }
 
     return null;
+  }
+
+  ActionValidationFailure? _validateExecutionEvent(AgentActionTrigger trigger) {
+    final source = trigger.schedule.sourceActionId?.trim();
+    if (source == null || source.isEmpty || source == trigger.actionId.trim()) {
+      return _failure(
+        field: 'schedule.sourceActionId',
+        reason: 'invalid_event_source',
+        userMessage: 'Selecione outra acao como origem do evento.',
+      );
+    }
+    return _validateNonTemporal(trigger);
   }
 
   ActionValidationFailure? _validateOnce(AgentActionTrigger trigger) {
@@ -162,6 +182,9 @@ class ValidateAgentActionTrigger {
       );
     }
     if (trigger.schedule.startAt != null ||
+        trigger.schedule.endAt != null ||
+        trigger.schedule.weekdays.isNotEmpty ||
+        trigger.schedule.dayOfMonth != null ||
         trigger.schedule.interval != null ||
         trigger.schedule.timeOfDayMinutes != null) {
       return _failure(

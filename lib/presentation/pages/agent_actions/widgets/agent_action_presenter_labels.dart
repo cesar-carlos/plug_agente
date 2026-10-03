@@ -143,7 +143,10 @@ String agentActionTriggerSummaryLine(AgentActionTrigger trigger, AppLocalization
       ? l10n.agentActionsTriggerNotScheduled
       : l10n.agentActionsTriggerNextRun(formatAgentActionTriggerLocalDateTime(next));
 
-  final base = '$typeLabel · $statusLabel · $scheduleLabel';
+  final eventSource = trigger.isExecutionEventTrigger ? trigger.schedule.sourceActionId : null;
+  final base = eventSource == null
+      ? '$typeLabel · $statusLabel · $scheduleLabel'
+      : '$typeLabel · $statusLabel · $eventSource';
   final ianaId = trigger.schedule.timezoneId?.trim();
   final withTimezone = (ianaId == null || ianaId.isEmpty)
       ? base
@@ -173,6 +176,8 @@ String agentActionTriggerTypeLabel(AgentActionTriggerType type, AppLocalizations
     AgentActionTriggerType.monthly => l10n.agentActionsTriggerTypeMonthly,
     AgentActionTriggerType.appStart => l10n.agentActionsTriggerTypeAppStart,
     AgentActionTriggerType.appClose => l10n.agentActionsTriggerTypeAppClose,
+    AgentActionTriggerType.actionSucceeded => l10n.agentActionsTriggerTypeActionSucceeded,
+    AgentActionTriggerType.actionFailed => l10n.agentActionsTriggerTypeActionFailed,
   };
 }
 

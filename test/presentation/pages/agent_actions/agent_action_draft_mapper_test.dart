@@ -85,6 +85,34 @@ void main() {
   });
 
   group('AgentActionDraftMapper.applyDefinition', () {
+    test('preserves sub-minute runtime and stop time when editing a saved action', () {
+      final draft = AgentActionDraft();
+      addTearDown(draft.dispose);
+      const definition = AgentActionDefinition(
+        id: 'short',
+        name: 'Short action',
+        config: CommandLineActionConfig(command: 'echo hi'),
+        policies: AgentActionDefinitionPolicies(
+          timeout: AgentActionTimeoutPolicy(maxRuntime: Duration(milliseconds: 5250), stopTimeOfDayMinutes: 1080),
+        ),
+      );
+      const AgentActionDraftMapper().applyDefinition(
+        draft,
+        definition,
+        capabilities: const AgentActionDraftCapabilities(remoteAdHocEnabled: false, elevatedEnabled: false),
+        hooks: AgentActionDraftMapperHooks(clearDeveloperConnections: () {}, markDirty: (_) {}, setDraftKind: (_) {}),
+      );
+      expect(draft.runtimeInSeconds, isTrue);
+      expect(draft.executionPolicy.maxRuntimeMinutes.text, '5.25');
+      expect(draft.timeoutPolicy().maxRuntime, const Duration(milliseconds: 5250));
+      expect(draft.executionPolicy.stopTimeOfDay.text, '18:00');
+      draft.setRuntimeUnit(false);
+      expect(draft.timeoutPolicy().maxRuntime, const Duration(milliseconds: 5250));
+      draft.setRuntimeUnit(true);
+      expect(draft.executionPolicy.maxRuntimeMinutes.text, '5.25');
+      expect(draft.timeoutPolicy().stopTimeOfDayMinutes, 1080);
+    });
+
     test('null definition delegates to clear', () {
       final draft = AgentActionDraft()
         ..identity.name.text = 'old'

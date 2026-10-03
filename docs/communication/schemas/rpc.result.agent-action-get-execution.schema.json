@@ -50,7 +50,7 @@
         "trigger_id": { "type": "string", "minLength": 1 },
         "trigger_type": {
           "type": "string",
-          "enum": ["manual", "remote", "once", "interval", "daily", "weekly", "monthly", "appStart", "appClose"]
+          "enum": ["manual", "remote", "once", "interval", "daily", "weekly", "monthly", "appStart", "appClose", "actionSucceeded", "actionFailed"]
         },
         "scheduled_at": { "type": "string", "format": "date-time" },
         "triggered_at": { "type": "string", "format": "date-time" }

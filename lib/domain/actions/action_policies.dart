@@ -65,18 +65,46 @@ class AgentActionTimeoutPolicy {
   const AgentActionTimeoutPolicy({
     this.maxRuntime = const Duration(minutes: 30),
     this.killMainProcessOnTimeout = true,
+    this.stopTimeOfDayMinutes,
+    this.executionDeadline,
   });
 
   final Duration maxRuntime;
   final bool killMainProcessOnTimeout;
+  final int? stopTimeOfDayMinutes;
+
+  /// Absolute deadline shared by retries of the current execution; not persisted.
+  final DateTime? executionDeadline;
+
+  DateTime deadlineFrom(DateTime startedAt) {
+    final runtimeDeadline = startedAt.add(maxRuntime);
+    final stop = executionDeadline ?? nextStopAt(startedAt);
+    return stop != null && stop.isBefore(runtimeDeadline) ? stop : runtimeDeadline;
+  }
+
+  DateTime? nextStopAt(DateTime startedAt) {
+    final minutes = stopTimeOfDayMinutes;
+    if (minutes == null) return null;
+    final local = startedAt.toLocal();
+    var stop = DateTime(local.year, local.month, local.day, minutes ~/ 60, minutes % 60);
+    if (stop.isBefore(local)) {
+      stop = DateTime(local.year, local.month, local.day + 1, minutes ~/ 60, minutes % 60);
+    }
+    return stop;
+  }
 
   AgentActionTimeoutPolicy copyWith({
     Duration? maxRuntime,
     bool? killMainProcessOnTimeout,
+    int? stopTimeOfDayMinutes,
+    bool clearStopTimeOfDay = false,
+    DateTime? executionDeadline,
   }) {
     return AgentActionTimeoutPolicy(
       maxRuntime: maxRuntime ?? this.maxRuntime,
       killMainProcessOnTimeout: killMainProcessOnTimeout ?? this.killMainProcessOnTimeout,
+      stopTimeOfDayMinutes: clearStopTimeOfDay ? null : stopTimeOfDayMinutes ?? this.stopTimeOfDayMinutes,
+      executionDeadline: executionDeadline ?? this.executionDeadline,
     );
   }
 }

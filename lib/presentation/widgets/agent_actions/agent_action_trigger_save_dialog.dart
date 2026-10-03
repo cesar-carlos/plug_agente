@@ -88,6 +88,9 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
     super.dispose();
   }
 
+  AgentActionDefinition? get _actionDefinition =>
+      widget.provider.definitions.where((item) => item.id == widget.actionId).firstOrNull;
+
   Future<void> _onTriggerTypeChanged(AgentActionTriggerType value) async {
     final previous = _formState.type;
     if (value == AgentActionTriggerType.appClose && previous != AgentActionTriggerType.appClose) {
@@ -217,9 +220,11 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
         label: l10n.agentActionsTriggerFieldType,
         value: _formState.type,
         items: AgentActionTriggerType.values
+            .where((type) => (_actionDefinition?.type.supportsTrigger(type) ?? true) || type == _formState.type)
             .map(
               (value) => ComboBoxItem<AgentActionTriggerType>(
                 value: value,
+                enabled: _actionDefinition?.type.supportsTrigger(value) ?? true,
                 child: Text(_triggerTypeLabel(value, l10n)),
               ),
             )
@@ -236,6 +241,25 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       ),
     );
 
+    addField(Text(l10n.agentActionsTriggerScheduleHint, style: context.bodyMuted));
+    if (_actionDefinition?.type.isManualLocalOnly ?? false) {
+      addField(
+        InfoBar(
+          title: Text(l10n.agentActionsTriggersTitle),
+          content: Text(l10n.agentActionsTriggerCommandLineRestriction),
+          isLong: true,
+        ),
+      );
+    }
+    if (_formState.type == AgentActionTriggerType.appClose) {
+      addField(
+        InfoBar(
+          title: Text(l10n.agentActionsTriggerTypeAppClose),
+          content: Text(l10n.agentActionsTriggerAppCloseRequirements),
+          isLong: true,
+        ),
+      );
+    }
     _buildScheduleFields(
       l10n: l10n,
       provider: provider,
@@ -292,6 +316,26 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
       case AgentActionTriggerType.appStart:
       case AgentActionTriggerType.appClose:
         return fields;
+      case AgentActionTriggerType.actionSucceeded:
+      case AgentActionTriggerType.actionFailed:
+        final definitions = provider.definitions.where((item) => item.id != widget.actionId).toList();
+        final source = _formState.sourceActionIdController.text.trim();
+        return [
+          AppDropdown<String>(
+            label: l10n.agentActionsTriggerSourceAction,
+            value: source.isEmpty ? null : source,
+            items: [
+              for (final definition in definitions) ComboBoxItem(value: definition.id, child: Text(definition.name)),
+              if (source.isNotEmpty && !definitions.any((item) => item.id == source))
+                ComboBoxItem(value: source, enabled: false, child: Text(source)),
+            ],
+            onChanged: enabled
+                ? (value) {
+                    if (value != null) setState(() => _formState.sourceActionIdController.text = value);
+                  }
+                : null,
+          ),
+        ];
       case AgentActionTriggerType.once:
         fields.add(
           _fieldPair(
@@ -528,6 +572,7 @@ class _AgentActionTriggerSaveDialogState extends State<AgentActionTriggerSaveDia
         provider.isSavingTrigger,
         provider.triggerErrorMessage,
         provider.isRemoteAgentActionsEnabled,
+        Object.hashAll(provider.definitions),
       ),
       builder: (context) {
         final remoteError = provider.triggerErrorMessage;
@@ -600,6 +645,8 @@ String _triggerTypeLabel(AgentActionTriggerType type, AppLocalizations l10n) {
     AgentActionTriggerType.monthly => l10n.agentActionsTriggerTypeMonthly,
     AgentActionTriggerType.appStart => l10n.agentActionsTriggerTypeAppStart,
     AgentActionTriggerType.appClose => l10n.agentActionsTriggerTypeAppClose,
+    AgentActionTriggerType.actionSucceeded => l10n.agentActionsTriggerTypeActionSucceeded,
+    AgentActionTriggerType.actionFailed => l10n.agentActionsTriggerTypeActionFailed,
   };
 }
 

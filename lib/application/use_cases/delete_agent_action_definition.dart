@@ -23,6 +23,22 @@ class DeleteAgentActionDefinition {
       );
     }
 
+    final triggers = await _repository.listTriggers(
+      isEnabled: true,
+      types: const {AgentActionTriggerType.actionSucceeded, AgentActionTriggerType.actionFailed},
+    );
+    if (triggers.isError()) return Failure(triggers.exceptionOrNull()!);
+    if (triggers.getOrThrow().any((trigger) => trigger.schedule.sourceActionId?.trim() == trimmed)) {
+      return Failure(
+        ActionValidationFailure.withContext(
+          message: 'Action is referenced by enabled execution event triggers.',
+          context: const {
+            'reason': 'action_has_event_dependents',
+            'user_message': 'Desative ou exclua os gatilhos que dependem desta acao antes de exclui-la.',
+          },
+        ),
+      );
+    }
     return _repository.deleteDefinition(trimmed);
   }
 }

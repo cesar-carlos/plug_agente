@@ -117,3 +117,4 @@ test/tool/plug_agente_windows_secure_storage_reader_test.dart
 test/tool/promote_e2e_signing_from_monorepo_env_test.dart
 test/tool/generate_dev_e2e_signing_test.dart
 test/tool/e2e_monorepo_env_paths_test.dart
+test/application/actions/agent_action_automation_regression_test.dart

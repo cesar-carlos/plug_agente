@@ -349,14 +349,11 @@ class _ToolbarButtonGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var index = 0; index < children.length; index++) ...[
-          if (index > 0) const SizedBox(width: AppSpacing.sm),
-          children[index],
-        ],
-      ],
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: children,
     );
   }
 }

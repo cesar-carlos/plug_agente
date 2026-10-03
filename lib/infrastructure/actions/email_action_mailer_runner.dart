@@ -202,7 +202,7 @@ class EmailActionMailerRunner implements AgentActionLocalRunner {
         message,
         smtpServer,
         timeout: definition.policies.timeout.maxRuntime,
-      );
+      ).timeout(definition.policies.timeout.maxRuntime);
       final finishedAt = DateTime.now();
       final recipientCount =
           toResult.getOrThrow().length + ccResult.getOrThrow().length + bccResult.getOrThrow().length;
@@ -231,6 +231,13 @@ class EmailActionMailerRunner implements AgentActionLocalRunner {
           redactionApplied: true,
         ),
       );
+    } on TimeoutException catch (error) {
+      return Failure(ActionTimeoutFailure.withContext(
+        message: 'Email send exceeded the configured timeout.', cause: error,
+        code: AgentActionFailureCode.executionTimedOut,
+        context: const {'phase': 'smtp_send', 'reason': 'smtp_timeout',
+          'user_message': 'O envio de e-mail excedeu o tempo limite. Verifique a entrega antes de repetir o envio.'},
+      ));
     } on Exception catch (error) {
       return Failure(
         ActionRuntimeFailure.withContext(

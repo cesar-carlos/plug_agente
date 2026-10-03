@@ -15,6 +15,18 @@ extension AgentActionTypeExecutionScope on AgentActionType {
 
   /// Whether the type can be advertised to a Hub as remotely executable.
   bool get isRemoteCapable => !isManualLocalOnly;
+
+  bool get supportsProcessTermination => switch (this) {
+    AgentActionType.commandLine ||
+    AgentActionType.executable ||
+    AgentActionType.script ||
+    AgentActionType.jar ||
+    AgentActionType.developer => true,
+    AgentActionType.email || AgentActionType.comObject => false,
+  };
+
+  bool supportsTrigger(AgentActionTriggerType trigger) =>
+      !isManualLocalOnly || trigger == AgentActionTriggerType.manual;
 }
 
 enum AgentActionState {
@@ -34,6 +46,8 @@ enum AgentActionTriggerType {
   monthly,
   appStart,
   appClose,
+  actionSucceeded,
+  actionFailed,
 }
 
 enum AgentActionExecutionStatus {

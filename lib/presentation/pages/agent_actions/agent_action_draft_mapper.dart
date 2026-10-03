@@ -108,7 +108,10 @@ class AgentActionDraftMapper {
     draft.notifyOnTimeout = false;
     draft.maxAttempts = 1;
     draft.allowRemoteRetry = false;
+    draft.runtimeInSeconds = false;
     draft.executionPolicy.maxRuntimeMinutes.text = '30';
+    draft.executionPolicy.stopTimeOfDay.clear();
+    draft.executionPolicy.waitBeforeKillSeconds.text = '5';
     draft.killMainProcessOnTimeout = true;
     draft.executionPolicy.allowedProfiles.clear();
     draft.executionPolicy.allowedEnvironmentVariableNames.clear();
@@ -181,8 +184,12 @@ class AgentActionDraftMapper {
     draft.allowRemoteRetry = retry.allowRemote;
 
     final timeout = definition.policies.timeout;
-    draft.executionPolicy.maxRuntimeMinutes.text =
-        '${timeout.maxRuntime.inMinutes < 1 ? 1 : timeout.maxRuntime.inMinutes}';
+    draft.runtimeInSeconds = timeout.maxRuntime.inMilliseconds % 60000 != 0;
+    draft.executionPolicy.maxRuntimeMinutes.text = AgentActionDraftParsers.formatDuration(
+      timeout.maxRuntime,
+      seconds: draft.runtimeInSeconds,
+    );
+    draft.executionPolicy.stopTimeOfDay.text = AgentActionDraftParsers.formatTimeOfDay(timeout.stopTimeOfDayMinutes);
     draft.killMainProcessOnTimeout = timeout.killMainProcessOnTimeout;
 
     final environment = definition.policies.environment;
@@ -194,6 +201,10 @@ class AgentActionDraftMapper {
 
     draft.executionPolicy.acceptedExitCodes.text = definition.policies.exitCode.acceptedExitCodes.join(', ');
     draft.onAppExit = definition.policies.lifecycle.onAppExit;
+    draft.executionPolicy.waitBeforeKillSeconds.text = AgentActionDraftParsers.formatDuration(
+      definition.policies.lifecycle.waitBeforeKillOnAppExit,
+      seconds: true,
+    );
     draft.processWindowMode = definition.policies.process.windowMode;
 
     final encoding = definition.policies.encoding;

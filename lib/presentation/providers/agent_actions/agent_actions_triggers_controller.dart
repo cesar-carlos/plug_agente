@@ -4,6 +4,7 @@ import 'package:plug_agente/application/use_cases/delete_agent_action_trigger.da
 import 'package:plug_agente/application/use_cases/list_agent_action_triggers.dart';
 import 'package:plug_agente/application/use_cases/save_agent_action_trigger.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:result_dart/result_dart.dart';
 
 typedef AgentActionsTriggerStateChanged = void Function();
 
@@ -40,6 +41,8 @@ class AgentActionsTriggersController {
   void invalidateCaches() {
     triggersViewCache = null;
   }
+
+  Future<Result<List<AgentActionTrigger>>> listForAction(String actionId) => _listTriggers(actionId: actionId);
 
   bool isDeletingTrigger(String triggerId) => deletingTriggerIds.contains(triggerId);
 

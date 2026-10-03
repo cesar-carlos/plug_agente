@@ -10,6 +10,7 @@ class AgentActionTriggerSchedule {
     this.dayOfMonth,
     this.timezoneId,
     this.ignoreMissedRuns = true,
+    this.sourceActionId,
   });
 
   final DateTime? startAt;
@@ -20,6 +21,7 @@ class AgentActionTriggerSchedule {
   final int? dayOfMonth;
   final String? timezoneId;
   final bool ignoreMissedRuns;
+  final String? sourceActionId;
 
   bool get hasTimeOfDay {
     final value = timeOfDayMinutes;
@@ -35,6 +37,7 @@ class AgentActionTriggerSchedule {
     int? dayOfMonth,
     String? timezoneId,
     bool? ignoreMissedRuns,
+    String? sourceActionId,
   }) {
     return AgentActionTriggerSchedule(
       startAt: startAt ?? this.startAt,
@@ -45,6 +48,7 @@ class AgentActionTriggerSchedule {
       dayOfMonth: dayOfMonth ?? this.dayOfMonth,
       timezoneId: timezoneId ?? this.timezoneId,
       ignoreMissedRuns: ignoreMissedRuns ?? this.ignoreMissedRuns,
+      sourceActionId: sourceActionId ?? this.sourceActionId,
     );
   }
 }
@@ -80,6 +84,9 @@ class AgentActionTrigger {
     return type == AgentActionTriggerType.appStart || type == AgentActionTriggerType.appClose;
   }
 
+  bool get isExecutionEventTrigger =>
+      type == AgentActionTriggerType.actionSucceeded || type == AgentActionTriggerType.actionFailed;
+
   bool get isTemporalTrigger {
     return switch (type) {
       AgentActionTriggerType.once ||
@@ -90,7 +97,9 @@ class AgentActionTrigger {
       AgentActionTriggerType.manual ||
       AgentActionTriggerType.remote ||
       AgentActionTriggerType.appStart ||
-      AgentActionTriggerType.appClose => false,
+      AgentActionTriggerType.appClose ||
+      AgentActionTriggerType.actionSucceeded ||
+      AgentActionTriggerType.actionFailed => false,
     };
   }
 

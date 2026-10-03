@@ -268,6 +268,7 @@ void _registerActionsInfrastructure(GetIt getIt) {
         statusFileSyncer: getIt<ElevatedActionStatusFileSyncer>(),
         readiness: getIt<ElevatedActionRunnerReadinessService>(),
         abortRegistry: getIt<ElevatedActionExecutionAbortRegistry>(),
+        canceller: getIt<IElevatedActionExecutionCanceller>(),
       ),
     )
     ..registerLazySingleton<AgentActionLocalRunnerRegistry>(

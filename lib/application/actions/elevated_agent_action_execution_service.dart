@@ -4,6 +4,7 @@ import 'package:plug_agente/application/actions/elevated_action_status_file_sync
 import 'package:plug_agente/core/constants/agent_action_elevated_constants.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/repositories/i_elevated_action_execution_canceller.dart';
 import 'package:plug_agente/domain/repositories/i_elevated_action_runner_bridge.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -14,17 +15,20 @@ class ElevatedAgentActionExecutionService {
     required ElevatedActionStatusFileSyncer statusFileSyncer,
     required ElevatedActionRunnerReadinessService readiness,
     ElevatedActionExecutionAbortRegistry? abortRegistry,
+    IElevatedActionExecutionCanceller? canceller,
     DateTime Function()? now,
   }) : _bridge = bridge,
        _statusFileSyncer = statusFileSyncer,
        _readiness = readiness,
        _abortRegistry = abortRegistry ?? ElevatedActionExecutionAbortRegistry(),
+       _canceller = canceller,
        _now = now ?? DateTime.now;
 
   final IElevatedActionRunnerBridge _bridge;
   final ElevatedActionStatusFileSyncer _statusFileSyncer;
   final ElevatedActionRunnerReadinessService _readiness;
   final ElevatedActionExecutionAbortRegistry _abortRegistry;
+  final IElevatedActionExecutionCanceller? _canceller;
   final DateTime Function() _now;
 
   Result<void> ensureActionTypeSupported(AgentActionDefinition definition) {
@@ -57,6 +61,8 @@ class ElevatedAgentActionExecutionService {
       return Failure(typeGate.exceptionOrNull()!);
     }
 
+    final startedAt = _now();
+    final deadline = definition.policies.timeout.deadlineFrom(startedAt);
     final submitResult = await _bridge.submitExecution(
       executionId: executionId,
       definition: definition,
@@ -75,15 +81,30 @@ class ElevatedAgentActionExecutionService {
       return Failure(failure);
     }
 
-    final startedAt = _now();
     final trimmedExecutionId = executionId.trim();
     _abortRegistry.register(trimmedExecutionId);
     try {
-      final terminalResult = await _waitForTerminalOrAbort(
+      var terminalResult = await _waitForTerminalOrAbort(
         executionId: trimmedExecutionId,
         processStartedAt: startedAt,
-        timeout: definition.policies.timeout.maxRuntime,
+        timeout: deadline.difference(_now()),
       );
+      while (!definition.policies.timeout.killMainProcessOnTimeout &&
+          terminalResult.exceptionOrNull() is ActionFailure &&
+          (terminalResult.exceptionOrNull()! as ActionFailure).code == AgentActionFailureCode.executionTimedOut) {
+        terminalResult = await _waitForTerminalOrAbort(
+          executionId: trimmedExecutionId,
+          processStartedAt: startedAt,
+          timeout: definition.policies.timeout.maxRuntime,
+        );
+      }
+      final failure = terminalResult.exceptionOrNull();
+      if (failure is ActionFailure && failure.code == AgentActionFailureCode.executionTimedOut) {
+        if (definition.policies.timeout.killMainProcessOnTimeout) {
+          final cancelled = await _canceller?.cancel(executionId: trimmedExecutionId);
+          if (cancelled != null && cancelled.isError()) return Failure(cancelled.exceptionOrNull()!);
+        }
+      }
       if (terminalResult.isSuccess()) {
         final output = terminalResult.getOrThrow();
         final failureCode = output.failureCode?.trim();

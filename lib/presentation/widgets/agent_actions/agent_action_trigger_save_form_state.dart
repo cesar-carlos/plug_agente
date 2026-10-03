@@ -16,6 +16,7 @@ final class AgentActionTriggerBuildResult {
 class AgentActionTriggerSaveFormState {
   AgentActionTriggerSaveFormState({AgentActionTrigger? existing})
     : nameController = TextEditingController(text: existing?.name ?? ''),
+      sourceActionIdController = TextEditingController(text: existing?.schedule.sourceActionId ?? ''),
       _type = existing?.type ?? AgentActionTriggerType.manual,
       _isEnabled = existing?.isEnabled ?? true,
       _ignoreMissedRuns = existing?.schedule.ignoreMissedRuns ?? true,
@@ -34,6 +35,7 @@ class AgentActionTriggerSaveFormState {
       );
 
   final TextEditingController nameController;
+  final TextEditingController sourceActionIdController;
   final TextEditingController timezoneController;
   final TextEditingController startAtController;
   final TextEditingController endAtController;
@@ -63,6 +65,7 @@ class AgentActionTriggerSaveFormState {
 
   void dispose() {
     nameController.dispose();
+    sourceActionIdController.dispose();
     timezoneController.dispose();
     startAtController.dispose();
     endAtController.dispose();
@@ -113,7 +116,9 @@ class AgentActionTriggerSaveFormState {
       AgentActionTriggerType.manual ||
       AgentActionTriggerType.remote ||
       AgentActionTriggerType.appStart ||
-      AgentActionTriggerType.appClose => false,
+      AgentActionTriggerType.appClose ||
+      AgentActionTriggerType.actionSucceeded ||
+      AgentActionTriggerType.actionFailed => false,
     };
   }
 
@@ -128,6 +133,14 @@ class AgentActionTriggerSaveFormState {
     final nameRaw = nameController.text.trim();
     final name = nameRaw.isEmpty ? null : nameRaw;
 
+    if (supportsMissedRunPolicy) {
+      for (final field in [startAtController, endAtController]) {
+        if (field.text.trim().isNotEmpty && _tryParseLocalDateTime(field.text) == null) {
+          parseError = l10n.agentActionsTriggerValidationInvalidDateRange;
+          return AgentActionTriggerBuildResult(parseError: parseError);
+        }
+      }
+    }
     final AgentActionTriggerSchedule schedule;
     switch (_type) {
       case AgentActionTriggerType.manual:
@@ -135,6 +148,14 @@ class AgentActionTriggerSaveFormState {
       case AgentActionTriggerType.appStart:
       case AgentActionTriggerType.appClose:
         schedule = const AgentActionTriggerSchedule();
+      case AgentActionTriggerType.actionSucceeded:
+      case AgentActionTriggerType.actionFailed:
+        final source = sourceActionIdController.text.trim();
+        if (source.isEmpty || source == actionId) {
+          parseError = l10n.agentActionsTriggerValidationSourceAction;
+          return AgentActionTriggerBuildResult(parseError: parseError);
+        }
+        schedule = AgentActionTriggerSchedule(sourceActionId: source);
       case AgentActionTriggerType.once:
         final startAt = _tryParseLocalDateTime(startAtController.text);
         if (startAt == null) {

@@ -100,7 +100,9 @@ class DispatchAgentActionTrigger {
       AgentActionTriggerType.interval ||
       AgentActionTriggerType.daily ||
       AgentActionTriggerType.weekly ||
-      AgentActionTriggerType.monthly => AgentActionRequestSource.scheduler,
+      AgentActionTriggerType.monthly ||
+      AgentActionTriggerType.actionSucceeded ||
+      AgentActionTriggerType.actionFailed => AgentActionRequestSource.scheduler,
     };
   }
 

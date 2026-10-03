@@ -54,7 +54,8 @@ class AgentActionTriggerScheduleCalculator {
       AgentActionTriggerType.manual ||
       AgentActionTriggerType.remote ||
       AgentActionTriggerType.appStart ||
-      AgentActionTriggerType.appClose => null,
+      AgentActionTriggerType.appClose ||
+      AgentActionTriggerType.actionSucceeded || AgentActionTriggerType.actionFailed => null,
     };
 
     return Success(
@@ -127,8 +128,8 @@ class AgentActionTriggerScheduleCalculator {
       return null;
     }
 
-    final anchor = trigger.schedule.startAt ?? now;
-    if (!anchor.isBefore(now)) {
+    final anchor = trigger.schedule.startAt ?? trigger.createdAt ?? trigger.lastScheduledAt ?? now;
+    if (anchor.isAfter(now)) {
       return _withinEnd(trigger, anchor) ? anchor : null;
     }
 

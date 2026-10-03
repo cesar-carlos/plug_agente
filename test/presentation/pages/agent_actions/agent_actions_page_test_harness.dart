@@ -150,13 +150,28 @@ Future<void> openTab(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> openCreateActionDialog(
-  WidgetTester tester,
-  AppLocalizations l10n,
-) async {
+Future<void> openCreateActionDialog(WidgetTester tester, AppLocalizations l10n, {bool expandPolicies = true}) async {
   await tester.tap(find.widgetWithText(FilledButton, l10n.agentActionsFormNew).first);
   await tester.pumpAndSettle();
   expect(find.byType(ContentDialog), findsOneWidget);
+  if (expandPolicies) await expandActionEditorPolicies(tester);
+}
+
+Future<void> expandActionEditorPolicies(WidgetTester tester) async {
+  for (final section in ['advanced', 'notifications']) {
+    final header = find
+        .descendant(of: find.byKey(ValueKey('agent_action_section_$section')), matching: find.byType(Button))
+        .first;
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(header);
+    await tester.pumpAndSettle();
+    await tester.tap(header);
+    await tester.pumpAndSettle();
+  }
+  final name = find.byType(AppTextField).first;
+  await tester.ensureVisible(name);
+  await tester.pumpAndSettle();
 }
 
 Future<void> selectActionFormType(WidgetTester tester, AppLocalizations l10n, String typeLabel) async {
@@ -167,6 +182,10 @@ Future<void> selectActionFormType(WidgetTester tester, AppLocalizations l10n, St
 }
 
 Future<void> selectPowerShellMode(WidgetTester tester, AppLocalizations l10n, String modeLabel) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(agentActionFormComboBox(l10n.agentActionsFormPowerShellMode));
+  await tester.pumpAndSettle();
   await tester.tap(agentActionFormComboBox(l10n.agentActionsFormPowerShellMode));
   await tester.pumpAndSettle();
   await tester.tap(find.text(modeLabel).last);
@@ -174,18 +193,23 @@ Future<void> selectPowerShellMode(WidgetTester tester, AppLocalizations l10n, St
 }
 
 Future<void> selectPowerShellExecutable(WidgetTester tester, AppLocalizations l10n, String executableLabel) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(agentActionFormComboBox(l10n.agentActionsFormPowerShellExecutable));
+  await tester.pumpAndSettle();
   await tester.tap(agentActionFormComboBox(l10n.agentActionsFormPowerShellExecutable));
   await tester.pumpAndSettle();
   await tester.tap(find.text(executableLabel).last);
   await tester.pumpAndSettle();
 }
 
-Future<void> openSelectedActionDialog(WidgetTester tester) async {
+Future<void> openSelectedActionDialog(WidgetTester tester, {bool expandPolicies = true}) async {
   await tester.tap(find.byKey(const ValueKey<String>('agent_action_definition_more_action-1')));
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey<String>('agent_action_definition_edit_action-1')));
   await tester.pumpAndSettle();
   expect(find.byType(ContentDialog), findsAtLeastNWidgets(1));
+  if (expandPolicies) await expandActionEditorPolicies(tester);
 }
 
 Future<void> openActionDetailsDialog(WidgetTester tester, String actionId) async {
@@ -232,6 +256,8 @@ String triggerTypeTestLabel(AgentActionTriggerType type, AppLocalizations l10n) 
     AgentActionTriggerType.monthly => l10n.agentActionsTriggerTypeMonthly,
     AgentActionTriggerType.appStart => l10n.agentActionsTriggerTypeAppStart,
     AgentActionTriggerType.appClose => l10n.agentActionsTriggerTypeAppClose,
+    AgentActionTriggerType.actionSucceeded => l10n.agentActionsTriggerTypeActionSucceeded,
+    AgentActionTriggerType.actionFailed => l10n.agentActionsTriggerTypeActionFailed,
   };
 }
 

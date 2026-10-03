@@ -5,6 +5,7 @@ import 'package:plug_agente/application/actions/elevated_agent_action_execution_
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
 import 'package:plug_agente/core/storage/global_storage_path_resolver.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
+import 'package:plug_agente/domain/repositories/i_elevated_action_execution_canceller.dart';
 import 'package:plug_agente/domain/repositories/i_elevated_action_runner_bridge.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -24,6 +25,39 @@ class _FakeElevatedBridge implements IElevatedActionRunnerBridge {
 
 void main() {
   group('ElevatedAgentActionExecutionService', () {
+    test('signals elevated helper cancellation when the absolute deadline is reached', () async {
+      final canceller = _Canceller();
+      final syncer = _RecordingStatusSyncer(
+        result: Failure(
+          ActionTimeoutFailure.withContext(message: 'Timed out', code: AgentActionFailureCode.executionTimedOut),
+        ),
+      );
+      final start = DateTime(2026, 10, 3, 12);
+      final service = ElevatedAgentActionExecutionService(
+        bridge: _FakeElevatedBridge(submitResult: const Success(unit)),
+        statusFileSyncer: syncer,
+        readiness: ElevatedActionRunnerReadinessService(),
+        canceller: canceller,
+        now: () => start,
+      );
+      final result = await service.run(
+        executionId: 'cutoff',
+        definition: AgentActionDefinition(
+          id: 'a',
+          name: 'Elevated',
+          config: const CommandLineActionConfig(command: 'echo hi'),
+          policies: AgentActionDefinitionPolicies(
+            timeout: AgentActionTimeoutPolicy(
+              executionDeadline: start.add(const Duration(seconds: 2)),
+            ),
+          ),
+        ),
+      );
+      expect(result.exceptionOrNull(), isA<ActionTimeoutFailure>());
+      expect(syncer.lastTimeout, const Duration(seconds: 2));
+      expect(canceller.cancelledIds, ['cutoff']);
+    });
+
     test('should mark readiness degraded when submit fails with protection error', () async {
       final readiness = ElevatedActionRunnerReadinessService();
       final service = ElevatedAgentActionExecutionService(
@@ -108,6 +142,7 @@ class _RecordingStatusSyncer extends ElevatedActionStatusFileSyncer {
     : super(storageContext: const GlobalStorageContext(appDirectoryPath: '/unused'));
 
   final Result<AgentActionProcessResult> result;
+  Duration? lastTimeout;
 
   @override
   Future<Result<AgentActionProcessResult>> waitForTerminalResult({
@@ -116,6 +151,25 @@ class _RecordingStatusSyncer extends ElevatedActionStatusFileSyncer {
     required Duration timeout,
     Future<void>? abort,
   }) async {
+    lastTimeout = timeout;
     return result;
   }
+}
+
+class _Canceller implements IElevatedActionExecutionCanceller {
+  final cancelledIds = <String>[];
+  @override
+  Future<Result<AgentActionCancellationResult>> cancel({required String executionId}) async {
+    cancelledIds.add(executionId);
+    return Success(
+      AgentActionCancellationResult(
+        executionId: executionId,
+        status: AgentActionExecutionStatus.cancelled,
+        killed: false,
+      ),
+    );
+  }
+
+  @override
+  Future<void> cancelAllPendingExecutions() async {}
 }

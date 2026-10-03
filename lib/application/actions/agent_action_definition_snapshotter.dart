@@ -80,11 +80,12 @@ class AgentActionDefinitionSnapshotter {
       'timeout': <String, Object?>{
         'maxRuntimeMs': policies.timeout.maxRuntime.inMilliseconds,
         'killMainProcessOnTimeout': policies.timeout.killMainProcessOnTimeout,
+        if (policies.timeout.stopTimeOfDayMinutes != null)
+          'stopTimeOfDayMinutes': policies.timeout.stopTimeOfDayMinutes,
       },
     };
     if (secretReferenceFingerprints != null && secretReferenceFingerprints.isNotEmpty) {
-      final sortedEntries = secretReferenceFingerprints.entries.toList()
-        ..sort((a, b) => a.key.compareTo(b.key));
+      final sortedEntries = secretReferenceFingerprints.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
       snapshot['secretReferenceFingerprints'] = Map<String, String>.fromEntries(sortedEntries);
     }
     return snapshot;
@@ -173,6 +174,8 @@ class AgentActionDefinitionSnapshotter {
       'timeout': <String, Object?>{
         'maxRuntimeMs': policies.timeout.maxRuntime.inMilliseconds,
         'killMainProcessOnTimeout': policies.timeout.killMainProcessOnTimeout,
+        if (policies.timeout.stopTimeOfDayMinutes != null)
+          'stopTimeOfDayMinutes': policies.timeout.stopTimeOfDayMinutes,
       },
       'capture': <String, Object?>{
         'captureStdout': policies.capture.captureStdout,

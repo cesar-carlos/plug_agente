@@ -103,7 +103,20 @@ void _registerActionsUseCases(GetIt getIt) {
       ),
     )
     ..registerLazySingleton(
-      () => SaveAgentActionExecution(getIt<IAgentActionRepository>()),
+      () => SaveAgentActionExecution(
+        getIt<IAgentActionRepository>(),
+        onTerminalExecution: (execution) async {
+          final result = await getIt<AgentActionTriggerScheduler>().dispatchExecutionTriggers(execution);
+          if (result.isError()) {
+            developer.log(
+              'Failed to dispatch action execution event',
+              name: 'agent_action_events',
+              level: 900,
+              error: result.exceptionOrNull(),
+            );
+          }
+        },
+      ),
     )
     ..registerLazySingleton(
       () => GetAgentActionExecution(getIt<IAgentActionRepository>()),

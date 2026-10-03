@@ -79,6 +79,19 @@ class AgentActionDefinitionRowActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Tooltip(
+          message: l10n.agentActionsTriggerAdd,
+          child: IconButton(
+            key: ValueKey<String>('agent_action_definition_add_trigger_${definition.id}'),
+            icon: const Icon(FluentIcons.add_event, size: 16),
+            onPressed: provider.canManageTriggers && !provider.isSavingTrigger
+                ? () {
+                    provider.selectAction(definition.id);
+                    onAddTrigger(definition);
+                  }
+                : null,
+          ),
+        ),
+        Tooltip(
           message: l10n.agentActionsRunSelected,
           child: IconButton(
             icon: provider.isRunning && provider.selectedActionId == definition.id

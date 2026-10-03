@@ -40,6 +40,8 @@ enum DraftValidationField {
   environment,
   queueLimits,
   maxRuntime,
+  stopTimeOfDay,
+  waitBeforeKill,
   remoteApproval,
   preflightActiveState,
   powerShellMode,
@@ -180,7 +182,33 @@ class AgentActionDraftValidators {
   }
 
   DraftValidationResult _validateTimeout(AgentActionDraft draft, AppLocalizations l10n) {
-    if (AgentActionDraftParsers.positiveInt(draft.executionPolicy.maxRuntimeMinutes.text) != null) {
+    if (draft.draftType.supportsProcessTermination &&
+        draft.onAppExit == AgentActionOnAppExitBehavior.waitThenKillMainProcess) {
+      final wait = AgentActionDraftParsers.positiveDuration(
+        draft.executionPolicy.waitBeforeKillSeconds.text,
+        seconds: true,
+      );
+      if (wait == null || wait > const Duration(seconds: 30)) {
+        return DraftValidationInvalid(
+          field: DraftValidationField.waitBeforeKill,
+          message: l10n.agentActionsFormInvalidWaitBeforeKill,
+        );
+      }
+    }
+    final stop = draft.executionPolicy.stopTimeOfDay.text.trim();
+    if (draft.draftType.supportsProcessTermination &&
+        stop.isNotEmpty &&
+        (AgentActionDraftParsers.timeOfDayMinutes(stop) == null || !draft.killMainProcessOnTimeout)) {
+      return DraftValidationInvalid(
+        field: DraftValidationField.stopTimeOfDay,
+        message: l10n.agentActionsFormInvalidStopTime,
+      );
+    }
+    if (AgentActionDraftParsers.positiveDuration(
+          draft.executionPolicy.maxRuntimeMinutes.text,
+          seconds: draft.runtimeInSeconds,
+        ) !=
+        null) {
       return const DraftValidationValid();
     }
     return DraftValidationInvalid(

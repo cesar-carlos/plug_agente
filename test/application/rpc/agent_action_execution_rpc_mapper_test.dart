@@ -1,9 +1,40 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:json_schema/json_schema.dart';
 import 'package:plug_agente/application/rpc/agent_action_execution_rpc_mapper.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 
 void main() {
   group('agentActionExecutionToGetExecutionResult', () {
+    for (final type in [AgentActionTriggerType.actionSucceeded, AgentActionTriggerType.actionFailed]) {
+      test('serializes $type within the published execution result schema', () async {
+        final execution = AgentActionExecution(
+          id: 'event-execution',
+          actionId: 'target',
+          actionType: AgentActionType.executable,
+          status: AgentActionExecutionStatus.succeeded,
+          requestedAt: DateTime.utc(2026, 10, 3),
+          source: AgentActionRequestSource.scheduler,
+          triggerId: 'event-trigger',
+          triggerType: type,
+          redactionApplied: true,
+        );
+        final result = agentActionExecutionToGetExecutionResult(execution);
+        final schema = JsonSchema.create(
+          jsonDecode(
+                await File(
+                  'docs/communication/schemas/rpc.result.agent-action-get-execution.schema.json',
+                ).readAsString(),
+              )
+              as Object,
+        );
+        expect(schema.validate(result).isValid, isTrue);
+        expect((result['trigger']! as Map<String, dynamic>)['trigger_type'], type.name);
+      });
+    }
+
     test('should serialize execution timestamps as UTC ISO-8601', () {
       final execution = AgentActionExecution(
         id: 'exec-utc-1',

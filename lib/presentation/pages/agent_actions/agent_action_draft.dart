@@ -61,6 +61,7 @@ class AgentActionDraft {
   bool notifyOnTimeout = false;
   int maxAttempts = 1;
   bool allowRemoteRetry = false;
+  bool runtimeInSeconds = false;
   bool killMainProcessOnTimeout = true;
   AgentActionOnAppExitBehavior onAppExit = AgentActionOnAppExitBehavior.killMainProcess;
   AgentActionProcessWindowMode processWindowMode = AgentActionProcessWindowMode.normal;
@@ -111,6 +112,8 @@ class AgentActionDraft {
     developer.connectionId,
     developer.connectionLabel,
     executionPolicy.maxRuntimeMinutes,
+    executionPolicy.stopTimeOfDay,
+    executionPolicy.waitBeforeKillSeconds,
     executionPolicy.allowedProfiles,
     executionPolicy.allowedEnvironmentVariableNames,
     executionPolicy.environmentVariables,
@@ -162,12 +165,26 @@ class AgentActionDraft {
     );
   }
 
+  void setRuntimeUnit(bool seconds) {
+    final duration = AgentActionDraftParsers.positiveDuration(
+      executionPolicy.maxRuntimeMinutes.text,
+      seconds: runtimeInSeconds,
+    );
+    runtimeInSeconds = seconds;
+    if (duration != null) {
+      executionPolicy.maxRuntimeMinutes.text = AgentActionDraftParsers.formatDuration(duration, seconds: seconds);
+    }
+  }
+
   AgentActionTimeoutPolicy timeoutPolicy() {
     return AgentActionTimeoutPolicy(
-      maxRuntime: Duration(
-        minutes: AgentActionDraftParsers.positiveInt(executionPolicy.maxRuntimeMinutes.text) ?? 0,
-      ),
-      killMainProcessOnTimeout: killMainProcessOnTimeout,
+      maxRuntime:
+          AgentActionDraftParsers.positiveDuration(executionPolicy.maxRuntimeMinutes.text, seconds: runtimeInSeconds) ??
+          Duration.zero,
+      killMainProcessOnTimeout: draftType.supportsProcessTermination && killMainProcessOnTimeout,
+      stopTimeOfDayMinutes: draftType.supportsProcessTermination
+          ? AgentActionDraftParsers.timeOfDayMinutes(executionPolicy.stopTimeOfDay.text)
+          : null,
     );
   }
 
@@ -194,7 +211,12 @@ class AgentActionDraft {
   }
 
   AgentActionLifecyclePolicy lifecyclePolicy() {
-    return AgentActionLifecyclePolicy(onAppExit: onAppExit);
+    return AgentActionLifecyclePolicy(
+      onAppExit: draftType.supportsProcessTermination ? onAppExit : AgentActionOnAppExitBehavior.leaveRunning,
+      waitBeforeKillOnAppExit:
+          AgentActionDraftParsers.positiveDuration(executionPolicy.waitBeforeKillSeconds.text, seconds: true) ??
+          const Duration(seconds: 5),
+    );
   }
 
   AgentActionProcessPolicy processPolicy() {
@@ -397,6 +419,8 @@ class AgentActionDraftDeveloper {
 /// feed `environmentPolicy`, `queuePolicy`, `pathPolicy`, etc.
 class AgentActionDraftExecutionPolicy {
   final TextEditingController maxRuntimeMinutes = TextEditingController();
+  final TextEditingController stopTimeOfDay = TextEditingController();
+  final TextEditingController waitBeforeKillSeconds = TextEditingController(text: '5');
   final TextEditingController allowedProfiles = TextEditingController();
   final TextEditingController allowedEnvironmentVariableNames = TextEditingController();
   final TextEditingController environmentVariables = TextEditingController();

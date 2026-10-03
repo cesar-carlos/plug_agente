@@ -1055,7 +1055,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpTypeMessage.
   ///
   /// In en, this message translates to:
-  /// **'Defines the runner and internal contract used to save and run this action. After the action is created, the type becomes read-only to avoid accidental runner changes.'**
+  /// **'Chooses how to run the task: command, program, script, JAR, email, COM object or Developer project. The type cannot change after saving; create another action to change its type.'**
   String get agentActionsHelpTypeMessage;
 
   /// No description provided for @agentActionsHelpStateTitle.
@@ -1079,13 +1079,13 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpCommandMessage.
   ///
   /// In en, this message translates to:
-  /// **'Advanced local-only mode. Prefer Executable with structured arguments. To include a context file, use exactly \\\${context_path}; secrets are not allowed in the command.'**
+  /// **'Advanced local-only mode. Prefer Executable with structured arguments. To include a context file, use exactly {context_path}; secrets are not allowed in the command.'**
   String agentActionsHelpCommandMessage(Object context_path);
 
   /// No description provided for @agentActionsCommandLineLegacyWarning.
   ///
   /// In en, this message translates to:
-  /// **'Command line is an advanced local-only mode. Prefer Executable with structured arguments; use \\\${context_path} exactly once when a context file is provided.'**
+  /// **'Command line is an advanced local-only mode. Prefer Executable with structured arguments; use {context_path} exactly once when a context file is provided.'**
   String agentActionsCommandLineLegacyWarning(Object context_path);
 
   /// No description provided for @agentActionsHelpPowerShellModeTitle.
@@ -1169,7 +1169,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpWorkingDirectoryMessage.
   ///
   /// In en, this message translates to:
-  /// **'Initial process directory. Leave empty to use the runner default or enter an absolute path allowed by the path policy.'**
+  /// **'Initial process folder. Leave it blank to use the executor default or enter an allowed absolute path.'**
   String get agentActionsHelpWorkingDirectoryMessage;
 
   /// No description provided for @agentActionsHelpInterpreterTitle.
@@ -1253,7 +1253,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpTimeoutMessage.
   ///
   /// In en, this message translates to:
-  /// **'Local execution timeout in minutes. When reached, execution fails as timed out and the policy below decides whether the main process should be killed.'**
+  /// **'Maximum runtime in the selected unit. For process actions, termination depends on the option below. Without termination, the agent tracks the process until it exits. For email and COM, the limit ends waiting without guaranteeing the operation stops.'**
   String get agentActionsHelpTimeoutMessage;
 
   /// No description provided for @agentActionsHelpKillOnTimeoutTitle.
@@ -1265,19 +1265,19 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpKillOnTimeoutMessage.
   ///
   /// In en, this message translates to:
-  /// **'When enabled, the runner tries to kill the main process if execution exceeds the configured maximum runtime.'**
+  /// **'Terminates the process and its tree on Windows when maximum runtime or the stop time is reached.'**
   String get agentActionsHelpKillOnTimeoutMessage;
 
   /// No description provided for @agentActionsHelpRemoteRetryTitle.
   ///
   /// In en, this message translates to:
-  /// **'Remote retry'**
+  /// **'Retries from the Hub'**
   String get agentActionsHelpRemoteRetryTitle;
 
   /// No description provided for @agentActionsHelpRemoteRetryMessage.
   ///
   /// In en, this message translates to:
-  /// **'Allows Hub-started executions to use the retry policy. Enable only when repeating this action is safe.'**
+  /// **'Also applies the attempt limit to executions started by the Hub. Enable only when repeating the operation is safe.'**
   String get agentActionsHelpRemoteRetryMessage;
 
   /// No description provided for @agentActionsHelpRunElevatedTitle.
@@ -1301,7 +1301,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpContextInjectionMessage.
   ///
   /// In en, this message translates to:
-  /// **'Defines how runtime parameters enter the execution: argument, file, environment variables, or stdin.'**
+  /// **'Chooses how the task receives execution parameters: argument, file, environment variables or standard input (stdin).'**
   String get agentActionsHelpContextInjectionMessage;
 
   /// No description provided for @agentActionsHelpPathChangePolicyTitle.
@@ -1319,7 +1319,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpRuntimeSchemaTitle.
   ///
   /// In en, this message translates to:
-  /// **'Runtime schema'**
+  /// **'Parameter format'**
   String get agentActionsHelpRuntimeSchemaTitle;
 
   /// No description provided for @agentActionsHelpRuntimeSchemaMessage.
@@ -1445,7 +1445,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsHelpOnAppExitMessage.
   ///
   /// In en, this message translates to:
-  /// **'Defines what to do with still-running processes when Plug Agent closes: try to stop them, leave them running, or block according to runner support.'**
+  /// **'Chooses whether active processes are terminated, left running, or given the configured grace period before termination. Email and COM have no cancellable process.'**
   String get agentActionsHelpOnAppExitMessage;
 
   /// No description provided for @agentActionsHelpRemoteExecutionTitle.
@@ -1541,7 +1541,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormExecutionPoliciesDescription.
   ///
   /// In en, this message translates to:
-  /// **'Timeout and retry apply to local runs and scheduled triggers. Remote Hub runs stay at one attempt unless remote retry is enabled.'**
+  /// **'Set how long the action may run, how many attempts are allowed and when to stop its process.'**
   String get agentActionsFormExecutionPoliciesDescription;
 
   /// No description provided for @agentActionsFormPathChangePolicy.
@@ -1571,7 +1571,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormContextInjectionMode.
   ///
   /// In en, this message translates to:
-  /// **'Context injection mode'**
+  /// **'How to send execution parameters'**
   String get agentActionsFormContextInjectionMode;
 
   /// No description provided for @agentActionsFormContextInjectionArgument.
@@ -1601,7 +1601,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormRuntimeParameterSchema.
   ///
   /// In en, this message translates to:
-  /// **'Runtime parameters JSON schema (optional)'**
+  /// **'Parameter format (JSON Schema)'**
   String get agentActionsFormRuntimeParameterSchema;
 
   /// No description provided for @agentActionsFormRuntimeParameterSchemaHint.
@@ -1625,7 +1625,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormKillOnTimeout.
   ///
   /// In en, this message translates to:
-  /// **'Kill main process on timeout'**
+  /// **'Stop process when the limit is reached'**
   String get agentActionsFormKillOnTimeout;
 
   /// No description provided for @agentActionsFormMaxAttempts.
@@ -1637,7 +1637,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormAllowRemoteRetry.
   ///
   /// In en, this message translates to:
-  /// **'Allow retry on remote Hub runs'**
+  /// **'Allow retries for Hub executions'**
   String get agentActionsFormAllowRemoteRetry;
 
   /// No description provided for @agentActionsFormRuntimePoliciesTitle.
@@ -1799,7 +1799,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentActionsFormInvalidMaxRuntime.
   ///
   /// In en, this message translates to:
-  /// **'Enter a positive integer for maximum runtime.'**
+  /// **'Enter a positive maximum runtime in minutes or seconds.'**
   String get agentActionsFormInvalidMaxRuntime;
 
   /// No description provided for @agentActionsFormMaxAttemptsExceedsLimit.
@@ -9133,6 +9133,246 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unexpected error while looking up the postal code.'**
   String get agentProfileViaCepUnexpectedError;
+
+  /// No description provided for @agentActionsFormRuntimeUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum runtime unit'**
+  String get agentActionsFormRuntimeUnit;
+
+  /// No description provided for @agentActionsFormRuntimeUnitMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes'**
+  String get agentActionsFormRuntimeUnitMinutes;
+
+  /// No description provided for @agentActionsFormRuntimeUnitSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Seconds'**
+  String get agentActionsFormRuntimeUnitSeconds;
+
+  /// No description provided for @agentActionsFormMaxRuntimeSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum runtime (seconds)'**
+  String get agentActionsFormMaxRuntimeSeconds;
+
+  /// No description provided for @agentActionsFormStopTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop at (optional, local time)'**
+  String get agentActionsFormStopTime;
+
+  /// No description provided for @agentActionsFormStopTimeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Stops the process at the next HH:mm in the computer’s local time, or earlier at maximum runtime. If the time has passed, the next day is used. Retries share this stop deadline.'**
+  String get agentActionsFormStopTimeHint;
+
+  /// No description provided for @agentActionsFormInvalidStopTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter HH:mm between 00:00 and 23:59 and enable termination on timeout.'**
+  String get agentActionsFormInvalidStopTime;
+
+  /// No description provided for @agentActionsProcessTerminationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This action has no cancellable process. Timeout limits waiting; the operation may continue. Email and COM cannot be interrupted after starting. Check the result before retrying.'**
+  String get agentActionsProcessTerminationUnavailable;
+
+  /// No description provided for @agentActionsTriggerTypeActionSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'After another action succeeds'**
+  String get agentActionsTriggerTypeActionSucceeded;
+
+  /// No description provided for @agentActionsTriggerTypeActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'After another action fails or times out'**
+  String get agentActionsTriggerTypeActionFailed;
+
+  /// No description provided for @agentActionsTriggerSourceAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Action that produces the event'**
+  String get agentActionsTriggerSourceAction;
+
+  /// No description provided for @agentActionsTriggerValidationSourceAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Select another action as the event source.'**
+  String get agentActionsTriggerValidationSourceAction;
+
+  /// No description provided for @agentActionsTriggerValidationInvalidDateRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter valid start and end dates, or leave optional fields empty.'**
+  String get agentActionsTriggerValidationInvalidDateRange;
+
+  /// No description provided for @agentActionsTriggerScheduleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic triggers require the agent to remain open. The end date prevents new runs; use the action timeout or stop time to terminate a process.'**
+  String get agentActionsTriggerScheduleHint;
+
+  /// No description provided for @agentActionsTriggerCommandLineRestriction.
+  ///
+  /// In en, this message translates to:
+  /// **'Command line supports manual local execution only. Use Executable or Script for automatic or remote triggers.'**
+  String get agentActionsTriggerCommandLineRestriction;
+
+  /// No description provided for @agentActionsTriggerAppCloseRequirements.
+  ///
+  /// In en, this message translates to:
+  /// **'Set maximum runtime to at most 5 seconds, one attempt, and termination on timeout. Closing requires a process action without elevation or remote approval.'**
+  String get agentActionsTriggerAppCloseRequirements;
+
+  /// No description provided for @agentActionsFormWaitBeforeKillSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait before closing (seconds, up to 30)'**
+  String get agentActionsFormWaitBeforeKillSeconds;
+
+  /// No description provided for @agentActionsFormInvalidWaitBeforeKill.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a positive shutdown wait of at most 30 seconds.'**
+  String get agentActionsFormInvalidWaitBeforeKill;
+
+  /// No description provided for @agentActionsEditorIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Identification'**
+  String get agentActionsEditorIdentity;
+
+  /// No description provided for @agentActionsEditorTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'What to run'**
+  String get agentActionsEditorTarget;
+
+  /// No description provided for @agentActionsEditorSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'When to run'**
+  String get agentActionsEditorSchedule;
+
+  /// No description provided for @agentActionsEditorLimits.
+  ///
+  /// In en, this message translates to:
+  /// **'Limits and shutdown'**
+  String get agentActionsEditorLimits;
+
+  /// No description provided for @agentActionsEditorAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced settings'**
+  String get agentActionsEditorAdvanced;
+
+  /// No description provided for @agentActionsEditorAdvancedSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Context, environment, permissions, queue, output and remote access'**
+  String get agentActionsEditorAdvancedSummary;
+
+  /// No description provided for @agentActionsEditorRequiredHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get agentActionsEditorRequiredHint;
+
+  /// No description provided for @agentActionsEditorOptionalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get agentActionsEditorOptionalHint;
+
+  /// No description provided for @agentActionsEditorNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'E.g. Update inventory'**
+  String get agentActionsEditorNameHint;
+
+  /// No description provided for @agentActionsEditorDescriptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the purpose of this action and when to use it.'**
+  String get agentActionsEditorDescriptionHint;
+
+  /// No description provided for @agentActionsEditorActivationSteps.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the action, use Test action to validate it, then change its state to Active. Validation checks the configuration without running the task.'**
+  String get agentActionsEditorActivationSteps;
+
+  /// No description provided for @agentActionsEditorScheduleSaveFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the action before adding triggers. Then open it and configure its schedule in this section.'**
+  String get agentActionsEditorScheduleSaveFirst;
+
+  /// No description provided for @agentActionsEditorScheduleLocalOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'This type only supports local manual execution. To schedule it, create an Executable or Script action.'**
+  String get agentActionsEditorScheduleLocalOnly;
+
+  /// No description provided for @agentActionsEditorScheduleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Triggers run the saved action and require the agent to remain open. Form changes take effect after saving.'**
+  String get agentActionsEditorScheduleHint;
+
+  /// No description provided for @agentActionsEditorStopDependency.
+  ///
+  /// In en, this message translates to:
+  /// **'To use a stop time, enable “Stop process when the limit is reached”. Otherwise, only the maximum duration applies according to the monitoring policy.'**
+  String get agentActionsEditorStopDependency;
+
+  /// No description provided for @agentActionsEditorWaitHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Waits between 0.001 and 30 seconds when closing the agent; stops the process if it remains active.'**
+  String get agentActionsEditorWaitHint;
+
+  /// No description provided for @agentActionsEditorContextTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Parameters and context'**
+  String get agentActionsEditorContextTitle;
+
+  /// No description provided for @agentActionsEditorSecurityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution permissions'**
+  String get agentActionsEditorSecurityTitle;
+
+  /// No description provided for @agentActionsEditorRemoteUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote execution is unavailable for this action type.'**
+  String get agentActionsEditorRemoteUnavailable;
+
+  /// No description provided for @agentActionsEditorOutputTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Process window and output'**
+  String get agentActionsEditorOutputTitle;
+
+  /// No description provided for @agentActionsEditorNoScheduledRun.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming time-based run. See event triggers below.'**
+  String get agentActionsEditorNoScheduledRun;
+
+  /// No description provided for @agentActionsEditorNextRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Next run: {time}'**
+  String agentActionsEditorNextRun(String time);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

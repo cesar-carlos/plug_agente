@@ -80,6 +80,7 @@ void main() {
     final validateDefinition = ValidateAgentActionDefinition(
       AgentActionAdapterRegistry([
         const _FakeCommandLineActionAdapter(),
+        const _FakeExecutableActionAdapter(),
         const _FakeDeveloperActionAdapter(),
       ]),
     );
@@ -87,6 +88,7 @@ void main() {
       repository,
       AgentActionAdapterRegistry([
         const _FakeCommandLineActionAdapter(),
+        const _FakeExecutableActionAdapter(),
         const _FakeDeveloperActionAdapter(),
       ]),
     );
@@ -312,7 +314,7 @@ void main() {
       id: 'action-1',
       name: 'Run command',
       state: AgentActionState.active,
-      config: CommandLineActionConfig(command: 'dir'),
+      config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\Tools\job.exe')),
     );
 
     await provider.load();
@@ -1164,7 +1166,7 @@ void main() {
       id: 'action-1',
       name: 'Export me',
       state: AgentActionState.active,
-      config: CommandLineActionConfig(command: 'echo export'),
+      config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\Tools\job.exe')),
       policies: AgentActionDefinitionPolicies(
         environment: AgentActionEnvironmentPolicy(
           variables: <String, String>{'API_KEY': r'${secret:api_key}'},
@@ -1487,6 +1489,13 @@ class _FakeCommandLineActionAdapter implements AgentActionAdapter {
   ) async {
     return Success(definition);
   }
+}
+
+class _FakeExecutableActionAdapter extends _FakeCommandLineActionAdapter {
+  const _FakeExecutableActionAdapter();
+
+  @override
+  AgentActionType get type => AgentActionType.executable;
 }
 
 class _FakeDeveloperActionAdapter implements AgentActionAdapter {

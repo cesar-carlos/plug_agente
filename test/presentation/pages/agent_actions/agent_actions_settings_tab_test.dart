@@ -1,3 +1,4 @@
+import 'package:fluent_ui/fluent_ui.dart' show ComboBox;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/actions/agent_action_definition_snapshotter.dart';
@@ -124,15 +125,10 @@ void main() {
     await openSelectedActionDialog(tester);
     await tester.pumpAndSettle();
 
-    expect(find.text(ptL10n.agentActionsPreflightExpiredTitle), findsNothing);
-
-    await tester.tap(formComboBox(ptL10n.agentActionsFormState).last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(ptL10n.agentActionsStateActive).last);
-    await tester.pumpAndSettle();
-
     expect(find.text(ptL10n.agentActionsPreflightExpiredTitle), findsOneWidget);
     expect(find.text(ptL10n.agentActionsPreflightExpiredForActive), findsOneWidget);
+    final stateCombo = tester.widget<ComboBox<AgentActionState>>(formComboBox(ptL10n.agentActionsFormState).last);
+    expect(stateCombo.items!.singleWhere((item) => item.value == AgentActionState.active).enabled, isFalse);
   });
 
   testWidgets('preferences tab shows dangerous-command warn card and reflects flag changes', (tester) async {

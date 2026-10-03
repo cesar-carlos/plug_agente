@@ -68,10 +68,11 @@ class AgentActionIdentitySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final stackFields = constraints.maxWidth < 720;
+        final stackFields = constraints.maxWidth < 720 * MediaQuery.textScalerOf(context).scale(1);
         final nameField = AppTextField(
           label: l10n.agentActionsFormName,
           controller: nameController,
+          hint: l10n.agentActionsEditorNameHint,
           enabled: enabled,
           textInputAction: TextInputAction.next,
           reserveHelpAffordance: true,
@@ -126,6 +127,7 @@ class AgentActionIdentitySection extends StatelessWidget {
               .map(
                 (value) => ComboBoxItem<AgentActionState>(
                   value: value,
+                  enabled: value != AgentActionState.active || canSelectActiveState,
                   child: Text(stateLabelForValue(value)),
                 ),
               )

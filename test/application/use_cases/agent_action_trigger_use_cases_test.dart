@@ -153,6 +153,7 @@ void main() {
         state: AgentActionState.active,
         config: _structuredTestConfig,
         policies: AgentActionDefinitionPolicies(
+          timeout: const AgentActionTimeoutPolicy(maxRuntime: Duration(seconds: 5)),
           remote: AgentActionRemotePolicy(
             isEnabled: true,
             approvedAt: DateTime.utc(2026),

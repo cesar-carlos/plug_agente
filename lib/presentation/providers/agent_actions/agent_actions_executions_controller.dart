@@ -79,7 +79,8 @@ class AgentActionsExecutionsController {
         !execution.isTerminal &&
         !hasCancellationInProgress(execution.id) &&
         (execution.status == AgentActionExecutionStatus.queued ||
-            execution.status == AgentActionExecutionStatus.running);
+            (execution.status == AgentActionExecutionStatus.running &&
+                execution.actionType.supportsProcessTermination));
   }
 
   int get queuedCount => executions.where((execution) => execution.status == AgentActionExecutionStatus.queued).length;

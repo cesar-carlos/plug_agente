@@ -531,7 +531,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsHelpTypeMessage =>
-      'Defines the runner and internal contract used to save and run this action. After the action is created, the type becomes read-only to avoid accidental runner changes.';
+      'Chooses how to run the task: command, program, script, JAR, email, COM object or Developer project. The type cannot change after saving; create another action to change its type.';
 
   @override
   String get agentActionsHelpStateTitle => 'Action state';
@@ -545,12 +545,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String agentActionsHelpCommandMessage(Object context_path) {
-    return 'Advanced local-only mode. Prefer Executable with structured arguments. To include a context file, use exactly \\\$$context_path; secrets are not allowed in the command.';
+    return 'Advanced local-only mode. Prefer Executable with structured arguments. To include a context file, use exactly $context_path; secrets are not allowed in the command.';
   }
 
   @override
   String agentActionsCommandLineLegacyWarning(Object context_path) {
-    return 'Command line is an advanced local-only mode. Prefer Executable with structured arguments; use \\\$$context_path exactly once when a context file is provided.';
+    return 'Command line is an advanced local-only mode. Prefer Executable with structured arguments; use $context_path exactly once when a context file is provided.';
   }
 
   @override
@@ -600,7 +600,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsHelpWorkingDirectoryMessage =>
-      'Initial process directory. Leave empty to use the runner default or enter an absolute path allowed by the path policy.';
+      'Initial process folder. Leave it blank to use the executor default or enter an allowed absolute path.';
 
   @override
   String get agentActionsHelpInterpreterTitle => 'Interpreter';
@@ -649,21 +649,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsHelpTimeoutMessage =>
-      'Local execution timeout in minutes. When reached, execution fails as timed out and the policy below decides whether the main process should be killed.';
+      'Maximum runtime in the selected unit. For process actions, termination depends on the option below. Without termination, the agent tracks the process until it exits. For email and COM, the limit ends waiting without guaranteeing the operation stops.';
 
   @override
   String get agentActionsHelpKillOnTimeoutTitle => 'Kill on timeout';
 
   @override
   String get agentActionsHelpKillOnTimeoutMessage =>
-      'When enabled, the runner tries to kill the main process if execution exceeds the configured maximum runtime.';
+      'Terminates the process and its tree on Windows when maximum runtime or the stop time is reached.';
 
   @override
-  String get agentActionsHelpRemoteRetryTitle => 'Remote retry';
+  String get agentActionsHelpRemoteRetryTitle => 'Retries from the Hub';
 
   @override
   String get agentActionsHelpRemoteRetryMessage =>
-      'Allows Hub-started executions to use the retry policy. Enable only when repeating this action is safe.';
+      'Also applies the attempt limit to executions started by the Hub. Enable only when repeating the operation is safe.';
 
   @override
   String get agentActionsHelpRunElevatedTitle => 'Elevated execution';
@@ -677,7 +677,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsHelpContextInjectionMessage =>
-      'Defines how runtime parameters enter the execution: argument, file, environment variables, or stdin.';
+      'Chooses how the task receives execution parameters: argument, file, environment variables or standard input (stdin).';
 
   @override
   String get agentActionsHelpPathChangePolicyTitle => 'Path change policy';
@@ -687,7 +687,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Controls what happens when paths or content snapshots change after validation: fail, warn, or allow.';
 
   @override
-  String get agentActionsHelpRuntimeSchemaTitle => 'Runtime schema';
+  String get agentActionsHelpRuntimeSchemaTitle => 'Parameter format';
 
   @override
   String get agentActionsHelpRuntimeSchemaMessage =>
@@ -761,7 +761,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsHelpOnAppExitMessage =>
-      'Defines what to do with still-running processes when Plug Agent closes: try to stop them, leave them running, or block according to runner support.';
+      'Chooses whether active processes are terminated, left running, or given the configured grace period before termination. Email and COM have no cancellable process.';
 
   @override
   String get agentActionsHelpRemoteExecutionTitle => 'Remote execution';
@@ -814,7 +814,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentActionsFormExecutionPoliciesDescription =>
-      'Timeout and retry apply to local runs and scheduled triggers. Remote Hub runs stay at one attempt unless remote retry is enabled.';
+      'Set how long the action may run, how many attempts are allowed and when to stop its process.';
 
   @override
   String get agentActionsFormPathChangePolicy => 'Path change policy';
@@ -829,7 +829,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsFormPathChangePolicyAllow => 'Allow path and content changes';
 
   @override
-  String get agentActionsFormContextInjectionMode => 'Context injection mode';
+  String get agentActionsFormContextInjectionMode => 'How to send execution parameters';
 
   @override
   String get agentActionsFormContextInjectionArgument => 'Argument (default)';
@@ -844,7 +844,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsFormContextInjectionStdin => 'Standard input';
 
   @override
-  String get agentActionsFormRuntimeParameterSchema => 'Runtime parameters JSON schema (optional)';
+  String get agentActionsFormRuntimeParameterSchema => 'Parameter format (JSON Schema)';
 
   @override
   String get agentActionsFormRuntimeParameterSchemaHint =>
@@ -857,13 +857,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentActionsFormMaxRuntimeMinutes => 'Maximum runtime (minutes)';
 
   @override
-  String get agentActionsFormKillOnTimeout => 'Kill main process on timeout';
+  String get agentActionsFormKillOnTimeout => 'Stop process when the limit is reached';
 
   @override
   String get agentActionsFormMaxAttempts => 'Maximum attempts';
 
   @override
-  String get agentActionsFormAllowRemoteRetry => 'Allow retry on remote Hub runs';
+  String get agentActionsFormAllowRemoteRetry => 'Allow retries for Hub executions';
 
   @override
   String get agentActionsFormRuntimePoliciesTitle => 'Runtime constraints';
@@ -955,7 +955,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter a positive integer for maximum concurrency and a non-negative integer for the queue.';
 
   @override
-  String get agentActionsFormInvalidMaxRuntime => 'Enter a positive integer for maximum runtime.';
+  String get agentActionsFormInvalidMaxRuntime => 'Enter a positive maximum runtime in minutes or seconds.';
 
   @override
   String agentActionsFormMaxAttemptsExceedsLimit(int limit) {
@@ -4896,4 +4896,139 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentProfileViaCepUnexpectedError => 'Unexpected error while looking up the postal code.';
+
+  @override
+  String get agentActionsFormRuntimeUnit => 'Maximum runtime unit';
+
+  @override
+  String get agentActionsFormRuntimeUnitMinutes => 'Minutes';
+
+  @override
+  String get agentActionsFormRuntimeUnitSeconds => 'Seconds';
+
+  @override
+  String get agentActionsFormMaxRuntimeSeconds => 'Maximum runtime (seconds)';
+
+  @override
+  String get agentActionsFormStopTime => 'Stop at (optional, local time)';
+
+  @override
+  String get agentActionsFormStopTimeHint =>
+      'Stops the process at the next HH:mm in the computer’s local time, or earlier at maximum runtime. If the time has passed, the next day is used. Retries share this stop deadline.';
+
+  @override
+  String get agentActionsFormInvalidStopTime =>
+      'Enter HH:mm between 00:00 and 23:59 and enable termination on timeout.';
+
+  @override
+  String get agentActionsProcessTerminationUnavailable =>
+      'This action has no cancellable process. Timeout limits waiting; the operation may continue. Email and COM cannot be interrupted after starting. Check the result before retrying.';
+
+  @override
+  String get agentActionsTriggerTypeActionSucceeded => 'After another action succeeds';
+
+  @override
+  String get agentActionsTriggerTypeActionFailed => 'After another action fails or times out';
+
+  @override
+  String get agentActionsTriggerSourceAction => 'Action that produces the event';
+
+  @override
+  String get agentActionsTriggerValidationSourceAction => 'Select another action as the event source.';
+
+  @override
+  String get agentActionsTriggerValidationInvalidDateRange =>
+      'Enter valid start and end dates, or leave optional fields empty.';
+
+  @override
+  String get agentActionsTriggerScheduleHint =>
+      'Automatic triggers require the agent to remain open. The end date prevents new runs; use the action timeout or stop time to terminate a process.';
+
+  @override
+  String get agentActionsTriggerCommandLineRestriction =>
+      'Command line supports manual local execution only. Use Executable or Script for automatic or remote triggers.';
+
+  @override
+  String get agentActionsTriggerAppCloseRequirements =>
+      'Set maximum runtime to at most 5 seconds, one attempt, and termination on timeout. Closing requires a process action without elevation or remote approval.';
+
+  @override
+  String get agentActionsFormWaitBeforeKillSeconds => 'Wait before closing (seconds, up to 30)';
+
+  @override
+  String get agentActionsFormInvalidWaitBeforeKill => 'Enter a positive shutdown wait of at most 30 seconds.';
+
+  @override
+  String get agentActionsEditorIdentity => 'Identification';
+
+  @override
+  String get agentActionsEditorTarget => 'What to run';
+
+  @override
+  String get agentActionsEditorSchedule => 'When to run';
+
+  @override
+  String get agentActionsEditorLimits => 'Limits and shutdown';
+
+  @override
+  String get agentActionsEditorAdvanced => 'Advanced settings';
+
+  @override
+  String get agentActionsEditorAdvancedSummary => 'Context, environment, permissions, queue, output and remote access';
+
+  @override
+  String get agentActionsEditorRequiredHint => 'Required';
+
+  @override
+  String get agentActionsEditorOptionalHint => 'Optional';
+
+  @override
+  String get agentActionsEditorNameHint => 'E.g. Update inventory';
+
+  @override
+  String get agentActionsEditorDescriptionHint => 'Describe the purpose of this action and when to use it.';
+
+  @override
+  String get agentActionsEditorActivationSteps =>
+      'Save the action, use Test action to validate it, then change its state to Active. Validation checks the configuration without running the task.';
+
+  @override
+  String get agentActionsEditorScheduleSaveFirst =>
+      'Save the action before adding triggers. Then open it and configure its schedule in this section.';
+
+  @override
+  String get agentActionsEditorScheduleLocalOnly =>
+      'This type only supports local manual execution. To schedule it, create an Executable or Script action.';
+
+  @override
+  String get agentActionsEditorScheduleHint =>
+      'Triggers run the saved action and require the agent to remain open. Form changes take effect after saving.';
+
+  @override
+  String get agentActionsEditorStopDependency =>
+      'To use a stop time, enable “Stop process when the limit is reached”. Otherwise, only the maximum duration applies according to the monitoring policy.';
+
+  @override
+  String get agentActionsEditorWaitHint =>
+      'Waits between 0.001 and 30 seconds when closing the agent; stops the process if it remains active.';
+
+  @override
+  String get agentActionsEditorContextTitle => 'Parameters and context';
+
+  @override
+  String get agentActionsEditorSecurityTitle => 'Execution permissions';
+
+  @override
+  String get agentActionsEditorRemoteUnavailable => 'Remote execution is unavailable for this action type.';
+
+  @override
+  String get agentActionsEditorOutputTitle => 'Process window and output';
+
+  @override
+  String get agentActionsEditorNoScheduledRun => 'No upcoming time-based run. See event triggers below.';
+
+  @override
+  String agentActionsEditorNextRun(String time) {
+    return 'Next run: $time';
+  }
 }

@@ -59,7 +59,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
       child: ComboBox<T>(
         value: widget.value,
         items: widget.items,
-        onChanged: _handleChanged,
+        onChanged: widget.onChanged == null ? null : _handleChanged,
         isExpanded: true,
         placeholder: widget.placeholder ?? Text('${l10n.formDropdownSelectPrefix}${widget.label}'),
       ),

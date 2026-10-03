@@ -111,6 +111,40 @@ void main() {
       verifyNever(() => cancel(any()));
     });
 
+    test('does not cancel an execution that finishes during the shutdown grace period', () async {
+      when(
+        () => repository.listExecutions(
+          statuses: const {AgentActionExecutionStatus.queued},
+          limit: any(named: 'limit'),
+        ),
+      ).thenAnswer((_) async => const Success([]));
+      when(
+        () => repository.listExecutions(
+          statuses: const {AgentActionExecutionStatus.running},
+          limit: any(named: 'limit'),
+        ),
+      ).thenAnswer((_) async => Success([execution(id: 'r1', status: AgentActionExecutionStatus.running)]));
+      final definition = definitionWithPolicy(AgentActionOnAppExitBehavior.waitThenKillMainProcess);
+      when(() => repository.getDefinition('action-1')).thenAnswer(
+        (_) async => Success(
+          definition.copyWith(
+            policies: definition.policies.copyWith(
+              lifecycle: const AgentActionLifecyclePolicy(
+                onAppExit: AgentActionOnAppExitBehavior.waitThenKillMainProcess,
+                waitBeforeKillOnAppExit: Duration.zero,
+              ),
+            ),
+          ),
+        ),
+      );
+      when(
+        () => repository.getExecution('r1', hydrateCapturedOutput: false),
+      ).thenAnswer((_) async => Success(execution(id: 'r1', status: AgentActionExecutionStatus.succeeded)));
+      final result = await ApplyAgentActionOnAppExitPolicies(repository, cancel)();
+      expect(result.getOrThrow().runningHandled, 0);
+      verifyNever(() => cancel(any()));
+    });
+
     test('should wait then kill running when policy is waitThenKillMainProcess', () async {
       when(
         () => repository.listExecutions(
@@ -142,6 +176,9 @@ void main() {
           ),
         ),
       );
+      when(
+        () => repository.getExecution('r1', hydrateCapturedOutput: false),
+      ).thenAnswer((_) async => Success(execution(id: 'r1', status: AgentActionExecutionStatus.running)));
       when(() => cancel('r1')).thenAnswer(
         (_) async => Success(execution(id: 'r1', status: AgentActionExecutionStatus.killed)),
       );

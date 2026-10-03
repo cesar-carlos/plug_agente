@@ -17,6 +17,35 @@ abstract final class AgentActionDraftParsers {
     return parsed;
   }
 
+  static Duration? positiveDuration(String input, {required bool seconds}) {
+    final raw = input.trim().replaceAll(',', '.');
+    if (!RegExp(r'^\d+(?:\.\d+)?$').hasMatch(raw)) return null;
+    final value = double.tryParse(raw);
+    if (value == null || !value.isFinite || value <= 0) return null;
+    final milliseconds = value * (seconds ? 1000 : 60000);
+    if (!milliseconds.isFinite || milliseconds > 86400000000) return null;
+    final rounded = milliseconds.round();
+    return rounded > 0 ? Duration(milliseconds: rounded) : null;
+  }
+
+  static String formatDuration(Duration duration, {required bool seconds}) {
+    final divisor = seconds ? 1000 : 60000;
+    if (duration.inMilliseconds % divisor == 0) return '${duration.inMilliseconds ~/ divisor}';
+    return (duration.inMilliseconds / divisor).toString();
+  }
+
+  static int? timeOfDayMinutes(String input) {
+    final match = RegExp(r'^(\d{2}):(\d{2})$').firstMatch(input.trim());
+    if (match == null) return null;
+    final hour = int.parse(match[1]!);
+    final minute = int.parse(match[2]!);
+    return hour < 24 && minute < 60 ? hour * 60 + minute : null;
+  }
+
+  static String formatTimeOfDay(int? minutes) => minutes == null
+      ? ''
+      : '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
+
   /// Parses a non-negative integer, returning `null` when invalid.
   static int? nonNegativeInt(String input) {
     final parsed = int.tryParse(input.trim());

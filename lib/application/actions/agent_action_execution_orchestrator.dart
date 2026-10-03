@@ -462,6 +462,7 @@ class AgentActionExecutionOrchestrator {
       runElevated: definition.policies.elevated.runElevated,
     );
     var terminalExecution = runningExecution;
+    final stopAt = definition.policies.timeout.nextStopAt(runningExecution.processStartedAt!);
 
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       if (attempt > 1) {
@@ -492,7 +493,36 @@ class AgentActionExecutionOrchestrator {
         return Failure(resolvedDefinitionResult.exceptionOrNull()!);
       }
 
-      final resolvedDefinition = resolvedDefinitionResult.getOrThrow();
+      var resolvedDefinition = resolvedDefinitionResult.getOrThrow();
+      if (stopAt != null) {
+        final remaining = stopAt.difference(_now());
+        if (remaining <= Duration.zero) {
+          terminalExecution = _failedExecutionFromFailure(
+            runningExecution,
+            ActionTimeoutFailure.withContext(
+              message: 'Scheduled stop time reached.',
+              code: AgentActionFailureCode.executionTimedOut,
+              context: const {
+                'phase': 'timeout',
+                'reason': 'scheduled_stop_reached',
+                'user_message': 'O horario de parada foi atingido. Nenhuma nova tentativa foi iniciada.',
+              },
+            ),
+          );
+          break;
+        }
+        final timeout = resolvedDefinition.policies.timeout;
+        resolvedDefinition = resolvedDefinition.copyWith(
+          policies: resolvedDefinition.policies.copyWith(
+            timeout: timeout.copyWith(
+              maxRuntime: remaining < timeout.maxRuntime ? remaining : timeout.maxRuntime,
+              killMainProcessOnTimeout: true,
+              clearStopTimeOfDay: true,
+              executionDeadline: stopAt,
+            ),
+          ),
+        );
+      }
       final resolvedCommandSafetyResult = _dangerousCommandPolicyEnforcer?.enforce(
         definition: resolvedDefinition,
         request: request,
@@ -524,6 +554,8 @@ class AgentActionExecutionOrchestrator {
       );
 
       if (terminalExecution.status.isSuccess ||
+          (stopAt != null && !_now().isBefore(stopAt)) ||
+          (terminalExecution.timedOut && !definition.type.supportsProcessTermination) ||
           !retryPolicy.isRetriableStatus(terminalExecution.status) ||
           attempt >= maxAttempts) {
         break;

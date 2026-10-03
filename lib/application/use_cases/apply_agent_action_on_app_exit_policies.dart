@@ -19,11 +19,11 @@ class ApplyAgentActionOnAppExitPolicies {
 
   Future<Result<({int queuedCancelled, int runningHandled})>> call() async {
     final queuedCancelled = await _cancelQueuedExecutions();
+    final runningHandled = await _handleRunningExecutions();
     if (queuedCancelled.isError()) {
       return Failure(queuedCancelled.exceptionOrNull()!);
     }
 
-    final runningHandled = await _handleRunningExecutions();
     if (runningHandled.isError()) {
       return Failure(runningHandled.exceptionOrNull()!);
     }
@@ -50,15 +50,19 @@ class ApplyAgentActionOnAppExitPolicies {
     }
 
     var cancelled = 0;
+    Exception? firstFailure;
     for (final execution in queuedResult.getOrThrow()) {
       final cancelResult = await _cancelExecution(execution.id);
       if (cancelResult.isError()) {
-        return Failure(cancelResult.exceptionOrNull()!);
+        final failure = cancelResult.exceptionOrNull()!;
+        if (failure is ActionFailure && failure.code == AgentActionFailureCode.alreadyFinished) continue;
+        firstFailure ??= failure;
+        continue;
       }
       cancelled++;
     }
 
-    return Success(cancelled);
+    return firstFailure == null ? Success(cancelled) : Failure(firstFailure);
   }
 
   Future<Result<int>> _handleRunningExecutions() async {
@@ -71,13 +75,17 @@ class ApplyAgentActionOnAppExitPolicies {
     }
 
     var handled = 0;
+    Exception? firstFailure;
     for (final execution in runningResult.getOrThrow()) {
       final definitionResult = await _repository.getDefinition(execution.actionId);
       if (definitionResult.isError()) {
-        return Failure(definitionResult.exceptionOrNull()!);
+        firstFailure ??= definitionResult.exceptionOrNull()!;
+        continue;
       }
 
-      final lifecycle = definitionResult.getOrThrow().policies.lifecycle;
+      final definition = definitionResult.getOrThrow();
+      if (!definition.type.supportsProcessTermination) continue;
+      final lifecycle = definition.policies.lifecycle;
       if (lifecycle.onAppExit == AgentActionOnAppExitBehavior.leaveRunning) {
         continue;
       }
@@ -88,15 +96,24 @@ class ApplyAgentActionOnAppExitPolicies {
         const maxWait = Duration(seconds: 30);
         final wait = lifecycle.waitBeforeKillOnAppExit < maxWait ? lifecycle.waitBeforeKillOnAppExit : maxWait;
         await Future<void>.delayed(wait);
+        final refreshed = await _repository.getExecution(execution.id, hydrateCapturedOutput: false);
+        if (refreshed.isError()) {
+          firstFailure ??= refreshed.exceptionOrNull()!;
+          continue;
+        }
+        if (refreshed.getOrThrow().isTerminal) continue;
       }
 
       final cancelResult = await _cancelExecution(execution.id);
       if (cancelResult.isError()) {
-        return Failure(cancelResult.exceptionOrNull()!);
+        final failure = cancelResult.exceptionOrNull();
+        if (failure is ActionFailure && failure.code == AgentActionFailureCode.alreadyFinished) continue;
+        firstFailure ??= cancelResult.exceptionOrNull()!;
+        continue;
       }
       handled++;
     }
 
-    return Success(handled);
+    return firstFailure == null ? Success(handled) : Failure(firstFailure);
   }
 }

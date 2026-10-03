@@ -417,6 +417,9 @@ class AgentActionsProvider extends ChangeNotifier {
 
   Future<void> refreshTriggersForSelection() => _triggersCoordinator.refreshTriggersForSelection();
 
+  Future<Result<List<AgentActionTrigger>>> loadTriggersForAction(String actionId) =>
+      _triggersController.listForAction(actionId);
+
   void clearTriggerOperationError() => _triggersCoordinator.clearTriggerOperationError();
 
   Future<bool> saveTrigger(AgentActionTrigger trigger) => _triggersCoordinator.saveTrigger(trigger);

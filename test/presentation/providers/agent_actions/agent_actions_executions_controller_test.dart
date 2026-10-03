@@ -67,6 +67,27 @@ void main() {
     historyController = AgentActionsHistoryController();
   });
 
+  test('running email and COM cannot be cancelled, but their queued executions can', () {
+    for (final type in [AgentActionType.email, AgentActionType.comObject]) {
+      final execution = AgentActionExecution(
+        id: 'execution',
+        actionId: 'a',
+        actionType: type,
+        status: AgentActionExecutionStatus.running,
+        requestedAt: now,
+        source: AgentActionRequestSource.localUi,
+      );
+      expect(controller.canCancelExecution(execution: execution, isFeatureEnabled: true), isFalse);
+      expect(
+        controller.canCancelExecution(
+          execution: execution.copyWith(status: AgentActionExecutionStatus.queued),
+          isFeatureEnabled: true,
+        ),
+        isTrue,
+      );
+    }
+  });
+
   group('AgentActionsExecutionsController status helpers', () {
     setUp(() {
       controller.executions = [

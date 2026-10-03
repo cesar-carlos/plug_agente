@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/infrastructure/actions/action_path_validator.dart';
+import 'package:plug_agente/infrastructure/actions/agent_action_process_lifecycle.dart';
 import 'package:plug_agente/infrastructure/actions/agent_action_process_starter.dart';
 import 'package:plug_agente/infrastructure/actions/executable_action_process_runner.dart';
 
@@ -184,7 +185,11 @@ void main() {
         operationalProfileResolver: kTestAgentOperationalProfileResolver,
         stdinSetup: kTestActionProcessStdinSetup,
         adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
-        processStarter: _starterFor(process),
+        lifecycle: AgentActionProcessLifecycle(
+          stdinSetup: kTestActionProcessStdinSetup,
+          processStarter: _starterFor(process),
+          now: () => DateTime(2026, 10, 3, 12),
+        ),
       );
 
       final result = await runner.run(
@@ -198,6 +203,49 @@ void main() {
           ),
           policies: AgentActionDefinitionPolicies(
             timeout: AgentActionTimeoutPolicy(maxRuntime: Duration(milliseconds: 1)),
+          ),
+        ),
+        request: const AgentActionExecutionRequest(
+          actionId: 'action-1',
+          source: AgentActionRequestSource.localUi,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      final output = result.getOrThrow();
+      expect(output.status, AgentActionExecutionStatus.timedOut);
+      expect(output.timedOut, isTrue);
+      expect(output.killed, isTrue);
+      expect(process.killCalled, isTrue);
+    });
+
+    test('should kill at the absolute scheduled stop before maximum runtime', () async {
+      final process = _FakeProcess.pendingExit(pid: 4321);
+      final runner = ExecutableActionProcessRunner(
+        environmentResolver: kTestActionEnvironmentResolver,
+        operationalProfileResolver: kTestAgentOperationalProfileResolver,
+        stdinSetup: kTestActionProcessStdinSetup,
+        adapterRegistry: createTestAdapterRegistry(pathValidator: _acceptingPathValidator()),
+        lifecycle: AgentActionProcessLifecycle(
+          stdinSetup: kTestActionProcessStdinSetup,
+          processStarter: _starterFor(process),
+          now: () => DateTime(2026, 10, 3, 12),
+        ),
+      );
+
+      final result = await runner.run(
+        executionId: 'execution-1',
+        definition: AgentActionDefinition(
+          id: 'action-1',
+          name: 'Run executable',
+          state: AgentActionState.active,
+          config: const ExecutableActionConfig(
+            executablePath: AgentActionPathReference(originalPath: r'C:\Tools\job.exe'),
+          ),
+          policies: AgentActionDefinitionPolicies(
+            timeout: AgentActionTimeoutPolicy(
+              executionDeadline: DateTime(2026, 10, 3, 12).add(const Duration(milliseconds: 2)),
+            ),
           ),
         ),
         request: const AgentActionExecutionRequest(

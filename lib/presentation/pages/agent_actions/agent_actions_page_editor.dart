@@ -14,6 +14,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_
 import 'package:plug_agente/presentation/pages/agent_actions/agent_action_draft_validation.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_developer_connection_coordinator.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_draft_fields_builder.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_field_feedback.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_form_header.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_keys.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_layout.dart';
@@ -21,6 +22,8 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agen
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_policy_confirmations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_policy_panel.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_save_button.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_scheduling_section.dart';
+import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_section.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_sections.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_titles.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_widgets.dart';
@@ -28,6 +31,7 @@ import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agen
 import 'package:plug_agente/presentation/providers/agent_actions_provider.dart';
 import 'package:plug_agente/presentation/widgets/agent_actions/agent_actions_select_builder.dart';
 import 'package:plug_agente/shared/widgets/common/feedback/message_modal.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_form_feedback_scope.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_text_field.dart';
 
 class AgentActionEditor extends StatefulWidget {
@@ -81,10 +85,52 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
   int _visibleDialogSectionCount = AgentActionEditorLayout.dialogSectionCount;
   final Set<String> _shownDialogWarnings = <String>{};
+  final Set<int> _expandedSections = {0, 1, 2};
+  Map<TextEditingController, String> _fieldErrors = {};
+  TextEditingController? _focusController;
+  int _focusRequest = 0;
+
+  void _toggleSection(int section) => setState(() {
+    if (!_expandedSections.remove(section)) _expandedSections.add(section);
+  });
+
+  bool _showInvalid(DraftValidationInvalid invalid) {
+    final errors = <TextEditingController, String>{};
+    if (invalid.field == DraftValidationField.requiredFields) {
+      for (final entry in AgentActionEditorFieldFeedback.requiredFields(_draft, widget.l10n).entries) {
+        if (entry.key.text.trim().isEmpty ||
+            (entry.key == _draft.email.to && AgentActionDraftParsers.structuredArguments(entry.key.text).isEmpty)) {
+          errors[entry.key] = widget.l10n.formFieldRequired(entry.value);
+        }
+      }
+    } else {
+      for (final controller in AgentActionEditorFieldFeedback.controllersFor(_draft, invalid.field)) {
+        errors[controller] = invalid.message;
+      }
+    }
+    setState(() {
+      _draft.validationMessage = invalid.message;
+      _fieldErrors = errors;
+      _focusController = errors.keys.firstOrNull;
+      _focusRequest++;
+      _visibleDialogSectionCount = AgentActionEditorLayout.dialogSectionCount;
+      _expandedSections.add(AgentActionEditorFieldFeedback.sectionFor(invalid.field));
+      if (invalid.field == DraftValidationField.requiredFields) _expandedSections.addAll([0, 1]);
+    });
+    return false;
+  }
+
+  void _clearFieldError(TextEditingController controller) {
+    if (!_fieldErrors.containsKey(controller)) return;
+    setState(() {
+      _fieldErrors = Map.of(_fieldErrors)..remove(controller);
+      if (_fieldErrors.isEmpty) _draft.validationMessage = null;
+    });
+  }
 
   static const AgentOperationalProfileResolver _operationalProfileResolver = AgentOperationalProfileResolver();
 
-  bool get _showInlineFeedback => widget.showChrome;
+  bool get _showInlineFeedback => true;
 
   @override
   void initState() {
@@ -117,6 +163,9 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   void _setValidationMessage(String message) {
     setState(() {
       _draft.validationMessage = message;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _draft.dialogScrollController.hasClients) _draft.dialogScrollController.jumpTo(0);
     });
   }
 
@@ -177,15 +226,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   }
 
   Future<bool> _showValidationDialog(String message) async {
-    if (!mounted) {
-      return false;
-    }
-
-    await MessageModal.showWarning<void>(
-      context: context,
-      title: widget.l10n.agentActionsValidationTitle,
-      message: message,
-    );
+    if (mounted) _setValidationMessage(message);
     return false;
   }
 
@@ -209,15 +250,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
   Future<bool> _showSaveFailureDialog() async {
     final message = widget.provider.errorMessage?.trim();
-    if (message == null || message.isEmpty || !mounted) {
-      return false;
-    }
-
-    await MessageModal.showError<void>(
-      context: context,
-      title: widget.l10n.agentActionsErrorTitle,
-      message: message,
-    );
+    if (mounted && message != null && message.isNotEmpty) _setValidationMessage(message);
     return false;
   }
 
@@ -239,6 +272,9 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       agentActionTypeForDraftKind(draftKind, _draft.powerShellMode);
 
   void _setDraftKind(AgentActionDraftKind draftKind) {
+    _fieldErrors = {};
+    _focusController = null;
+    _draft.validationMessage = null;
     _draft.draftKind = draftKind;
     if (draftKind == AgentActionDraftKind.powerShell && _isPowerShellModeUnavailable(_draft.powerShellMode)) {
       _draft.powerShellMode = _defaultAvailablePowerShellMode();
@@ -299,6 +335,8 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
   /// injects the live provider capabilities and the editor's
   /// `setState`-bound hooks.
   void _loadDefinition(AgentActionDefinition? definition) {
+    _fieldErrors = {};
+    _focusController = null;
     const mapper = AgentActionDraftMapper();
     mapper.applyDefinition(
       _draft,
@@ -310,6 +348,8 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
   /// Thin wrapper around [AgentActionDraftMapper.clear].
   void _clearDraft([AgentActionDraftKind? draftKind]) {
+    _fieldErrors = {};
+    _focusController = null;
     const mapper = AgentActionDraftMapper();
     mapper.clear(
       _draft,
@@ -373,7 +413,16 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       editableDraftKinds: _editableDraftKinds,
       isDraftKindUnavailable: _isDraftKindUnavailable,
       draftKindLabel: _draftKindLabel,
-      onDraftKindChanged: (value) => setState(() => _clearDraft(value)),
+      onDraftKindChanged: (value) => _updateDraft(() {
+        _setDraftKind(value);
+        if (_draft.draftType.isManualLocalOnly) {
+          _draft.remoteEnabled = false;
+          _draft.remoteAdHoc = false;
+          _draft.remoteApprovalGranted = false;
+          _draft.allowRemoteRetry = false;
+        }
+        if (!_draft.draftType.supportsProcessTermination) _draft.runElevated = false;
+      }),
       nameController: _draft.identity.name,
       state: _draft.state,
       canSelectActiveState: canSelectActiveState,
@@ -409,7 +458,7 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       },
       preflightInfoBar: preflightInfoBar,
       actionTypeDropdownKey: AgentActionEditorKeys.actionTypeDropdown,
-      showInlineFeedback: _showInlineFeedback,
+      showInlineFeedback: _showInlineFeedback && _draft.editingActionId != null,
     );
   }
 
@@ -430,8 +479,18 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       ),
     );
     if (preSaveResult is DraftValidationInvalid) {
-      _setValidationMessage(preSaveResult.message);
-      return _showValidationDialog(preSaveResult.message);
+      return _showInvalid(preSaveResult);
+    }
+    final policyResult = _validators.validatePolicies(_draft, l10n: widget.l10n);
+    if (policyResult is DraftValidationInvalid) return _showInvalid(policyResult);
+    if (_draft.draftType == AgentActionType.comObject &&
+        AgentActionDraftParsers.comObjectArguments(_draft.comObject.arguments.text) == null) {
+      return _showInvalid(
+        DraftValidationInvalid(
+          field: DraftValidationField.comArguments,
+          message: widget.l10n.agentActionsFormInvalidComArguments,
+        ),
+      );
     }
     // accepted-exit-codes payload, but we still need the parsed set
     // for the policy builders below.
@@ -455,7 +514,11 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
 
     switch (outcome) {
       case AgentActionDraftSaveRejected(:final message):
-        _setValidationMessage(message);
+        if (message == widget.l10n.agentActionsFormPowerShellScriptPathInvalid) {
+          return _showInvalid(
+            DraftValidationInvalid(field: DraftValidationField.powerShellScriptPathInvalid, message: message),
+          );
+        }
         return _showValidationDialog(message);
       case AgentActionDraftSaveForwarded(:final result):
         if (result.isSuccess()) {
@@ -569,8 +632,8 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
     onPickScriptInterpreterPath: () => _pathPickCoordinator.pickScriptInterpreterPath(),
     onPickPowerShellScriptPath: () => _pathPickCoordinator.pickPowerShellScriptPath(),
     isPowerShellModeUnavailable: _isPowerShellModeUnavailable,
-    onPowerShellModeChanged: (value) => setState(() => _setPowerShellMode(value)),
-    onPowerShellExecutableChanged: (value) => setState(() => _draft.powerShellExecutable = value),
+    onPowerShellModeChanged: (value) => _updateDraft(() => _setPowerShellMode(value)),
+    onPowerShellExecutableChanged: (value) => _updateDraft(() => _draft.powerShellExecutable = value),
   );
 
   Widget _buildContent(BuildContext context) {
@@ -601,18 +664,50 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           },
           onNewDraft: () => setState(_clearDraft),
         ),
-        if (_isDialogSectionVisible(0)) _buildIdentitySection(saving),
-        if (_isDialogSectionVisible(1)) ...[
-          const SizedBox(height: AppSpacing.sm),
-          AppTextField(
-            label: widget.l10n.agentActionsFormDescription,
-            controller: _draft.identity.description,
-            enabled: fieldsEnabled,
-            textInputAction: TextInputAction.next,
+        if (_isDialogSectionVisible(0))
+          AgentActionEditorSection(
+            key: const ValueKey('agent_action_section_identity'),
+            title: widget.l10n.agentActionsEditorIdentity,
+            expanded: _expandedSections.contains(0),
+            onToggle: () => _toggleSection(0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildIdentitySection(saving),
+                const SizedBox(height: AppSpacing.sm),
+                AppTextField(
+                  label: widget.l10n.agentActionsFormDescription,
+                  controller: _draft.identity.description,
+                  hint: widget.l10n.agentActionsEditorDescriptionHint,
+                  enabled: fieldsEnabled,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(widget.l10n.agentActionsEditorActivationSteps, style: context.bodyMuted),
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          ..._draftFieldsBuilder.build(saving),
-        ],
+        if (_isDialogSectionVisible(1))
+          AgentActionEditorSection(
+            key: const ValueKey('agent_action_section_target'),
+            title: widget.l10n.agentActionsEditorTarget,
+            expanded: _expandedSections.contains(1),
+            onToggle: () => _toggleSection(1),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _draftFieldsBuilder.build(saving)),
+          ),
+        AgentActionEditorSection(
+          key: const ValueKey('agent_action_section_schedule'),
+          title: widget.l10n.agentActionsEditorSchedule,
+          expanded: _expandedSections.contains(5),
+          onToggle: () => _toggleSection(5),
+          child: AgentActionEditorSchedulingSection(
+            provider: widget.provider,
+            l10n: widget.l10n,
+            actionId: _draft.editingActionId,
+            manualOnly: _draft.draftType.isManualLocalOnly,
+            enabled: fieldsEnabled,
+          ),
+        ),
         AgentActionEditorPolicyPanel(
           l10n: widget.l10n,
           provider: widget.provider,
@@ -621,10 +716,20 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           enabled: fieldsEnabled,
           showProductionPathAllowlistWarning: _shouldShowProductionPathAllowlistWarning,
           visibleSections: _isDialogSectionVisible,
+          expandedSections: Set.of(_expandedSections),
+          onToggleSection: _toggleSection,
           executionCallbacks: AgentActionExecutionPoliciesCallbacks(
             onMaxAttemptsChanged: (value) => _updateDraft(() => _draft.maxAttempts = value),
             onMaxRuntimeMinutesChanged: (_) => _markDraftModified(),
-            onKillOnTimeoutChanged: (value) => _updateDraft(() => _draft.killMainProcessOnTimeout = value),
+            onRuntimeUnitChanged: (value) => _updateDraft(() => _draft.setRuntimeUnit(value)),
+            onStopTimeChanged: (_) => _markDraftModified(),
+            onKillOnTimeoutChanged: (value) => _updateDraft(() {
+              _draft.killMainProcessOnTimeout = value;
+              if (!value) {
+                _draft.executionPolicy.stopTimeOfDay.clear();
+                _fieldErrors = Map.of(_fieldErrors)..remove(_draft.executionPolicy.stopTimeOfDay);
+              }
+            }),
             onAllowRemoteRetryChanged: (value) => _updateDraft(() => _draft.allowRemoteRetry = value),
             onRunElevatedChanged: (value) => unawaited(_onRunElevatedChanged(value)),
             onContextInjectionModeChanged: (value) => _updateDraft(() => _draft.contextInjectionMode = value),
@@ -642,9 +747,12 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
           ),
           onRemoteEnabledChanged: (value) => unawaited(_onRemoteEnabledChanged(value)),
           onRemoteAdHocChanged: (value) => unawaited(_onRemoteAdHocChanged(value)),
-          onNotifyOnSuccessChanged: (value) => setState(() => _draft.notifyOnSuccess = value),
-          onNotifyOnFailureChanged: (value) => setState(() => _draft.notifyOnFailure = value),
-          onNotifyOnTimeoutChanged: (value) => setState(() => _draft.notifyOnTimeout = value),
+          onNotifyOnSuccessChanged: (value) =>
+              _updateDraft(() => _draft.notifyOnSuccess = value, invalidatePreflight: false),
+          onNotifyOnFailureChanged: (value) =>
+              _updateDraft(() => _draft.notifyOnFailure = value, invalidatePreflight: false),
+          onNotifyOnTimeoutChanged: (value) =>
+              _updateDraft(() => _draft.notifyOnTimeout = value, invalidatePreflight: false),
         ),
         if (widget.showChrome) ...[
           const SizedBox(height: AppSpacing.md),
@@ -653,11 +761,26 @@ class _AgentActionEditorState extends State<AgentActionEditor> {
       ],
     );
 
-    return AgentActionEditorLayout.build(
-      showChrome: widget.showChrome,
-      scrollController: _draft.dialogScrollController,
-      form: form,
-      saveButton: saveButton,
+    return AppFormFeedbackScope(
+      errors: Map.of(_fieldErrors),
+      requiredControllers: {
+        ...AgentActionEditorFieldFeedback.requiredFields(_draft, widget.l10n).keys,
+        _draft.executionPolicy.maxRuntimeMinutes,
+        _draft.executionPolicy.maxConcurrent,
+        _draft.executionPolicy.maxQueued,
+        _draft.executionPolicy.acceptedExitCodes,
+      },
+      requiredHint: widget.l10n.agentActionsEditorRequiredHint,
+      optionalHint: widget.l10n.agentActionsEditorOptionalHint,
+      focusController: _focusController,
+      focusRequest: _focusRequest,
+      onChanged: _clearFieldError,
+      child: AgentActionEditorLayout.build(
+        showChrome: widget.showChrome,
+        scrollController: _draft.dialogScrollController,
+        form: form,
+        saveButton: saveButton,
+      ),
     );
   }
 

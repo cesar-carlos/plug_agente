@@ -74,7 +74,7 @@ class AgentActionProcessLifecycle {
     AgentActionProcessTreeLease? processTreeLease;
     try {
       final startedAt = _now();
-      final deadline = startedAt.add(definition.policies.timeout.maxRuntime);
+      final deadline = definition.policies.timeout.deadlineFrom(startedAt);
       late final Process process;
       try {
         process = await _startBeforeDeadline(

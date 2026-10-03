@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:plug_agente/core/theme/theme.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_form_feedback_scope.dart';
 import 'package:plug_agente/shared/widgets/common/form/app_labeled_field.dart';
 import 'package:plug_agente/shared/widgets/common/form/field_spec.dart';
 
@@ -30,6 +31,7 @@ class AppTextField extends StatefulWidget {
     this.helpTooltip,
     this.helpButtonKey,
     this.reserveHelpAffordance = false,
+    this.helperText,
   });
 
   final String label;
@@ -55,6 +57,7 @@ class AppTextField extends StatefulWidget {
   final String? helpTooltip;
   final Key? helpButtonKey;
   final bool reserveHelpAffordance;
+  final String? helperText;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -63,6 +66,25 @@ class AppTextField extends StatefulWidget {
 class _AppTextFieldState extends State<AppTextField> {
   bool _touched = false;
   String _lastChangedValue = '';
+  final FocusNode _focusNode = FocusNode();
+  int _lastFocusRequest = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final feedback = AppFormFeedbackScope.maybeOf(context);
+    if (feedback == null ||
+        feedback.focusController != widget.controller ||
+        feedback.focusRequest == _lastFocusRequest) {
+      return;
+    }
+    _lastFocusRequest = feedback.focusRequest;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      (widget.focusNode ?? _focusNode).requestFocus();
+      Scrollable.ensureVisible(context, alignment: 0.2);
+    });
+  }
 
   String? get _effectiveHint => widget.hint ?? widget.fieldSpec?.hint;
 
@@ -112,6 +134,7 @@ class _AppTextFieldState extends State<AppTextField> {
   @override
   void dispose() {
     widget.controller?.removeListener(_onControllerChanged);
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -127,6 +150,8 @@ class _AppTextFieldState extends State<AppTextField> {
       _lastChangedValue = value;
     });
     widget.onChanged?.call(value);
+    final controller = widget.controller;
+    if (controller != null) AppFormFeedbackScope.maybeOf(context)?.onChanged(controller);
   }
 
   Widget? _buildPrefixIcon() {
@@ -150,6 +175,8 @@ class _AppTextFieldState extends State<AppTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final feedback = AppFormFeedbackScope.maybeOf(context);
+    final isRequired = feedback?.requiredControllers.contains(widget.controller) ?? false;
     final textBox = TextBox(
       controller: widget.controller,
       placeholder: _effectiveHint,
@@ -163,7 +190,7 @@ class _AppTextFieldState extends State<AppTextField> {
       onChanged: _handleChanged,
       suffix: widget.suffixIcon,
       prefix: _buildPrefixIcon(),
-      focusNode: widget.focusNode,
+      focusNode: widget.focusNode ?? _focusNode,
       autofocus: widget.autofocus,
       textInputAction: widget.textInputAction,
       onSubmitted: widget.onSubmitted,
@@ -171,7 +198,14 @@ class _AppTextFieldState extends State<AppTextField> {
 
     return AppLabeledField(
       label: widget.label,
-      errorText: _errorText,
+      errorText: feedback?.errors[widget.controller] ?? _errorText,
+      helperText:
+          widget.helperText ??
+          (feedback == null || widget.readOnly
+              ? null
+              : isRequired
+              ? feedback.requiredHint
+              : feedback.optionalHint),
       helpTitle: widget.helpTitle,
       helpMessage: widget.helpMessage,
       helpTooltip: widget.helpTooltip,

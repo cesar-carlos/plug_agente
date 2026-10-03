@@ -327,7 +327,9 @@ void main() {
       );
       final useCase = SaveAgentActionDefinition(
         repository,
-        validateDefinition,
+        ValidateAgentActionDefinition(
+          AgentActionAdapterRegistry(const [FakeCommandLineActionAdapter(actionType: AgentActionType.executable)]),
+        ),
         const AgentActionDefinitionSnapshotter(),
         featureFlags,
       );
@@ -335,8 +337,9 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: const CommandLineActionConfig(command: 'dir'),
+        config: const ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\job.exe')),
         policies: AgentActionDefinitionPolicies(
+          timeout: const AgentActionTimeoutPolicy(maxRuntime: Duration(seconds: 5)),
           remote: AgentActionRemotePolicy(
             isEnabled: true,
             approvedAt: DateTime.utc(2026),

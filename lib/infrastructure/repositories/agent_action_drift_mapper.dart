@@ -297,6 +297,7 @@ class AgentActionDriftMapper {
       'timeout': {
         'maxRuntimeMs': policies.timeout.maxRuntime.inMilliseconds,
         'killMainProcessOnTimeout': policies.timeout.killMainProcessOnTimeout,
+        'stopTimeOfDayMinutes': policies.timeout.stopTimeOfDayMinutes,
       },
       'capture': {
         'captureStdout': policies.capture.captureStdout,
@@ -366,6 +367,7 @@ class AgentActionDriftMapper {
       'dayOfMonth': schedule.dayOfMonth,
       'timezoneId': schedule.timezoneId,
       'ignoreMissedRuns': schedule.ignoreMissedRuns,
+      'sourceActionId': schedule.sourceActionId,
     };
   }
 
@@ -382,6 +384,7 @@ class AgentActionDriftMapper {
       dayOfMonth: json['dayOfMonth'] as int?,
       timezoneId: json['timezoneId'] as String?,
       ignoreMissedRuns: json['ignoreMissedRuns'] as bool? ?? true,
+      sourceActionId: json['sourceActionId'] as String?,
     );
   }
 
@@ -428,6 +431,7 @@ class AgentActionDriftMapper {
           milliseconds: timeout['maxRuntimeMs'] as int? ?? const Duration(minutes: 30).inMilliseconds,
         ),
         killMainProcessOnTimeout: timeout['killMainProcessOnTimeout'] as bool? ?? true,
+        stopTimeOfDayMinutes: timeout['stopTimeOfDayMinutes'] as int?,
       ),
       capture: AgentActionCapturePolicy(
         captureStdout: capture['captureStdout'] as bool? ?? true,

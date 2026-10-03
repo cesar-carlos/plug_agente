@@ -1,5 +1,6 @@
 /// Stable `failure.context['reason']` for agent action triggers and related lifecycle validation.
 abstract final class AgentActionTriggerConstants {
+  static const Duration appCloseExecutionBudget = Duration(seconds: 5);
   static const String blankActionIdReason = 'blank_action_id';
 
   static const String nonTemporalTriggerReason = 'non_temporal_trigger';

@@ -142,6 +142,23 @@ class ValidateAgentActionDefinition {
       );
     }
 
+    final stopMinutes = definition.policies.timeout.stopTimeOfDayMinutes;
+    if (stopMinutes != null &&
+        (stopMinutes < 0 ||
+            stopMinutes >= Duration.minutesPerDay ||
+            !definition.type.supportsProcessTermination ||
+            !definition.policies.timeout.killMainProcessOnTimeout)) {
+      return ActionValidationFailure.withContext(
+        message: 'Invalid scheduled process stop policy.',
+        context: const {
+          'field': 'timeout.stopTimeOfDayMinutes',
+          'reason': 'invalid_stop_policy',
+          'user_message':
+              'Informe um horario de parada valido e habilite o encerramento no timeout em uma acao com processo.',
+        },
+      );
+    }
+
     if (definition.policies.elevated.runElevated && definition.policies.retry.maxAttempts > 1) {
       return ActionValidationFailure.withContext(
         message: 'Elevated actions cannot configure automatic retry.',

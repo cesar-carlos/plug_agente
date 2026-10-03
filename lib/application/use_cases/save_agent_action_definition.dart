@@ -2,6 +2,7 @@ import 'package:plug_agente/application/actions/agent_action_definition_snapshot
 import 'package:plug_agente/application/actions/agent_action_preflight_validity.dart';
 import 'package:plug_agente/application/actions/agent_action_remote_approval_reconciler.dart';
 import 'package:plug_agente/application/actions/agent_action_secret_reference_fingerprinter.dart';
+import 'package:plug_agente/application/actions/agent_action_trigger_definition_validator.dart';
 import 'package:plug_agente/application/use_cases/validate_agent_action_definition.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
@@ -99,6 +100,13 @@ class SaveAgentActionDefinition {
           ),
         );
       }
+    }
+
+    final enabledTriggers = await _repository.listTriggers(actionId: definitionWithRemote.id, isEnabled: true);
+    if (enabledTriggers.isError()) return Failure(enabledTriggers.exceptionOrNull()!);
+    for (final trigger in enabledTriggers.getOrThrow()) {
+      final compatibility = const AgentActionTriggerDefinitionValidator().validate(trigger, definitionWithRemote);
+      if (compatibility.isError()) return Failure(compatibility.exceptionOrNull()!);
     }
 
     final pendingSnapshotHash = _snapshotter.snapshotHash(definitionWithRemote);

@@ -1,10 +1,10 @@
 import 'dart:developer' as developer;
 
+import 'package:plug_agente/application/actions/agent_action_trigger_definition_validator.dart';
 import 'package:plug_agente/application/actions/agent_action_trigger_scheduler.dart';
 import 'package:plug_agente/application/use_cases/validate_agent_action_trigger.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
-import 'package:plug_agente/core/constants/agent_action_trigger_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:result_dart/result_dart.dart';
@@ -48,6 +48,7 @@ class SaveAgentActionTrigger {
     final persistedTrigger = validatedTrigger.copyWith(
       id: validatedTrigger.id.trim(),
       actionId: validatedTrigger.actionId.trim(),
+      schedule: validatedTrigger.schedule.copyWith(sourceActionId: validatedTrigger.schedule.sourceActionId?.trim()),
     );
 
     final definitionResult = await _repository.getDefinition(persistedTrigger.actionId);
@@ -56,36 +57,41 @@ class SaveAgentActionTrigger {
     }
 
     final definition = definitionResult.getOrThrow();
-    if (persistedTrigger.type == AgentActionTriggerType.appClose && definition.policies.remote.canRunSavedAction) {
-      return Failure(
-        ActionValidationFailure.withContext(
-          message: 'App-close trigger cannot be saved because the action is approved for remote execution.',
-          code: AgentActionFailureCode.appCloseRemoteActionBlocked,
-          context: {
-            'trigger_id': persistedTrigger.id,
-            'action_id': persistedTrigger.actionId,
-            'reason': AgentActionTriggerConstants.appCloseRemoteActionBlockedReason,
-            'user_message':
-                'Nao e possivel salvar um gatilho de encerramento para uma acao aprovada para execucao remota pelo hub.',
-          },
-        ),
-      );
-    }
-
-    if (persistedTrigger.type == AgentActionTriggerType.appClose && definition.policies.elevated.runElevated) {
-      return Failure(
-        ActionValidationFailure.withContext(
-          message: 'App-close trigger cannot be saved because the action requires elevated execution.',
-          code: AgentActionFailureCode.appCloseElevatedActionBlocked,
-          context: {
-            'trigger_id': persistedTrigger.id,
-            'action_id': persistedTrigger.actionId,
-            'reason': AgentActionTriggerConstants.appCloseElevatedActionBlockedReason,
-            'user_message':
-                'Nao e possivel salvar um gatilho de encerramento para uma acao que exige execucao elevada (UAC).',
-          },
-        ),
-      );
+    final compatibility = const AgentActionTriggerDefinitionValidator().validate(persistedTrigger, definition);
+    if (compatibility.isError()) return Failure(compatibility.exceptionOrNull()!);
+    if (persistedTrigger.isExecutionEventTrigger) {
+      final source = persistedTrigger.schedule.sourceActionId!.trim();
+      final sourceResult = await _repository.getDefinition(source);
+      if (sourceResult.isError()) return Failure(sourceResult.exceptionOrNull()!);
+      final triggersResult = await _repository.listTriggers();
+      if (triggersResult.isError()) return Failure(triggersResult.exceptionOrNull()!);
+      final dependencies = <String, Set<String>>{};
+      for (final other in [
+        ...triggersResult.getOrThrow().where((item) => item.id != persistedTrigger.id),
+        persistedTrigger,
+      ]) {
+        final dependency = other.schedule.sourceActionId?.trim();
+        if (other.isExecutionEventTrigger && dependency != null && dependency.isNotEmpty) {
+          dependencies.putIfAbsent(other.actionId, () => <String>{}).add(dependency);
+        }
+      }
+      final pending = <String>[source];
+      final visited = <String>{};
+      while (pending.isNotEmpty) {
+        final action = pending.removeLast();
+        if (action == persistedTrigger.actionId) {
+          return Failure(
+            ActionValidationFailure.withContext(
+              message: 'Execution event triggers cannot create dependency cycles.',
+              context: const {
+                'reason': 'event_trigger_cycle',
+                'user_message': 'Este gatilho cria um ciclo entre acoes. Escolha outra origem.',
+              },
+            ),
+          );
+        }
+        if (visited.add(action)) pending.addAll(dependencies[action] ?? const <String>{});
+      }
     }
 
     final saveResult = await _repository.saveTrigger(persistedTrigger);

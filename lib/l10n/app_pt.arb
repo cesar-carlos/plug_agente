@@ -35,8 +35,12 @@
   "agentActionsImportBundleSuccessMessage": "Importadas {definitionCount, plural, =1{1 ação} other{{definitionCount} ações}} e {triggerCount, plural, =1{1 gatilho} other{{triggerCount} gatilhos}}. Valide as definições antes de executar.",
   "@agentActionsImportBundleSuccessMessage": {
     "placeholders": {
-      "definitionCount": { "type": "int" },
-      "triggerCount": { "type": "int" }
+      "definitionCount": {
+        "type": "int"
+      },
+      "triggerCount": {
+        "type": "int"
+      }
     }
   },
   "agentActionsImportBundleSecretsMessage": "Configure estes placeholders de segredo nesta máquina: {secretNames}.",
@@ -186,12 +190,12 @@
   "agentActionsFormUnsupportedType": "O editor visual deste tipo de ação ainda não está disponível nesta tela.",
   "agentActionsFormState": "Estado",
   "agentActionsHelpTypeTitle": "Tipo da ação",
-  "agentActionsHelpTypeMessage": "Define o runner e o contrato interno usado para salvar e executar a ação. Depois que a ação é criada, o tipo fica somente leitura para evitar troca acidental de runner.",
+  "agentActionsHelpTypeMessage": "Escolhe como executar a tarefa: comando, programa, script, JAR, e-mail, objeto COM ou projeto Developer. O tipo não pode ser alterado depois de salvar; crie outra ação para mudar o tipo.",
   "agentActionsHelpStateTitle": "Estado da ação",
   "agentActionsHelpStateMessage": "Controla se a ação pode executar. Ações que precisam validar aparecem na lista, mas não devem ser executadas automaticamente até serem revisadas.",
   "agentActionsHelpCommandTitle": "Comando",
-  "agentActionsHelpCommandMessage": "Modo avançado e local. Prefira Executável com argumentos estruturados. Para anexar um arquivo de contexto, use exatamente \\${context_path}; segredos não são permitidos no comando.",
-  "agentActionsCommandLineLegacyWarning": "Linha de comando é um modo avançado e somente local. Prefira Executável com argumentos estruturados; use \\${context_path} exatamente uma vez quando houver arquivo de contexto.",
+  "agentActionsHelpCommandMessage": "Modo avançado e local. Prefira Executável com argumentos estruturados. Para anexar um arquivo de contexto, use exatamente {context_path}; segredos não são permitidos no comando.",
+  "agentActionsCommandLineLegacyWarning": "Linha de comando é um modo avançado e somente local. Prefira Executável com argumentos estruturados; use {context_path} exatamente uma vez quando houver arquivo de contexto.",
   "agentActionsHelpPowerShellModeTitle": "Modo PowerShell",
   "agentActionsHelpPowerShellModeMessage": "Comando salva um wrapper de PowerShell como linha de comando. Script .ps1 salva como ação de script, reaproveitando o runner de scripts.",
   "agentActionsHelpPowerShellExecutableTitle": "Executável PowerShell",
@@ -205,7 +209,7 @@
   "agentActionsHelpArgumentsTitle": "Argumentos",
   "agentActionsHelpArgumentsMessage": "Informe um argumento por linha. Cada linha vira um item da lista de argumentos, então não misture várias opções na mesma linha a menos que o programa espere esse formato.",
   "agentActionsHelpWorkingDirectoryTitle": "Diretório de trabalho",
-  "agentActionsHelpWorkingDirectoryMessage": "Diretório inicial do processo. Deixe vazio para usar o padrão do runner ou preencha um caminho absoluto permitido pela política de path.",
+  "agentActionsHelpWorkingDirectoryMessage": "Pasta inicial do processo. Deixe vazio para usar a pasta padrão do executor ou informe um caminho absoluto autorizado.",
   "agentActionsHelpInterpreterTitle": "Interpretador",
   "agentActionsHelpInterpreterMessage": "Executável usado para abrir scripts. Quando vazio, o runner escolhe o interpretador padrão da extensão; preencha para forçar uma versão específica, como pwsh.exe ou python.exe.",
   "agentActionsHelpJarTitle": "Arquivo JAR",
@@ -219,18 +223,18 @@
   "agentActionsHelpMaxAttemptsTitle": "Máximo de tentativas",
   "agentActionsHelpMaxAttemptsMessage": "Quantidade máxima de tentativas para execuções locais e gatilhos. Execuções remotas continuam em uma tentativa, salvo se retry remoto estiver habilitado.",
   "agentActionsHelpTimeoutTitle": "Tempo máximo",
-  "agentActionsHelpTimeoutMessage": "Tempo limite da execução local em minutos. Ao atingir o limite, a execução falha por timeout e a política abaixo decide se o processo principal deve ser encerrado.",
+  "agentActionsHelpTimeoutMessage": "Tempo máximo na unidade selecionada. Em ações com processo, o encerramento depende da opção abaixo. Sem encerramento, o agente acompanha o processo até ele sair. Para e-mail e COM, o limite encerra a espera, sem garantir a interrupção da operação.",
   "agentActionsHelpKillOnTimeoutTitle": "Encerrar no timeout",
-  "agentActionsHelpKillOnTimeoutMessage": "Quando marcado, o runner tenta encerrar o processo principal se a execução ultrapassar o tempo máximo configurado.",
-  "agentActionsHelpRemoteRetryTitle": "Retry remoto",
-  "agentActionsHelpRemoteRetryMessage": "Permite que execuções iniciadas pelo Hub usem a política de retry. Use apenas quando repetir a ação for seguro.",
+  "agentActionsHelpKillOnTimeoutMessage": "Encerra o processo e sua árvore no Windows quando o tempo máximo ou horário de parada é atingido.",
+  "agentActionsHelpRemoteRetryTitle": "Novas tentativas pelo Hub",
+  "agentActionsHelpRemoteRetryMessage": "Permite aplicar o máximo de tentativas também às execuções iniciadas pelo Hub. Habilite apenas quando repetir a operação for seguro.",
   "agentActionsHelpRunElevatedTitle": "Execução elevada",
   "agentActionsHelpRunElevatedMessage": "Executa por helper elevado quando disponível. Requer instalação e configuração local do helper e da tarefa agendada.",
   "agentActionsHelpContextInjectionTitle": "Injeção de contexto",
-  "agentActionsHelpContextInjectionMessage": "Define como parâmetros runtime entram na execução: argumento, arquivo, variáveis de ambiente ou stdin.",
+  "agentActionsHelpContextInjectionMessage": "Escolhe como a tarefa recebe os parâmetros da execução: argumento, arquivo, variáveis de ambiente ou entrada padrão (stdin).",
   "agentActionsHelpPathChangePolicyTitle": "Mudança de path",
   "agentActionsHelpPathChangePolicyMessage": "Controla o que acontece quando caminhos ou snapshots de conteúdo mudam depois da validação: falhar, avisar ou permitir.",
-  "agentActionsHelpRuntimeSchemaTitle": "Schema runtime",
+  "agentActionsHelpRuntimeSchemaTitle": "Formato dos parâmetros",
   "agentActionsHelpRuntimeSchemaMessage": "Objeto JSON Schema usado para validar runtimeParameters antes da execução. Use quando o Hub ou gatilhos enviarem parâmetros; deixe vazio para aceitar qualquer objeto.",
   "agentActionsHelpAllowedProfilesTitle": "Perfis permitidos",
   "agentActionsHelpAllowedProfilesMessage": "Limita a ação aos perfis operacionais informados. Campo vazio permite qualquer perfil do agente.",
@@ -251,7 +255,7 @@
   "agentActionsHelpAcceptedExitCodesTitle": "Códigos de saída",
   "agentActionsHelpAcceptedExitCodesMessage": "Lista de códigos que contam como sucesso. O padrão é 0; outros valores devem ser separados por vírgula.",
   "agentActionsHelpOnAppExitTitle": "Ao fechar o agente",
-  "agentActionsHelpOnAppExitMessage": "Define o que fazer com processos ainda em execução quando o Plug Agente for fechado: tentar encerrar, deixar continuar ou bloquear conforme suporte do runner.",
+  "agentActionsHelpOnAppExitMessage": "Define se processos ativos serão encerrados, mantidos em execução ou aguardados pelo tempo configurado antes do encerramento. E-mail e COM não possuem processo cancelável.",
   "agentActionsHelpRemoteExecutionTitle": "Execução remota",
   "agentActionsHelpRemoteExecutionMessage": "Permite que o Hub execute esta ação salva via Socket.IO JSON-RPC. Exige aprovação local e deve ficar ativo somente em ações revisadas.",
   "agentActionsHelpRemoteAdHocTitle": "Ad-hoc remoto",
@@ -267,23 +271,23 @@
   "agentActionNotificationTimeoutBody": "Execucao excedeu o tempo maximo configurado.",
   "agentActionNotificationFailureFallbackBody": "Execucao terminou com falha.",
   "agentActionsFormExecutionPoliciesTitle": "Políticas de execução",
-  "agentActionsFormExecutionPoliciesDescription": "Timeout e retry valem para execuções locais e gatilhos. Execuções remotas do Hub permanecem em uma tentativa, salvo se retry remoto estiver habilitado.",
+  "agentActionsFormExecutionPoliciesDescription": "Defina por quanto tempo a ação pode executar, quantas tentativas são permitidas e quando encerrar o processo.",
   "agentActionsFormPathChangePolicy": "Política de mudança de path",
   "agentActionsFormPathChangePolicyFail": "Falhar se path ou conteúdo mudou",
   "agentActionsFormPathChangePolicyWarn": "Avisar se path ou conteúdo mudou",
   "agentActionsFormPathChangePolicyAllow": "Permitir mudanças de path e conteúdo",
-  "agentActionsFormContextInjectionMode": "Modo de injeção de contexto",
+  "agentActionsFormContextInjectionMode": "Como enviar os parâmetros da execução",
   "agentActionsFormContextInjectionArgument": "Argumento (padrão)",
   "agentActionsFormContextInjectionFile": "Arquivo de contexto (obrigatório na execução)",
   "agentActionsFormContextInjectionEnvironment": "Variáveis de ambiente",
   "agentActionsFormContextInjectionStdin": "Entrada padrão (stdin)",
-  "agentActionsFormRuntimeParameterSchema": "Schema JSON de parâmetros runtime (opcional)",
+  "agentActionsFormRuntimeParameterSchema": "Formato dos parâmetros (JSON Schema)",
   "agentActionsFormRuntimeParameterSchemaHint": "Objeto JSON Schema validado contra runtimeParameters em cada execução. Deixe vazio para ignorar.",
   "agentActionsTestPreviewPathSnapshotWarnings": "Avisos de snapshot de path",
   "agentActionsFormMaxRuntimeMinutes": "Tempo máximo (minutos)",
-  "agentActionsFormKillOnTimeout": "Encerrar processo principal no timeout",
+  "agentActionsFormKillOnTimeout": "Encerrar processo ao atingir o limite",
   "agentActionsFormMaxAttempts": "Máximo de tentativas",
-  "agentActionsFormAllowRemoteRetry": "Permitir retry em execuções remotas do Hub",
+  "agentActionsFormAllowRemoteRetry": "Permitir novas tentativas em execuções do Hub",
   "agentActionsFormRuntimePoliciesTitle": "Restrições de runtime",
   "agentActionsFormRuntimePoliciesDescription": "Perfil operacional, ambiente do processo filho, códigos de saída aceitos e comportamento ao fechar o Plug Agente. Perfis permitidos vazios significa qualquer perfil.",
   "agentActionsFormAllowedProfiles": "Perfis operacionais permitidos",
@@ -317,7 +321,7 @@
   "agentActionsFormMaxConcurrent": "Máximo de execuções concorrentes",
   "agentActionsFormMaxQueued": "Máximo na fila",
   "agentActionsFormInvalidQueueLimits": "Informe um inteiro positivo para concorrência máxima e um inteiro não negativo para a fila.",
-  "agentActionsFormInvalidMaxRuntime": "Informe um inteiro positivo para o tempo máximo.",
+  "agentActionsFormInvalidMaxRuntime": "Informe um tempo máximo positivo em minutos ou segundos.",
   "agentActionsFormMaxAttemptsExceedsLimit": "Esta ação tem mais tentativas que o limite atual do agente ({limit}). Escolha um valor permitido antes de salvar.",
   "@agentActionsFormMaxAttemptsExceedsLimit": {
     "placeholders": {
@@ -695,7 +699,7 @@
   "agentActionsEmptyHistory": "Nenhuma execução registrada para esta ação.",
   "agentActionsTriggersTitle": "Agendas e gatilhos",
   "agentActionsTriggersEmpty": "Nenhum gatilho salvo para esta ação.",
-  "agentActionsTriggersLoading": "Carregando gatilhos\u2026",
+  "agentActionsTriggersLoading": "Carregando gatilhos…",
   "agentActionsTriggerEnabled": "Ativo",
   "agentActionsTriggerDisabled": "Desativado",
   "agentActionsTriggerUnnamed": "Gatilho sem nome",
@@ -1211,49 +1215,135 @@
   "configBackupExportSecretsIncludedNote": "Foi incluído um blob encriptado de segredos do armazenamento seguro no ZIP de cópia.",
   "configBackupRestoreOdbcSecretsWarning": "Esta cópia não inclui segredos do armazenamento seguro. Numa máquina nova ou após restaurar, volte a introduzir as credenciais ODBC nas definições de ligação e autentique-se novamente no hub.",
   "configBackupRestoreSecretsIncludedNote": "Esta cópia inclui um blob encriptado de segredos do armazenamento seguro. Palavras-passe ODBC, tokens do hub e segredos de client token serão restaurados quando confirmar.",
-  "@configBackupSectionTitle": { "description": "Settings tab: local backup section title." },
-  "@configBackupIntro": { "description": "Explains what the ZIP contains and secure-storage limits." },
-  "@configBackupDuplicateNote": { "description": "Warns about duplicate agent IDs when restoring on multiple machines." },
-  "@configBackupButtonExport": { "description": "Primary action to save a backup ZIP." },
-  "@configBackupButtonRestore": { "description": "Primary action to pick a backup ZIP to restore." },
-  "@configBackupExporting": { "description": "Accessibility/loading label during export." },
-  "@configBackupRestoring": { "description": "Accessibility/loading label while staging restore." },
-  "@configBackupExportSuccessTitle": { "description": "Dialog title after successful export." },
-  "@configBackupExportSuccessMessage": { "description": "Dialog body after successful export." },
-  "@configBackupRestoreDialogTitle": { "description": "Destructive restore confirmation dialog title." },
-  "@configBackupRestoreDialogBody": { "description": "Explains that restore replaces DB/settings and uses .bak." },
-  "@configBackupRestoreDuplicateWarning": { "description": "Shown when hub lists this agent as connected." },
-  "@configBackupRestoreVerifyWarning": { "description": "Shown when hub could not be queried." },
-  "@configBackupRestoreInstallationMismatch": { "description": "Shown when backup installationId differs from current." },
-  "@configBackupCheckboxAcknowledgeDuplicate": { "description": "Risk acknowledgement when duplicate session likely." },
-  "@configBackupCheckboxAcknowledgeUncertain": { "description": "Risk acknowledgement when hub check failed." },
-  "@configBackupRestoreConfirm": { "description": "Confirm restore and exit the app." },
-  "@configBackupCancel": { "description": "Cancel backup/restore flow." },
-  "@configBackupErrMissingManifestOrDb": { "description": "Validation error: ZIP incomplete." },
-  "@configBackupErrInvalidManifest": { "description": "Validation error: manifest JSON invalid." },
-  "@configBackupErrUnsupportedFormat": { "description": "Validation error: unsupported manifest formatVersion." },
-  "@configBackupErrDbVersion": { "description": "Could not read PRAGMA user_version from staged DB." },
-  "@configBackupErrNewerBackup": { "description": "Backup schema is newer than this app." },
-  "@configBackupErrInvalidEntry": { "description": "ZIP path unsafe or bad entry." },
-  "@configBackupErrExportDbNotFound": { "description": "Local agent_config.db missing during export." },
-  "@configBackupErrExportZip": { "description": "ZIP encoder failed." },
-  "@configBackupErrExportWrite": { "description": "Could not write destination ZIP path." },
-  "@configBackupErrExportGeneric": { "description": "Unexpected export failure." },
-  "@configBackupErrReadZip": { "description": "Could not decode selected ZIP." },
-  "@configBackupErrStageGeneric": { "description": "Unexpected staging failure." },
-  "@configBackupErrApplyMissingDb": { "description": "Staged DB path missing at apply time." },
-  "@configBackupErrApplyWrite": { "description": "File copy failed during apply." },
-  "@configBackupRestoreFailedTitle": { "description": "Error dialog title for restore failures before exit." },
-  "@configBackupExportFailedTitle": { "description": "Error dialog title for export failures." },
-  "@configBackupRestoreRestartNotice": { "description": "Tells user the app will exit after restore." },
-  "@configBackupRestoreOlderSchemaNote": { "description": "Info when backup user_version is below current app schema." },
-  "@configBackupSecureStorageSecretsNote": { "description": "Info on backup tab: secure-storage secrets are omitted by default." },
-  "@configBackupIncludeSecureStorageSecretsLabel": { "description": "Checkbox label to opt in to encrypted secure-storage export." },
-  "@configBackupIncludeSecureStorageSecretsWarning": { "description": "Warning shown when the user opts in to exporting encrypted secrets." },
-  "@configBackupExportSecretsNotIncludedNote": { "description": "Reminder in export success dialog that secure-storage secrets were omitted." },
-  "@configBackupExportSecretsIncludedNote": { "description": "Reminder in export success dialog that encrypted secure-storage secrets were included." },
-  "@configBackupRestoreOdbcSecretsWarning": { "description": "Warning in restore confirm dialog when backup has no secure-storage secrets." },
-  "@configBackupRestoreSecretsIncludedNote": { "description": "Info in restore confirm dialog when backup includes encrypted secure-storage secrets." },
+  "@configBackupSectionTitle": {
+    "description": "Settings tab: local backup section title."
+  },
+  "@configBackupIntro": {
+    "description": "Explains what the ZIP contains and secure-storage limits."
+  },
+  "@configBackupDuplicateNote": {
+    "description": "Warns about duplicate agent IDs when restoring on multiple machines."
+  },
+  "@configBackupButtonExport": {
+    "description": "Primary action to save a backup ZIP."
+  },
+  "@configBackupButtonRestore": {
+    "description": "Primary action to pick a backup ZIP to restore."
+  },
+  "@configBackupExporting": {
+    "description": "Accessibility/loading label during export."
+  },
+  "@configBackupRestoring": {
+    "description": "Accessibility/loading label while staging restore."
+  },
+  "@configBackupExportSuccessTitle": {
+    "description": "Dialog title after successful export."
+  },
+  "@configBackupExportSuccessMessage": {
+    "description": "Dialog body after successful export."
+  },
+  "@configBackupRestoreDialogTitle": {
+    "description": "Destructive restore confirmation dialog title."
+  },
+  "@configBackupRestoreDialogBody": {
+    "description": "Explains that restore replaces DB/settings and uses .bak."
+  },
+  "@configBackupRestoreDuplicateWarning": {
+    "description": "Shown when hub lists this agent as connected."
+  },
+  "@configBackupRestoreVerifyWarning": {
+    "description": "Shown when hub could not be queried."
+  },
+  "@configBackupRestoreInstallationMismatch": {
+    "description": "Shown when backup installationId differs from current."
+  },
+  "@configBackupCheckboxAcknowledgeDuplicate": {
+    "description": "Risk acknowledgement when duplicate session likely."
+  },
+  "@configBackupCheckboxAcknowledgeUncertain": {
+    "description": "Risk acknowledgement when hub check failed."
+  },
+  "@configBackupRestoreConfirm": {
+    "description": "Confirm restore and exit the app."
+  },
+  "@configBackupCancel": {
+    "description": "Cancel backup/restore flow."
+  },
+  "@configBackupErrMissingManifestOrDb": {
+    "description": "Validation error: ZIP incomplete."
+  },
+  "@configBackupErrInvalidManifest": {
+    "description": "Validation error: manifest JSON invalid."
+  },
+  "@configBackupErrUnsupportedFormat": {
+    "description": "Validation error: unsupported manifest formatVersion."
+  },
+  "@configBackupErrDbVersion": {
+    "description": "Could not read PRAGMA user_version from staged DB."
+  },
+  "@configBackupErrNewerBackup": {
+    "description": "Backup schema is newer than this app."
+  },
+  "@configBackupErrInvalidEntry": {
+    "description": "ZIP path unsafe or bad entry."
+  },
+  "@configBackupErrExportDbNotFound": {
+    "description": "Local agent_config.db missing during export."
+  },
+  "@configBackupErrExportZip": {
+    "description": "ZIP encoder failed."
+  },
+  "@configBackupErrExportWrite": {
+    "description": "Could not write destination ZIP path."
+  },
+  "@configBackupErrExportGeneric": {
+    "description": "Unexpected export failure."
+  },
+  "@configBackupErrReadZip": {
+    "description": "Could not decode selected ZIP."
+  },
+  "@configBackupErrStageGeneric": {
+    "description": "Unexpected staging failure."
+  },
+  "@configBackupErrApplyMissingDb": {
+    "description": "Staged DB path missing at apply time."
+  },
+  "@configBackupErrApplyWrite": {
+    "description": "File copy failed during apply."
+  },
+  "@configBackupRestoreFailedTitle": {
+    "description": "Error dialog title for restore failures before exit."
+  },
+  "@configBackupExportFailedTitle": {
+    "description": "Error dialog title for export failures."
+  },
+  "@configBackupRestoreRestartNotice": {
+    "description": "Tells user the app will exit after restore."
+  },
+  "@configBackupRestoreOlderSchemaNote": {
+    "description": "Info when backup user_version is below current app schema."
+  },
+  "@configBackupSecureStorageSecretsNote": {
+    "description": "Info on backup tab: secure-storage secrets are omitted by default."
+  },
+  "@configBackupIncludeSecureStorageSecretsLabel": {
+    "description": "Checkbox label to opt in to encrypted secure-storage export."
+  },
+  "@configBackupIncludeSecureStorageSecretsWarning": {
+    "description": "Warning shown when the user opts in to exporting encrypted secrets."
+  },
+  "@configBackupExportSecretsNotIncludedNote": {
+    "description": "Reminder in export success dialog that secure-storage secrets were omitted."
+  },
+  "@configBackupExportSecretsIncludedNote": {
+    "description": "Reminder in export success dialog that encrypted secure-storage secrets were included."
+  },
+  "@configBackupRestoreOdbcSecretsWarning": {
+    "description": "Warning in restore confirm dialog when backup has no secure-storage secrets."
+  },
+  "@configBackupRestoreSecretsIncludedNote": {
+    "description": "Info in restore confirm dialog when backup includes encrypted secure-storage secrets."
+  },
   "configLastUpdateNever": "Nunca verificado",
   "configUpdatesChecking": "Verificando atualizações...",
   "configCheckUpdatesNow": "Verificar atualizações",
@@ -1346,21 +1436,27 @@
   "configAutoUpdateReleaseNotesLink": "Abrir no navegador",
   "@configAutoUpdateClosingBody": {
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "autoUpdateReadyBannerTitle": "Atualização pronta para instalar",
   "autoUpdateReadyBannerBody": "A versão {version} já foi baixada. O agente continua online; instale quando quiser para concluir a atualização.",
   "@autoUpdateReadyBannerBody": {
     "placeholders": {
-      "version": {"type": "String"}
+      "version": {
+        "type": "String"
+      }
     }
   },
   "autoUpdateReadyBannerUacCancelledTitle": "A aprovação de administrador foi cancelada",
   "autoUpdateReadyBannerUacCancelledBody": "A versão {version} continua baixada. Ao instalar de novo, aprove o aviso do Windows ou tente mais tarde.",
   "@autoUpdateReadyBannerUacCancelledBody": {
     "placeholders": {
-      "version": {"type": "String"}
+      "version": {
+        "type": "String"
+      }
     }
   },
   "autoUpdateReadyBannerInstallNow": "Instalar agora",
@@ -1369,7 +1465,9 @@
   "autoUpdateReadyDialogBody": "O Plug Agente será fechado para instalar a versão {version}. O agente ficará offline brevemente até reabrir. Deseja continuar?",
   "@autoUpdateReadyDialogBody": {
     "placeholders": {
-      "version": {"type": "String"}
+      "version": {
+        "type": "String"
+      }
     }
   },
   "autoUpdateReadyDialogConfirm": "Instalar e reiniciar",
@@ -1379,7 +1477,9 @@
   "autoUpdateConsentBannerBody": "A versão {version} está disponível. Instalar exige aprovação do Controle de Conta de Usuário (UAC) do Windows, por isso a atualização automática não foi executada sem confirmação.",
   "@autoUpdateConsentBannerBody": {
     "placeholders": {
-      "version": {"type": "String"}
+      "version": {
+        "type": "String"
+      }
     }
   },
   "autoUpdateConsentBannerInstall": "Baixar e instalar",
@@ -1387,7 +1487,9 @@
   "autoUpdateConsentDialogBody": "O Plug Agente vai baixar a versão {version} e depois fechar para instalá-la. O Windows vai pedir aprovação de administrador (UAC) durante a instalação. Deseja continuar?",
   "@autoUpdateConsentDialogBody": {
     "placeholders": {
-      "version": {"type": "String"}
+      "version": {
+        "type": "String"
+      }
     }
   },
   "autoUpdateConsentDialogConfirm": "Baixar e instalar",
@@ -1484,8 +1586,12 @@
   "@gsErrorWithDetail": {
     "description": "Combina a mensagem traduzida do erro com um detalhe técnico opcional.",
     "placeholders": {
-      "message": {"type": "String"},
-      "detail": {"type": "String"}
+      "message": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "gsStartupEnabledSuccess": "Inicialização com o Windows ativada",
@@ -1793,14 +1899,18 @@
   "ctErrorRuleResourceInvalidChars": "Nome de recurso inválido: \"{resource}\". Use apenas letras, números, underscores e um ponto opcional (schema.nome).",
   "@ctErrorRuleResourceInvalidChars": {
     "placeholders": {
-      "resource": { "type": "String" }
+      "resource": {
+        "type": "String"
+      }
     }
   },
   "ctRuleWarnDuplicates": "As regras a seguir já existem e serão substituídas: {resources}. Confirme para continuar.",
   "ctDialogConfirmReplace": "Confirmar substituição",
   "@ctRuleWarnDuplicates": {
     "placeholders": {
-      "resources": { "type": "String" }
+      "resources": {
+        "type": "String"
+      }
     }
   },
   "ctRuleImportFile": "Importar .txt",
@@ -1810,8 +1920,12 @@
   "ctImportRulesErrorInvalidFormat": "Linha {line}: \"{content}\" — formato inválido. Cada linha deve estar no padrão completo: recurso;tipo;efeito;permissões (ex: dbo.clientes;table;allow;read).",
   "@ctImportRulesErrorInvalidFormat": {
     "placeholders": {
-      "line": { "type": "int" },
-      "content": { "type": "String" }
+      "line": {
+        "type": "int"
+      },
+      "content": {
+        "type": "String"
+      }
     }
   },
   "ctImportRulesErrorEmpty": "O arquivo está vazio ou não contém regras válidas.",
@@ -1821,13 +1935,17 @@
   "ctImportRulesSuccess": "{count,plural, =1{1 regra importada com sucesso.} other{{count} regras importadas com sucesso.}}",
   "@ctImportRulesSuccess": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ctRuleImportSuccess": "{count,plural, =1{1 regra importada com sucesso.} other{{count} regras importadas com sucesso.}}",
   "@ctRuleImportSuccess": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ctRuleImportErrorEmpty": "O arquivo está vazio.",
@@ -1836,8 +1954,12 @@
   "ctRuleImportErrorLineInvalid": "Linha {line}: \"{content}\" — formato inválido. Use schema.nome ou schema.nome;table;allow;read.",
   "@ctRuleImportErrorLineInvalid": {
     "placeholders": {
-      "line": { "type": "int" },
-      "content": { "type": "String" }
+      "line": {
+        "type": "int"
+      },
+      "content": {
+        "type": "String"
+      }
     }
   },
   "ctRuleFieldType": "Tipo",
@@ -1939,5 +2061,52 @@
   "agentProfileViaCepEmptyResponse": "Resposta vazia do serviço de consulta de CEP.",
   "agentProfileViaCepInvalidPayload": "Resposta inválida do serviço de consulta de CEP.",
   "agentProfileViaCepNetworkError": "Não foi possível consultar o CEP. Verifique a conexão.",
-  "agentProfileViaCepUnexpectedError": "Erro inesperado ao consultar o CEP."
+  "agentProfileViaCepUnexpectedError": "Erro inesperado ao consultar o CEP.",
+  "agentActionsFormRuntimeUnit": "Unidade do tempo máximo",
+  "agentActionsFormRuntimeUnitMinutes": "Minutos",
+  "agentActionsFormRuntimeUnitSeconds": "Segundos",
+  "agentActionsFormMaxRuntimeSeconds": "Tempo máximo (segundos)",
+  "agentActionsFormStopTime": "Encerrar às (opcional, horário local)",
+  "agentActionsFormStopTimeHint": "Encerra o processo no próximo horário HH:mm do computador, ou antes pelo tempo máximo. Se o horário já passou, usa o dia seguinte. O limite também vale para novas tentativas.",
+  "agentActionsFormInvalidStopTime": "Informe HH:mm entre 00:00 e 23:59 e habilite o encerramento no timeout.",
+  "agentActionsProcessTerminationUnavailable": "Esta ação não possui processo cancelável. O timeout limita a espera; a operação pode continuar. E-mail e COM não podem ser interrompidos após iniciarem. Confira o resultado antes de repetir.",
+  "agentActionsTriggerTypeActionSucceeded": "Após sucesso de outra ação",
+  "agentActionsTriggerTypeActionFailed": "Após falha ou timeout de outra ação",
+  "agentActionsTriggerSourceAction": "Ação que dispara o evento",
+  "agentActionsTriggerValidationSourceAction": "Selecione outra ação como origem do evento.",
+  "agentActionsTriggerValidationInvalidDateRange": "Informe datas inicial e final válidas ou deixe os campos opcionais vazios.",
+  "agentActionsTriggerScheduleHint": "Os gatilhos automáticos dependem do agente aberto. A data final impede novos disparos; para parar um processo, use o timeout ou o horário de parada da ação.",
+  "agentActionsTriggerCommandLineRestriction": "Linha de comando aceita apenas execução manual local. Use Executável ou Script para gatilhos automáticos ou remotos.",
+  "agentActionsTriggerAppCloseRequirements": "Configure o tempo máximo em até 5 segundos, uma única tentativa e encerramento no timeout. O fechamento exige uma ação com processo, sem UAC e sem aprovação remota.",
+  "agentActionsFormWaitBeforeKillSeconds": "Aguardar ao fechar (segundos, até 30)",
+  "agentActionsFormInvalidWaitBeforeKill": "Informe uma espera positiva de até 30 segundos ao fechar o agente.",
+  "agentActionsEditorIdentity": "Identificação",
+  "agentActionsEditorTarget": "O que executar",
+  "agentActionsEditorSchedule": "Quando executar",
+  "agentActionsEditorLimits": "Limites e encerramento",
+  "agentActionsEditorAdvanced": "Configurações avançadas",
+  "agentActionsEditorAdvancedSummary": "Contexto, ambiente, permissões, filas, saída e acesso remoto",
+  "agentActionsEditorRequiredHint": "Obrigatório",
+  "agentActionsEditorOptionalHint": "Opcional",
+  "agentActionsEditorNameHint": "Ex.: Atualizar estoque",
+  "agentActionsEditorDescriptionHint": "Descreva a finalidade da ação e quando utilizá-la.",
+  "agentActionsEditorActivationSteps": "Salve a ação, use Testar ação para validar e depois altere o estado para Ativa. A validação verifica a configuração sem executar a tarefa.",
+  "agentActionsEditorScheduleSaveFirst": "Salve a ação para cadastrar gatilhos. Depois, abra a ação e configure seus horários nesta seção.",
+  "agentActionsEditorScheduleLocalOnly": "Este tipo permite somente execução manual local. Para agendar, crie uma ação Executável ou Script.",
+  "agentActionsEditorScheduleHint": "Os gatilhos executam a versão salva da ação e exigem que o agente esteja aberto. As alterações deste formulário só entram em vigor após salvar.",
+  "agentActionsEditorStopDependency": "Para usar o horário de parada, habilite “Encerrar processo ao atingir o limite”. Sem essa opção, apenas a duração máxima é aplicada conforme a política de acompanhamento.",
+  "agentActionsEditorWaitHint": "Aguarda de 0,001 a 30 segundos ao fechar o agente; encerra o processo se ele continuar ativo.",
+  "agentActionsEditorContextTitle": "Parâmetros e contexto",
+  "agentActionsEditorSecurityTitle": "Permissões de execução",
+  "agentActionsEditorRemoteUnavailable": "Execução remota indisponível para este tipo de ação.",
+  "agentActionsEditorOutputTitle": "Janela e saída do processo",
+  "agentActionsEditorNoScheduledRun": "Nenhum próximo disparo por horário. Consulte os gatilhos por evento abaixo.",
+  "agentActionsEditorNextRun": "Próximo disparo: {time}",
+  "@agentActionsEditorNextRun": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  }
 }

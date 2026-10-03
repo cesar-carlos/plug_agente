@@ -1,12 +1,20 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
 import 'package:plug_agente/core/constants/agent_action_validation_constants.dart';
 import 'package:plug_agente/domain/actions/actions.dart';
 import 'package:plug_agente/domain/repositories/i_agent_action_repository.dart';
 import 'package:result_dart/result_dart.dart';
 
 class SaveAgentActionExecution {
-  const SaveAgentActionExecution(IAgentActionRepository repository) : _repository = repository;
+  const SaveAgentActionExecution(
+    IAgentActionRepository repository, {
+    Future<void> Function(AgentActionExecution)? onTerminalExecution,
+  }) : _repository = repository,
+       _onTerminalExecution = onTerminalExecution;
 
   final IAgentActionRepository _repository;
+  final Future<void> Function(AgentActionExecution)? _onTerminalExecution;
 
   Future<Result<AgentActionExecution>> call(
     AgentActionExecution execution,
@@ -51,6 +59,36 @@ class SaveAgentActionExecution {
       );
     }
 
-    return _repository.saveExecution(execution);
+    final listener = _onTerminalExecution;
+    var shouldNotify = false;
+    if (listener != null && execution.isTerminal) {
+      final previous = await _repository.getExecution(execution.id, hydrateCapturedOutput: false);
+      if (previous.isError() && previous.exceptionOrNull() is! ActionNotFoundFailure) {
+        return Failure(previous.exceptionOrNull()!);
+      }
+      shouldNotify = previous.isSuccess() && !previous.getOrThrow().isTerminal;
+    }
+    final result = await _repository.saveExecution(execution);
+    if (result.isSuccess() && shouldNotify && listener != null) {
+      unawaited(_notifyTerminal(listener, result.getOrThrow()));
+    }
+    return result;
+  }
+
+  Future<void> _notifyTerminal(
+    Future<void> Function(AgentActionExecution) listener,
+    AgentActionExecution execution,
+  ) async {
+    try {
+      await listener(execution);
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Failed to dispatch action completion event',
+        name: 'save_agent_action_execution',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }

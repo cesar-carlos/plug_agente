@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:plug_agente/application/actions/action_trigger_schedule_calculator.dart';
 import 'package:plug_agente/application/actions/agent_action_failure_diagnostics.dart';
+import 'package:plug_agente/application/actions/agent_action_trigger_definition_validator.dart';
 import 'package:plug_agente/application/use_cases/dispatch_agent_action_trigger.dart';
 import 'package:plug_agente/core/config/feature_flags.dart';
 import 'package:plug_agente/core/constants/agent_action_gate_constants.dart';
@@ -226,7 +227,7 @@ class AgentActionTriggerScheduler {
   }
 
   Future<Result<int>> dispatchAppCloseTriggers({
-    Duration timeoutPerTrigger = const Duration(seconds: 5),
+    Duration timeoutPerTrigger = AgentActionTriggerConstants.appCloseExecutionBudget,
   }) {
     final featureGateResult = _ensureLifecycleFeatureGateAllows();
     if (featureGateResult.isError()) {
@@ -250,6 +251,52 @@ class AgentActionTriggerScheduler {
 
   void unscheduleTrigger(String triggerId) {
     _unscheduleTrigger(triggerId);
+  }
+
+  Future<Result<int>> dispatchExecutionTriggers(AgentActionExecution execution) async {
+    if (!_started || _bootstrapDisabled) return const Success(0);
+    final gate = _ensureSchedulerFeatureGateAllows();
+    if (gate.isError()) return Failure(gate.exceptionOrNull()!);
+    final AgentActionTriggerType type;
+    switch (execution.status) {
+      case AgentActionExecutionStatus.succeeded:
+        type = AgentActionTriggerType.actionSucceeded;
+      case AgentActionExecutionStatus.failed:
+      case AgentActionExecutionStatus.timedOut:
+        type = AgentActionTriggerType.actionFailed;
+      default:
+        return const Success(0);
+    }
+    final result = await _repository.listTriggers(isEnabled: true, types: {type});
+    if (result.isError()) return Failure(result.exceptionOrNull()!);
+    final inherited = execution.idempotencyKey?.split(':');
+    final isEventExecution =
+        execution.triggerType == AgentActionTriggerType.actionSucceeded ||
+        execution.triggerType == AgentActionTriggerType.actionFailed;
+    final root = isEventExecution && inherited != null && inherited.length == 3 && inherited.first == 'action-event'
+        ? inherited[1]
+        : execution.id;
+    final generation = _scheduleGeneration;
+    var count = 0;
+    for (final trigger in result.getOrThrow()) {
+      if (!_isSchedulingLive(generation)) break;
+      if (trigger.schedule.sourceActionId?.trim() != execution.actionId || trigger.actionId == execution.actionId) {
+        continue;
+      }
+      final dispatched = await _dispatchTrigger(
+        triggerId: trigger.id,
+        idempotencyKey: 'action-event:$root:${trigger.id}',
+        traceId: execution.traceId,
+      );
+      if (dispatched.isError()) {
+        _logSchedulerIssue('Failed to dispatch execution event trigger ${trigger.id}', dispatched.exceptionOrNull());
+        continue;
+      }
+      count++;
+      final saved = await _repository.saveTrigger(trigger.copyWith(lastRunAt: _now()));
+      if (saved.isError()) _logSchedulerIssue('Failed to update event trigger ${trigger.id}', saved.exceptionOrNull());
+    }
+    return Success(count);
   }
 
   Future<Result<bool>> syncTrigger(AgentActionTrigger trigger) async {
@@ -465,8 +512,15 @@ class AgentActionTriggerScheduler {
       return const Success(false);
     }
 
+    final effectiveTrigger = trigger.type == AgentActionTriggerType.interval && trigger.schedule.startAt == null
+        ? trigger.copyWith(
+            schedule: trigger.schedule.copyWith(
+              startAt: trigger.createdAt ?? trigger.lastScheduledAt ?? _now(),
+            ),
+          )
+        : trigger;
     final decisionResult = _calculator.nextRun(
-      trigger: trigger,
+      trigger: effectiveTrigger,
       now: _now(),
     );
     if (decisionResult.isError()) {
@@ -476,12 +530,12 @@ class AgentActionTriggerScheduler {
     final nextRunAt = decisionResult.getOrThrow().nextRunAt;
     if (nextRunAt == null) {
       await _repository.saveTrigger(
-        trigger.copyWith(clearNextRunAt: true),
+        effectiveTrigger.copyWith(clearNextRunAt: true),
       );
       return const Success(false);
     }
 
-    final updatedTrigger = trigger.copyWith(nextRunAt: nextRunAt);
+    final updatedTrigger = effectiveTrigger.copyWith(nextRunAt: nextRunAt);
     final saveResult = await _repository.saveTrigger(updatedTrigger);
     if (saveResult.isError()) {
       return Failure(saveResult.exceptionOrNull()!);
@@ -677,36 +731,8 @@ class AgentActionTriggerScheduler {
       );
     }
 
-    if (definition.policies.remote.canRunSavedAction) {
-      return Failure(
-        ActionValidationFailure.withContext(
-          message: 'Action app-close trigger cannot run because the action is approved for remote execution.',
-          code: AgentActionFailureCode.appCloseRemoteActionBlocked,
-          context: {
-            'trigger_id': trigger.id,
-            'action_id': actionId,
-            'reason': AgentActionTriggerConstants.appCloseRemoteActionBlockedReason,
-            'user_message':
-                'A acao nao foi executada no fechamento porque ela esta aprovada para execucao remota pelo hub.',
-          },
-        ),
-      );
-    }
-
-    if (definition.policies.elevated.runElevated) {
-      return Failure(
-        ActionValidationFailure.withContext(
-          message: 'Action app-close trigger cannot run because the action requires elevated execution.',
-          code: AgentActionFailureCode.appCloseElevatedActionBlocked,
-          context: {
-            'trigger_id': trigger.id,
-            'action_id': actionId,
-            'reason': AgentActionTriggerConstants.appCloseElevatedActionBlockedReason,
-            'user_message': 'A acao nao foi executada no fechamento porque ela exige execucao elevada (UAC).',
-          },
-        ),
-      );
-    }
+    final compatibility = const AgentActionTriggerDefinitionValidator().validate(trigger, definition);
+    if (compatibility.isError()) return Failure(compatibility.exceptionOrNull()!);
 
     return const Success(true);
   }

@@ -14,6 +14,7 @@ class AppLabeledField extends StatelessWidget {
     this.helpTooltip,
     this.helpButtonKey,
     this.reserveHelpAffordance = false,
+    this.helperText,
   });
 
   final String label;
@@ -24,6 +25,7 @@ class AppLabeledField extends StatelessWidget {
   final String? helpTooltip;
   final Key? helpButtonKey;
   final bool reserveHelpAffordance;
+  final String? helperText;
 
   bool get _hasHelp {
     return (helpTitle?.trim().isNotEmpty ?? false) && (helpMessage?.trim().isNotEmpty ?? false);
@@ -48,7 +50,7 @@ class AppLabeledField extends StatelessWidget {
   Widget build(BuildContext context) {
     final trimmed = errorText?.trim();
     final colors = context.appColors;
-    final content = trimmed != null && trimmed.isNotEmpty
+    final content = (trimmed != null && trimmed.isNotEmpty) || helperText != null
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -56,10 +58,9 @@ class AppLabeledField extends StatelessWidget {
               child,
               const SizedBox(height: AppSpacing.xs),
               Text(
-                trimmed,
-                style: context.bodyMuted.copyWith(
-                  color: colors.error,
-                  fontSize: 12,
+                trimmed != null && trimmed.isNotEmpty ? trimmed : helperText!,
+                style: context.captionText.copyWith(
+                  color: trimmed != null && trimmed.isNotEmpty ? colors.error : null,
                 ),
               ),
             ],

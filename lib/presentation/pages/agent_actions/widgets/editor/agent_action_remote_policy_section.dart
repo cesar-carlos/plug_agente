@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_widgets.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_checkbox.dart';
 
 /// Remote execution policy controls (enable remote, allow ad-hoc) plus the
 /// feature-disabled and reapproval info bars for an action draft.
@@ -65,16 +66,16 @@ class AgentActionRemotePolicySection extends StatelessWidget {
           runSpacing: AppSpacing.sm,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Checkbox(
+            AppCheckbox(
               checked: remoteEnabled,
-              onChanged: !enabled ? null : (value) => onRemoteEnabledChanged(value ?? false),
+              onChanged: !enabled || !remoteFeatureEnabled ? null : (value) => onRemoteEnabledChanged(value ?? false),
               content: AgentActionEditorHelpCheckboxLabel(
                 label: l10n.agentActionsFormRemoteExecutionEnabled,
                 helpTitle: l10n.agentActionsHelpRemoteExecutionTitle,
                 helpMessage: l10n.agentActionsHelpRemoteExecutionMessage,
               ),
             ),
-            Checkbox(
+            AppCheckbox(
               checked: remoteAdHoc,
               onChanged: !enabled || !remoteEnabled || !remoteAdHocFeatureEnabled
                   ? null

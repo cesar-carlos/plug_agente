@@ -33,7 +33,7 @@ class AgentActionEditorFormHeader extends StatelessWidget {
           const Divider(),
           const SizedBox(height: AppSpacing.md),
         ],
-        if (showChrome && validationMessage != null && validationMessage!.isNotEmpty) ...[
+        if (validationMessage != null && validationMessage!.isNotEmpty) ...[
           InfoBar(
             key: const ValueKey<String>('agent_action_editor_validation_message'),
             title: Text(l10n.agentActionsValidationTitle),

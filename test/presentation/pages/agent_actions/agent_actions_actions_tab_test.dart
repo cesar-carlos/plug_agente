@@ -229,7 +229,7 @@ void main() {
       id: 'action-1',
       name: 'Remote action',
       state: AgentActionState.active,
-      config: CommandLineActionConfig(command: 'dir'),
+      config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\tools\runner.exe')),
     );
 
     await tester.binding.setSurfaceSize(const Size(1600, 2000));
@@ -403,13 +403,62 @@ void main() {
     expect(find.textContaining(ptL10n.agentActionsTriggerSummaryCatchUpEnabled), findsOneWidget);
   });
 
+  testWidgets('visible trigger shortcut creates a success event for another action', (tester) async {
+    final harness = AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Destino',
+      config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\tools\job.exe')),
+    );
+    harness.repository.definitions['source'] = const AgentActionDefinition(
+      id: 'source',
+      name: 'Origem',
+      config: CommandLineActionConfig(command: 'echo source'),
+    );
+    await setResponsiveTestWindow(tester, const Size(1400, 900));
+    await harness.pumpPage(tester);
+    await tester.tap(find.byKey(const ValueKey<String>('agent_action_definition_add_trigger_action-1')));
+    await tester.pumpAndSettle();
+    await selectTriggerType(tester, ptL10n, ptL10n.agentActionsTriggerTypeActionSucceeded);
+    await tester.tap(formComboBox(ptL10n.agentActionsTriggerSourceAction));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Origem').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, ptL10n.agentActionsTriggerSave));
+    await tester.pumpAndSettle();
+    expect(harness.repository.triggers, hasLength(1));
+    expect(harness.repository.triggers.values.single.type, AgentActionTriggerType.actionSucceeded);
+    expect(harness.repository.triggers.values.single.schedule.sourceActionId, 'source');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('command line trigger picker only offers manual local execution', (tester) async {
+    final harness = AgentActionsPageHarness();
+    harness.repository.definitions['action-1'] = const AgentActionDefinition(
+      id: 'action-1',
+      name: 'Comando',
+      config: CommandLineActionConfig(command: 'echo source'),
+    );
+    await setResponsiveTestWindow(tester, const Size(1400, 900));
+    await harness.pumpPage(tester);
+    await tester.tap(find.byKey(const ValueKey<String>('agent_action_definition_add_trigger_action-1')));
+    await tester.pumpAndSettle();
+    expect(find.text(ptL10n.agentActionsTriggerCommandLineRestriction), findsOneWidget);
+    await tester.tap(formComboBox(ptL10n.agentActionsTriggerFieldType));
+    await tester.pumpAndSettle();
+    expect(find.text(ptL10n.agentActionsTriggerTypeInterval), findsNothing);
+    expect(find.text(ptL10n.agentActionsTriggerTypeRemote), findsNothing);
+    expect(find.text(ptL10n.agentActionsTriggerTypeActionSucceeded), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('trigger dialog uses larger desktop surface with fixed footer', (tester) async {
     final harness = AgentActionsPageHarness();
     harness.repository.definitions['action-1'] = const AgentActionDefinition(
       id: 'action-1',
       name: 'Run command',
       state: AgentActionState.active,
-      config: CommandLineActionConfig(command: 'dir'),
+      config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\tools\job.exe')),
     );
 
     await setResponsiveTestWindow(tester, const Size(1400, 900));
@@ -430,7 +479,7 @@ void main() {
       id: 'action-1',
       name: 'Run command',
       state: AgentActionState.active,
-      config: CommandLineActionConfig(command: 'dir'),
+      config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\tools\job.exe')),
     );
 
     await setResponsiveTestWindow(tester, const Size(1400, 900));
@@ -452,7 +501,7 @@ void main() {
       id: 'action-1',
       name: 'Run command',
       state: AgentActionState.active,
-      config: CommandLineActionConfig(command: 'dir'),
+      config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\tools\job.exe')),
     );
     harness.repository.triggers['trig-1'] = const AgentActionTrigger(
       id: 'trig-1',
@@ -484,7 +533,7 @@ void main() {
       id: 'action-1',
       name: 'Run command',
       state: AgentActionState.active,
-      config: CommandLineActionConfig(command: 'dir'),
+      config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\tools\job.exe')),
     );
 
     await setResponsiveTestWindow(tester, const Size(900, 560));
@@ -540,7 +589,7 @@ void main() {
         id: 'action-1',
         name: 'Run command',
         state: AgentActionState.active,
-        config: CommandLineActionConfig(command: 'dir'),
+        config: ExecutableActionConfig(executablePath: AgentActionPathReference(originalPath: r'C:\tools\job.exe')),
       );
 
       await setResponsiveTestWindow(tester, const Size(1400, 900));
@@ -854,20 +903,17 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.byType(ContentDialog), findsNWidgets(2));
+    expect(find.byType(ContentDialog), findsOneWidget);
     expect(find.text(ptL10n.agentActionsValidationTitle), findsOneWidget);
     expect(
       find.textContaining(ptL10n.formFieldRequired(ptL10n.agentActionsFormName)),
-      findsOneWidget,
+      findsAtLeastNWidgets(1),
     );
     expect(
       find.textContaining(ptL10n.formFieldRequired(ptL10n.agentActionsFormCommand)),
-      findsOneWidget,
+      findsAtLeastNWidgets(1),
     );
     expect(harness.repository.definitions, isEmpty);
-
-    Navigator.pop(tester.element(find.text(ptL10n.agentActionsValidationTitle)));
-    await tester.pumpAndSettle();
 
     expect(find.byType(ContentDialog), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormCreateTitle), findsOneWidget);
@@ -1184,7 +1230,7 @@ void main() {
     await harness.pumpPage(tester);
     await openSelectedActionDialog(tester);
 
-    expect(find.byKey(const ValueKey('agent_actions_developer_connection_changed_info_bar')), findsNothing);
+    expect(find.byKey(const ValueKey('agent_actions_developer_connection_changed_info_bar')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormConnectionChangedTitle), findsOneWidget);
     expect(
       find.text(ptL10n.agentActionsFormConnectionChangedMessage),
@@ -1299,7 +1345,7 @@ void main() {
     await openSelectedActionDialog(tester);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('agent_actions_developer_connection_missing_info_bar')), findsNothing);
+    expect(find.byKey(const ValueKey('agent_actions_developer_connection_missing_info_bar')), findsOneWidget);
     expect(find.text(ptL10n.agentActionsFormConnectionMissingTitle), findsOneWidget);
     expect(
       find.text(ptL10n.agentActionsFormConnectionMissingMessage),
@@ -1556,6 +1602,8 @@ void main() {
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
 
     expect(find.text(ptL10n.agentActionsFormPowerShellModeScript), findsOneWidget);
+    await tester.ensureVisible(agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));
+    await tester.pumpAndSettle();
     await tester.tap(agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));
     await tester.pumpAndSettle();
     expect(
@@ -1580,6 +1628,8 @@ void main() {
     await selectActionFormType(tester, ptL10n, ptL10n.agentActionsTypePowerShell);
 
     expect(find.text(ptL10n.agentActionsFormPowerShellModeCommand), findsOneWidget);
+    await tester.ensureVisible(agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));
+    await tester.pumpAndSettle();
     await tester.tap(agentActionFormComboBox(ptL10n.agentActionsFormPowerShellMode));
     await tester.pumpAndSettle();
     expect(

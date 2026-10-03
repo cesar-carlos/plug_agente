@@ -254,6 +254,7 @@ class FailureToRpcErrorMapper {
       'recoverable': RpcErrorCode.isRecoverable(code),
       'failure_code': failure.code,
       ...contextForExtra,
+      'retryable': _resolveRetryable(failure, code),
       if (subreasonForPayload case final String r) 'subreason': r,
       if (odbcReasonForPayload case final String r) 'odbc_reason': r,
       'reason': resolvedReason,
@@ -487,6 +488,7 @@ class FailureToRpcErrorMapper {
   /// Honors an explicit `retryable` flag from failure context when present.
   /// Otherwise falls back to failure type and RPC code heuristics.
   static bool _resolveRetryable(Failure failure, int code) {
+    if (failure.context['outcome_unknown'] == true) return false;
     final explicit = failure.context['retryable'];
     if (explicit is bool) {
       return explicit;
@@ -507,7 +509,29 @@ class FailureToRpcErrorMapper {
 
   static Map<String, dynamic> _sanitizeContext(Map<String, dynamic> context) {
     return Map.fromEntries(
-      context.entries.where((e) => !_isSensitiveKey(e.key)),
+      context.entries
+          .where(
+            (e) =>
+                !_isSensitiveKey(e.key) &&
+                e.key != _odbcMessageContextKey &&
+                !const {
+                  'odbc_stack_trace',
+                  'stack_trace',
+                  'stackTrace',
+                  'cause',
+                  'sql',
+                  'query',
+                  'parameters',
+                  'params',
+                }.contains(e.key),
+          )
+          .map((e) => MapEntry(e.key, _sanitizeValue(e.value))),
     );
+  }
+
+  static Object? _sanitizeValue(Object? value) {
+    if (value is Map<String, dynamic>) return _sanitizeContext(value);
+    if (value is List) return value.map(_sanitizeValue).toList(growable: false);
+    return value;
   }
 }

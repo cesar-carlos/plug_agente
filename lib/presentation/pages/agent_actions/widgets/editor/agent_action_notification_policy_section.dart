@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:plug_agente/core/theme/theme.dart';
 import 'package:plug_agente/l10n/app_localizations.dart';
 import 'package:plug_agente/presentation/pages/agent_actions/widgets/editor/agent_action_editor_widgets.dart';
+import 'package:plug_agente/shared/widgets/common/form/app_checkbox.dart';
 
 /// Notification preferences (success/failure/timeout) for an action draft.
 ///
@@ -87,7 +88,7 @@ class _NotificationCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final handler = onChanged;
-    return Checkbox(
+    return AppCheckbox(
       checked: checked,
       onChanged: handler == null ? null : (value) => handler(value ?? false),
       content: AgentActionEditorHelpCheckboxLabel(
