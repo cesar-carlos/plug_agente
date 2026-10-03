@@ -39,6 +39,9 @@ final class OdbcRecommendedOptionsMerger {
       autoReconnectOnConnectionLost:
           plugOptions.autoReconnectOnConnectionLost ?? recommended.autoReconnectOnConnectionLost,
       maxReconnectAttempts: plugOptions.maxReconnectAttempts ?? recommended.maxReconnectAttempts,
+      // Explicit safety policy: never replay statements after reconnect.
+      // ignore: avoid_redundant_argument_values
+      replayQueriesAfterReconnect: false,
       reconnectBackoff: plugOptions.reconnectBackoff ?? recommended.reconnectBackoff,
       slowQueryThreshold: recommended.slowQueryThreshold,
       streamChunkSizeBytes: recommended.streamChunkSizeBytes,
@@ -59,8 +62,7 @@ final class OdbcRecommendedOptionsMerger {
       idleTimeout: plugOverrides.idleTimeout ?? recommended.idleTimeout,
       maxLifetime: plugOverrides.maxLifetime ?? recommended.maxLifetime,
       connectionTimeout: plugOverrides.connectionTimeout ?? recommended.connectionTimeout,
-      sessionResetOnCheckout:
-          plugOverrides.sessionResetOnCheckout ?? recommended.sessionResetOnCheckout,
+      sessionResetOnCheckout: plugOverrides.sessionResetOnCheckout ?? recommended.sessionResetOnCheckout,
     );
   }
 }

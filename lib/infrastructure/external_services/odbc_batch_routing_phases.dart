@@ -11,6 +11,7 @@ import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/validation/sql_validator.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/homogeneous_insert_batch_planner.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
@@ -203,6 +204,8 @@ final class OdbcBatchRoutingPhases {
             context: context,
             error: beginFailure,
             attempt: attempt,
+            executionNotStarted:
+                !OdbcErrorInspector.outcomeUnknown(beginFailure) && !OdbcErrorInspector.isTimeout(beginFailure),
           )) {
             _failureMapper.recordTransactionalNativePoolFallback(
               context: context,
@@ -228,6 +231,10 @@ final class OdbcBatchRoutingPhases {
           );
           if (bulkResult.isError()) {
             final bulkFailure = bulkResult.exceptionOrNull()!;
+            if (OdbcErrorInspector.outcomeUnknown(bulkFailure)) {
+              transaction.markUnconfirmed();
+              _connectionManager.markConnectionOutcomeUnknown(connectionState.connectionId!);
+            }
             await _rollbackActiveTransaction(
               transaction: transaction,
               connectionId: connectionState.connectionId,
@@ -237,6 +244,7 @@ final class OdbcBatchRoutingPhases {
               context: context,
               error: bulkFailure,
               attempt: attempt,
+              rollbackConfirmed: transaction.rollbackConfirmed,
             )) {
               _failureMapper.recordTransactionalNativePoolFallback(
                 context: context,
@@ -265,6 +273,9 @@ final class OdbcBatchRoutingPhases {
           return Success(_syntheticBulkInsertBatchResults(commands));
         }
       } on TimeoutException catch (error) {
+        transaction?.markUnconfirmed();
+        final unsafeConnection = connectionState.connectionId;
+        if (unsafeConnection != null) _connectionManager.markConnectionOutcomeUnknown(unsafeConnection);
         await _rollbackActiveTransaction(
           transaction: transaction,
           connectionId: connectionState.connectionId,
@@ -277,6 +288,8 @@ final class OdbcBatchRoutingPhases {
             context: {
               'reason': OdbcContextConstants.transactionFailedReason,
               'operation': 'bulk_insert_batch_timeout',
+              'outcome_unknown': true,
+              'retryable': false,
               'transaction': true,
               'timeout': true,
               'timeout_stage': 'sql',
@@ -284,6 +297,11 @@ final class OdbcBatchRoutingPhases {
           ),
         );
       } on Object catch (error, stackTrace) {
+        if (OdbcErrorInspector.outcomeUnknown(error) || error is TimeoutException) {
+          transaction?.markUnconfirmed();
+          final unsafeConnection = connectionState.connectionId;
+          if (unsafeConnection != null) _connectionManager.markConnectionOutcomeUnknown(unsafeConnection);
+        }
         await _rollbackActiveTransaction(
           transaction: transaction,
           connectionId: connectionState.connectionId,
@@ -300,6 +318,7 @@ final class OdbcBatchRoutingPhases {
           context: context,
           error: error,
           attempt: attempt,
+          rollbackConfirmed: transaction?.rollbackConfirmed ?? false,
         )) {
           _failureMapper.recordTransactionalNativePoolFallback(
             context: context,

@@ -29,6 +29,35 @@ final class OdbcEventBridge {
        _workerRecoveryPort = workerRecoveryPort,
        _maxRecentEvents = maxRecentEvents > 0 ? maxRecentEvents : kOdbcEventBridgeMaxRecentEvents {
     _subscription = adminService.events.listen(_handleEvent);
+    _diagnosticSubscription = AppLogger.logger.onRecord.listen((record) {
+      try {
+        final error = record.error;
+        if (error is OdbcError && !_isDisposed) {
+          final diagnostic = <String, Object?>{
+            'kind': 'odbc_diagnostic',
+            'timestamp': record.time.toIso8601String(),
+            'odbc_error_code': error.code.name,
+            'odbc_operation': error.details.operation,
+            'odbc_connection_id': error.details.connectionId,
+            'odbc_transaction_id': error.details.transactionId,
+            'odbc_request_id': error.details.requestId,
+            'odbc_worker_id': error.details.workerId,
+            'outcome_unknown': error.details.outcomeUnknown,
+            'secondary_error_count': error.details.secondaryErrors.length,
+          };
+          _recentEvents.addFirst(Map.unmodifiable(diagnostic));
+          while (_recentEvents.length > _maxRecentEvents) {
+            _recentEvents.removeLast();
+          }
+          _metrics?.store.incrementEventCounter('odbc_diagnostic');
+          if (error.details.outcomeUnknown) _metrics?.store.incrementEventCounter('odbc_outcome_unconfirmed');
+          if (error.details.secondaryErrors.isNotEmpty)
+            _metrics?.store.incrementEventCounter('odbc_cleanup_unconfirmed');
+        }
+      } on Object {
+        // Telemetry must never change SQL execution or recurse into the logger.
+      }
+    });
   }
 
   final MetricsCollector? _metrics;
@@ -36,6 +65,7 @@ final class OdbcEventBridge {
   final int _maxRecentEvents;
   final ListQueue<Map<String, Object?>> _recentEvents = ListQueue<Map<String, Object?>>();
   late final StreamSubscription<OdbcEvent> _subscription;
+  late final StreamSubscription<Object?> _diagnosticSubscription;
   bool _isDisposed = false;
 
   static const String _logName = 'odbc_event_bridge';
@@ -161,5 +191,6 @@ final class OdbcEventBridge {
   Future<void> dispose() async {
     _isDisposed = true;
     await _subscription.cancel();
+    await _diagnosticSubscription.cancel();
   }
 }

@@ -7,13 +7,25 @@ import 'package:result_dart/result_dart.dart';
 /// Incremental consumer for coalesced multi-result items.
 typedef OdbcMultiResultItemHandler = Future<void> Function(QueryResultMultiItem item);
 
-QueryResult _appendResultBatch(QueryResult current, QueryResult next) {
-  return QueryResult(
-    columns: current.columns,
-    rows: <List<dynamic>>[...current.rows, ...next.rows],
-    rowCount: current.rowCount + next.rowCount,
-    outputParamValues: current.outputParamValues,
-    columnsMetadata: current.columnsMetadata ?? next.columnsMetadata,
+final class _ResultBatchAccumulator {
+  _ResultBatchAccumulator(this.first) : rows = List<List<dynamic>>.of(first.rows), rowCount = first.rowCount;
+  final QueryResult first;
+  final List<List<dynamic>> rows;
+  int rowCount;
+  List<ColumnMetadata>? metadata;
+
+  void append(QueryResult next) {
+    rows.addAll(next.rows);
+    rowCount += next.rowCount;
+    metadata ??= next.columnsMetadata;
+  }
+
+  QueryResult build() => QueryResult(
+    columns: first.columns,
+    rows: rows,
+    rowCount: rowCount,
+    outputParamValues: first.outputParamValues,
+    columnsMetadata: first.columnsMetadata ?? metadata,
   );
 }
 
@@ -41,7 +53,7 @@ Future<Result<void>> forEachStreamQueryMulti(
   int fetchSize = OdbcStreamingNativeOptions.odbcFastDefaultFetchSize,
   int chunkSize = OdbcStreamingNativeOptions.materializedMultiResultChunkSizeBytes,
 }) async {
-  QueryResult? pendingResultSet;
+  _ResultBatchAccumulator? pendingResultSet;
 
   Future<Result<void>> flushPending() async {
     final pending = pendingResultSet;
@@ -50,7 +62,7 @@ Future<Result<void>> forEachStreamQueryMulti(
     }
     pendingResultSet = null;
     try {
-      await onItem(QueryResultMultiItem.resultSet(pending));
+      await onItem(QueryResultMultiItem.resultSet(pending.build()));
       return const Success(unit);
     } on Object catch (error) {
       return Failure(
@@ -81,14 +93,14 @@ Future<Result<void>> forEachStreamQueryMulti(
     final resultSet = batch.resultSet;
     if (resultSet != null) {
       if (batch.isContinuationBatch && pendingResultSet != null) {
-        pendingResultSet = _appendResultBatch(pendingResultSet!, resultSet);
+        pendingResultSet!.append(resultSet);
         continue;
       }
       final flushed = await flushPending();
       if (flushed.isError()) {
         return flushed;
       }
-      pendingResultSet = resultSet;
+      pendingResultSet = _ResultBatchAccumulator(resultSet);
       continue;
     }
 

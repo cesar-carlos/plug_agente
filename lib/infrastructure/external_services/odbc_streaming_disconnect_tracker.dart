@@ -57,7 +57,7 @@ final class OdbcStreamingDisconnectTracker {
     if (existing != null) {
       return _observe(existing, timeout: timeout, onTimeout: onTimeout, onFailure: onFailure);
     }
-    if (_pending.length >= maxPending) {
+    if (_pending.length >= maxPending || _tracked.length >= maxInFlight + maxPending) {
       onSaturated?.call();
       developer.log(
         'Streaming disconnect queue is saturated; new cleanup was not started',
@@ -139,7 +139,7 @@ final class OdbcStreamingDisconnectTracker {
       final disconnectResult = await queued.disconnect(queued.connectionId);
       result = disconnectResult.fold(
         (_) => const Success(unit),
-        (error) => OdbcErrorInspector.isInvalidConnectionId(error)
+        (error) => !OdbcErrorInspector.outcomeUnknown(error) && OdbcErrorInspector.isInvalidConnectionId(error)
             ? const Success(unit)
             : Failure(
                 OdbcFailureMapper.mapConnectionError(
@@ -148,6 +148,8 @@ final class OdbcStreamingDisconnectTracker {
                   context: const <String, Object?>{
                     'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
                     'discarded': true,
+                    'outcome_unknown': true,
+                    'retryable': false,
                   },
                 ),
               ),
@@ -160,6 +162,8 @@ final class OdbcStreamingDisconnectTracker {
           context: const <String, Object?>{
             'reason': OdbcContextConstants.streamCancelDisconnectFailedReason,
             'discarded': true,
+            'outcome_unknown': true,
+            'retryable': false,
           },
         ),
       );
@@ -168,9 +172,9 @@ final class OdbcStreamingDisconnectTracker {
     if (!queued.completer.isCompleted) {
       queued.completer.complete(result);
     }
-    queued.onComplete?.call();
+    if (result.isSuccess()) queued.onComplete?.call();
     _running--;
-    if (identical(_tracked[queued.connectionId], queued.completer.future)) {
+    if (result.isSuccess() && identical(_tracked[queued.connectionId], queued.completer.future)) {
       _tracked.remove(queued.connectionId);
     }
     _pump();

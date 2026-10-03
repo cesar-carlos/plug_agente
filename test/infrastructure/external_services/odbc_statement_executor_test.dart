@@ -83,7 +83,7 @@ void main() {
 
       expect(first.getOrNull(), 11);
       expect(second.getOrNull(), 11);
-      expect(cache, isEmpty);
+      expect(cache.values, [11]);
       verify(() => service.prepare(any(), any(), timeoutMs: any(named: 'timeoutMs'))).called(2);
     });
 
@@ -152,7 +152,7 @@ void main() {
       expect(discarded, isEmpty);
     });
 
-    test('cancels, marks discard and frees on timeout', () async {
+    test('cancels and retains native request ownership on unconfirmed timeout', () async {
       when(() => service.executeAsyncStart('c1', 'SELECT slow')).thenAnswer((_) async => const Success(9));
       when(() => service.asyncPoll(9)).thenAnswer((_) async => const Success(0)); // pending forever
       when(() => service.asyncCancel(9)).thenAnswer((_) async => const Success(unit));
@@ -166,12 +166,12 @@ void main() {
           // without scheduling real delays.
           timeout: Duration.zero,
         ),
-        throwsA(isA<TimeoutException>()),
+        throwsA(isA<QueryError>().having((error) => error.details.outcomeUnknown, 'outcomeUnknown', true)),
       );
 
       expect(discarded, contains('c1'));
       verify(() => service.asyncCancel(9)).called(1);
-      verify(() => service.asyncFree(9)).called(1);
+      verifyNever(() => service.asyncFree(9));
     });
 
     test('records a failed native async cancellation', () async {
@@ -291,7 +291,7 @@ void main() {
           statementId: 4,
           timeout: const Duration(milliseconds: 20),
         ),
-        throwsA(isA<TimeoutException>()),
+        throwsA(isA<QueryError>().having((error) => error.details.outcomeUnknown, 'outcomeUnknown', true)),
       );
 
       expect(discarded, contains('c1'));

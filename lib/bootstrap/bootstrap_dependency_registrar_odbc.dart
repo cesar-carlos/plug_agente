@@ -145,6 +145,7 @@ void _registerOdbc(
         getIt<IOdbcConnectionSettings>(),
         recommendedOptions: getIt<OdbcProfileRecommendedOptions>(),
         batchedQuerySource: OdbcBatchedStreamingQuerySource(
+          service: getIt<odbc.OdbcService>(),
           asyncNative: odbcWorkerLocator.asyncNativeConnection,
           syncNative: odbcWorkerLocator.nativeConnection,
           isAsync: odbcWorkerLocator.isAsyncMode,

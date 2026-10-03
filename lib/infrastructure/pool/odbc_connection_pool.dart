@@ -46,12 +46,11 @@ class OdbcConnectionPool
 
   final Map<String, Set<String>> _leasedIdsByConnectionString = {};
   final Set<String> _leasedIds = {};
+  final Map<String, Future<Result<void>>> _cleanup = {};
+  final Set<String> _unconfirmedIds = {};
+  final Set<String> _quarantinedConnectionStrings = {};
 
   bool _messageIndicatesInvalidConnectionId(Object error) => OdbcErrorInspector.isInvalidConnectionId(error);
-
-  bool _shouldForceFinalizeLeaseOnDisconnectError(Object error) {
-    return _messageIndicatesInvalidConnectionId(error) || OdbcErrorInspector.isTimeout(error);
-  }
 
   @override
   Future<Result<String>> acquire(
@@ -67,6 +66,16 @@ class OdbcConnectionPool
     ConnectionAcquireOptions? options,
     Duration? acquireTimeout,
   }) async {
+    if (_quarantinedConnectionStrings.contains(connectionString)) {
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError('Connection cleanup is unconfirmed'),
+          operation: 'pool_acquire',
+          context: const {'outcome_unknown': true, 'retryable': false},
+        ),
+      );
+    }
+
     final effectiveAcquireTimeout = acquireTimeout ?? _acquireTimeout;
     final stopwatch = Stopwatch()..start();
     try {
@@ -175,8 +184,6 @@ class OdbcConnectionPool
     return _disconnectLeasedConnection(
       connectionId,
       operation: 'pool_release',
-      releaseLeaseOnFailure: false,
-      eagerLeaseRelease: false,
     );
   }
 
@@ -185,11 +192,19 @@ class OdbcConnectionPool
     String connectionId, {
     PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
   }) async {
+    if (reason == PoolDiscardReason.outcomeUnknown) {
+      _quarantine(connectionId);
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          StateError('Transaction completion is unconfirmed'),
+          operation: 'pool_discard',
+          context: const {'outcome_unknown': true, 'retryable': false},
+        ),
+      );
+    }
     return _disconnectLeasedConnection(
       connectionId,
       operation: 'pool_discard',
-      releaseLeaseOnFailure: true,
-      eagerLeaseRelease: true,
     );
   }
 
@@ -384,88 +399,73 @@ class OdbcConnectionPool
     return const Success(unit);
   }
 
+  void _quarantine(String connectionId) {
+    _unconfirmedIds.add(connectionId);
+    for (final entry in _leasedIdsByConnectionString.entries) {
+      if (entry.value.contains(connectionId)) {
+        _quarantinedConnectionStrings.add(entry.key);
+      }
+    }
+  }
+
   Future<Result<void>> _disconnectLeasedConnection(
     String connectionId, {
     required String operation,
-    required bool releaseLeaseOnFailure,
-    required bool eagerLeaseRelease,
   }) async {
-    final hadLease = _leasedIds.contains(connectionId);
-    var leaseReleasedEarly = false;
-
-    if (eagerLeaseRelease) {
-      _finalizeLeaseRelease(connectionId, hadLease: hadLease);
-      leaseReleasedEarly = true;
+    if (!_leasedIds.contains(connectionId)) return const Success(unit);
+    final existing = _cleanup[connectionId];
+    if (existing != null) {
+      return existing.timeout(
+        _acquireTimeout,
+        onTimeout: () => _unconfirmedCleanup(connectionId, operation, TimeoutException('Cleanup timeout')),
+      );
     }
-
-    var handshakeHeld = false;
-    if (!eagerLeaseRelease) {
-      try {
-        await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
-        handshakeHeld = true;
-      } on TimeoutException catch (error) {
-        developer.log(
-          'ODBC native handshake slot timeout during release; disconnecting anyway',
-          name: 'connection_pool',
-          level: 900,
-          error: error,
-        );
-      }
+    if (_unconfirmedIds.contains(connectionId)) {
+      return _unconfirmedCleanup(connectionId, operation, StateError('Explicit recovery required'));
     }
-
-    late Result<void> disconnectResult;
-    try {
-      try {
-        disconnectResult = await _service.disconnect(connectionId);
-      } on Object catch (error) {
-        disconnectResult = Failure(
-          OdbcFailureMapper.mapPoolError(
-            error,
-            operation: operation,
-          ),
-        );
-      }
-    } finally {
-      if (handshakeHeld) {
-        _nativeHandshakeSemaphore.release();
-      }
-    }
-
-    return disconnectResult.fold(
-      (_) {
-        if (!leaseReleasedEarly) {
-          _finalizeLeaseRelease(connectionId, hadLease: hadLease);
-        }
-        return const Success(unit);
-      },
-      (error) {
-        if (_messageIndicatesInvalidConnectionId(error)) {
-          if (!leaseReleasedEarly) {
-            _finalizeLeaseRelease(connectionId, hadLease: hadLease);
-          }
-          return const Success(unit);
-        }
-
-        _metrics?.recordPoolReleaseFailure();
-        developer.log(
-          'Leased ODBC connection cleanup failed (reason=lease_disconnect_failed)',
-          name: 'connection_pool',
-          level: 900,
-          error: <String, Object?>{'operation': operation},
-        );
-
-        if (!leaseReleasedEarly && (releaseLeaseOnFailure || _shouldForceFinalizeLeaseOnDisconnectError(error))) {
-          _finalizeLeaseRelease(connectionId, hadLease: hadLease);
-        }
-
-        return Failure(
-          OdbcFailureMapper.mapPoolError(
-            error,
-            operation: operation,
-          ),
-        );
-      },
+    final work = _disconnectConfirmed(connectionId, operation);
+    _cleanup[connectionId] = work;
+    return work.timeout(
+      _acquireTimeout,
+      onTimeout: () => _unconfirmedCleanup(connectionId, operation, TimeoutException('Cleanup timeout')),
     );
+  }
+
+  Result<void> _unconfirmedCleanup(String connectionId, String operation, Object error) {
+    _quarantine(connectionId);
+    _metrics?.recordPoolReleaseFailure();
+    return Failure(
+      OdbcFailureMapper.mapPoolError(
+        error,
+        operation: operation,
+        context: const {'outcome_unknown': true, 'retryable': false},
+      ),
+    );
+  }
+
+  Future<Result<void>> _disconnectConfirmed(String connectionId, String operation) async {
+    var held = false;
+    try {
+      await _nativeHandshakeSemaphore.acquire(timeout: _acquireTimeout);
+      held = true;
+      final result = await _service.disconnect(connectionId);
+      if (result.isSuccess() ||
+          (!OdbcErrorInspector.outcomeUnknown(result.exceptionOrNull()!) &&
+              _messageIndicatesInvalidConnectionId(result.exceptionOrNull()!))) {
+        _unconfirmedIds.remove(connectionId);
+        _finalizeLeaseRelease(connectionId, hadLease: true);
+        _quarantinedConnectionStrings.removeWhere(
+          (key) => !(_leasedIdsByConnectionString[key]?.any(_unconfirmedIds.contains) ?? false),
+        );
+        return const Success(unit);
+      }
+      return _unconfirmedCleanup(connectionId, operation, result.exceptionOrNull()!);
+    } on Object catch (error) {
+      return _unconfirmedCleanup(connectionId, operation, error);
+    } finally {
+      if (held) _nativeHandshakeSemaphore.release();
+      if (!_leasedIds.contains(connectionId)) _cleanup.remove(connectionId);
+    }
   }
 
   void _finalizeLeaseRelease(

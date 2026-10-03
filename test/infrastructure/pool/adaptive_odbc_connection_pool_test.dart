@@ -89,7 +89,12 @@ void main() {
       expect(diagnostics['native_eligible'], isTrue);
       expect(metrics.odbcNativePoolFallbackCount, 0);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          'DSN=Prod;PoolTestOnCheckout=false',
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).called(1);
       verifyNever(() => service.connect(any()));
       verify(() => service.poolReleaseConnection('native-1')).called(1);
@@ -266,7 +271,12 @@ void main() {
       expect(metrics.odbcNativeCompatibleAcquireAttemptCount, 1);
       expect(metrics.odbcNativeCompatibleAcquireSuccessCount, 0);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          'DSN=Prod;PoolTestOnCheckout=false',
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).called(1);
       final captured =
           verify(() => service.connect('DSN=Prod', options: captureAny(named: 'options'))).captured.single
@@ -541,7 +551,12 @@ void main() {
       expect(diagnostics['native_circuit_failures'], 2);
       expect(metrics.odbcNativePoolFallbackCount, 2);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          'DSN=Prod;PoolTestOnCheckout=false',
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).called(2);
       verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(3);
       verify(() => configRepository.getCurrentConfigMetadata()).called(1);
@@ -590,7 +605,12 @@ void main() {
       expect(diagnostics['native_warmup_enabled'], isTrue);
       expect(diagnostics['native_circuit_open'], isFalse);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          'DSN=Prod;PoolTestOnCheckout=false',
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).called(1);
       verify(() => service.poolGetConnection(51)).called(2);
       verify(() => service.poolReleaseConnection(any())).called(2);
@@ -601,6 +621,7 @@ void main() {
       when(() => configRepository.getCurrentConfigMetadata()).thenAnswer(
         (_) async => Success(_sqlServerConfig()),
       );
+      var warmId = 0;
       when(
         () => service.connect(
           any(),
@@ -609,7 +630,7 @@ void main() {
       ).thenAnswer(
         (_) async => Success(
           Connection(
-            id: 'lease-warm-1',
+            id: 'lease-warm-${++warmId}',
             connectionString: 'DSN=Prod',
             createdAt: DateTime.now(),
             isActive: true,
@@ -635,7 +656,14 @@ void main() {
       final diagnostics = pool.getHealthDiagnostics();
       expect(diagnostics['native_warmup_enabled'], isFalse);
       expect(diagnostics['native_skip_reason'], 'native_warmup_disabled');
-      verifyNever(() => service.poolCreate(any(), any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')));
+      verifyNever(
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      );
       verify(() => service.connect('DSN=Prod', options: any(named: 'options'))).called(2);
       verify(() => service.disconnect(any())).called(2);
     });
@@ -684,7 +712,12 @@ void main() {
       expect(diagnostics['native_circuit_open'], isFalse);
       expect(diagnostics['native_circuit_failures'], 0);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          'DSN=Prod;PoolTestOnCheckout=false',
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).called(1);
       verify(() => service.poolGetConnection(51)).called(2);
       verify(() => service.poolReleaseConnection(any())).called(2);
@@ -730,7 +763,14 @@ void main() {
       expect(diagnostics['effective_strategy'], 'lease');
       expect(diagnostics['driver_type'], 'sybaseAnywhere');
       expect(diagnostics['native_eligible'], isFalse);
-      verifyNever(() => service.poolCreate(any(), any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')));
+      verifyNever(
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      );
       verify(() => service.connect('DSN=SQLAnywhere', options: any(named: 'options'))).called(1);
       verify(() => configRepository.getCurrentConfigMetadata()).called(1);
     });
@@ -799,7 +839,12 @@ void main() {
       expect(diagnostics['driver_type'], 'sybaseAnywhere');
       expect(diagnostics['native_eligible'], isFalse);
       verify(
-        () => service.poolCreate('DSN=Prod;PoolTestOnCheckout=false', any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          'DSN=Prod;PoolTestOnCheckout=false',
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).called(1);
       verify(() => service.connect('DSN=SQLAnywhere', options: any(named: 'options'))).called(1);
     });
@@ -893,7 +938,12 @@ void main() {
         (_) async => Success(_sqlServerConfig()),
       );
       when(
-        () => service.poolCreate(any(), any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).thenAnswer((_) async => const Success(41));
       when(() => service.poolGetConnection(41)).thenAnswer(
         (_) async => Success(
@@ -937,7 +987,12 @@ void main() {
         (_) async => Success(_sqlServerConfig()),
       );
       when(
-        () => service.poolCreate(any(), any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).thenAnswer((_) async => const Success(41));
       when(() => service.poolGetConnection(41)).thenAnswer(
         (_) async => Success(
@@ -998,7 +1053,12 @@ void main() {
         (_) async => Success(_sqlServerConfig()),
       );
       when(
-        () => service.poolCreate(any(), any(), options: any(named: 'options'), connectionOptions: any(named: 'connectionOptions')),
+        () => service.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
       ).thenAnswer((_) async => const Success(41));
       when(() => service.poolGetConnection(41)).thenAnswer(
         (_) async => Success(

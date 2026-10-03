@@ -27,6 +27,9 @@ enum PoolDiscardReason {
 
   /// The native pool itself may be poisoned and should be recycled.
   poisonedPool,
+
+  /// Completion or cleanup is unconfirmed; do not perform normal checkin.
+  outcomeUnknown,
 }
 
 /// Interface para pool de conexoes ODBC.

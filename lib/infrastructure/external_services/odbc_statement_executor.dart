@@ -5,6 +5,8 @@ import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_prepared_statement_cache_policy.dart';
@@ -30,6 +32,16 @@ final class OdbcStatementExecutor {
   final OdbcService _service;
   final MetricsCollector _metrics;
   final void Function(String connectionId) _markConnectionForDiscard;
+  final Set<(String, int)> _pendingStatements = {};
+  final Set<(String, int)> _deferredCloses = {};
+  int _generation = 0;
+
+  /// Old completions must never close a handle belonging to a recovered worker.
+  void invalidateAfterWorkerRecovery() {
+    _generation++;
+    _pendingStatements.clear();
+    _deferredCloses.clear();
+  }
 
   static const int maxPreparedStatementsPerConnection = 64;
   static const int _asyncRequestPendingStatus = 0;
@@ -52,6 +64,14 @@ final class OdbcStatementExecutor {
     if (cachePolicy.dartLruEnabled) {
       final existingStmtId = preparedStatements[statementKey];
       if (existingStmtId != null) {
+        if (_pendingStatements.contains((connectionId, existingStmtId))) {
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Prepared statement is still running',
+              context: const {'outcome_unknown': true, 'retryable': false},
+            ),
+          );
+        }
         preparedStatements.remove(statementKey);
         preparedStatements[statementKey] = existingStmtId;
         _metrics.recordPreparedStatementReuse();
@@ -87,10 +107,16 @@ final class OdbcStatementExecutor {
         final oldestKey = preparedStatements.keys.first;
         final oldestStmtId = preparedStatements.remove(oldestKey);
         if (oldestStmtId != null) {
-          await closePreparedStatements(connectionId, <int>[oldestStmtId]);
+          final closed = await closePreparedStatements(connectionId, <int>[oldestStmtId]);
+          if (closed.isError()) {
+            preparedStatements[statementKey] = stmtId;
+            return Failure(closed.exceptionOrNull()!);
+          }
         }
       }
       preparedStatements[statementKey] = stmtId;
+    } else {
+      preparedStatements['$statementKey::$stmtId'] = stmtId;
     }
     return Success(stmtId);
   }
@@ -149,11 +175,37 @@ final class OdbcStatementExecutor {
       stmtId: statementId,
       options: statementOptions,
     );
+    final handle = (connectionId, statementId);
+    final generation = _generation;
+    _pendingStatements.add(handle);
+    final trackedExecution = execution.then(
+      (result) async {
+        if (generation != _generation) {
+          return Failure<QueryResult, Exception>(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Statement completion belongs to an obsolete runtime generation',
+              context: const {'reason': 'odbc_generation_changed', 'outcome_unknown': true, 'retryable': false},
+            ),
+          );
+        }
+        if (result.isError() && OdbcErrorInspector.outcomeUnknown(result.exceptionOrNull()!)) {
+          _markConnectionForDiscard(connectionId);
+          return result;
+        }
+        _pendingStatements.remove(handle);
+        if (_deferredCloses.remove(handle)) await closePreparedStatements(connectionId, [statementId]);
+        return result;
+      },
+      onError: (Object error, StackTrace stack) {
+        _markConnectionForDiscard(connectionId);
+        return Failure<QueryResult, Exception>(OdbcFailureMapper.mapQueryError(error));
+      },
+    );
     if (timeout == null) {
-      return execution;
+      return trackedExecution;
     }
 
-    return execution.timeout(
+    return trackedExecution.timeout(
       timeout,
       onTimeout: () async {
         _markConnectionForDiscard(connectionId);
@@ -163,19 +215,39 @@ final class OdbcStatementExecutor {
             statementId: statementId,
           ),
         );
-        throw TimeoutException('Prepared statement execution deadline exceeded');
+        throw QueryError(
+          message: 'Prepared statement execution deadline exceeded',
+          details: OdbcErrorDetails(
+            code: OdbcErrorCode.timeout,
+            operation: 'executePrepared',
+            connectionId: connectionId,
+            outcomeUnknown: true,
+          ),
+        );
       },
     );
   }
 
-  Future<void> closePreparedStatements(
+  Future<Result<void>> closePreparedStatements(
     String connectionId,
     Iterable<int> stmtIds,
   ) async {
+    final errors = <domain.Failure>[];
     for (final stmtId in stmtIds) {
+      final handle = (connectionId, stmtId);
+      if (_pendingStatements.contains(handle)) {
+        _deferredCloses.add(handle);
+        continue;
+      }
       try {
-        await _service.closeStatement(connectionId, stmtId);
+        final closed = await _service.closeStatement(connectionId, stmtId);
+        if (closed.isError()) {
+          errors.add(OdbcFailureMapper.mapQueryError(closed.exceptionOrNull()!, operation: 'closeStatement'));
+          _markConnectionForDiscard(connectionId);
+        }
       } on Object catch (error) {
+        errors.add(OdbcFailureMapper.mapQueryError(error, operation: 'closeStatement'));
+        _markConnectionForDiscard(connectionId);
         developer.log(
           'Failed to close prepared statement after execution',
           name: 'database_gateway',
@@ -184,11 +256,23 @@ final class OdbcStatementExecutor {
         );
       }
     }
+    if (errors.isEmpty) return const Success(unit);
+    _metrics.recordPoolReleaseFailure();
+    return Failure(
+      domain.QueryExecutionFailure.withContext(
+        message: 'Prepared statement cleanup failed',
+        cause: errors.first,
+        context: {
+          'operation': 'closeStatement',
+          'secondary_errors': [for (final error in errors) error.context],
+        },
+      ),
+    );
   }
 
   /// Runs [query] through the native async request lifecycle, polling until it
   /// completes or [timeout] elapses. On timeout the request is cancelled and
-  /// the connection marked for discard; the request is always freed.
+  /// the connection quarantined. Only a confirmed terminal request is freed.
   Future<Result<QueryResult>> runNativeAsyncQueryWithTimeout({
     required String connectionId,
     required String query,
@@ -197,10 +281,14 @@ final class OdbcStatementExecutor {
     String? inFlightRequestId,
     String? inFlightExecutionId,
   }) async {
-    final startResult = await _service.executeAsyncStart(
-      connectionId,
-      query,
-    );
+    final generation = _generation;
+    final deadline = DateTime.now().add(timeout);
+    final startResult = await _service
+        .executeAsyncStart(
+          connectionId,
+          query,
+        )
+        .timeout(timeout);
     if (startResult.isError()) {
       return Failure(startResult.exceptionOrNull()!);
     }
@@ -213,7 +301,7 @@ final class OdbcStatementExecutor {
         executionId: inFlightExecutionId,
       );
     }
-    final deadline = DateTime.now().add(timeout);
+    var completionUnconfirmed = true;
 
     try {
       while (true) {
@@ -225,22 +313,34 @@ final class OdbcStatementExecutor {
         final status = pollResult.getOrThrow();
         switch (status) {
           case _asyncRequestReadyStatus:
+            completionUnconfirmed = false;
             final result = await _service.asyncGetResult(requestId);
             return await result.fold(Success.new, Failure.new);
           case _asyncRequestPendingStatus:
             final remaining = deadline.difference(DateTime.now());
             if (remaining <= Duration.zero) {
+              completionUnconfirmed = true;
               await _cancelAsyncRequestForTimeout(
                 connectionId: connectionId,
                 requestId: requestId,
               );
-              throw TimeoutException('Async SQL execution deadline exceeded');
+              throw QueryError(
+                message: 'Async SQL execution deadline exceeded',
+                details: OdbcErrorDetails(
+                  code: OdbcErrorCode.timeout,
+                  operation: 'executeAsync',
+                  connectionId: connectionId,
+                  requestId: requestId,
+                  outcomeUnknown: true,
+                ),
+              );
             }
             final delay = remaining < _asyncRequestPollInterval ? remaining : _asyncRequestPollInterval;
             await Future<void>.delayed(delay);
             continue;
           case _asyncRequestErrorStatus:
           case _asyncRequestCancelledStatus:
+            completionUnconfirmed = false;
             final result = await _service.asyncGetResult(requestId);
             if (result.isError()) {
               return Failure(result.exceptionOrNull()!);
@@ -269,7 +369,12 @@ final class OdbcStatementExecutor {
         }
       }
     } finally {
-      await _freeAsyncRequestSafely(requestId);
+      if (!completionUnconfirmed && generation == _generation) {
+        await _freeAsyncRequestSafely(requestId);
+      } else {
+        if (generation == _generation) _markConnectionForDiscard(connectionId);
+        _metrics.store.incrementEventCounter('odbc_cleanup_unconfirmed');
+      }
     }
   }
 
@@ -284,6 +389,10 @@ final class OdbcStatementExecutor {
     if (cancelResult.isSuccess()) {
       _metrics.recordTimeoutCancelSuccess();
       return;
+    }
+
+    if (OdbcErrorInspector.code(cancelResult.exceptionOrNull()!) == OdbcErrorCode.unsupported) {
+      _metrics.store.incrementEventCounter('timeout_cancel_unsupported');
     }
 
     _markConnectionForDiscard(connectionId);

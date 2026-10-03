@@ -8,6 +8,7 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/infrastructure/config/odbc_recommended_options_merger.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_lost_session_failure.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
@@ -88,6 +89,7 @@ final class DirectOdbcQueryExecutor {
       directLease.release();
       return Failure(cancelledAfterLease);
     }
+    var connectionEstablished = false;
     var directLeaseReleased = false;
     void releaseDirectLease() {
       if (directLeaseReleased) {
@@ -112,6 +114,7 @@ final class DirectOdbcQueryExecutor {
       );
       return await connectResult.fold(
         (connection) async {
+          connectionEstablished = true;
           var connectionCleanedUp = false;
 
           Future<void> cleanupOwnedConnection() async {
@@ -138,6 +141,10 @@ final class DirectOdbcQueryExecutor {
             );
             if (!outcome.isSuccess) {
               final error = outcome.error!;
+              if (OdbcErrorInspector.outcomeUnknown(error)) {
+                _connectionManager.markConnectionOutcomeUnknown(connection.id);
+                return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'execute_query'));
+              }
               if (_optionsResolver.isBufferTooSmallError(error)) {
                 _metrics.recordOdbcBufferExpansion();
                 _metrics.recordDiagnosticReason(
@@ -264,6 +271,11 @@ final class DirectOdbcQueryExecutor {
                 timeout: timeout,
               ),
             );
+          } on Object catch (error) {
+            if (OdbcErrorInspector.outcomeUnknown(error)) {
+              _connectionManager.markConnectionOutcomeUnknown(connection.id);
+            }
+            return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'execute_query_direct'));
           } finally {
             await cleanupOwnedConnection();
           }
@@ -297,7 +309,7 @@ final class DirectOdbcQueryExecutor {
         },
       );
     } finally {
-      releaseDirectLease();
+      if (!connectionEstablished) releaseDirectLease();
     }
   }
 }

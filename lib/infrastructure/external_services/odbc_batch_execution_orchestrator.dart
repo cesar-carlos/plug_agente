@@ -9,6 +9,7 @@ import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/circuit_breaker/connection_circuit_breaker_cache.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/homogeneous_insert_batch_planner.dart';
 import 'package:plug_agente/infrastructure/external_services/native_compatible_acquire_policy.dart';
@@ -185,18 +186,20 @@ final class OdbcBatchExecutionOrchestrator {
       localConfig,
       databaseOverride: database,
     );
-    return breakers.getOrCreate(connectionString).execute(
-      connectionString,
-      () => _executeUnlocked(
-        agentId: agentId,
-        commands: commands,
-        database: database,
-        options: options,
-        timeout: timeout,
-        sourceRpcRequestId: sourceRpcRequestId,
-        cancellationToken: cancellationToken,
-      ),
-    );
+    return breakers
+        .getOrCreate(connectionString)
+        .execute(
+          connectionString,
+          () => _executeUnlocked(
+            agentId: agentId,
+            commands: commands,
+            database: database,
+            options: options,
+            timeout: timeout,
+            sourceRpcRequestId: sourceRpcRequestId,
+            cancellationToken: cancellationToken,
+          ),
+        );
   }
 
   Future<Result<List<SqlCommandResult>>> _executeUnlocked({
@@ -282,6 +285,8 @@ final class OdbcBatchExecutionOrchestrator {
             context: context,
             error: beginFailure,
             attempt: attempt,
+            executionNotStarted:
+                !OdbcErrorInspector.outcomeUnknown(beginFailure) && !OdbcErrorInspector.isTimeout(beginFailure),
           )) {
             _failureMapper.recordTransactionalNativePoolFallback(
               context: context,
@@ -332,6 +337,7 @@ final class OdbcBatchExecutionOrchestrator {
               context: context,
               error: commandFailure,
               attempt: attempt,
+              rollbackConfirmed: transaction.rollbackConfirmed,
             )) {
               _failureMapper.recordTransactionalNativePoolFallback(
                 context: context,
@@ -365,15 +371,20 @@ final class OdbcBatchExecutionOrchestrator {
           return commandResult;
         }
       } on Object catch (error, stackTrace) {
+        if (OdbcErrorInspector.outcomeUnknown(error) || error is TimeoutException) {
+          transaction?.markUnconfirmed();
+          final unsafeConnection = connectionState.connectionId;
+          if (unsafeConnection != null) _connectionManager.markConnectionOutcomeUnknown(unsafeConnection);
+        }
         final activeConnectionId = connectionState.connectionId;
         if (options.transaction) {
           final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
           await transaction?.rollback(
             (transactionId) async {
               if (activeConnectionId == null) {
-                return;
+                return Failure(domain.QueryExecutionFailure('Connection unavailable during rollback'));
               }
-              await _txManager.rollbackIfNeeded(
+              return await _txManager.rollbackIfNeeded(
                 activeConnectionId,
                 transactionId,
                 timeout: rollbackTimeout,
@@ -392,6 +403,7 @@ final class OdbcBatchExecutionOrchestrator {
           context: context,
           error: error,
           attempt: attempt,
+          rollbackConfirmed: transaction?.rollbackConfirmed ?? false,
         )) {
           _failureMapper.recordTransactionalNativePoolFallback(
             context: context,
@@ -410,6 +422,10 @@ final class OdbcBatchExecutionOrchestrator {
             context: {
               'reason': OdbcContextConstants.transactionFailedReason,
               'operation': 'transaction_unexpected_error',
+              if (transaction?.state == BatchTransactionState.unconfirmed) ...{
+                'outcome_unknown': true,
+                'retryable': false,
+              },
               'transaction': options.transaction,
             },
           ),

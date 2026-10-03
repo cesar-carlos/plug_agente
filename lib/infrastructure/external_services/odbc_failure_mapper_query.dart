@@ -5,6 +5,7 @@ import 'package:plug_agente/core/constants/sql_pipeline_context_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
 import 'package:plug_agente/domain/protocol/rpc_error_code.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_failure_mapper_connection.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_failure_mapper_context.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_failure_mapper_timeout.dart';
@@ -36,7 +37,28 @@ class OdbcFailureMapperQuery {
     final sqlState = OdbcFailureMapperContext.extractSqlState(error);
     final baseContext = OdbcFailureMapperContext.buildBaseContext(error, operation, context);
 
-    if (error is CancelledError || error is CancellationException) {
+    if (OdbcErrorInspector.outcomeUnknown(error) || context['outcome_unknown'] == true) {
+      return QueryExecutionFailure.withContext(
+        message: 'Database operation outcome was not confirmed',
+        cause: error,
+        context: {
+          ...baseContext,
+          'outcome_unknown': true,
+          'retryable': false,
+          if (OdbcErrorInspector.isTimeout(error)) ...{'timeout': true, 'timeout_stage': 'sql'},
+          'reason':
+              baseContext['reason'] ??
+              (OdbcErrorInspector.isTimeout(error)
+                  ? RpcSqlBudgetConstants.queryTimeoutReason
+                  : 'odbc_outcome_unconfirmed'),
+          'user_message': 'O banco não confirmou a operação. Verifique o resultado antes de tentar novamente.',
+        },
+      );
+    }
+
+    if (error is CancelledError ||
+        error is CancellationException ||
+        OdbcErrorInspector.code(error) == OdbcErrorCode.cancelled) {
       return QueryExecutionFailure.withContext(
         message: 'SQL execution cancelled',
         cause: error,
@@ -49,7 +71,7 @@ class OdbcFailureMapperQuery {
       );
     }
 
-    if (error is MalformedPayloadError) {
+    if (error is MalformedPayloadError || OdbcErrorInspector.code(error) == OdbcErrorCode.protocol) {
       return QueryExecutionFailure.withContext(
         message: 'Invalid ODBC response',
         cause: error,
@@ -90,7 +112,7 @@ class OdbcFailureMapperQuery {
       );
     }
 
-    if (error is ResourceLimitReachedError) {
+    if (error is ResourceLimitReachedError || OdbcErrorInspector.code(error) == OdbcErrorCode.resourceLimit) {
       return QueryExecutionFailure.withContext(
         message: detail,
         cause: error,
@@ -103,7 +125,7 @@ class OdbcFailureMapperQuery {
       );
     }
 
-    if (error is WorkerCrashedError) {
+    if (error is WorkerCrashedError || OdbcErrorInspector.code(error) == OdbcErrorCode.workerInterrupted) {
       return QueryExecutionFailure.withContext(
         message: detail,
         cause: error,
@@ -117,7 +139,7 @@ class OdbcFailureMapperQuery {
       );
     }
 
-    if (error is UnsupportedFeatureError) {
+    if (error is UnsupportedFeatureError || OdbcErrorInspector.code(error) == OdbcErrorCode.unsupported) {
       return QueryExecutionFailure.withContext(
         message: detail,
         cause: error,
@@ -146,7 +168,9 @@ class OdbcFailureMapperQuery {
       );
     }
 
-    if (OdbcFailureMapperTimeout.isTimeout(sqlState, detail)) {
+    if (OdbcErrorInspector.isTimeout(error) ||
+        (OdbcErrorInspector.structuredError(error)?.details.code == null &&
+            OdbcFailureMapperTimeout.isTimeout(sqlState, detail))) {
       return QueryExecutionFailure.withContext(
         message: 'Query execution timeout exceeded',
         cause: error,

@@ -10,6 +10,7 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/validation/sql_validator.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_batch_execution_types.dart';
@@ -66,7 +67,8 @@ final class OdbcBatchCommandPhase {
     final results = <SqlCommandResult>[];
     final repeatedPreparedKeys = OdbcQueryRunner.collectRepeatedPreparedKeys(commands);
     final preparedStatements = <String, int>{};
-
+    Result<void> cleanup = const Success(unit);
+    Future<Result<List<SqlCommandResult>>> execute() async {
     try {
       for (var i = 0; i < commands.length; i++) {
         if (cancellationToken?.isCancelled ?? false) {
@@ -178,12 +180,17 @@ final class OdbcBatchCommandPhase {
             );
 
             if (options.transaction) {
+              if (OdbcErrorInspector.outcomeUnknown(failure)) {
+                transaction.markUnconfirmed();
+                _connectionManager.markConnectionOutcomeUnknown(connectionState.connectionId!);
+              }
               final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
               await transaction.rollback(
                 (transactionId) async {
                   final activeConnId = connectionState.connectionId;
-                  if (activeConnId == null) return;
-                  await _txManager.rollbackIfNeeded(
+                  if (activeConnId == null)
+                    return Failure(domain.QueryExecutionFailure('Connection unavailable during rollback'));
+                  return await _txManager.rollbackIfNeeded(
                     activeConnId,
                     transactionId,
                     timeout: rollbackTimeout,
@@ -203,7 +210,17 @@ final class OdbcBatchCommandPhase {
                   cause: error,
                   context: {
                     'reason': OdbcContextConstants.transactionFailedReason,
+                    ...failure.context,
                     'operation': 'transaction_execute',
+                    'rollback_confirmed': transaction.rollbackConfirmed,
+                    if (transaction.rollbackError != null)
+                      'secondary_errors': [
+                        OdbcFailureMapper.mapQueryError(transaction.rollbackError!).context,
+                      ],
+                    if (transaction.state == BatchTransactionState.unconfirmed) ...{
+                      'outcome_unknown': true,
+                      'retryable': false,
+                    },
                     'failedIndex': i,
                     'detail': failure.message,
                   },
@@ -280,12 +297,15 @@ final class OdbcBatchCommandPhase {
           );
         } on TimeoutException catch (error) {
           if (options.transaction) {
+            transaction.markUnconfirmed();
+            _connectionManager.markConnectionOutcomeUnknown(connectionState.connectionId!);
             final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
             await transaction.rollback(
               (transactionId) async {
                 final activeConnId = connectionState.connectionId;
-                if (activeConnId == null) return;
-                await _txManager.rollbackIfNeeded(
+                if (activeConnId == null)
+                  return Failure(domain.QueryExecutionFailure('Connection unavailable during rollback'));
+                return await _txManager.rollbackIfNeeded(
                   activeConnId,
                   transactionId,
                   timeout: rollbackTimeout,
@@ -299,6 +319,8 @@ final class OdbcBatchCommandPhase {
                 context: {
                   'reason': OdbcContextConstants.transactionFailedReason,
                   'operation': 'transaction_timeout',
+                  'outcome_unknown': true,
+                  'retryable': false,
                   'failedIndex': i,
                   'timeout': true,
                   'timeout_stage': 'sql',
@@ -324,7 +346,7 @@ final class OdbcBatchCommandPhase {
     } finally {
       final activeConnectionId = connectionState.connectionId;
       if (activeConnectionId != null) {
-        await _statementExecutor.closePreparedStatements(
+        cleanup = await _statementExecutor.closePreparedStatements(
           activeConnectionId,
           preparedStatements.values,
         );
@@ -332,6 +354,26 @@ final class OdbcBatchCommandPhase {
     }
 
     return Success(results);
+    }
+    Result<List<SqlCommandResult>> primary;
+    try {
+      primary = await execute();
+    } on Object catch (error) {
+      primary = Failure(OdbcFailureMapper.mapQueryError(error, operation: 'batch_execute'));
+    }
+    if (cleanup.isError()) {
+      final cleanupError = cleanup.exceptionOrNull()!;
+      if (OdbcErrorInspector.outcomeUnknown(cleanupError)) transaction.markUnconfirmed();
+      if (primary.isSuccess()) return Failure(cleanupError);
+      final mapped = OdbcFailureMapper.mapQueryError(primary.exceptionOrNull()!);
+      return Failure(domain.QueryExecutionFailure.withContext(message: mapped.message,
+        cause: mapped.cause ?? primary.exceptionOrNull(), context: {
+          ...mapped.context, 'retryable': false,
+          'secondary_errors': [...?(mapped.context['secondary_errors'] as List<Object?>?),
+            OdbcFailureMapper.mapQueryError(cleanupError).context],
+        }));
+    }
+    return primary;
   }
 
   Future<QueryExecutionOutcome> _retryBatchCommandAfterConnectionFailure({

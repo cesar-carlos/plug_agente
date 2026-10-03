@@ -24,7 +24,13 @@ final class OdbcBatchFailureMapper {
     required BatchExecutionContext context,
     required Object error,
     required int attempt,
+    bool rollbackConfirmed = false,
+    bool executionNotStarted = false,
   }) {
+    if (OdbcErrorInspector.outcomeUnknown(error) || (!rollbackConfirmed && !executionNotStarted)) {
+      _metrics.store.incrementEventCounter('odbc_fallback_blocked');
+      return false;
+    }
     if (!context.nativeCompatibleAcquire || context.ownedConnection || attempt > 0) {
       return false;
     }
@@ -45,7 +51,7 @@ final class OdbcBatchFailureMapper {
     required Object error,
     required int attempt,
   }) {
-    if (attempt > 0) {
+    if (attempt > 0 || OdbcErrorInspector.outcomeUnknown(error)) {
       return false;
     }
     final failure = error is domain.Failure ? error : OdbcFailureMapper.mapQueryError(error);
@@ -56,6 +62,7 @@ final class OdbcBatchFailureMapper {
   }
 
   bool shouldRecoverNonTransactionalBatchConnection(domain.Failure failure) {
+    if (OdbcErrorInspector.outcomeUnknown(failure)) return false;
     if (failure is domain.ConnectionFailure) {
       return true;
     }

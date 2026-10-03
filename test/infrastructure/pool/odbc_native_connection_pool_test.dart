@@ -289,6 +289,19 @@ void main() {
 
     test('should map poolReleaseConnection failure', () async {
       when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(99));
+      when(() => mockService.poolGetConnection(99)).thenAnswer(
+        (_) async =>
+            Success(Connection(id: 'cid', connectionString: 'DSN=Tracked', createdAt: DateTime.now(), isActive: true)),
+      );
+      await pool.acquire('DSN=Tracked');
+      when(
         () => mockService.poolReleaseConnection('cid'),
       ).thenAnswer(
         (_) async => const Failure(
@@ -305,6 +318,19 @@ void main() {
 
     test('release treats invalid connection id as success', () async {
       when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(99));
+      when(() => mockService.poolGetConnection(99)).thenAnswer(
+        (_) async =>
+            Success(Connection(id: 'cid', connectionString: 'DSN=Tracked', createdAt: DateTime.now(), isActive: true)),
+      );
+      await pool.acquire('DSN=Tracked');
+      when(
         () => mockService.poolReleaseConnection('cid'),
       ).thenAnswer(
         (_) async => const Failure(
@@ -320,6 +346,19 @@ void main() {
     });
 
     test('discard treats invalid connection id as success', () async {
+      when(
+        () => mockService.poolCreate(
+          any(),
+          any(),
+          options: any(named: 'options'),
+          connectionOptions: any(named: 'connectionOptions'),
+        ),
+      ).thenAnswer((_) async => const Success(99));
+      when(() => mockService.poolGetConnection(99)).thenAnswer(
+        (_) async =>
+            Success(Connection(id: 'cid', connectionString: 'DSN=Tracked', createdAt: DateTime.now(), isActive: true)),
+      );
+      await pool.acquire('DSN=Tracked');
       // odbc_fast 3.9.0: pool-owned handles must be returned via
       // poolReleaseConnection, which the implementation calls in discard().
       when(
@@ -337,7 +376,7 @@ void main() {
       verify(() => mockService.poolReleaseConnection('cid')).called(1);
     });
 
-    test('discard failure releases active accounting so quarantine can recover', () async {
+    test('discard failure retains active accounting until explicit recovery', () async {
       when(
         () => mockService.poolCreate(
           any(),
@@ -364,7 +403,7 @@ void main() {
       final discarded = await pool.discard('discard-failure');
 
       expect(discarded.isError(), isTrue);
-      expect(pool.getHealthDiagnostics()['native_active_count'], 0);
+      expect(pool.getHealthDiagnostics()['native_active_count'], 1);
     });
 
     test('recycle with unknown connection string succeeds without close', () async {
@@ -651,11 +690,11 @@ void main() {
       ).thenAnswer((_) async => const Success(61));
       var counter = 0;
       when(() => mockService.poolGetConnection(61)).thenAnswer((_) async {
-        counter++;
+        final leaseIndex = ++counter;
         await Future<void>.delayed(const Duration(milliseconds: 30));
         return Success(
           Connection(
-            id: 'warm-$counter',
+            id: 'warm-$leaseIndex',
             connectionString: 'DSN=Warm',
             createdAt: DateTime.now(),
             isActive: true,

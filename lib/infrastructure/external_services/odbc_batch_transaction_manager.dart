@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
-import 'package:plug_agente/infrastructure/logging/odbc_resilience_log.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -14,8 +13,7 @@ import 'package:result_dart/result_dart.dart';
 /// bounded rollback.
 ///
 /// Extracted from `OdbcDatabaseGateway` so transaction begin/commit/rollback
-/// semantics (including the rollback time budget and rollback-on-commit-failure
-/// behavior) live behind a focused, testable surface.
+/// semantics (including bounded cleanup and uncertain completion) live behind a focused, testable surface.
 final class OdbcBatchTransactionManager {
   OdbcBatchTransactionManager({
     required OdbcService service,
@@ -51,8 +49,7 @@ final class OdbcBatchTransactionManager {
       return const Success(BatchTransactionStart(null));
     }
 
-    final skipOptions =
-        connectionString != null && _plainTransactionConnectionStrings.contains(connectionString);
+    final skipOptions = connectionString != null && _plainTransactionConnectionStrings.contains(connectionString);
     final beginResult = await _beginTransaction(
       connectionId,
       accessMode: skipOptions ? TransactionAccessMode.readWrite : accessMode,
@@ -61,7 +58,7 @@ final class OdbcBatchTransactionManager {
     );
     if (beginResult.isError()) {
       final error = beginResult.exceptionOrNull()!;
-      if (error is UnsupportedFeatureError && !skipOptions) {
+      if (!OdbcErrorInspector.outcomeUnknown(error) && error is UnsupportedFeatureError && !skipOptions) {
         _metrics.recordTransactionOptionsUnsupported();
         if (connectionString != null) {
           _plainTransactionConnectionStrings.add(connectionString);
@@ -89,9 +86,12 @@ final class OdbcBatchTransactionManager {
     required Duration? lockTimeout,
     required DateTime? deadline,
   }) async {
-    final budget = _boundedBudget(deadline, _defaultBeginTimeout);
+    final budget = _executionBudget(deadline, _defaultBeginTimeout);
+    if (budget <= Duration.zero) {
+      return Failure(_budgetExhausted('transaction_begin'));
+    }
     try {
-      return await _service
+      final result = await _service
           .beginTransaction(
             connectionId,
             savepointDialect: SavepointDialect.auto,
@@ -99,14 +99,24 @@ final class OdbcBatchTransactionManager {
             lockTimeout: lockTimeout,
           )
           .timeout(budget);
+      if (result.isError() && OdbcErrorInspector.outcomeUnknown(result.exceptionOrNull()!)) {
+        _onRollbackUnconfirmed?.call(connectionId);
+      }
+      return result;
     } on TimeoutException catch (error) {
       _onRollbackUnconfirmed?.call(connectionId);
       return Failure(error);
+    } on Object catch (error) {
+      if (OdbcErrorInspector.outcomeUnknown(error)) _onRollbackUnconfirmed?.call(connectionId);
+      return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'transaction_begin'));
     }
   }
 
   Result<BatchTransactionStart> _beginFailure(Object error) {
-    if (error is TimeoutException) {
+    if (error is domain.Failure && error.context['execution_not_started'] == true) {
+      return Failure(error);
+    }
+    if (OdbcErrorInspector.outcomeUnknown(error) || error is TimeoutException) {
       return Failure(
         domain.QueryExecutionFailure.withContext(
           message: 'Timed out while starting the transaction',
@@ -116,7 +126,8 @@ final class OdbcBatchTransactionManager {
             'operation': 'transaction_begin',
             'timeout': true,
             'timeout_stage': 'sql',
-            'retryable': true,
+            'retryable': false,
+            'outcome_unknown': true,
           },
         ),
       );
@@ -144,104 +155,85 @@ final class OdbcBatchTransactionManager {
     );
   }
 
-  /// Commits the [guard]'s transaction, rolling back on commit failure.
   Future<Result<void>> commit({
     required String connectionId,
     required BatchTransactionGuard guard,
     DateTime? deadline,
   }) async {
     final transactionId = guard.transactionId;
-    if (transactionId == null) {
-      return const Success(unit);
+    if (transactionId == null) return const Success(unit);
+    final budget = _executionBudget(deadline, _defaultCommitTimeout);
+    if (budget <= Duration.zero) return Failure(_budgetExhausted('transaction_commit'));
+    if (!guard.beginCompletion()) {
+      return Failure(domain.QueryExecutionFailure('Transaction finalization already started'));
     }
-
-    late Result<void> commitResult;
+    Object? failure;
     try {
-      commitResult = await _service
-          .commitTransaction(
-            connectionId,
-            transactionId,
-          )
-          .timeout(_boundedBudget(deadline, _defaultCommitTimeout));
-    } on TimeoutException catch (error) {
-      _metrics.recordTransactionCommitUnconfirmed();
-      _onRollbackUnconfirmed?.call(connectionId);
-      OdbcResilienceLog.warning(
-        event: 'commit_unconfirmed',
-        reason: OdbcContextConstants.transactionCommitUnconfirmedReason,
-        stage: 'transaction_commit',
-      );
-      return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'Transaction commit was not confirmed before the deadline',
-          cause: error,
-          context: {
-            'reason': OdbcContextConstants.transactionCommitUnconfirmedReason,
-            'operation': 'transaction_commit',
-            'timeout': true,
-            'timeout_stage': 'sql',
-          },
-        ),
-      );
+      final result = await _service.commitTransaction(connectionId, transactionId).timeout(budget);
+      if (result.isSuccess()) {
+        guard.markCommitted();
+        return const Success(unit);
+      }
+      failure = result.exceptionOrNull()!;
+    } on Object catch (error) {
+      failure = error;
     }
-    if (commitResult.isError()) {
-      final error = commitResult.exceptionOrNull()!;
-      final rollbackTimeout = rollbackTimeoutFromDeadline(deadline);
-      await guard.rollback(
-        (id) => rollbackIfNeeded(connectionId, id, timeout: rollbackTimeout),
-      );
-      return Failure(
-        domain.QueryExecutionFailure.withContext(
-          message: 'Failed to commit transaction',
-          cause: error,
-          context: {
-            'reason': OdbcContextConstants.transactionFailedReason,
-            'operation': 'transaction_commit',
-            'error': OdbcErrorInspector.message(error),
-          },
-        ),
-      );
-    }
-
-    guard.markCommitted();
-    return const Success(unit);
+    // Never reverse a commit decision, including failures returned as Result.
+    guard.markUnconfirmed();
+    _metrics.recordTransactionCommitUnconfirmed();
+    _onRollbackUnconfirmed?.call(connectionId);
+    final mapped = OdbcFailureMapper.mapQueryError(failure, operation: 'transaction_commit');
+    return Failure(
+      domain.QueryExecutionFailure.withContext(
+        message: 'Transaction commit was not confirmed',
+        cause: failure,
+        context: {
+          ...mapped.context,
+          'reason': OdbcContextConstants.transactionCommitUnconfirmedReason,
+          'operation': 'transaction_commit',
+          'odbc_transaction_id': transactionId.toString(),
+          'odbc_connection_id': connectionId,
+          'outcome_unknown': true,
+          'retryable': false,
+          if (OdbcErrorInspector.isTimeout(failure)) ...{'timeout': true, 'timeout_stage': 'sql'},
+          'user_message': 'O banco não confirmou o commit. Verifique a transação antes de tentar novamente.',
+        },
+      ),
+    );
   }
 
-  /// Best-effort rollback bounded by [timeout]. Logs and records metrics on
-  /// failure/timeout; the caller is expected to discard the connection when the
-  /// rollback could not be confirmed.
-  Future<void> rollbackIfNeeded(
+  Future<Result<void>> rollbackIfNeeded(
     String connectionId,
     int? transactionId, {
     Duration? timeout,
   }) async {
-    if (transactionId == null) {
-      return;
-    }
-    final effectiveTimeout = timeout ?? _rollbackTimeout;
+    if (transactionId == null) return const Success(unit);
     _metrics.recordTransactionRollbackAttempt();
+    Object? failure;
     try {
-      final rollback = await _service.rollbackTransaction(connectionId, transactionId).timeout(effectiveTimeout);
-      if (rollback.isError()) {
-        _metrics.recordTransactionRollbackFailure();
-        developer.log(
-          'Failed to rollback transaction',
-          name: 'database_gateway',
-          level: 900,
-          error: rollback.exceptionOrNull(),
-        );
-        _onRollbackUnconfirmed?.call(connectionId);
-      }
-    } on TimeoutException catch (error) {
-      _metrics.recordTransactionRollbackFailure();
-      developer.log(
-        'Rollback timed out after ${effectiveTimeout.inSeconds}s; connection will be discarded',
-        name: 'database_gateway',
-        level: 900,
-        error: error,
-      );
-      _onRollbackUnconfirmed?.call(connectionId);
+      final result = await _service
+          .rollbackTransaction(connectionId, transactionId)
+          .timeout(timeout ?? _rollbackTimeout);
+      if (result.isSuccess()) return const Success(unit);
+      failure = result.exceptionOrNull()!;
+    } on Object catch (error) {
+      failure = error;
     }
+    _metrics.recordTransactionRollbackFailure();
+    _onRollbackUnconfirmed?.call(connectionId);
+    final mapped = OdbcFailureMapper.mapQueryError(failure, operation: 'transaction_rollback');
+    return Failure(
+      domain.QueryExecutionFailure.withContext(
+        message: 'Transaction rollback was not confirmed',
+        cause: failure,
+        context: {
+          ...mapped.context,
+          'operation': 'transaction_rollback',
+          'outcome_unknown': true,
+          'retryable': false,
+        },
+      ),
+    );
   }
 
   /// Remaining time from [deadline] clamped to the configured rollback timeout;
@@ -261,4 +253,21 @@ final class OdbcBatchTransactionManager {
     }
     return remaining < fallback ? remaining : fallback;
   }
+
+  Duration _executionBudget(DateTime? deadline, Duration fallback) {
+    if (deadline == null) return fallback;
+    final remaining = deadline.difference(DateTime.now());
+    return remaining <= Duration.zero ? Duration.zero : (remaining < fallback ? remaining : fallback);
+  }
+
+  domain.QueryExecutionFailure _budgetExhausted(String operation) => domain.QueryExecutionFailure.withContext(
+    message: 'Operation budget exhausted before transaction dispatch',
+    context: {
+      'operation': operation,
+      'timeout': true,
+      'timeout_stage': 'sql',
+      'execution_not_started': true,
+      'retryable': false,
+    },
+  );
 }

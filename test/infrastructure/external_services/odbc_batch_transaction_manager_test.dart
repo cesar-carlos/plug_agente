@@ -32,8 +32,14 @@ void main() {
     test('invokes rollback once and not after markCommitted', () async {
       final guard = BatchTransactionGuard(5);
       var calls = 0;
-      await guard.rollback((_) async => calls++);
-      await guard.rollback((_) async => calls++);
+      await guard.rollback((_) async {
+        calls++;
+        return const Success(unit);
+      });
+      await guard.rollback((_) async {
+        calls++;
+        return const Success(unit);
+      });
       expect(calls, 1);
       expect(guard.isActive, isFalse);
     });
@@ -41,7 +47,10 @@ void main() {
     test('does nothing for a null transaction id', () async {
       final guard = BatchTransactionGuard(null);
       var calls = 0;
-      await guard.rollback((_) async => calls++);
+      await guard.rollback((_) async {
+        calls++;
+        return const Success(unit);
+      });
       expect(calls, 0);
       expect(guard.isActive, isFalse);
     });
@@ -49,7 +58,10 @@ void main() {
     test('markCommitted prevents subsequent rollback', () async {
       final guard = BatchTransactionGuard(7)..markCommitted();
       var calls = 0;
-      await guard.rollback((_) async => calls++);
+      await guard.rollback((_) async {
+        calls++;
+        return const Success(unit);
+      });
       expect(calls, 0);
     });
   });
@@ -213,7 +225,7 @@ void main() {
       expect(guard.isActive, isFalse);
     });
 
-    test('rolls back and fails when commit errors', () async {
+    test('does not reverse a failed commit decision', () async {
       when(() => service.commitTransaction('c1', 11)).thenAnswer((_) async => Failure(Exception('commit boom')));
       when(() => service.rollbackTransaction('c1', 11)).thenAnswer((_) async => const Success(unit));
       final guard = BatchTransactionGuard(11);
@@ -222,7 +234,8 @@ void main() {
 
       expect(result.isError(), isTrue);
       expect((result.exceptionOrNull()! as domain.Failure).context['operation'], 'transaction_commit');
-      verify(() => service.rollbackTransaction('c1', 11)).called(1);
+      verifyNever(() => service.rollbackTransaction('c1', 11));
+      expect(guard.state, BatchTransactionState.unconfirmed);
     });
 
     test('marks commit timeout as unconfirmed without rolling back', () async {
@@ -248,7 +261,8 @@ void main() {
       expect(failure.context['reason'], OdbcContextConstants.transactionCommitUnconfirmedReason);
       expect(failure.context['timeout'], isTrue);
       expect(discarded, ['c1']);
-      expect(guard.isActive, isTrue);
+      expect(guard.isActive, isFalse);
+      expect(guard.state, BatchTransactionState.unconfirmed);
       verifyNever(() => service.rollbackTransaction(any(), any()));
     });
   });

@@ -756,7 +756,7 @@ class OdbcStreamingGateway
     if (canReuse) {
       return true;
     }
-    await _cancelCoordinator.disconnectActiveStream(activeStream);
-    return false;
+    final disconnected = await _cancelCoordinator.disconnectActiveStream(activeStream);
+    return disconnected.isError();
   }
 }

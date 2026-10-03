@@ -13,6 +13,13 @@ from tool.py.odbc_benchmark_runner import resolve_benchmark_driver_family, run_o
 
 
 class OdbcBenchmarkRunnerTests(unittest.TestCase):
+    def test_explicit_matrix_driver_overrides_default_sql_server_preference(self) -> None:
+        environment = {
+            "ODBC_BENCH_DRIVER_DSN": "Driver={SQL Anywhere 17};ServerName=matrix",
+            "ODBC_TEST_DSN_SQL_SERVER": "Driver={ODBC Driver 17 for SQL Server};Server=default",
+        }
+        self.assertEqual(resolve_benchmark_driver_family(environment), "SQL Anywhere")
+
     def test_driver_family_uses_the_same_dsn_preference_as_the_runner(self) -> None:
         environment = {
             "ODBC_TEST_DSN": "Driver={SQL Anywhere 17};ServerName=generic",

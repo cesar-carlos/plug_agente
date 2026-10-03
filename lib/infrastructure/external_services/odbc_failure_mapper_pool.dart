@@ -1,6 +1,7 @@
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_failure_mapper_context.dart';
 
 /// Maps ODBC connection pool errors to typed [Failure] values.
@@ -25,7 +26,8 @@ class OdbcFailureMapperPool {
       context: {
         ...baseContext,
         'poolExhausted': isExhausted,
-        'retryable': contextRetryable is bool ? contextRetryable : isExhausted,
+        'retryable':
+            baseContext['outcome_unknown'] != true && (contextRetryable is bool ? contextRetryable : isExhausted),
         'reason':
             contextReason ??
             (isExhausted ? OdbcContextConstants.poolExhaustedReason : OdbcContextConstants.poolErrorReason),

@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
+import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/core/utils/pool_semaphore.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
 import 'package:plug_agente/domain/repositories/i_pool_discard_inflight_diagnostics.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/logging/odbc_resilience_log.dart';
@@ -39,6 +41,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
   final Duration _inflightDiscardStaleThreshold;
   final PoolSemaphore _discardSemaphore;
   final Map<String, PoolDiscardReason> _connectionsToDiscard = <String, PoolDiscardReason>{};
+  final Map<String, Future<Result<void>>> _ownedDisconnects = {};
   final Map<String, DateTime> _lastRecycleAttempt = <String, DateTime>{};
   final Map<String, DateTime> _inflightDiscards = <String, DateTime>{};
 
@@ -197,48 +200,83 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     );
   }
 
-  Future<void> disconnectOwnedConnectionSafely(
+  Future<Result<void>> disconnectOwnedConnectionSafely(
     String connectionId, {
     required String operation,
   }) async {
-    _connectionsToDiscard.remove(connectionId);
-    late Result<void> disconnectResult;
-    try {
-      disconnectResult = await _service.disconnect(connectionId);
-    } on Object catch (error) {
-      disconnectResult = Failure(
-        OdbcFailureMapper.mapPoolError(
-          error,
-          operation: operation,
+    if (_connectionsToDiscard[connectionId] == PoolDiscardReason.outcomeUnknown) {
+      return Failure(
+        domain.ConnectionFailure.withContext(
+          message: 'Connection completion requires explicit recovery',
+          context: const {'outcome_unknown': true, 'retryable': false},
         ),
       );
     }
-    if (disconnectResult.isSuccess()) {
-      return;
-    }
-
-    _metrics.recordPoolReleaseFailure();
-    developer.log(
-      'Failed to disconnect owned ODBC connection (reason=owned_disconnect_failed)',
-      name: 'database_gateway',
-      level: 900,
-      error: <String, Object?>{'operation': operation},
+    final work = _ownedDisconnects[connectionId] ??= _disconnectOwned(connectionId, operation);
+    return work.timeout(
+      ConnectionConstants.defaultPoolAcquireTimeout,
+      onTimeout: () {
+        markConnectionOutcomeUnknown(connectionId);
+        return Failure(
+          domain.ConnectionFailure.withContext(
+            message: 'Connection cleanup was not confirmed',
+            context: const {'outcome_unknown': true, 'retryable': false, 'timeout': true},
+          ),
+        );
+      },
     );
   }
 
-  Future<void> disconnectOwnedConnectionAndReleaseLease({
+  Future<Result<void>> _disconnectOwned(String connectionId, String operation) async {
+    try {
+      final result = await _service.disconnect(connectionId);
+      if (result.isSuccess()) {
+        _connectionsToDiscard.remove(connectionId);
+        return const Success(unit);
+      }
+      markConnectionOutcomeUnknown(connectionId);
+      _metrics.recordPoolReleaseFailure();
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          result.exceptionOrNull()!,
+          operation: operation,
+          context: const {'outcome_unknown': true, 'retryable': false},
+        ),
+      );
+    } on Object catch (error) {
+      markConnectionOutcomeUnknown(connectionId);
+      _metrics.recordPoolReleaseFailure();
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: operation,
+          context: const {'outcome_unknown': true, 'retryable': false},
+        ),
+      );
+    }
+  }
+
+  Future<Result<void>> disconnectOwnedConnectionAndReleaseLease({
     required String connectionId,
     required DirectOdbcConnectionLease directLease,
     required String operation,
   }) async {
-    try {
-      await disconnectOwnedConnectionSafely(
-        connectionId,
-        operation: operation,
-      );
-    } finally {
+    final observed = await disconnectOwnedConnectionSafely(connectionId, operation: operation);
+    final work = _ownedDisconnects[connectionId];
+    if (observed.isSuccess()) {
       directLease.release();
+      _ownedDisconnects.remove(connectionId);
+    } else if (work != null) {
+      unawaited(
+        work.then((result) {
+          if (result.isSuccess()) {
+            directLease.release();
+            _ownedDisconnects.remove(connectionId);
+          }
+        }),
+      );
     }
+    return observed;
   }
 
   Future<void> releaseConnectionSafely(String connectionId) async {
@@ -276,10 +314,14 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
   }) {
     final current = _connectionsToDiscard[connectionId];
-    if (current == PoolDiscardReason.poisonedPool) {
+    if (current == PoolDiscardReason.poisonedPool || current == PoolDiscardReason.outcomeUnknown) {
       return;
     }
     _connectionsToDiscard[connectionId] = reason;
+  }
+
+  void markConnectionOutcomeUnknown(String connectionId) {
+    _connectionsToDiscard[connectionId] = PoolDiscardReason.outcomeUnknown;
   }
 
   void recordPooledExecutionFailure({
@@ -382,6 +424,7 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
       _metrics.recordPoolDiscardReconciliationRemediated();
       return;
     }
+    if (OdbcErrorInspector.outcomeUnknown(discardResult.exceptionOrNull()!)) return;
 
     _metrics.recordPoolReleaseFailure();
     developer.log(
@@ -409,8 +452,25 @@ final class OdbcGatewayConnectionManager implements IPoolDiscardInflightDiagnost
     String connectionId,
     PoolDiscardReason reason,
   ) async {
-    final discardResult = await _connectionPool.discard(connectionId, reason: reason);
+    Result<void> discardResult;
+    try {
+      discardResult = await _connectionPool.discard(connectionId, reason: reason);
+    } on Object catch (error) {
+      discardResult = Failure(
+        OdbcFailureMapper.mapPoolError(
+          error,
+          operation: 'pool_discard',
+          context: const {'outcome_unknown': true, 'retryable': false},
+        ),
+      );
+    }
     if (discardResult.isSuccess()) {
+      return;
+    }
+    if (reason == PoolDiscardReason.outcomeUnknown ||
+        OdbcErrorInspector.outcomeUnknown(discardResult.exceptionOrNull()!)) {
+      _connectionsToDiscard[connectionId] = PoolDiscardReason.outcomeUnknown;
+      _metrics.store.incrementEventCounter('odbc_cleanup_unconfirmed');
       return;
     }
 

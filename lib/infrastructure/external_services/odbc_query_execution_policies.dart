@@ -6,6 +6,7 @@ import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 
@@ -43,11 +44,10 @@ abstract final class OdbcQueryExecutionPolicies {
     QueryRequest request,
     QueryResponse response,
   ) {
-    if (!request.expectMultipleResults) {
+    if (!request.expectMultipleResults || !SqlValidator.isReadOnlyQuery(request.query)) {
       return false;
     }
-    final hasRows =
-        response.data.isNotEmpty || response.resultSets.any((resultSet) => resultSet.rows.isNotEmpty);
+    final hasRows = response.data.isNotEmpty || response.resultSets.any((resultSet) => resultSet.rows.isNotEmpty);
     final hasNonZeroRowCount = response.items.any(
       (item) => item.isRowCount && (item.rowCount ?? 0) > 0,
     );
@@ -83,6 +83,8 @@ abstract final class OdbcQueryExecutionPolicies {
         'timeout': true,
         'timeout_stage': 'sql',
         'stage': 'query',
+        'outcome_unknown': true,
+        'retryable': false,
         'reason': RpcSqlBudgetConstants.queryTimeoutReason,
         if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
       },

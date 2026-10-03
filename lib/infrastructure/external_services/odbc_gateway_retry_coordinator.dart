@@ -126,6 +126,7 @@ class OdbcGatewayRetryCoordinator {
     Exception exception, {
     required bool retryConnectionLossForReadOnly,
   }) {
+    if (exception is domain.Failure && exception.context['outcome_unknown'] == true) return false;
     if (retryConnectionLossForReadOnly && _isRetryableReadOnlyConnectionLoss(exception)) {
       return true;
     }

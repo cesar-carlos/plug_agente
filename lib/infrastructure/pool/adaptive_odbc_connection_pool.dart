@@ -266,11 +266,9 @@ final class AdaptiveOdbcConnectionPool
 
   @override
   Future<Result<void>> release(String connectionId) async {
-    final owner = _connectionOwners.remove(connectionId);
-    _connectionCircuitKeys.remove(connectionId);
-    _connectionAcquireStrings.remove(connectionId);
-    _decrementOwnerActiveCount(owner);
+    final owner = _connectionOwners[connectionId];
     final result = await _releaseToOwnerPool(connectionId, owner);
+    if (result.isSuccess()) _forgetOwner(connectionId);
     await _maybeCompleteConfigDrain();
     return result;
   }
@@ -280,11 +278,9 @@ final class AdaptiveOdbcConnectionPool
     String connectionId, {
     PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
   }) async {
-    final owner = _connectionOwners.remove(connectionId);
-    _connectionCircuitKeys.remove(connectionId);
-    _connectionAcquireStrings.remove(connectionId);
-    _decrementOwnerActiveCount(owner);
+    final owner = _connectionOwners[connectionId];
     final result = await _discardFromOwnerPool(connectionId, owner, reason);
+    if (result.isSuccess()) _forgetOwner(connectionId);
     await _maybeCompleteConfigDrain();
     return result;
   }
@@ -311,6 +307,13 @@ final class AdaptiveOdbcConnectionPool
       _AdaptivePoolOwner.native => _nativePool.release(connectionId),
       _AdaptivePoolOwner.lease => _leasePool.release(connectionId),
     };
+  }
+
+  void _forgetOwner(String connectionId) {
+    final owner = _connectionOwners.remove(connectionId);
+    _connectionCircuitKeys.remove(connectionId);
+    _connectionAcquireStrings.remove(connectionId);
+    _decrementOwnerActiveCount(owner);
   }
 
   Future<Result<void>> _discardFromOwnerPool(
@@ -352,6 +355,7 @@ final class AdaptiveOdbcConnectionPool
       errors.add(leaseResult.exceptionOrNull()!);
     }
 
+    if (errors.isNotEmpty) return Failure(_aggregatePoolFailure(errors, operation: 'pool_close_all'));
     _connectionOwners.clear();
     _connectionCircuitKeys.clear();
     _connectionAcquireStrings.clear();
@@ -498,6 +502,7 @@ final class AdaptiveOdbcConnectionPool
     if (error == null) {
       return false;
     }
+    if (OdbcErrorInspector.outcomeUnknown(error)) return false;
 
     return OdbcErrorInspector.isInvalidConnectionId(error) ||
         OdbcGatewayBufferExpansion.messageIndicatesBufferTooSmall(

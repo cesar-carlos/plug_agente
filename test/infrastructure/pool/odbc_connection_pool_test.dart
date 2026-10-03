@@ -394,7 +394,7 @@ void main() {
       },
     );
 
-    test('discard should free the local lease even when disconnect fails', () async {
+    test('discard retains capacity and quarantines the DSN after disconnect failure', () async {
       mockSettings.poolSize = 1;
       pool = OdbcConnectionPool(
         mockService,
@@ -435,14 +435,14 @@ void main() {
       expect(metrics.poolReleaseFailureCount, 1);
 
       final activeAfterDiscard = await pool.getActiveCount();
-      expect(activeAfterDiscard.getOrNull(), 0);
+      expect(activeAfterDiscard.getOrNull(), 1);
 
       final reacquired = await pool.acquire('DSN=Test');
-      expect(reacquired.getOrNull(), 'lease-2');
+      expect(reacquired.isError(), isTrue);
       verify(() => mockService.disconnect('lease-1')).called(1);
     });
 
-    test('release should free the local lease when disconnect throws a timeout', () async {
+    test('release retains capacity after unconfirmed disconnect timeout', () async {
       mockSettings.poolSize = 1;
       pool = OdbcConnectionPool(
         mockService,
@@ -483,13 +483,13 @@ void main() {
       expect(metrics.poolReleaseFailureCount, 1);
 
       final activeAfterRelease = await pool.getActiveCount();
-      expect(activeAfterRelease.getOrNull(), 0);
+      expect(activeAfterRelease.getOrNull(), 1);
 
       final reacquired = await pool.acquire('DSN=Test');
-      expect(reacquired.getOrNull(), 'lease-2');
+      expect(reacquired.isError(), isTrue);
     });
 
-    test('discard should free the local lease before disconnect completes', () async {
+    test('discard retains the lease until disconnect is confirmed', () async {
       mockSettings.poolSize = 1;
       pool = OdbcConnectionPool(
         mockService,
@@ -528,14 +528,14 @@ void main() {
       final discardFuture = pool.discard('lease-1');
 
       final activeAfterDiscardStarted = await pool.getActiveCount();
-      expect(activeAfterDiscardStarted.getOrNull(), 0);
-
-      final reacquired = await pool.acquire('DSN=Test');
-      expect(reacquired.getOrNull(), 'lease-2');
+      expect(activeAfterDiscardStarted.getOrNull(), 1);
 
       disconnectCompleter.complete(const Success(unit));
       final discarded = await discardFuture;
       expect(discarded.isSuccess(), isTrue);
+      expect((await pool.getActiveCount()).getOrNull(), 0);
+      final reacquired = await pool.acquire('DSN=Test');
+      expect(reacquired.getOrNull(), 'lease-2');
     });
 
     test('release treats invalid connection id as a successful cleanup', () async {
@@ -667,7 +667,7 @@ void main() {
 
       expect(result.isError(), isTrue);
       final activeAfter = await pool.getActiveCount();
-      expect(activeAfter.getOrNull(), 0);
+      expect(activeAfter.getOrNull(), 1);
     });
 
     test('getHealthDiagnostics exposes strategy and circuit fields', () {

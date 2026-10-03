@@ -21,23 +21,7 @@ final class OdbcStreamingQueryStreamOpener {
     Map<String, dynamic>? parameters,
   }) {
     final namedParameters = _namedParametersOrNull(parameters);
-    final batchedSource = _batchedQuerySource;
-    final nativeConnectionId = int.tryParse(connectionId);
-    final canUseBatched =
-        batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0;
-
-    if (canUseBatched) {
-      return batchedSource.streamColumnarQuery(
-        nativeConnectionId,
-        query,
-        nativeStreamingOptions,
-        namedParameters: namedParameters,
-      );
-    }
-
     if (namedParameters != null) {
-      // Fallbacks inherit lazyStrings from ConnectionOptions; convert to typed
-      // columnar after row-major streamQueryNamed.
       return _service
           .streamQueryNamed(
             connectionId,
@@ -47,6 +31,18 @@ final class OdbcStreamingQueryStreamOpener {
             chunkSize: nativeStreamingOptions.nativeChunkSizeBytes,
           )
           .map((result) => result.map(toTypedColumnar));
+    }
+    final batchedSource = _batchedQuerySource;
+    final nativeConnectionId = int.tryParse(connectionId);
+    final canUseBatched = batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0;
+
+    if (canUseBatched) {
+      return batchedSource.streamColumnarQuery(
+        nativeConnectionId,
+        query,
+        nativeStreamingOptions,
+        namedParameters: namedParameters,
+      );
     }
 
     return _service.streamQueryColumnar(
@@ -65,10 +61,18 @@ final class OdbcStreamingQueryStreamOpener {
     bool lazyStrings = false,
   }) {
     final namedParameters = _namedParametersOrNull(parameters);
+    if (namedParameters != null) {
+      return _service.streamQueryNamed(
+        connectionId,
+        query,
+        namedParameters,
+        fetchSize: nativeStreamingOptions.fetchSize,
+        chunkSize: nativeStreamingOptions.nativeChunkSizeBytes,
+      );
+    }
     final batchedSource = _batchedQuerySource;
     final nativeConnectionId = int.tryParse(connectionId);
-    final canUseBatched =
-        batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0;
+    final canUseBatched = batchedSource != null && nativeConnectionId != null && nativeConnectionId > 0;
 
     if (canUseBatched) {
       return batchedSource.streamRowMajorQuery(
@@ -77,18 +81,6 @@ final class OdbcStreamingQueryStreamOpener {
         nativeStreamingOptions,
         lazyStrings: lazyStrings,
         namedParameters: namedParameters,
-      );
-    }
-
-    // Fallbacks inherit lazyStrings from ConnectionOptions on the connection;
-    // streamQuery / streamQueryNamed do not take an explicit flag.
-    if (namedParameters != null) {
-      return _service.streamQueryNamed(
-        connectionId,
-        query,
-        namedParameters,
-        fetchSize: nativeStreamingOptions.fetchSize,
-        chunkSize: nativeStreamingOptions.nativeChunkSizeBytes,
       );
     }
 

@@ -25,8 +25,7 @@ final class OdbcStreamingCancelCoordinator {
        _metrics = metricsCollector,
        _cancelDisconnectTimeout = cancelDisconnectTimeout,
        _disconnectTracker =
-           disconnectTracker ??
-           OdbcStreamingDisconnectTracker(observedTimeout: cancelDisconnectTimeout);
+           disconnectTracker ?? OdbcStreamingDisconnectTracker(observedTimeout: cancelDisconnectTimeout);
 
   final OdbcService _service;
   final MetricsCollector? _metrics;
@@ -79,10 +78,12 @@ final class OdbcStreamingCancelCoordinator {
   Future<Result<void>> disconnectActiveStream(
     OdbcStreamingActiveConnection stream,
   ) async {
-    if (stream.isDisconnectStarted) {
-      return const Success(unit);
-    }
+    return stream.disconnectCompletion ??= _disconnectActiveStream(stream);
+  }
 
+  Future<Result<void>> _disconnectActiveStream(
+    OdbcStreamingActiveConnection stream,
+  ) async {
     stream.isDisconnectStarted = true;
     final result = await _disconnectTracker.run(
       connectionId: stream.connectionId,
@@ -90,6 +91,7 @@ final class OdbcStreamingCancelCoordinator {
       timeout: _cancelDisconnectTimeout,
       onTimeout: _metrics?.recordStreamCancelDisconnectTimeout,
       onFailure: _metrics?.recordStreamCancelDisconnectFailure,
+      onComplete: stream.lease.release,
     );
     return result.fold(
       (_) => const Success(unit),

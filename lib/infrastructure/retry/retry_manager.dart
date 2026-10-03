@@ -113,6 +113,7 @@ class RetryManager implements IRetryManager {
   @override
   bool isTransientFailure(Exception exception) {
     if (exception is domain.Failure) {
+      if (exception.context['outcome_unknown'] == true) return false;
       // Query execution may have reached the database already. Retrying
       // can duplicate non-idempotent DML — never retry regardless of isTransient.
       if (exception is domain.QueryExecutionFailure) {

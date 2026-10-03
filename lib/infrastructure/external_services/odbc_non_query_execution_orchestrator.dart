@@ -116,6 +116,10 @@ class OdbcNonQueryExecutionOrchestrator {
 
       if (result.isError()) {
         final error = result.exceptionOrNull()!;
+        if (OdbcErrorInspector.outcomeUnknown(error)) {
+          _connectionManager.markConnectionOutcomeUnknown(connId);
+          return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'execute_non_query'));
+        }
         if (_isInvalidConnectionIdError(error)) {
           _connectionManager.recordPooledExecutionFailure(
             connectionString: connectionString,
@@ -170,6 +174,7 @@ class OdbcNonQueryExecutionOrchestrator {
 
       return Success(result.getOrThrow().rowCount);
     } on TimeoutException catch (error) {
+      _connectionManager.markConnectionOutcomeUnknown(connId);
       return Failure(
         domain.QueryExecutionFailure.withContext(
           message: 'Non-query execution timeout',
@@ -178,11 +183,16 @@ class OdbcNonQueryExecutionOrchestrator {
             'timeout': true,
             'timeout_stage': 'sql',
             'stage': 'query',
+            'outcome_unknown': true,
+            'retryable': false,
             'reason': RpcSqlBudgetConstants.queryTimeoutReason,
             if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
           },
         ),
       );
+    } on Object catch (error) {
+      if (OdbcErrorInspector.outcomeUnknown(error)) _connectionManager.markConnectionOutcomeUnknown(connId);
+      return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'execute_non_query'));
     } finally {
       _unregisterInFlightExecution(inFlightRequestId);
       if (!releasedConnectionEarly) {
@@ -325,6 +335,7 @@ class OdbcNonQueryExecutionOrchestrator {
       return Failure(leaseResult.exceptionOrNull()!);
     }
     final directLease = leaseResult.getOrThrow();
+    var connectionEstablished = false;
     var directLeaseReleased = false;
     void releaseDirectLease() {
       if (directLeaseReleased) {
@@ -345,6 +356,7 @@ class OdbcNonQueryExecutionOrchestrator {
       );
       return await connectResult.fold(
         (connection) async {
+          connectionEstablished = true;
           final inFlightRequestId = _inFlightTrackingKey(sourceRpcRequestId);
           try {
             _registerInFlightExecution(inFlightRequestId, connection.id);
@@ -368,6 +380,7 @@ class OdbcNonQueryExecutionOrchestrator {
               ),
             );
           } on TimeoutException catch (error) {
+            _connectionManager.markConnectionOutcomeUnknown(connection.id);
             return Failure(
               domain.QueryExecutionFailure.withContext(
                 message: 'Non-query execution timeout',
@@ -376,11 +389,17 @@ class OdbcNonQueryExecutionOrchestrator {
                   'timeout': true,
                   'timeout_stage': 'sql',
                   'stage': 'query',
+                  'outcome_unknown': true,
+                  'retryable': false,
                   'reason': RpcSqlBudgetConstants.queryTimeoutReason,
                   if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
                 },
               ),
             );
+          } on Object catch (error) {
+            if (OdbcErrorInspector.outcomeUnknown(error))
+              _connectionManager.markConnectionOutcomeUnknown(connection.id);
+            return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'execute_non_query_direct'));
           } finally {
             _unregisterInFlightExecution(inFlightRequestId);
             await _connectionManager.disconnectOwnedConnectionAndReleaseLease(
@@ -403,7 +422,7 @@ class OdbcNonQueryExecutionOrchestrator {
         },
       );
     } finally {
-      releaseDirectLease();
+      if (!connectionEstablished) releaseDirectLease();
     }
   }
 
@@ -421,7 +440,7 @@ class OdbcNonQueryExecutionOrchestrator {
     if (error == null) {
       return Exception(fallbackMessage);
     }
-    return Exception(error.toString());
+    return OdbcFailureMapper.mapQueryError(error);
   }
 
   String? _inFlightTrackingKey(String? sourceRpcRequestId) {

@@ -21,6 +21,7 @@ class MockConnectionPool extends Mock implements IConnectionPool {}
 void main() {
   setUpAll(() {
     registerFallbackValue(const ConnectionOptions());
+    registerFallbackValue(PoolDiscardReason.outcomeUnknown);
     registerFallbackValue(const ConnectionAcquireOptions());
     registerFallbackValue(Duration.zero);
     registerFallbackValue(<Object?>[]);
@@ -67,7 +68,7 @@ void main() {
         metrics: metrics,
       );
 
-      when(() => mockConnectionPool.discard(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.discard(any(), reason: any(named: 'reason'))).thenAnswer((_) async {
         return const Success(unit);
       });
       when(
@@ -264,7 +265,7 @@ void main() {
         when(() => mockService.asyncPoll(asyncRequestId)).thenAnswer((_) async {
           return const Success(0);
         });
-        when(() => mockConnectionPool.discard(pooledConnectionId)).thenAnswer((_) async {
+        when(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).thenAnswer((_) async {
           return const Success(unit);
         });
 
@@ -284,9 +285,9 @@ void main() {
         expect(queryFailure.context['reason'], 'query_timeout');
         expect(metrics.timeoutCancelSuccessCount, 1);
         verify(() => mockService.asyncCancel(asyncRequestId)).called(1);
-        verify(() => mockService.asyncFree(asyncRequestId)).called(1);
+        verifyNever(() => mockService.asyncFree(asyncRequestId));
         verifyNever(() => mockConnectionPool.release(pooledConnectionId));
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).called(1);
         verifyNever(
           () => mockService.prepare(
             any(),
@@ -358,7 +359,7 @@ void main() {
           () => mockService.connect(any(), options: any(named: 'options')),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).called(1);
         verify(() => mockConnectionPool.recycle(any())).called(1);
       },
     );

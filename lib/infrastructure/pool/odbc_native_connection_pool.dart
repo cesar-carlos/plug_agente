@@ -56,6 +56,9 @@ class OdbcNativeConnectionPool
   final Map<String, int> _pools = {};
   final Map<String, Future<Result<int>>> _poolCreationFutures = {};
   final Map<String, int> _poolGenerations = <String, int>{};
+  final Map<String, Future<Result<void>>> _returns = {};
+  final Set<String> _unconfirmedConnections = {};
+  final Set<String> _retiredConnectionIds = {};
   final Map<String, String> _connectionOwners = <String, String>{};
   final Map<String, int> _activeByConnectionString = <String, int>{};
   final Set<String> _quarantinedConnectionStrings = <String>{};
@@ -356,128 +359,92 @@ class OdbcNativeConnectionPool
   }
 
   @override
-  Future<Result<void>> release(String connectionId) async {
-    final connectionString = _connectionOwners.remove(connectionId);
-    var handshakeHeld = false;
-    try {
-      await _nativeReturnSemaphore.acquire(
-        timeout: ConnectionConstants.defaultPoolAcquireTimeout,
-      );
-      handshakeHeld = true;
-    } on TimeoutException {
-      developer.log(
-        'Native pool release: handshake timeout; poolReleaseConnection anyway',
-        name: 'connection_pool',
-        level: 900,
-      );
-    }
-
-    late Result<void> result;
-    try {
-      result = await _service.poolReleaseConnection(connectionId);
-    } finally {
-      if (handshakeHeld) {
-        _nativeReturnSemaphore.release();
-      }
-    }
-
-    return result.fold(
-      (_) {
-        _decrementActive(connectionString);
-        _scheduleQuarantineRecoveryIfDrained(connectionString);
-        return const Success(unit);
-      },
-      (error) {
-        if (_messageIndicatesInvalidConnectionId(error)) {
-          _decrementActive(connectionString);
-          _scheduleQuarantineRecoveryIfDrained(connectionString);
-          return const Success(unit);
-        }
-        // The caller can no longer safely own a handle whose release failed.
-        // Account for it as drained and quarantine its native pool so a later
-        // checkout cannot reuse a potentially poisoned connection.
-        if (connectionString != null) {
-          _quarantinedConnectionStrings.add(connectionString);
-          _decrementActive(connectionString);
-          _scheduleQuarantineRecoveryIfDrained(connectionString);
-        }
-        _metrics?.recordPoolReleaseFailure();
-        return Failure(
-          OdbcFailureMapper.mapPoolError(
-            error,
-            operation: 'pool_release',
-          ),
-        );
-      },
-    );
-  }
+  Future<Result<void>> release(String connectionId) => _returnConnection(connectionId);
 
   @override
   Future<Result<void>> discard(
     String connectionId, {
     PoolDiscardReason reason = PoolDiscardReason.suspectConnection,
-  }) async {
-    final connectionString = _connectionOwners.remove(connectionId);
-    if (connectionString == null) {
-      // An unknown pooled connection cannot safely be associated with one pool.
+  }) {
+    final owner = _connectionOwners[connectionId];
+    if (owner == null && !_retiredConnectionIds.contains(connectionId)) {
       _quarantinedConnectionStrings.addAll(_pools.keys);
       _pools.keys.forEach(_scheduleQuarantineRecovery);
-    } else if (reason == PoolDiscardReason.poisonedPool) {
-      _quarantinedConnectionStrings.add(connectionString);
-    }
-    var handshakeHeld = false;
-    try {
-      await _nativeReturnSemaphore.acquire(
-        timeout: ConnectionConstants.defaultPoolAcquireTimeout,
-      );
-      handshakeHeld = true;
-    } on TimeoutException {
-      developer.log(
-        'Native pool discard: handshake timeout; poolReleaseConnection anyway',
-        name: 'connection_pool',
-        level: 900,
-      );
-    }
-
-    // odbc_fast 3.9.0: disconnect() returns ValidationError for pool-owned
-    // connections. Pool connections must be returned via poolReleaseConnection,
-    // which rolls back uncommitted work before making the slot available again.
-    late Result<void> result;
-    try {
-      result = await _service.poolReleaseConnection(connectionId);
-    } finally {
-      if (handshakeHeld) {
-        _nativeReturnSemaphore.release();
-      }
-    }
-
-    return result.fold(
-      (_) {
-        _decrementActive(connectionString);
-        _scheduleQuarantineRecoveryIfDrained(connectionString);
-        return const Success(unit);
-      },
-      (error) {
-        if (_messageIndicatesInvalidConnectionId(error)) {
-          _decrementActive(connectionString);
-          _scheduleQuarantineRecoveryIfDrained(connectionString);
-          return const Success(unit);
-        }
-        // Checkin failed, so the handle may still be poisoned. Quarantine the
-        // DSN even when the caller only asked to discard one connection.
-        if (connectionString != null) {
-          _quarantinedConnectionStrings.add(connectionString);
-        }
-        _decrementActive(connectionString);
-        _scheduleQuarantineRecoveryIfDrained(connectionString);
-        _metrics?.recordPoolReleaseFailure();
-        return Failure(
-          OdbcFailureMapper.mapPoolError(
-            error,
-            operation: 'pool_discard',
+      return Future.value(
+        Failure(
+          domain.ConnectionFailure.withContext(
+            message: 'Unknown native connection ownership',
+            context: const {'retryable': false},
           ),
-        );
-      },
+        ),
+      );
+    }
+    if (owner != null && reason != PoolDiscardReason.suspectConnection) {
+      _quarantinedConnectionStrings.add(owner);
+    }
+    if (reason == PoolDiscardReason.outcomeUnknown) {
+      _unconfirmedConnections.add(connectionId);
+      return Future.value(
+        Failure(
+          domain.ConnectionFailure.withContext(
+            message: 'Native connection completion is unconfirmed',
+            context: const {'outcome_unknown': true, 'retryable': false, 'operation': 'pool_discard'},
+          ),
+        ),
+      );
+    }
+    return _returnConnection(connectionId);
+  }
+
+  Future<Result<void>> _returnConnection(String connectionId) {
+    if (_unconfirmedConnections.contains(connectionId)) {
+      return Future.value(
+        Failure(
+          domain.ConnectionFailure.withContext(
+            message: 'Native connection cleanup requires explicit recovery',
+            context: const {'outcome_unknown': true, 'retryable': false},
+          ),
+        ),
+      );
+    }
+    if (!_connectionOwners.containsKey(connectionId)) return Future.value(const Success(unit));
+    return _returns[connectionId] ??= _returnOwnedConnection(connectionId);
+  }
+
+  Future<Result<void>> _returnOwnedConnection(String connectionId) async {
+    final owner = _connectionOwners[connectionId]!;
+    var held = false;
+    Result<void> result;
+    try {
+      await _nativeReturnSemaphore.acquire(timeout: ConnectionConstants.defaultPoolAcquireTimeout);
+      held = true;
+      result = await _service
+          .poolReleaseConnection(connectionId)
+          .timeout(ConnectionConstants.defaultPoolAcquireTimeout);
+    } on Object catch (error) {
+      result = Failure(OdbcFailureMapper.mapPoolError(error, operation: 'pool_release'));
+    } finally {
+      if (held) _nativeReturnSemaphore.release();
+    }
+    if (result.isSuccess() ||
+        (!OdbcErrorInspector.outcomeUnknown(result.exceptionOrNull()!) &&
+            _messageIndicatesInvalidConnectionId(result.exceptionOrNull()!))) {
+      if (_connectionOwners.remove(connectionId) != null) _decrementActive(owner);
+      _retiredConnectionIds.add(connectionId);
+      if (_retiredConnectionIds.length > 256) _retiredConnectionIds.remove(_retiredConnectionIds.first);
+      _scheduleQuarantineRecoveryIfDrained(owner);
+      _returns.remove(connectionId);
+      return const Success(unit);
+    }
+    _unconfirmedConnections.add(connectionId);
+    _quarantinedConnectionStrings.add(owner);
+    _metrics?.recordPoolReleaseFailure();
+    return Failure(
+      OdbcFailureMapper.mapPoolError(
+        result.exceptionOrNull()!,
+        operation: 'pool_release',
+        context: const {'outcome_unknown': true, 'retryable': false},
+      ),
     );
   }
 
@@ -512,11 +479,13 @@ class OdbcNativeConnectionPool
         );
       }
       try {
-        final result = await _service.poolClose(poolId);
+        final result = await _service.poolClose(poolId).timeout(ConnectionConstants.defaultPoolAcquireTimeout);
         result.fold(
           (_) {},
           (error) => errors.add(_odbcErrorMessage(error)),
         );
+      } on Object catch (error) {
+        errors.add(error.runtimeType.toString());
       } finally {
         if (handshakeHeld) {
           _nativeReturnSemaphore.release();
@@ -524,6 +493,19 @@ class OdbcNativeConnectionPool
       }
     }
 
+    if (errors.isNotEmpty) {
+      _quarantinedConnectionStrings.addAll(_pools.keys);
+      return Failure(
+        OdbcFailureMapper.mapPoolError(
+          Exception('Native pool shutdown was not confirmed'),
+          operation: 'pool_close_all',
+          context: const {'outcome_unknown': true, 'retryable': false},
+        ),
+      );
+    }
+    _returns.clear();
+    _unconfirmedConnections.clear();
+    _retiredConnectionIds.clear();
     _pools.clear();
     _poolStateCache.clear();
     _poolCreationFutures.clear();
@@ -712,7 +694,9 @@ class OdbcNativeConnectionPool
   Future<void> _reconcileActiveCount() async {
     final activeResult = await getActiveCount();
     if (activeResult.isSuccess()) {
-      _activeAcquireCount = activeResult.getOrThrow();
+      _activeAcquireCount = activeResult.getOrThrow() < _unconfirmedConnections.length
+          ? _unconfirmedConnections.length
+          : activeResult.getOrThrow();
     }
   }
 
@@ -775,6 +759,7 @@ class OdbcNativeConnectionPool
       'native_skip_reason': null,
       'lease_active_count': 0,
       'native_active_count': _activeAcquireCount,
+      'native_unconfirmed_connection_count': _unconfirmedConnections.length,
       'native_quarantined_pool_count': _quarantinedConnectionStrings.length,
       'native_quarantine_recovery_scheduled': _quarantineRetryTimers.length,
       'native_quarantine_slow_recovery': _slowQuarantineRecoveryLogged.length,
@@ -823,6 +808,7 @@ class OdbcNativeConnectionPool
         _quarantineRetryTimers.containsKey(connectionString)) {
       return;
     }
+    if (_unconfirmedConnections.any((id) => _connectionOwners[id] == connectionString)) return;
     final attempt = _quarantineRetryAttempts[connectionString] ?? 0;
     final Duration delay;
     if (attempt >= _maxQuarantineRetries) {

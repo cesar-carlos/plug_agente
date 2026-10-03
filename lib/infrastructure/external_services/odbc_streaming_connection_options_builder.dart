@@ -67,6 +67,9 @@ final class OdbcStreamingConnectionOptionsBuilder {
       blockFetchBatchSize: ConnectionConstants.defaultBlockFetchBatchSize,
       autoReconnectOnConnectionLost: plugAcquireOptions.autoReconnectOnConnectionLost ?? false,
       maxReconnectAttempts: plugAcquireOptions.maxReconnectAttempts,
+      // Explicit safety policy: never replay statements after reconnect.
+      // ignore: avoid_redundant_argument_values
+      replayQueriesAfterReconnect: false,
       reconnectBackoff: plugAcquireOptions.reconnectBackoff,
       lazyStrings: lazyStrings,
     );

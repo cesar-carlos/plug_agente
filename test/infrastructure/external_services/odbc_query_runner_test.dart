@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -122,7 +120,7 @@ void main() {
           // Zero budget trips the deadline on the first poll without real delays.
           timeout: Duration.zero,
         ),
-        throwsA(isA<TimeoutException>()),
+        throwsA(isA<QueryError>().having((error) => error.details.outcomeUnknown, 'outcomeUnknown', true)),
       );
 
       expect(discarded, contains('c1'));

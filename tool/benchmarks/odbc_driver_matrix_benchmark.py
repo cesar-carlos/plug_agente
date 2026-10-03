@@ -54,9 +54,11 @@ def run_benchmark_for_driver(
     print(f"Native/adaptive pool eligible: {driver_name != 'SQL Anywhere'}")
 
     previous_dsn = os.environ.get("ODBC_TEST_DSN")
+    previous_driver_dsn = os.environ.get("ODBC_BENCH_DRIVER_DSN")
     previous_stream_query = os.environ.get("ODBC_STREAM_BENCH_QUERY")
     try:
         os.environ["ODBC_TEST_DSN"] = dsn
+        os.environ["ODBC_BENCH_DRIVER_DSN"] = dsn
         os.environ.pop("ODBC_STREAM_BENCH_QUERY", None)
 
         if output_directory is None:
@@ -88,6 +90,10 @@ def run_benchmark_for_driver(
         if stream_exit != 0:
             raise RuntimeError(f"{driver_name} streaming benchmark failed")
     finally:
+        if previous_driver_dsn is None:
+            os.environ.pop("ODBC_BENCH_DRIVER_DSN", None)
+        else:
+            os.environ["ODBC_BENCH_DRIVER_DSN"] = previous_driver_dsn
         if previous_dsn is None:
             os.environ.pop("ODBC_TEST_DSN", None)
         else:
@@ -135,14 +141,19 @@ def main() -> int:
         print("No DSN configured; nothing to benchmark.")
         return 0
 
+    failed = False
     for driver in drivers:
-        run_benchmark_for_driver(
-            driver_name=driver["name"],
-            driver_slug=driver["slug"],
-            dsn=driver["dsn"],
-            output_directory=output_directory,
-        )
-    return 0
+        try:
+            run_benchmark_for_driver(
+                driver_name=driver["name"],
+                driver_slug=driver["slug"],
+                dsn=driver["dsn"],
+                output_directory=output_directory,
+            )
+        except RuntimeError as error:
+            print(str(error), file=sys.stderr)
+            failed = True
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -6,7 +6,9 @@ import 'package:plug_agente/core/constants/rpc_sql_budget_constants.dart';
 import 'package:plug_agente/domain/entities/cancellation_token.dart';
 import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/sql_command.dart';
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
@@ -295,45 +297,63 @@ final class OdbcQueryRunner {
     final deadline = OdbcExecutionDeadline.deadlineFor(timeout);
     final preparedStatements = <String, int>{};
     final statementKey = preparedStatementKeyFor(preparedExecution);
+    Future<QueryExecutionOutcome> execute() async {
+      try {
+        final stmtId = await _statementExecutor.getOrPrepareStatement(
+          connectionId: connectionId,
+          preparedExecution: preparedExecution,
+          preparedStatements: preparedStatements,
+          statementKey: statementKey,
+          timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+          cachePolicy: cachePolicy,
+        );
+        if (stmtId.isError()) {
+          return QueryExecutionOutcome.failure(
+            stmtId.exceptionOrNull() ?? StateError('prepare_statement_failed'),
+          );
+        }
+
+        final startedAt = DateTime.now();
+        final result = await _statementExecutor.executePreparedStatementWithTimeout(
+          connectionId: connectionId,
+          preparedExecution: preparedExecution,
+          statementId: stmtId.getOrThrow(),
+          timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+          inFlightRegistry: _inFlightRegistry,
+          inFlightRequestId: trackingId,
+          inFlightExecutionId: executionId,
+        );
+        return await result.fold(
+          (queryResult) => QueryExecutionOutcome.success(
+            OdbcQueryResponseFactory.fromSingleResult(request, queryResult, startedAt: startedAt),
+          ),
+          QueryExecutionOutcome.failure,
+        );
+      } on Object catch (error) {
+        return QueryExecutionOutcome.failure(error);
+      }
+    }
+
     try {
-      final stmtId = await _statementExecutor.getOrPrepareStatement(
-        connectionId: connectionId,
-        preparedExecution: preparedExecution,
-        preparedStatements: preparedStatements,
-        statementKey: statementKey,
-        timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
-        cachePolicy: cachePolicy,
-      );
-      if (stmtId.isError()) {
+      final outcome = await execute();
+      final cleanup = await _statementExecutor.closePreparedStatements(connectionId, preparedStatements.values);
+      if (cleanup.isError()) {
+        final primary = outcome.error == null ? null : OdbcFailureMapper.mapQueryError(outcome.error!);
         return QueryExecutionOutcome.failure(
-          stmtId.exceptionOrNull() ?? StateError('prepare_statement_failed'),
+          domain.QueryExecutionFailure.withContext(
+            message: primary?.message ?? 'Prepared statement cleanup failed',
+            cause: outcome.error ?? cleanup.exceptionOrNull(),
+            context: {
+              ...?primary?.context,
+              'operation': primary?.context['operation'] ?? 'closeStatement',
+              'secondary_errors': [OdbcFailureMapper.mapQueryError(cleanup.exceptionOrNull()!).context],
+            },
+          ),
         );
       }
-
-      final startedAt = DateTime.now();
-      final result = await _statementExecutor.executePreparedStatementWithTimeout(
-        connectionId: connectionId,
-        preparedExecution: preparedExecution,
-        statementId: stmtId.getOrThrow(),
-        timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
-        inFlightRegistry: _inFlightRegistry,
-        inFlightRequestId: trackingId,
-        inFlightExecutionId: executionId,
-      );
-      return await result.fold(
-        (queryResult) => QueryExecutionOutcome.success(
-          OdbcQueryResponseFactory.fromSingleResult(request, queryResult, startedAt: startedAt),
-        ),
-        QueryExecutionOutcome.failure,
-      );
+      return outcome;
     } finally {
-      if (manageInFlightRegistration) {
-        _unregisterInFlightExecution(trackingId, executionId);
-      }
-      await _statementExecutor.closePreparedStatements(
-        connectionId,
-        preparedStatements.values,
-      );
+      if (manageInFlightRegistration) _unregisterInFlightExecution(trackingId, executionId);
     }
   }
 

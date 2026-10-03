@@ -24,6 +24,7 @@ DEFAULT_STREAMING_BENCHMARK = "example/streaming_performance_benchmark.dart"
 
 def _resolve_benchmark_dsn(environment: Mapping[str, str]) -> str:
     for key in (
+        "ODBC_BENCH_DRIVER_DSN",
         "ODBC_TEST_DSN_SQL_SERVER",
         "ODBC_DSN_SQL_SERVER",
         "ODBC_TEST_DSN",

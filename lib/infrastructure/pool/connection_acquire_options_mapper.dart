@@ -18,7 +18,10 @@ extension ConnectionAcquireOptionsMapper on ConnectionAcquireOptions {
         blockFetchBatchSize: ConnectionConstants.defaultBlockFetchBatchSize,
         autoReconnectOnConnectionLost: autoReconnectOnConnectionLost ?? false,
         maxReconnectAttempts: maxReconnectAttempts,
-        reconnectBackoff: reconnectBackoff,
+        // Explicit safety policy: never replay statements after reconnect.
+      // ignore: avoid_redundant_argument_values
+      replayQueriesAfterReconnect: false,
+      reconnectBackoff: reconnectBackoff,
         lazyStrings: lazyStrings,
       );
     }

@@ -1,3 +1,6 @@
+import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:result_dart/result_dart.dart';
+
 /// Result of (optionally) starting a batch transaction: carries the engine
 /// transaction id, or null when the batch is non-transactional.
 class BatchTransactionStart {
@@ -8,29 +11,48 @@ class BatchTransactionStart {
 
 /// Tracks the lifecycle of a batch transaction so it is rolled back at most
 /// once and never after a successful commit.
+enum BatchTransactionState { active, completing, committed, rollingBack, rolledBack, unconfirmed }
+
 class BatchTransactionGuard {
   BatchTransactionGuard(this.transactionId);
 
   final int? transactionId;
-  bool _closed = false;
+  BatchTransactionState _state = BatchTransactionState.active;
+  Object? rollbackError;
 
-  bool get isActive => transactionId != null && !_closed;
+  BatchTransactionState get state => _state;
+  bool get isActive => transactionId != null && _state == BatchTransactionState.active;
+  bool get rollbackConfirmed => _state == BatchTransactionState.rolledBack;
+
+  bool beginCompletion() {
+    if (!isActive) return false;
+    _state = BatchTransactionState.completing;
+    return true;
+  }
+
+  void markUnconfirmed() => _state = BatchTransactionState.unconfirmed;
 
   /// Invokes [rollback] for the active transaction id exactly once, marking the
   /// guard closed. No-op when there is no transaction or it is already closed.
-  Future<void> rollback(
-    Future<void> Function(int transactionId) rollback,
+  Future<Result<void>> rollback(
+    Future<Result<void>> Function(int transactionId) rollback,
   ) async {
     final id = transactionId;
-    if (id == null || _closed) {
-      return;
+    if (id == null || !isActive) return const Success(unit);
+    _state = BatchTransactionState.rollingBack;
+    try {
+      final result = await rollback(id);
+      rollbackError = result.exceptionOrNull();
+      _state = result.isSuccess() ? BatchTransactionState.rolledBack : BatchTransactionState.unconfirmed;
+      return result;
+    } on Object catch (error) {
+      rollbackError = error;
+      markUnconfirmed();
+      return Failure(domain.QueryExecutionFailure.withContext(message: 'Rollback was not confirmed', cause: error, context: const {'outcome_unknown': true, 'retryable': false}));
     }
-
-    _closed = true;
-    await rollback(id);
   }
 
   void markCommitted() {
-    _closed = true;
+    _state = BatchTransactionState.committed;
   }
 }

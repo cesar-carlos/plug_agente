@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/infrastructure/external_services/i_odbc_batched_streaming_query_source.dart';
-import 'package:plug_agente/infrastructure/external_services/odbc_named_streaming_params.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_native_options.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_query_stream_opener.dart';
 import 'package:result_dart/result_dart.dart';
@@ -34,26 +33,17 @@ void main() {
     );
   });
 
-  test('prepareNamedStreamingParams cleans SQL and builds a params buffer', () {
-    final prepared = prepareNamedStreamingParams(
-      sql: 'SELECT * FROM t WHERE id = @id',
-      namedParameters: const {'id': 42},
-    );
-    expect(prepared.cleanedSql.toLowerCase(), contains('?'));
-    expect(prepared.paramsBuffer, isNotEmpty);
-  });
-
-  test('openRowMajor with params uses batched source and forwards knobs', () async {
+  test('openRowMajor with named parameters uses the public service even with a native id', () async {
     when(
-      () => batched.streamRowMajorQuery(
-        7,
+      () => service.streamQueryNamed(
         any(),
         any(),
-        lazyStrings: any(named: 'lazyStrings'),
-        namedParameters: any(named: 'namedParameters'),
+        any(),
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
       ),
     ).thenAnswer(
-      (_) => Stream<Result<QueryResult>>.fromIterable([
+      (_) => Stream.value(
         const Success(
           QueryResult(
             columns: ['id'],
@@ -63,35 +53,35 @@ void main() {
             rowCount: 1,
           ),
         ),
-      ]),
+      ),
     );
-
-    final stream = opener.openRowMajor(
-      connectionId: '7',
-      query: 'SELECT * FROM t WHERE id = @id',
-      nativeStreamingOptions: options,
-      parameters: const {'id': 42},
-      lazyStrings: true,
-    );
-
-    final first = await stream.first;
-    expect(first.isSuccess(), isTrue);
+    final first = await opener
+        .openRowMajor(
+          connectionId: '7',
+          query: 'SELECT @id',
+          parameters: const {'id': 42},
+          nativeStreamingOptions: options,
+        )
+        .first;
+    expect(first.getOrThrow().rows, [
+      [42],
+    ]);
     verify(
-      () => batched.streamRowMajorQuery(
-        7,
-        'SELECT * FROM t WHERE id = @id',
-        options,
-        lazyStrings: true,
-        namedParameters: {'id': 42},
+      () => service.streamQueryNamed(
+        '7',
+        'SELECT @id',
+        {'id': 42},
+        fetchSize: options.fetchSize,
+        chunkSize: options.nativeChunkSizeBytes,
       ),
     ).called(1);
     verifyNever(
-      () => service.streamQueryNamed(
+      () => batched.streamRowMajorQuery(
         any(),
         any(),
         any(),
-        fetchSize: any(named: 'fetchSize'),
-        chunkSize: any(named: 'chunkSize'),
+        lazyStrings: any(named: 'lazyStrings'),
+        namedParameters: any(named: 'namedParameters'),
       ),
     );
   });
@@ -183,34 +173,44 @@ void main() {
     );
   });
 
-  test('openColumnar with params uses batched source', () async {
+  test('openColumnar with named parameters converts only for a columnar consumer', () async {
     when(
-      () => batched.streamColumnarQuery(
-        9,
+      () => service.streamQueryNamed(
         any(),
         any(),
-        namedParameters: any(named: 'namedParameters'),
+        any(),
+        fetchSize: any(named: 'fetchSize'),
+        chunkSize: any(named: 'chunkSize'),
       ),
     ).thenAnswer(
-      (_) => Stream<Result<TypedColumnarResult>>.fromIterable([
-        Success(toTypedColumnar(const QueryResult(columns: ['v'], rows: [], rowCount: 0))),
-      ]),
+      (_) => Stream.value(
+        const Success(
+          QueryResult(
+            columns: ['v'],
+            rows: [
+              [1],
+            ],
+            rowCount: 1,
+          ),
+        ),
+      ),
     );
-
-    final stream = opener.openColumnar(
-      connectionId: '9',
-      query: 'SELECT @v AS v',
-      nativeStreamingOptions: options,
-      parameters: const {'v': 1},
-    );
-
-    await stream.first;
+    final result = await opener
+        .openColumnar(
+          connectionId: '9',
+          query: 'SELECT @v AS v',
+          nativeStreamingOptions: options,
+          parameters: const {'v': 1},
+        )
+        .first;
+    expect(result.getOrThrow().rowCount, 1);
     verify(
-      () => batched.streamColumnarQuery(
-        9,
+      () => service.streamQueryNamed(
+        '9',
         'SELECT @v AS v',
-        options,
-        namedParameters: {'v': 1},
+        {'v': 1},
+        fetchSize: options.fetchSize,
+        chunkSize: options.nativeChunkSizeBytes,
       ),
     ).called(1);
   });

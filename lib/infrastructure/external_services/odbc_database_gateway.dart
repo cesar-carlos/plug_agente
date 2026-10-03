@@ -122,13 +122,14 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
     _txManager = OdbcBatchTransactionManager(
       service: _service,
       metrics: _metrics,
-      onRollbackUnconfirmed: _connectionManager.markConnectionForDiscard,
+      onRollbackUnconfirmed: _connectionManager.markConnectionOutcomeUnknown,
     );
     _statementExecutor = OdbcStatementExecutor(
       service: _service,
       metrics: _metrics,
-      markConnectionForDiscard: _connectionManager.markConnectionForDiscard,
+      markConnectionForDiscard: _connectionManager.markConnectionOutcomeUnknown,
     );
+    _runtimeLifecycle.addInvalidationListener(_statementExecutor.invalidateAfterWorkerRecovery);
     _queryRunner = OdbcQueryRunner(
       queries: _service,
       metrics: _metrics,
@@ -159,6 +160,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
       settings: _settings,
       parallelPool: connectionPool is AdaptiveOdbcConnectionPool ? connectionPool.nativeBulkInsertPool : null,
       inFlightRegistry: _inFlightRegistry,
+      statementExecutor: _statementExecutor,
     );
     _readOnlyBatchParallelExecutor = OdbcReadOnlyBatchParallelExecutor(
       connectionManager: _connectionManager,
@@ -317,8 +319,7 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
         () async {
           final connResult = await _service.connect(
             connectionString,
-            options: _optionsResolver.defaultOptions
-                .toOdbcConnectionOptionsForConnectionString(connectionString),
+            options: _optionsResolver.defaultOptions.toOdbcConnectionOptionsForConnectionString(connectionString),
           );
 
           return connResult.fold(
@@ -461,16 +462,16 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
             return breaker.execute(
               connectionString,
               () => _retryCoordinator.executeQueryWithRetry(
-              (remainingTimeout) => _nonQueryExecutionOrchestrator.execute(
-                query,
-                parameters,
-                connectionString,
-                timeout: remainingTimeout,
-                cancellationToken: cancellationToken,
-                sourceRpcRequestId: sourceRpcRequestId,
+                (remainingTimeout) => _nonQueryExecutionOrchestrator.execute(
+                  query,
+                  parameters,
+                  connectionString,
+                  timeout: remainingTimeout,
+                  cancellationToken: cancellationToken,
+                  sourceRpcRequestId: sourceRpcRequestId,
+                ),
+                timeout: timeout,
               ),
-              timeout: timeout,
-            ),
             );
           },
           (domainFailure) => Failure(_configurationLoadFailure(domainFailure)),
@@ -508,13 +509,13 @@ class OdbcDatabaseGateway implements IDatabaseGateway, IPoolDiscardInflightDiagn
             return _getCircuitBreaker(connectionString).execute(
               connectionString,
               () => _bulkInsertExecutor.executeDirect(
-              request,
-              connectionString,
-              timeout: timeout,
-              databaseType: localConfig.databaseType,
-              cancellationToken: cancellationToken,
-              sourceRpcRequestId: sourceRpcRequestId,
-            ),
+                request,
+                connectionString,
+                timeout: timeout,
+                databaseType: localConfig.databaseType,
+                cancellationToken: cancellationToken,
+                sourceRpcRequestId: sourceRpcRequestId,
+              ),
             );
           },
           (domainFailure) => Failure(

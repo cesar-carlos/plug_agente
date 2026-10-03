@@ -448,11 +448,11 @@ void main() {
         );
         when(
           () => mockService.streamQuery(
-          'conn-cap',
-          any(),
-          fetchSize: any(named: 'fetchSize'),
-          chunkSize: any(named: 'chunkSize'),
-        ),
+            'conn-cap',
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect(any()),
@@ -524,11 +524,11 @@ void main() {
         );
         when(
           () => mockService.streamQuery(
-          'conn-disconnect',
-          any(),
-          fetchSize: any(named: 'fetchSize'),
-          chunkSize: any(named: 'chunkSize'),
-        ),
+            'conn-disconnect',
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect(any()),
@@ -587,7 +587,7 @@ void main() {
 
     test(
       'cancel disconnect failure keeps direct connection lease reserved '
-      'until execution unwinds',
+      'after execution unwinds when cleanup remains unconfirmed',
       () async {
         final controller = StreamController<Result<QueryResult>>();
         mockSettings.poolSize = 1;
@@ -623,19 +623,19 @@ void main() {
         );
         when(
           () => mockService.streamQuery(
-          'conn-1',
-          any(),
-          fetchSize: any(named: 'fetchSize'),
-          chunkSize: any(named: 'chunkSize'),
-        ),
+            'conn-1',
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.streamQuery(
-          'conn-2',
-          any(),
-          fetchSize: any(named: 'fetchSize'),
-          chunkSize: any(named: 'chunkSize'),
-        ),
+            'conn-2',
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
         ).thenAnswer(
           (_) => Stream<Result<QueryResult>>.fromIterable([
             const Success<QueryResult, Exception>(
@@ -699,8 +699,8 @@ void main() {
           'DSN=Test',
           (_) async {},
         );
-        expect(secondAfterUnwind.isSuccess(), isTrue);
-        expect(connectionCounter, 2);
+        expect(secondAfterUnwind.isError(), isTrue);
+        expect(connectionCounter, 1);
       },
     );
 
@@ -727,11 +727,11 @@ void main() {
         );
         when(
           () => mockService.streamQuery(
-          'conn-cancel-timeout',
-          any(),
-          fetchSize: any(named: 'fetchSize'),
-          chunkSize: any(named: 'chunkSize'),
-        ),
+            'conn-cancel-timeout',
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect('conn-cancel-timeout'),
@@ -787,11 +787,11 @@ void main() {
         );
         when(
           () => mockService.streamQuery(
-          'conn-invalid-id',
-          any(),
-          fetchSize: any(named: 'fetchSize'),
-          chunkSize: any(named: 'chunkSize'),
-        ),
+            'conn-invalid-id',
+            any(),
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
         ).thenAnswer((_) => controller.stream);
         when(
           () => mockService.disconnect('conn-invalid-id'),

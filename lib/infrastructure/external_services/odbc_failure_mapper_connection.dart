@@ -1,6 +1,7 @@
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/core/constants/odbc_context_constants.dart';
 import 'package:plug_agente/domain/errors/errors.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_failure_mapper_context.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_failure_mapper_driver.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_failure_mapper_timeout.dart';
@@ -17,6 +18,19 @@ class OdbcFailureMapperConnection {
     final detail = OdbcFailureMapperContext.extractDetail(error);
     final sqlState = OdbcFailureMapperContext.extractSqlState(error);
     final baseContext = OdbcFailureMapperContext.buildBaseContext(error, operation, context);
+
+    if (OdbcErrorInspector.outcomeUnknown(error)) {
+      return ConnectionFailure.withContext(
+        message: 'Database connection operation was not confirmed',
+        cause: error,
+        context: {
+          ...baseContext,
+          'retryable': false,
+          if (OdbcErrorInspector.isTimeout(error)) ...{'timeout': true, 'timeout_stage': 'connect'},
+          'user_message': 'The database did not confirm the connection operation. Recovery is required.',
+        },
+      );
+    }
 
     if (error is WorkerCrashedError) {
       return ConnectionFailure.withContext(
@@ -66,7 +80,9 @@ class OdbcFailureMapperConnection {
       );
     }
 
-    if (OdbcFailureMapperTimeout.isTimeout(sqlState, detail)) {
+    if (OdbcErrorInspector.isTimeout(error) ||
+        (OdbcErrorInspector.structuredError(error)?.details.code == null &&
+            OdbcFailureMapperTimeout.isTimeout(sqlState, detail))) {
       return ConnectionFailure.withContext(
         message: 'Connection timeout when connecting to database',
         cause: error,

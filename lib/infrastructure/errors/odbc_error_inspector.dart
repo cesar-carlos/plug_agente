@@ -6,7 +6,38 @@ import 'package:plug_agente/domain/errors/failures.dart' as domain;
 class OdbcErrorInspector {
   OdbcErrorInspector._();
 
+  static OdbcError? structuredError(Object error, [Set<Object>? visited]) {
+    final seen = visited ?? Set<Object>.identity();
+    if (!seen.add(error)) return null;
+    if (error is OdbcError) return error;
+    if (error is OdbcErrorConvertible) return error.toOdbcError();
+    if (error is domain.Failure) {
+      final cause = error.cause;
+      final nested = error.context['error'];
+      return (cause == null ? null : structuredError(cause, seen)) ??
+          (nested is Object ? structuredError(nested, seen) : null);
+    }
+    return null;
+  }
+
+  static bool outcomeUnknown(Object error, [Set<Object>? visited]) {
+    final seen = visited ?? Set<Object>.identity();
+    if (!seen.add(error)) return false;
+    if (structuredError(error)?.details.outcomeUnknown ?? false) return true;
+    if (error is domain.Failure) {
+      if (error.context['outcome_unknown'] == true) return true;
+      final cause = error.cause;
+      final nested = error.context['error'];
+      return (cause != null && outcomeUnknown(cause, seen)) || (nested is Object && outcomeUnknown(nested, seen));
+    }
+    return false;
+  }
+
+  static OdbcErrorCode? code(Object error) => structuredError(error)?.code;
+
   static String message(Object error) {
+    final structured = structuredError(error);
+    if (structured != null) return structured.message;
     if (error is OdbcError) {
       return error.message;
     }
@@ -27,6 +58,8 @@ class OdbcErrorInspector {
   }
 
   static String? sqlState(Object error) {
+    final structured = structuredError(error);
+    if (structured != null) return _normalizeSqlState(structured.sqlState);
     if (error is domain.Failure) {
       final contextSqlState = _normalizeSqlState(error.context['odbc_sql_state']);
       if (contextSqlState != null) {
@@ -57,6 +90,8 @@ class OdbcErrorInspector {
   }
 
   static int? nativeCode(Object error) {
+    final structured = structuredError(error);
+    if (structured != null) return structured.nativeCode;
     if (error is domain.Failure) {
       final contextNativeCode = _normalizeNativeCode(
         error.context['odbc_native_code'],
@@ -89,6 +124,11 @@ class OdbcErrorInspector {
   }
 
   static bool isTimeout(Object error) {
+    final structured = structuredError(error);
+    if (structured != null && structured.details.code != null) {
+      return structured.code == OdbcErrorCode.timeout;
+    }
+    if (code(error) == OdbcErrorCode.timeout) return true;
     if (error is TimeoutException) {
       return true;
     }

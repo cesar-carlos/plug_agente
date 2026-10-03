@@ -8,7 +8,9 @@ import 'package:plug_agente/domain/entities/query_request.dart';
 import 'package:plug_agente/domain/entities/query_response.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
 import 'package:plug_agente/domain/repositories/i_connection_pool.dart';
+import 'package:plug_agente/domain/validation/sql_validator.dart';
 import 'package:plug_agente/infrastructure/config/database_type.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_lost_session_failure.dart';
 import 'package:plug_agente/infrastructure/external_services/direct_odbc_query_executor.dart';
@@ -152,6 +154,10 @@ final class PooledOdbcQueryExecutor {
 
       if (!outcome.isSuccess) {
         final error = outcome.error!;
+        if (OdbcErrorInspector.outcomeUnknown(error)) {
+          _connectionManager.markConnectionOutcomeUnknown(connId);
+          return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'execute_query'));
+        }
         if (OdbcQueryExecutionPolicies.isInvalidConnectionIdError(error)) {
           _connectionManager.recordPooledExecutionFailure(
             connectionString: connectionString,
@@ -213,7 +219,10 @@ final class PooledOdbcQueryExecutor {
           return Failure(lostSession);
         }
 
-        if (allowAdaptiveRetry && _optionsResolver.isBufferTooSmallError(error)) {
+        if (allowAdaptiveRetry &&
+            !OdbcErrorInspector.outcomeUnknown(error) &&
+            SqlValidator.isReadOnlyQuery(preparedExecution.sql) &&
+            _optionsResolver.isBufferTooSmallError(error)) {
           _metrics.recordOdbcBufferExpansion();
           _metrics.recordDiagnosticReason(
             category: 'query',
@@ -375,6 +384,11 @@ final class PooledOdbcQueryExecutor {
           timeout: timeout,
         ),
       );
+    } on Object catch (error) {
+      if (OdbcErrorInspector.outcomeUnknown(error)) {
+        _connectionManager.markConnectionOutcomeUnknown(connId);
+      }
+      return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'execute_query'));
     } finally {
       if (!releasedConnectionEarly) {
         await _connectionManager.releaseConnectionSafely(connId);

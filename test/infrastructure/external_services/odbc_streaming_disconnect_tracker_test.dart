@@ -56,7 +56,7 @@ void main() {
       expect(result.isError(), isTrue);
       final failure = result.exceptionOrNull()! as domain.Failure;
       expect(failure.context['discarded'], isTrue);
-      expect(tracker.inFlightCount, 0);
+      expect(tracker.inFlightCount, 1);
     });
 
     test('deduplicates work and rejects new cleanup when the bounded queue is full', () async {

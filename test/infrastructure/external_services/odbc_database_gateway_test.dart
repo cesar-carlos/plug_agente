@@ -37,6 +37,7 @@ class MockNativeCompatibleConnectionPool extends Mock
 void main() {
   setUpAll(() {
     registerFallbackValue(const ConnectionOptions());
+    registerFallbackValue(PoolDiscardReason.outcomeUnknown);
     registerFallbackValue(const ConnectionAcquireOptions());
     registerFallbackValue(Duration.zero);
     registerFallbackValue(<Object?>[]);
@@ -68,7 +69,7 @@ void main() {
         metrics,
         mockSettings,
       );
-      when(() => mockConnectionPool.discard(any())).thenAnswer((_) async {
+      when(() => mockConnectionPool.discard(any(), reason: any(named: 'reason'))).thenAnswer((_) async {
         return const Success(unit);
       });
       when(
@@ -247,7 +248,7 @@ void main() {
           () => mockService.connect(any(), options: any(named: 'options')),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).called(1);
         verify(() => mockConnectionPool.recycle(any())).called(1);
       },
     );
@@ -343,7 +344,7 @@ void main() {
         expect(result.exceptionOrNull(), isA<domain.ConnectionFailure>());
         expect(metrics.connectTimeoutCount, 3);
         verify(() => mockService.connect(any(), options: any(named: 'options'))).called(3);
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(3);
+        verify(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).called(3);
         verify(() => mockConnectionPool.recycle(any())).called(1);
       },
     );
@@ -425,7 +426,7 @@ void main() {
         expect(result.isSuccess(), isTrue);
         verify(() => mockService.connect(any(), options: any(named: 'options'))).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).called(1);
         verify(() => mockConnectionPool.recycle(any())).called(1);
       },
     );
@@ -509,7 +510,7 @@ void main() {
         final result = await gateway.executeQuery(request);
 
         expect(result.isSuccess(), isTrue);
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).called(1);
         verifyNever(() => mockConnectionPool.recycle(connectionString));
       },
     );
@@ -1699,11 +1700,11 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       });
       when(
         () => mockService.streamQueryMultiBatches(
-            pooledConnectionId,
-            any(),
-            fetchSize: any(named: 'fetchSize'),
-            chunkSize: any(named: 'chunkSize'),
-          ),
+          pooledConnectionId,
+          any(),
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).thenAnswer((_) {
         return Stream<Result<QueryResultMultiBatchItem>>.fromIterable(const [
           Success(
@@ -1750,11 +1751,11 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
       ]);
       verify(
         () => mockService.streamQueryMultiBatches(
-            pooledConnectionId,
-            request.query,
-            fetchSize: any(named: 'fetchSize'),
-            chunkSize: any(named: 'chunkSize'),
-          ),
+          pooledConnectionId,
+          request.query,
+          fetchSize: any(named: 'fetchSize'),
+          chunkSize: any(named: 'chunkSize'),
+        ),
       ).called(1);
     });
 
@@ -1856,10 +1857,20 @@ WHERE id = :id OR parent_id = :id OR label = @label OR alias = @label
         expect(response.resultSets, hasLength(2));
         expect(response.data.single['a'], 1);
         verify(
-          () => mockService.streamQueryMultiBatches(pooledConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
+          () => mockService.streamQueryMultiBatches(
+            pooledConnectionId,
+            sql,
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
         ).called(1);
         verify(
-          () => mockService.streamQueryMultiBatches(directConnectionId, sql, fetchSize: any(named: 'fetchSize'), chunkSize: any(named: 'chunkSize')),
+          () => mockService.streamQueryMultiBatches(
+            directConnectionId,
+            sql,
+            fetchSize: any(named: 'fetchSize'),
+            chunkSize: any(named: 'chunkSize'),
+          ),
         ).called(1);
         verify(() => mockService.disconnect(directConnectionId)).called(1);
         expect(metrics.multiResultPoolVacuousFallbackCount, 1);
@@ -3549,8 +3560,8 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
 
         expect(result.isError(), isTrue);
         verify(() => mockService.cancelStatement(ownedId, stmtId)).called(1);
-        verify(() => mockService.rollbackTransaction(ownedId, 1)).called(1);
-        verify(() => mockService.closeStatement(ownedId, stmtId)).called(1);
+        verifyNever(() => mockService.rollbackTransaction(ownedId, 1));
+        verifyNever(() => mockService.closeStatement(ownedId, stmtId));
         expect(metrics.timeoutCancelSuccessCount, 1);
       },
     );
@@ -3711,7 +3722,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockConnectionPool.release(pooledConnectionId)).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConnectionPool.discard(pooledConnectionId)).thenAnswer((_) async {
+        when(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).thenAnswer((_) async {
           return const Success(unit);
         });
 
@@ -3730,10 +3741,10 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         expect(queryFailure.context['reason'], 'query_timeout');
         expect(metrics.timeoutCancelSuccessCount, 1);
         verify(() => mockService.asyncCancel(asyncRequestId)).called(1);
-        verify(() => mockService.asyncFree(asyncRequestId)).called(1);
+        verifyNever(() => mockService.asyncFree(asyncRequestId));
         verifyNever(() => mockConnectionPool.recycle(connectionString));
         verifyNever(() => mockConnectionPool.release(pooledConnectionId));
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).called(1);
         verifyNever(
           () => mockService.prepare(
             any(),
@@ -3783,7 +3794,7 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         when(() => mockConnectionPool.recycle(any())).thenAnswer((_) async {
           return const Success(unit);
         });
-        when(() => mockConnectionPool.discard(pooledConnectionId)).thenAnswer((_) async {
+        when(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).thenAnswer((_) async {
           return Failure(Exception('discard failed'));
         });
 
@@ -3803,11 +3814,11 @@ WHERE a = :a AND b = :b AND c = :c AND d = :d AND e = :e AND f = :f
         expect(queryFailure.context['reason'], 'query_timeout');
         expect(metrics.timeoutCancelFailureCount, greaterThanOrEqualTo(1));
         await Future<void>.delayed(Duration.zero);
-        expect(metrics.poolReleaseFailureCount, greaterThanOrEqualTo(1));
+        expect(queryFailure.context['outcome_unknown'], isTrue);
         verify(() => mockService.asyncCancel(asyncRequestId)).called(1);
-        verify(() => mockService.asyncFree(asyncRequestId)).called(1);
+        verifyNever(() => mockService.asyncFree(asyncRequestId));
         verifyNever(() => mockConnectionPool.recycle(connectionString));
-        verify(() => mockConnectionPool.discard(pooledConnectionId)).called(1);
+        verify(() => mockConnectionPool.discard(pooledConnectionId, reason: any(named: 'reason'))).called(1);
       },
     );
 

@@ -1,9 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:odbc_fast/odbc_fast_native.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
 import 'package:plug_agente/infrastructure/external_services/i_odbc_batched_streaming_query_source.dart';
-import 'package:plug_agente/infrastructure/external_services/odbc_named_streaming_params.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_streaming_native_options.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -11,20 +9,23 @@ import 'package:result_dart/result_dart.dart';
 ///
 /// Uses `streamQueryColumnarBatched` from `odbc_fast` 4.x so chunks stay columnar
 /// until the gateway maps them into Hub row-map wire chunks. Named parameters use
-/// row-major `streamQueryBatched` + `paramsBuffer` (columnar batched has no params
-/// API) and convert to [TypedColumnarResult] when needed.
+/// the public named Result service and convert to [TypedColumnarResult] only
+/// when a typed columnar consumer requires it.
 class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySource {
   OdbcBatchedStreamingQuerySource({
     required AsyncNativeOdbcConnection asyncNative,
     required NativeOdbcConnection syncNative,
     required bool isAsync,
+    required OdbcService service,
   }) : _asyncNative = asyncNative,
        _syncNative = syncNative,
-       _isAsync = isAsync;
+       _isAsync = isAsync,
+       _service = service;
 
   final AsyncNativeOdbcConnection _asyncNative;
   final NativeOdbcConnection _syncNative;
   final bool _isAsync;
+  final OdbcService _service;
 
   @override
   Stream<Result<QueryResult>> streamRowMajorQuery(
@@ -35,13 +36,21 @@ class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySourc
     Map<String, Object?>? namedParameters,
   }) async* {
     try {
-      final prepared = _prepareSqlAndParams(sql, namedParameters);
+      if (namedParameters != null && namedParameters.isNotEmpty) {
+        yield* _service.streamQueryNamed(
+          nativeConnectionId.toString(),
+          sql,
+          namedParameters,
+          fetchSize: options.fetchSize,
+          chunkSize: options.nativeChunkSizeBytes,
+        );
+        return;
+      }
       await for (final buffer in _streamRowMajorBatched(
         nativeConnectionId,
-        prepared.sql,
+        sql,
         options,
         lazyStrings: lazyStrings,
-        paramsBuffer: prepared.paramsBuffer,
       )) {
         yield Success(
           QueryResult(
@@ -51,8 +60,8 @@ class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySourc
           ),
         );
       }
-    } on Exception catch (error) {
-      yield Failure(error);
+    } on Object catch (error) {
+      yield Failure(OdbcFailureMapper.mapStreamingError(error));
     }
   }
 
@@ -85,23 +94,9 @@ class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySourc
       )) {
         yield Success(chunk);
       }
-    } on Exception catch (error) {
-      yield Failure(error);
+    } on Object catch (error) {
+      yield Failure(OdbcFailureMapper.mapStreamingError(error));
     }
-  }
-
-  ({String sql, Uint8List? paramsBuffer}) _prepareSqlAndParams(
-    String sql,
-    Map<String, Object?>? namedParameters,
-  ) {
-    if (namedParameters == null || namedParameters.isEmpty) {
-      return (sql: sql, paramsBuffer: null);
-    }
-    final prepared = prepareNamedStreamingParams(
-      sql: sql,
-      namedParameters: namedParameters,
-    );
-    return (sql: prepared.cleanedSql, paramsBuffer: prepared.paramsBuffer);
   }
 
   Stream<ParsedRowBuffer> _streamRowMajorBatched(
@@ -109,7 +104,6 @@ class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySourc
     String sql,
     OdbcStreamingNativeOptions options, {
     required bool lazyStrings,
-    Uint8List? paramsBuffer,
   }) {
     if (_isAsync) {
       return _asyncNative.streamQueryBatched(
@@ -120,7 +114,6 @@ class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySourc
         maxBufferBytes: options.maxResultBufferBytes,
         resultEncodingWire: ResultEncoding.rowMajor.wireCode,
         lazyStrings: lazyStrings,
-        paramsBuffer: paramsBuffer,
       );
     }
 
@@ -130,7 +123,6 @@ class OdbcBatchedStreamingQuerySource implements IOdbcBatchedStreamingQuerySourc
       fetchSize: options.fetchSize,
       chunkSize: options.nativeChunkSizeBytes,
       lazyStrings: lazyStrings,
-      paramsBuffer: paramsBuffer,
     );
   }
 

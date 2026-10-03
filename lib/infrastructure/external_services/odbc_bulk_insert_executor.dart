@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' as io;
 
 import 'package:odbc_fast/odbc_fast.dart' hide DatabaseType;
 import 'package:plug_agente/core/constants/connection_constants.dart';
@@ -12,13 +13,17 @@ import 'package:plug_agente/domain/repositories/i_odbc_native_bulk_insert_pool.d
 import 'package:plug_agente/infrastructure/config/database_type.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/errors/odbc_failure_mapper.dart';
+import 'package:plug_agente/infrastructure/external_services/batch_transaction.dart';
 import 'package:plug_agente/infrastructure/external_services/bulk_insert_parallel_policy.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_batch_transaction_manager.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_connection_options_resolver.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_execution_deadline.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_gateway_connection_manager.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_gateway_query_preparation.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_in_flight_execution_registry.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_native_bcp_policy.dart';
 import 'package:plug_agente/infrastructure/external_services/odbc_native_bulk_insert_builder.dart';
+import 'package:plug_agente/infrastructure/external_services/odbc_statement_executor.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 import 'package:plug_agente/infrastructure/pool/connection_acquire_options_mapper.dart';
 import 'package:result_dart/result_dart.dart';
@@ -37,13 +42,21 @@ final class OdbcBulkInsertExecutor {
     required IOdbcConnectionSettings settings,
     IOdbcNativeBulkInsertPool? parallelPool,
     OdbcInFlightExecutionRegistry? inFlightRegistry,
+    OdbcStatementExecutor? statementExecutor,
   }) : _connectionManager = connectionManager,
        _optionsResolver = optionsResolver,
        _service = service,
        _metrics = metrics,
        _settings = settings,
        _parallelPool = parallelPool,
-       _inFlightRegistry = inFlightRegistry;
+       _inFlightRegistry = inFlightRegistry,
+       _statementExecutor =
+           statementExecutor ??
+           OdbcStatementExecutor(
+             service: service,
+             metrics: metrics,
+             markConnectionForDiscard: connectionManager.markConnectionOutcomeUnknown,
+           );
 
   final OdbcGatewayConnectionManager _connectionManager;
   final OdbcConnectionOptionsResolver _optionsResolver;
@@ -52,6 +65,7 @@ final class OdbcBulkInsertExecutor {
   final IOdbcConnectionSettings _settings;
   final IOdbcNativeBulkInsertPool? _parallelPool;
   final OdbcInFlightExecutionRegistry? _inFlightRegistry;
+  final OdbcStatementExecutor _statementExecutor;
 
   /// Validates the shape of [request], returning a typed failure or null.
   static domain.Failure? validate(BulkInsertRequest request) {
@@ -151,7 +165,8 @@ final class OdbcBulkInsertExecutor {
       );
     }
 
-    if (databaseType != null &&
+    if (!_requiresWideTextBinding(request) &&
+        databaseType != null &&
         BulkInsertParallelPolicy.shouldUseParallel(
           databaseType: databaseType,
           requestRowCount: request.rowCount,
@@ -177,6 +192,7 @@ final class OdbcBulkInsertExecutor {
       return Failure(leaseResult.exceptionOrNull()!);
     }
     final directLease = leaseResult.getOrThrow();
+    var connectionEstablished = false;
     var directLeaseReleased = false;
     void releaseDirectLease() {
       if (directLeaseReleased) {
@@ -197,6 +213,7 @@ final class OdbcBulkInsertExecutor {
       );
       return await connectResult.fold(
         (connection) async {
+          connectionEstablished = true;
           final inFlightRequestId = _inFlightTrackingKey(sourceRpcRequestId);
           try {
             _registerInFlightExecution(inFlightRequestId, connection.id);
@@ -207,6 +224,7 @@ final class OdbcBulkInsertExecutor {
               timeout: timeout,
               databaseType: databaseType,
               wrapChunksInTransaction: true,
+              forceTransaction: requireAtomic,
               allowNativeBcp: !requireAtomic,
               cancellationToken: cancellationToken,
             );
@@ -215,6 +233,7 @@ final class OdbcBulkInsertExecutor {
             }
             return Success(inserted.getOrThrow());
           } on TimeoutException catch (error) {
+            _connectionManager.markConnectionOutcomeUnknown(connection.id);
             return Failure(
               domain.QueryExecutionFailure.withContext(
                 message: 'Bulk insert execution timeout',
@@ -223,6 +242,8 @@ final class OdbcBulkInsertExecutor {
                   'timeout': true,
                   'timeout_stage': 'sql',
                   'stage': 'bulk_insert',
+                  'outcome_unknown': true,
+                  'retryable': false,
                   'reason': RpcSqlBudgetConstants.queryTimeoutReason,
                   if (timeout != null) 'timeout_ms': timeout.inMilliseconds,
                 },
@@ -250,7 +271,7 @@ final class OdbcBulkInsertExecutor {
         },
       );
     } finally {
-      releaseDirectLease();
+      if (!connectionEstablished) releaseDirectLease();
     }
   }
 
@@ -398,12 +419,13 @@ final class OdbcBulkInsertExecutor {
     required DatabaseType? databaseType,
     required bool wrapChunksInTransaction,
     required bool allowNativeBcp,
+    bool forceTransaction = false,
     CancellationToken? cancellationToken,
   }) {
     final chunkSize = ConnectionConstants.bulkInsertChunkRowCount;
     final shouldWrap =
         wrapChunksInTransaction &&
-        request.rows.length > chunkSize &&
+        (forceTransaction || request.rows.length > chunkSize) &&
         !(allowNativeBcp && shouldAttemptNativeBcpBulkInsert(databaseType: databaseType));
     if (!shouldWrap) {
       return _executeChunkedBulkInsert(
@@ -436,13 +458,22 @@ final class OdbcBulkInsertExecutor {
     CancellationToken? cancellationToken,
   }) async {
     final remaining = OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout;
-    final beginResult = await _service.beginTransaction(
-      connectionId,
-      savepointDialect: SavepointDialect.auto,
+    final manager = OdbcBatchTransactionManager(
+      service: _service,
+      metrics: _metrics,
+      onRollbackUnconfirmed: _connectionManager.markConnectionOutcomeUnknown,
+    );
+    final beginResult = await manager.beginIfNeeded(
+      connectionId: connectionId,
+      transactionEnabled: true,
       accessMode: TransactionAccessMode.readWrite,
       lockTimeout: remaining,
+      deadline: deadline,
     );
     if (beginResult.isError()) {
+      if (OdbcErrorInspector.outcomeUnknown(beginResult.exceptionOrNull()!)) {
+        _connectionManager.markConnectionOutcomeUnknown(connectionId);
+      }
       return Failure(
         OdbcFailureMapper.mapQueryError(
           beginResult.exceptionOrNull()!,
@@ -451,7 +482,31 @@ final class OdbcBulkInsertExecutor {
       );
     }
 
-    final transactionId = beginResult.getOrThrow();
+    final guard = BatchTransactionGuard(beginResult.getOrThrow().transactionId);
+    Future<Result<int>> abort(Object error) async {
+      if (OdbcErrorInspector.outcomeUnknown(error) || error is TimeoutException) {
+        guard.markUnconfirmed();
+        _connectionManager.markConnectionOutcomeUnknown(connectionId);
+      }
+      await guard.rollback((id) => manager.rollbackIfNeeded(connectionId, id));
+      final mapped = OdbcFailureMapper.mapQueryError(
+        error,
+        operation: 'bulk_insert_transaction_execute',
+        context: {
+          if (guard.state == BatchTransactionState.unconfirmed) ...{
+            'outcome_unknown': true,
+            'retryable': false,
+          },
+          'rollback_confirmed': guard.rollbackConfirmed,
+          if (guard.rollbackError != null)
+            'secondary_errors': [
+              OdbcFailureMapper.mapQueryError(guard.rollbackError!).context,
+            ],
+        },
+      );
+      return Failure(mapped);
+    }
+
     try {
       final inserted = await _executeChunkedBulkInsert(
         connectionId: connectionId,
@@ -462,39 +517,12 @@ final class OdbcBulkInsertExecutor {
         allowNativeBcp: false,
         cancellationToken: cancellationToken,
       );
-      if (inserted.isError()) {
-        await _rollbackBulkTransaction(connectionId, transactionId);
-        return inserted;
-      }
-
-      final commitResult = await _service.commitTransaction(connectionId, transactionId);
-      if (commitResult.isError()) {
-        await _rollbackBulkTransaction(connectionId, transactionId);
-        return Failure(
-          OdbcFailureMapper.mapQueryError(
-            commitResult.exceptionOrNull()!,
-            operation: 'bulk_insert_transaction_commit',
-          ),
-        );
-      }
+      if (inserted.isError()) return await abort(inserted.exceptionOrNull()!);
+      final commit = await manager.commit(connectionId: connectionId, guard: guard, deadline: deadline);
+      if (commit.isError()) return Failure(commit.exceptionOrNull()!);
       return inserted;
-    } on TimeoutException {
-      await _rollbackBulkTransaction(connectionId, transactionId);
-      rethrow;
-    } on Object {
-      await _rollbackBulkTransaction(connectionId, transactionId);
-      rethrow;
-    }
-  }
-
-  Future<void> _rollbackBulkTransaction(String connectionId, int transactionId) async {
-    try {
-      final rollback = await _service.rollbackTransaction(connectionId, transactionId);
-      if (rollback.isError()) {
-        _connectionManager.markConnectionForDiscard(connectionId);
-      }
-    } on Object {
-      _connectionManager.markConnectionForDiscard(connectionId);
+    } on Object catch (error) {
+      return await abort(error);
     }
   }
 
@@ -564,6 +592,17 @@ final class OdbcBulkInsertExecutor {
     if (cancellationToken?.isCancelled ?? false) {
       return Failure(_cancelledFailure());
     }
+    // Windows array binding in 5.0.0 uses narrow text buffers. Select the
+    // public wide parameter path before dispatch so Unicode cannot be corrupted.
+    if (_requiresWideTextBinding(request)) {
+      return _executeWideTextChunk(
+        connectionId: connectionId,
+        request: request,
+        deadline: deadline,
+        timeout: timeout,
+        cancellationToken: cancellationToken,
+      );
+    }
     final pilotEnabled = allowNativeBcp && shouldAttemptNativeBcpBulkInsert(databaseType: databaseType);
     if (pilotEnabled) {
       _metrics.recordDiagnosticReason(
@@ -621,6 +660,110 @@ final class OdbcBulkInsertExecutor {
         return Failure(mapped);
       },
     );
+  }
+
+  bool _requiresWideTextBinding(BulkInsertRequest request) {
+    if (!io.Platform.isWindows) return false;
+    for (var column = 0; column < request.columns.length; column++) {
+      if (request.columns[column].type != BulkInsertColumnType.text) continue;
+      for (final row in request.rows) {
+        final value = row[column];
+        if (value != null && value.toString().codeUnits.any((unit) => unit > 127)) return true;
+      }
+    }
+    return false;
+  }
+
+  Future<Result<int>> _executeWideTextChunk({
+    required String connectionId,
+    required BulkInsertRequest request,
+    required DateTime? deadline,
+    required Duration? timeout,
+    CancellationToken? cancellationToken,
+  }) async {
+    final identifier = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+    String quote(String path) {
+      final parts = path.split('.');
+      if (parts.any((part) => !identifier.hasMatch(part) || part.length > 128)) {
+        throw const FormatException('Bulk insert requires a simple identifier path');
+      }
+      return parts.map((part) => '"$part"').join('.');
+    }
+
+    final statements = _statementExecutor;
+    final owned = <String, int>{};
+    Future<Result<int>> execute() async {
+      final sql =
+          'INSERT INTO ${quote(request.table)} '
+          '(${request.columns.map((column) => quote(column.name)).join(', ')}) '
+          'VALUES (${List.generate(request.columns.length, (index) => ':p$index').join(', ')})';
+      final prepared = await statements.getOrPrepareStatement(
+        connectionId: connectionId,
+        preparedExecution: OdbcPreparedQueryExecution(
+          sql: sql,
+          parameters: {for (var index = 0; index < request.columns.length; index++) 'p$index': null},
+        ),
+        preparedStatements: owned,
+        statementKey: sql,
+        timeout: OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout,
+      );
+      if (prepared.isError()) return Failure(prepared.exceptionOrNull()!);
+      _metrics.store.incrementEventCounter('odbc_bulk_wide_text_path');
+      var inserted = 0;
+      for (final row in request.rows) {
+        if (cancellationToken?.isCancelled ?? false) return Failure(_cancelledFailure());
+        final remaining = OdbcExecutionDeadline.remainingFromDeadline(deadline) ?? timeout;
+        if (remaining != null && remaining <= Duration.zero) {
+          return Failure(
+            domain.QueryExecutionFailure.withContext(
+              message: 'Bulk insert budget exhausted',
+              context: const {'timeout': true, 'retryable': false, 'execution_not_started': true},
+            ),
+          );
+        }
+        final parameters = <String, Object?>{};
+        for (var index = 0; index < row.length; index++) {
+          final value = row[index];
+          parameters['p$index'] = value == null
+              ? null
+              : switch (request.columns[index].type) {
+                  BulkInsertColumnType.text => value.toString(),
+                  BulkInsertColumnType.decimal => ParamValueDecimal(value.toString()),
+                  BulkInsertColumnType.timestamp => value is DateTime ? value.toString() : value,
+                  _ => value,
+                };
+        }
+        final result = await statements.executePreparedStatementWithTimeout(
+          connectionId: connectionId,
+          preparedExecution: OdbcPreparedQueryExecution(sql: sql, parameters: parameters),
+          statementId: prepared.getOrThrow(),
+          timeout: remaining,
+        );
+        if (result.isError()) return Failure(result.exceptionOrNull()!);
+        inserted++;
+      }
+      return Success(inserted);
+    }
+
+    Result<int> result;
+    try {
+      result = await execute();
+    } on Object catch (error) {
+      result = Failure(OdbcFailureMapper.mapQueryError(error, operation: 'bulk_insert_wide_text'));
+    }
+    final closed = await statements.closePreparedStatements(connectionId, owned.values);
+    if (closed.isError()) {
+      if (result.isSuccess()) return Failure(closed.exceptionOrNull()!);
+      return Failure(
+        OdbcFailureMapper.mapQueryError(
+          result.exceptionOrNull()!,
+          context: {
+            'secondary_errors': [OdbcFailureMapper.mapQueryError(closed.exceptionOrNull()!).context],
+          },
+        ),
+      );
+    }
+    return result;
   }
 
   domain.Failure _parallelBulkFailure(
