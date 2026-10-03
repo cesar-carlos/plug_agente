@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:odbc_fast/odbc_fast.dart';
 import 'package:plug_agente/domain/repositories/i_odbc_worker_runtime_recovery_port.dart';
+import 'package:plug_agente/infrastructure/errors/odbc_error_inspector.dart';
 import 'package:plug_agente/infrastructure/logging/odbc_resilience_log.dart';
 import 'package:plug_agente/infrastructure/metrics/metrics_collector.dart';
 
@@ -31,8 +32,8 @@ final class OdbcEventBridge {
     _subscription = adminService.events.listen(_handleEvent);
     _diagnosticSubscription = AppLogger.logger.onRecord.listen((record) {
       try {
-        final error = record.error;
-        if (error is OdbcError && !_isDisposed) {
+        final error = record.error == null ? null : OdbcErrorInspector.structuredError(record.error!);
+        if (error != null && !_isDisposed) {
           final diagnostic = <String, Object?>{
             'kind': 'odbc_diagnostic',
             'timestamp': record.time.toIso8601String(),
@@ -51,8 +52,9 @@ final class OdbcEventBridge {
           }
           _metrics?.store.incrementEventCounter('odbc_diagnostic');
           if (error.details.outcomeUnknown) _metrics?.store.incrementEventCounter('odbc_outcome_unconfirmed');
-          if (error.details.secondaryErrors.isNotEmpty)
+          if (error.details.secondaryErrors.isNotEmpty) {
             _metrics?.store.incrementEventCounter('odbc_cleanup_unconfirmed');
+          }
         }
       } on Object {
         // Telemetry must never change SQL execution or recurse into the logger.

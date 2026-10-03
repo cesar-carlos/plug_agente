@@ -397,8 +397,9 @@ class OdbcNonQueryExecutionOrchestrator {
               ),
             );
           } on Object catch (error) {
-            if (OdbcErrorInspector.outcomeUnknown(error))
+            if (OdbcErrorInspector.outcomeUnknown(error)) {
               _connectionManager.markConnectionOutcomeUnknown(connection.id);
+            }
             return Failure(OdbcFailureMapper.mapQueryError(error, operation: 'execute_non_query_direct'));
           } finally {
             _unregisterInFlightExecution(inFlightRequestId);

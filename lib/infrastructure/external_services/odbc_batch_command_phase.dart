@@ -69,195 +69,108 @@ final class OdbcBatchCommandPhase {
     final preparedStatements = <String, int>{};
     Result<void> cleanup = const Success(unit);
     Future<Result<List<SqlCommandResult>>> execute() async {
-    try {
-      for (var i = 0; i < commands.length; i++) {
-        if (cancellationToken?.isCancelled ?? false) {
-          if (options.transaction) {
-            final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
-            await transaction.rollback(
-              (transactionId) => _txManager.rollbackIfNeeded(
-                context.connectionId,
-                transactionId,
-                timeout: rollbackTimeout,
-              ),
-            );
-            return Failure(domain.QueryExecutionFailure('Transaction aborted because the batch was cancelled'));
-          }
-          for (; i < commands.length; i++) {
-            results.add(SqlCommandResult.failure(index: i, error: 'Batch SQL execution was cancelled'));
-          }
-          break;
-        }
-        final command = commands[i];
-        final validation = SqlValidator.validateSqlForExecution(command.sql);
-        if (validation.isError()) {
-          final failure = validation.exceptionOrNull()! as domain.Failure;
-          if (options.transaction) {
-            final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
-            await transaction.rollback(
-              (transactionId) => _txManager.rollbackIfNeeded(
-                context.connectionId,
-                transactionId,
-                timeout: rollbackTimeout,
-              ),
-            );
-            return Failure(
-              domain.QueryExecutionFailure.withContext(
-                message: 'Transaction aborted due to command validation failure',
-                cause: failure,
-                context: {
-                  'reason': OdbcContextConstants.transactionFailedReason,
-                  'operation': 'transaction_validation',
-                  'failedIndex': i,
-                  'detail': failure.message,
-                },
-              ),
-            );
-          }
-          results.add(SqlCommandResult.failure(index: i, error: failure.message));
-          continue;
-        }
-
-        final commandRequest = QueryRequest(
-          id: _uuid.v4(),
-          agentId: agentId,
-          query: command.sql,
-          parameters: command.params,
-          timestamp: DateTime.now(),
-          sourceRpcRequestId: sourceRpcRequestId,
-        );
-        final preparedExecution = OdbcPreparedQueryExecution(
-          sql: command.sql,
-          parameters: command.params,
-        );
-
-        try {
-          final remainingTimeout = _remainingTimeout(context.deadline);
-
-          Future<QueryExecutionOutcome> executeCurrentCommand() async {
-            final currentConnectionId = connectionState.connectionId;
-            if (currentConnectionId == null) {
-              return QueryExecutionOutcome.failure(
-                StateError('batch_connection_unavailable'),
-              );
-            }
-
-            final key = OdbcQueryRunner.preparedStatementKeyFor(preparedExecution);
-            final usePrepared = repeatedPreparedKeys.contains(key);
-            return usePrepared
-                ? _queryRunner.runPreparedBatch(
-                    connectionId: currentConnectionId,
-                    request: commandRequest,
-                    preparedExecution: preparedExecution,
-                    preparedStatements: preparedStatements,
-                    statementKey: key,
-                    timeout: remainingTimeout,
-                    cancellationToken: cancellationToken,
-                  )
-                : _queryRunner.runWithTimeout(
-                    connId: currentConnectionId,
-                    request: commandRequest,
-                    preparedExecution: preparedExecution,
-                    connectionString: context.connectionString,
-                    timeout: remainingTimeout,
-                    preferPreparedTimeout: options.transaction,
-                    executionMode: options.transaction ? 'batch_transaction' : 'batch',
-                    cancellationToken: cancellationToken,
-                  );
-          }
-
-          var outcome = await executeCurrentCommand();
-
-          if (!outcome.isSuccess) {
-            var error = outcome.error!;
-            var failure = OdbcFailureMapper.mapQueryError(
-              error,
-              operation: 'execute_batch_item',
-              context: {
-                'command_index': i,
-                'transaction': options.transaction,
-              },
-            );
-
+      try {
+        for (var i = 0; i < commands.length; i++) {
+          if (cancellationToken?.isCancelled ?? false) {
             if (options.transaction) {
-              if (OdbcErrorInspector.outcomeUnknown(failure)) {
-                transaction.markUnconfirmed();
-                _connectionManager.markConnectionOutcomeUnknown(connectionState.connectionId!);
-              }
               final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
               await transaction.rollback(
-                (transactionId) async {
-                  final activeConnId = connectionState.connectionId;
-                  if (activeConnId == null)
-                    return Failure(domain.QueryExecutionFailure('Connection unavailable during rollback'));
-                  return await _txManager.rollbackIfNeeded(
-                    activeConnId,
-                    transactionId,
-                    timeout: rollbackTimeout,
-                  );
-                },
+                (transactionId) => _txManager.rollbackIfNeeded(
+                  context.connectionId,
+                  transactionId,
+                  timeout: rollbackTimeout,
+                ),
               );
-              _recordExecutionFailure(
-                request: commandRequest,
-                preparedExecution: preparedExecution,
-                errorMessage: failure.message,
-                executedInDb: true,
-                method: 'sql.executeBatch',
+              return Failure(domain.QueryExecutionFailure('Transaction aborted because the batch was cancelled'));
+            }
+            for (; i < commands.length; i++) {
+              results.add(SqlCommandResult.failure(index: i, error: 'Batch SQL execution was cancelled'));
+            }
+            break;
+          }
+          final command = commands[i];
+          final validation = SqlValidator.validateSqlForExecution(command.sql);
+          if (validation.isError()) {
+            final failure = validation.exceptionOrNull()! as domain.Failure;
+            if (options.transaction) {
+              final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
+              await transaction.rollback(
+                (transactionId) => _txManager.rollbackIfNeeded(
+                  context.connectionId,
+                  transactionId,
+                  timeout: rollbackTimeout,
+                ),
               );
               return Failure(
                 domain.QueryExecutionFailure.withContext(
-                  message: 'Transaction aborted due to command failure',
-                  cause: error,
+                  message: 'Transaction aborted due to command validation failure',
+                  cause: failure,
                   context: {
                     'reason': OdbcContextConstants.transactionFailedReason,
-                    ...failure.context,
-                    'operation': 'transaction_execute',
-                    'rollback_confirmed': transaction.rollbackConfirmed,
-                    if (transaction.rollbackError != null)
-                      'secondary_errors': [
-                        OdbcFailureMapper.mapQueryError(transaction.rollbackError!).context,
-                      ],
-                    if (transaction.state == BatchTransactionState.unconfirmed) ...{
-                      'outcome_unknown': true,
-                      'retryable': false,
-                    },
+                    'operation': 'transaction_validation',
                     'failedIndex': i,
                     'detail': failure.message,
                   },
                 ),
               );
             }
+            results.add(SqlCommandResult.failure(index: i, error: failure.message));
+            continue;
+          }
 
-            if (_failureMapper.shouldRecoverNonTransactionalBatchConnection(failure)) {
-              outcome = await _retryBatchCommandAfterConnectionFailure(
-                context: context,
-                connectionState: connectionState,
-                preparedStatements: preparedStatements,
-                failure: failure,
-                commandSql: command.sql,
-                failedIndex: i,
-                executeCommand: executeCurrentCommand,
-              );
-              if (outcome.isSuccess) {
-                final response = outcome.response!;
-                final limitedRows = truncateSqlResultRows(
-                  response.data,
-                  options.maxRows,
+          final commandRequest = QueryRequest(
+            id: _uuid.v4(),
+            agentId: agentId,
+            query: command.sql,
+            parameters: command.params,
+            timestamp: DateTime.now(),
+            sourceRpcRequestId: sourceRpcRequestId,
+          );
+          final preparedExecution = OdbcPreparedQueryExecution(
+            sql: command.sql,
+            parameters: command.params,
+          );
+
+          try {
+            final remainingTimeout = _remainingTimeout(context.deadline);
+
+            Future<QueryExecutionOutcome> executeCurrentCommand() async {
+              final currentConnectionId = connectionState.connectionId;
+              if (currentConnectionId == null) {
+                return QueryExecutionOutcome.failure(
+                  StateError('batch_connection_unavailable'),
                 );
-                results.add(
-                  SqlCommandResult.success(
-                    index: i,
-                    rows: limitedRows,
-                    rowCount: limitedRows.length,
-                    affectedRows: response.affectedRows,
-                    columnMetadata: response.columnMetadata,
-                  ),
-                );
-                continue;
               }
 
-              error = outcome.error!;
-              failure = OdbcFailureMapper.mapQueryError(
+              final key = OdbcQueryRunner.preparedStatementKeyFor(preparedExecution);
+              final usePrepared = repeatedPreparedKeys.contains(key);
+              return usePrepared
+                  ? _queryRunner.runPreparedBatch(
+                      connectionId: currentConnectionId,
+                      request: commandRequest,
+                      preparedExecution: preparedExecution,
+                      preparedStatements: preparedStatements,
+                      statementKey: key,
+                      timeout: remainingTimeout,
+                      cancellationToken: cancellationToken,
+                    )
+                  : _queryRunner.runWithTimeout(
+                      connId: currentConnectionId,
+                      request: commandRequest,
+                      preparedExecution: preparedExecution,
+                      connectionString: context.connectionString,
+                      timeout: remainingTimeout,
+                      preferPreparedTimeout: options.transaction,
+                      executionMode: options.transaction ? 'batch_transaction' : 'batch',
+                      cancellationToken: cancellationToken,
+                    );
+            }
+
+            var outcome = await executeCurrentCommand();
+
+            if (!outcome.isSuccess) {
+              var error = outcome.error!;
+              var failure = OdbcFailureMapper.mapQueryError(
                 error,
                 operation: 'execute_batch_item',
                 context: {
@@ -265,63 +178,165 @@ final class OdbcBatchCommandPhase {
                   'transaction': options.transaction,
                 },
               );
+
+              if (options.transaction) {
+                if (OdbcErrorInspector.outcomeUnknown(failure)) {
+                  transaction.markUnconfirmed();
+                  _connectionManager.markConnectionOutcomeUnknown(connectionState.connectionId!);
+                }
+                final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
+                await transaction.rollback(
+                  (transactionId) async {
+                    final activeConnId = connectionState.connectionId;
+                    if (activeConnId == null) {
+                      return Failure(domain.QueryExecutionFailure('Connection unavailable during rollback'));
+                    }
+                    return await _txManager.rollbackIfNeeded(
+                      activeConnId,
+                      transactionId,
+                      timeout: rollbackTimeout,
+                    );
+                  },
+                );
+                _recordExecutionFailure(
+                  request: commandRequest,
+                  preparedExecution: preparedExecution,
+                  errorMessage: failure.message,
+                  executedInDb: true,
+                  method: 'sql.executeBatch',
+                );
+                return Failure(
+                  domain.QueryExecutionFailure.withContext(
+                    message: 'Transaction aborted due to command failure',
+                    cause: error,
+                    context: {
+                      'reason': OdbcContextConstants.transactionFailedReason,
+                      ...failure.context,
+                      'operation': 'transaction_execute',
+                      'rollback_confirmed': transaction.rollbackConfirmed,
+                      if (transaction.rollbackError != null)
+                        'secondary_errors': [
+                          OdbcFailureMapper.mapQueryError(transaction.rollbackError!).context,
+                        ],
+                      if (transaction.state == BatchTransactionState.unconfirmed) ...{
+                        'outcome_unknown': true,
+                        'retryable': false,
+                      },
+                      'failedIndex': i,
+                      'detail': failure.message,
+                    },
+                  ),
+                );
+              }
+
+              if (_failureMapper.shouldRecoverNonTransactionalBatchConnection(failure)) {
+                outcome = await _retryBatchCommandAfterConnectionFailure(
+                  context: context,
+                  connectionState: connectionState,
+                  preparedStatements: preparedStatements,
+                  failure: failure,
+                  commandSql: command.sql,
+                  failedIndex: i,
+                  executeCommand: executeCurrentCommand,
+                );
+                if (outcome.isSuccess) {
+                  final response = outcome.response!;
+                  final limitedRows = truncateSqlResultRows(
+                    response.data,
+                    options.maxRows,
+                  );
+                  results.add(
+                    SqlCommandResult.success(
+                      index: i,
+                      rows: limitedRows,
+                      rowCount: limitedRows.length,
+                      affectedRows: response.affectedRows,
+                      columnMetadata: response.columnMetadata,
+                    ),
+                  );
+                  continue;
+                }
+
+                error = outcome.error!;
+                failure = OdbcFailureMapper.mapQueryError(
+                  error,
+                  operation: 'execute_batch_item',
+                  context: {
+                    'command_index': i,
+                    'transaction': options.transaction,
+                  },
+                );
+              }
+
+              _recordExecutionFailure(
+                request: commandRequest,
+                preparedExecution: preparedExecution,
+                errorMessage: failure.message,
+                executedInDb: true,
+                method: 'sql.executeBatch',
+              );
+
+              results.add(
+                SqlCommandResult.failure(index: i, error: failure.message),
+              );
+              continue;
             }
 
-            _recordExecutionFailure(
-              request: commandRequest,
-              preparedExecution: preparedExecution,
-              errorMessage: failure.message,
-              executedInDb: true,
-              method: 'sql.executeBatch',
+            final response = outcome.response!;
+            final limitedRows = truncateSqlResultRows(
+              response.data,
+              options.maxRows,
             );
-
             results.add(
-              SqlCommandResult.failure(index: i, error: failure.message),
+              SqlCommandResult.success(
+                index: i,
+                rows: limitedRows,
+                rowCount: limitedRows.length,
+                affectedRows: response.affectedRows,
+                columnMetadata: response.columnMetadata,
+              ),
             );
-            continue;
-          }
-
-          final response = outcome.response!;
-          final limitedRows = truncateSqlResultRows(
-            response.data,
-            options.maxRows,
-          );
-          results.add(
-            SqlCommandResult.success(
-              index: i,
-              rows: limitedRows,
-              rowCount: limitedRows.length,
-              affectedRows: response.affectedRows,
-              columnMetadata: response.columnMetadata,
-            ),
-          );
-        } on TimeoutException catch (error) {
-          if (options.transaction) {
-            transaction.markUnconfirmed();
-            _connectionManager.markConnectionOutcomeUnknown(connectionState.connectionId!);
-            final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
-            await transaction.rollback(
-              (transactionId) async {
-                final activeConnId = connectionState.connectionId;
-                if (activeConnId == null)
-                  return Failure(domain.QueryExecutionFailure('Connection unavailable during rollback'));
-                return await _txManager.rollbackIfNeeded(
-                  activeConnId,
-                  transactionId,
-                  timeout: rollbackTimeout,
-                );
-              },
-            );
+          } on TimeoutException catch (error) {
+            if (options.transaction) {
+              transaction.markUnconfirmed();
+              _connectionManager.markConnectionOutcomeUnknown(connectionState.connectionId!);
+              final rollbackTimeout = _txManager.rollbackTimeoutFromDeadline(context.deadline);
+              await transaction.rollback(
+                (transactionId) async {
+                  final activeConnId = connectionState.connectionId;
+                  if (activeConnId == null) {
+                    return Failure(domain.QueryExecutionFailure('Connection unavailable during rollback'));
+                  }
+                  return await _txManager.rollbackIfNeeded(
+                    activeConnId,
+                    transactionId,
+                    timeout: rollbackTimeout,
+                  );
+                },
+              );
+              return Failure(
+                domain.QueryExecutionFailure.withContext(
+                  message: 'Transaction aborted due to timeout',
+                  cause: error,
+                  context: {
+                    'reason': OdbcContextConstants.transactionFailedReason,
+                    'operation': 'transaction_timeout',
+                    'outcome_unknown': true,
+                    'retryable': false,
+                    'failedIndex': i,
+                    'timeout': true,
+                    'timeout_stage': 'sql',
+                    'stage': 'batch',
+                  },
+                ),
+              );
+            }
             return Failure(
               domain.QueryExecutionFailure.withContext(
-                message: 'Transaction aborted due to timeout',
+                message: 'Batch SQL execution timeout',
                 cause: error,
                 context: {
-                  'reason': OdbcContextConstants.transactionFailedReason,
-                  'operation': 'transaction_timeout',
-                  'outcome_unknown': true,
-                  'retryable': false,
-                  'failedIndex': i,
+                  'reason': RpcSqlBudgetConstants.queryTimeoutReason,
                   'timeout': true,
                   'timeout_stage': 'sql',
                   'stage': 'batch',
@@ -329,32 +344,20 @@ final class OdbcBatchCommandPhase {
               ),
             );
           }
-          return Failure(
-            domain.QueryExecutionFailure.withContext(
-              message: 'Batch SQL execution timeout',
-              cause: error,
-              context: {
-                'reason': RpcSqlBudgetConstants.queryTimeoutReason,
-                'timeout': true,
-                'timeout_stage': 'sql',
-                'stage': 'batch',
-              },
-            ),
+        }
+      } finally {
+        final activeConnectionId = connectionState.connectionId;
+        if (activeConnectionId != null) {
+          cleanup = await _statementExecutor.closePreparedStatements(
+            activeConnectionId,
+            preparedStatements.values,
           );
         }
       }
-    } finally {
-      final activeConnectionId = connectionState.connectionId;
-      if (activeConnectionId != null) {
-        cleanup = await _statementExecutor.closePreparedStatements(
-          activeConnectionId,
-          preparedStatements.values,
-        );
-      }
+
+      return Success(results);
     }
 
-    return Success(results);
-    }
     Result<List<SqlCommandResult>> primary;
     try {
       primary = await execute();
@@ -366,12 +369,20 @@ final class OdbcBatchCommandPhase {
       if (OdbcErrorInspector.outcomeUnknown(cleanupError)) transaction.markUnconfirmed();
       if (primary.isSuccess()) return Failure(cleanupError);
       final mapped = OdbcFailureMapper.mapQueryError(primary.exceptionOrNull()!);
-      return Failure(domain.QueryExecutionFailure.withContext(message: mapped.message,
-        cause: mapped.cause ?? primary.exceptionOrNull(), context: {
-          ...mapped.context, 'retryable': false,
-          'secondary_errors': [...?(mapped.context['secondary_errors'] as List<Object?>?),
-            OdbcFailureMapper.mapQueryError(cleanupError).context],
-        }));
+      return Failure(
+        domain.QueryExecutionFailure.withContext(
+          message: mapped.message,
+          cause: mapped.cause ?? primary.exceptionOrNull(),
+          context: {
+            ...mapped.context,
+            'retryable': false,
+            'secondary_errors': [
+              ...?(mapped.context['secondary_errors'] as List<Object?>?),
+              OdbcFailureMapper.mapQueryError(cleanupError).context,
+            ],
+          },
+        ),
+      );
     }
     return primary;
   }

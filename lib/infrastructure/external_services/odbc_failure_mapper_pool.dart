@@ -15,7 +15,10 @@ class OdbcFailureMapperPool {
   }) {
     final detail = OdbcFailureMapperContext.extractDetail(error);
     final baseContext = OdbcFailureMapperContext.buildBaseContext(error, operation, context);
-    final isExhausted = error is ResourceLimitReachedError || _isPoolExhausted(detail);
+    final isExhausted =
+        error is ResourceLimitReachedError ||
+        OdbcErrorInspector.code(error) == OdbcErrorCode.resourceLimit ||
+        _isPoolExhausted(detail);
     final contextReason = context['reason']?.toString();
     final contextRetryable = context['retryable'];
     final contextUserMessage = context['user_message']?.toString();

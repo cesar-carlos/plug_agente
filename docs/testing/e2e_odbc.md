@@ -39,9 +39,9 @@ calculos do runtime da app:
 | `ODBC_ASYNC_MAX_PENDING_REQUESTS` | Nao | Override positivo para requests pendentes no worker pool interno; default `poolSize * 4` |
 | `ODBC_RESULT_ENCODING` | Nao | Opt-in para `rowMajor`, `columnar` ou `columnarCompressed` em queries parametrizadas; default `rowMajor` |
 
-O app mantem `asyncBackpressureMode=failFast` de forma explicita porque a
-fila `SqlExecutionQueue` ja controla backpressure antes do worker pool
-interno do `odbc_fast`.
+The agent explicitly uses `asyncBackpressureMode=waitForSlot`. A request's
+remaining deadline must include capacity/queue wait; a timed-out native call
+retains ownership until its completion is confirmed.
 
 O pool adaptativo ODBC fica habilitado por default para drivers elegiveis
 (SQL Server/PostgreSQL), mas continua bloqueado para SQL Anywhere. Um valor
@@ -316,3 +316,38 @@ Edite as variaveis no inicio de cada script. Consulte
    ```bash
    psql -h localhost -p 5432 -U postgres -d postgres -c "SELECT 1"
    ```
+
+## odbc_fast 5.0.0 migration checks
+
+`test/integration/odbc5_migration_live_test.dart` selects both required drivers
+explicitly using `E2EEnv`: `ODBC_TEST_DSN` for SQL Anywhere and
+`ODBC_TEST_DSN_SQL_SERVER` for SQL Server. An absent DSN remains pending and a
+skip never counts as homologation. Credentials belong only in the local `.env`.
+For the local SQL Server instance, use a database that exists; the disposable
+migration fixtures use `tempdb`. SQL Server's port belongs in `Server=host,port`,
+not a standalone `Port` attribute.
+
+```powershell
+flutter test test/infrastructure/external_services/odbc5_migration_regression_test.dart
+flutter test test/integration/odbc5_migration_live_test.dart --reporter expanded
+flutter test --exclude-tags 'live || slow || perf'
+```
+
+The driver checks cover query/named Unicode parameters, lease/native pool cycles,
+slow-consumer streaming, confirmed commit/rollback, multiple result continuations,
+and atomic Unicode bulk with duplicate-key rollback. Fixtures have unique names
+and are dropped during teardown. Twenty confirmed pool and streaming cycles are
+exercised for each driver. Pending resources after uncertain cleanup must remain
+tracked and unavailable.
+
+Evidence is kept under `artifacts/odbc_validation/migration_5_0_0/` (ignored local
+artifacts). Complete timeout/cancel/contention/recovery and encoding coverage,
+Windows release smoke and performance comparisons remain release gates.
+The benchmark driver matrix passes `ODBC_BENCH_DRIVER_DSN` to each subprocess so
+a configured SQL Server DSN cannot silently replace a SQL Anywhere scenario.
+Before changing defaults, compare three states on the same machine/SDK/driver:
+4.6.0, corrected 5.0.0, optimized 5.0.0. Use three warmups and at least ten samples;
+report p50/p95/p99, throughput, memory and resource/prepare/queue metrics. Repeat
+variation above 10%. Require >=10% gain, <=5% tail latency regression and <=10%
+peak memory regression to change tuning defaults. Safety fixes are evaluated
+separately. Run benchmarks without concurrent suites.

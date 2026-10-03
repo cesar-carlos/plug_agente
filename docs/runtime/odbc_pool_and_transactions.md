@@ -1,7 +1,7 @@
 # ODBC Pool, Transactions and Runtime Tuning
 
 This document is the source of truth for how `plug_agente` uses
-[`odbc_fast`](https://pub.dev/packages/odbc_fast) **4.6.0** at runtime. It
+[`odbc_fast`](https://pub.dev/packages/odbc_fast) **5.0.0** at runtime. It
 covers pool sizing and lifecycle, transaction control, async backpressure,
 lock-safety, streaming session reuse, bulk insert atomicity, and
 observability hooks. Defaults, decisions and trade-offs are documented
@@ -136,20 +136,19 @@ caller:
   package rolls back leftover local work before returning the slot).
 - `discard(connectionId)` → also calls `poolReleaseConnection`. Direct
   `disconnect()` for pool-owned connections returns
-  `ValidationError` since `odbc_fast 3.9.0` (still true in 4.6.0) —
+  `ValidationError` since `odbc_fast 3.9.0` (still true in 5.0.0) —
   pool connections must always go back through the pool API.
 
-`PoolDiscardReason.suspectConnection` (default: timeout, cancel, unconfirmed
-rollback) relies on the checkin reset. The native pool is **quarantined**
-when discard uses `PoolDiscardReason.poisonedPool`, when the connection id is
-unknown (every native pool is quarantined), or when checkin itself fails.
-While quarantined, new native checkouts fail with a retryable
-`native_pool_quarantined` reason, so the adaptive pool uses its safe
-lease/direct fallback. After the final checkout drains, the agent closes and
-recreates the native pool. Recovery is single-scheduled per connection string:
-five fast attempts with exponential backoff from 250 ms, then one attempt
-every 30 s until it succeeds (`native_quarantine_slow_recovery` is logged once
-and counted in pool diagnostics).
+`PoolDiscardReason.outcomeUnknown` retains ownership and capacity without
+normal checkin or forced disconnect. New checkouts of the affected pool are
+blocked. Failed release/disconnect also keeps the resource quarantined.
+Concurrent returns are deduplicated; capacity is decremented only once after
+confirmed cleanup. Unknown outcomes block adaptive fallback and automatic
+quarantine recovery. Explicit runtime recovery/reload is required; recovery
+does not establish whether earlier writes committed.
+
+Known suspect connections may use the native checkin reset. Poisoned pools
+with confirmed drained ownership retain the existing bounded backoff recovery.
 
 ### Connection loss and recovery
 
@@ -220,25 +219,26 @@ production. If the counter stays at zero while the agent is busy, no
 batch in that workload is read-only and the optimization has no impact —
 that is still useful information.
 
-### Rollback discipline
+### Transaction finalization and uncertain outcomes
 
-`BatchTransactionGuard` ensures every transaction is closed exactly once.
-**Rollback always completes before the connection is returned to the
-pool** (`OdbcBatchConnectionPhase.releaseBatchConnection` runs in
-`finally`, after command/commit/rollback paths).
+`BatchTransactionGuard` uses `active`, `completing`, `committed`,
+`rollingBack`, `rolledBack`, and `unconfirmed`. A commit is sent at most once;
+its success must be explicit. Failed or timed-out commit never triggers an
+automatic rollback. Rollback is allowed only before commit dispatch, after
+confirmed completion of SQL work, and is itself confirmed before reuse.
 
-| Trigger | Cleanup |
+| Trigger | Resource handling |
 |---|---|
-| Command failure mid-batch | rollback, then release to pool |
-| Validation failure | rollback + structured failure context, then release |
-| Commit failure | rollback (engine-side) + best-effort cleanup, then release |
-| Unexpected exception | rollback inside `catch`, then release in `finally` |
-| Deadline already elapsed at rollback time | `rollbackTimeoutFromDeadline` applies a floor so cleanup is not cut mid-flight |
-| Unconfirmed rollback | connection marked for discard; slot is not reused as a live txn |
-| Native-compatible pool fallback to direct | `recycleAfterRelease` triggers `poolReleaseConnection` after rollback |
+| Confirmed command failure before commit | Attempt one bounded rollback; retain its failure as secondary evidence |
+| Commit failure or timeout after dispatch | Mark unconfirmed; no commit retry, rollback or normal pool return |
+| SQL work pending or structured `outcomeUnknown` | Quarantine ownership; no replay or fallback |
+| Deadline exhausted before begin/commit dispatch | Do not dispatch; an active transaction may still be rolled back during cleanup |
+| Rollback failure or timeout | Remain unconfirmed; block reuse |
+| Transactional native-pool fallback | Require proof of no execution or confirmed rollback |
 
-The guard is idempotent (`_closed = true` after first call), so repeated
-rollback attempts across nested error paths cannot double-execute.
+`outcome_unknown=true` takes precedence over retry hints. The internal rollback
+result carries confirmation/failure instead of silently completing `Future<void>`.
+Primary failures retain secondary cleanup diagnostics.
 
 ### Deadline near-stall warning
 
@@ -251,9 +251,8 @@ least 80% of its active deadline, two things happen:
   `remaining_ms`, `effective_timeout_ms`, `command_count` and a
   suggestion to either raise `timeoutMs` or split the batch.
 
-The signal exists because a commit that races the timeout pushes the
-rollback path into the same shrinking budget, and the agent loses the
-race to clean up engine-side locks if the deadline runs out mid-rollback.
+The signal highlights a shrinking completion budget. Once commit is dispatched,
+a timeout cannot authorize rollback or repeating the writes.
 
 ## DBMS detection
 
@@ -390,8 +389,8 @@ batched decode.
 
 Shared policy:
 
-- parameterized streaming uses the native batched path with a params
-  buffer (columnar batched has no params API);
+- named streaming uses public `streamQueryNamed` with explicit fetch and chunk
+  sizes; row consumers avoid conversion to typed columnar results;
 - chunk size is set by the caller; the gateway clamps
   `initialResultBufferBytes` and `maxResultBufferBytes`;
 - streaming connections keep `autoReconnectOnConnectionLost` off; loss
@@ -419,7 +418,7 @@ Lifecycle:
 - cancel on the last chunk does **not** reuse a dirty session
   (`reuseEligible` requires a successful complete and no cancel).
 
-`odbc_fast` 4.6.0 exposes `disconnect(connectionId)` and
+`odbc_fast` 5.0.0 exposes `disconnect(connectionId)` and
 `cancelStream(streamId)` only. High-level `streamQuery*` APIs do not
 return a stream id, and disconnect has no force-close argument. A Dart
 `.timeout()` must not abandon the native future; the tracker keeps it.
@@ -430,7 +429,7 @@ return a stream id, and disconnect has no force-close argument. A Dart
 dedicated direct connection. Chunked `executeDirect` is **atomic**:
 chunks above `ODBC_BULK_INSERT_CHUNK_ROWS` (default 10k) run inside
 begin/commit. `requireAtomic` forces that sequential transactional path
-and **refuses parallel/BCP**.
+and **refuses parallel/BCP**, including single-chunk loads.
 
 SQL Server loads with at least
 `ODBC_BULK_INSERT_PARALLEL_ROW_THRESHOLD` rows (default 1000) may use
@@ -545,3 +544,58 @@ python tool/benchmarks/run_benchmark_suite.py
 - Operational wrappers
   (`odbc_async_benchmark.py`, `odbc_streaming_benchmark.py`,
   `odbc_driver_matrix_benchmark.py`) remain valid for a single axis.
+
+## 5.0.0 migration implementation and validation
+
+Connection builders explicitly set `replayQueriesAfterReconnect: false`.
+The existing `waitForSlot`, worker/pending limits and conservative per-driver
+streaming defaults remain. Changing tuning defaults requires measured gains.
+The existing `meta` override remains; no other transitive package changed.
+No XA/XID consumer was introduced.
+
+Explicit prepares are owned even with a native pool and closed after confirmed
+completion. Repeated SQL may reuse a bounded 64-entry LRU within one acquired
+connection. Handles never cross native checkouts. Timed-out work defers closing
+its pending statement, and runtime generation invalidation prevents late
+completion from closing a new worker's handle. Close failures remain visible.
+
+The multi-result collector appends continuations to one accumulator and builds
+once per cursor. Complete RPC results still require full materialization;
+streaming continuation batches are consumed separately with consumer backpressure.
+
+Windows native bulk text buffers in 5.0.0 corrupted non-ASCII text in live tests
+on both local drivers. The agent chooses the public prepared parameter path
+before dispatch for such chunks and skips parallel native bulk for that payload.
+This preserves Unicode and atomicity; its performance cost needs measurement.
+ASCII and other compatible bulk payloads keep column-oriented native chunks.
+
+Structured diagnostics use `OdbcError`/`OdbcErrorConvertible`, code, SQLSTATE,
+operation and correlation IDs. RPC codes/formats are preserved; technical stack
+traces, SQL, parameters and credentials stay out of client context. Late package
+diagnostics are captured from public `AppLogger.logger.onRecord`, with a bounded
+history and telemetry failures isolated from SQL. `ServiceLocator` does not
+expose an `onDiagnostic` option. Unsupported cancellation is recorded as failure
+or unavailability; accepting cancellation is not proof that SQL has stopped.
+
+Validation artifacts: `artifacts/odbc_validation/migration_5_0_0/`.
+The 4.6.0 baseline passed 109 selected ODBC tests. The local 5.0.0 suite passed
+4,742 tests (five intentional skips, excluding live/slow/perf). The dedicated
+regression suite covers structured timeout, uncertain commit/rollback,
+explicit native-pool statements, deferred close, duplicate release,
+quarantine, exhausted dispatch budget and stale-generation completion.
+Live checks use explicit SQL Server and SQL Anywhere DSNs, not first-available
+selection, with disposable fixtures and confirmed teardown.
+
+Migration remains pending the complete timeout/cancel/contention/recovery and
+data/encoding matrix, resource stability under failure, Windows release smoke,
+and reproducible 4.6.0 / 5.0.0 corrected / 5.0.0 optimized performance comparisons.
+Initial passing driver checks are not full homologation. Do not distribute
+until both drivers and the release build complete the required matrix. No
+performance gain is claimed and no tuning default was increased.
+
+Keep the last homologated installer for operational rollback. Diagnose uncertain
+writes/resources before any retry; restoring a build does not determine an
+uncertain transaction's outcome.
+
+Official reference: [5.0.0 changelog](https://github.com/cesar-carlos/dart_odbc_fast/blob/v5.0.0/CHANGELOG.md)
+and [examples](https://github.com/cesar-carlos/dart_odbc_fast/blob/v5.0.0/example/README.md).
