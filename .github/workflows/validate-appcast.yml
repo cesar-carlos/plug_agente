@@ -55,18 +55,23 @@ jobs:
 
       - name: Inspect current appcast
         env:
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
           FEED_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.feed_url || 'https://cesar-carlos.github.io/plug_agente/appcast.xml' }}
           MAX_APPCAST_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '10' }}
         run: |
-          curl -L -sS "${FEED_URL}" -o published_appcast.xml
+          set -euo pipefail
+          test -n "$AUTO_UPDATE_FEED_PUBLIC_KEY" || { echo "Feed public keys are required" >&2; exit 1; }
+          curl --fail-with-body -L -sS "${FEED_URL}" -o published_appcast.xml
           python3 tool/appcast/appcast_manager.py inspect-url \
             --feed-url "${FEED_URL}" \
             --env-file appcast.env \
+            --public-keys "$AUTO_UPDATE_FEED_PUBLIC_KEY" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}"
 
       - name: Smoke validate current appcast
         env:
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
           FEED_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.feed_url || 'https://cesar-carlos.github.io/plug_agente/appcast.xml' }}
           MAX_APPCAST_ITEMS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_items || '10' }}
         run: |
@@ -80,6 +85,9 @@ jobs:
             --asset-sha256 "${ASSET_SHA256}" \
             --asset-name "${ASSET_NAME}" \
             --channel "${CHANNEL}" \
+            --manifest-url "$MANIFEST_URL" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --public-keys "$AUTO_UPDATE_FEED_PUBLIC_KEY" \
             --rollout-percentage "${ROLLOUT_PERCENTAGE}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}" \

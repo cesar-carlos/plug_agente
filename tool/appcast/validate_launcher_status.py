@@ -43,7 +43,7 @@ except ImportError as error:  # pragma: no cover - import-time guard
 
 
 SCHEMA_PATH = (
-    Path(__file__).resolve().parent.parent
+    Path(__file__).resolve().parents[2]
     / "docs"
     / "communication"
     / "schemas"

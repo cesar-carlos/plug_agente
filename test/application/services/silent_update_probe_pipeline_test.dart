@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
@@ -10,8 +15,21 @@ import 'package:plug_agente/application/services/silent_update_probe_pipeline.da
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
+import 'package:result_dart/result_dart.dart';
 
 import '../../helpers/auto_update_test_fakes.dart';
+
+class FixtureManifestDownloader implements IUpdateManifestDownloader {
+  FixtureManifestDownloader(this.bytes);
+  final Uint8List bytes;
+  int calls = 0;
+  @override
+  Future<Result<Uint8List>> download(String url) async {
+    calls++;
+    return Success(bytes);
+  }
+}
 
 void main() {
   group('SilentUpdateProbePipeline', () {
@@ -103,6 +121,59 @@ void main() {
       expect(latestDiagnostics?.validationErrorCode, 'invalid_sha256');
       expect(persistCount, greaterThan(0));
     });
+
+    test('new feed items require a complete binding even when legacy signatures are optional', () async {
+      probe.result = const AppcastProbeResult(
+        requestUrl: 'https://example.com/appcast.xml',
+        latestVersion: '99.0.0+1',
+        assetUrl: 'https://example.com/PlugAgente-Setup-99.0.0.exe',
+        assetSize: 123,
+        assetName: 'PlugAgente-Setup-99.0.0.exe',
+        sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        manifestUrl: 'https://example.com/release.json',
+      );
+      final result = await pipeline.run(request());
+      expect(result, isA<SilentUpdateProbeTerminal>());
+      expect(latestDiagnostics?.validationErrorCode, 'feed_signature_malformed');
+    });
+
+    for (final tampered in [false, true]) {
+      test('validates manifest bytes and installer identity before download (tampered=$tampered)', () async {
+        final fixture =
+            jsonDecode(File('test/fixtures/updater_manifest_v1.json').readAsStringSync()) as Map<String, dynamic>;
+        final bytes = Uint8List.fromList(utf8.encode(jsonEncode(fixture['envelope'])));
+        final downloader = FixtureManifestDownloader(tampered ? Uint8List.fromList([...bytes, 0]) : bytes);
+        dotenv.loadFromString(
+          envString: 'AUTO_UPDATE_FEED_PUBLIC_KEY=${fixture['publicKey']}\nAUTO_UPDATE_CHANNEL=stable',
+        );
+        probe.result = AppcastProbeResult(
+          requestUrl: 'https://example.com/appcast.xml',
+          latestVersion: '1.8.6+1',
+          assetUrl: 'https://example.com/PlugAgente-Setup-1.8.6.exe',
+          assetSize: 123,
+          assetName: 'PlugAgente-Setup-1.8.6.exe',
+          sha256: List.filled(64, 'a').join(),
+          manifestUrl: 'https://example.com/release.json',
+          manifestSha256: sha256.convert(bytes).toString(),
+          manifestSignature: 'binding',
+        );
+        pipeline = SilentUpdateProbePipeline(
+          appcastProbeService: probe,
+          signatureVerifier: signatureVerifier,
+          pendingStore: pendingStore,
+          automaticFailureBreaker: breaker,
+          manifestDownloader: downloader,
+        );
+        final result = await pipeline.run(request());
+        expect(downloader.calls, 1);
+        if (tampered) {
+          expect(result, isA<SilentUpdateProbeTerminal>());
+          expect(latestDiagnostics?.validationErrorCode, 'manifest_rejected');
+        } else {
+          expect(latestDiagnostics?.validationErrorCode, isNull);
+        }
+      });
+    }
 
     test('returns validation failure for disallowed HTTP installer URL', () async {
       probe.result = const AppcastProbeResult(

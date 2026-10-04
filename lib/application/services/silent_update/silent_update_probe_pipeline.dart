@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:plug_agente/application/observability/i_auto_update_metrics_collector.dart';
 import 'package:plug_agente/application/observability/update_check_diagnostics.dart';
 import 'package:plug_agente/application/services/appcast_probe_service.dart';
@@ -9,8 +12,10 @@ import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
+import 'package:plug_agente/core/security/update_manifest_verifier.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:result_dart/result_dart.dart';
 
 sealed class SilentUpdateProbePipelineResult {
@@ -78,10 +83,12 @@ class SilentUpdateProbePipeline {
     required IAppcastSignatureVerifier signatureVerifier,
     required IPendingSilentUpdateStore pendingStore,
     required PersistentCircuitBreaker automaticFailureBreaker,
+    IUpdateManifestDownloader? manifestDownloader,
     IAutoUpdateMetricsCollector? metricsCollector,
     DateTime Function()? clock,
   }) : _appcastProbeService = appcastProbeService,
        _signatureVerifier = signatureVerifier,
+       _manifestDownloader = manifestDownloader,
        _pendingStore = pendingStore,
        _automaticFailureBreaker = automaticFailureBreaker,
        _metricsCollector = metricsCollector,
@@ -89,6 +96,7 @@ class SilentUpdateProbePipeline {
 
   final IAppcastProbeService _appcastProbeService;
   final IAppcastSignatureVerifier _signatureVerifier;
+  final IUpdateManifestDownloader? _manifestDownloader;
   final IPendingSilentUpdateStore _pendingStore;
   final PersistentCircuitBreaker _automaticFailureBreaker;
   final IAutoUpdateMetricsCollector? _metricsCollector;
@@ -185,21 +193,44 @@ class SilentUpdateProbePipeline {
     }
 
     final environment = AppEnvironment.snapshot();
-    final feedSignatureRequired = resolveAutoUpdateRequireFeedSignature(environment: environment);
+    final hasManifestBinding =
+        probeResult.manifestUrl != null || probeResult.manifestSha256 != null || probeResult.manifestSignature != null;
+    final feedSignatureRequired = hasManifestBinding || resolveAutoUpdateRequireFeedSignature(environment: environment);
     final feedPublicKey = resolveAutoUpdateFeedPublicKey(environment: environment);
-    final signatureStatus = await _signatureVerifier.verifyEnclosure(
-      canonicalPayload: buildAppcastEnclosureSignable(
-        version: probeResult.latestVersion!,
-        os: probeResult.os ?? '',
-        sha256: probeResult.sha256!,
-        channel: probeResult.channel ?? defaultAutoUpdateChannel,
-        rolloutPercentage: probeResult.rolloutPercentage ?? 100,
-        assetUrl: probeResult.assetUrl!,
-        assetSize: probeResult.assetSize!,
-      ),
+    final enclosurePayload = buildAppcastEnclosureSignable(
+      version: probeResult.latestVersion!,
+      os: probeResult.os ?? '',
+      sha256: probeResult.sha256!,
+      channel: probeResult.channel ?? defaultAutoUpdateChannel,
+      rolloutPercentage: probeResult.rolloutPercentage ?? 100,
+      assetUrl: probeResult.assetUrl!,
+      assetSize: probeResult.assetSize!,
+    );
+    var signatureStatus = await _signatureVerifier.verifyEnclosure(
+      canonicalPayload: enclosurePayload,
       base64Signature: probeResult.edSignature,
       base64PublicKey: feedPublicKey,
     );
+    if (hasManifestBinding && signatureStatus == AppcastSignatureVerificationStatus.valid) {
+      try {
+        if (probeResult.manifestUrl == null ||
+            probeResult.manifestSha256 == null ||
+            probeResult.manifestSignature == null) {
+          throw const FormatException('Incomplete manifest binding');
+        }
+        signatureStatus = await _signatureVerifier.verifyEnclosure(
+          canonicalPayload: buildAppcastManifestBindingSignable(
+            enclosurePayload: enclosurePayload,
+            manifestUrl: probeResult.manifestUrl!,
+            manifestSha256: probeResult.manifestSha256!,
+          ),
+          base64Signature: probeResult.manifestSignature,
+          base64PublicKey: feedPublicKey,
+        );
+      } on FormatException {
+        signatureStatus = AppcastSignatureVerificationStatus.malformed;
+      }
+    }
     await publish(
       diagnostics.copyWith(
         feedSignatureStatus: signatureStatus.name,
@@ -235,6 +266,54 @@ class SilentUpdateProbePipeline {
           ),
         ),
       );
+    }
+
+    if (hasManifestBinding) {
+      String? manifestError;
+      try {
+        final downloader = _manifestDownloader;
+        if (downloader == null) throw const FormatException('Manifest transport unavailable');
+        final downloaded = await downloader.download(probeResult.manifestUrl!);
+        if (downloaded.isError()) throw const FormatException('Manifest download rejected');
+        final bytes = downloaded.getOrThrow();
+        if (bytes.length > 128 * 1024 || sha256.convert(bytes).toString() != probeResult.manifestSha256) {
+          throw const FormatException('Manifest hash rejected');
+        }
+        final envelope = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+        final verified = await UpdateManifestVerifier().verify(
+          envelope: envelope,
+          publicKeys: feedPublicKey ?? '',
+          expectedVersion: probeResult.latestVersion!,
+          expectedChannel: probeResult.channel ?? defaultAutoUpdateChannel,
+          expectedSize: probeResult.assetSize!,
+          expectedSha256: probeResult.sha256!,
+        );
+        if (verified.isError()) throw const FormatException('Manifest identity rejected');
+      } on Object {
+        manifestError = 'O manifesto da atualização não pôde ser validado.';
+      }
+      if (manifestError != null) {
+        final failureState = await _automaticFailureBreaker.recordFailure();
+        await publish(
+          diagnostics.copyWith(
+            completedAt: _clock(),
+            completionSource: UpdateCheckCompletionSource.automaticValidationFailure,
+            automaticFailureCount: failureState.failureCount,
+            automaticCooldownUntil: failureState.cooldownUntil,
+            validationErrorCode: 'manifest_rejected',
+            errorMessage: manifestError,
+          ),
+        );
+        return SilentUpdateProbeTerminal(
+          diagnostics: diagnostics,
+          outcome: Failure(
+            domain.ValidationFailure.withContext(
+              message: manifestError,
+              context: const {'validation_code': 'manifest_rejected'},
+            ),
+          ),
+        );
+      }
     }
 
     final remoteVersion = probeResult.latestVersion!;
@@ -441,16 +520,15 @@ String _feedSignatureRequiredMessage(AppcastSignatureVerificationStatus status) 
   return switch (status) {
     AppcastSignatureVerificationStatus.missing =>
       'Silent update appcast signature is required but missing. '
-      'Publish a signed item or set AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=false.',
+          'Publish a signed item or set AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=false.',
     AppcastSignatureVerificationStatus.publicKeyUnavailable =>
       'Silent update appcast signature is required but the public key is not configured. '
-      'Set AUTO_UPDATE_FEED_PUBLIC_KEY or disable AUTO_UPDATE_REQUIRE_FEED_SIGNATURE.',
+          'Set AUTO_UPDATE_FEED_PUBLIC_KEY or disable AUTO_UPDATE_REQUIRE_FEED_SIGNATURE.',
     AppcastSignatureVerificationStatus.malformed =>
       'Silent update appcast signature is required but the signature or public key is malformed.',
     AppcastSignatureVerificationStatus.invalid =>
       'Silent update appcast signature is required but verification failed. '
-      'The feed item may have been tampered with or signed with a different key.',
-    AppcastSignatureVerificationStatus.valid =>
-      'Silent update appcast signature is required but was not valid.',
+          'The feed item may have been tampered with or signed with a different key.',
+    AppcastSignatureVerificationStatus.valid => 'Silent update appcast signature is required but was not valid.',
   };
 }

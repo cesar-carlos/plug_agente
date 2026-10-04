@@ -13,6 +13,7 @@ Execute a partir da raiz: python installer/build_installer.py
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -133,14 +134,13 @@ def read_env_value(key: str) -> Optional[str]:
 
 
 def find_generated_installer() -> Path:
-    candidates = sorted(
-        DIST_DIR.glob("PlugAgente-Setup-*.exe"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
-    if not candidates:
-        raise SystemExit(f"Erro: instalador nao encontrado em {DIST_DIR}")
-    return candidates[0]
+    version = re.search(r'^#define MyAppVersion "([0-9]+\.[0-9]+\.[0-9]+)"$', SETUP_ISS.read_text(encoding="utf-8"), re.MULTILINE)
+    if version is None:
+        raise SystemExit("Invalid installer version")
+    expected = DIST_DIR / f"PlugAgente-Setup-{version.group(1)}.exe"
+    if not expected.is_file():
+        raise SystemExit(f"Erro: instalador esperado nao encontrado: {expected.name}")
+    return expected
 
 
 def signing_cert_path() -> Optional[Path]:
@@ -227,6 +227,15 @@ def build_iscc_signtool_command() -> Optional[str]:
 
 def build_iscc_command() -> List[str]:
     cmd = [find_iscc()]
+    pubspec = (PROJECT_ROOT / 'pubspec.yaml').read_text(encoding='utf-8')
+    version = re.search(r'^version:\s*([0-9]+\.[0-9]+\.[0-9]+\+[0-9]+)\s*$', pubspec, re.MULTILINE)
+    if version is None:
+        raise SystemExit('Installer worker requires the exact application version including build number')
+    cmd.append(f'/DMyAppWorkerVersion={version.group(1)}')
+    channel = resolve_auto_update_define("AUTO_UPDATE_CHANNEL") or "stable"
+    if channel not in {"stable", "beta", "internal"}:
+        raise SystemExit("Invalid installer update channel")
+    cmd.append(f"/DMyAppChannel={channel}")
     sign_command = build_iscc_signtool_command()
     if sign_command is not None:
         cmd.append("/DSIGN_INSTALLER")
@@ -322,6 +331,10 @@ def main() -> None:
         value = resolve_auto_update_define(key)
         if value:
             flutter_cmd.append(f"--dart-define={key}={value}")
+            if key == "AUTO_UPDATE_FEED_PUBLIC_KEY":
+                # CMake embeds the same public trust anchors into the native
+                # supervisor. Dart defines alone do not reach its configure step.
+                os.environ[key] = ",".join(part.strip() for part in value.split(","))
             print(f"   {key} injetado via --dart-define: {value}", flush=True)
     run(flutter_cmd)
 
@@ -349,6 +362,11 @@ def main() -> None:
     app_exe = BUILD_DIR / "plug_agente.exe"
     helper_exe = BUILD_DIR / "plug_update_helper.exe"
     elevated_helper_exe = BUILD_DIR / "plug_agente_elevated_runner.exe"
+    updater_artifacts = [BUILD_DIR / "updater" / name for name in (
+        "plug_update_service.exe", "plug_update_client.exe", "plug_update_worker.exe")]
+    for artifact in updater_artifacts:
+        if not artifact.exists():
+            raise SystemExit(f"Updater artifact missing: {artifact.name}")
     if should_sign_artifacts():
         step += 1
         print(f"\n{step}.1. Assinando executavel Windows...", flush=True)
@@ -357,6 +375,8 @@ def main() -> None:
         sign_file(helper_exe)
         print(f"\n{step}.3. Assinando elevated action runner...", flush=True)
         sign_file(elevated_helper_exe)
+        for artifact in updater_artifacts:
+            sign_file(artifact)
 
     step += 1
     print(f"\n{step}. Compilando instalador Inno Setup...", flush=True)

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:plug_agente/core/config/app_environment.dart';
 import 'package:plug_agente/core/config/auto_update_feed_config.dart';
 import 'package:plug_agente/core/constants/app_constants.dart';
 import 'package:plug_agente/core/versioning/app_version_comparator.dart';
@@ -20,6 +21,9 @@ class AppcastProbeResult {
     this.itemCount,
     this.errorMessage,
     this.edSignature,
+    this.manifestUrl,
+    this.manifestSha256,
+    this.manifestSignature,
     this.releaseNotes,
     this.releaseNotesUrl,
   });
@@ -42,6 +46,12 @@ class AppcastProbeResult {
   /// configured public key, so this field is just the raw transport value.
   final String? edSignature;
 
+  /// New releases bind these fields to the enclosure with a separate signature.
+  /// Legacy enclosures without a manifest remain readable during transition.
+  final String? manifestUrl;
+  final String? manifestSha256;
+  final String? manifestSignature;
+
   /// Release notes text, taken from the `<description>` element of the item.
   /// Already trimmed; rendering is the UI's responsibility (basic markdown
   /// allowed). `null` when the publisher omitted the description.
@@ -61,9 +71,12 @@ abstract interface class IAppcastProbeService {
 }
 
 class AppcastProbeService implements IAppcastProbeService {
-  AppcastProbeService({Dio? dio}) : _dio = dio ?? _createProbeDio();
+  AppcastProbeService({Dio? dio, String Function()? channelResolver})
+    : _dio = dio ?? _createProbeDio(),
+      _channelResolver = channelResolver ?? (() => resolveAutoUpdateChannel(environment: AppEnvironment.snapshot()));
 
   final Dio _dio;
+  final String Function() _channelResolver;
 
   static const int _maxAppcastBytes = 1024 * 1024;
   static const String _sparkleNamespace = 'http://www.andymatuschak.org/xml-namespaces/sparkle';
@@ -150,12 +163,15 @@ class AppcastProbeService implements IAppcastProbeService {
       _ProbeCandidate? bestWindowsCandidate;
       _ProbeCandidate? bestLegacyCandidate;
       String? firstCandidateError;
+      final configuredChannel = _channelResolver();
       for (final item in items) {
         final enclosure = _firstChildElementByName(item, 'enclosure');
         if (enclosure == null) {
           firstCandidateError ??= 'Latest appcast item is missing enclosure';
           continue;
         }
+        // Releases before channels were introduced belong to stable only.
+        if ((_plugChannelFromEnclosure(enclosure) ?? defaultAutoUpdateChannel) != configuredChannel) continue;
 
         final latestVersion = _sparkleVersionFromEnclosure(enclosure);
         if (latestVersion == null || latestVersion.isEmpty) {
@@ -264,6 +280,9 @@ class AppcastProbeService implements IAppcastProbeService {
       rolloutPercentage: _plugRolloutPercentageFromEnclosure(enclosure),
       itemCount: itemCount,
       edSignature: _plugEdSignatureFromEnclosure(enclosure),
+      manifestUrl: _plugAttribute(enclosure, 'manifestUrl'),
+      manifestSha256: _plugAttribute(enclosure, 'manifestSha256'),
+      manifestSignature: _plugAttribute(enclosure, 'manifestSignature'),
       releaseNotes: _releaseNotesFromItem(candidate.item),
       releaseNotesUrl: _releaseNotesLinkFromItem(candidate.item),
     );
@@ -296,6 +315,14 @@ class AppcastProbeService implements IAppcastProbeService {
       qualifiedName: 'plug:edSignature',
     );
   }
+
+  static String? _plugAttribute(XmlElement enclosure, String localName) => _namespacedAttributeValue(
+    enclosure,
+    localName: localName,
+    prefix: 'plug',
+    namespaceUri: _plugNamespace,
+    qualifiedName: 'plug:$localName',
+  );
 
   static String? _sparkleVersionFromEnclosure(XmlElement enclosure) {
     return _namespacedAttributeValue(

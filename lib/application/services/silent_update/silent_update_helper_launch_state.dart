@@ -19,6 +19,7 @@ abstract final class SilentUpdateHelperLaunchState {
     'elevatedStarted',
     'runningCurrentUser',
     'runningElevated',
+    'recoveryRequired',
   };
 
   static const Set<String> terminalFailureStates = <String>{
@@ -49,8 +50,9 @@ abstract final class SilentUpdateHelperLaunchState {
     return launchedAt != null || launcherStatus != null;
   }
 
-  /// True while a launched helper is still within the wait window and has not
-  /// reached a terminal status. Staged-only records always return false.
+  /// A deadline is never evidence that a native installer stopped. Keep launch
+  /// ownership until an explicit terminal status, including missing/stale status.
+  /// The duration arguments are retained for compatibility with existing callers.
   static bool isInFlight({
     required DateTime? launchedAt,
     required SilentUpdateLauncherStatus? launcherStatus,
@@ -61,17 +63,9 @@ abstract final class SilentUpdateHelperLaunchState {
       return false;
     }
 
-    final state = launcherStatus?.state;
-    if (launcherStatus != null && state != null && !inProgressStates.contains(state)) {
-      return false;
-    }
-
-    final activityAt = launcherStatus?.lastUpdatedAt ?? launchedAt;
-    if (activityAt == null) {
-      return false;
-    }
-
-    return now.difference(activityAt) <= helperWaitDuration;
+    return !isTerminalSuccess(launcherStatus) &&
+        !isTerminalFailure(launcherStatus) &&
+        !isUserCancelledElevation(launcherStatus);
   }
 
   /// True when the helper reported that the operator cancelled the UAC
@@ -83,10 +77,8 @@ abstract final class SilentUpdateHelperLaunchState {
     return state != null && userCancelledElevationStates.contains(state);
   }
 
-  /// Launch evidence exists but the helper is no longer in-flight (wait window
-  /// elapsed or terminal status). Reconcile and resolve share this gate so both
-  /// refuse Ready/retry and clear the pending record (fail + cooldown policy)
-  /// instead of one path clearing and the other offering Install again.
+  /// Launch evidence exists and the helper explicitly confirmed a terminal
+  /// result. A stale/missing status retains artifacts and blocks another setup.
   ///
   /// UAC cancellation is excluded: the operator can retry the same staged
   /// installer without waiting out the automatic failure cooldown.

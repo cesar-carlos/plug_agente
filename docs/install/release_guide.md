@@ -30,7 +30,7 @@ python tool/release/release_preflight.py --version 1.8.4 --gate --check-secrets 
 
 O gate executa `flutter analyze`, `flutter test --exclude-tags "live || slow || perf"`,
 `test/architecture/layer_boundaries_test.dart` e os testes Python de appcast.
-Tambem imprime avisos sobre secrets (`RELEASE_PUBLISH_TOKEN`, assinatura, feed key)
+Também imprime avisos sobre certificado Authenticode e chaves de assinatura do feed
 e os comandos `gh workflow run` sugeridos.
 
 Hook git opcional (pre-push em `main` quando `pubspec.yaml`, `lib/` ou `test/` mudam):
@@ -59,38 +59,38 @@ Ordem sugerida:
    - `version`: versao curta, exemplo `1.6.6`;
    - `build_number`: sufixo do `pubspec.yaml`, exemplo `1`;
    - `run_tests`: mantenha ativo para release estavel;
-   - `require_signing`: ative apenas quando os secrets de assinatura estiverem
-     configurados;
+   - `require_signing`: obrigatório em produção; configure o certificado antes de publicar;
    - `prerelease`: use apenas para versoes de validacao;
    - `dry_run`: gera e valida o instalador sem criar commit, tag ou release.
 5. Apos a publicacao, confirme que o workflow **Update Appcast on Release**
-   terminou com sucesso (disparo automatico com `RELEASE_PUBLISH_TOKEN`, ou
-   fallback disparado pelo proprio publish workflow).
+   terminou com sucesso como chamada reutilizável do publish, sem PAT nem evento secundário.
 
 Use `dry_run=true` para validar uma versao antes de publica-la. O workflow
 continua atualizando a versao no workspace temporario do runner, rodando
 preflight e gerando o instalador, mas encerra antes dos passos destrutivos.
 
-Secrets opcionais para assinatura:
+Secrets exigidos para produção:
 
-- `WINDOWS_CODE_SIGNING_CERT_BASE64`: certificado PFX em Base64.
+- `WINDOWS_CODE_SIGNING_CERT_BASE64`: certificado PFX válido em Base64.
 - `WINDOWS_CODE_SIGNING_CERT_PASSWORD`: senha do PFX.
+- `APPCAST_SIGNING_PRIVATE_KEY`: chave Ed25519 já utilizada pelo feed.
+- `AUTO_UPDATE_FEED_PUBLIC_KEY`: CSV das chaves públicas confiáveis, incluindo a chave da assinatura emitida.
 
-Quando `require_signing=true`, a release falha se o certificado nao estiver
-disponivel. Quando `false`, a assinatura e aplicada apenas se os secrets
-existirem. Sem certificado, o workflow **pula automaticamente** a verificacao
-Authenticode (nao e mais necessario marcar `skip_authenticode_check=true`).
+Produção exige testes, assinatura de todos os executáveis e validação
+Authenticode. Ausência de certificado/chaves bloqueia publicação. Desligar gates
+ou `skip_authenticode_check=true` só é permitido em dry-run sem distribuição.
+O token padrão `github.token` publica a release; `update-appcast.yml` é chamado
+como workflow reutilizável e não depende de `RELEASE_PUBLISH_TOKEN`.
 
-Secrets recomendados:
+O canal passa ao aplicativo, instalador e feed. Prerelease é `beta` e não pode
+ser publicada em `stable`. Setup e manifesto são assets obrigatórios. Antes de
+publicar, o workflow verifica assinatura Ed25519, bytes do setup e commit da
+tag. Deploy/smoke usam o commit exato do feed. O rollout inicial é 5%; avanços
+para 25% e 100% exigem pelo menos 48 horas de observação por etapa.
 
-- `RELEASE_PUBLISH_TOKEN`: PAT classico com escopo `repo` para o appcast disparar
-  sozinho apos a release. Releases criadas com o `GITHUB_TOKEN` padrao nao
-  propagam `release.published`; sem o PAT, o step **Dispatch appcast update
-  without PAT** do **Publish Windows Release** dispara **Update Appcast on
-  Release** como fallback. Para criar o PAT: GitHub > Settings > Developer
-  settings > Personal access tokens > Tokens (classic), escopo `repo` apenas,
-  expiracao curta (ex.: 90 dias); depois Settings > Secrets and variables >
-  Actions > New repository secret `RELEASE_PUBLISH_TOKEN`.
+A base do serviço ainda está bloqueada: não publique esta mudança como
+atualização automática concluída antes dos itens pendentes registrados em
+[plano_auto_update_evolution.md](../implemente/plano_auto_update_evolution.md).
 
 Secrets e variables do feed assinado (`AUTO_UPDATE_FEED_PUBLIC_KEY`,
 `APPCAST_SIGNING_PRIVATE_KEY`, `vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE`)
@@ -126,10 +126,11 @@ O `installer/build_installer.py` executa:
 4. `python tool/elevated/build_elevated_runner.py` (`dart build cli`, copia
    `plug_agente_elevated_runner.exe` e sidecars nativos para o bundle
    Release/Debug; obrigatorio)
-5. Validacao de presenca de `plug_agente.exe`, `plug_update_helper.exe` e
-   `plug_agente_elevated_runner.exe` no bundle Release
-6. Assinatura opcional de `plug_agente.exe`, `plug_update_helper.exe` e
-   `plug_agente_elevated_runner.exe`
+5. Validacao de presenca do aplicativo, helper, runner elevado e componentes
+   `updater/plug_update_service.exe`, `plug_update_client.exe` e
+   `plug_update_worker.exe` no bundle Release
+6. Assinatura desses executaveis, obrigatoria para producao; artefatos sem
+   assinatura sao restritos a desenvolvimento/dry-run sem distribuicao
 7. `ISCC installer/setup.iss` (com `SignTool` + `SignedUninstaller` quando o
    certificado estiver configurado) e `signtool verify` do instalador assinado
 
@@ -178,15 +179,14 @@ git push origin v1.2.7
 
 ### 6. Validar automacao
 
-Apos publicar, confira o workflow **Update Appcast on Release** em GitHub
-Actions (os dois runs: o de `release.published` e o redespacho que publica o
-Pages; detalhes em [auto_update_setup.md](auto_update_setup.md)). Se ele nao
-disparar, rode manualmente:
+Após publicar, confira a chamada reutilizável **Update Appcast on Release**,
+incluindo deploy e smoke do commit publicado. Para publicação manual, anexe o
+manifesto assinado correspondente; execute o workflow com a tag e canal corretos:
 
 ```bash
 gh workflow run update-appcast.yml --ref main \
   -f release_tag=v1.2.7 \
-  -f rollout_percentage=100 \
+  -f rollout_percentage=5 \
   -f channel=stable
 ```
 
@@ -234,21 +234,17 @@ python tool/release/release_preflight.py --version 1.2.7 --require-iscc --check-
 
 ## Seguranca Operacional
 
-- Para distribuicao ampla, priorize tambem assinatura de codigo do executavel e
-  do instalador para reduzir alertas de SmartScreen e aumentar confianca no
-  update.
-- O script `installer/build_installer.py` assina `plug_agente.exe`,
-  `plug_update_helper.exe` e `plug_agente_elevated_runner.exe`, e passa
-  `SignTool` ao ISCC (`SignedUninstaller=yes`) para o instalador e o
-  uninstaller embutido quando `WINDOWS_CODE_SIGNING_CERT_PATH` aponta para um
-  PFX. Use `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar
-  explicitamente quando a assinatura nao estiver configurada.
-- O workflow `Publish Windows Release` roda `signtool verify /pa /v` sobre
-  instalador e `plug_update_helper.exe` apos o build quando ha certificado.
-  Esse gate falha o release quando qualquer dos dois nao tem cadeia
-  confiavel. Sem certificado o gate e pulado automaticamente; o input
-  `skip_authenticode_check=true` so e necessario para pular o gate mesmo com
-  certificado (uso restrito).
+- Producao exige assinatura Authenticode dos executaveis proprios e do
+  instalador, alem de feed e manifesto assinados. Ausencia de certificado ou
+  validacao inconclusiva bloqueiam a publicacao.
+- O script `installer/build_installer.py` assina aplicativo, helper, runner
+  elevado, servico, cliente e worker, e passa `SignTool` ao ISCC
+  (`SignedUninstaller=yes`) para o instalador e o uninstaller embutido quando
+  `WINDOWS_CODE_SIGNING_CERT_PATH` aponta para um PFX.
+- O workflow `Publish Windows Release` verifica Authenticode do instalador e
+  de todos os executaveis proprios. `skip_authenticode_check=true` e a ausencia
+  de certificado ficam restritos a dry-run sem distribuicao; nao ha bypass
+  automatico desse gate em producao.
 - O workflow tambem expoe o input `require_valid_update_signature`: quando
   `true`, compila o release com `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true` e
   forca `WINDOWS_CODE_SIGNING_REQUIRED=true`. Criterio de promocao em

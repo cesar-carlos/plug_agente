@@ -3,16 +3,65 @@
 Configuracao, publicacao e diagnostico do update automatico do Plug Agente no
 Windows.
 
+## Transição para serviço Windows — 2026-10-04
+
+A implementação do serviço está em andamento. O instalador oferece **Atualizar
+automaticamente** em instalação global interativa e registra autorização
+administrativa separadamente das preferências do aplicativo. Em instalação
+silenciosa nova, use `/AUTOUPDATE=1` explicitamente; sem esse argumento, o
+serviço não é instalado. Upgrades silenciosos preservam o registro protegido.
+Instalação por usuário continua manual. Inicie o setup normalmente e deixe o
+próprio instalador solicitar UAC, preservando o usuário original.
+
+Os componentes de controle ficam em `%ProgramFiles%\PlugAgenteUpdater`,
+fora do bundle; somente SYSTEM/administradores podem modificá-los. Usuários
+comuns têm leitura/execução do cliente. Política, journal e staging ficam em
+`%ProgramData%\PlugAgenteUpdater`, sem permissão de acesso comum. Esses
+arquivos não recebem a ACL compartilhada de `%ProgramData%\PlugAgente`.
+Workers ficam em `%ProgramFiles%\PlugAgenteUpdater\workers\<versão+build>`.
+O instalador recebe essa versão compilada de `pubspec.yaml`, separada do protocolo
+do worker. A promoção do próximo worker depende de saúde confirmada; o supervisor
+e o worker que executa a tentativa permanecem fora do bundle substituído.
+
+**A aplicação automática pelo serviço permanece bloqueada** por
+`kApplicationContractImplemented=false` no código e
+`applicationContractValidated=false` na política. Enrollment não comprova recuperação.
+Ainda faltam conectar o launcher da sessão original, a manutenção ao runtime,
+o bootstrap em validação, a restauração DPAPI/SQLite e a homologação nas VMs.
+O caminho ativo do aplicativo continua sendo o helper legado e pode pedir UAC.
+Não distribuir esta implementação como automação concluída; veja o status em
+[plano_auto_update_evolution.md](../implemente/plano_auto_update_evolution.md).
+
+Enclosures novos incluem `manifestUrl`, `manifestSha256` e `manifestSignature`.
+O cliente verifica o binding assinado, limita a resposta a 128 KiB, rejeita
+redirecionamento para HTTP e confere assinatura e identidade do manifesto antes
+de baixar o instalador. Binding parcial ou inválido bloqueia esse caminho mesmo
+se assinaturas opcionais do formato legado estiverem desabilitadas. A leitura do
+feed legado continua disponível; ela não habilita aplicação privilegiada.
+
+Para revogar a autorização administrativa do serviço, execute em terminal
+administrativo:
+
+```powershell
+& "$env:ProgramFiles\PlugAgenteUpdater\plug_update_client.exe" --revoke
+```
+
+Isso impede novas aplicações. Não encerre um setup ativo. Preserve journal,
+staging e snapshots em `recoveryRequired`; a recuperação automática completa
+não está integrada. Não transforme resultado desconhecido em sucesso ou
+repita uma instalação cuja conclusão ainda não foi confirmada.
+
 ## Visao Geral
 
 O app tem dois fluxos de update:
 
 - verificacao manual via `auto_updater`/WinSparkle, mantendo interacao do
   usuario;
-- instalacao automatica silenciosa, ligada por padrao, com verificacao,
-  download e apply em background (quando auto-apply esta ligado), validacao e
-  *staging* do instalador por helper nativo; com auto-apply desligado, o apply
-  permanece explicito via banner ou shutdown natural.
+- fluxo silencioso legado, ligado por padrao, com verificacao e download em
+  background e instalacao pelo helper nativo quando auto-apply esta ligado.
+  Instalacoes globais ainda podem exigir UAC. Com auto-apply desligado, o apply
+  permanece explicito via banner ou shutdown natural. A autorizacao do servico
+  e separada dessa preferencia; sua aplicacao ainda esta bloqueada.
 
 O recurso fica ativo quando:
 
@@ -62,8 +111,8 @@ AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true
 | `AUTO_UPDATE_DOWNLOAD_TIMEOUT_SECONDS` | `300` | minimo 60. Timeout de inatividade (stall) do download do instalador: aborta quando nenhum byte chega nesse intervalo, nao pelo tempo total. |
 | `AUTO_UPDATE_DOWNLOAD_RESUME` | `true` | quando `false` desliga `HTTP Range`; use apenas em proxies que nao honram `Range`. |
 | `AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS` | `30` | 0 desliga o aviso pre-fechamento; max 120. Tempo de espera apos a notificacao "fechando para atualizar" antes do `exit`. O helper espera o PID do app por no minimo **70 s** (`resolveAutoUpdateWaitPidTimeoutSeconds` = pre-close + 25 s de grace de exit + 15 s de buffer, teto 180 s), alinhado a essa janela. |
-| `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela onde **novos** downloads automaticos (boot/timer) retornam `skippedByQuietHours`. Pending ja *staged* ainda pode auto-aplicar / permanecer Ready. `Instalar agora` (user-initiated) nao espera essa janela. Suporta janelas que cruzam meia-noite. |
-| `AUTO_UPDATE_HELPER_WAIT_MINUTES` | `30` | min 5, max 120. Tempo maximo que o reconcile aguarda um helper **ja lancado** (status / `launchedAt`) antes de marcar falha e limpar. Download apenas staged nao usa este timeout para clear+fail. |
+| `AUTO_UPDATE_QUIET_HOURS_START` / `_END` | desligado | formato `HH:MM`; ambos obrigatorios para ativar. Janela que bloqueia novos downloads automáticos e a aplicação de updates já baixados, inclusive no shutdown; o staging é preservado. `Instalar agora` (user-initiated) nao espera essa janela. Suporta janelas que cruzam meia-noite. |
+| `AUTO_UPDATE_HELPER_WAIT_MINUTES` | `30` | min 5, max 120. Prazo de supervisão do helper. Expiração não comprova término: registros lançados e artefatos permanecem bloqueados até status terminal confirmado ou recuperação administrativa. |
 | `AUTO_UPDATE_AUTO_APPLY` | `true` | quando `false`/`0`, o fluxo silencioso faz apenas download e *staging*; o apply exige banner ou shutdown. Opt-out por deploy. |
 | `AUTO_UPDATE_FEED_PUBLIC_KEY` | nao definido | CSV base64 de chaves Ed25519 (ver secao de assinatura). |
 | `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE` | `false` | quando `true`, items sem `plug:edSignature` valido sao rejeitados. |
@@ -204,13 +253,16 @@ esta apenas *staged* em disco, o agente permanece online e conectado ao hub.
 
 ### Fase automatica (boot / timer)
 
-1. Validar pending persistido: artefatos ausentes sao limpos; helper em
-   execucao bloqueia novo ciclo; update ja staged pode seguir para auto-apply.
-2. Ler o appcast e localizar o item mais recente.
+1. Validar pending persistido: stage sem evidencia de launch pode ser limpo
+   pela politica de expiracao; launch sem conclusao confirmada preserva os
+   artefatos e bloqueia novo ciclo. Update ja staged pode seguir para auto-apply.
+2. Ler o appcast e selecionar a maior versao elegivel no canal configurado.
 3. Comparar a versao remota com `AppConstants.appVersion`.
 4. Rejeitar o fluxo se `plug:sha256`, tamanho, nome do asset, URL do
    instalador ou assinatura Ed25519 (quando exigida) estiverem ausentes ou
-   invalidos. O gate UAC **nao** bloqueia mais o download automatico.
+   invalidos. Nos enclosures com manifesto, verificar tambem o binding
+   assinado, hash, assinatura e identidade antes do download do setup.
+   O gate UAC nao bloqueia o download automatico.
 5. Baixar o `.exe` para a pasta global de updates, primeiro como `.part`.
 6. Validar tamanho e SHA-256.
 7. Copiar `plug_update_helper.exe` do bundle instalado para a pasta global de
@@ -241,7 +293,7 @@ instalar. No shutdown natural, o helper e lancado sem reentrar na logica de
 close.
 
 Em instalacoes sob `Program Files`, o Windows ainda pode exibir prompt UAC
-**na instalacao** (elevacao do helper). Isso e esperado e nao bloqueia mais o
+**na instalacao** (elevacao do setup). Isso e esperado e nao bloqueia o
 download automatico.
 
 O helper recebe argumentos explicitos, incluindo versao, instalador,
@@ -251,33 +303,26 @@ em `kDefaultWaitPidTimeoutSeconds`). A espera do PID precisa cobrir o
 pre-close; um timeout menor (por exemplo 45 s) deixaria o Inno iniciar
 enquanto o app ainda esta no aviso de fechamento.
 
-## Retry Sem Admin e Fallback Elevado
+## Modo de instalação e helper legado
 
-O instalador continua com `PrivilegesRequired=admin` por padrao para o fluxo
-manual. Para o auto-update, o setup permite override por linha de comando via
-`PrivilegesRequiredOverridesAllowed=commandline`.
+O modo vem de `install-mode.ini`: `user` permite `/CURRENTUSER`; `global`
+(ou ausência do registro antigo) usa `/ALLUSERS`. Gravabilidade da pasta é
+somente diagnóstico; não muda o modo nem provoca uma segunda instalação global
+após falha da instalação por usuário. Pasta personalizada é preservada.
 
-O helper usa politica conservadora:
-
-- se a pasta atual do app for gravavel, tenta primeiro:
-  `/CURRENTUSER /DIR="<pasta atual>"`;
-- se a tentativa retornar exit code diferente de `0`, tenta uma unica vez via
-  `ShellExecuteEx(..., lpVerb="runas")` com `/ALLUSERS`;
-- se a pasta atual nao for gravavel, pula a tentativa sem admin e inicia direto
-  o fallback elevado.
-
-Todos os updates automaticos passam:
+O helper espera o processo terminar cooperativamente. Os argumentos são:
 
 ```text
-/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS /LAUNCHAFTERUPDATE=1 /MERGETASKS="!desktopicon,!startup" /DIR="<pasta atual>" /LOG="<log>"
+/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /LAUNCHAFTERUPDATE=0 /MERGETASKS="!desktopicon,!startup" /DIR="<pasta registrada>" /LOG="<log>"
 ```
 
-O relaunch pos-update fica so no `[Run]` com `/LAUNCHAFTERUPDATE=1`. Nao use
-`/RESTARTAPPLICATIONS` junto: se o helper precisar do `/CLOSEAPPLICATIONS`
-(app ainda aberto), os dois caminhos lancariam duas instancias. Pelo mesmo
-motivo o `setup.iss` define `RestartApplications=no`; o app registra
-`RegisterApplicationRestart` apenas para crash/hang
-(`RESTART_NO_PATCH | RESTART_NO_REBOOT`), nao para patch nem reboot.
+O helper, executado no usuário original, relança o aplicativo depois de setup
+confirmado, cancelamento do UAC ou falha antes de iniciar o setup. `[Run]` não
+relança nesse caminho. Não há fechamento forçado do agente. A supervisão tem
+prazo de 30 minutos; ao exceder, registra `recoveryRequired` e mantém o lock
+até a saída real do instalador. Status ausente, antigo ou desconhecido depois
+do despacho não libera retry nem remove artefatos. O mutex do setup é
+`Global\PlugAgenteSetup`, compartilhado entre sessões.
 
 `/MERGETASKS="!desktopicon,!startup"` impede o update silencioso de
 re-selecionar o atalho da area de trabalho e a task **Iniciar com o
@@ -286,16 +331,17 @@ Windows**. Auto-start de instalacao elevada (nao de update) usa
 `{commonappdata}\PlugAgente\autostart-requested`; veja
 [requirements.md](requirements.md).
 
-O `installer/setup.iss` usa `SetupMutex=PlugAgenteSetup` para impedir duas
+O `installer/setup.iss` usa `SetupMutex=Global\PlugAgenteSetup` para impedir duas
 instancias do Setup (manual + helper silencioso). `AppMutex` e omitido de
 proposito: o helper espera o PID primeiro; um AppMutex abortaria
-`/VERYSILENT` durante a janela de pre-close. `CloseApplications=force`
-com filtro `plug_agente.exe` fecha o processo se ele ainda estiver vivo
-apos essa espera. A desinstalacao remove `{commonappdata}\PlugAgente\updates`.
+`/VERYSILENT` durante a janela de pre-close. O setup interativo usa
+`CloseApplications=yes`, com filtro `plug_agente.exe`; o helper passa
+`/NOCLOSEAPPLICATIONS` e nao inicia a instalacao se a espera pelo PID falhar.
+A desinstalacao remove `{commonappdata}\PlugAgente\updates`.
 
-Em instalacoes sob `Program Files`, UAC continua esperado. O objetivo desta
-etapa e reduzir UAC para instalacoes em diretorios gravaveis pelo usuario, nao
-criar um servico privilegiado permanente. Se o operador cancelar o UAC, o
+Em instalacoes sob `Program Files`, UAC continua esperado no caminho legado.
+O servico dedicado descrito no plano vigente ainda nao aplica atualizacoes.
+Se o operador cancelar o UAC, o
 pending permanece **Ready** (nao sucesso e nao fail+cooldown); o banner
 oferece retry.
 
@@ -317,9 +363,10 @@ No proximo boot (reconcile):
   `AUTO_UPDATE_HELPER_WAIT_MINUTES`) permanece pending in-progress;
   `hasPendingDownloadedUpdate` / banner Ready **excluem** in-flight (nao
   oferecem Install enquanto o helper ja esta rodando);
-- falha/clear apos evidencia de launch + timeout do helper, ou status
-  terminal de falha do helper — **reconcile e resolve** compartilham a mesma
-  politica fail+cooldown (nunca Ready/retry apos launch concluido/expirado);
+- status terminal confirmado de falha do helper aplica a politica
+  fail+cooldown; timeout, status ausente ou `recoveryRequired` depois do
+  despacho preservam o pending e os artefatos, sem liberar retry. O prazo
+  expirado nao comprova que o setup terminou;
 - cancelamento do UAC (`elevatedCancelled` / estado `elevatedCancelled`) e
   a excecao: o instalador staged permanece Ready para retry no banner, com
   mensagem localizada; nao conta como sucesso e nao incrementa o cooldown;
@@ -354,7 +401,7 @@ A tela **Atualizacoes/Sobre** mostra diagnosticos copiaveis com:
   - `signatureStatus` — Authenticode do `setup.exe` (escrita pelo helper
     C++): `valid` / `invalid` / `unsigned` / `unknown`.
   - `helperSignatureStatus` — Authenticode do `plug_update_helper.exe`
-    (probe PowerShell em Dart, cache por sessao): `valid` / `invalid` /
+    (probe PowerShell em Dart, revalidação em cada chamada, sem cache por caminho): `valid` / `invalid` /
     `unsigned` / `unknown`. Quando `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true`
     e o status nao for `valid`, o silent flow falha com
     `validation_code=helper_signature_*` antes mesmo de baixar o instalador.
@@ -423,19 +470,24 @@ silenciosa do gate de assinatura.
 6. O workflow publica o feed em GitHub Pages.
 7. O smoke check confirma que o feed publicado aponta para o asset esperado.
 
-Detalhe operacional do passo 6: o workflow `update-appcast.yml` faz o deploy
-do Pages apenas no caminho `workflow_dispatch`. Quando disparado pelo evento
-`release:published`, o primeiro job commita o `appcast.xml` em `main` e
-**redespacha** o proprio workflow via `dispatch-main-appcast-publish`; o
-segundo run (workflow_dispatch) e o que publica no Pages e roda o smoke
-check. Em pos-release, valide ambos os runs em Actions, nao apenas o
-primeiro.
+O publish chama `update-appcast.yml` como workflow reutilizável. Não depende
+de PAT, de `release.published` ou de redespacho secundário. Mutação de `main`
+usa uma fila compartilhada; publicação/deploy/smoke do feed também são
+serializados. Deploy e smoke usam o SHA do commit que publicou o appcast.
 
-O workflow de appcast aceita `rollout_percentage`, default `100`, para permitir
-rollout gradual em proximas releases.
-Em execucao manual ele tambem aceita `channel` (`stable`, `beta` ou
-`internal`). Releases publicadas automaticamente continuam entrando em
-`stable`.
+Prerelease usa `beta`; publicação de prerelease em `stable` é bloqueada.
+O item é deduplicado por versão, plataforma e canal, e é reassinado quando
+publicado com chave, inclusive durante rotação. Releases novas incluem
+`PlugAgente-Manifest-<versão>.json`: assinatura Ed25519 cobre commit/tag,
+versão/canal, hash/tamanho do setup, requisitos e protocolos de dados.
+`plug:manifestSignature` vincula URL/hash do manifesto ao item, preservando
+`plug:edSignature` para clientes antigos. O serviço rejeita formato legado
+como autorização de aplicação privilegiada.
+
+Produção exige certificado Authenticode e chaves de feed válidas. O workflow
+seleciona exatamente o asset esperado, valida bytes, assinatura, tag/commit e
+canal antes de escrever o feed. A primeira publicação pelo workflow começa
+em 5%; mudanças para 25% e 100% exigem as observações previstas no plano.
 
 Para ensaio completo sem publicacao, execute o workflow manual
 **Release Preflight**. Ele atualiza a versao apenas no workspace temporario do

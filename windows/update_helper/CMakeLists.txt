@@ -5,7 +5,13 @@ add_executable(plug_update_helper WIN32
   "main.cpp"
 )
 
-apply_standard_settings(plug_update_helper)
+if(COMMAND apply_standard_settings)
+  apply_standard_settings(plug_update_helper)
+else()
+  target_compile_features(plug_update_helper PRIVATE cxx_std_17)
+  target_compile_definitions(plug_update_helper PRIVATE UNICODE _UNICODE)
+  target_compile_options(plug_update_helper PRIVATE /W4 /WX /EHsc /utf-8)
+endif()
 target_compile_definitions(plug_update_helper PRIVATE "NOMINMAX")
 target_link_libraries(plug_update_helper PRIVATE "advapi32.lib" "shell32.lib" "wintrust.lib")
 

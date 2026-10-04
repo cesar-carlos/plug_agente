@@ -1,0 +1,2 @@
+#pragma once
+inline constexpr char kFeedPublicKeys[] = "@PLUG_FEED_PUBLIC_KEYS@";

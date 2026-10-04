@@ -121,6 +121,19 @@ class SqlExecutionQueue {
   late final SqlExecutionGhostQueryPolicy _ghostQueryPolicy;
 
   bool _disposed = false;
+  String? _maintenanceOperation;
+
+  void pauseAdmissionForMaintenance(String operationId) {
+    if (_maintenanceOperation != null && _maintenanceOperation != operationId) {
+      throw StateError('SQL maintenance already belongs to another operation');
+    }
+    _maintenanceOperation = operationId;
+  }
+
+  void resumeAdmissionAfterMaintenance(String operationId) {
+    if (_maintenanceOperation == operationId) _maintenanceOperation = null;
+  }
+
   Completer<void>? _drainedCompleter;
   final List<Completer<void>> _activeWorkerIdleWaiters = <Completer<void>>[];
   // Consecutive `queue full` rejections without any accepted submission in
@@ -240,6 +253,12 @@ class SqlExecutionQueue {
   }
 
   domain.ConfigurationFailure? _admitSubmission({required String? requestId}) {
+    if (_maintenanceOperation != null) {
+      return domain.ConfigurationFailure.withContext(
+        message: 'O agente está em preparação para manutenção.',
+        context: const {'reason': 'maintenance', 'retryable': true},
+      );
+    }
     if (_disposed) {
       developer.log(
         'SQL request REJECTED (queue disposed)',

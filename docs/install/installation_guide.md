@@ -22,9 +22,9 @@ Redistributable x64) e driver ODBC 64 bits do banco.
 ## Passo 2: Executar o Instalador
 
 1. **Localize o arquivo** do instalador (ex.: `PlugAgente-Setup-1.8.6.exe`)
-2. **Clique com o botão direito** no arquivo
-3. Selecione **"Executar como administrador"**
-4. Se aparecer o **Controle de Conta de Usuário (UAC)**, clique em **"Sim"**
+2. Abra o arquivo normalmente com duplo clique.
+3. Permita a elevação solicitada pelo próprio instalador no UAC; use credenciais administrativas quando necessário.
+4. Iniciar normalmente preserva o usuário original para autostart e relançamento, inclusive quando as credenciais administrativas pertencem a outra conta.
 
 ---
 
@@ -42,6 +42,7 @@ A tela de boas-vindas fica desligada. O assistente começa pela pasta de instala
 
 O instalador mostra opções para:
 
+- **Atualizar automaticamente** (instalação global): autoriza o serviço Windows e reinícios breves do agente; pode ser desmarcada. Permissões adicionais exigem nova aprovação administrativa. A integração está em transição e a aplicação pelo serviço continua bloqueada até validação e homologação; consulte [auto_update_setup.md](auto_update_setup.md).
 - **Criar um atalho na área de trabalho**
 - **Iniciar com o Windows**: o aplicativo inicia no login do usuário que instalou, na bandeja quando ela estiver operacional. Detalhes em **Inicialização com o Windows** em [requirements.md](requirements.md).
 
@@ -136,20 +137,20 @@ desinstalar o aplicativo principal.
 ### "Você precisa de permissões de administrador"
 
 1. Feche o instalador
-2. Clique com o botão direito no arquivo `.exe`
-3. Selecione **"Executar como administrador"**
+2. Abra novamente o setup normalmente.
+3. Forneça as credenciais administrativas quando o próprio instalador solicitar UAC.
 
 ### "Não foi possível baixar o Microsoft Visual C++ Redistributable x64"
 
 1. Confirme a conexão com a internet e o acesso a `https://aka.ms/vs/17/release/vc_redist.x64.exe`
 2. Ou instale o runtime manualmente e rode o setup de novo
-3. Execute o instalador como administrador
+3. Abra o setup normalmente e autorize o UAC solicitado pelo instalador.
 
 ### "Aplicativo não inicia após instalação"
 
 1. Verifique se o Microsoft Visual C++ Redistributable x64 está instalado
 2. Verifique os logs em: `C:\ProgramData\PlugAgente\logs\`
-3. Tente executar como administrador
+3. Confira o diagnóstico do runtime e as permissões dos diretórios de dados; não altere a conta que executa o agente como solução permanente.
 
 ### "Driver ODBC ou ferramenta do banco não foi encontrada"
 

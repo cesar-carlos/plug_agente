@@ -61,83 +61,13 @@ jobs:
             exit 1
           fi
 
-      - name: Verify plug:edSignature (when configured)
+      - name: Verify feed and manifest binding signatures
         env:
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${AUTO_UPDATE_FEED_PUBLIC_KEY:-}" ]; then
-            echo "No AUTO_UPDATE_FEED_PUBLIC_KEY secret configured; skipping signature verification."
-            exit 0
-          fi
-          python3 - <<'PY'
-          import base64
-          import os
-          import re
-          import sys
-          import urllib.parse
-          import xml.etree.ElementTree as ET
-
-          sys.path.insert(0, "tool")
-          from appcast_signing import EnclosureSignaturePayload, verify_with_any_key  # type: ignore
-
-          NS = {
-              "sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle",
-              # Keep this URI in sync with `PLUG_NS` in tool/appcast/appcast_manager.py
-              # and `_plugNamespace` in lib/application/services/appcast_probe_service.dart.
-              # Drift breaks signature verification silently (the script falls
-              # back to "no signature" and exits 0 instead of failing the gate).
-              "plug": "https://plug.se7esistemas.com/appcast",
-          }
-
-          public_keys = os.environ["AUTO_UPDATE_FEED_PUBLIC_KEY"]
-          tree = ET.parse("published_appcast.xml")
-          root = tree.getroot()
-          items = root.findall("./channel/item")
-          if not items:
-              print("Appcast has no <item> elements.", file=sys.stderr)
-              sys.exit(1)
-
-          # Pick the most recent item (sparkle:version on the enclosure).
-          def parse_version(item):
-              enc = item.find("enclosure")
-              if enc is None:
-                  return None
-              return enc.get("{%s}version" % NS["sparkle"])
-
-          def version_tuple(s):
-              if not s:
-                  return ()
-              base = s.split("+", 1)[0]
-              parts = re.findall(r"\d+", base)
-              return tuple(int(p) for p in parts)
-
-          latest = max(items, key=lambda i: version_tuple(parse_version(i)))
-          enclosure = latest.find("enclosure")
-          if enclosure is None:
-              print("Latest item is missing enclosure.", file=sys.stderr)
-              sys.exit(1)
-
-          signature_b64 = enclosure.get("{%s}edSignature" % NS["plug"])
-          if not signature_b64:
-              print("Latest item has no plug:edSignature; skipping (signing rollout in progress).")
-              sys.exit(0)
-
-          payload = EnclosureSignaturePayload(
-              version=enclosure.get("{%s}version" % NS["sparkle"]) or "",
-              os=enclosure.get("{%s}os" % NS["sparkle"]) or "",
-              sha256=(enclosure.get("{%s}sha256" % NS["plug"]) or "").lower(),
-              channel=enclosure.get("{%s}channel" % NS["plug"]) or "stable",
-              rollout_percentage=int(enclosure.get("{%s}rolloutPercentage" % NS["plug"]) or 100),
-              asset_url=enclosure.get("url") or "",
-              asset_size=int(enclosure.get("length") or 0),
-          )
-
-          if not verify_with_any_key(payload, signature_b64, public_keys):
-              print("plug:edSignature failed verification against AUTO_UPDATE_FEED_PUBLIC_KEY.", file=sys.stderr)
-              sys.exit(1)
-          print("plug:edSignature verified against configured public key(s).")
-          PY
+          test -n "$AUTO_UPDATE_FEED_PUBLIC_KEY" || { echo 'Feed public keys are required' >&2; exit 1; }
+          python3 tool/appcast/appcast_manager.py inspect-url --feed-url "$FEED_URL" --env-file appcast.env --release-body-file release_body.txt --public-keys "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 
       - name: Upload diagnostics on failure
         if: failure()

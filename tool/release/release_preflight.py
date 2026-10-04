@@ -317,6 +317,10 @@ def run_optional_checks(args: argparse.Namespace) -> None:
                 "tool.appcast.test_appcast_manager",
                 "tool.appcast.test_validate_release",
                 "tool.appcast.test_appcast_signing",
+                "tool.appcast.test_validate_launcher_status",
+                "tool.updater.test_manifest",
+                "tool.updater.test_verify_release",
+                "tool.updater.test_installer",
                 "-v",
             ]
         )
@@ -333,21 +337,16 @@ def list_github_actions_secrets(repo: str) -> set[str]:
 def collect_publish_secret_warnings(repo: str) -> list[str]:
     secrets = list_github_actions_secrets(repo)
     warnings: list[str] = []
-    if "RELEASE_PUBLISH_TOKEN" not in secrets:
-        warnings.append(
-            "RELEASE_PUBLISH_TOKEN is not configured: update-appcast.yml will not run "
-            "automatically after publish (the publish workflow dispatches it as fallback)."
-        )
     if "WINDOWS_CODE_SIGNING_CERT_BASE64" not in secrets:
         warnings.append(
-            "WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured: builds are unsigned and "
-            "Authenticode verification is skipped in CI."
+            "WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured: production publication is blocked."
         )
     if "AUTO_UPDATE_FEED_PUBLIC_KEY" not in secrets:
         warnings.append(
-            "AUTO_UPDATE_FEED_PUBLIC_KEY is not configured: feed signature embedding checks "
-            "are skipped unless you pass --feed-public-key."
+            "AUTO_UPDATE_FEED_PUBLIC_KEY is not configured: production publication is blocked."
         )
+    if "APPCAST_SIGNING_PRIVATE_KEY" not in secrets:
+        warnings.append("APPCAST_SIGNING_PRIVATE_KEY is not configured: signed manifest and feed publication is blocked.")
     return warnings
 
 
@@ -360,35 +359,23 @@ def print_publish_workflow_hints(
 ) -> None:
     secrets = list_github_actions_secrets(repo)
     has_signing = "WINDOWS_CODE_SIGNING_CERT_BASE64" in secrets
-    has_publish_token = "RELEASE_PUBLISH_TOKEN" in secrets
 
     print("\nPublish workflow hints:")
     print(f"  1. Optional dry run: gh workflow run \"Publish Windows Release\" --ref main")
     print(f"     -f version={version_short} -f build_number={build_number} -f dry_run=true")
     print("  2. Production publish:")
-    authode_flag = "true" if skip_authenticode or not has_signing else "false"
     print(
         f"     gh workflow run \"Publish Windows Release\" --ref main "
         f"-f version={version_short} -f build_number={build_number} "
-        f"-f run_tests=true -f require_signing=false -f dry_run=false "
-        f"-f skip_authenticode_check={authode_flag}"
+        f"-f run_tests=true -f require_signing=true -f require_valid_update_signature=true -f dry_run=false "
+        f"-f skip_authenticode_check=false"
     )
     if not has_signing:
         print(
             "  WARN: WINDOWS_CODE_SIGNING_CERT_BASE64 is not configured; "
-            "use skip_authenticode_check=true or the publish job will fail after the build."
+            "production requires a valid certificate; unsigned development builds must use dry_run=true."
         )
-    if not has_publish_token:
-        print(
-            "  WARN: RELEASE_PUBLISH_TOKEN is not configured; "
-            "update-appcast.yml will not run automatically after publish."
-        )
-        print(
-            f"     After publish: gh workflow run \"Update Appcast on Release\" --ref main "
-            f"-f release_tag=v{version_short} -f rollout_percentage=100 -f channel=stable"
-        )
-    else:
-        print("  OK: RELEASE_PUBLISH_TOKEN is configured (appcast should auto-update).")
+    print("  Appcast publication uses workflow_call with GITHUB_TOKEN; no PAT is required.")
 
 
 def build_parser() -> argparse.ArgumentParser:

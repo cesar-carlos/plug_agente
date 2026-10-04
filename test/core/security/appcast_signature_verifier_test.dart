@@ -1,10 +1,57 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 
 void main() {
+  test('manifest binding matches Python bytes and rejects substitution', () async {
+    final fixture =
+        jsonDecode(File('test/fixtures/updater_manifest_v1.json').readAsStringSync()) as Map<String, dynamic>;
+    final binding = fixture['feedBinding'] as Map<String, dynamic>;
+    String payload(String url) => buildAppcastManifestBindingSignable(
+      enclosurePayload: binding['enclosure'] as String,
+      manifestUrl: url,
+      manifestSha256: binding['sha256'] as String,
+    );
+    final canonical = payload(binding['url'] as String);
+    expect(canonical, binding['payload']);
+    final verifier = Ed25519AppcastSignatureVerifier();
+    expect(
+      await verifier.verifyEnclosure(
+        canonicalPayload: canonical,
+        base64Signature: binding['signature'] as String,
+        base64PublicKey: fixture['publicKey'] as String,
+      ),
+      AppcastSignatureVerificationStatus.valid,
+    );
+    expect(
+      await verifier.verifyEnclosure(
+        canonicalPayload: payload('https://example.com/other.json'),
+        base64Signature: binding['signature'] as String,
+        base64PublicKey: fixture['publicKey'] as String,
+      ),
+      AppcastSignatureVerificationStatus.invalid,
+    );
+  });
+  test('manifest binding rejects transport downgrade and line injection', () {
+    for (final url in [
+      'http://example.com/release.json',
+      'https://example.com/release.json\nversion=9',
+      'https://user:pass@example.com/release.json',
+      'https://example.com/release.json#unbound',
+    ]) {
+      expect(
+        () => buildAppcastManifestBindingSignable(
+          enclosurePayload: 'version=1\n',
+          manifestUrl: url,
+          manifestSha256: List.filled(64, 'a').join(),
+        ),
+        throwsFormatException,
+      );
+    }
+  });
   group('buildAppcastEnclosureSignable', () {
     test('writes fields in deterministic lexicographic order', () {
       final payload = buildAppcastEnclosureSignable(

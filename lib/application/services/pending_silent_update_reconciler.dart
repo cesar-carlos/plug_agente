@@ -75,7 +75,7 @@ class PendingSilentUpdateReconciler {
     } on FormatException {
       completed = false;
     }
-    if (!completed && launcherStatus == null && await _isPendingStale(pending)) {
+    if (!completed && launcherStatus == null && downloaded?.launchedAt == null && await _isPendingStale(pending)) {
       developer.log(
         'Clearing stale pending silent update (paths no longer exist): version=${pending.version}',
         name: 'silent_update_coordinator',
@@ -87,13 +87,12 @@ class PendingSilentUpdateReconciler {
     }
 
     final launchedAt = downloaded?.launchedAt;
-    if (!completed &&
-        SilentUpdateHelperLaunchState.isInFlight(
-          launchedAt: launchedAt,
-          launcherStatus: launcherStatus,
-          now: now,
-          helperWaitDuration: _helperWaitDuration,
-        )) {
+    if (SilentUpdateHelperLaunchState.isInFlight(
+      launchedAt: launchedAt,
+      launcherStatus: launcherStatus,
+      now: now,
+      helperWaitDuration: _helperWaitDuration,
+    )) {
       request.onDiagnosticsUpdated(
         diagnosticsForPending(
           pending: pending,
@@ -113,9 +112,7 @@ class PendingSilentUpdateReconciler {
 
     // Operator cancelled the UAC prompt. Keep the staged installer Ready so
     // the banner can offer a retry instead of failing + cooling down.
-    if (!completed &&
-        downloaded != null &&
-        SilentUpdateHelperLaunchState.isUserCancelledElevation(launcherStatus)) {
+    if (!completed && downloaded != null && SilentUpdateHelperLaunchState.isUserCancelledElevation(launcherStatus)) {
       developer.log(
         'Keeping staged silent update after UAC cancellation: version=${pending.version}',
         name: 'silent_update_coordinator',

@@ -26,6 +26,7 @@ import 'package:plug_agente/core/runtime/i_uac_detector.dart';
 import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
+import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 
 /// Wires the silent-update collaborators so the coordinator stays an orchestrator.
 class SilentUpdateCollaborators {
@@ -63,6 +64,7 @@ class SilentUpdateCollaborators {
     Duration helperWaitDuration = AutoUpdateDefaults.helperWaitDuration,
     Duration Function()? bootJitterProvider,
     IAppcastSignatureVerifier? signatureVerifier,
+    IUpdateManifestDownloader? manifestDownloader,
     UpdateCheckIdRecorder? checkIdRecorder,
     IAutoUpdateMetricsCollector? metricsCollector,
     IAutoUpdateDiagnosticsGateway? diagnosticsGateway,
@@ -111,6 +113,7 @@ class SilentUpdateCollaborators {
     final resolvedProbePipeline = SilentUpdateProbePipeline(
       appcastProbeService: appcastProbe,
       signatureVerifier: resolvedSignatureVerifier,
+      manifestDownloader: manifestDownloader,
       pendingStore: resolvedPendingStore,
       automaticFailureBreaker: automaticFailureBreaker,
       metricsCollector: metricsCollector,

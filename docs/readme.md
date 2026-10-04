@@ -9,10 +9,6 @@ Indice principal da documentacao do projeto. Cada subpasta tem o proprio
 docs/
 |- readme.md
 |- project_overview.md
-|- archive/                         # historico (nao SoT)
-|  |- readme.md
-|  |- plano_acoes_mvp_2026-05.md
-|  \- plug_server_02_implementation_checklist_2026-06.md
 |- architecture/
 |  |- readme.md
 |  |- QUICKSTART.md
@@ -79,4 +75,3 @@ docs/
 - [Seguranca de acoes agendadas](implemente/acoes/seguranca_acoes.md)
 - [Threat model do auto-update](security/auto_update_threat_model.md)
 - [Guia de instalacao](install/readme.md)
-- [Archive (historico)](archive/readme.md)

@@ -12,6 +12,8 @@ for _entry in (str(_ROOT), str(_TOOL_DIR)):
         sys.path.insert(0, _entry)
 
 import argparse
+import os
+import tempfile
 import re
 import shlex
 import sys
@@ -48,6 +50,8 @@ class AppcastContext:
     channel: str = DEFAULT_CHANNEL
     rollout_percentage: int = DEFAULT_ROLLOUT_PERCENTAGE
     max_items: int = 10
+    manifest_url: str = ""
+    manifest_sha256: str = ""
 
     @property
     def version(self) -> str:
@@ -173,7 +177,9 @@ def _ensure_channel(root: et.Element) -> et.Element:
 def _find_matching_item(channel: et.Element, context: AppcastContext) -> et.Element | None:
     for item in channel.findall("item"):
         enclosure = item.find("enclosure")
-        if _sparkle_version(enclosure) in {context.version, context.version_short}:
+        if (_sparkle_version(enclosure) in {context.version, context.version_short}
+                and _sparkle_os(enclosure) == WINDOWS_OS_NAME
+                and _plug_channel(enclosure) == context.expected_channel):
             return item
     return None
 
@@ -205,6 +211,16 @@ def _build_appcast_item(
     enclosure.set(_plug_attr("rolloutPercentage"), str(context.expected_rollout_percentage))
     enclosure.set("length", str(context.asset_size))
     enclosure.set("type", ENCLOSURE_MIME_TYPE)
+    if bool(context.manifest_url) != bool(context.manifest_sha256):
+        raise ValueError("Manifest URL and hash must be supplied together")
+    if context.manifest_url:
+        uri = urllib.parse.urlparse(context.manifest_url)
+        if uri.scheme != "https" or not uri.netloc or not uri.path.endswith(".json"):
+            raise ValueError("Manifest URL must be HTTPS JSON")
+        if not signing_private_key_b64:
+            raise ValueError("Manifest feed binding requires signing")
+        enclosure.set(_plug_attr("manifestUrl"), context.manifest_url)
+        enclosure.set(_plug_attr("manifestSha256"), normalize_sha256(context.manifest_sha256))
     if signing_private_key_b64:
         from tool.appcast.appcast_signing import EnclosureSignaturePayload, sign_payload
 
@@ -218,6 +234,9 @@ def _build_appcast_item(
             asset_size=int(context.asset_size),
         )
         enclosure.set(_plug_attr("edSignature"), sign_payload(payload, signing_private_key_b64))
+        if context.manifest_url:
+            enclosure.set(_plug_attr("manifestSignature"), sign_payload(
+                ManifestBindingPayload(payload, context.manifest_url, context.manifest_sha256), signing_private_key_b64))
     return item
 
 
@@ -251,10 +270,13 @@ def update_appcast_tree(
     for item in list(channel.findall("item")):
         enclosure = item.find("enclosure")
         sparkle_version = _sparkle_version(enclosure)
-        if sparkle_version in {context.version, context.version_short}:
+        if (sparkle_version in {context.version, context.version_short}
+                and _sparkle_os(enclosure) == WINDOWS_OS_NAME
+                and _plug_channel(enclosure) == context.expected_channel):
             channel.remove(item)
 
-    if matching_item is not None and existing_pub_date and _item_matches_context(matching_item, context):
+    if (not signing_private_key_b64 and matching_item is not None
+            and existing_pub_date and _item_matches_context(matching_item, context)):
         item = matching_item
     else:
         item = _build_appcast_item(
@@ -285,12 +307,21 @@ def update_appcast_tree(
 
 def write_appcast_tree(tree: et.ElementTree, appcast_path: Path) -> None:
     et.indent(tree, space=" ")
-    with appcast_path.open("wb") as fh:
-        fh.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
-        tree.write(fh, encoding="utf-8")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", dir=appcast_path.parent, delete=False) as fh:
+            temporary = Path(fh.name)
+            fh.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
+            tree.write(fh, encoding="utf-8")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temporary, appcast_path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
 
 
-def validate_appcast_tree(tree: et.ElementTree, context: AppcastContext) -> None:
+def validate_appcast_tree(tree: et.ElementTree, context: AppcastContext, public_keys: str = "") -> None:
     root = tree.getroot()
     channel = root.find("channel")
     if channel is None:
@@ -313,6 +344,34 @@ def validate_appcast_tree(tree: et.ElementTree, context: AppcastContext) -> None
         )
 
     validate_item(latest_item, context)
+    if public_keys:
+        validate_signatures(latest_item, context, public_keys)
+
+
+@dataclass(frozen=True)
+class ManifestBindingPayload:
+    enclosure: object
+    url: str
+    sha256: str
+
+    def canonical_bytes(self) -> bytes:
+        return self.enclosure.canonical_bytes() + f"manifest_sha256={normalize_sha256(self.sha256)}\nmanifest_url={self.url}\n".encode("utf-8")
+
+
+def validate_signatures(item: et.Element, context: AppcastContext, public_keys: str) -> None:
+    from tool.appcast.appcast_signing import EnclosureSignaturePayload, verify_with_any_key
+    enclosure = item.find("enclosure")
+    payload = EnclosureSignaturePayload(version=context.version, os=WINDOWS_OS_NAME, sha256=context.expected_asset_sha256,
+        channel=context.expected_channel, rollout_percentage=context.expected_rollout_percentage,
+        asset_url=context.asset_url, asset_size=int(context.asset_size))
+    if not verify_with_any_key(payload, enclosure.get(_plug_attr("edSignature"), ""), public_keys):
+        raise ValueError("Feed signature is absent or invalid")
+    if context.manifest_url:
+        if enclosure.get(_plug_attr("manifestUrl")) != context.manifest_url or enclosure.get(_plug_attr("manifestSha256")) != context.manifest_sha256:
+            raise ValueError("Feed manifest identity mismatch")
+        binding = ManifestBindingPayload(payload, context.manifest_url, context.manifest_sha256)
+        if not verify_with_any_key(binding, enclosure.get(_plug_attr("manifestSignature"), ""), public_keys):
+            raise ValueError("Feed manifest signature is absent or invalid")
 
 
 def validate_item(item: et.Element, context: AppcastContext) -> None:
@@ -351,6 +410,8 @@ def validate_item(item: et.Element, context: AppcastContext) -> None:
         raise ValueError("latest enclosure plug:channel does not match release channel")
     if rollout_percentage != context.expected_rollout_percentage:
         raise ValueError("latest enclosure plug:rolloutPercentage does not match release rollout percentage")
+    if enclosure.get(_plug_attr("manifestUrl"), "") != context.manifest_url or enclosure.get(_plug_attr("manifestSha256"), "") != context.manifest_sha256:
+        raise ValueError("latest enclosure manifest identity does not match publication context")
     if mime_type != ENCLOSURE_MIME_TYPE:
         raise ValueError(f"invalid enclosure type: {mime_type!r}")
     if os_name != WINDOWS_OS_NAME:
@@ -404,12 +465,14 @@ def context_from_latest_item(item: et.Element, *, max_items: int = 10) -> Appcas
         rollout_percentage=rollout_percentage,
         release_body=description,
         max_items=max_items,
+        manifest_url=enclosure.get(_plug_attr("manifestUrl"), ""),
+        manifest_sha256=enclosure.get(_plug_attr("manifestSha256"), ""),
     )
     validate_item(item, context)
     return context
 
 
-def inspect_feed_url(feed_url: str, *, max_items: int = 10, cache_bust: bool = True) -> AppcastContext:
+def inspect_feed_url(feed_url: str, *, max_items: int = 10, cache_bust: bool = True, public_keys: str = "") -> AppcastContext:
     root = fetch_feed_root(feed_url, cache_bust=cache_bust)
     channel = root.find("channel")
     if channel is None:
@@ -421,7 +484,10 @@ def inspect_feed_url(feed_url: str, *, max_items: int = 10, cache_bust: bool = T
     if len(items) > max_items:
         raise ValueError(f"item count {len(items)} exceeds limit {max_items}")
 
-    return context_from_latest_item(items[0], max_items=max_items)
+    context = context_from_latest_item(items[0], max_items=max_items)
+    if public_keys:
+        validate_signatures(items[0], context, public_keys)
+    return context
 
 
 def write_shell_env(path: Path, context: AppcastContext) -> None:
@@ -434,6 +500,8 @@ def write_shell_env(path: Path, context: AppcastContext) -> None:
         "ASSET_SHA256": context.expected_asset_sha256,
         "CHANNEL": context.expected_channel,
         "ROLLOUT_PERCENTAGE": str(context.expected_rollout_percentage),
+        "MANIFEST_URL": context.manifest_url,
+        "MANIFEST_SHA256": context.manifest_sha256,
     }
     path.write_text(
         "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items()),
@@ -448,6 +516,7 @@ def smoke_validate_feed(
     attempts: int = 6,
     delay_seconds: int = 5,
     cache_bust: bool = True,
+    public_keys: str = "",
 ) -> None:
     last_error: Exception | None = None
     for attempt in range(1, attempts + 1):
@@ -462,6 +531,8 @@ def smoke_validate_feed(
             if len(items) > context.max_items:
                 raise ValueError(f"item count {len(items)} exceeds limit {context.max_items}")
             validate_item(items[0], context)
+            if public_keys:
+                validate_signatures(items[0], context, public_keys)
             return
         except Exception as error:  # pragma: no cover - exercised via retry loop
             last_error = error
@@ -492,6 +563,8 @@ def build_context_from_args(args: argparse.Namespace) -> AppcastContext:
         rollout_percentage=getattr(args, "rollout_percentage", DEFAULT_ROLLOUT_PERCENTAGE),
         release_body=load_release_body(getattr(args, "release_body_file", None)),
         max_items=args.max_items,
+        manifest_url=getattr(args, "manifest_url", ""),
+        manifest_sha256=getattr(args, "manifest_sha256", ""),
     )
 
 
@@ -509,7 +582,7 @@ def command_update(args: argparse.Namespace) -> int:
 def command_validate_file(args: argparse.Namespace) -> int:
     context = build_context_from_args(args)
     tree = et.parse(args.appcast)
-    validate_appcast_tree(tree, context)
+    validate_appcast_tree(tree, context, getattr(args, "public_keys", ""))
     print(
         "appcast.xml validation passed "
         f"(version={context.version}, item_count={len(tree.getroot().find('channel').findall('item'))})"
@@ -525,6 +598,7 @@ def command_smoke_validate_url(args: argparse.Namespace) -> int:
         attempts=args.attempts,
         delay_seconds=args.delay_seconds,
         cache_bust=not args.no_cache_bust,
+        public_keys=getattr(args, "public_keys", ""),
     )
     print(
         "Published appcast smoke validation passed "
@@ -538,6 +612,7 @@ def command_inspect_url(args: argparse.Namespace) -> int:
         args.feed_url,
         max_items=args.max_items,
         cache_bust=not args.no_cache_bust,
+        public_keys=getattr(args, "public_keys", ""),
     )
     write_shell_env(args.env_file, context)
     args.release_body_file.write_text(context.release_body, encoding="utf-8")
@@ -563,6 +638,9 @@ def build_parser() -> argparse.ArgumentParser:
         subparser.add_argument("--rollout-percentage", type=int, default=DEFAULT_ROLLOUT_PERCENTAGE)
         subparser.add_argument("--release-body-file", type=Path)
         subparser.add_argument("--max-items", type=int, default=10)
+        subparser.add_argument("--manifest-url", default="")
+        subparser.add_argument("--manifest-sha256", default="")
+        subparser.add_argument("--public-keys", default="")
 
     update_parser = subparsers.add_parser("update")
     update_parser.add_argument("--appcast", type=Path, required=True)
@@ -600,6 +678,7 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("--env-file", type=Path, required=True)
     inspect_parser.add_argument("--release-body-file", type=Path, required=True)
     inspect_parser.add_argument("--max-items", type=int, default=10)
+    inspect_parser.add_argument("--public-keys", default="")
     inspect_parser.add_argument(
         "--no-cache-bust",
         action="store_true",

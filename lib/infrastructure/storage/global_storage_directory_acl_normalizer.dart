@@ -13,6 +13,11 @@ class GlobalStorageDirectoryAclNormalizer {
   final IcaclsCommandRunner _commandRunner;
 
   Future<IcaclsGrantOutcome> normalizeDirectory(String directoryPath) async {
+    if (_isUpdaterStorage(directoryPath)) {
+      return const IcaclsGrantOutcome.processFailed(
+        stderr: 'Privileged updater storage cannot receive shared app-data ACLs',
+      );
+    }
     if (!Platform.isWindows) {
       return const IcaclsGrantOutcome.skippedNonWindows();
     }
@@ -28,6 +33,11 @@ class GlobalStorageDirectoryAclNormalizer {
   }
 
   Future<IcaclsGrantOutcome> normalizeFile(String filePath) async {
+    if (_isUpdaterStorage(filePath)) {
+      return const IcaclsGrantOutcome.processFailed(
+        stderr: 'Privileged updater storage cannot receive shared app-data ACLs',
+      );
+    }
     if (!Platform.isWindows) {
       return const IcaclsGrantOutcome.skippedNonWindows();
     }
@@ -38,4 +48,7 @@ class GlobalStorageDirectoryAclNormalizer {
       operation: 'normalize_file',
     );
   }
+
+  bool _isUpdaterStorage(String path) =>
+      path.replaceAll('/', r'\').split(r'\').any((part) => part.toLowerCase() == 'plugagenteupdater');
 }

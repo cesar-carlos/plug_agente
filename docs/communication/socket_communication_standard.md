@@ -51,7 +51,6 @@ Visao geral por tema (links externos para subdocs e ancoras internas):
   [Checklist de homologacao do cliente](#checklist-de-homologacao-do-cliente)
 - [Schemas JSON](#schemas-json-contrato),
   [Referencias internas](#referencias-internas)
-- Changelog historico: [socket_communication_roadmap.md](socket_communication_roadmap.md)
 
 Cross-references:
 
@@ -1856,31 +1855,6 @@ por mensagem; **nao** infere o modo local do emissor (Automatico vs Sempre GZIP)
 `agent:session.superseded` intentionally use plain JSON as listed above.
 - Eventos legados fora do contrato v2 continuam fora do escopo deste
 documento.
-
-### Exemplo de payload legado (v1)
-
-Historical reference only: this payload is not accepted by the current runtime.
-
-```json
-{
-  "v": 1,
-  "type": "query_request",
-  "requestId": "req-legacy-001",
-  "agentId": "agent-01",
-  "timestamp": "2026-03-12T10:00:00Z",
-  "cmp": "none",
-  "contentType": "json",
-  "payloadBytes": [
-    {
-      "query": "SELECT * FROM users",
-      "parameters": {},
-      "client_token": "a1b2c3d4e5f6..."
-    }
-  ]
-}
-```
-
-- `client_token` (ou `auth`) no payload: obrigatorio quando auth ativo.
 
 ## Client Token Authorization (implementado)
 

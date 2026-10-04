@@ -468,7 +468,7 @@ void main() {
         expect(resolution, isA<PendingDownloadedInFlight>());
       });
 
-      test('clears and returns stale when launchedAt is outside helper wait without status', () async {
+      test('retains unknown launched setup after deadline without allowing another attempt', () async {
         final pending = _downloadedPending().copyWith(
           launchedAt: DateTime.utc(2026, 6, 10, 10),
         );
@@ -479,10 +479,10 @@ void main() {
 
         final resolution = await service.resolvePersistedDownloadedPending();
 
-        expect(resolution, isA<PendingDownloadedStaleCleared>());
-        expect(pendingStore.clearCount, 1);
-        expect(pendingStore.pending, isNull);
-        expect(breaker.failureCount, 1);
+        expect(resolution, isA<PendingDownloadedInFlight>());
+        expect(pendingStore.clearCount, 0);
+        expect(pendingStore.pending, isNotNull);
+        expect(breaker.failureCount, 0);
       });
 
       test('resets breaker on terminal helper success even when app version is still older', () async {
@@ -771,7 +771,7 @@ void main() {
         expect(closeCount, 1);
       });
 
-      test('apply with concluded/timed-out launch fails without spawning a second helper', () async {
+      test('apply with unknown timed-out launch requires recovery and retains artifacts', () async {
         final pending = _downloadedPending().copyWith(
           launchedAt: DateTime.utc(2026, 6, 10, 10),
         );
@@ -789,14 +789,14 @@ void main() {
             expect(error, isA<domain.ConfigurationFailure>());
             expect(
               (error as domain.ConfigurationFailure).context['reason'],
-              'launch_concluded_or_timed_out',
+              'recovery_required',
             );
           },
         );
         expect(installer.launchHelperCount, 0);
-        expect(pendingStore.pending, isNull);
-        expect(breaker.failureCount, 1);
-        expect(installer.cleanupCount, 1);
+        expect(pendingStore.pending, isNotNull);
+        expect(breaker.failureCount, 0);
+        expect(installer.cleanupCount, 0);
       });
 
       test('apply after UAC cancel relaunches helper without clearing pending', () async {

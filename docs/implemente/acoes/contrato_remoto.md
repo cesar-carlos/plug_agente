@@ -14,7 +14,6 @@ depende de RA-01 / RA-02 / RA-05.
 | Status / backlog RA / riscos | [`plano_acoes_agendadas_execucoes.md`](../plano_acoes_agendadas_execucoes.md) |
 | Flags, rollback, live Hub | [`seguranca_acoes.md`](seguranca_acoes.md) |
 | UI | [`ui_acoes.md`](ui_acoes.md) |
-| Historico MVP | [`plano_acoes_mvp_2026-05.md`](../../archive/plano_acoes_mvp_2026-05.md) |
 
 ## Metodos (resumo)
 

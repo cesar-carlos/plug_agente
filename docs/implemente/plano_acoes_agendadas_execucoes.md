@@ -13,9 +13,6 @@ ate RA-01 (COM real), RA-02 (policy no Hub) e RA-05 (live Hub E2E assinado).
 Codigo de dominio: `lib/domain/actions/` (e espelhos em `application` /
 `infrastructure`), nao em `lib/domain/agent_actions/`.
 
-Historico completo do MVP (fases, checklists `[x]`, decisoes fechadas):
-[`docs/archive/plano_acoes_mvp_2026-05.md`](../archive/plano_acoes_mvp_2026-05.md).
-
 ## Ownership documental
 
 | Assunto | Fonte de verdade |
@@ -58,9 +55,6 @@ Subdocs opcionais ainda nao criados (`runner_local`, `runner_elevado`,
 - Auditoria remota append-only: Drift `agent_action_remote_audit`
 - Identidade de runtime: `AgentRuntimeIdentity` (`runtimeInstanceId` /
   `runtimeSessionId`)
-
-Detalhe historico e checklist de arquivos: arquivo em
-[`docs/archive/`](../archive/plano_acoes_mvp_2026-05.md).
 
 ## Threat model (baseline)
 

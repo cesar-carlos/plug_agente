@@ -1,7 +1,13 @@
 part of 'bootstrap_dependency_registrar.dart';
 
 void _registerAutoUpdate(GetIt getIt) {
+  if (Platform.isWindows) {
+    getIt
+      ..registerLazySingleton<IPrivilegedUpdater>(WindowsPrivilegedUpdater.new)
+      ..registerLazySingleton<IUpdateSecretsSnapshot>(WindowsUpdateSecretsSnapshot.new);
+  }
   getIt
+    ..registerLazySingleton<IUpdateManifestDownloader>(HttpUpdateManifestDownloader.new)
     ..registerLazySingleton<IUpdatePreferencesRepository>(
       () => UpdatePreferencesRepository(settingsStore: getIt<IAppSettingsStore>()),
     )
@@ -37,8 +43,8 @@ void _registerAutoUpdate(GetIt getIt) {
       () => UpdateCheckIdRecorder(settingsStore: getIt<IAppSettingsStore>()),
     )
     // Throttled diagnostics gateway. The Plug hub method
-    // `agent.autoUpdate.diagnostics.push` remains a **proposta** (Decisao 3
-    // of plano_auto_update_evolution.md): schema exists under
+    // `agent.autoUpdate.diagnostics.push` remains a proposal outside the
+    // updater service plan: schema exists under
     // docs/communication/schemas/, but it is intentionally **not** listed in
     // openrpc.json / rpc.discover until the hub consumes it. Outbound
     // transport is currently a no-op; when the hub ships the method, swap the
@@ -59,6 +65,7 @@ void _registerAutoUpdate(GetIt getIt) {
       () => AutoUpdateOrchestrator(
         getIt<RuntimeCapabilities>(),
         silentUpdateInstaller: getIt<ISilentUpdateInstaller>(),
+        manifestDownloader: getIt<IUpdateManifestDownloader>(),
         settingsStore: getIt<IAppSettingsStore>(),
         updatePreferencesRepository: getIt<IUpdatePreferencesRepository>(),
         metricsCollector: getIt<MetricsCollector>(),

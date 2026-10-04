@@ -4,6 +4,23 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('installer setup script', () {
+    test('enrollment is global and explicit for silent installs, with protected control files outside the bundle', () {
+      final setup = File('installer/setup.iss').readAsStringSync();
+      expect(setup, contains('Name: "autoupdate";'));
+      expect(setup, contains("ExpandConstant('{param:AUTOUPDATE|0}') = '1'"));
+      expect(setup, contains("'Authorized', Authorized"));
+      expect(setup, contains(r'{commonpf}\PlugAgenteUpdater\workers\{#MyAppWorkerVersion}'));
+      expect(setup, contains('--prepare-control'));
+      expect(setup, contains('--enroll'));
+      expect(setup, contains('--revoke'));
+      expect(setup, contains('function InitializeUninstall()'));
+      expect(setup, contains('--remove-service'));
+      expect(setup, contains(r'updater,updater\*'));
+      expect(
+        setup,
+        isNot(contains(r'Source: "..\build\windows\x64\runner\Release\updater\*"; DestDir: "{app}"')),
+      );
+    });
     test('keeps admin as default and allows command-line privilege override', () {
       final setupScript = File('installer/setup.iss').readAsStringSync();
 
@@ -73,7 +90,7 @@ void main() {
       );
     });
 
-    test('silent-update contract keeps MERGETASKS startup skip and launches via LAUNCHAFTERUPDATE', () {
+    test('silent update keeps autostart and relaunches through the original-user helper', () {
       final setupScript = File('installer/setup.iss').readAsStringSync();
       final helperSource = File('windows/update_helper/main.cpp').readAsStringSync();
 
@@ -81,16 +98,19 @@ void main() {
       expect(setupScript, contains("ExpandConstant('{param:LAUNCHAFTERUPDATE|0}') = '1'"));
       expect(setupScript, contains('/MERGETASKS="!desktopicon,!startup"'));
       expect(helperSource, contains(r'/MERGETASKS=\"!desktopicon,!startup\"'));
-      expect(helperSource, contains('/LAUNCHAFTERUPDATE=1'));
-      expect(helperSource, contains('/FORCECLOSEAPPLICATIONS'));
+      expect(helperSource, contains('/LAUNCHAFTERUPDATE=0'));
+      expect(helperSource, contains('relaunch_original_user(options)'));
+      expect(helperSource, contains('/NOCLOSEAPPLICATIONS'));
+      expect(helperSource, isNot(contains('/FORCECLOSEAPPLICATIONS')));
+      expect(helperSource, isNot(contains('INFINITE')));
       expect(helperSource, isNot(contains('/RESTARTAPPLICATIONS')));
     });
 
-    test('prevents concurrent setup and force-closes the running app during file replace', () {
+    test('prevents concurrent setup and avoids forced application termination', () {
       final setupScript = File('installer/setup.iss').readAsStringSync();
 
-      expect(setupScript, contains('SetupMutex=PlugAgenteSetup'));
-      expect(setupScript, contains('CloseApplications=force'));
+      expect(setupScript, contains(r'SetupMutex=Global\PlugAgenteSetup'));
+      expect(setupScript, contains('CloseApplications=yes'));
       expect(setupScript, contains('CloseApplicationsFilter=plug_agente.exe'));
       expect(setupScript, contains('RestartApplications=no'));
     });
@@ -176,7 +196,7 @@ void main() {
       );
     });
 
-    test('registers the plugdb URL protocol for uninstallable HKLM classes', () {
+    test('registers the plugdb URL protocol according to installation mode', () {
       final setupScript = File('installer/setup.iss').readAsStringSync();
 
       expect(setupScript, contains(r'Software\Classes\plugdb'));

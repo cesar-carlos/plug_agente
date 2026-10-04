@@ -21,7 +21,7 @@ on:
         description: "Fail if code signing certificate secrets are unavailable"
         required: true
         type: boolean
-        default: false
+        default: true
       prerelease:
         description: "Publish as a prerelease"
         required: true
@@ -33,7 +33,7 @@ on:
         type: boolean
         default: false
       skip_authenticode_check:
-        description: "Skip signtool verify gate (only for manual rebuilds without certificate)"
+        description: "Skip signtool verify only for non-distributed dry-run artifacts"
         required: false
         type: boolean
         default: false
@@ -41,7 +41,7 @@ on:
         description: "Build with AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=true (enforce Authenticode of installer+helper at runtime)"
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -56,10 +56,14 @@ jobs:
     # Pin VS 2022 toolchain: windows-latest may redirect to windows-2025-vs2026,
     # which breaks flutter_local_notifications_windows (STL1011 coroutine).
     runs-on: windows-2022
+    concurrency:
+      group: plug-main-mutation
+      cancel-in-progress: false
     env:
       VERSION_SHORT: ${{ inputs.version }}
       FULL_VERSION: ${{ inputs.version }}+${{ inputs.build_number }}
       RELEASE_TAG: v${{ inputs.version }}
+      RELEASE_CHANNEL: ${{ inputs.prerelease && 'beta' || 'stable' }}
       OFFICIAL_FEED_URL: https://cesar-carlos.github.io/plug_agente/appcast.xml
     steps:
       - name: Checkout main
@@ -78,7 +82,7 @@ jobs:
         run: choco install innosetup --yes --no-progress
 
       - name: Install Python dependencies
-        run: python -m pip install --quiet "cryptography>=42.0.0"
+        run: python -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
 
       - name: Early release preflight
         shell: bash
@@ -88,6 +92,16 @@ jobs:
             ARGS+=(--allow-existing-tag)
           fi
           python tool/release/release_preflight.py "${ARGS[@]}"
+
+      - name: Require production release gates
+        if: ${{ !inputs.dry_run }}
+        shell: pwsh
+        env:
+          FEED_KEY: ${{ secrets.APPCAST_SIGNING_PRIVATE_KEY }}
+          FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
+        run: |
+          if ('${{ inputs.run_tests }}' -ne 'true' -or '${{ inputs.require_signing }}' -ne 'true' -or '${{ inputs.require_valid_update_signature }}' -ne 'true' -or '${{ inputs.skip_authenticode_check }}' -eq 'true') { throw "Production requires tests and signature verification." }
+          if (!$env:FEED_KEY -or !$env:FEED_PUBLIC_KEY) { throw "Production requires feed signing keys." }
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -175,13 +189,13 @@ jobs:
       - name: Build installer
         env:
           AUTO_UPDATE_FEED_URL: ${{ env.OFFICIAL_FEED_URL }}
-          AUTO_UPDATE_CHANNEL: stable
-          # Default false during the Authenticode rollout (plano fase 1E.2).
+          AUTO_UPDATE_CHANNEL: ${{ env.RELEASE_CHANNEL }}
+          # Production keeps the runtime signature gate enabled.
           # Flip the workflow input to true once helper+installer are signed
           # end-to-end and at least two release builds passed in the field.
           AUTO_UPDATE_REQUIRE_VALID_SIGNATURE: ${{ inputs.require_valid_update_signature }}
           AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
-          AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: ${{ vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE || 'false' }}
+          AUTO_UPDATE_REQUIRE_FEED_SIGNATURE: ${{ !inputs.dry_run || vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE == 'true' }}
           WINDOWS_CODE_SIGNING_CERT_PATH: ${{ steps.signing.outputs.cert_path }}
           WINDOWS_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERT_PASSWORD }}
           WINDOWS_CODE_SIGNING_REQUIRED: ${{ inputs.require_signing || inputs.require_valid_update_signature }}
@@ -239,7 +253,20 @@ jobs:
             Write-Output $exitHelper
             throw "signtool verify failed for plug_update_helper.exe ($helper)"
           }
-          Write-Host "Authenticode verification passed for installer and helper."
+          $artifacts = @('plug_agente.exe', 'plug_agente_elevated_runner.exe', 'updater/plug_update_service.exe', 'updater/plug_update_client.exe', 'updater/plug_update_worker.exe')
+          foreach ($artifact in $artifacts) {
+            $path = Join-Path 'build/windows/x64/runner/Release' $artifact
+            if (!(Test-Path -LiteralPath $path)) { throw "Missing signed component: $artifact" }
+            & $signtool verify /pa /v $path
+            if ($LASTEXITCODE -ne 0) { throw "Invalid Authenticode: $artifact" }
+          }
+          Write-Host 'Authenticode verification passed for all privileged components and app.'
+
+      - name: Test native updater contracts
+        shell: pwsh
+        run: |
+          ctest --test-dir build/windows/x64/updater -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "Native updater contract tests failed." }
 
       - name: Commit version bump
         if: ${{ !inputs.dry_run }}
@@ -255,6 +282,15 @@ jobs:
           git commit -m "chore: bump version to ${VERSION_SHORT}"
           git push origin main
 
+      - name: Generate signed updater manifest
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          APPCAST_SIGNING_PRIVATE_KEY: ${{ secrets.APPCAST_SIGNING_PRIVATE_KEY }}
+        run: |
+          SCHEMA=$(python -c "import re; from pathlib import Path; print(re.search(r'int get schemaVersion => ([0-9]+)', Path('lib/infrastructure/repositories/agent_config_drift_database.dart').read_text()).group(1))")
+          python -m tool.updater.manifest --installer "installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe" --version "$FULL_VERSION" --channel "$RELEASE_CHANNEL" --schema "$SCHEMA" --source-commit "$(git rev-parse HEAD)" --output "installer/dist/PlugAgente-Manifest-${VERSION_SHORT}.json"
+
       - name: Create and push tag
         if: ${{ !inputs.dry_run }}
         shell: bash
@@ -265,15 +301,8 @@ jobs:
       - name: Publish GitHub Release
         if: ${{ !inputs.dry_run }}
         shell: bash
-        # Prefer RELEASE_PUBLISH_TOKEN (PAT with `repo` scope) when the
-        # secret is configured. GitHub does not propagate the
-        # `release.published` webhook for releases created with the
-        # default GITHUB_TOKEN, which means `update-appcast.yml` must be
-        # dispatched manually for every new release. Using a PAT fixes
-        # that and keeps the previous behavior as a fallback when the
-        # secret is missing.
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PUBLISH_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           PRERELEASE_FLAG=""
           LATEST_FLAG="--latest"
@@ -281,34 +310,14 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
             LATEST_FLAG="--latest=false"
           fi
-          if [ -n "${{ secrets.RELEASE_PUBLISH_TOKEN }}" ]; then
-            echo "Publishing release with RELEASE_PUBLISH_TOKEN (downstream workflows will trigger)."
-          else
-            echo "::warning::RELEASE_PUBLISH_TOKEN not configured; publishing with GITHUB_TOKEN. update-appcast.yml will NOT trigger automatically — dispatch it manually."
-          fi
           gh release create "${RELEASE_TAG}" \
             "installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe" \
+            "installer/dist/PlugAgente-Manifest-${VERSION_SHORT}.json" \
             --title "Version ${VERSION_SHORT}" \
             --generate-notes \
             --verify-tag \
             ${LATEST_FLAG} \
             ${PRERELEASE_FLAG}
-
-      - name: Dispatch appcast update without PAT
-        if: ${{ !inputs.dry_run }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -n "${{ secrets.RELEASE_PUBLISH_TOKEN }}" ]; then
-            echo "RELEASE_PUBLISH_TOKEN is configured; appcast should update via release.published webhook."
-            exit 0
-          fi
-          echo "::warning::RELEASE_PUBLISH_TOKEN not set; dispatching Update Appcast on Release."
-          gh workflow run "Update Appcast on Release" --ref main \
-            -f "release_tag=${RELEASE_TAG}" \
-            -f rollout_percentage=100 \
-            -f channel=stable
 
       - name: Dry run summary
         if: inputs.dry_run
@@ -317,3 +326,18 @@ jobs:
           echo "Dry run completed for ${FULL_VERSION}."
           echo "Installer generated at installer/dist/PlugAgente-Setup-${VERSION_SHORT}.exe."
           echo "No commit, tag, or GitHub Release was created."
+
+  publish-appcast:
+    if: ${{ !inputs.dry_run }}
+    needs: publish
+    uses: ./.github/workflows/update-appcast.yml
+    with:
+      release_tag: v${{ inputs.version }}
+      rollout_percentage: "5"
+      channel: ${{ inputs.prerelease && 'beta' || 'stable' }}
+    secrets: inherit
+    permissions:
+      contents: write
+      actions: write
+      pages: write
+      id-token: write

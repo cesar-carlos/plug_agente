@@ -19,6 +19,36 @@ Dio _localProbeDio() {
 AppcastProbeService _probeService() => AppcastProbeService(dio: _localProbeDio());
 
 void main() {
+  test('selects the highest eligible version in each channel', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      request.response.write(
+        '''
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:plug="https://plug.se7esistemas.com/appcast"><channel>
+        <item><enclosure sparkle:version="9.0.0+1" sparkle:os="windows" plug:channel="beta" /></item>
+        <item><enclosure sparkle:version="1.0.0+1" sparkle:os="windows" plug:channel="stable" /></item>
+        <item><enclosure sparkle:version="2.0.0+2" sparkle:os="windows" plug:channel="stable" /></item>
+      </channel></rss>''',
+      );
+      await request.response.close();
+    });
+    final url = 'http://127.0.0.1:${server.port}/appcast.xml';
+    expect(
+      (await AppcastProbeService(
+        dio: _localProbeDio(),
+        channelResolver: () => 'stable',
+      ).probeLatest(feedUrl: url)).latestVersion,
+      '2.0.0+2',
+    );
+    expect(
+      (await AppcastProbeService(
+        dio: _localProbeDio(),
+        channelResolver: () => 'beta',
+      ).probeLatest(feedUrl: url)).latestVersion,
+      '9.0.0+1',
+    );
+  });
   group('AppcastProbeService', () {
     test('reads latest sparkle version from local appcast feed', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -42,7 +72,10 @@ void main() {
         length="12345"
         plug:sha256="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         plug:channel="stable"
-        plug:rolloutPercentage="25" />
+        plug:rolloutPercentage="25"
+        plug:manifestUrl="https://example.com/update-manifest.json"
+        plug:manifestSha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        plug:manifestSignature="signed-binding" />
     </item>
     <item>
       <enclosure sparkle:version="1.2.2+3" />
@@ -62,6 +95,9 @@ void main() {
       expect(result.assetUrl, 'https://example.com/downloads/PlugAgente-Setup-1.2.3.exe');
       expect(result.assetSize, 12345);
       expect(result.assetName, 'PlugAgente-Setup-1.2.3.exe');
+      expect(result.manifestUrl, 'https://example.com/update-manifest.json');
+      expect(result.manifestSha256, List.filled(64, 'a').join());
+      expect(result.manifestSignature, 'signed-binding');
       expect(result.sha256, '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
       expect(result.os, 'windows');
       expect(result.channel, 'stable');

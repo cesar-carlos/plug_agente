@@ -36,6 +36,19 @@ class ActionExecutionQueue {
   final List<Completer<void>> _idleWaiters = <Completer<void>>[];
 
   bool _disposed = false;
+  String? _maintenanceOperation;
+
+  void pauseAdmissionForMaintenance(String operationId) {
+    if (_maintenanceOperation != null && _maintenanceOperation != operationId) {
+      throw StateError('Action maintenance already belongs to another operation');
+    }
+    _maintenanceOperation = operationId;
+  }
+
+  void resumeAdmissionAfterMaintenance(String operationId) {
+    if (_maintenanceOperation == operationId) _maintenanceOperation = null;
+  }
+
   Completer<void>? _drainedCompleter;
 
   int get runningCount => _runningByActionId.values.fold(0, (total, count) => total + count);
@@ -397,6 +410,13 @@ class ActionExecutionQueue {
   }
 
   ActionQueueFailure? _disposedFailure({required String actionId}) {
+    if (_maintenanceOperation != null) {
+      return ActionQueueFailure.withContext(
+        message: 'O agente está em preparação para manutenção.',
+        code: AgentActionFailureCode.maintenanceMode,
+        context: const {'reason': 'maintenance', 'retryable': true},
+      );
+    }
     if (!_disposed) {
       return null;
     }

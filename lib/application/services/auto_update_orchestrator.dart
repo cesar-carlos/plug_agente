@@ -31,6 +31,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/services/i_auto_update_orchestrator.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:result_dart/result_dart.dart';
 
 export 'auto_updater_gateway.dart';
@@ -46,6 +47,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
     SilentUpdateCoordinatorOptions? silentOptions,
     IAutoUpdaterGateway? updaterGateway,
     IAppcastProbeService? appcastProbeService,
+    IUpdateManifestDownloader? manifestDownloader,
     ISilentUpdateInstaller? silentUpdateInstaller,
     IAppSettingsStore? settingsStore,
     IUpdatePreferencesRepository? updatePreferencesRepository,
@@ -147,6 +149,7 @@ class AutoUpdateOrchestrator implements IAutoUpdateOrchestrator {
           () => _feedUrl,
           appcastProbeService: _appcastProbeService,
           silentUpdateInstaller: silentUpdateInstaller,
+          manifestDownloader: manifestDownloader,
           updatePreferencesRepository: wiredPreferences,
           settingsStore: settingsStore,
           closeApplicationForSilentUpdate: closeApplicationForSilentUpdate,

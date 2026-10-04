@@ -27,8 +27,8 @@ Checklist e matriz detalhada em [requirements.md](requirements.md).
 2. (Opcional, recomendado) Executar o workflow manual **Release Preflight**
    para ensaiar build, signtool e helper sem criar commit/tag/release
 3. Executar o workflow manual **Publish Windows Release** no GitHub Actions
-4. Confirmar o workflow **Update Appcast on Release** (em release publicada,
-   ele dispara duas execucoes; a segunda e que faz o deploy do Pages)
+4. Confirmar a chamada reutilizavel **Update Appcast on Release**, incluindo
+   deploy do Pages e smoke criptografico do commit publicado
 5. Validar o auto-update em [auto_update_setup.md](auto_update_setup.md)
 
 Saida esperada:

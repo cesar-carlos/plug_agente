@@ -264,7 +264,8 @@ class ReleasePreflightTests(unittest.TestCase):
             warnings = release_preflight.collect_publish_secret_warnings("owner/repo")
         self.assertGreaterEqual(len(warnings), 2)
         joined = " ".join(warnings)
-        self.assertIn("RELEASE_PUBLISH_TOKEN", joined)
+        self.assertNotIn("RELEASE_PUBLISH_TOKEN", joined)
+        self.assertIn("APPCAST_SIGNING_PRIVATE_KEY", joined)
         self.assertIn("WINDOWS_CODE_SIGNING_CERT_BASE64", joined)
 
     def test_list_github_actions_secrets_parses_names(self) -> None:

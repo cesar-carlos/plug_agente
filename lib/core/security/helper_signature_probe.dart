@@ -28,9 +28,8 @@ abstract interface class IHelperSignatureProbe {
 }
 
 /// Runs PowerShell `Get-AuthenticodeSignature` to verify Windows
-/// Authenticode. Results are cached per session because the helper binary
-/// does not change between checks within the same process lifetime, and
-/// each PowerShell launch costs ~150 ms of cold start.
+/// Authenticode. Each execution checks the current file rather than trusting
+/// a previous result for a path whose contents may have changed.
 class PowerShellHelperSignatureProbe implements IHelperSignatureProbe {
   PowerShellHelperSignatureProbe({
     Duration timeout = const Duration(seconds: 5),
@@ -51,18 +50,13 @@ class PowerShellHelperSignatureProbe implements IHelperSignatureProbe {
   })
   _processRunner;
 
-  final Map<String, HelperSignatureStatus> _cache = <String, HelperSignatureStatus>{};
-
   @override
   Future<HelperSignatureStatus> probe(String filePath) async {
-    final cached = _cache[filePath];
-    if (cached != null) return cached;
-
     if (!Platform.isWindows) {
-      return _cache[filePath] = HelperSignatureStatus.unknown;
+      return HelperSignatureStatus.unknown;
     }
     if (filePath.isEmpty || !File(filePath).existsSync()) {
-      return _cache[filePath] = HelperSignatureStatus.unknown;
+      return HelperSignatureStatus.unknown;
     }
 
     try {
@@ -74,16 +68,16 @@ class PowerShellHelperSignatureProbe implements IHelperSignatureProbe {
           '-Command',
           // Trailing whitespace + `Trim()` keeps the output a single token so
           // the parser stays simple even if PowerShell ever adds extras.
-          "(Get-AuthenticodeSignature -FilePath '$filePath').Status",
+          "(Get-AuthenticodeSignature -LiteralPath '${filePath.replaceAll("'", "''")}').Status",
         ],
         timeout: _timeout,
       );
-      final status = _interpretStatus(result.stdout.toString().trim());
-      return _cache[filePath] = status;
+      if (result.exitCode != 0) return HelperSignatureStatus.unknown;
+      return _interpretStatus(result.stdout.toString().trim());
     } on TimeoutException {
-      return _cache[filePath] = HelperSignatureStatus.unknown;
+      return HelperSignatureStatus.unknown;
     } on ProcessException {
-      return _cache[filePath] = HelperSignatureStatus.unknown;
+      return HelperSignatureStatus.unknown;
     }
   }
 

@@ -1,0 +1,41 @@
+{
+  "envelope": {
+    "formatVersion": 1,
+    "payloadBase64": "eyJjaGFubmVsIjoic3RhYmxlIiwiZGF0YSI6eyJyb2xsYmFja1Byb3RvY29sIjoxLCJzY2hlbWEiOjMwfSwiZm9ybWF0VmVyc2lvbiI6MSwiaW5zdGFsbGVyIjp7Im5hbWUiOiJQbHVnQWdlbnRlLVNldHVwLTEuOC42LmV4ZSIsInNoYTI1NiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaXplIjoxMjN9LCJwcm90b2NvbCI6eyJob3N0IjoxLCJ3b3JrZXIiOjF9LCJyZWxlYXNlIjp7ImNvbW1pdCI6ImJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJ0YWciOiJ2MS44LjYifSwicmVxdWlyZW1lbnRzIjpbImFwcC5maWxlcyIsImF1dG9zdGFydC51c2VyIl0sInZlcnNpb24iOiIxLjguNisxIn0=",
+    "signatureBase64": "l+/Xp48vYdT23dI+8SbMrUNlT+sPyjQU/JJ9KKf2nnqKzYV1+7nvfa86rjJqEt7GQ7nYC/xHUWiFa+omwUdWBw=="
+  },
+  "payload": {
+    "channel": "stable",
+    "data": {
+      "rollbackProtocol": 1,
+      "schema": 30
+    },
+    "formatVersion": 1,
+    "installer": {
+      "name": "PlugAgente-Setup-1.8.6.exe",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size": 123
+    },
+    "protocol": {
+      "host": 1,
+      "worker": 1
+    },
+    "requirements": [
+      "app.files",
+      "autostart.user"
+    ],
+    "version": "1.8.6+1",
+    "release": {
+      "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "tag": "v1.8.6"
+    }
+  },
+  "publicKey": "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+  "feedBinding": {
+    "enclosure": "asset_size=123\nasset_url=https://example.com/PlugAgente-Setup-1.8.6.exe\nchannel=stable\nos=windows\nrollout_percentage=5\nsha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nversion=1.8.6+1\n",
+    "url": "https://example.com/update-manifest.json",
+    "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "payload": "asset_size=123\nasset_url=https://example.com/PlugAgente-Setup-1.8.6.exe\nchannel=stable\nos=windows\nrollout_percentage=5\nsha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nversion=1.8.6+1\nmanifest_sha256=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\nmanifest_url=https://example.com/update-manifest.json\n",
+    "signature": "KdX9YiyhqjStSnREDdY7rn6t9NZTYXFcS2viec98b9dEiKIrLo0RpSVWKbXAB88BKMjn1oqsCBuI0zLcrUGRDg=="
+  }
+}

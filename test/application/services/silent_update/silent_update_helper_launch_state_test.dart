@@ -37,6 +37,33 @@ void main() {
   const wait = Duration(minutes: 30);
 
   group('SilentUpdateHelperLaunchState', () {
+    test('stale, unknown and recovery statuses never prove setup termination', () {
+      for (final status in [
+        null,
+        _status(state: 'runningElevated'),
+        _status(state: 'recoveryRequired'),
+        _status(state: 'unknown'),
+      ]) {
+        expect(
+          SilentUpdateHelperLaunchState.isInFlight(
+            launchedAt: now.subtract(const Duration(days: 2)),
+            launcherStatus: status,
+            now: now,
+            helperWaitDuration: wait,
+          ),
+          isTrue,
+        );
+        expect(
+          SilentUpdateHelperLaunchState.isLaunchConcludedOrTimedOut(
+            launchedAt: now.subtract(const Duration(days: 2)),
+            launcherStatus: status,
+            now: now,
+            helperWaitDuration: wait,
+          ),
+          isFalse,
+        );
+      }
+    });
     test('UAC cancel is not a concluded launch', () {
       final status = _status(state: 'elevatedCancelled', elevatedCancelled: true);
 
@@ -50,12 +77,15 @@ void main() {
         ),
         isFalse,
       );
-      expect(SilentUpdateHelperLaunchState.isInFlight(
-        launchedAt: DateTime.utc(2026, 6, 10, 10),
-        launcherStatus: status,
-        now: now,
-        helperWaitDuration: wait,
-      ), isFalse);
+      expect(
+        SilentUpdateHelperLaunchState.isInFlight(
+          launchedAt: DateTime.utc(2026, 6, 10, 10),
+          launcherStatus: status,
+          now: now,
+          helperWaitDuration: wait,
+        ),
+        isFalse,
+      );
     });
 
     test('elevatedCancelled flag is enough even when state is missing', () {

@@ -102,6 +102,9 @@ class FakeAppcastProbeService implements IAppcastProbeService {
       itemCount: result.itemCount,
       errorMessage: result.errorMessage,
       edSignature: result.edSignature,
+      manifestUrl: result.manifestUrl,
+      manifestSha256: result.manifestSha256,
+      manifestSignature: result.manifestSignature,
       releaseNotes: result.releaseNotes,
       releaseNotesUrl: result.releaseNotesUrl,
     );

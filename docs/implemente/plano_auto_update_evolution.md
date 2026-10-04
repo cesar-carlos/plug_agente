@@ -2,10 +2,10 @@
 
 ## Objetivo
 
-Evoluir o auto-update silencioso em fases independentes (assinatura do feed,
-Authenticode, resiliencia de download, observabilidade, UX, contratos,
-diagnostics no hub, rollback), mantendo o repositorio funcional ao fim de cada
-fase — sem big-bang.
+Entregar atualizacao automatica por servico Windows, autorizada na primeira
+instalacao, com encerramento seguro, recuperacao de binarios e dados locais e
+revisao de requisitos a cada release. Preservar instalacao global, pasta
+personalizada, atualizacao manual por usuario e contratos RPC existentes.
 
 Este documento guarda apenas o que falta fazer e as decisoes pendentes. O
 comportamento ja entregue esta descrito em
@@ -14,198 +14,127 @@ seguranca em [auto_update_threat_model.md](../security/auto_update_threat_model.
 
 ## Status oficial
 
-**2026-09-25**: `[x]` entregue; `[~]` em andamento/diferido; `[ ]` pendente.
-Fases 1A-1D, 2A, 2B (doc), 3, 4A, 5, 6A, 9A e 9C entregues. Pendentes:
-operacao do feed assinado (1E), review de seguranca (2B), testes de
-histograma (4B), 6B/6C, integracao com o hub (7), rollback (8) e chaos tests
-(9B).
+**2026-10-04 — implementação do plano de serviço:** estado verificável:
 
-## Backlog
+| Etapa do novo plano | Estado verificável |
+| --- | --- |
+| Correções imediatas | Schema/gates, canal, deduplicação, reassinatura, asset exato, cache removido, relançamento legado e supervisão corrigidos; testes locais. |
+| Contratos e confiança | Manifesto Python/Dart/C++ e fixture criptográfica comum; cliente valida binding, baixa manifesto por HTTPS com limite de 128 KiB e verifica hash/assinatura/identidade antes do download do setup. IPC/DACL/PID/SCM, consulta de capacidades e staging protegido implementados. Apply privilegiado permanece pendente. |
+| Serviço e instalador | Binários compilados; autorização interativa/silenciosa e revogação implementadas; supervisor separado de workers por versão completa; SID e sessão ativa conferidos. Enrollment ainda não homologado em instalação real. |
+| Manutenção segura | Filas SQL/ações congeláveis, coordenador reversível, checkpoint SQLite e testes. Falta admission de configuração, inspeção integrada de recursos nativos e conexão ao fluxo de apply. |
+| Recuperação | Snapshot de segredos exato/DPAPI e checkpoint testados; worker experimental. Faltam launcher não elevado, probation/saúde autenticada, restauração no usuário original, retenção/reconciliação completas e migrações em rollback. |
+| Homologação e entrega | Gates locais e build Windows disponíveis. VMs Windows 10/11/Server, 20 ciclos, certificado de teste/distribuição e rollout em campo ainda não executados. |
 
-| Prioridade | ID | Entrega | Status | Bloqueador externo |
-| --- | --- | --- | --- | --- |
-| P0 | 1A | CI instala `cryptography` e roda `tool.appcast.test_appcast_signing` sem skip | [x] | - |
-| P0 | 1B | `AUTO_UPDATE_FEED_PUBLIC_KEY` aceita CSV (rotacao multi-chave) | [x] | - |
-| P0 | 1C | Gate `signtool verify /pa` no `release.yml` (installer + helper), pulado sem certificado ou via `skip_authenticode_check` | [x] | - |
-| P0 | 1D | `release_preflight.py --feed-public-key` valida pubkey embutida | [x] | - |
-| P0 | 1E.1 | Configurar secrets de assinatura e publicar release assinada | [ ] | Decisao 1 |
-| P0 | 1E.2 | Ativar `REQUIRE_FEED_SIGNATURE` e `require_valid_update_signature` em producao | [ ] | observacao em campo |
-| P0 | 2A | `IHelperSignatureProbe` (Authenticode do helper) antes do spawn | [x] | - |
-| P0 | 2B | Threat model documentado; falta review de seguranca | [~] | - |
-| P1 | 3A | Pre-flight de espaco em disco (`insufficient_disk_space`) | [x] | - |
-| P1 | 3B | Download resumivel HTTP Range (`AUTO_UPDATE_DOWNLOAD_RESUME`) | [x] | - |
-| P1 | 4A | Correlation ID UUIDv7 (`checkId`) nas diagnostics | [x] | - |
-| P1 | 4B | Histogramas de duracao de probe/download; faltam testes | [~] | - |
-| P1 | 5A | Aviso pre-close configuravel (`AUTO_UPDATE_PRE_CLOSE_DELAY_SECONDS`) | [x] | - |
-| P1 | 5B | Release notes na UI | [x] | - |
-| P1 | 5C | Quiet hours (`skippedByQuietHours`) | [x] | - |
-| P2 | 6A | `Result<ManualCheckOutcome>` em `checkManual()` | [x] | - |
-| P2 | 6B | Schema do launcher status + validacao no CI; falta `json_serializable` | [~] | - |
-| P2 | 6C | Extrair `ManualUpdateOrchestrator` | [~] diferido | - |
-| P2 | 7A-7C | Push `agent.autoUpdate.diagnostics.push` ao hub | [~] | Decisao 3 |
-| P3 | 8A-8B | Backup pre-install + heartbeat/auto-restore no helper | [~] diferido | Decisao 2 |
-| Cont. | 9A | Tests de jitter com `package:fake_async` | [x] | - |
-| Cont. | 9B | Chaos tests no download | [ ] | - |
-| Cont. | 9C | Workflow agendado `feed-smoke.yml` | [x] | - |
+A aplicação pelo serviço é **bloqueada no código**, com
+`kApplicationContractImplemented=false`, e na política com
+`applicationContractValidated=false`. Enrollment não é homologação. O caminho
+operacional do aplicativo ainda usa helper legado. Não afirmar atualização sem
+UAC, rollback automático completo ou aprovação da matriz antes dos itens acima.
+Não há novos métodos RPC do hub nesta mudança.
 
-## Decisoes operacionais externas
+Validação da integração do manifesto: 4.774 testes Dart aprovados e 5 ignorados
+na suíte completa, 62 testes Python de tooling, 46 testes afetados do feed/
+manifesto e 26 de contrato/instalador após o ajuste de `recoveryRequired`.
+Também passaram 47 testes Python de scripts, os dois alvos CTest e o
+`actionlint` dos quatro workflows alterados. Logs locais em `build/updater`.
+`recoveryRequired` exige atenção, sem provar término do setup ou liberar ownership.
+`dart analyze` sem diagnósticos; build Windows e empacotamento Inno com payload
+compilados localmente. O setup gerado em `build/installer-payload` é **unsigned de
+desenvolvimento**, não foi executado nem distribuído. Testes locais não comprovam
+instalação real, ausência de UAC ou rollback entre schemas em máquinas cliente/Server.
 
-Bloqueiam apenas as fases listadas; o resto continua.
+O protocolo nativo não permite novo prepare sobre fases ativas, desconhecidas ou
+de recuperação, mesmo se o worker já tiver terminado. Revogação mantém status,
+cancelamento seguro e confirmação de saúde acessíveis; não autoriza novo start. Fontes e baseline são fixados
+por handles durante validação/cópia; worker ativo nunca é substituído pelo setup.
 
-1. **Custodia da chave privada Ed25519** (afeta 1E.1, 1E.2):
-   - Opcao A: GitHub Actions Secrets do repo `plug_agente` com rotacao anual.
-   - Opcao B: vault corporativo (1Password, HashiCorp Vault).
-   - **Status**: pendente decisao.
+Bloqueios externos observados: módulo Hyper-V presente, mas `Get-VM` negou
+acesso ao processo atual; nenhum certificado de code signing encontrado nos
+stores `CurrentUser/My` e `LocalMachine/My`, nem PFX configurado para build local.
+Acesso às VMs e certificado adequado continuam necessários. As integrações
+pendentes acima são trabalho de implementação, separadas desses bloqueios.
 
-2. **Pipeline Authenticode** (afeta 1E.2, 8):
-   - Existe certificado EV/OV configurado em `WINDOWS_CODE_SIGNING_CERT_BASE64`?
-   - **Status**: pendente verificacao.
+## Trabalho restante
 
-3. **Evolucao do protocolo Plug** (afeta 7):
-   - Time do hub aceita o metodo RPC `agent.autoUpdate.diagnostics.push`?
-   - Schema + privacy review feita?
-   - **Status**: pendente coordenacao.
+### Servico, autorizacao e sessao
 
-## Pendencias por fase
+- Integrar o apply privilegiado sem liberar os gates de seguranca antes de
+  cumprir o contrato completo. Preservar `IAutoUpdateOrchestrator` como fachada.
+- Completar launcher fora do bundle, nao elevado, na sessao e conta originais,
+  com uma unica instancia. Sem sessao apta, preparar download e adiar apply.
+- Completar aprovacao administrativa de requisitos adicionais e alteracoes do
+  host; comparar politica antes da manutencao e antes da instalacao. Preferencias
+  do app nao autorizam ampliacao de servicos, drivers, firewall, DSNs ou destinos.
+- Homologar enrollment, revogacao, desinstalacao e migracao das instalacoes
+  existentes. Baseline sem assinatura e recuperacao impede modo automatico.
 
-### Fase 1E - Feed assinado em producao
+### Manutencao e supervisao
 
-O codigo esta pronto: `update-appcast.yml` assina com
-`APPCAST_SIGNING_PRIVATE_KEY`; `release.yml` e `release-preflight.yml` injetam
-`AUTO_UPDATE_FEED_PUBLIC_KEY` via `--dart-define` e leem
-`vars.AUTO_UPDATE_REQUIRE_FEED_SIGNATURE`. Configuracao em
-[auto_update_setup.md](../install/auto_update_setup.md).
+- Conectar o coordenador reversivel ao fluxo real: suspender admissao SQL,
+  acoes e configuracao; inspecionar operacoes, recursos nativos e resultado
+  incerto antes de confirmar cleanup e persistencia.
+- Aguardar ate 60 segundos; se nao houver encerramento seguro, restaurar
+  admissao e adiar por 15 minutos sem contabilizar falha de instalacao.
+- Aplicar quiet hours e cooldown a pending e shutdown. A acao manual pode
+  ignorar essas janelas, mas continua exigindo integridade, autorizacao e drain.
+- Executar politicas de saida uma vez por tentativa, antes do snapshot.
+  Nao repetir seus efeitos durante recuperacao.
+- Reconciliar setup real apos 30 minutos, interrupcao do servico e reboot.
+  `recoveryRequired` nao libera lock, recursos ou nova instalacao.
 
-#### 1E.1 Onboard signing
+### Snapshot, validacao e rollback
 
-- [~] Decisao 1 (custodia da chave).
-- [ ] Gerar keypair com `python tool/appcast/generate_appcast_signing_key.py`.
-- [ ] Configurar os secrets `APPCAST_SIGNING_PRIVATE_KEY` e
-  `AUTO_UPDATE_FEED_PUBLIC_KEY` no repositorio.
-- [ ] Publicar release e verificar: step `Validate generated installer` sem
-  erro, step `Update appcast.xml` reporta `(signed)`, item com
-  `plug:edSignature`.
-- [ ] Em cliente em campo: diagnostico copiado mostra
-  `feedSignatureStatus: valid`.
+- Integrar snapshot exato do bundle, worker, instalador anterior validado,
+  configuracoes, SQLite e segredos do agente no usuario original. Usar
+  checkpoint confirmado ou API de backup SQLite para preservar efeitos do WAL.
+- Validar hashes, schema, espaco e completude; backup incompleto bloqueia apply.
+  Reter dois snapshots confirmados sem remover o da tentativa ativa.
+- Integrar bootstrap em validacao, sem SQL remoto, acoes, startup triggers ou
+  efeitos externos. Confirmar saude autenticada em ate 120 segundos, incluindo
+  versao, processo, SQLite, configuracoes e componentes locais necessarios.
+  Hub ou banco remoto indisponivel nao determina rollback por si so.
+- Completar restauracao de binarios, schema e segredos DPAPI na conta original,
+  preservando outros namespaces, politica administrativa, logs e efeitos externos.
+- Permitir uma restauracao automatica por tentativa; apos rollback, bloquear
+  o mesmo manifesto ate nova release ou acao administrativa. Falha de
+  restauracao preserva evidencias e exige `recoveryRequired`.
 
-#### 1E.2 Ativar REQUIRE
+### Observabilidade e publicacao
 
-- [ ] Aguardar 2 releases consecutivas com `feedSignatureStatus: valid` em
-  campo (nenhum cliente com `missing`/`publicKeyUnavailable`/`invalid`).
-- [ ] Criar a variable `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true` no repositorio.
-- [ ] Atualizar `.env.example` para `AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true`.
-- [ ] Apos 2 releases com Authenticode valido em helper, runner elevado e
-  installer, publicar com `require_valid_update_signature=true`.
-- [ ] Monitorar 48h: `automaticValidationFailure` com
-  `validation_code=feed_signature_*` ou `helper_signature_*` indica regressao.
-  Rollback: voltar a variable/input para `false` e gerar novo build.
+- Integrar diagnosticos de fase, autorizacao, adiamento, setup, saude e rollback
+  ao collector existente; testar duracoes, falhas de telemetria e redacao.
+  IDs sao correlacao de logs, sem labels de metricas de alta cardinalidade.
+- Usar os secrets existentes para assinar feed e manifesto. Exigir Authenticode
+  em todos os executaveis proprios e setup, identidade de publicador autorizada
+  e rotacao testada. Falta de assinatura bloqueia producao.
+- Validar publicacao atomica, chamada reutilizavel, canal stable/beta, asset exato,
+  vinculo ao commit publicado e smoke criptografico. Nao introduzir novos RPCs
+  do hub para executar este plano.
 
-#### Criterio de aceite da Fase 1
+## Homologacao e criterios de conclusao
 
-- [ ] Release publica com `plug:edSignature` valido.
-- [ ] Cliente em campo reporta `feedSignatureStatus: valid`.
-- [ ] Rotacao testada via builds que aceitam 2 chaves.
-
-### Fase 2B - Review do threat model
-
-- [ ] Review por alguem de seguranca de
-  [auto_update_threat_model.md](../security/auto_update_threat_model.md).
-
-### Fase 4B - Testes dos histogramas
-
-- [ ] Tests em `test/infrastructure/metrics/metrics_collector_test.dart`
-  cobrindo as chaves de duracao de probe/download no snapshot.
-
-### Fase 6 - Contratos
-
-- [ ] 6B: gerar `SilentUpdateLauncherStatus`
-  (`lib/domain/entities/pending_silent_update.dart`) com `json_serializable`.
-- [~] 6C diferido: extrair `ManualUpdateOrchestrator` exige mover a logica
-  WinSparkle (gateway, listeners, drain window, circuit breaker manual) do
-  `AutoUpdateOrchestrator` e testes de integracao que so rodam no Windows. O
-  6A ja desacoplou o contrato manual; `IAutoUpdateOrchestrator` deve continuar
-  como fachada por composicao e a DI permanecer igual.
-- [ ] Criterio: `flutter analyze` zero, cobertura igual ou superior,
-  comportamento identico.
-
-### Fase 7 - Push de diagnostics ao hub
-
-Entregue no agente: schema
-`docs/communication/schemas/auto_update_diagnostics.schema.json`, rascunho em
-`docs/communication/socket_communication_backlog.md`,
-`ThrottledAutoUpdateDiagnosticsGateway` (1 push/minuto) chamado apos cada
-check e teste live `test/live/auto_update_diagnostics_push_e2e_test.dart`. O
-transporte registrado no DI ainda e no-op.
-
-- [ ] Decisao 3 aceita pelo time do hub; privacy review.
-- [ ] Trocar o transporte no-op por um sender RPC real.
-- [ ] Entrada em `docs/communication/openrpc.json` / `rpc.discover`.
-- [ ] Implementacao hub-side no `plug_server`; E2E passa contra hub de
-  homologacao.
-
-### Fase 8 - Rollback automatico (diferido)
-
-Requer modificar o helper C++ (`windows/update_helper/main.cpp`) com risco
-alto de regressao nao coberta por testes Dart. Antes de comecar:
-
-1. Pipeline Authenticode estavel (Decisao 2): o helper modificado precisa ser
-   assinado e validado a cada release.
-2. Orcamento de disco para backups em `ProgramData\PlugAgente\updates`.
-3. Politica de retencao (quantidade e criterio).
-4. Heartbeat: chave de settings ou arquivo separado; janela antes do
-   auto-restore.
-
-#### 8A. Backup pre-install
-
-- [ ] `CreateRollbackBackup(version)` no helper antes de spawnar o Inno.
-- [ ] Copiar `plug_agente.exe` + DLLs criticas e plugins para
-  `updates/backup-<versao>/`; limpar backups antigos apos copia.
-- [ ] Status JSON ganha `backupVersion`; atualizar
-  `docs/communication/schemas/silent_update_launcher_status.schema.json`.
-
-#### 8B. Heartbeat + auto-restore
-
-- [ ] App grava heartbeat da versao apos boot bem-sucedido.
-- [ ] Helper restaura o backup anterior quando nao ha heartbeat dentro da
-  janela configurada.
-- [ ] UI mostra "Versao restaurada automaticamente" no boot seguinte.
-- [ ] Telemetria via Fase 7 (`rollback_restored=true`).
-
-#### Criterio de aceite da Fase 8
-
-- [ ] Teste manual: instalar versao quebrada -> proximo ciclo restaura.
-- [ ] Doc cobre o mecanismo, como desligar e custo de disco.
-- [ ] CI assina o helper modificado e roda `signtool verify`.
-
-### Fase 9B - Chaos tests
-
-- [ ] Server HTTP de teste que encerra a conexao em pontos aleatorios.
-- [ ] Verificar a reconciliacao do pending em todos os estados.
-- [ ] Criterio: nenhum teste novo flaky em 10 runs.
-
-## Riscos aceitos
-
-- **R1**: 1E.2 so apos 2 releases assinadas validadas em campo. Qualquer
-  `feedSignatureStatus: invalid` em 1E.1 pausa o rollout.
-- **R2**: Fase 8 muda o helper C++ e aumenta a responsabilidade de
-  assinatura/teste; so executar com o pipeline Authenticode estavel.
-- **R3**: Fase 7 muda contrato; habilitar o transporte real so quando o hub
-  estiver pronto (acoplamento de release).
-
-## Sucesso global
-
-1. 100% das releases com `plug:edSignature` valido + Authenticode no installer
-   e helper.
-2. `automaticInstallFailure rate` < 1% por semana em frota > 100 clientes.
-3. p95 do ciclo silent (probe -> installer start) < 60s.
-4. Operador responde "X% da frota esta em versao N" em < 1 minuto.
-5. Nenhuma release que quebra o app deixa cliente preso > 24h.
+- Executar matriz em VMs descartaveis Windows 10/11 e Server suportado, com
+  administrador e usuario padrao: instalacao nova/upgrade/silenciosa/manual,
+  credenciais administrativas distintas, pasta personalizada e desinstalacao.
+- Cobrir ACL/assinatura/publicador invalidos, reparse points, substituicao de
+  arquivos, IPC remoto, replay, requisitos novos, cancelamento e revogacao.
+- Cobrir SQL/acoes/transacoes ativos, recurso pendente e resultado incerto;
+  logout/RDP/ausencia de sessao; setup travado; interrupcao em cada fase/reboot;
+  falta de espaco; snapshot invalido; falha de boot e de rollback.
+- Executar migracoes SQLite/WAL e restauracao exata de configuracoes/segredos,
+  sem efeitos externos no modo de validacao, e 20 ciclos de update sem crescimento
+  de processos, locks ou handles. Testes ignorados nao aprovam a matriz.
+- Publicar primeiro a transicao assinada; promover em 5%, 25% e 100%, com pelo
+  menos 48 horas de observacao por etapa. Integridade, permissoes, perda de dados,
+  relancamento elevado ou rollback incorreto interrompem a promocao.
+- Concluir somente com updates comuns sem UAC/confirmacao, novas permissoes
+  bloqueadas ate aprovacao, rollback de schema testado e feed validado.
+  Entregar evidencias e procedimentos de revogacao e recuperacao para o ultimo
+  build homologado. Nao desabilitar validacao de assinatura como recuperacao.
 
 ## Referencias cruzadas
 
-- Fonte de verdade do auto-update:
-  [docs/install/auto_update_setup.md](../install/auto_update_setup.md)
-- Threat model:
-  [docs/security/auto_update_threat_model.md](../security/auto_update_threat_model.md)
-- Padrao deste plano:
-  [plano_acoes_agendadas_execucoes.md](./plano_acoes_agendadas_execucoes.md)
+- Operacao: [auto_update_setup.md](../install/auto_update_setup.md).
+- Instalacao: [installation_guide.md](../install/installation_guide.md).
+- Publicacao: [release_guide.md](../install/release_guide.md).
+- Seguranca: [auto_update_threat_model.md](../security/auto_update_threat_model.md).

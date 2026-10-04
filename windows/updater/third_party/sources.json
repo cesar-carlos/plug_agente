@@ -1,0 +1,30 @@
+{
+  "json.hpp": {
+    "url": "https://raw.githubusercontent.com/nlohmann/json/v3.11.3/single_include/nlohmann/json.hpp",
+    "sha256": "9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6"
+  },
+  "json.LICENSE.MIT": {
+    "url": "https://raw.githubusercontent.com/nlohmann/json/v3.11.3/LICENSE.MIT",
+    "sha256": "86b998c792894ccb911a1cb7994f7a9652894e7a094c0b5e45be2f553f45cf14"
+  },
+  "monocypher.c": {
+    "url": "https://raw.githubusercontent.com/LoupVaillant/Monocypher/4.0.2/src/monocypher.c",
+    "sha256": "02174117935699d418443c75a558a287deb06ef8cf7c1adced61d9047d2f323d"
+  },
+  "monocypher.h": {
+    "url": "https://raw.githubusercontent.com/LoupVaillant/Monocypher/4.0.2/src/monocypher.h",
+    "sha256": "fcaf6ed771358bb4f40fba016f6518ae86ec02b1b877d2cc35ad92d3a26fd7b3"
+  },
+  "monocypher-ed25519.c": {
+    "url": "https://raw.githubusercontent.com/LoupVaillant/Monocypher/4.0.2/src/optional/monocypher-ed25519.c",
+    "sha256": "97d581639dfa72be08a6d57deb7d79b736be001cb416819cab196d22559d242b"
+  },
+  "monocypher-ed25519.h": {
+    "url": "https://raw.githubusercontent.com/LoupVaillant/Monocypher/4.0.2/src/optional/monocypher-ed25519.h",
+    "sha256": "3a3035181f991a158d0e1c7567258f0bae8ba0f1f23c5512b4a1db1b3c9730ce"
+  },
+  "monocypher.LICENCE": {
+    "url": "https://raw.githubusercontent.com/LoupVaillant/Monocypher/4.0.2/LICENCE.md",
+    "sha256": "a5781770269d2516e52ba4863f790c10a16da4089a1e81823aee19ff1e9026b0"
+  }
+}

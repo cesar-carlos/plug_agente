@@ -29,6 +29,7 @@ import 'package:plug_agente/core/runtime/runtime_capabilities.dart';
 import 'package:plug_agente/core/security/appcast_signature_verifier.dart';
 import 'package:plug_agente/core/settings/app_settings_store.dart';
 import 'package:plug_agente/domain/errors/failures.dart' as domain;
+import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
 import 'package:result_dart/result_dart.dart';
 
 export 'package:plug_agente/application/services/silent_update/silent_update_download_apply_service.dart'
@@ -116,6 +117,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     Duration helperWaitDuration = AutoUpdateDefaults.helperWaitDuration,
     Duration Function()? bootJitterProvider,
     IAppcastSignatureVerifier? signatureVerifier,
+    IUpdateManifestDownloader? manifestDownloader,
     UpdateCheckIdRecorder? checkIdRecorder,
     IAutoUpdateMetricsCollector? metricsCollector,
     IAutoUpdateDiagnosticsGateway? diagnosticsGateway,
@@ -141,6 +143,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
          helperWaitDuration: helperWaitDuration,
          bootJitterProvider: bootJitterProvider,
          signatureVerifier: signatureVerifier,
+         manifestDownloader: manifestDownloader,
          checkIdRecorder: checkIdRecorder,
          metricsCollector: metricsCollector,
          diagnosticsGateway: diagnosticsGateway,
@@ -252,7 +255,19 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           if (_shouldAutoApply() &&
               !_cancelRequested &&
               !SilentUpdateHelperLaunchState.isUserCancelledElevation(readyStatus)) {
-            return await _autoApplyStagedUpdate(feedUrl: feedUrl);
+            if (!userInitiated && _collaborators.scheduler.isWithinQuietHours()) {
+              return await _returnInstallerReady(feedUrl: feedUrl, pending: pending);
+            }
+            if (!userInitiated) {
+              final cooldown = await _collaborators.scheduler.buildCooldownResult(
+                feedUrl: feedUrl,
+                checkId: _currentCheckId,
+                onDiagnostics: (value) => _lastAutomaticDiagnostics = value,
+                persistDiagnostics: _persistLastAutomaticDiagnostics,
+              );
+              if (cooldown != null) return cooldown;
+            }
+            return await _autoApplyStagedUpdate(feedUrl: feedUrl, userInitiated: userInitiated);
           }
           return await _returnInstallerReady(feedUrl: feedUrl, pending: pending);
         case PendingDownloadedNone():
@@ -388,7 +403,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
           _collaborators.diagnosticsNotifier.notifyChanged();
           _collaborators.diagnosticsNotifier.pushBestEffort(AutoUpdateDiagnosticsSource.silent);
           if (_shouldAutoApply() && !_cancelRequested) {
-            return await _autoApplyStagedUpdate(feedUrl: feedUrl);
+            return await _autoApplyStagedUpdate(feedUrl: feedUrl, userInitiated: userInitiated);
           }
           return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
       }
@@ -500,7 +515,16 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     String? noticeTitle,
     String? noticeBody,
     bool triggerAppClose = true,
-  }) {
+  }) async {
+    if (!triggerAppClose &&
+        (_collaborators.scheduler.isWithinQuietHours() || await _collaborators.scheduler.hasActiveCooldown())) {
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message: 'A atualização será aplicada fora do horário de bloqueio e do período de espera.',
+          context: const {'reason': 'update_deferred', 'retryable': true},
+        ),
+      );
+    }
     return _collaborators.downloadApplyService.applyPendingDownloadedUpdate(
       noticeTitle: noticeTitle,
       noticeBody: noticeBody,
@@ -548,9 +572,7 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
       checkId: _currentCheckId,
       completionSource: UpdateCheckCompletionSource.automaticInstallReady,
       updateAvailable: true,
-      errorMessage: elevatedCancelled
-          ? 'Windows administrator approval was cancelled. You can install again.'
-          : null,
+      errorMessage: elevatedCancelled ? 'Windows administrator approval was cancelled. You can install again.' : null,
     );
     await _persistLastAutomaticDiagnostics();
     _collaborators.diagnosticsNotifier.notifyChanged();
@@ -558,9 +580,17 @@ class SilentUpdateCoordinator implements ISilentUpdateCoordinator {
     return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
   }
 
-  Future<Result<SilentUpdateOutcome>> _autoApplyStagedUpdate({required String feedUrl}) async {
+  Future<Result<SilentUpdateOutcome>> _autoApplyStagedUpdate({
+    required String feedUrl,
+    required bool userInitiated,
+  }) async {
     if (!automaticSilentUpdatesEnabled || _cancelRequested) {
       return const Success<SilentUpdateOutcome, Exception>(SilentUpdateOutcome.installerReady);
+    }
+    // Recheck after downloads and persistence: the permitted window may have ended.
+    if (!userInitiated &&
+        (_collaborators.scheduler.isWithinQuietHours() || await _collaborators.scheduler.hasActiveCooldown())) {
+      return const Success(SilentUpdateOutcome.installerReady);
     }
 
     final applyResult = await applyPendingDownloadedUpdate();

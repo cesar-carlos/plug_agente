@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cwchar>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -732,18 +733,41 @@ std::vector<std::wstring> build_base_setup_args(const Options& options) {
       L"/VERYSILENT",
       L"/SUPPRESSMSGBOXES",
       L"/NORESTART",
-      L"/CLOSEAPPLICATIONS",
-      L"/FORCECLOSEAPPLICATIONS",
+      L"/NOCLOSEAPPLICATIONS",
       // Do not ask Inno to restart closed apps. [Run] already relaunches via
       // /LAUNCHAFTERUPDATE=1; both together can start two app instances.
-      L"/LAUNCHAFTERUPDATE=1",
+      L"/LAUNCHAFTERUPDATE=0",
       L"/MERGETASKS=\"!desktopicon,!startup\"",
       L"/DIR=\"" + options.installDirectory + L"\"",
       L"/LOG=\"" + options.logPath + L"\"",
   };
 }
 
-RunResult run_setup_process(const std::wstring& executable, const std::vector<std::wstring>& args) {
+void supervise_setup(HANDLE process, HelperStatus* status) {
+  if (WaitForSingleObject(process, 30 * 60 * 1000) == WAIT_OBJECT_0) return;
+  status->state = L"recoveryRequired";
+  status->errorMessage = L"Installer exceeded 30 minutes; retaining the lock until its actual exit. Recovery must be reconciled before retry.";
+  write_status_file(*status);
+  // A running installer must never be abandoned with an unlocked setup path.
+  while (true) {
+    const DWORD wait = WaitForSingleObject(process, 1000);
+    if (wait == WAIT_OBJECT_0) return;
+    // WAIT_FAILED is unknown outcome, never evidence of process termination.
+    if (wait == WAIT_FAILED) Sleep(1000);
+  }
+}
+
+bool relaunch_original_user(const Options& options) {
+  const std::wstring executable = options.installDirectory + L"\\plug_agente.exe";
+  if (options.requireValidSignature && verify_signature_status(executable) != L"valid") return false;
+  std::wstring command = quote_executable(executable);
+  STARTUPINFOW startup{}; startup.cb = sizeof(startup); PROCESS_INFORMATION process{};
+  if (!CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
+      options.installDirectory.c_str(), &startup, &process)) return false;
+  CloseHandle(process.hThread); CloseHandle(process.hProcess); return true;
+}
+
+RunResult run_setup_process(const std::wstring& executable, const std::vector<std::wstring>& args, HelperStatus* status) {
   RunResult result{};
   const auto started_at = std::chrono::steady_clock::now();
   std::wstring command_line = quote_executable(executable) + L" " + join_arguments(args);
@@ -771,7 +795,7 @@ RunResult run_setup_process(const std::wstring& executable, const std::vector<st
   }
 
   result.started = true;
-  WaitForSingleObject(process_info.hProcess, INFINITE);
+  supervise_setup(process_info.hProcess, status);
   DWORD exit_code = 1;
   if (GetExitCodeProcess(process_info.hProcess, &exit_code)) {
     result.exitCode = exit_code;
@@ -782,7 +806,7 @@ RunResult run_setup_process(const std::wstring& executable, const std::vector<st
   return result;
 }
 
-RunResult run_setup_elevated(const std::wstring& executable, const std::vector<std::wstring>& args) {
+RunResult run_setup_elevated(const std::wstring& executable, const std::vector<std::wstring>& args, HelperStatus* status) {
   RunResult result{};
   const auto started_at = std::chrono::steady_clock::now();
   const std::wstring parameters = join_arguments(args);
@@ -803,7 +827,7 @@ RunResult run_setup_elevated(const std::wstring& executable, const std::vector<s
   }
 
   result.started = true;
-  WaitForSingleObject(shell_execute_info.hProcess, INFINITE);
+  supervise_setup(shell_execute_info.hProcess, status);
   DWORD exit_code = 1;
   if (GetExitCodeProcess(shell_execute_info.hProcess, &exit_code)) {
     result.exitCode = exit_code;
@@ -927,10 +951,56 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE previous_instance, PWSTR com
     // disk so a subsequent failure can be explained instead of looking like
     // an unrelated installer error, and so operators can tell a normal
     // "already exited" run apart from a "had to be force-closed" one.
-    status.errorMessage = L"App did not exit within " + std::to_wstring(options.waitPidTimeoutSeconds) +
-                           L"s; proceeding with install and relying on /CLOSEAPPLICATIONS to close it";
+    status.state = kStateLauncherFailed;
+    status.errorMessage = L"App did not exit safely; installation deferred.";
+    write_status_file(status);
+    ReleaseMutex(mutex); CloseHandle(mutex); return 1;
   }
   write_status_file(status);
+  // Validate again after the potentially long wait, immediately before execution.
+  struct InstallerPin {
+    HANDLE file = INVALID_HANDLE_VALUE;
+    std::vector<HANDLE> ancestors;
+    explicit InstallerPin(const std::wstring& path) {
+      const std::filesystem::path expected(path);
+      if (!expected.is_absolute() || path.rfind(L"\\\\", 0) == 0) return;
+      std::filesystem::path current = expected.root_path();
+      std::vector<std::filesystem::path> components{current};
+      for (const auto& part : expected.relative_path()) {
+        if (part == L".." || part == L"." || part.native().find(L':') != std::wstring::npos) return;
+        current /= part; components.push_back(current);
+      }
+      for (size_t index = 0; index < components.size(); ++index) {
+        const bool leaf = index + 1 == components.size();
+        const HANDLE opened = CreateFileW(components[index].c_str(), leaf ? GENERIC_READ : FILE_READ_ATTRIBUTES,
+            leaf ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        FILE_ATTRIBUTE_TAG_INFO identity{};
+        if (opened == INVALID_HANDLE_VALUE) return;
+        if (!GetFileInformationByHandleEx(opened, FileAttributeTagInfo, &identity, sizeof(identity)) ||
+            (identity.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) { CloseHandle(opened); return; }
+        if (leaf) file = opened; else ancestors.push_back(opened);
+      }
+    }
+    ~InstallerPin() {
+      if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+      for (const HANDLE ancestor : ancestors) CloseHandle(ancestor);
+    }
+  } pinned(options.installerPath);
+  if (pinned.file == INVALID_HANDLE_VALUE) {
+    status.state = kStateLauncherFailed; status.errorMessage = L"Installer could not be pinned for validation.";
+    write_status_file(status); relaunch_original_user(options);
+    ReleaseMutex(mutex); CloseHandle(mutex); return 1;
+  }
+  status.signatureStatus = verify_signature_status(options.installerPath);
+  if (!validate_installer_payload(options, &status) || (options.requireValidSignature && status.signatureStatus != L"valid")) {
+    status.state = kStateLauncherFailed; write_status_file(status);
+    relaunch_original_user(options); ReleaseMutex(mutex); CloseHandle(mutex); return 1;
+  }
+  const std::wstring mode_file = options.installDirectory + L"\\install-mode.ini";
+  wchar_t install_mode[16]{};
+  GetPrivateProfileStringW(L"installation", L"mode", L"global", install_mode, 16, mode_file.c_str());
+  options.tryCurrentUserFirst = std::wstring(install_mode) == L"user";
 
   const std::vector<std::wstring> base_args = build_base_setup_args(options);
   if (options.tryCurrentUserFirst) {
@@ -940,7 +1010,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE previous_instance, PWSTR com
     current_user_args.reserve(base_args.size() + 1);
     current_user_args.emplace_back(L"/CURRENTUSER");
     current_user_args.insert(current_user_args.end(), base_args.begin(), base_args.end());
-    const RunResult current_user_result = run_setup_process(options.installerPath, current_user_args);
+    const RunResult current_user_result = run_setup_process(options.installerPath, current_user_args, &status);
     status.hasNonAdminExitCode = true;
     status.nonAdminExitCode = current_user_result.exitCode;
     status.hasNonAdminDurationMs = true;
@@ -948,16 +1018,19 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE previous_instance, PWSTR com
     if (!current_user_result.started) {
       status.errorMessage = current_user_result.errorMessage;
     }
-    if (current_user_result.started && current_user_result.exitCode == 0) {
+    if (current_user_result.started && (current_user_result.exitCode == 0 || current_user_result.exitCode == 3010)) {
       status.state = kStateCompleted;
       status.errorMessage.clear();
       write_status_file(status);
+      relaunch_original_user(options);
       ReleaseMutex(mutex);
       CloseHandle(mutex);
       return 0;
     }
     status.state = kStateNonAdminFailed;
     write_status_file(status);
+    // A per-user install never falls back to a different machine-wide mode.
+    relaunch_original_user(options); ReleaseMutex(mutex); CloseHandle(mutex); return 1;
   }
 
   status.state = kStateElevatedStarted;
@@ -968,7 +1041,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE previous_instance, PWSTR com
   all_users_args.reserve(base_args.size() + 1);
   all_users_args.emplace_back(L"/ALLUSERS");
   all_users_args.insert(all_users_args.end(), base_args.begin(), base_args.end());
-  const RunResult elevated_result = run_setup_elevated(options.installerPath, all_users_args);
+  const RunResult elevated_result = run_setup_elevated(options.installerPath, all_users_args, &status);
   status.hasElevatedExitCode = true;
   status.elevatedExitCode = elevated_result.exitCode;
   status.hasElevatedDurationMs = true;
@@ -978,14 +1051,16 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE previous_instance, PWSTR com
     status.elevatedCancelled = elevated_result.cancelled;
     status.errorMessage = elevated_result.errorMessage;
     write_status_file(status);
+    relaunch_original_user(options);
     ReleaseMutex(mutex);
     CloseHandle(mutex);
     return 1;
   }
-  if (elevated_result.exitCode == 0) {
+  if (elevated_result.exitCode == 0 || elevated_result.exitCode == 3010) {
     status.state = kStateCompleted;
     status.errorMessage.clear();
     write_status_file(status);
+    relaunch_original_user(options);
     ReleaseMutex(mutex);
     CloseHandle(mutex);
     return 0;

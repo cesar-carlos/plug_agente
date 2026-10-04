@@ -175,3 +175,19 @@ String buildAppcastEnclosureSignable({
   }
   return buffer.toString();
 }
+
+/// The first lines retain the legacy signature contract. The appended fields
+/// match ManifestBindingPayload.canonical_bytes in the Python publisher.
+String buildAppcastManifestBindingSignable({
+  required String enclosurePayload,
+  required String manifestUrl,
+  required String manifestSha256,
+}) {
+  final uri = Uri.tryParse(manifestUrl);
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty || uri.userInfo.isNotEmpty ||
+      uri.hasFragment || !uri.path.endsWith('.json') || manifestUrl.contains(RegExp(r'[\r\n]')) ||
+      !RegExp(r'^[0-9a-f]{64}$').hasMatch(manifestSha256)) {
+    throw const FormatException('Invalid manifest binding');
+  }
+  return '${enclosurePayload}manifest_sha256=$manifestSha256\nmanifest_url=$manifestUrl\n';
+}

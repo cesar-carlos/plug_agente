@@ -24,13 +24,15 @@ Esse comando executa:
    `plug_agente_elevated_runner.exe` em `tool/plug_agente_elevated_runner/` e
    copia para o bundle Release/Debug). O script falha cedo se esse helper nao
    estiver no bundle.
-3. Validacao de que `plug_agente.exe`, `plug_update_helper.exe` e
+3. Compila e valida também `updater/plug_update_service.exe`, `plug_update_client.exe` e `plug_update_worker.exe`. O instalador coloca controle em `%ProgramFiles%\PlugAgenteUpdater` e workers em `workers/<versão+build>`, fora do bundle substituído. `build_installer.py` compila o parâmetro `MyAppWorkerVersion` a partir do `pubspec.yaml`.
+4. Validacao de que `plug_agente.exe`, `plug_update_helper.exe` e
    `plug_agente_elevated_runner.exe` estao no bundle Release.
-4. Assinatura opcional de `plug_agente.exe`, `plug_update_helper.exe` e
-   `plug_agente_elevated_runner.exe` quando o certificado esta configurado.
-5. `ISCC installer/setup.iss`. Com certificado, o ISCC recebe `SignTool` e
+5. Assinatura do aplicativo, helper, runner elevado, servico, cliente e worker.
+   Obrigatoria em producao; artefatos sem assinatura sao restritos a
+   desenvolvimento/dry-run, sem distribuicao.
+6. `ISCC installer/setup.iss`. Com certificado, o ISCC recebe `SignTool` e
    `SignedUninstaller=yes` para assinar o setup e o uninstaller embutido.
-6. `signtool verify` no `PlugAgente-Setup-<versao>.exe` quando a assinatura
+7. `signtool verify` no `PlugAgente-Setup-<versao>.exe` quando a assinatura
    estiver configurada.
 
 Quando o ambiente ou `.env` define `AUTO_UPDATE_FEED_URL`,
@@ -42,13 +44,22 @@ feed oficial padrao.
 `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE` controla um gate em dois niveis: o lado
 Dart bloqueia o spawn quando `plug_update_helper.exe` nao esta com Authenticode
 valido; o helper nativo bloqueia o `setup.exe` quando o instalador nao esta
-assinado. O `.env.example` e o default do codigo sao `true`; o workflow
-`Publish Windows Release` mantem `false` enquanto o rollout de Authenticode
-nao termina (plano `docs/implemente/plano_auto_update_evolution.md` fase 1E.2)
-e expoe o input `require_valid_update_signature` para virar `true` quando
-helper e instalador ja estiverem assinados ponta a ponta. Em builds locais que
-ainda nao tem certificado configurado, exporte `AUTO_UPDATE_REQUIRE_VALID_SIGNATURE=false`
-no `.env` antes de rodar o build.
+assinado. Produção exige esse gate e assinatura do feed; os inputs de
+publicação são `true` por padrão. Artefatos locais sem certificado podem ser
+usados apenas para desenvolvimento/dry-run, sem distribuição automática.
+
+O build embute as mesmas chaves públicas no Dart e no supervisor nativo. O
+canal também é compilado no setup, para enrollment e `install-mode.ini`.
+Instalação interativa global oferece autorização do serviço; instalação
+silenciosa nova exige `/AUTOUPDATE=1`. Upgrades silenciosos preservam a
+autorização administrativa existente. Desmarcar a opção revoga aplicações
+futuras. Enrollment valida publicador, ACL e contrato do serviço já registrado.
+
+**Estado atual:** enrollment e controle estão implementados, mas
+`kApplicationContractImplemented=false` e `applicationContractValidated=false` bloqueiam aplicação automática. Launcher,
+manutenção ligada ao runtime e recuperação completa ainda precisam ser
+integrados e homologados antes de distribuição; veja
+[status](../docs/implemente/plano_auto_update_evolution.md).
 
 Para validar a sintaxe do Inno Setup sem o bundle Flutter (o mesmo gate do
 job `iss-syntax` no Flutter CI), rode:
@@ -87,9 +98,10 @@ manual **Release Preflight**. Ele gera o instalador, valida o helper nativo,
 roda `tool/appcast/validate_launcher_status.py` contra o status JSON e salva os
 artifacts sem criar commit, tag ou release.
 
-Assinatura de codigo e opcional. Se `WINDOWS_CODE_SIGNING_CERT_PATH` apontar
+Assinatura de código é obrigatória em produção e opcional somente em desenvolvimento sem distribuição. Se `WINDOWS_CODE_SIGNING_CERT_PATH` apontar
 para um certificado PFX, o script assina `plug_agente.exe`,
-`plug_update_helper.exe` e `plug_agente_elevated_runner.exe` e passa
+`plug_update_helper.exe`, `plug_agente_elevated_runner.exe` e os componentes
+`plug_update_service.exe`, `plug_update_client.exe`, `plug_update_worker.exe`, e passa
 `SignTool` ao ISCC (`SignedUninstaller=yes`) para o instalador e o
 uninstaller embutido. Use `WINDOWS_CODE_SIGNING_CERT_PASSWORD` para senha do
 PFX e `WINDOWS_CODE_SIGNING_REQUIRED=true` para falhar quando a assinatura
@@ -98,9 +110,7 @@ nao estiver configurada. Builds locais unsigned nao definem `SignTool`.
 No workflow `Publish Windows Release`, o passo `Verify Authenticode
 signatures` valida `signtool verify /pa /v` para installer e helper apos o
 build. Ele falha o release se qualquer dos dois nao estiver assinado pela
-cadeia confiavel. Use o input `skip_authenticode_check=true` apenas em
-rebuild manual sem certificado disponivel; nesse caso confirme depois com
-`signtool verify /pa` localmente.
+cadeia confiável. O gate inclui aplicativo, helper, runner elevado, serviço, cliente, worker e setup. `skip_authenticode_check=true` é restrito a dry-run sem distribuição.
 
 ## Saida
 

@@ -307,6 +307,12 @@ class SilentUpdateDownloadApplyService {
       return const PendingDownloadedNone();
     }
 
+    final now = _clock();
+    final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+    if (_isHelperInstallInFlight(pending, launcherStatus)) {
+      return PendingDownloadedInFlight(pending);
+    }
+
     if (!await _artifactsExistOnDisk(pending)) {
       developer.log(
         'Clearing stale pending silent update (artifacts missing on disk): version=${pending.version}',
@@ -315,13 +321,6 @@ class SilentUpdateDownloadApplyService {
       );
       await _pendingStore.clear();
       return const PendingDownloadedStaleCleared();
-    }
-
-    final now = _clock();
-    final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
-
-    if (_isHelperInstallInFlight(pending, launcherStatus)) {
-      return PendingDownloadedInFlight(pending);
     }
 
     // Same fail+cooldown policy as PendingSilentUpdateReconciler: after a real
@@ -484,6 +483,20 @@ class SilentUpdateDownloadApplyService {
     }
 
     final launcherStatus = await _launcherStatusReader.read(pending.launcherStatusPath);
+    final activityAt = launcherStatus?.lastUpdatedAt ?? pending.launchedAt;
+    if (_isHelperInstallInFlight(pending, launcherStatus) &&
+        (launcherStatus?.state == 'recoveryRequired' ||
+            activityAt == null ||
+            _clock().difference(activityAt) > _helperWaitDuration)) {
+      _applyInProgress = false;
+      return Failure(
+        domain.ConfigurationFailure.withContext(
+          message:
+              'O encerramento do instalador não foi confirmado. Verifique a recuperação antes de tentar novamente.',
+          context: const {'operation': 'applyPendingDownloadedUpdate', 'reason': 'recovery_required'},
+        ),
+      );
+    }
     if (_isHelperInstallInFlight(pending, launcherStatus)) {
       // Idempotent Success across process restarts: recent launchedAt / helper
       // status means a helper is already running — do not spawn a second one.

@@ -15,6 +15,51 @@ instalacao via helper nativo. Cobre:
 Nao cobre: vulnerabilidades no Inno Setup, malware no usuario antes da
 instalacao, ataques fisicos a maquina.
 
+## Serviço privilegiado em implementação — 2026-10-04
+
+O supervisor tem código C++ próprio e não usa o runner elevado de ações.
+Controle fica em Program Files; política, journal, staging e backups ficam em
+ProgramData separado e protegido. DACLs e proprietário são verificados; os
+arquivos de controle permitem somente leitura/execução a usuários comuns, e o
+armazenamento privilegiado permite acesso apenas a SYSTEM/administradores.
+Enrollment rejeita serviço existente com caminho, conta ou contrato divergente.
+
+IPC v1 usa named pipe local com DACL explícita e bloqueio de clientes remotos.
+O serviço valida PID/imagem/publicador e o SID do cliente. O cliente compara
+PID do servidor com o serviço SCM e sua configuração antes de transmitir dados,
+para rejeitar ocupação maliciosa do nome do pipe. Mensagens têm tamanho, tempo
+e profundidade limitados; campos JSON duplicados são rejeitados. Não há comando
+IPC para executar scripts, fornecer URLs ou escolher destinos privilegiados.
+
+Manifestos Ed25519 canônicos incluem release/tag/commit, canal, instalador,
+requisitos e protocolos de dados. Feed assinado vincula URL e hash do manifesto.
+Authenticode verifica cadeia Windows, revogação e certificado de publicador
+aprovado; validação inconclusiva bloqueia execução. O setup efetivamente
+executado permanece aberto sem compartilhamento de escrita/exclusão durante a
+revalidação. Ancestrais são abertos sem seguir reparse points e mantidos contra
+renomeação. Copiar dados para staging não transfere ACLs de dados compartilhados.
+Folhas com hard links adicionais ou exclusão pendente também são rejeitadas pelo
+handle aberto. O baseline de recuperação é copiado com a fonte fixada e tem
+hash e publicador conferidos na cópia. A sessão precisa estar ativa e seu token
+de usuário deve coincidir com o SID do solicitante e do agente.
+
+Snapshots de segredos usam DPAPI do usuário por pipes anônimos; não usam a
+sanitização nem a chave do backup portátil. Os namespaces próprios incluem
+credenciais ODBC, autenticação hub, token do cliente, ações e assinatura de
+payload. A restauração testada é exata nesses namespaces e preserva os demais.
+
+**Limitação deliberada:** o contrato completo da aplicação ainda não foi
+integrado. `kApplicationContractImplemented=false` impede ativação mesmo que
+alguém modifique `applicationContractValidated`. Não elevar esses valores nem
+distribuir como automação concluída sem launcher, bootstrap em validação,
+cleanup confirmado, rollback completo e homologação Windows. As interfaces
+Dart, manutenção e DPAPI existentes ainda não tornam o caminho operacional.
+
+Persistência de `recoveryRequired` impede novo setup automático/manual enquanto
+uma operação estiver desconhecida. O helper legado mantém o lock após prazo de
+30 minutos até a saída comprovada, sem fechamento forçado. Um processo novo ou
+uma preferência comum não comprovam autorização administrativa nem saúde.
+
 ## Defesas em camadas
 
 | ID | Defesa | Implementacao | Cobertura |
@@ -38,7 +83,7 @@ instalacao, ataques fisicos a maquina.
 | D17 | Cancellation token | Coordinator e installer respondem a cancel | Estado consistente quando user muda preferencia mid-flight |
 | D18 | UAC gate (currentUserThenElevated) | Estrategia documentada em `auto_update_setup.md` | Tentativa de privilege escalation por atacante local |
 | D19 | Helper SHA-256 capturado | Diagnostic-only `helperSha256` | Detectar drift do helper entre installs (audit, nao bloqueio) |
-| D20 | TLS pinning de GitHub Pages | Implicito (Windows root store) | Atacante que controla CA root no sistema (improvavel sem admin) |
+| D20 | Validação TLS de GitHub Pages | Windows root store; não constitui certificate pinning | Atacante que controla CA root no sistema (improvavel sem admin) |
 
 ## Atores e ameacas
 
@@ -131,8 +176,9 @@ rodar. Mitigacoes:
 pode publicar release maliciosa que passa por todos os gates do cliente.
 Mitigacoes operacionais:
 - Cert EV em HSM hardware (nao acessivel por workflow GitHub).
-- Chave Ed25519 em vault corporativo (nao GH Secrets) — decisao 1 do
-  plano de evolucao.
+- Restringir acesso aos GitHub Secrets existentes de assinatura Ed25519,
+  auditar seu uso e testar rotacao. A custodia ja definida nao constitui uma
+  decisao pendente do plano de atualizacao.
 - Rollout gradual (D11) limita blast radius mesmo no pior caso.
 - Audit log de quem disparou o workflow `Publish Windows Release`.
 
@@ -174,16 +220,14 @@ linha = ator. Resultado = severidade + defesa que ainda mitiga.
 1. **Sem TLS pinning explicito**: confianca no Windows root store. Ataque
    por CA root malicioso e mitigado por D3/D4/D9 mas em cliente sem
    `REQUIRE_FEED_SIGNATURE=true`, MITM com CA controlada serve um
-   appcast valido com asset cujo SHA bate. Mitigacao planejada: completar
-   Fase 1E.2 (REQUIRE=true em producao).
+   appcast valido com asset cujo SHA bate. Os gates de publicação agora exigem assinatura em produção; clientes legados continuam precisando da versão de transição assinada.
 
 2. **Sem assinatura do diretorio de release**: nao validamos que a soma
    total de arquivos em `installer/dist/` corresponde a um manifesto
-   assinado. Apenas o `.exe` final e validado. Atacante com A4 pode
+   assinado. O manifesto novo cobre o setup final e sua associação à tag/commit, e o CI verifica os executáveis próprios. Não cobre individualmente todas as DLLs e ativos transitivos. Atacante com A4 pode
    substituir DLLs antes do build sem detectar.
 
-3. **Rollback de versao com regressao depende de operador**: nao ha
-   restore automatico (Fase 8 do plano de evolucao, diferida).
+3. **Rollback completo ainda não integrado**: existe worker experimental bloqueado, mas launcher, probation, restauração no usuário original, reconciliação de reboot e homologação ainda estão pendentes. Preservar dados e evidências até recuperação confirmada.
 
 4. **Helper Authenticode probe e best-effort**: PowerShell pode falhar
    por motivos operacionais (timeout, ausencia, politicas). Quando
@@ -194,8 +238,9 @@ linha = ator. Resultado = severidade + defesa que ainda mitiga.
 5. **Sem auditoria centralizada de telemetria**: status de update e
    visivel apenas localmente. Operador nao sabe se 10% da frota esta
    em `feedSignatureStatus: invalid` sem coletar diagnostics manualmente.
-   Fase 7 do plano de evolucao: gateway cliente existe, mas o transporte e
-   no-op ate o hub aceitar `agent.autoUpdate.diagnostics.push`.
+   O gateway cliente existente usa transporte no-op. Ativar envio ao hub
+   exige um contrato aprovado em escopo separado; o plano vigente nao
+   introduz novos metodos RPC.
 
 ## Checklist de revisao de PR sensiveis
 
@@ -222,3 +267,8 @@ Use ao revisar PR que toca os componentes abaixo:
 - Schema do helper status:
   `docs/communication/schemas/silent_update_launcher_status.schema.json`
   (validado no workflow Release Preflight)
+
+
+Referências primárias usadas na implementação: [CreateFileW e compartilhamento de handles](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew), [SetupMutex entre sessões](https://jrsoftware.org/ishelp/topic_setup_setupmutex.htm), [token de sessão do usuário](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsqueryusertoken).
+
+Identidade de arquivos: [FILE_STANDARD_INFO, número de links e exclusão pendente](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_standard_info), [hard links e junctions](https://learn.microsoft.com/en-us/windows/win32/fileio/hard-links-and-junctions).

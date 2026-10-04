@@ -5,6 +5,69 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ## Unreleased
 
+### Added — Windows updater service foundation
+
+- Native `PlugAgenteUpdater` supervisor, versioned worker and control client,
+  with protected policy/journal/staging, local named-pipe IPC, client identity
+  checks and publisher validation. Control binaries remain outside the agent
+  bundle; workers use the full application version, including build number.
+- Administrative enrollment and revocation for global installations.
+  Interactive setup offers automatic updates; a new silent installation
+  requires `/AUTOUPDATE=1`, while silent upgrades preserve existing approval.
+  Per-user installations retain the manual update path.
+- Signed release manifest contracts and shared Python/Dart/C++ verification
+  fixtures. New feed entries bind the manifest URL, hash and signature;
+  the client verifies this binding and the bounded HTTPS manifest before
+  downloading the setup. Legacy feeds cannot authorize privileged application.
+- Reversible SQL/action queue admission, maintenance coordination, SQLite
+  checkpointing and exact current-user DPAPI secret snapshots, with regression
+  coverage for IPC, integrity, ownership and uncertain recovery states.
+- Service application remains disabled by `kApplicationContractImplemented=false`
+  and `applicationContractValidated=false`. Session launcher, runtime maintenance
+  integration, authenticated validation boot, complete rollback and Windows
+  client/Server qualification remain pending; the active legacy helper can
+  still request UAC. See the [current plan](docs/implemente/plano_auto_update_evolution.md).
+
+### Fixed — Windows installation and silent updates
+
+- The legacy helper derives installation scope from registered installation
+  metadata, preserves custom directories and relaunches under the original
+  user after confirmed setup completion, cancelled UAC or failure before setup
+  starts. Silent apply uses `/LAUNCHAFTERUPDATE=0` and `/NOCLOSEAPPLICATIONS`.
+- Installer supervision uses a 30-minute deadline instead of an infinite wait.
+  Unknown, missing or stale post-dispatch status and `recoveryRequired` retain
+  pending artifacts and ownership; timeout does not authorize another setup.
+- Helper signature checks no longer reuse a successful result by file path.
+  Privileged staging revalidates pinned files and ancestors and rejects reparse
+  points, additional hard links and unconfirmed integrity.
+- Installation scope controls `plugdb://` registration. Visual C++ runtime
+  installation checks minimum version, Microsoft signature and exit status,
+  recording a pending reboot without restarting Windows automatically.
+- Downloaded updates respect quiet hours and cooldown on automatic/shutdown
+  paths. Explicit apply can bypass those windows, preserving integrity checks.
+- Launcher-status tooling uses the canonical schema path; its regression tests
+  are included in publication gates.
+
+### Changed — release publication and documentation
+
+- Production publication requires tests, Authenticode validation of all owned
+  executables and the setup, and signed feed/manifest assets. Unsigned or
+  verification-bypassed builds are limited to development/dry-run artifacts.
+- Release publication calls the reusable appcast/deploy workflow directly,
+  without a PAT or secondary release event. Shared publication is serialized;
+  deployment and cryptographic smoke checks use the exact published feed commit.
+- Channels propagate through build, installer and feed; prereleases use `beta`
+  and cannot enter `stable`. Appcast entries are deduplicated by version,
+  platform and channel and re-signed when a signing key is supplied. Asset
+  selection requires the exact expected setup and validates HTTP responses.
+- Removed the superseded action-MVP plan, delivered server checklist and their
+  archive index; repaired references and removed the unsupported v1 payload
+  example. Installation, release and security guides now distinguish the
+  operational legacy helper from the incomplete service implementation.
+- Consolidated the updater plan around current implementation, remaining work
+  and qualification criteria, removing superseded rollback and hub-RPC plans.
+  No new hub RPC methods are introduced.
+
 ### Fixed — Socket.IO transport lifecycle
 
 - The shared transport worker pool settles queued and active jobs exactly once on disposal, closes reply ports/listeners, kills workers that finish startup after shutdown, and enters a deterministic failed state after startup failure or unexpected worker exit. Existing worker counts, thresholds and public codec error mappings remain unchanged.
@@ -26,7 +89,9 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 
 ### Changed
 
-- `docs/plug_server/` deixa de descrever implementacao ja entregue no hub. Extensoes apontam para os ADRs 0009, 0011 e 0012; o poll de health existe e fica desligado por defeito. O checklist de 2026-06 ficou so como nota de arquivo.
+- Hub extensions reference ADRs 0009, 0011 and 0012; optional health polling
+  remains disabled by default. Superseded server implementation documentation
+  and the delivered checklist have been removed.
 - Visao geral e roadmap de comunicacao sem a secao e a linha que repetiam health e o estado atual.
 
 ### Added
@@ -60,8 +125,9 @@ and version bump instructions remain in `docs/install/release_guide.md`.
 - Inbound `PayloadFrame` bounds checks run before HMAC (negative sizes, binary
   length vs `compressedSize`, negotiated limits, gzip inflation →
   `invalid_payload` / `compressionFailed`).
-- Installer installs Visual C++ Redistributable x64 when missing and registers
-  `plugdb://` under HKLM (removed on uninstall).
+- Installer installs Visual C++ Redistributable x64 when missing or below the
+  required version and registers `plugdb://` according to installation scope
+  (removed on uninstall).
 
 ### Changed
 
@@ -90,9 +156,9 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   unclassifiable overlays count as a user choice and are not overwritten.
 - User-initiated silent install (`Instalar agora`) no longer waits on quiet
   hours or automatic failure cooldown.
-- Inno silent updates wait for the app pre-close budget (helper PID wait ≥ 70s)
-  and relaunch only via `[Run]` (`/LAUNCHAFTERUPDATE=1`), not
-  `/RESTARTAPPLICATIONS`.
+- Inno silent updates wait for the app pre-close budget (helper PID wait ≥ 70s).
+  The original-user helper owns relaunch; `[Run]` and Restart Manager do not
+  relaunch the agent on this path.
 - Direct dependencies bumped to latest resolvable majors (`odbc_fast` 4.5.1,
   `drift`/`sqlite3` 3.x, `get_it` 9, `win32` 6, `file_picker` 12,
   `flutter_secure_storage` 11, Syncfusion 34, and related packages).
@@ -134,8 +200,8 @@ and version bump instructions remain in `docs/install/release_guide.md`.
   pending lookups.
 - Inno wizard: Brazilian Portuguese first, branded images, `lzma2/ultra64`,
   `Se7e Sistemas` publisher info. Release signing passes `SignTool` to ISCC
-  (`SignedUninstaller=yes`); `CloseApplications=force` for a running
-  `plug_agente.exe`.
+  (`SignedUninstaller=yes`); interactive setup uses `CloseApplications=yes`,
+  while silent updates require cooperative exit and disable setup app closing.
 - CI: Flutter workflow split into `analyze`, `test`, `agent-actions-gate`,
   `verify-code-generation`, and `iss-syntax`; `workflow-sanity` validates CI
   configuration; Dependabot for GitHub Actions; appcast signing tests run in

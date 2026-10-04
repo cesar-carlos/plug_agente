@@ -26,6 +26,8 @@ class SilentUpdateScheduler {
 
   Timer? _automaticCheckTimer;
 
+  Future<bool> hasActiveCooldown() async => await _automaticFailureBreaker.remainingCooldown() != null;
+
   bool isWithinQuietHours() {
     final environmentSnapshot = AppEnvironment.snapshot();
     final quietHoursStart = resolveAutoUpdateQuietHoursStartMinute(environment: environmentSnapshot);

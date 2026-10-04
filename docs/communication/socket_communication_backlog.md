@@ -34,9 +34,9 @@ comando.
 
 - Spec RPC `agent.autoUpdate.diagnostics.push` — schema agente entregue
   (`docs/communication/schemas/auto_update_diagnostics.schema.json`); transport
-  outbound ainda no-op ate Decisao 3 / consumo no hub
-  (`docs/implemente/plano_auto_update_evolution.md`). **Nao** publicado em
-  `openrpc.json` / `rpc.discover` ate o hub aceitar o metodo.
+  outbound ainda no-op. Proposta fora do plano vigente do servico de update;
+  requer contrato e consumo aprovados separadamente no hub. **Nao** publicado
+  em `openrpc.json` / `rpc.discover` ate o hub aceitar o metodo.
 - Canal socket `agent:profile.update` / `agent:profile.updated` no runtime do
   agente (hoje o sync de perfil usa apenas REST
   `PATCH /api/v1/agents/{agentId}/profile`; o hub ja expoe o canal socket).

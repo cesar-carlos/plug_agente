@@ -93,7 +93,7 @@ void main() {
       expect(status, HelperSignatureStatus.unknown);
     });
 
-    test('caches result so PowerShell is invoked only once per session', () async {
+    test('revalidates the file on every execution', () async {
       if (!Platform.isWindows) return;
       var callCount = 0;
       final probe = PowerShellHelperSignatureProbe(
@@ -105,7 +105,7 @@ void main() {
       await probe.probe(targetFile.path);
       await probe.probe(targetFile.path);
       await probe.probe(targetFile.path);
-      expect(callCount, 1);
+      expect(callCount, 3);
     });
 
     test('returns unknown when the runner throws ProcessException', () async {

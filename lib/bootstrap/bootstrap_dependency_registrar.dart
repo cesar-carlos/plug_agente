@@ -237,6 +237,9 @@ import 'package:plug_agente/domain/repositories/i_token_audit_store.dart';
 import 'package:plug_agente/domain/repositories/i_token_secret_store.dart';
 import 'package:plug_agente/domain/repositories/i_transport_client.dart';
 import 'package:plug_agente/domain/repositories/sql_execution_queue_metrics_collector.dart';
+import 'package:plug_agente/domain/services/i_privileged_updater.dart';
+import 'package:plug_agente/domain/services/i_update_manifest_downloader.dart';
+import 'package:plug_agente/domain/services/i_update_secrets_snapshot.dart';
 import 'package:plug_agente/domain/streaming/i_streaming_named_parameter_preparer.dart';
 import 'package:plug_agente/infrastructure/actions/action_command_safety_validator.dart';
 import 'package:plug_agente/infrastructure/actions/actions.dart';
@@ -301,8 +304,11 @@ import 'package:plug_agente/infrastructure/services/auto_start_service.dart';
 import 'package:plug_agente/infrastructure/services/dio_silent_update_installer.dart';
 import 'package:plug_agente/infrastructure/services/file_installer_autostart_request_store.dart';
 import 'package:plug_agente/infrastructure/services/file_silent_update_launcher_status_reader.dart';
+import 'package:plug_agente/infrastructure/services/http_update_manifest_downloader.dart';
 import 'package:plug_agente/infrastructure/services/noop_notification_service.dart';
 import 'package:plug_agente/infrastructure/services/notification_service.dart';
+import 'package:plug_agente/infrastructure/services/windows_privileged_updater.dart';
+import 'package:plug_agente/infrastructure/services/windows_update_secrets_snapshot.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_bootstrap.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_acl_marker_store.dart';
 import 'package:plug_agente/infrastructure/storage/global_storage_directory_acl_normalizer.dart';
@@ -398,10 +404,10 @@ Duration _autoUpdateBootJitter() {
   return Duration(seconds: minSeconds + Random.secure().nextInt(rangeSeconds + 1));
 }
 
-/// Forces the app to terminate so the silent update helper can replace the
+/// Requests orderly termination so the silent update helper can replace the
 /// running executable. Goes through [WindowManagerService] when available
-/// (which already runs [shutdownApp]), then falls back to a hard exit if the
-/// process is still alive after [_silentUpdateExitGraceWindow].
+/// (which already runs [shutdownApp]). If the process stays alive, the helper
+/// defers installation instead of forcing unfinished work to terminate.
 ///
 /// Invoked only from `IAutoUpdateOrchestrator.applyPendingSilentUpdate` --
 /// never from the silent download path, which leaves the agent online.
@@ -421,7 +427,6 @@ Future<void> _closeApplicationForSilentUpdate({
     // Flip preventClose/closeToTray off so the close request actually exits
     // the window instead of hiding it to the tray.
     await service.allowQuitForUpdate();
-    unawaited(_scheduleSilentUpdateHardExitFallback());
     await service.close();
     return;
   }
@@ -482,25 +487,10 @@ IPoolDiscardInflightDiagnostics? _resolvePoolDiscardInflightDiagnostics(
   return null;
 }
 
-const Duration _silentUpdateExitGraceWindow = Duration(
-  seconds: autoUpdateSilentExitGraceSeconds,
-);
-
 AppLocalizations _silentUpdateLocalizations() {
   try {
     return lookupAppLocalizations(PlatformDispatcher.instance.locale);
   } on Object {
     return lookupAppLocalizations(const Locale('en'));
   }
-}
-
-Future<void> _scheduleSilentUpdateHardExitFallback() async {
-  await Future<void>.delayed(_silentUpdateExitGraceWindow);
-  developer.log(
-    'Silent update close did not terminate the process within '
-    '${_silentUpdateExitGraceWindow.inSeconds}s; forcing exit(0)',
-    name: 'plug_dependency_registrar',
-    level: 900,
-  );
-  exit(0);
 }

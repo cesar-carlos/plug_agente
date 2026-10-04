@@ -157,6 +157,18 @@ class AppDatabase extends _$AppDatabase with _AppDatabaseMigrationHelpers implem
     _walCheckpointTimer = null;
     await super.close();
   }
+
+  /// Only called after reversible maintenance has confirmed all writers idle.
+  /// A busy checkpoint is evidence that a filesystem snapshot is unsafe.
+  Future<void> checkpointAndCloseForUpdate() async {
+    _walCheckpointTimer?.cancel();
+    _walCheckpointTimer = null;
+    final rows = await customSelect('PRAGMA wal_checkpoint(TRUNCATE)').get();
+    if (rows.length != 1 || rows.single.read<int>('busy') != 0) {
+      throw StateError('SQLite checkpoint for update was not confirmed');
+    }
+    await close();
+  }
 }
 
 LazyDatabase _openConnection({

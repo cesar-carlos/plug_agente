@@ -14,6 +14,51 @@ from tool.appcast import appcast_manager
 
 
 class AppcastManagerTests(unittest.TestCase):
+    def test_manifest_binding_is_signed_and_tampering_is_detected(self) -> None:
+        from dataclasses import replace
+        from tool.appcast.appcast_signing import generate_keypair
+        private, public = generate_keypair()
+        context = replace(self.build_context(), manifest_url="https://example.com/manifest.json", manifest_sha256="a" * 64)
+        tree = appcast_manager.et.ElementTree(appcast_manager._base_rss_root())
+        appcast_manager.update_appcast_tree(tree, context, signing_private_key_b64=private)
+        appcast_manager.validate_appcast_tree(tree, context, public)
+        enclosure = tree.getroot().find("channel/item/enclosure")
+        enclosure.set(appcast_manager._plug_attr("manifestSha256"), "b" * 64)
+        with self.assertRaises(ValueError):
+            appcast_manager.validate_item(tree.getroot().find("channel/item"), context)
+        with self.assertRaises(ValueError):
+            appcast_manager.validate_appcast_tree(tree, context, public)
+
+    def test_same_version_preserves_each_channel(self) -> None:
+        from dataclasses import replace
+        context = self.build_context()
+        tree = appcast_manager.et.ElementTree(appcast_manager._base_rss_root())
+        appcast_manager.update_appcast_tree(tree, context)
+        appcast_manager.update_appcast_tree(tree, replace(context, channel="beta"))
+        channels = {appcast_manager._plug_channel(item.find("enclosure"))
+                    for item in tree.getroot().find("channel").findall("item")}
+        self.assertEqual(channels, {"stable", "beta"})
+
+    def test_republishing_signs_unsigned_item_and_rotates_signature(self) -> None:
+        from tool.appcast import appcast_signing
+        context = self.build_context()
+        tree = appcast_manager.et.ElementTree(appcast_manager._base_rss_root())
+        appcast_manager.update_appcast_tree(tree, context)
+        private_key, public_key = appcast_signing.generate_keypair()
+        appcast_manager.update_appcast_tree(tree, context, signing_private_key_b64=private_key)
+        payload = appcast_signing.EnclosureSignaturePayload(
+            version=context.version, os="windows", sha256=context.asset_sha256,
+            channel=context.channel, rollout_percentage=context.rollout_percentage,
+            asset_url=context.asset_url, asset_size=int(context.asset_size))
+        enclosure = tree.getroot().find("channel/item/enclosure")
+        signature = enclosure.get(appcast_manager._plug_attr("edSignature"))
+        self.assertTrue(appcast_signing.verify_payload(payload, signature, public_key))
+        next_key, next_public_key = appcast_signing.generate_keypair()
+        appcast_manager.update_appcast_tree(tree, context, signing_private_key_b64=next_key)
+        next_signature = tree.getroot().find("channel/item/enclosure").get(appcast_manager._plug_attr("edSignature"))
+        self.assertNotEqual(next_signature, signature)
+        self.assertTrue(appcast_signing.verify_payload(payload, next_signature, next_public_key))
+
     def build_context(
         self,
         *,

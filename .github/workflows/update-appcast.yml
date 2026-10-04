@@ -1,8 +1,22 @@
 name: Update Appcast on Release
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
+      rollout_percentage:
+        type: string
+        default: "100"
+      channel:
+        type: string
+        default: "stable"
+    secrets:
+      APPCAST_SIGNING_PRIVATE_KEY:
+        required: true
+      AUTO_UPDATE_FEED_PUBLIC_KEY:
+        required: true
   workflow_dispatch:
     inputs:
       release_tag:
@@ -25,9 +39,16 @@ on:
           - beta
           - internal
 
+concurrency:
+  group: plug-appcast-publish
+  cancel-in-progress: false
+
 jobs:
   update-appcast:
-    runs-on: windows-latest
+    runs-on: windows-2022
+    concurrency:
+      group: plug-main-mutation
+      cancel-in-progress: false
     env:
       MAX_APPCAST_ITEMS: "10"
     defaults:
@@ -41,8 +62,11 @@ jobs:
       asset_name: ${{ steps.asset.outputs.name }}
       asset_size: ${{ steps.asset.outputs.size }}
       asset_sha256: ${{ steps.asset.outputs.sha256 }}
+      manifest_url: ${{ steps.manifest.outputs.url }}
+      manifest_sha256: ${{ steps.manifest.outputs.sha256 }}
       channel: ${{ steps.channel.outputs.channel }}
       rollout_percentage: ${{ steps.rollout.outputs.rollout_percentage }}
+      commit_sha: ${{ steps.commit.outputs.sha }}
     permissions:
       contents: write
       actions: write
@@ -60,10 +84,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install Python dependencies
-        run: python3 -m pip install --quiet "cryptography>=42.0.0"
+        run: python3 -m pip install --quiet "cryptography>=42.0.0" "jsonschema>=4.0.0"
 
       - name: Run appcast tooling unit tests
-        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.appcast.test_appcast_signing -v
+        run: python3 -m unittest tool.appcast.test_appcast_manager tool.appcast.test_validate_release tool.appcast.test_appcast_signing tool.appcast.test_validate_launcher_status tool.updater.test_manifest tool.updater.test_verify_release tool.updater.test_installer -v
 
       - name: Ensure appcast signing tests did not skip
         shell: bash
@@ -79,7 +103,7 @@ jobs:
       - name: Resolve rollout percentage
         id: rollout
         env:
-          RAW_ROLLOUT_PERCENTAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.rollout_percentage || '100' }}
+          RAW_ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage || '100' }}
         run: |
           python3 << 'PYEOF'
           import os
@@ -101,7 +125,7 @@ jobs:
       - name: Resolve appcast channel
         id: channel
         env:
-          RAW_CHANNEL: ${{ github.event_name == 'workflow_dispatch' && inputs.channel || 'stable' }}
+          RAW_CHANNEL: ${{ inputs.channel || 'stable' }}
         run: |
           python3 << 'PYEOF'
           import os
@@ -120,7 +144,8 @@ jobs:
         id: ctx
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          TAG: ${{ inputs.release_tag }}
+          FEED_CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
           python3 << 'PY'
           import json
@@ -139,6 +164,10 @@ jobs:
               text=True,
           )
           data = json.loads(raw)
+          if data.get("draft"):
+              raise SystemExit("Draft releases cannot be published to the feed")
+          if data.get("prerelease") and os.environ["FEED_CHANNEL"] == "stable":
+              raise SystemExit("Prereleases cannot be published to stable")
           body = data.get("body") or ""
           with open("release_body.txt", "w", encoding="utf-8") as f:
               f.write(body)
@@ -204,20 +233,20 @@ jobs:
       - name: Get asset info
         id: asset
         env:
-          ASSET_PATTERN: "PlugAgente-Setup-"
+          EXPECTED_ASSET: PlugAgente-Setup-${{ steps.release.outputs.version }}.exe
         run: |
-          ASSET_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          ASSET_RESPONSE=$(curl --fail-with-body -sS -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "${{ github.api_url }}/repos/${{ github.repository }}/releases/${{ steps.ctx.outputs.release_id }}/assets")
 
-          ASSET_CHOSEN=$(echo "$ASSET_RESPONSE" | python3 -c "
-          import sys, json
+          ASSET_CHOSEN=$(echo "$ASSET_RESPONSE" | python3 -c '
+          import sys, json, os
           assets = json.load(sys.stdin)
-          exes = [a for a in assets if a['name'].endswith('.exe')]
-          preferred = [a for a in exes if '${{ env.ASSET_PATTERN }}' in a['name']]
-          chosen = (preferred or exes)[0] if (preferred or exes) else None
-          if chosen:
-              print(chosen['url'] + '|' + chosen['browser_download_url'] + '|' + str(chosen.get('size', '')) + '|' + chosen['name'])
-          " 2>/dev/null || echo "")
+          matches = [a for a in assets if a["name"] == os.environ["EXPECTED_ASSET"]]
+          if len(matches) != 1:
+              raise SystemExit("Expected exactly one matching installer asset")
+          chosen = matches[0]
+          print(chosen["url"] + "|" + chosen["browser_download_url"] + "|" + str(chosen["size"]) + "|" + chosen["name"])
+          ')
           ASSET_API_URL=$(echo "$ASSET_CHOSEN" | cut -d'|' -f1)
           ASSET_URL=$(echo "$ASSET_CHOSEN" | cut -d'|' -f2)
           ASSET_SIZE=$(echo "$ASSET_CHOSEN" | cut -d'|' -f3)
@@ -229,7 +258,7 @@ jobs:
           fi
 
           ASSET_DOWNLOAD_PATH="release_asset_${ASSET_NAME}"
-          curl -L -sS \
+          curl --fail-with-body -L -sS \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/octet-stream" \
             "$ASSET_API_URL" \
@@ -254,7 +283,7 @@ jobs:
           print(h.hexdigest())
           PYEOF
           )
-          rm -f "$ASSET_DOWNLOAD_PATH"
+          echo "path=$ASSET_DOWNLOAD_PATH" >> "$GITHUB_OUTPUT"
 
           {
             echo "url=$ASSET_URL"
@@ -263,6 +292,44 @@ jobs:
             echo "name=$ASSET_NAME"
             echo "sha256=$ASSET_SHA256"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Verify installer Authenticode
+        shell: pwsh
+        env:
+          INSTALLER_PATH: ${{ steps.asset.outputs.path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $signature = Get-AuthenticodeSignature -LiteralPath $env:INSTALLER_PATH
+          if ($signature.Status -ne 'Valid') { throw 'Installer Authenticode validation failed' }
+          $chain = [Security.Cryptography.X509Certificates.X509Chain]::new()
+          $chain.ChainPolicy.RevocationMode = 'Online'
+          $chain.ChainPolicy.RevocationFlag = 'ExcludeRoot'
+          if (!$chain.Build($signature.SignerCertificate)) { throw 'Installer certificate trust is inconclusive or revoked' }
+
+      - name: Verify signed release manifest
+        id: manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          VERSION_SHORT: ${{ steps.release.outputs.version }}
+          FULL_VERSION: ${{ steps.release.outputs.full_version }}
+          RELEASE_CHANNEL: ${{ steps.channel.outputs.channel }}
+          INSTALLER_PATH: ${{ steps.asset.outputs.path }}
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          MANIFEST_NAME="PlugAgente-Manifest-${VERSION_SHORT}.json"
+          gh release download "$RELEASE_TAG" --pattern "$MANIFEST_NAME" --dir manifest-asset
+          python3 -m tool.updater.verify_release --manifest "manifest-asset/$MANIFEST_NAME" --installer "$INSTALLER_PATH" --version "$FULL_VERSION" --channel "$RELEASE_CHANNEL" --source-commit "$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          python3 << 'PY'
+          import hashlib, os
+          from pathlib import Path
+          name = 'PlugAgente-Manifest-' + os.environ['VERSION_SHORT'] + '.json'
+          digest = hashlib.sha256((Path('manifest-asset') / name).read_bytes()).hexdigest()
+          url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}/{name}"
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'url={url}\nsha256={digest}\n')
+          PY
 
       - name: Validate release consistency
         env:
@@ -319,10 +386,7 @@ jobs:
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
           APPCAST_SIGNING_PRIVATE_KEY: ${{ secrets.APPCAST_SIGNING_PRIVATE_KEY }}
         run: |
-          # When APPCAST_SIGNING_PRIVATE_KEY is configured, the published item
-          # gets a plug:edSignature attribute that clients with
-          # AUTO_UPDATE_REQUIRE_FEED_SIGNATURE=true validate before
-          # downloading. Empty secret => unsigned item (backward compat).
+          test -n "$APPCAST_SIGNING_PRIVATE_KEY" || { echo "Feed signing key is required" >&2; exit 1; }
           python3 tool/appcast/appcast_manager.py update \
             --appcast appcast.xml \
             --version-short "${{ steps.release.outputs.version }}" \
@@ -332,6 +396,8 @@ jobs:
             --asset-sha256 "${{ steps.asset.outputs.sha256 }}" \
             --asset-name "${{ steps.asset.outputs.name }}" \
             --channel "${{ steps.channel.outputs.channel }}" \
+            --manifest-url "${{ steps.manifest.outputs.url }}" \
+            --manifest-sha256 "${{ steps.manifest.outputs.sha256 }}" \
             --rollout-percentage "${{ steps.rollout.outputs.rollout_percentage }}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}" \
@@ -339,6 +405,7 @@ jobs:
 
       - name: Validate appcast.xml
         env:
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
           FULL_VERSION: ${{ steps.release.outputs.full_version }}
           MAX_APPCAST_ITEMS: ${{ env.MAX_APPCAST_ITEMS }}
           VERSION_SHORT: ${{ steps.release.outputs.version }}
@@ -352,11 +419,15 @@ jobs:
             --asset-sha256 "${{ steps.asset.outputs.sha256 }}" \
             --asset-name "${{ steps.asset.outputs.name }}" \
             --channel "${{ steps.channel.outputs.channel }}" \
+            --manifest-url "${{ steps.manifest.outputs.url }}" \
+            --manifest-sha256 "${{ steps.manifest.outputs.sha256 }}" \
             --rollout-percentage "${{ steps.rollout.outputs.rollout_percentage }}" \
             --release-body-file release_body.txt \
-            --max-items "${MAX_APPCAST_ITEMS}"
+            --max-items "${MAX_APPCAST_ITEMS}" \
+            --public-keys "$AUTO_UPDATE_FEED_PUBLIC_KEY"
 
       - name: Commit and push
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -364,31 +435,9 @@ jobs:
           git add appcast.xml
           git diff --staged --quiet || git commit -m "Update appcast.xml for ${{ steps.release.outputs.tag }}"
           git push origin main
-
-  dispatch-main-appcast-publish:
-    if: ${{ github.event_name == 'release' }}
-    needs: update-appcast
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Dispatch appcast publish from main
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.update-appcast.outputs.tag }}
-          ROLLOUT_PERCENTAGE: ${{ needs.update-appcast.outputs.rollout_percentage }}
-          CHANNEL: ${{ needs.update-appcast.outputs.channel }}
-        run: |
-          gh workflow run "${GITHUB_WORKFLOW}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --ref main \
-            -f release_tag="${RELEASE_TAG}" \
-            -f rollout_percentage="${ROLLOUT_PERCENTAGE}" \
-            -f channel="${CHANNEL}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   deploy-pages:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: update-appcast
     runs-on: ubuntu-latest
     permissions:
@@ -402,7 +451,7 @@ jobs:
       - name: Checkout published appcast
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.update-appcast.outputs.commit_sha }}
           fetch-depth: 1
 
       - name: Configure Pages
@@ -423,7 +472,6 @@ jobs:
         uses: actions/deploy-pages@v5
 
   smoke-validate-appcast:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs:
       - update-appcast
       - deploy-pages
@@ -440,7 +488,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.update-appcast.outputs.commit_sha }}
           fetch-depth: 1
 
       - name: Setup Python
@@ -453,8 +501,12 @@ jobs:
         with:
           name: release-body
 
+      - name: Install signature verifier
+        run: python3 -m pip install --quiet "cryptography>=42.0.0"
+
       - name: Smoke validate published appcast feed
         env:
+          AUTO_UPDATE_FEED_PUBLIC_KEY: ${{ secrets.AUTO_UPDATE_FEED_PUBLIC_KEY }}
           ASSET_NAME: ${{ needs.update-appcast.outputs.asset_name }}
           ASSET_SHA256: ${{ needs.update-appcast.outputs.asset_sha256 }}
           ASSET_SIZE: ${{ needs.update-appcast.outputs.asset_size }}
@@ -471,6 +523,9 @@ jobs:
             --asset-sha256 "${ASSET_SHA256}" \
             --asset-name "${ASSET_NAME}" \
             --channel "${CHANNEL}" \
+            --manifest-url "${{ needs.update-appcast.outputs.manifest_url }}" \
+            --manifest-sha256 "${{ needs.update-appcast.outputs.manifest_sha256 }}" \
+            --public-keys "$AUTO_UPDATE_FEED_PUBLIC_KEY" \
             --rollout-percentage "${ROLLOUT_PERCENTAGE}" \
             --release-body-file release_body.txt \
             --max-items "${MAX_APPCAST_ITEMS}" \

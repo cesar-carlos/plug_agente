@@ -720,7 +720,7 @@ void main() {
         );
       });
 
-      test('auto-applies staged pending during quiet hours instead of skipping', () async {
+      test('keeps staged pending ready without applying during quiet hours', () async {
         dotenv.clean();
         dotenv.loadFromString(
           envString:
@@ -767,8 +767,8 @@ void main() {
         final result = await coordinator.checkSilently();
 
         expect(probe.callCount, 0, reason: 'quiet hours must still skip new probes');
-        expect(installer.launchHelperCount, 1);
-        expect(closeCalled, isTrue);
+        expect(installer.launchHelperCount, 0);
+        expect(closeCalled, isFalse);
         expect(result.isSuccess(), isTrue);
         result.fold(
           (outcome) => expect(outcome, SilentUpdateOutcome.installerReady),
@@ -1103,7 +1103,7 @@ void main() {
         expect(store.getInt('auto_update.automatic_failure_count'), isNull);
       });
 
-      test('fails and clears when launched helper times out without completion', () async {
+      test('retains launched helper ownership when completion is unknown after deadline', () async {
         final store = InMemoryAppSettingsStore();
         final now = DateTime(2026, 6, 10, 12);
         final launchedAt = now.subtract(const Duration(hours: 2));
@@ -1124,12 +1124,12 @@ void main() {
 
         await coordinator.reconcilePendingAndSchedule();
 
-        expect(store.getString('auto_update.pending_silent_update'), isNull);
+        expect(store.getString('auto_update.pending_silent_update'), isNotNull);
         expect(
           coordinator.lastAutomaticDiagnostics?.completionSource,
-          UpdateCheckCompletionSource.automaticPendingFailed,
+          UpdateCheckCompletionSource.automaticInstallStarted,
         );
-        expect(coordinator.lastAutomaticDiagnostics?.automaticFailureCount, 1);
+        expect(store.getInt('auto_update.automatic_failure_count'), isNull);
       });
 
       test('resets breaker on terminal helper success even when app version is still older', () async {
