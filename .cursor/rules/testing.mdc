@@ -28,7 +28,9 @@ Para convencoes especificas de Dart/Flutter, use `testing_dart_flutter.mdc`.
 
 - Cada teste deve validar um comportamento claro
 - Use AAA: Arrange, Act, Assert
-- Descreva testes no formato `should ... when ...`
+- Descreva o teste pelo comportamento. `should ... when ...` e uma frase direta
+  no mesmo estilo do arquivo (`reads and writes dark mode preference`) sao
+  aceitaveis
 - Nao compartilhe estado entre testes
 - Use setup e teardown para preparar e limpar dependencias
 

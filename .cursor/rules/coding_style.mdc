@@ -204,12 +204,14 @@ switch (result) {
 - Evite dot shorthand se ele dificultar a navegacao ou a leitura fora do contexto
 
 ```dart
-return ThemeData(
-  colorScheme: .fromSeed(seedColor: Colors.blue),
-);
+enum ConnectionPhase { ready, pending }
 
-alignment: .center;
+final phase = ConnectionPhase.ready;
+final isReady = phase == .ready;
 ```
+
+Em superficie Fluent, consuma os tokens Fluent do app. Nao use `ThemeData` nem
+`Colors` de Material como atalho; o dono disso e `flutter_widgets.mdc`.
 
 ### Tear-offs
 
@@ -314,16 +316,11 @@ final class Disconnected extends ConnectionState {}
 
 - Use extensions quando o comportamento fizer sentido semantico no tipo receptor
 - Prefira extensoes em `BuildContext` para helpers de tema, layout e acesso a
-  tokens
+  tokens. Neste repositorio o acesso vigente e `FluentTheme` via
+  `AppThemeColorsContext` em `lib/core/theme/app_colors.dart`
 - Evite colocar regra de negocio ou side effects em extensoes de tipos
   primitivos
 - Se o receiver nao melhorar a leitura no ponto de uso, prefira funcao nomeada
-
-```dart
-extension AppThemeContext on BuildContext {
-  ColorScheme get colorScheme => Theme.of(this).colorScheme;
-}
-```
 
 ### Extension Types
 
@@ -336,10 +333,10 @@ extension AppThemeContext on BuildContext {
 
 ## JSON e Codegen
 
-- Prefira `json_serializable`/`json_annotation` quando o projeto usar models
-  serializaveis
-- Use `FieldRename.snake` quando a API usar `snake_case`
-- Reexecute `build_runner` depois de mudar modelos anotados ou qualquer codigo
+- Este repositorio gera codigo com Drift e `build_runner`. Nao introduza
+  `json_serializable` nem `json_annotation`
+- JSON pontual de fronteira fica no mapper dono do payload
+- Reexecute `build_runner` depois de mudar modelos Drift ou qualquer codigo
   dirigido por geracao
 - Se o arquivo gerado ainda nao existir, erros como `Target of URI hasn't been
 generated` sao esperados ate a primeira geracao

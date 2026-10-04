@@ -1,6 +1,5 @@
 ---
 description: Project-specific rules for plug_agente application
-globs: ["lib/**/*.dart", "pubspec.yaml"]
 alwaysApply: true
 ---
 
@@ -157,8 +156,13 @@ strings para representar erro.
   repositories e gateways
 - Todo fluxo falivel deve terminar em `Success` ou `Failure` tipada, com
   significado claro para quem consome a API
-- Traduza excecoes de infraestrutura para failures especificas:
-  `NetworkFailure`, `ConnectionFailure`, `ValidationFailure`, `ServerFailure`
+- Traduza excecoes de infraestrutura para um subtipo concreto de `Failure` ja
+  declarado em `lib/domain/errors/failures.dart`. Acoes agendadas usam a
+  hierarquia de `lib/domain/actions/action_failure.dart`. Escolha pelo
+  significado: rede, conexao, banco, consulta, validacao, nao encontrado,
+  configuracao, compressao, notificacao ou servidor. Nao invente subtipo quando
+  um destes cobre o caso, e nao use `ServerFailure` como coringa de ODBC ou
+  banco
 - Preserve `cause` e `context` quando mapear a falha
 - Separe mensagem segura para usuario de contexto tecnico para log/diagnostico
 - Exponha para a UI mensagens claras e acionaveis; nao exponha stack trace bruto
@@ -200,20 +204,10 @@ Future<Result<User>> getById(String id) async {
   `API_TEST_BASE_URL` para API; `ODBC_TEST_DSN*` para ODBC
 - Testes E2E devem usar `skip` quando variaveis nao estiverem definidas, com
   mensagem clara
-- Rode `dart run tool/e2e/check_e2e_env.dart` para verificar configuracao antes dos
-  testes
-- Consulte `docs/testing/e2e_setup.md` para o indice E2E e
-  `docs/testing/e2e_hub.md` / `docs/testing/e2e_odbc.md` para familias
-- Acoes agendadas (`agent.action.*`): gate local/CI sem Hub via
-  `python tool/agent_actions/run_agent_actions_operational_gate.py` ou
-  `python tool/agent_actions/homologate_hub_agent_actions.py --run-contract-tests` (manifestos
-  `tool/agent_actions/manifests/agent_actions_*_test_paths.txt`); preflight estatico:
-  `python tool/agent_actions/preflight_agent_actions_production.py`; live Hub opt-in com `RUN_LIVE_HUB_*`,
-  `E2E_HUB_URL`, `E2E_HUB_TOKEN`,
-  assinatura `PAYLOAD_SIGNING_*` e `-ValidateLiveEnv -RunLiveTests`; preflight live:
-  `dart run tool/e2e/validate_live_hub_agent_actions_env.dart` (ver
-  `docs/implemente/plano_acoes_agendadas_execucoes.md` e
-  `docs/testing/e2e_hub.md`)
+- Rode `dart run tool/e2e/check_e2e_env.dart` para verificar a configuracao
+  antes dos testes
+- Indice, familias e o gate de acoes agendadas (`agent.action.*`, inclusive
+  live Hub opt-in): `docs/testing/e2e_setup.md`
 
 ## Expectativas de Teste no Repositorio
 
@@ -231,18 +225,13 @@ Future<Result<User>> getById(String id) async {
 
 ## Regra de UI para Falhas
 
-```dart
-result.fold(
-  (User user) => state = Loaded(user),
-  (Failure failure) {
-    failure.log();
-    state = ErrorState(
-      message: failure.message,
-      canRetry: failure.isTransient,
-    );
-  },
-);
-```
+Na fronteira com a tela, faca `fold` do `Result` no estado que a pagina ou o
+provider ja usa:
+
+- no `Success`, atualize esse estado com o valor
+- no `Failure`, chame `failure.log()` e mostre `failure.message`
+- use `failure.isTransient` so para habilitar retry
+- nao invente tipos de estado como `Loaded` ou `ErrorState`
 
 ## Desktop e Runtime
 
@@ -257,16 +246,12 @@ result.fold(
 
 ## Entry Point
 
-```dart
-Future<void> main(List<String> args) async {
-  WidgetsFlutterBinding.ensureInitialized();
+O bootstrap vigente esta em `lib/main.dart`: `runZonedGuarded`,
+`ErrorLoggingBootstrap`, `AppInitializer` e, em falha, `BootstrapFailureApp`.
 
-  await dotenv.load(fileName: '.env');
-  setupDependencies();
-
-  runApp(const MyApp());
-}
-```
+Nao recrie um `main` paralelo com `dotenv.load` e `setupDependencies()` soltos.
+Boot, DI e ambiente passam por `AppInitializer`. Janela antes de `runApp()`
+esta em "Desktop e Runtime".
 
 ## Checklist de Revisao
 

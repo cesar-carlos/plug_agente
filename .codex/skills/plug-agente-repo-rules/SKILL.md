@@ -18,30 +18,16 @@ topic you are touching.
 3. Read [project_specifics.mdc](../../../.cursor/rules/project_specifics.mdc)
    before code changes that touch architecture, dependencies, transport,
    persistence, runtime, failures, or tests.
-4. Load only the thematic rule that owns the task after the two files above.
+4. Load only the thematic rule that owns the task. The catalog is
+   `rules_index.mdc`.
 5. If multiple topics overlap, keep one owner per theme and let
    `project_specifics.mdc` win only for repository-specific decisions.
 
-## Task Routing
+## Routing
 
-- General code hygiene, naming, duplication, refactoring:
-  [general_rules.mdc](../../../.cursor/rules/general_rules.mdc)
-- Layering, imports, DTO/domain boundaries, mappings:
-  [clean_architecture.mdc](../../../.cursor/rules/clean_architecture.mdc)
-- SRP/OCP/LSP/ISP/DIP, code smells, abstraction choices:
-  [solid_principles.mdc](../../../.cursor/rules/solid_principles.mdc)
-- Dart syntax, modern language features, toolchain, logging:
-  [coding_style.mdc](../../../.cursor/rules/coding_style.mdc)
-- Nullability and safe optional handling:
-  [null_safety.mdc](../../../.cursor/rules/null_safety.mdc)
-- Widget structure, shared components, rebuild performance:
-  [flutter_widgets.mdc](../../../.cursor/rules/flutter_widgets.mdc)
-- Desktop UX, Fluent-first surfaces, visual consistency:
-  [ui_ux_design.mdc](../../../.cursor/rules/ui_ux_design.mdc)
-- Test strategy and failure-path coverage:
-  [testing.mdc](../../../.cursor/rules/testing.mdc)
-- Dart/Flutter test harnesses and widget tests:
-  [testing_dart_flutter.mdc](../../../.cursor/rules/testing_dart_flutter.mdc)
+The ownership table in
+[rules_index.mdc](../../../.cursor/rules/rules_index.mdc) is the only catalog.
+Do not copy rule names or rule text into this skill.
 
 ## Test-Specific Rule
 
@@ -49,17 +35,6 @@ Even for test-only tasks, also read
 [project_specifics.mdc](../../../.cursor/rules/project_specifics.mdc).
 Repository-specific expectations for `Result<T>`, typed failures, E2E
 environment, protocol contracts, and user-safe error messaging live there.
-
-## High-Value Repository Context
-
-- The app is Flutter desktop-first for Windows.
-- The app bridges a central hub and local databases through Socket.IO and ODBC.
-- Prefer `Provider`, `get_it`, `result_dart`, `drift`, `socket_io_client`,
-  `odbc_fast`, `go_router`, and Fluent UI as defined by the repo rules.
-- `Result<T>` with typed failures is the official error strategy; do not switch
-  to `Either`/`dartz`.
-- Reusable UI patterns should evolve through shared components and theme tokens,
-  not by duplicating layout.
 
 ## Sensitive Areas
 

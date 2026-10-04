@@ -1,6 +1,5 @@
 ---
 description: Index of available Cursor rules in this repo
-globs: ["**/*"]
 alwaysApply: true
 ---
 
@@ -8,75 +7,39 @@ alwaysApply: true
 
 ## Behavioral Guardrails
 
-- Never commit, push, or create new documentation unless explicitly requested
-- Never create git branches unless explicitly requested
-- Prefer self-explanatory code via naming, structure, and focused abstractions
-- Never swallow errors silently
-- Prefer clear, actionable failures over generic error messages
-- Do not duplicate the same rule across multiple files; keep one owner and use
-  short cross-references elsewhere
+- Nao faca commit, push nem crie documentacao nova sem pedido explicito
+- Nao crie branch git sem pedido explicito
+- Prefira codigo autoexplicativo por nome, estrutura e abstracoes focadas
+- Nunca engula erro em silencio
+- Prefira falha clara e acionavel a mensagem generica
+- Nao duplique a mesma regra em varios arquivos; um tema tem um dono e os
+  demais fazem referencia curta
 
-## Rule Categories
+## Ownership
 
-### Universal Rules
+Cada tema tem um unico arquivo dono. Quando a regra tiver parte generica e
+parte local, a parte generica fica na rule tematica e `project_specifics.mdc`
+guarda so o delta deste repositorio.
 
-Use these as language-agnostic guidance that can be reused in other stacks.
+Carregue somente o dono da tarefa. Rules universais valem em qualquer stack.
+Rules de Dart e Flutter valem so para codigo Dart/Flutter.
 
-- **`general_rules.mdc`**: cross-cutting behavior, Clean Code heuristics,
-  docs/comments policy, reuse, duplication, magic numbers, refactoring strategy
-- **`clean_architecture.mdc`**: layer boundaries and dependency direction
-- **`solid_principles.mdc`**: SRP/OCP/LSP/ISP/DIP design guidance and practical
-  code smell heuristics
-- **`testing.mdc`**: universal test strategy, isolation, mocking, failure-path
-  coverage, and tests as behavior contracts
+- `general_rules.mdc`: comportamento transversal, Clean Code, docs/comentarios,
+  reuso, duplicacao, numeros magicos, refatoracao
+- `clean_architecture.mdc`: fronteira de camadas e direcao de dependencia
+- `solid_principles.mdc`: SRP/OCP/LSP/ISP/DIP e heuristicas de code smell
+- `testing.mdc`: estrategia universal de teste, isolamento, mock, caminho de
+  falha e teste como contrato de comportamento
+- `coding_style.mdc`: sintaxe Dart, nomes, imports, formatacao, async, logging,
+  tooling e recursos modernos da linguagem
+- `null_safety.mdc`: modelagem de nulabilidade e acesso seguro
+- `flutter_widgets.mdc`: composicao de widget, componente compartilhado, estado
+  local, rebuild, layout e composicao compativel com Provider
+- `ui_ux_design.mdc`: design system desktop, interacao, acessibilidade,
+  janela redimensionavel e Fluent como linguagem principal
+- `testing_dart_flutter.mdc`: teste Dart/Flutter, widget test, harness,
+  assertion, mock e fake
+- `project_specifics.mdc`: stack, transporte Plug, failures tipadas, runtime
+  desktop, persistencia, l10n e ambiente de teste
 
-### Dart and Flutter Rules
-
-Use these only when the codebase is Dart/Flutter.
-
-- **`coding_style.mdc`**: Dart syntax, naming, imports, formatting,
-  async/logging, tooling, and modern language features
-- **`null_safety.mdc`**: nullability modeling and safe access patterns
-- **`flutter_widgets.mdc`**: widget composition, shared component strategy,
-  local UI state, build/rebuild performance, layout primitives, and
-  Provider-friendly composition
-- **`ui_ux_design.mdc`**: desktop design system, interaction patterns,
-  accessibility, responsive desktop behavior, and Fluent-first guidance
-- **`testing_dart_flutter.mdc`**: Dart/Flutter test code, widget tests, test
-  harnesses, assertion preferences, mocks, and fakes
-
-### Project-Specific Rules
-
-- **`project_specifics.mdc`**: repo-specific stack choices, transport contract,
-  typed failures, desktop/runtime, persistence, l10n, and test environment
-  decisions
-
-## Coordination Rules
-
-- Each theme has a single owner file; when topics overlap, keep the full rule
-  only in the owner and reference it from the others
-- If a rule has both generic and repo-specific aspects, keep the generic
-  guidance in the thematic rule and leave only the repository delta in
-  `project_specifics.mdc`
-
-- General behavior, Clean Code, docs/comments, reuse, duplication, refactoring
-  strategy:
-  `general_rules.mdc`
-- Layering and import direction: `clean_architecture.mdc`
-- Class and interface design: `solid_principles.mdc`
-- Test strategy in any stack: `testing.mdc`
-- Dart syntax/style/tooling: `coding_style.mdc`
-- Dart nullability: `null_safety.mdc`
-- Flutter widget/layout code: `flutter_widgets.mdc`
-- Desktop UX/design: `ui_ux_design.mdc`
-- Dart/Flutter test code: `testing_dart_flutter.mdc`
-- Repo-specific packages, protocol rules, failure mapping, runtime, persistence,
-  and test environment decisions:
-  `project_specifics.mdc`
-
-## Copying to Other Projects
-
-- For non-Dart projects, keep only the universal rules
-- For Dart/Flutter projects, keep the universal rules plus the Dart/Flutter rules
-- Replace `project_specifics.mdc` with one tailored to the target repository
-- Keep `readme.md` synchronized with this index
+Reaproveitar este conjunto em outro repositorio: `.cursor/rules/readme.md`.

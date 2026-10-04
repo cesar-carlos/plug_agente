@@ -212,7 +212,8 @@ TextField(
 ## Consumo de Tema
 
 - Consuma cores, tipografia, spacing e radius a partir do theme/tokens do app
-- Use `ThemeExtension` para tokens que nao cabem no `ThemeData` padrao
+- Tokens que nao cabem no tema Fluent ficam em extensao do `FluentTheme`, como
+  `AppThemeColorsContext` em `lib/core/theme/app_colors.dart`
 - Nao hardcode design system em widgets compartilhados
 - Em superficies Fluent, prefira tokens e componentes do tema Fluent do app em
   vez de adaptar APIs Material por conveniencia

@@ -1,6 +1,5 @@
 ---
 description: General rules - cross-cutting principles and code hygiene
-globs: ["lib/**/*.dart", "test/**/*.dart"]
 alwaysApply: true
 ---
 

@@ -36,9 +36,11 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
 
 ## Regras de Dependencia
 
-- `domain` pode depender apenas de `domain`, `core` e `shared`
-- `domain` nao pode importar Flutter, framework UI, IO ou detalhes de
-  infraestrutura
+- `domain` pode depender apenas de `domain` e de modulos de `core` ou `shared`
+  que nao importem Flutter, IO, UI, rede ou infraestrutura
+- `domain` nao pode importar Flutter, framework UI, IO, detalhes de
+  infraestrutura, nem arquivos de `core` que facam isso, como DI, runtime de
+  janela ou clientes
 - `application` pode depender de `domain` e `core`
 - `application` nao pode importar `infrastructure` nem `presentation`
 - `infrastructure` pode depender de `domain` e `core`
@@ -78,7 +80,8 @@ Para isso, use `coding_style.mdc`, `solid_principles.mdc` e
 
 ## Sinais de Violacao
 
-- `domain` conhecendo `Dio`, `Socket`, `BuildContext` ou `Widget`
+- `domain` conhecendo `Dio`, `Socket`, `BuildContext`, `Widget`, service
+  locator ou runtime de janela
 - `presentation` chamando datasource, repository concreto ou client de rede
 - `application` importando widget, provider ou classe de infraestrutura
 - entidades com logica de persistencia, serializacao de transporte ou estado de

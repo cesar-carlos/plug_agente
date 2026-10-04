@@ -67,6 +67,9 @@ Hoje este conjunto esta orientado a:
 
 ## Reaproveitando em Outro Projeto
 
+Este `readme.md` e o dono da receita de copia. `rules_index.mdc` apenas aponta
+para ca.
+
 ### Projeto de outra linguagem
 
 Copie apenas:
@@ -111,7 +114,8 @@ hibridas precisam refletir isso explicitamente na rule.
 Para manter baixo acoplamento, nem toda rule fica ativa o tempo todo:
 
 - Sempre ativas (`alwaysApply: true`), por serem transversais:
-  `rules_index.mdc`, `general_rules.mdc` e `project_specifics.mdc`
+  `rules_index.mdc`, `general_rules.mdc` e `project_specifics.mdc`. Essas tres
+  nao declaram `globs`: com `alwaysApply: true` o glob e ignorado
 - Escopadas por `globs` (`alwaysApply: false`): as demais rules tematicas, que
   so entram em contexto quando a tarefa toca os arquivos correspondentes
 
@@ -121,7 +125,8 @@ carrega regra de widget.
 ## Ajustando Globs
 
 Se a estrutura do projeto mudar, atualize o frontmatter da rule tematica e
-mantenha `alwaysApply: false` para que o escopo por `globs` seja respeitado:
+mantenha `alwaysApply: false` para que o escopo por `globs` seja respeitado.
+Nao adicione `globs` em rule com `alwaysApply: true`.
 
 ```yaml
 ---
