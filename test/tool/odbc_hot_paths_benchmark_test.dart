@@ -22,6 +22,7 @@ import 'package:plug_agente/infrastructure/pool/direct_odbc_connection_limiter.d
 import 'package:result_dart/result_dart.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../tool/benchmarks/benchmark_vm_diagnostics.dart';
 import '../helpers/mock_odbc_connection_settings.dart';
 
 class _BenchmarkOdbcService extends Mock implements OdbcService {}
@@ -29,6 +30,29 @@ class _BenchmarkOdbcService extends Mock implements OdbcService {}
 class _BenchmarkConnectionPool extends Mock implements IConnectionPool {}
 
 void main() {
+  if (Platform.environment['BENCHMARK_HOT_PATHS_DIAGNOSTICS'] == '1') {
+    test(
+      'profiles construction and empty batch execution outside timing gates',
+      () async {
+        registerFallbackValue(const ConnectionOptions());
+        registerFallbackValue(const StatementOptions());
+        registerFallbackValue(const ConnectionAcquireOptions());
+        final metrics = MetricsCollector();
+        addTearDown(metrics.dispose);
+        final report = await captureBenchmarkDiagnostics(() async {
+          for (var index = 0; index < 1000; index++) {
+            await _executeEmptyBatch(_createExecutor(metrics));
+          }
+        });
+        final path =
+            Platform.environment['BENCHMARK_HOT_PATHS_DIAGNOSTICS_OUTPUT'] ?? 'build/hot-paths-diagnostics.json';
+        File(path).writeAsStringSync(jsonEncode(report));
+      },
+      timeout: Timeout.none,
+      tags: const ['perf'],
+    );
+    return;
+  }
   test(
     'emits ODBC hot-path benchmark samples',
     () async {
@@ -77,71 +101,31 @@ void main() {
         ),
       ];
       scenarios.add(
-        await _measureAsync('read_only_batch_worker_warmup', () async {
-          final service = _BenchmarkOdbcService();
-          final pool = _BenchmarkConnectionPool();
-          when(() => pool.acquire('DSN=benchmark', options: any(named: 'options'))).thenAnswer(
-            (_) async => const Success('worker'),
-          );
-          when(() => pool.release('worker')).thenAnswer(
-            (_) async => const Success(unit),
-          );
-          final manager = OdbcGatewayConnectionManager(
-            service: service,
-            connectionPool: pool,
-            directConnectionLimiter: DirectOdbcConnectionLimiter(
-              maxConcurrent: 2,
-              acquireTimeout: const Duration(seconds: 1),
-            ),
-            metrics: metrics,
-          );
-          final executor = OdbcReadOnlyBatchParallelExecutor(
-            connectionManager: manager,
-            queryRunner: OdbcQueryRunner(
-              queries: service,
-              metrics: metrics,
-              statementExecutor: OdbcStatementExecutor(
-                service: service,
-                metrics: metrics,
-                markConnectionForDiscard: manager.markConnectionForDiscard,
-              ),
-              resultEncodingExecutor: OdbcResultEncodingExecutor(service),
-              markConnectionForDiscard: manager.markConnectionForDiscard,
-            ),
-            optionsResolver: OdbcConnectionOptionsResolver(
-              MockOdbcConnectionSettings(poolSize: 4),
-            ),
-            metrics: metrics,
-            parallelSemaphore: PoolSemaphore(2),
-            uuid: const Uuid(),
-            recordInfrastructureFailure: ({required originalSql, required errorMessage, rpcRequestId}) {},
-          );
-          final result = await executor.execute(
-            agentId: 'benchmark',
-            commands: const <SqlCommand>[],
-            connectionString: 'DSN=benchmark',
-            databaseConfig: DatabaseConfig.sqlServer(
-              driverName: 'driver',
-              username: 'user',
-              password: 'password',
-              database: 'database',
-              server: 'localhost',
-              port: 1433,
-            ),
-            options: const SqlExecutionOptions(maxParallelReadOnlyBatchItems: 2),
-            timeout: const Duration(seconds: 1),
-            batchSqlPreview: '',
-            poolSize: 4,
-          );
-          expect(result.isSuccess(), isTrue);
+        await _measureAsync('construct_and_execute_empty_batch', () async {
+          await _executeEmptyBatch(_createExecutor(metrics));
         }, payloadBytes: 0),
+      );
+      scenarios.add(_measure('batch_executor_construction', () => _createExecutor(metrics), payloadBytes: 0));
+      final executor = _createExecutor(metrics);
+      scenarios.add(
+        await _measureAsync(
+          'empty_batch_first_execution',
+          () => _executeEmptyBatch(executor),
+          payloadBytes: 0,
+          iterations: 1,
+          warmupIterations: 0,
+        ),
+      );
+      scenarios.add(
+        await _measureAsync('empty_batch_warmed_execution', () => _executeEmptyBatch(executor), payloadBytes: 0),
       );
       final payload = <String, Object>{
         'benchmark': 'odbc_hot_paths',
+        'harness_version': 2,
         'scenarios': scenarios,
       };
       stdout.writeln(jsonEncode(payload));
-      expect(scenarios, hasLength(4));
+      expect(scenarios, hasLength(7));
     },
     tags: const ['perf'],
   );
@@ -151,8 +135,12 @@ Future<Map<String, Object>> _measureAsync(
   String scenario,
   Future<void> Function() operation, {
   required int payloadBytes,
+  int iterations = 100,
+  int warmupIterations = 10,
 }) async {
-  const iterations = 30;
+  for (var index = 0; index < warmupIterations; index++) {
+    await operation();
+  }
   final samples = <int>[];
   for (var index = 0; index < iterations; index++) {
     final stopwatch = Stopwatch()..start();
@@ -177,6 +165,9 @@ Map<String, Object> _measure(
   required int payloadBytes,
 }) {
   const iterations = 100;
+  for (var index = 0; index < 10; index++) {
+    operation();
+  }
   final samples = <int>[];
   for (var index = 0; index < iterations; index++) {
     final stopwatch = Stopwatch()..start();
@@ -195,4 +186,66 @@ Map<String, Object> _measure(
     // heap measurement (which Dart does not expose portably in production).
     'input_payload_bytes': payloadBytes,
   };
+}
+
+OdbcReadOnlyBatchParallelExecutor _createExecutor(MetricsCollector metrics) {
+  final service = _BenchmarkOdbcService();
+  final pool = _BenchmarkConnectionPool();
+  when(() => pool.acquire('DSN=benchmark', options: any(named: 'options'))).thenAnswer(
+    (_) async => const Success('worker'),
+  );
+  when(() => pool.release('worker')).thenAnswer(
+    (_) async => const Success(unit),
+  );
+  final manager = OdbcGatewayConnectionManager(
+    service: service,
+    connectionPool: pool,
+    directConnectionLimiter: DirectOdbcConnectionLimiter(
+      maxConcurrent: 2,
+      acquireTimeout: const Duration(seconds: 1),
+    ),
+    metrics: metrics,
+  );
+  return OdbcReadOnlyBatchParallelExecutor(
+    connectionManager: manager,
+    queryRunner: OdbcQueryRunner(
+      queries: service,
+      metrics: metrics,
+      statementExecutor: OdbcStatementExecutor(
+        service: service,
+        metrics: metrics,
+        markConnectionForDiscard: manager.markConnectionForDiscard,
+      ),
+      resultEncodingExecutor: OdbcResultEncodingExecutor(service),
+      markConnectionForDiscard: manager.markConnectionForDiscard,
+    ),
+    optionsResolver: OdbcConnectionOptionsResolver(
+      MockOdbcConnectionSettings(poolSize: 4),
+    ),
+    metrics: metrics,
+    parallelSemaphore: PoolSemaphore(2),
+    uuid: const Uuid(),
+    recordInfrastructureFailure: ({required originalSql, required errorMessage, rpcRequestId}) {},
+  );
+}
+
+Future<void> _executeEmptyBatch(OdbcReadOnlyBatchParallelExecutor executor) async {
+  final result = await executor.execute(
+    agentId: 'benchmark',
+    commands: const <SqlCommand>[],
+    connectionString: 'DSN=benchmark',
+    databaseConfig: DatabaseConfig.sqlServer(
+      driverName: 'driver',
+      username: 'user',
+      password: 'password',
+      database: 'database',
+      server: 'localhost',
+      port: 1433,
+    ),
+    options: const SqlExecutionOptions(maxParallelReadOnlyBatchItems: 2),
+    timeout: const Duration(seconds: 1),
+    batchSqlPreview: '',
+    poolSize: 4,
+  );
+  expect(result.isSuccess(), isTrue);
 }

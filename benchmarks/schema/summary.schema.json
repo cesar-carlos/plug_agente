@@ -4,14 +4,30 @@
   "title": "Plug Agente benchmark summary",
   "description": "Normalized per-run benchmark summary. No secrets or connection strings.",
   "type": "object",
-  "required": ["schema_version", "run_id", "captured_at", "git", "machine", "env_flags", "suites"],
+  "required": [
+    "schema_version",
+    "run_id",
+    "captured_at",
+    "git",
+    "machine",
+    "env_flags",
+    "suites"
+  ],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
-    "schema_version": { "type": "integer", "const": 1 },
+    "$schema": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1,
+        2
+      ]
+    },
     "run_id": {
       "type": "string",
-      "pattern": "^[0-9]{8}_[0-9]{6}$",
+      "pattern": "^(baseline|[0-9]{8}_[0-9]{6})$",
       "description": "Folder timestamp yyyyMMdd_HHmmss"
     },
     "captured_at": {
@@ -20,82 +36,255 @@
     },
     "git": {
       "type": "object",
-      "required": ["commit_sha", "branch", "dirty"],
+      "required": [
+        "commit_sha",
+        "branch",
+        "dirty"
+      ],
       "additionalProperties": false,
       "properties": {
-        "commit_sha": { "type": "string", "minLength": 1 },
-        "branch": { "type": "string", "minLength": 1 },
-        "dirty": { "type": "boolean" }
+        "commit_sha": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
       }
     },
     "machine": {
       "type": "object",
-      "required": ["platform", "machine"],
+      "required": [
+        "platform",
+        "machine"
+      ],
       "additionalProperties": true,
       "properties": {
-        "platform": { "type": "string" },
-        "machine": { "type": "string" },
-        "processor": { "type": "string" },
-        "python_version": { "type": "string" }
+        "platform": {
+          "type": "string"
+        },
+        "machine": {
+          "type": "string"
+        },
+        "processor": {
+          "type": "string"
+        },
+        "python_version": {
+          "type": "string"
+        }
       }
     },
     "env_flags": {
       "type": "object",
       "additionalProperties": {
         "oneOf": [
-          { "type": "boolean" },
-          { "type": "integer" },
-          { "type": "string" },
-          { "type": "null" }
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
         ]
       },
       "description": "Non-secret environment toggles and numeric tuning values only"
     },
     "suites": {
       "type": "array",
-      "items": { "$ref": "#/$defs/suite" }
+      "items": {
+        "$ref": "#/$defs/suite"
+      }
     },
     "notes": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
+    },
+    "qualification": {
+      "enum": [
+        "pass",
+        "fail",
+        "inconclusive"
+      ]
+    },
+    "comparison": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "inconclusive"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "Locked Dart package versions; no connection strings",
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   },
   "$defs": {
     "suite_status": {
       "type": "string",
-      "enum": ["pass", "fail", "skipped", "error"]
+      "enum": [
+        "pass",
+        "fail",
+        "skipped",
+        "error",
+        "inconclusive"
+      ]
     },
     "suite": {
       "type": "object",
-      "required": ["id", "kind", "status"],
+      "required": [
+        "id",
+        "kind",
+        "status"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
         "kind": {
           "type": "string",
-          "enum": ["flutter_test", "dart_tool", "dart_odbc_fast"]
+          "enum": [
+            "flutter_test",
+            "dart_tool",
+            "dart_odbc_fast"
+          ]
         },
-        "status": { "$ref": "#/$defs/suite_status" },
-        "wall_ms": { "type": "number", "minimum": 0 },
-        "exit_code": { "type": "integer" },
-        "log_file": { "type": "string" },
-        "reason": { "type": "string" },
+        "status": {
+          "$ref": "#/$defs/suite_status"
+        },
+        "wall_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "log_file": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
         "comparison_identity": {
           "type": "object",
-          "additionalProperties": { "type": "string" },
+          "additionalProperties": {
+            "type": "string"
+          },
           "description": "Non-sensitive package and workload identity required for comparable benchmarks"
         },
         "metrics": {
           "type": "object",
           "additionalProperties": {
             "oneOf": [
-              { "type": "number" },
-              { "type": "boolean" },
-              { "type": "string" }
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
             ]
+          }
+        },
+        "metric_metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "category",
+              "unit",
+              "direction"
+            ],
+            "properties": {
+              "category": {
+                "enum": [
+                  "latency",
+                  "throughput",
+                  "memory",
+                  "counter",
+                  "configuration"
+                ]
+              },
+              "unit": {
+                "type": "string"
+              },
+              "direction": {
+                "enum": [
+                  "lower",
+                  "higher",
+                  "none"
+                ]
+              }
+            },
+            "additionalProperties": false
           }
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "qualification",
+          "comparison",
+          "dependencies"
+        ],
+        "properties": {
+          "suites": {
+            "items": {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "pass"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "metrics",
+                  "metric_metadata",
+                  "comparison_identity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

@@ -53,55 +53,25 @@ def run_benchmark_for_driver(
     print(f"==> {driver_name}")
     print(f"Native/adaptive pool eligible: {driver_name != 'SQL Anywhere'}")
 
-    previous_dsn = os.environ.get("ODBC_TEST_DSN")
-    previous_driver_dsn = os.environ.get("ODBC_BENCH_DRIVER_DSN")
-    previous_stream_query = os.environ.get("ODBC_STREAM_BENCH_QUERY")
-    try:
-        os.environ["ODBC_TEST_DSN"] = dsn
-        os.environ["ODBC_BENCH_DRIVER_DSN"] = dsn
-        os.environ.pop("ODBC_STREAM_BENCH_QUERY", None)
+    from tool.py.benchmark_common import resolve_dart_odbc_fast_root, write_json
+    from tool.py.odbc_benchmark_runner import run_odbc_async_benchmark, run_odbc_streaming_benchmark
 
-        if output_directory is None:
-            async_exit = invoke_benchmark("odbc_async_benchmark.py", None)
-            if async_exit != 0:
-                raise RuntimeError(f"{driver_name} async benchmark failed")
-            stream_exit = invoke_benchmark("odbc_streaming_benchmark.py", None)
-            if stream_exit != 0:
-                raise RuntimeError(f"{driver_name} streaming benchmark failed")
-            return
-
-        output_directory.mkdir(parents=True, exist_ok=True)
-        async_log = output_directory / f"driver_matrix_{driver_slug}_async.log"
-        stream_log = output_directory / f"driver_matrix_{driver_slug}_streaming.log"
-
-        async_exit = run_streaming(
-            [sys.executable, str(BENCHMARKS_DIR / "odbc_async_benchmark.py")],
-            cwd=PROJECT_ROOT,
-            log_path=async_log,
-        )
-        if async_exit != 0:
-            raise RuntimeError(f"{driver_name} async benchmark failed")
-
-        stream_exit = run_streaming(
-            [sys.executable, str(BENCHMARKS_DIR / "odbc_streaming_benchmark.py")],
-            cwd=PROJECT_ROOT,
-            log_path=stream_log,
-        )
-        if stream_exit != 0:
-            raise RuntimeError(f"{driver_name} streaming benchmark failed")
-    finally:
-        if previous_driver_dsn is None:
-            os.environ.pop("ODBC_BENCH_DRIVER_DSN", None)
-        else:
-            os.environ["ODBC_BENCH_DRIVER_DSN"] = previous_driver_dsn
-        if previous_dsn is None:
-            os.environ.pop("ODBC_TEST_DSN", None)
-        else:
-            os.environ["ODBC_TEST_DSN"] = previous_dsn
-        if previous_stream_query is None:
-            os.environ.pop("ODBC_STREAM_BENCH_QUERY", None)
-        else:
-            os.environ["ODBC_STREAM_BENCH_QUERY"] = previous_stream_query
+    package_root = resolve_dart_odbc_fast_root()
+    if package_root is None:
+        raise RuntimeError("Locked odbc_fast package not found")
+    environment = os.environ.copy()
+    environment["ODBC_TEST_DSN"] = dsn
+    environment["ODBC_BENCH_DRIVER_DSN"] = dsn
+    destination = output_directory or PROJECT_ROOT / "artifacts" / "driver_matrix"
+    destination.mkdir(parents=True, exist_ok=True)
+    reports = []
+    for mode, runner in (("async", run_odbc_async_benchmark), ("streaming", run_odbc_streaming_benchmark)):
+        log = destination / f"driver_matrix_{driver_slug}_{mode}.log"
+        code, metrics, _ = runner(package_root=package_root, log_path=log, environment=environment)
+        reports.append({"mode": mode, "exit_code": code, "status": "pass" if code == 0 else ("inconclusive" if code == 2 else "fail"), "metrics": metrics, "log_file": log.name})
+    write_json(destination / f"{driver_slug}_summary.json", {"matrix_version": 1, "driver": driver_name, "scenarios": reports})
+    if any(report["exit_code"] != 0 for report in reports):
+        raise RuntimeError(f"{driver_name}: one or more benchmark scenarios failed or are inconclusive")
 
 
 def main() -> int:
@@ -139,7 +109,7 @@ def main() -> int:
 
     if configured == 0:
         print("No DSN configured; nothing to benchmark.")
-        return 0
+        return 2
 
     failed = False
     for driver in drivers:

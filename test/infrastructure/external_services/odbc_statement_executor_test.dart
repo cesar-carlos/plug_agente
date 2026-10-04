@@ -174,6 +174,74 @@ void main() {
       verifyNever(() => service.asyncFree(9));
     });
 
+    test('recovers the engine diagnostic when async poll hides a finished statement', () async {
+      when(() => service.executeAsyncStart('c1', 'UPDATE t SET amt = amt + 2 WHERE id = 1')).thenAnswer(
+        (_) async => const Success(7),
+      );
+      when(() => service.asyncPoll(7)).thenAnswer(
+        (_) async => const Failure(
+          QueryError(
+            message: 'Failed to complete asyncPoll',
+            details: OdbcErrorDetails(operation: 'asyncPoll', code: OdbcErrorCode.query),
+          ),
+        ),
+      );
+      when(() => service.asyncGetResult(7)).thenAnswer(
+        (_) async => const Failure(
+          QueryError(
+            message: 'Locked',
+            sqlState: '40001',
+            nativeCode: -210,
+            details: OdbcErrorDetails(operation: 'asyncGetResult', code: OdbcErrorCode.query),
+          ),
+        ),
+      );
+      when(() => service.asyncFree(7)).thenAnswer((_) async => const Success(unit));
+
+      final result = await executor.runNativeAsyncQueryWithTimeout(
+        connectionId: 'c1',
+        query: 'UPDATE t SET amt = amt + 2 WHERE id = 1',
+        timeout: const Duration(seconds: 5),
+      );
+
+      expect(result.isError(), isTrue);
+      final error = result.exceptionOrNull()! as QueryError;
+      expect(error.message, 'Locked');
+      expect(error.nativeCode, -210);
+      expect(discarded, isEmpty);
+      verify(() => service.asyncFree(7)).called(1);
+    });
+
+    test('keeps a generic async poll failure unconfirmed when no diagnostic exists', () async {
+      when(() => service.executeAsyncStart('c1', 'UPDATE t SET amt = 1')).thenAnswer((_) async => const Success(8));
+      when(() => service.asyncPoll(8)).thenAnswer(
+        (_) async => const Failure(
+          QueryError(
+            message: 'Failed to complete asyncPoll',
+            details: OdbcErrorDetails(operation: 'asyncPoll', code: OdbcErrorCode.query),
+          ),
+        ),
+      );
+      when(() => service.asyncGetResult(8)).thenAnswer(
+        (_) async => const Failure(
+          QueryError(
+            message: 'Failed to complete asyncGetResult',
+            details: OdbcErrorDetails(operation: 'asyncGetResult', code: OdbcErrorCode.query),
+          ),
+        ),
+      );
+
+      final result = await executor.runNativeAsyncQueryWithTimeout(
+        connectionId: 'c1',
+        query: 'UPDATE t SET amt = 1',
+        timeout: const Duration(seconds: 5),
+      );
+
+      expect(result.exceptionOrNull().toString(), contains('Failed to complete asyncPoll'));
+      expect(discarded, contains('c1'));
+      verifyNever(() => service.asyncFree(8));
+    });
+
     test('records a failed native async cancellation', () async {
       when(() => service.asyncCancel(9)).thenAnswer((_) async => Failure(Exception('cancel failed')));
 

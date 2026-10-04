@@ -1,0 +1,2774 @@
+{
+  "$schema": "../../schema/summary.schema.json",
+  "schema_version": 2,
+  "qualification": "fail",
+  "comparison": {
+    "status": "inconclusive",
+    "reason": "Identical-code control violated limits or has missing measurements",
+    "control": {
+      "status": "fail",
+      "scenarios": [
+        {
+          "case": "small_sql_repetitive",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 61,
+            "candidate": 58,
+            "limit": 64.05
+          },
+          "receive_p95_us": {
+            "base": 27,
+            "candidate": 29,
+            "limit": 28.35
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 65,
+            "candidate": 71,
+            "limit": 68.25
+          },
+          "receive_p95_us": {
+            "base": 37,
+            "candidate": 57,
+            "limit": 38.85
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 218,
+            "candidate": 239,
+            "limit": 228.9
+          },
+          "receive_p95_us": {
+            "base": 69,
+            "candidate": 75,
+            "limit": 72.45
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 163,
+            "candidate": 156,
+            "limit": 171.15
+          },
+          "receive_p95_us": {
+            "base": 74,
+            "candidate": 84,
+            "limit": 77.7
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 236,
+            "candidate": 280,
+            "limit": 247.8
+          },
+          "receive_p95_us": {
+            "base": 66,
+            "candidate": 89,
+            "limit": 69.3
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 155,
+            "candidate": 165,
+            "limit": 162.75
+          },
+          "receive_p95_us": {
+            "base": 70,
+            "candidate": 81,
+            "limit": 73.5
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 7784,
+            "candidate": 7624,
+            "limit": 8173.200000000001
+          },
+          "receive_p95_us": {
+            "base": 8351,
+            "candidate": 8888,
+            "limit": 8768.550000000001
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 5752,
+            "candidate": 6319,
+            "limit": 6039.6
+          },
+          "receive_p95_us": {
+            "base": 4516,
+            "candidate": 5314,
+            "limit": 4741.8
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 10150,
+            "candidate": 10611,
+            "limit": 10657.5
+          },
+          "receive_p95_us": {
+            "base": 7823,
+            "candidate": 8050,
+            "limit": 8214.15
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 8662,
+            "candidate": 9491,
+            "limit": 9095.1
+          },
+          "receive_p95_us": {
+            "base": 4301,
+            "candidate": 5311,
+            "limit": 4516.05
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 10104,
+            "candidate": 10560,
+            "limit": 10609.2
+          },
+          "receive_p95_us": {
+            "base": 7897,
+            "candidate": 8933,
+            "limit": 8291.85
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 8846,
+            "candidate": 9698,
+            "limit": 9288.300000000001
+          },
+          "receive_p95_us": {
+            "base": 4522,
+            "candidate": 5002,
+            "limit": 4748.1
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 7799,
+            "candidate": 7977,
+            "limit": 8188.950000000001
+          },
+          "receive_p95_us": {
+            "base": 2696,
+            "candidate": 2584,
+            "limit": 2830.8
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 5476,
+            "candidate": 5841,
+            "limit": 5749.8
+          },
+          "receive_p95_us": {
+            "base": 1516,
+            "candidate": 1626,
+            "limit": 1591.8
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 22398,
+            "candidate": 22581,
+            "limit": 23517.9
+          },
+          "receive_p95_us": {
+            "base": 8300,
+            "candidate": 8451,
+            "limit": 8715.0
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 19041,
+            "candidate": 19620,
+            "limit": 19993.05
+          },
+          "receive_p95_us": {
+            "base": 5526,
+            "candidate": 5578,
+            "limit": 5802.3
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 21819,
+            "candidate": 22409,
+            "limit": 22909.95
+          },
+          "receive_p95_us": {
+            "base": 8316,
+            "candidate": 8350,
+            "limit": 8731.800000000001
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 19254,
+            "candidate": 20179,
+            "limit": 20216.7
+          },
+          "receive_p95_us": {
+            "base": 5462,
+            "candidate": 5702,
+            "limit": 5735.1
+          }
+        }
+      ],
+      "throughput_ratio": 0.9698339708098468,
+      "rss_peak_bytes": {
+        "base": 197013504,
+        "candidate": 198230016
+      },
+      "heap_gate_evaluated": true,
+      "heap_growth_bytes": {
+        "base": 0,
+        "candidate": 3367424,
+        "limit": 0.0
+      },
+      "pending_metrics": [],
+      "failures": [
+        "('small_sql_repetitive', 'none', False) receive_p95_us: 29 > 28.35",
+        "('small_sql_repetitive', 'none', True) send_p95_us: 71 > 68.25",
+        "('small_sql_repetitive', 'none', True) receive_p95_us: 57 > 38.85",
+        "('small_sql_repetitive', 'auto', False) send_p95_us: 239 > 228.9",
+        "('small_sql_repetitive', 'auto', False) receive_p95_us: 75 > 72.45",
+        "('small_sql_repetitive', 'auto', True) receive_p95_us: 84 > 77.7",
+        "('small_sql_repetitive', 'gzip', False) send_p95_us: 280 > 247.8",
+        "('small_sql_repetitive', 'gzip', False) receive_p95_us: 89 > 69.3",
+        "('small_sql_repetitive', 'gzip', True) send_p95_us: 165 > 162.75",
+        "('small_sql_repetitive', 'gzip', True) receive_p95_us: 81 > 73.5",
+        "('large_sql_low_compressibility', 'none', False) receive_p95_us: 8888 > 8768.550000000001",
+        "('large_sql_low_compressibility', 'none', True) send_p95_us: 6319 > 6039.6",
+        "('large_sql_low_compressibility', 'none', True) receive_p95_us: 5314 > 4741.8",
+        "('large_sql_low_compressibility', 'auto', True) send_p95_us: 9491 > 9095.1",
+        "('large_sql_low_compressibility', 'auto', True) receive_p95_us: 5311 > 4516.05",
+        "('large_sql_low_compressibility', 'gzip', False) receive_p95_us: 8933 > 8291.85",
+        "('large_sql_low_compressibility', 'gzip', True) send_p95_us: 9698 > 9288.300000000001",
+        "('large_sql_low_compressibility', 'gzip', True) receive_p95_us: 5002 > 4748.1",
+        "('large_incompressible_blob', 'none', True) send_p95_us: 5841 > 5749.8",
+        "('large_incompressible_blob', 'none', True) receive_p95_us: 1626 > 1591.8",
+        "Heap growth exceeds 110% of base"
+      ]
+    },
+    "forward": {
+      "status": "fail",
+      "scenarios": [
+        {
+          "case": "small_sql_repetitive",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 83,
+            "candidate": 62,
+            "limit": 87.15
+          },
+          "receive_p95_us": {
+            "base": 40,
+            "candidate": 31,
+            "limit": 42.0
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 100,
+            "candidate": 89,
+            "limit": 105.0
+          },
+          "receive_p95_us": {
+            "base": 62,
+            "candidate": 59,
+            "limit": 65.10000000000001
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 270,
+            "candidate": 325,
+            "limit": 283.5
+          },
+          "receive_p95_us": {
+            "base": 63,
+            "candidate": 84,
+            "limit": 66.15
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 232,
+            "candidate": 196,
+            "limit": 243.60000000000002
+          },
+          "receive_p95_us": {
+            "base": 111,
+            "candidate": 105,
+            "limit": 116.55000000000001
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 291,
+            "candidate": 255,
+            "limit": 305.55
+          },
+          "receive_p95_us": {
+            "base": 88,
+            "candidate": 86,
+            "limit": 92.4
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 191,
+            "candidate": 201,
+            "limit": 200.55
+          },
+          "receive_p95_us": {
+            "base": 100,
+            "candidate": 102,
+            "limit": 105.0
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 10336,
+            "candidate": 8738,
+            "limit": 10852.800000000001
+          },
+          "receive_p95_us": {
+            "base": 10474,
+            "candidate": 9285,
+            "limit": 10997.7
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 9619,
+            "candidate": 9407,
+            "limit": 10099.95
+          },
+          "receive_p95_us": {
+            "base": 7603,
+            "candidate": 10742,
+            "limit": 7983.150000000001
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 13331,
+            "candidate": 11687,
+            "limit": 13997.550000000001
+          },
+          "receive_p95_us": {
+            "base": 9964,
+            "candidate": 8303,
+            "limit": 10462.2
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 16078,
+            "candidate": 12466,
+            "limit": 16881.9
+          },
+          "receive_p95_us": {
+            "base": 7727,
+            "candidate": 6835,
+            "limit": 8113.35
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 14362,
+            "candidate": 12684,
+            "limit": 15080.1
+          },
+          "receive_p95_us": {
+            "base": 10251,
+            "candidate": 8563,
+            "limit": 10763.550000000001
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 11618,
+            "candidate": 12464,
+            "limit": 12198.9
+          },
+          "receive_p95_us": {
+            "base": 7109,
+            "candidate": 7494,
+            "limit": 7464.450000000001
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 9549,
+            "candidate": 9168,
+            "limit": 10026.45
+          },
+          "receive_p95_us": {
+            "base": 3505,
+            "candidate": 2921,
+            "limit": 3680.25
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 9809,
+            "candidate": 9210,
+            "limit": 10299.45
+          },
+          "receive_p95_us": {
+            "base": 2830,
+            "candidate": 2887,
+            "limit": 2971.5
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 27518,
+            "candidate": 24467,
+            "limit": 28893.9
+          },
+          "receive_p95_us": {
+            "base": 10097,
+            "candidate": 9939,
+            "limit": 10601.85
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 30506,
+            "candidate": 24688,
+            "limit": 32031.300000000003
+          },
+          "receive_p95_us": {
+            "base": 8356,
+            "candidate": 9371,
+            "limit": 8773.800000000001
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 31168,
+            "candidate": 25131,
+            "limit": 32726.4
+          },
+          "receive_p95_us": {
+            "base": 11446,
+            "candidate": 9921,
+            "limit": 12018.300000000001
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 25650,
+            "candidate": 25016,
+            "limit": 26932.5
+          },
+          "receive_p95_us": {
+            "base": 8299,
+            "candidate": 10109,
+            "limit": 8713.95
+          }
+        }
+      ],
+      "throughput_ratio": 1.0925731675859434,
+      "rss_peak_bytes": {
+        "base": 197570560,
+        "candidate": 220319744
+      },
+      "heap_gate_evaluated": true,
+      "heap_growth_bytes": {
+        "base": 1164480,
+        "candidate": 1352496,
+        "limit": 1280928.0
+      },
+      "pending_metrics": [],
+      "failures": [
+        "('small_sql_repetitive', 'auto', False) send_p95_us: 325 > 283.5",
+        "('small_sql_repetitive', 'auto', False) receive_p95_us: 84 > 66.15",
+        "('small_sql_repetitive', 'gzip', True) send_p95_us: 201 > 200.55",
+        "('large_sql_low_compressibility', 'none', True) receive_p95_us: 10742 > 7983.150000000001",
+        "('large_sql_low_compressibility', 'gzip', True) send_p95_us: 12464 > 12198.9",
+        "('large_sql_low_compressibility', 'gzip', True) receive_p95_us: 7494 > 7464.450000000001",
+        "('large_incompressible_blob', 'auto', True) receive_p95_us: 9371 > 8773.800000000001",
+        "('large_incompressible_blob', 'gzip', True) receive_p95_us: 10109 > 8713.95",
+        "Heap growth exceeds 110% of base"
+      ]
+    },
+    "reverse": {
+      "status": "fail",
+      "scenarios": [
+        {
+          "case": "small_sql_repetitive",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 58,
+            "candidate": 63,
+            "limit": 60.900000000000006
+          },
+          "receive_p95_us": {
+            "base": 33,
+            "candidate": 36,
+            "limit": 34.65
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 78,
+            "candidate": 89,
+            "limit": 81.9
+          },
+          "receive_p95_us": {
+            "base": 46,
+            "candidate": 48,
+            "limit": 48.300000000000004
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 258,
+            "candidate": 273,
+            "limit": 270.90000000000003
+          },
+          "receive_p95_us": {
+            "base": 80,
+            "candidate": 85,
+            "limit": 84.0
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 225,
+            "candidate": 223,
+            "limit": 236.25
+          },
+          "receive_p95_us": {
+            "base": 116,
+            "candidate": 94,
+            "limit": 121.80000000000001
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 248,
+            "candidate": 277,
+            "limit": 260.40000000000003
+          },
+          "receive_p95_us": {
+            "base": 83,
+            "candidate": 89,
+            "limit": 87.15
+          }
+        },
+        {
+          "case": "small_sql_repetitive",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 204,
+            "candidate": 204,
+            "limit": 214.20000000000002
+          },
+          "receive_p95_us": {
+            "base": 100,
+            "candidate": 98,
+            "limit": 105.0
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 9119,
+            "candidate": 9810,
+            "limit": 9574.95
+          },
+          "receive_p95_us": {
+            "base": 10194,
+            "candidate": 9857,
+            "limit": 10703.7
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 8055,
+            "candidate": 9341,
+            "limit": 8457.75
+          },
+          "receive_p95_us": {
+            "base": 5885,
+            "candidate": 10392,
+            "limit": 6179.25
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 12864,
+            "candidate": 13124,
+            "limit": 13507.2
+          },
+          "receive_p95_us": {
+            "base": 10264,
+            "candidate": 9116,
+            "limit": 10777.2
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 11475,
+            "candidate": 11917,
+            "limit": 12048.75
+          },
+          "receive_p95_us": {
+            "base": 5274,
+            "candidate": 5629,
+            "limit": 5537.7
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 12629,
+            "candidate": 11772,
+            "limit": 13260.45
+          },
+          "receive_p95_us": {
+            "base": 9963,
+            "candidate": 9079,
+            "limit": 10461.15
+          }
+        },
+        {
+          "case": "large_sql_low_compressibility",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 14385,
+            "candidate": 11910,
+            "limit": 15104.25
+          },
+          "receive_p95_us": {
+            "base": 7165,
+            "candidate": 5308,
+            "limit": 7523.25
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "none",
+          "signed": false,
+          "send_p95_us": {
+            "base": 10030,
+            "candidate": 8959,
+            "limit": 10531.5
+          },
+          "receive_p95_us": {
+            "base": 3087,
+            "candidate": 2837,
+            "limit": 3241.3500000000004
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "none",
+          "signed": true,
+          "send_p95_us": {
+            "base": 8766,
+            "candidate": 8871,
+            "limit": 9204.300000000001
+          },
+          "receive_p95_us": {
+            "base": 2527,
+            "candidate": 2616,
+            "limit": 2653.35
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "auto",
+          "signed": false,
+          "send_p95_us": {
+            "base": 26238,
+            "candidate": 24187,
+            "limit": 27549.9
+          },
+          "receive_p95_us": {
+            "base": 10092,
+            "candidate": 9562,
+            "limit": 10596.6
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "auto",
+          "signed": true,
+          "send_p95_us": {
+            "base": 25594,
+            "candidate": 24264,
+            "limit": 26873.7
+          },
+          "receive_p95_us": {
+            "base": 7239,
+            "candidate": 9711,
+            "limit": 7600.950000000001
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "gzip",
+          "signed": false,
+          "send_p95_us": {
+            "base": 26183,
+            "candidate": 24690,
+            "limit": 27492.15
+          },
+          "receive_p95_us": {
+            "base": 9321,
+            "candidate": 9627,
+            "limit": 9787.050000000001
+          }
+        },
+        {
+          "case": "large_incompressible_blob",
+          "compression": "gzip",
+          "signed": true,
+          "send_p95_us": {
+            "base": 24193,
+            "candidate": 24422,
+            "limit": 25402.65
+          },
+          "receive_p95_us": {
+            "base": 6960,
+            "candidate": 9557,
+            "limit": 7308.0
+          }
+        }
+      ],
+      "throughput_ratio": 1.0618824331991739,
+      "rss_peak_bytes": {
+        "base": 195809280,
+        "candidate": 212746240
+      },
+      "heap_gate_evaluated": true,
+      "heap_growth_bytes": {
+        "base": 1164480,
+        "candidate": 1352496,
+        "limit": 1280928.0
+      },
+      "pending_metrics": [],
+      "failures": [
+        "('small_sql_repetitive', 'none', False) send_p95_us: 63 > 60.900000000000006",
+        "('small_sql_repetitive', 'none', False) receive_p95_us: 36 > 34.65",
+        "('small_sql_repetitive', 'none', True) send_p95_us: 89 > 81.9",
+        "('small_sql_repetitive', 'auto', False) send_p95_us: 273 > 270.90000000000003",
+        "('small_sql_repetitive', 'auto', False) receive_p95_us: 85 > 84.0",
+        "('small_sql_repetitive', 'gzip', False) send_p95_us: 277 > 260.40000000000003",
+        "('small_sql_repetitive', 'gzip', False) receive_p95_us: 89 > 87.15",
+        "('large_sql_low_compressibility', 'none', False) send_p95_us: 9810 > 9574.95",
+        "('large_sql_low_compressibility', 'none', True) send_p95_us: 9341 > 8457.75",
+        "('large_sql_low_compressibility', 'none', True) receive_p95_us: 10392 > 6179.25",
+        "('large_sql_low_compressibility', 'auto', True) receive_p95_us: 5629 > 5537.7",
+        "('large_incompressible_blob', 'auto', True) receive_p95_us: 9711 > 7600.950000000001",
+        "('large_incompressible_blob', 'gzip', True) receive_p95_us: 9557 > 7308.0",
+        "Heap growth exceeds 110% of base"
+      ]
+    },
+    "base": {
+      "commit_sha": "79ecc2dc44277240ed8b2c230c7d6c578721406b",
+      "source_sha256": "cd4b7b67da4a41bdff967a75accf49d3cb8172d0b43ad0b2470ae054f7f20600"
+    },
+    "candidate": {
+      "commit_sha": "bdfd3ad00edad28e25f8cb6361eda3b8b1c9c785",
+      "source_sha256": "df67a2e06c7ac84d949396fa02a2a8d5da9a8f87d1862cb1c5e848aeff558d9d"
+    }
+  },
+  "run_id": "20261004_160337",
+  "captured_at": "2026-10-04T16:04:17-04:00",
+  "git": {
+    "commit_sha": "bdfd3ad00edad28e25f8cb6361eda3b8b1c9c785",
+    "branch": "main",
+    "dirty": true,
+    "source_sha256": "df67a2e06c7ac84d949396fa02a2a8d5da9a8f87d1862cb1c5e848aeff558d9d"
+  },
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python_version": "3.13.14",
+    "dart_version": "Dart SDK version: 3.13.4 (stable) (Tue Sep 15 01:01:15 2026 -0700) on \"windows_x64\"",
+    "flutter_version": "Flutter 3.47.5 • channel stable • https://github.com/flutter/flutter.git\nFramework • revision 6a19cca564 (2 weeks ago) • 2026-09-17 14:13:22 -0400\nEngine • hash ab598368592da0064197e2bc15c7f5b0a2c6bb1f (revision af7e796e16) (18 days ago) • 2026-09-16 18:35:09.000Z\nTools • Dart 3.13.4 • DevTools 2.60.0",
+    "dependencies_sha256": "7451e384964630ab97f130643729a010303c22b5665982e1b54a514bdea1f12c",
+    "host_fingerprint": "cfdd16ebf9efdf7d0398c6297f2875e10dfd9dd1209f02961c71c93c96c39d98"
+  },
+  "dependencies": {
+    "_fe_analyzer_shared": "103.0.0",
+    "analyzer": "13.3.0",
+    "android_file_picker": "2.0.0",
+    "archive": "4.3.0",
+    "args": "2.7.0",
+    "asn1lib": "1.6.5",
+    "async": "2.13.1",
+    "auto_updater": "1.0.0",
+    "auto_updater_macos": "1.0.0",
+    "auto_updater_platform_interface": "1.0.0",
+    "auto_updater_windows": "1.0.0",
+    "boolean_selector": "2.1.2",
+    "brasil_fields": "1.21.1",
+    "build": "4.0.11",
+    "build_config": "1.3.3",
+    "build_daemon": "4.1.6",
+    "build_runner": "2.16.1",
+    "built_collection": "5.1.1",
+    "built_value": "8.13.0",
+    "characters": "1.4.1",
+    "charcode": "1.4.0",
+    "checked_yaml": "2.0.4",
+    "checks": "0.3.2",
+    "cli_config": "0.2.0",
+    "cli_util": "0.4.2",
+    "clock": "1.1.3",
+    "cnativeapi": "0.3.0",
+    "code_assets": "1.2.1",
+    "collection": "1.19.1",
+    "convert": "3.1.2",
+    "coverage": "1.15.1",
+    "cross_file": "0.3.5+5",
+    "crypto": "3.0.7",
+    "crypto_keys": "0.3.1",
+    "cryptography": "2.9.0",
+    "cupertino_icons": "1.0.9",
+    "cupertino_ui": "1.1.1",
+    "dart_style": "3.1.13",
+    "dbus": "0.7.15",
+    "dio": "5.11.1",
+    "dio_web_adapter": "2.2.2",
+    "dotenv": "4.2.0",
+    "drift": "2.35.0",
+    "drift_dev": "2.35.0",
+    "equatable": "2.1.0",
+    "fake_async": "1.3.3",
+    "ffi": "2.2.0",
+    "ffi_leak_tracker": "0.1.2",
+    "file": "7.0.1",
+    "file_picker": "13.1.0",
+    "file_picker_darwin": "2.1.2",
+    "file_picker_linux": "2.0.0",
+    "file_picker_platform_interface": "4.0.0",
+    "file_picker_web": "4.0.0",
+    "fixnum": "1.1.1",
+    "fl_chart": "1.2.0",
+    "fluent_ui": "4.16.1",
+    "fluentui_system_icons": "1.1.273",
+    "flutter": "0.0.0",
+    "flutter_dotenv": "6.0.1",
+    "flutter_launcher_icons": "0.14.4",
+    "flutter_lints": "6.0.0",
+    "flutter_local_notifications": "22.3.1",
+    "flutter_local_notifications_linux": "8.0.1",
+    "flutter_local_notifications_platform_interface": "12.2.0",
+    "flutter_local_notifications_web": "1.0.0",
+    "flutter_local_notifications_windows": "3.1.1",
+    "flutter_localizations": "0.0.0",
+    "flutter_secure_storage": "11.2.0",
+    "flutter_secure_storage_darwin": "0.4.3",
+    "flutter_secure_storage_linux": "3.0.3",
+    "flutter_secure_storage_platform_interface": "2.1.1",
+    "flutter_secure_storage_web": "2.1.1",
+    "flutter_secure_storage_windows": "4.2.2",
+    "flutter_test": "0.0.0",
+    "flutter_web_plugins": "0.0.0",
+    "frontend_server_client": "4.0.0",
+    "get_it": "9.3.0",
+    "glob": "2.2.0",
+    "go_router": "18.0.1",
+    "google_fonts": "8.2.1",
+    "graphs": "2.3.2",
+    "hooks": "2.2.0",
+    "http": "1.6.0",
+    "http_multi_server": "3.2.2",
+    "http_parser": "4.1.2",
+    "image": "4.10.1",
+    "intl": "0.20.3",
+    "io": "1.1.0",
+    "jni": "1.0.3",
+    "jni_flutter": "1.0.3",
+    "jni_util": "1.0.0",
+    "jose": "0.3.5+2",
+    "json_annotation": "4.12.0",
+    "json_schema": "5.2.2",
+    "leak_tracker": "11.0.2",
+    "leak_tracker_flutter_testing": "3.0.10",
+    "leak_tracker_testing": "3.0.2",
+    "lints": "6.1.0",
+    "logger": "2.8.0",
+    "logging": "1.3.0",
+    "mailer": "7.2.0",
+    "matcher": "0.12.20",
+    "material_color_utilities": "0.13.0",
+    "material_ui": "1.4.0",
+    "math_expressions": "3.2.0",
+    "meta": "1.19.0",
+    "mime": "2.1.0",
+    "mocktail": "1.0.5",
+    "native_toolchain_c": "0.19.3",
+    "nativeapi": "0.3.0",
+    "nested": "1.0.0",
+    "node_preamble": "2.0.2",
+    "objective_c": "9.5.0",
+    "odbc_fast": "5.0.0",
+    "opentelemetry": "0.18.11",
+    "package_config": "2.2.0",
+    "package_info_plus": "10.2.1",
+    "package_info_plus_platform_interface": "4.1.0",
+    "path": "1.9.1",
+    "path_provider": "2.1.6",
+    "path_provider_android": "2.3.1",
+    "path_provider_foundation": "2.6.0",
+    "path_provider_linux": "2.2.2",
+    "path_provider_platform_interface": "2.1.3",
+    "path_provider_windows": "2.3.0",
+    "petitparser": "7.0.2",
+    "platform": "3.2.0",
+    "plugin_platform_interface": "2.1.8",
+    "pointycastle": "4.0.0",
+    "pool": "1.5.3",
+    "posix": "6.5.2",
+    "protobuf": "6.1.0",
+    "protoc_plugin": "25.1.0",
+    "provider": "6.1.5+1",
+    "pub_semver": "2.2.1",
+    "pubspec_parse": "1.6.0",
+    "punycoder": "0.3.0",
+    "quiver": "3.2.2",
+    "recase": "4.1.0",
+    "record_use": "1.1.1",
+    "result_dart": "2.2.0",
+    "rfc_6901": "0.2.1",
+    "screen_retriever": "0.2.2",
+    "screen_retriever_linux": "0.2.2",
+    "screen_retriever_macos": "0.2.2",
+    "screen_retriever_platform_interface": "0.2.2",
+    "screen_retriever_windows": "0.2.2",
+    "scroll_pos": "0.5.0",
+    "shared_preferences": "2.5.5",
+    "shared_preferences_android": "2.4.28",
+    "shared_preferences_foundation": "2.5.7",
+    "shared_preferences_linux": "2.4.1",
+    "shared_preferences_platform_interface": "2.4.2",
+    "shared_preferences_web": "2.4.3",
+    "shared_preferences_windows": "2.4.1",
+    "shelf": "1.4.2",
+    "shelf_packages_handler": "3.0.2",
+    "shelf_static": "1.1.3",
+    "shelf_web_socket": "3.0.0",
+    "sky_engine": "0.0.0",
+    "socket_io_client": "3.1.6",
+    "socket_io_common": "3.1.1",
+    "source_gen": "4.2.4",
+    "source_map_stack_trace": "2.1.2",
+    "source_maps": "0.10.14",
+    "source_span": "1.10.2",
+    "sqlite3": "3.6.0",
+    "sqlparser": "0.45.0",
+    "stack_trace": "1.12.2",
+    "stream_channel": "2.1.4",
+    "stream_transform": "2.1.2",
+    "string_normalizer": "0.4.0",
+    "string_scanner": "1.4.1",
+    "syncfusion_flutter_core": "34.2.9",
+    "syncfusion_flutter_datagrid": "34.2.9",
+    "term_glyph": "1.2.2",
+    "test": "1.31.1",
+    "test_api": "0.7.12",
+    "test_core": "0.6.18",
+    "timezone": "0.11.1",
+    "tray_manager": "0.7.0",
+    "typed_data": "1.4.0",
+    "unorm_dart": "0.3.2",
+    "uri": "1.0.0",
+    "uuid": "4.6.0",
+    "vector_math": "2.4.3",
+    "very_good_analysis": "11.0.0",
+    "vm_service": "15.3.0",
+    "watcher": "1.2.1",
+    "web": "1.1.1",
+    "web_socket": "1.0.1",
+    "web_socket_channel": "3.0.3",
+    "webkit_inspection_protocol": "1.2.1",
+    "win32": "6.4.0",
+    "window_manager": "0.5.2",
+    "windows_file_picker": "2.0.0",
+    "x509": "0.2.4+3",
+    "xdg_directories": "1.1.0",
+    "xml": "7.0.1",
+    "yaml": "3.1.4",
+    "yaml_edit": "2.2.4",
+    "zard": "1.4.0"
+  },
+  "env_flags": {
+    "odbc_test_dsn_configured": true,
+    "odbc_driver_family": "SQL Anywhere",
+    "odbc_pool_size": 32,
+    "odbc_async_worker_count": 32,
+    "odbc_async_max_pending_requests": 256,
+    "run_live_api_tests": true
+  },
+  "suites": [
+    {
+      "id": "transport_pipeline",
+      "kind": "flutter_test",
+      "status": "pass",
+      "wall_ms": 13642.96,
+      "exit_code": 0,
+      "log_file": "transport_pipeline.log",
+      "metrics": {
+        "small_sql_repetitive.async.none.signed_False.send_p50_us": 54.0,
+        "small_sql_repetitive.async.none.signed_False.send_p95_us": 294.0,
+        "small_sql_repetitive.async.none.signed_False.send_p99_us": 294.0,
+        "small_sql_repetitive.async.none.signed_False.receive_p50_us": 23.0,
+        "small_sql_repetitive.async.none.signed_False.receive_p95_us": 60.0,
+        "small_sql_repetitive.async.none.signed_False.receive_p99_us": 60.0,
+        "small_sql_repetitive.async.none.signed_True.send_p50_us": 94.0,
+        "small_sql_repetitive.async.none.signed_True.send_p95_us": 96.0,
+        "small_sql_repetitive.async.none.signed_True.send_p99_us": 96.0,
+        "small_sql_repetitive.async.none.signed_True.receive_p50_us": 63.0,
+        "small_sql_repetitive.async.none.signed_True.receive_p95_us": 129.0,
+        "small_sql_repetitive.async.none.signed_True.receive_p99_us": 129.0,
+        "small_sql_repetitive.async.auto.signed_False.send_p50_us": 182.0,
+        "small_sql_repetitive.async.auto.signed_False.send_p95_us": 294.0,
+        "small_sql_repetitive.async.auto.signed_False.send_p99_us": 294.0,
+        "small_sql_repetitive.async.auto.signed_False.receive_p50_us": 60.0,
+        "small_sql_repetitive.async.auto.signed_False.receive_p95_us": 93.0,
+        "small_sql_repetitive.async.auto.signed_False.receive_p99_us": 93.0,
+        "small_sql_repetitive.async.auto.signed_True.send_p50_us": 214.0,
+        "small_sql_repetitive.async.auto.signed_True.send_p95_us": 341.0,
+        "small_sql_repetitive.async.auto.signed_True.send_p99_us": 341.0,
+        "small_sql_repetitive.async.auto.signed_True.receive_p50_us": 107.0,
+        "small_sql_repetitive.async.auto.signed_True.receive_p95_us": 121.0,
+        "small_sql_repetitive.async.auto.signed_True.receive_p99_us": 121.0,
+        "small_sql_repetitive.async.gzip.signed_False.send_p50_us": 160.0,
+        "small_sql_repetitive.async.gzip.signed_False.send_p95_us": 262.0,
+        "small_sql_repetitive.async.gzip.signed_False.send_p99_us": 262.0,
+        "small_sql_repetitive.async.gzip.signed_False.receive_p50_us": 90.0,
+        "small_sql_repetitive.async.gzip.signed_False.receive_p95_us": 166.0,
+        "small_sql_repetitive.async.gzip.signed_False.receive_p99_us": 166.0,
+        "small_sql_repetitive.async.gzip.signed_True.send_p50_us": 117.0,
+        "small_sql_repetitive.async.gzip.signed_True.send_p95_us": 246.0,
+        "small_sql_repetitive.async.gzip.signed_True.send_p99_us": 246.0,
+        "small_sql_repetitive.async.gzip.signed_True.receive_p50_us": 71.0,
+        "small_sql_repetitive.async.gzip.signed_True.receive_p95_us": 72.0,
+        "small_sql_repetitive.async.gzip.signed_True.receive_p99_us": 72.0,
+        "large_sql_low_compressibility.async.none.signed_False.send_p50_us": 5400.0,
+        "large_sql_low_compressibility.async.none.signed_False.send_p95_us": 7700.0,
+        "large_sql_low_compressibility.async.none.signed_False.send_p99_us": 7700.0,
+        "large_sql_low_compressibility.async.none.signed_False.receive_p50_us": 5500.0,
+        "large_sql_low_compressibility.async.none.signed_False.receive_p95_us": 8000.0,
+        "large_sql_low_compressibility.async.none.signed_False.receive_p99_us": 8000.0,
+        "large_sql_low_compressibility.async.none.signed_True.send_p50_us": 5300.0,
+        "large_sql_low_compressibility.async.none.signed_True.send_p95_us": 5500.0,
+        "large_sql_low_compressibility.async.none.signed_True.send_p99_us": 5500.0,
+        "large_sql_low_compressibility.async.none.signed_True.receive_p50_us": 4600.0,
+        "large_sql_low_compressibility.async.none.signed_True.receive_p95_us": 8300.0,
+        "large_sql_low_compressibility.async.none.signed_True.receive_p99_us": 8300.0,
+        "large_sql_low_compressibility.async.auto.signed_False.send_p50_us": 9300.0,
+        "large_sql_low_compressibility.async.auto.signed_False.send_p95_us": 10000.0,
+        "large_sql_low_compressibility.async.auto.signed_False.send_p99_us": 10000.0,
+        "large_sql_low_compressibility.async.auto.signed_False.receive_p50_us": 3800.0,
+        "large_sql_low_compressibility.async.auto.signed_False.receive_p95_us": 4300.0,
+        "large_sql_low_compressibility.async.auto.signed_False.receive_p99_us": 4300.0,
+        "large_sql_low_compressibility.async.auto.signed_True.send_p50_us": 8600.0,
+        "large_sql_low_compressibility.async.auto.signed_True.send_p95_us": 9000.0,
+        "large_sql_low_compressibility.async.auto.signed_True.send_p99_us": 9000.0,
+        "large_sql_low_compressibility.async.auto.signed_True.receive_p50_us": 3700.0,
+        "large_sql_low_compressibility.async.auto.signed_True.receive_p95_us": 4200.0,
+        "large_sql_low_compressibility.async.auto.signed_True.receive_p99_us": 4200.0,
+        "large_sql_low_compressibility.async.gzip.signed_False.send_p50_us": 9100.0,
+        "large_sql_low_compressibility.async.gzip.signed_False.send_p95_us": 11500.0,
+        "large_sql_low_compressibility.async.gzip.signed_False.send_p99_us": 11500.0,
+        "large_sql_low_compressibility.async.gzip.signed_False.receive_p50_us": 3900.0,
+        "large_sql_low_compressibility.async.gzip.signed_False.receive_p95_us": 8600.0,
+        "large_sql_low_compressibility.async.gzip.signed_False.receive_p99_us": 8600.0,
+        "large_sql_low_compressibility.async.gzip.signed_True.send_p50_us": 8400.0,
+        "large_sql_low_compressibility.async.gzip.signed_True.send_p95_us": 9000.0,
+        "large_sql_low_compressibility.async.gzip.signed_True.send_p99_us": 9000.0,
+        "large_sql_low_compressibility.async.gzip.signed_True.receive_p50_us": 4400.0,
+        "large_sql_low_compressibility.async.gzip.signed_True.receive_p95_us": 4700.0,
+        "large_sql_low_compressibility.async.gzip.signed_True.receive_p99_us": 4700.0,
+        "large_incompressible_blob.async.none.signed_False.send_p50_us": 5300.0,
+        "large_incompressible_blob.async.none.signed_False.send_p95_us": 5400.0,
+        "large_incompressible_blob.async.none.signed_False.send_p99_us": 5400.0,
+        "large_incompressible_blob.async.none.signed_False.receive_p50_us": 1400.0,
+        "large_incompressible_blob.async.none.signed_False.receive_p95_us": 1400.0,
+        "large_incompressible_blob.async.none.signed_False.receive_p99_us": 1400.0,
+        "large_incompressible_blob.async.none.signed_True.send_p50_us": 5200.0,
+        "large_incompressible_blob.async.none.signed_True.send_p95_us": 5400.0,
+        "large_incompressible_blob.async.none.signed_True.send_p99_us": 5400.0,
+        "large_incompressible_blob.async.none.signed_True.receive_p50_us": 1300.0,
+        "large_incompressible_blob.async.none.signed_True.receive_p95_us": 1400.0,
+        "large_incompressible_blob.async.none.signed_True.receive_p99_us": 1400.0,
+        "large_incompressible_blob.async.auto.signed_False.send_p50_us": 20600.0,
+        "large_incompressible_blob.async.auto.signed_False.send_p95_us": 20900.0,
+        "large_incompressible_blob.async.auto.signed_False.send_p99_us": 20900.0,
+        "large_incompressible_blob.async.auto.signed_False.receive_p50_us": 5800.0,
+        "large_incompressible_blob.async.auto.signed_False.receive_p95_us": 6500.0,
+        "large_incompressible_blob.async.auto.signed_False.receive_p99_us": 6500.0,
+        "large_incompressible_blob.async.auto.signed_True.send_p50_us": 20900.0,
+        "large_incompressible_blob.async.auto.signed_True.send_p95_us": 21200.0,
+        "large_incompressible_blob.async.auto.signed_True.send_p99_us": 21200.0,
+        "large_incompressible_blob.async.auto.signed_True.receive_p50_us": 7400.0,
+        "large_incompressible_blob.async.auto.signed_True.receive_p95_us": 7600.0,
+        "large_incompressible_blob.async.auto.signed_True.receive_p99_us": 7600.0,
+        "large_incompressible_blob.async.gzip.signed_False.send_p50_us": 18600.0,
+        "large_incompressible_blob.async.gzip.signed_False.send_p95_us": 20200.0,
+        "large_incompressible_blob.async.gzip.signed_False.send_p99_us": 20200.0,
+        "large_incompressible_blob.async.gzip.signed_False.receive_p50_us": 5300.0,
+        "large_incompressible_blob.async.gzip.signed_False.receive_p95_us": 8200.0,
+        "large_incompressible_blob.async.gzip.signed_False.receive_p99_us": 8200.0,
+        "large_incompressible_blob.async.gzip.signed_True.send_p50_us": 19400.0,
+        "large_incompressible_blob.async.gzip.signed_True.send_p95_us": 19900.0,
+        "large_incompressible_blob.async.gzip.signed_True.send_p99_us": 19900.0,
+        "large_incompressible_blob.async.gzip.signed_True.receive_p50_us": 5600.0,
+        "large_incompressible_blob.async.gzip.signed_True.receive_p95_us": 6100.0,
+        "large_incompressible_blob.async.gzip.signed_True.receive_p99_us": 6100.0
+      },
+      "comparison_identity": {
+        "benchmark_profile": "transport_pipeline_v2",
+        "harness_sha256": "319f51ea7450b32d09bba575739bee0194fe4fda617da81be676ecdc1c1a2c71",
+        "parameters_sha256": "b4ad660036c8895aa0bd638dc7f30937bf72f7e4123c4da0cf4de9820f244f95"
+      },
+      "metric_metadata": {
+        "small_sql_repetitive.async.none.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.none.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.auto.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "small_sql_repetitive.async.gzip.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.none.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.auto.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_sql_low_compressibility.async.gzip.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.none.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.auto.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_False.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_False.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_False.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_False.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_False.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_False.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_True.send_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_True.send_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_True.send_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_True.receive_p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_True.receive_p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "large_incompressible_blob.async.gzip.signed_True.receive_p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        }
+      }
+    },
+    {
+      "id": "plug_agente_stack",
+      "kind": "flutter_test",
+      "status": "pass",
+      "wall_ms": 4355.73,
+      "exit_code": 0,
+      "log_file": "plug_agente_stack.log",
+      "metrics": {
+        "config_metadata_cache.cold.median_us": 42.0,
+        "config_metadata_cache.cold.p95_us": 89.0,
+        "config_metadata_cache.warm.median_us": 4.0,
+        "config_metadata_cache.warm.p95_us": 8.0,
+        "config_metadata_cache.warm.speedup": 10.5,
+        "odbc_connection_string_ttl_cache.cold.median_us": 1.0,
+        "odbc_connection_string_ttl_cache.cold.p95_us": 2.0,
+        "odbc_connection_string_ttl_cache.warm.median_us": 0.0,
+        "odbc_connection_string_ttl_cache.warm.p95_us": 0.0,
+        "odbc_connection_string_ttl_cache.warm.speedup": 1.0,
+        "columnar_stream_emitter.row_map.median_us": 838.0,
+        "columnar_stream_emitter.row_map.rows_per_sec": 1193317.4224343675,
+        "columnar_stream_emitter.wire_only.median_us": 19.0,
+        "columnar_stream_emitter.wire_only.speedup": 44.10526315789474,
+        "columnar_stream_emitter.wire_only.rows_per_sec": 52631578.94736842,
+        "backpressure_stream_emitter.sequential_admission.median_us": 1709.0,
+        "backpressure_stream_emitter.concurrent_admission.median_us": 1078.0,
+        "backpressure_stream_emitter.concurrent_admission.speedup": 1.585343228200371,
+        "queued_database_gateway.execute_query.median_us": 78.0,
+        "queued_database_gateway.execute_query.p95_us": 113.0,
+        "sql_rpc_db_streaming_executor.cold_config_cache.median_us": 185.0,
+        "sql_rpc_db_streaming_executor.warm_config_cache.median_us": 115.0,
+        "sql_rpc_db_streaming_executor.warm_config_cache.speedup": 1.61
+      },
+      "comparison_identity": {
+        "benchmark_profile": "plug_agente_stack_v2",
+        "harness_sha256": "319f51ea7450b32d09bba575739bee0194fe4fda617da81be676ecdc1c1a2c71",
+        "parameters_sha256": "b4ad660036c8895aa0bd638dc7f30937bf72f7e4123c4da0cf4de9820f244f95"
+      },
+      "metric_metadata": {
+        "config_metadata_cache.cold.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "config_metadata_cache.cold.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "config_metadata_cache.warm.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "config_metadata_cache.warm.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "config_metadata_cache.warm.speedup": {
+          "category": "throughput",
+          "unit": "ratio",
+          "direction": "higher"
+        },
+        "odbc_connection_string_ttl_cache.cold.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "odbc_connection_string_ttl_cache.cold.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "odbc_connection_string_ttl_cache.warm.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "odbc_connection_string_ttl_cache.warm.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "odbc_connection_string_ttl_cache.warm.speedup": {
+          "category": "throughput",
+          "unit": "ratio",
+          "direction": "higher"
+        },
+        "columnar_stream_emitter.row_map.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "columnar_stream_emitter.row_map.rows_per_sec": {
+          "category": "throughput",
+          "unit": "rows/s",
+          "direction": "higher"
+        },
+        "columnar_stream_emitter.wire_only.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "columnar_stream_emitter.wire_only.speedup": {
+          "category": "throughput",
+          "unit": "ratio",
+          "direction": "higher"
+        },
+        "columnar_stream_emitter.wire_only.rows_per_sec": {
+          "category": "throughput",
+          "unit": "rows/s",
+          "direction": "higher"
+        },
+        "backpressure_stream_emitter.sequential_admission.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "backpressure_stream_emitter.concurrent_admission.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "backpressure_stream_emitter.concurrent_admission.speedup": {
+          "category": "throughput",
+          "unit": "ratio",
+          "direction": "higher"
+        },
+        "queued_database_gateway.execute_query.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "queued_database_gateway.execute_query.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "sql_rpc_db_streaming_executor.cold_config_cache.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "sql_rpc_db_streaming_executor.warm_config_cache.median_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "sql_rpc_db_streaming_executor.warm_config_cache.speedup": {
+          "category": "throughput",
+          "unit": "ratio",
+          "direction": "higher"
+        }
+      }
+    },
+    {
+      "id": "odbc_hot_paths",
+      "kind": "flutter_test",
+      "status": "pass",
+      "wall_ms": 4500.01,
+      "exit_code": 0,
+      "log_file": "odbc_hot_paths.log",
+      "metrics": {
+        "health_snapshot.p50_us": 23.0,
+        "health_snapshot.p95_us": 144.0,
+        "health_snapshot.p99_us": 565.0,
+        "health_snapshot.input_payload_bytes": 0.0,
+        "pagination_materialization.p50_us": 9.0,
+        "pagination_materialization.p95_us": 22.0,
+        "pagination_materialization.p99_us": 67.0,
+        "pagination_materialization.input_payload_bytes": 4112.0,
+        "bulk_insert_planning.p50_us": 2265.0,
+        "bulk_insert_planning.p95_us": 2818.0,
+        "bulk_insert_planning.p99_us": 3206.0,
+        "bulk_insert_planning.input_payload_bytes": 2400.0,
+        "construct_and_execute_empty_batch.p50_us": 373.0,
+        "construct_and_execute_empty_batch.p95_us": 773.0,
+        "construct_and_execute_empty_batch.p99_us": 2819.0,
+        "construct_and_execute_empty_batch.input_payload_bytes": 0.0,
+        "batch_executor_construction.p50_us": 22.0,
+        "batch_executor_construction.p95_us": 51.0,
+        "batch_executor_construction.p99_us": 76.0,
+        "batch_executor_construction.input_payload_bytes": 0.0,
+        "empty_batch_first_execution.p50_us": 409.0,
+        "empty_batch_first_execution.p95_us": 409.0,
+        "empty_batch_first_execution.p99_us": 409.0,
+        "empty_batch_first_execution.input_payload_bytes": 0.0,
+        "empty_batch_warmed_execution.p50_us": 250.0,
+        "empty_batch_warmed_execution.p95_us": 456.0,
+        "empty_batch_warmed_execution.p99_us": 603.0,
+        "empty_batch_warmed_execution.input_payload_bytes": 0.0
+      },
+      "comparison_identity": {
+        "benchmark_profile": "odbc_hot_paths_v2",
+        "harness_sha256": "319f51ea7450b32d09bba575739bee0194fe4fda617da81be676ecdc1c1a2c71",
+        "parameters_sha256": "b4ad660036c8895aa0bd638dc7f30937bf72f7e4123c4da0cf4de9820f244f95"
+      },
+      "metric_metadata": {
+        "health_snapshot.p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "health_snapshot.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "health_snapshot.p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "health_snapshot.input_payload_bytes": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        },
+        "pagination_materialization.p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "pagination_materialization.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "pagination_materialization.p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "pagination_materialization.input_payload_bytes": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        },
+        "bulk_insert_planning.p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "bulk_insert_planning.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "bulk_insert_planning.p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "bulk_insert_planning.input_payload_bytes": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        },
+        "construct_and_execute_empty_batch.p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "construct_and_execute_empty_batch.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "construct_and_execute_empty_batch.p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "construct_and_execute_empty_batch.input_payload_bytes": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        },
+        "batch_executor_construction.p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "batch_executor_construction.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "batch_executor_construction.p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "batch_executor_construction.input_payload_bytes": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        },
+        "empty_batch_first_execution.p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "empty_batch_first_execution.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "empty_batch_first_execution.p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "empty_batch_first_execution.input_payload_bytes": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        },
+        "empty_batch_warmed_execution.p50_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "empty_batch_warmed_execution.p95_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "empty_batch_warmed_execution.p99_us": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "empty_batch_warmed_execution.input_payload_bytes": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        }
+      }
+    },
+    {
+      "id": "transport_pipeline_json",
+      "kind": "dart_tool",
+      "status": "skipped",
+      "reason": "plain `dart run` cannot compile FFI/isolate offload in this workspace; use flutter_test transport_pipeline or pass --no-skip-dart-tool for local experiments"
+    },
+    {
+      "id": "odbc_async",
+      "kind": "dart_odbc_fast",
+      "status": "fail",
+      "wall_ms": 8726.39,
+      "exit_code": 1,
+      "log_file": "odbc_async.log",
+      "metrics": {
+        "workerCount=1.elapsed_ms": 104.224,
+        "workerCount=1.workers": 1.0,
+        "workerCount=1.query_count": 24.0,
+        "workerCount=1.max_in_flight": 24.0,
+        "workerCount=1.pool_size": 0.0,
+        "workerCount=1.rows": 8000.0,
+        "workerCount=1.queries_per_second": 230.2732575990175,
+        "workerCount=1.timeouts": 0.0,
+        "workerCount=1.fallbacks": 0.0,
+        "workerCount=1.routed": 773.0,
+        "workerCount=1.completed_requests": 773.0,
+        "workerCount=1.failed_requests": 0.0,
+        "workerCount=4.elapsed_ms": 136.497,
+        "workerCount=4.workers": 4.0,
+        "workerCount=4.query_count": 24.0,
+        "workerCount=4.max_in_flight": 24.0,
+        "workerCount=4.pool_size": 0.0,
+        "workerCount=4.rows": 8000.0,
+        "workerCount=4.queries_per_second": 175.8280401767072,
+        "workerCount=4.timeouts": 0.0,
+        "workerCount=4.fallbacks": 0.0,
+        "workerCount=4.routed": 625.0,
+        "workerCount=4.completed_requests": 625.0,
+        "workerCount=4.failed_requests": 0.0,
+        "workerCount=4 columnar.elapsed_ms": 134.369,
+        "workerCount=4 columnar.workers": 4.0,
+        "workerCount=4 columnar.query_count": 24.0,
+        "workerCount=4 columnar.max_in_flight": 24.0,
+        "workerCount=4 columnar.pool_size": 0.0,
+        "workerCount=4 columnar.rows": 8000.0,
+        "workerCount=4 columnar.queries_per_second": 178.61262642424964,
+        "workerCount=4 columnar.timeouts": 0.0,
+        "workerCount=4 columnar.fallbacks": 0.0,
+        "workerCount=4 columnar.routed": 697.0,
+        "workerCount=4 columnar.completed_requests": 697.0,
+        "workerCount=4 columnar.failed_requests": 0.0,
+        "native pool.elapsed_ms": 181.173,
+        "native pool.workers": 4.0,
+        "native pool.query_count": 24.0,
+        "native pool.max_in_flight": 4.0,
+        "native pool.pool_size": 4.0,
+        "native pool.rows": 8000.0,
+        "native pool.queries_per_second": 132.47007004354953,
+        "native pool.timeouts": 0.0,
+        "native pool.fallbacks": 0.0,
+        "native pool.routed": 772.0,
+        "native pool.completed_requests": 772.0,
+        "native pool.failed_requests": 0.0,
+        "prepared reuse.elapsed_ms": 60.267,
+        "prepared reuse.workers": 1.0,
+        "prepared reuse.query_count": 24.0,
+        "prepared reuse.max_in_flight": 1.0,
+        "prepared reuse.pool_size": 0.0,
+        "prepared reuse.rows": 8000.0,
+        "prepared reuse.queries_per_second": 398.2278859077107,
+        "prepared reuse.timeouts": 0.0,
+        "prepared reuse.fallbacks": 0.0,
+        "prepared reuse.routed": 54.0,
+        "prepared reuse.completed_requests": 54.0,
+        "prepared reuse.failed_requests": 0.0,
+        "wall_ms": 8726.385899994057,
+        "package_version": "5.0.0"
+      },
+      "comparison_identity": {
+        "package_source": "odbc_fast",
+        "package_version": "5.0.0",
+        "driver_family": "SQL Server",
+        "benchmark_profile": "native_async_v2",
+        "workload": "deterministic_8000_rows_v1",
+        "workerCount=1.workers": "1.0",
+        "workerCount=1.query_count": "24.0",
+        "workerCount=1.max_in_flight": "24.0",
+        "workerCount=1.pool_size": "0.0",
+        "workerCount=1.rows": "8000.0",
+        "workerCount=4.workers": "4.0",
+        "workerCount=4.query_count": "24.0",
+        "workerCount=4.max_in_flight": "24.0",
+        "workerCount=4.pool_size": "0.0",
+        "workerCount=4.rows": "8000.0",
+        "workerCount=4 columnar.workers": "4.0",
+        "workerCount=4 columnar.query_count": "24.0",
+        "workerCount=4 columnar.max_in_flight": "24.0",
+        "workerCount=4 columnar.pool_size": "0.0",
+        "workerCount=4 columnar.rows": "8000.0",
+        "native pool.workers": "4.0",
+        "native pool.query_count": "24.0",
+        "native pool.max_in_flight": "4.0",
+        "native pool.pool_size": "4.0",
+        "native pool.rows": "8000.0",
+        "prepared reuse.workers": "1.0",
+        "prepared reuse.query_count": "24.0",
+        "prepared reuse.max_in_flight": "1.0",
+        "prepared reuse.pool_size": "0.0",
+        "prepared reuse.rows": "8000.0",
+        "harness_sha256": "319f51ea7450b32d09bba575739bee0194fe4fda617da81be676ecdc1c1a2c71",
+        "parameters_sha256": "b4ad660036c8895aa0bd638dc7f30937bf72f7e4123c4da0cf4de9820f244f95",
+        "dbms_name": "Microsoft SQL Server",
+        "dbms_version": "14.00.1000",
+        "driver_name": "msodbcsql17.dll",
+        "driver_version": "17.10.0006"
+      },
+      "metric_metadata": {
+        "workerCount=1.elapsed_ms": {
+          "category": "latency",
+          "unit": "ms",
+          "direction": "lower"
+        },
+        "workerCount=1.workers": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=1.query_count": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=1.max_in_flight": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=1.pool_size": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=1.rows": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "workerCount=1.queries_per_second": {
+          "category": "throughput",
+          "unit": "queries/s",
+          "direction": "higher"
+        },
+        "workerCount=1.timeouts": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=1.fallbacks": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=1.routed": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=1.completed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=1.failed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.elapsed_ms": {
+          "category": "latency",
+          "unit": "ms",
+          "direction": "lower"
+        },
+        "workerCount=4.workers": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.query_count": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.max_in_flight": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.pool_size": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.rows": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "workerCount=4.queries_per_second": {
+          "category": "throughput",
+          "unit": "queries/s",
+          "direction": "higher"
+        },
+        "workerCount=4.timeouts": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.fallbacks": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.routed": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.completed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4.failed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.elapsed_ms": {
+          "category": "latency",
+          "unit": "ms",
+          "direction": "lower"
+        },
+        "workerCount=4 columnar.workers": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.query_count": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.max_in_flight": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.pool_size": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.rows": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.queries_per_second": {
+          "category": "throughput",
+          "unit": "queries/s",
+          "direction": "higher"
+        },
+        "workerCount=4 columnar.timeouts": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.fallbacks": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.routed": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.completed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "workerCount=4 columnar.failed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.elapsed_ms": {
+          "category": "latency",
+          "unit": "ms",
+          "direction": "lower"
+        },
+        "native pool.workers": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.query_count": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.max_in_flight": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.pool_size": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.rows": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "native pool.queries_per_second": {
+          "category": "throughput",
+          "unit": "queries/s",
+          "direction": "higher"
+        },
+        "native pool.timeouts": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.fallbacks": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.routed": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.completed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "native pool.failed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.elapsed_ms": {
+          "category": "latency",
+          "unit": "ms",
+          "direction": "lower"
+        },
+        "prepared reuse.workers": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.query_count": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.max_in_flight": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.pool_size": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.rows": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "prepared reuse.queries_per_second": {
+          "category": "throughput",
+          "unit": "queries/s",
+          "direction": "higher"
+        },
+        "prepared reuse.timeouts": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.fallbacks": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.routed": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.completed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "prepared reuse.failed_requests": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "wall_ms": {
+          "category": "configuration",
+          "unit": "ms",
+          "direction": "none"
+        },
+        "package_version": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        }
+      }
+    },
+    {
+      "id": "odbc_streaming",
+      "kind": "dart_odbc_fast",
+      "status": "pass",
+      "wall_ms": 3244.16,
+      "exit_code": 0,
+      "log_file": "odbc_streaming.log",
+      "metrics": {
+        "wall_ms": 3244.163399998797,
+        "streamQueryBuffer.elapsed_ms": 4.934,
+        "streamQueryBuffer.rows": 8000.0,
+        "streamQueryBuffer.chunks": 1.0,
+        "streamQueryBuffer.rows_per_second": 1621402.5131738954,
+        "streamQueryBuffer.fetch_size": 0.0,
+        "streamQueryBuffer.chunk_size": 1048576.0,
+        "streamQueryBatched.elapsed_ms": 12.558,
+        "streamQueryBatched.rows": 8000.0,
+        "streamQueryBatched.chunks": 8.0,
+        "streamQueryBatched.rows_per_second": 637044.1153049849,
+        "streamQueryBatched.fetch_size": 1000.0,
+        "streamQueryBatched.chunk_size": 1048576.0,
+        "package_version": "5.0.0"
+      },
+      "comparison_identity": {
+        "package_source": "odbc_fast",
+        "package_version": "5.0.0",
+        "driver_family": "SQL Server",
+        "benchmark_profile": "native_streaming_v2",
+        "streamQueryBatched.rows": "8000.0",
+        "streamQueryBatched.fetch_size": "1000.0",
+        "streamQueryBatched.chunk_size": "1048576.0",
+        "workload": "deterministic_8000_rows_v1",
+        "streamQueryBuffer.rows": "8000.0",
+        "streamQueryBuffer.fetch_size": "0.0",
+        "streamQueryBuffer.chunk_size": "1048576.0",
+        "harness_sha256": "319f51ea7450b32d09bba575739bee0194fe4fda617da81be676ecdc1c1a2c71",
+        "parameters_sha256": "b4ad660036c8895aa0bd638dc7f30937bf72f7e4123c4da0cf4de9820f244f95",
+        "dbms_name": "Microsoft SQL Server",
+        "dbms_version": "14.00.1000",
+        "driver_name": "msodbcsql17.dll",
+        "driver_version": "17.10.0006"
+      },
+      "metric_metadata": {
+        "wall_ms": {
+          "category": "configuration",
+          "unit": "ms",
+          "direction": "none"
+        },
+        "streamQueryBuffer.elapsed_ms": {
+          "category": "latency",
+          "unit": "ms",
+          "direction": "lower"
+        },
+        "streamQueryBuffer.rows": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "streamQueryBuffer.chunks": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "streamQueryBuffer.rows_per_second": {
+          "category": "throughput",
+          "unit": "rows/s",
+          "direction": "higher"
+        },
+        "streamQueryBuffer.fetch_size": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "streamQueryBuffer.chunk_size": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        },
+        "streamQueryBatched.elapsed_ms": {
+          "category": "latency",
+          "unit": "ms",
+          "direction": "lower"
+        },
+        "streamQueryBatched.rows": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "streamQueryBatched.chunks": {
+          "category": "counter",
+          "unit": "count",
+          "direction": "none"
+        },
+        "streamQueryBatched.rows_per_second": {
+          "category": "throughput",
+          "unit": "rows/s",
+          "direction": "higher"
+        },
+        "streamQueryBatched.fetch_size": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "streamQueryBatched.chunk_size": {
+          "category": "configuration",
+          "unit": "bytes",
+          "direction": "none"
+        },
+        "package_version": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        }
+      }
+    },
+    {
+      "id": "odbc_gateway_encoding",
+      "kind": "flutter_test",
+      "status": "pass",
+      "wall_ms": 5178.24,
+      "exit_code": 0,
+      "log_file": "odbc_gateway_encoding.log",
+      "metrics": {
+        "median_us_balancedServer_rowMajor": 24478.0,
+        "balancedServer_rowMajor.rows": 8000.0,
+        "balancedServer_rowMajor.iterations": 4.0,
+        "median_us_highThroughput_rowMajor": 12586.0,
+        "highThroughput_rowMajor.rows": 8000.0,
+        "highThroughput_rowMajor.iterations": 4.0
+      },
+      "comparison_identity": {
+        "package_source": "odbc_fast",
+        "package_version": "5.0.0",
+        "benchmark_profile": "gateway_materialized_rowMajor_v2",
+        "driver_family": "SQL Anywhere",
+        "harness_sha256": "319f51ea7450b32d09bba575739bee0194fe4fda617da81be676ecdc1c1a2c71",
+        "parameters_sha256": "b4ad660036c8895aa0bd638dc7f30937bf72f7e4123c4da0cf4de9820f244f95",
+        "dbms_name": "SQL Anywhere",
+        "dbms_version": "16.00.0000",
+        "driver_name": "dbodbc16.dll",
+        "driver_version": "16.00.2043"
+      },
+      "metric_metadata": {
+        "median_us_balancedServer_rowMajor": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "balancedServer_rowMajor.rows": {
+          "category": "configuration",
+          "unit": "rows",
+          "direction": "none"
+        },
+        "balancedServer_rowMajor.iterations": {
+          "category": "configuration",
+          "unit": "count",
+          "direction": "none"
+        },
+        "median_us_highThroughput_rowMajor": {
+          "category": "latency",
+          "unit": "us",
+          "direction": "lower"
+        },
+        "highThroughput_rowMajor.rows": {
+          "category": "throughput",
+          "unit": "ops/s",
+          "direction": "higher"
+        },
+        "highThroughput_rowMajor.iterations": {
+          "category": "throughput",
+          "unit": "ops/s",
+          "direction": "higher"
+        }
+      }
+    }
+  ],
+  "notes": [
+    "Ephemeral run output; compare against benchmarks/baseline/summary.json.",
+    "Legacy benchmark_logs/ format is not schema-compatible with this summary.",
+    "Archived as evidence only; failed/inconclusive qualification. Not promoted to baseline. Source revision describes the working tree at measurement time, before publication."
+  ]
+}

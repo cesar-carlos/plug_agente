@@ -51,6 +51,8 @@ import argparse
 import json
 import os
 import re
+import math
+import hashlib
 import subprocess
 import sys
 import time
@@ -79,7 +81,12 @@ from tool.py.benchmark_common import (
     parse_transport_markdown_metrics,
     resolve_dart_odbc_fast_root,
     run_id_now,
+    strip_shell_log_prefix,
+    metric_metadata,
     write_json,
+    extract_json_object_from_output,
+    approved_controlled_comparison,
+    collect_dependency_versions,
 )
 from tool.py.odbc_benchmark_runner import (
     resolve_benchmark_driver_family,
@@ -290,7 +297,7 @@ def run_gateway_encoding_flutter_test(log_path: Path) -> dict[str, Any]:
         status = "skipped"
     package_root = resolve_dart_odbc_fast_root()
     comparison_identity = _odbc_fast_comparison_identity(package_root)
-    comparison_identity["benchmark_profile"] = "gateway_encoding_v1"
+    comparison_identity["benchmark_profile"] = "gateway_materialized_rowMajor_v2"
     comparison_identity["driver_family"] = get_dsn_driver_family(
         os.environ.get("ODBC_TEST_DSN", os.environ.get("ODBC_DSN", "")),
     )
@@ -341,10 +348,10 @@ def run_odbc_hot_paths_flutter_test(log_path: Path) -> dict[str, Any]:
     metrics: dict[str, float] = {}
     for line in output.splitlines():
         try:
-            payload = json.loads(line.strip())
+            payload = json.loads(strip_shell_log_prefix(line))
         except json.JSONDecodeError:
             continue
-        if payload.get("benchmark") != "odbc_hot_paths":
+        if not isinstance(payload, dict) or payload.get("benchmark") != "odbc_hot_paths":
             continue
         for scenario in payload.get("scenarios", []):
             if not isinstance(scenario, dict) or not isinstance(scenario.get("scenario"), str):
@@ -356,7 +363,7 @@ def run_odbc_hot_paths_flutter_test(log_path: Path) -> dict[str, Any]:
     return {
         "id": "odbc_hot_paths",
         "kind": "flutter_test",
-        "status": "pass" if exit_code == 0 else "fail",
+        "status": ("pass" if metrics else "inconclusive") if exit_code == 0 else "fail",
         "wall_ms": round(wall_ms, 2),
         "exit_code": exit_code,
         "log_file": log_path.name,
@@ -405,22 +412,14 @@ def enforce_columnar_speedup_gate(suites: list[dict[str, Any]]) -> int:
     except ValueError:
         print(f"Invalid BENCHMARK_COLUMNAR_MIN_SPEEDUP: {raw}", file=sys.stderr)
         return 2
-    gateway = next((suite for suite in suites if suite.get("id") == "odbc_gateway_encoding"), None)
-    if gateway is None or gateway.get("status") != "pass":
-        return 0
-    metrics = gateway.get("metrics") or {}
-    balanced = metrics.get("median_us_balancedServer_rowMajor")
-    columnar = metrics.get("median_us_highThroughput_columnar")
-    if not isinstance(balanced, (int, float)) or not isinstance(columnar, (int, float)) or columnar <= 0:
-        return 0
-    speedup = balanced / columnar
-    if speedup < min_speedup:
-        print(
-            f"Columnar speedup gate failed: {speedup:.3f} < {min_speedup} "
-            f"(balanced={balanced}us columnar={columnar}us)",
-            file=sys.stderr,
-        )
-        return 3
+    if not math.isfinite(min_speedup) or min_speedup <= 0:
+        return 2
+    # Columnar is measured and gated by the native async harness. The gateway
+    # materializes rowMajor results and cannot qualify this gate.
+    native = next((suite for suite in suites if suite.get("id") == "odbc_async"), None)
+    if native is None or native.get("status") != "pass":
+        print("Columnar gate inconclusive: valid native async measurements required", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -504,7 +503,7 @@ def run_odbc_suite(suite_id: str, package_root: Path, log_path: Path) -> dict[st
     comparison_identity = _odbc_fast_comparison_identity(package_root)
     comparison_identity["driver_family"] = resolve_benchmark_driver_family()
     if suite_id == "odbc_streaming":
-        comparison_identity["benchmark_profile"] = "streaming_example_v1"
+        comparison_identity["benchmark_profile"] = "native_streaming_v2"
         for key in (
             "streamQueryBatched.rows",
             "streamQueryBatched.fetch_size",
@@ -513,7 +512,12 @@ def run_odbc_suite(suite_id: str, package_root: Path, log_path: Path) -> dict[st
             value = metrics.get(key)
             if isinstance(value, (int, float)):
                 comparison_identity[key] = str(int(value))
-    status = "pass" if exit_code == 0 else "fail"
+    status = "pass" if exit_code == 0 else ("inconclusive" if exit_code == 2 else "fail")
+    comparison_identity.setdefault("benchmark_profile", "native_async_v2")
+    comparison_identity["workload"] = "deterministic_8000_rows_v1"
+    for key, value in metrics.items():
+        if key.endswith(('.rows', '.workers', '.query_count', '.pool_size', '.max_in_flight', '.fetch_size', '.chunk_size')):
+            comparison_identity[key] = str(value)
     return {
         "id": suite_id,
         "kind": "dart_odbc_fast",
@@ -573,6 +577,55 @@ def skipped_suite(suite_id: str, kind: str, reason: str) -> dict[str, Any]:
     }
 
 
+def required_metric_keys(suite_id: str) -> set[str]:
+    if suite_id == 'transport_pipeline':
+        return {f'{case}.async.{mode}.signed_{signed}.{direction}_p{percentile}_us'
+                for case in ('small_sql_repetitive', 'large_sql_low_compressibility', 'large_incompressible_blob')
+                for mode in ('none', 'auto', 'gzip') for signed in (False, True)
+                for direction in ('send', 'receive') for percentile in (50, 95, 99)}
+    if suite_id == 'odbc_hot_paths':
+        return {f'{case}.p{percentile}_us' for case in (
+            'health_snapshot', 'pagination_materialization', 'bulk_insert_planning',
+            'construct_and_execute_empty_batch', 'batch_executor_construction',
+            'empty_batch_first_execution', 'empty_batch_warmed_execution') for percentile in (50, 95, 99)}
+    if suite_id == 'plug_agente_stack':
+        return {f'{scenario}.{variant}.median_us' for scenario, variants in (
+            ('config_metadata_cache', ('cold', 'warm')), ('odbc_connection_string_ttl_cache', ('cold', 'warm')),
+            ('columnar_stream_emitter', ('row_map', 'wire_only')), ('backpressure_stream_emitter', ('sequential_admission', 'concurrent_admission')),
+            ('queued_database_gateway', ('execute_query',)), ('sql_rpc_db_streaming_executor', ('cold_config_cache', 'warm_config_cache')))
+            for variant in variants}
+    if suite_id == 'odbc_gateway_encoding':
+        return {f'median_us_{profile}_rowMajor' for profile in ('balancedServer', 'highThroughput')}
+    if suite_id == 'odbc_streaming':
+        return {f'{mode}.{field}' for mode in ('streamQueryBuffer', 'streamQueryBatched')
+                for field in ('elapsed_ms', 'rows', 'rows_per_second', 'fetch_size', 'chunk_size')}
+    if suite_id == 'odbc_async':
+        return {f'{scenario}.{field}' for scenario in (
+            'workerCount=1', 'workerCount=4', 'workerCount=4 columnar',
+            'workerCount=4 columnarCompressed', 'native pool', 'prepared reuse')
+            for field in ('elapsed_ms', 'rows', 'queries_per_second', 'timeouts', 'fallbacks', 'failed_requests')}
+    return set()
+
+
+def complete_suite_metrics(suite: dict[str, Any]) -> bool:
+    metrics = suite.get('metrics', {})
+    required = required_metric_keys(suite['id'])
+    numeric = lambda value: isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+    return bool(metrics) and required.issubset(metrics) and all(numeric(metrics[key]) for key in required) and all(
+        numeric(value) or (isinstance(value, str) and metric_metadata(key)['category'] == 'configuration')
+        for key, value in metrics.items())
+
+
+def harness_identity() -> str:
+    digest = hashlib.sha256()
+    paths = sorted((PROJECT_ROOT / 'tool/benchmarks').glob('*.dart'))
+    paths += [PROJECT_ROOT / path for path in (TRANSPORT_TEST, PLUG_AGENTE_STACK_TEST, GATEWAY_ENCODING_TEST, ODBC_HOT_PATHS_TEST)]
+    for path in paths:
+        digest.update(path.relative_to(PROJECT_ROOT).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
 def render_report(summary: dict[str, Any]) -> str:
     lines = [
         "# Relatório de benchmark — plug_agente",
@@ -582,6 +635,8 @@ def render_report(summary: dict[str, Any]) -> str:
         f"- Commit: `{summary['git']['commit_sha']}` ({summary['git']['branch']})",
         f"- Working tree dirty: {summary['git']['dirty']}",
         f"- Plataforma: {summary['machine']['platform']}",
+        f"- Validade das medições: **{summary['qualification']}**",
+        f"- Comparação controlada: **{summary['comparison']['status']}**",
         "",
         "## Suites",
         "",
@@ -619,6 +674,7 @@ def render_report(summary: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ensure_on_path()
     parser = argparse.ArgumentParser(description="Run plug_agente benchmark suite.")
+    parser.add_argument('--comparison-report', help='Attach a controlled transport comparison for this source')
     parser.add_argument("--dry-run", action="store_true", help="List planned benchmarks and exit.")
     parser.add_argument("--env-path", default=".env", help="Path to .env for ODBC flags (default: .env)")
     parser.add_argument(
@@ -653,6 +709,8 @@ def main(argv: list[str] | None = None) -> int:
 
     bootstrap_env(resolve_env_path(args.env_path))
     only = {item.strip() for item in args.only.split(",") if item.strip()} or None
+    if only and only - {plan['id'] for plan in build_suite_plans()}:
+        parser.error('Unknown benchmark suite id')
     plans = filter_suite_plans(
         build_suite_plans(),
         only=only,
@@ -693,13 +751,36 @@ def main(argv: list[str] | None = None) -> int:
         if suite["status"] in {"fail", "error"}:
             had_failure = True
 
+    for suite in suites:
+        if suite["status"] == "pass" and not complete_suite_metrics(suite):
+            suite["status"] = "inconclusive"
+            suite["reason"] = "Required benchmark metrics missing"
+        if suite["status"] == "skipped":
+            continue
+        suite.setdefault("comparison_identity", {"benchmark_profile": f"{suite['id']}_v2"})
+        suite['comparison_identity']['harness_sha256'] = harness_identity()
+        suite['comparison_identity']['parameters_sha256'] = hashlib.sha256(json.dumps(collect_env_flags(), sort_keys=True).encode()).hexdigest()
+        if suite.get('log_file'):
+            payload = extract_json_object_from_output((output_dir / suite['log_file']).read_text(encoding='utf-8'))
+            if payload and isinstance(payload.get('driver'), dict):
+                suite['comparison_identity'].update({key: str(value) for key, value in payload['driver'].items()
+                                                     if key in {'driver_name', 'driver_version', 'dbms_name', 'dbms_version'}})
+        suite["metric_metadata"] = {key: metric_metadata(key) for key in suite.get("metrics", {})}
+    qualification = "fail" if had_failure else ("inconclusive" if not any(s["status"] == "pass" for s in suites) or any(s["status"] == "inconclusive" for s in suites) else "pass")
+    try:
+        schema_reference = Path(os.path.relpath(SCHEMA_PATH, output_dir)).as_posix()
+    except ValueError:  # Windows output directory on a different drive.
+        schema_reference = SCHEMA_PATH.as_posix()
     summary: dict[str, Any] = {
-        "$schema": "../schema/summary.schema.json",
+        "$schema": schema_reference,
         "schema_version": SCHEMA_VERSION,
+        "qualification": qualification,
+        "comparison": {"status": "inconclusive", "reason": "No controlled comparison attached"},
         "run_id": run_id,
         "captured_at": captured_at_now(),
         "git": collect_git_metadata(),
         "machine": collect_machine_metadata(),
+        "dependencies": collect_dependency_versions(PROJECT_ROOT),
         "env_flags": collect_env_flags(),
         "suites": suites,
         "notes": [
@@ -707,6 +788,14 @@ def main(argv: list[str] | None = None) -> int:
             "Legacy benchmark_logs/ format is not schema-compatible with this summary.",
         ],
     }
+    if args.comparison_report:
+        comparison = json.loads(Path(args.comparison_report).read_text(encoding='utf-8'))
+        identity = {key: summary['git'][key] for key in ('commit_sha', 'source_sha256')}
+        if comparison.get('candidate') != identity:
+            comparison = {'status': 'inconclusive', 'reason': 'Controlled comparison measures a different candidate source'}
+        elif comparison.get('status') == 'pass' and not approved_controlled_comparison(comparison):
+            comparison = {'status': 'inconclusive', 'reason': 'Controlled comparison is incomplete or violates required gates'}
+        summary['comparison'] = comparison
 
     summary_path = output_dir / "summary.json"
     report_path = output_dir / "REPORT.md"
@@ -733,13 +822,20 @@ def main(argv: list[str] | None = None) -> int:
             ]
         )
 
+    # Keep the native ODBC gate's public exit code, including when transport
+    # qualification is inconclusive. Artifacts above are still published.
+    if any(suite.get('exit_code') == 3 for suite in suites):
+        return 3
+
     columnar_gate_exit = enforce_columnar_speedup_gate(suites)
     if columnar_gate_exit != 0:
         return columnar_gate_exit
 
     if compare_exit != 0:
         return compare_exit
-    return 1 if had_failure else 0
+    if args.comparison_report and summary['comparison'].get('status') != 'pass':
+        return 1 if summary['comparison'].get('status') == 'fail' else 2
+    return 1 if had_failure else (2 if qualification == "inconclusive" else 0)
 
 
 if __name__ == "__main__":

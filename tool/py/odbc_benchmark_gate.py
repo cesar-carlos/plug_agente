@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import json
+import math
 import re
 import sys
 from dataclasses import dataclass
@@ -12,12 +14,12 @@ _ASYNC_SCENARIO_RE = re.compile(
 )
 
 _STREAM_ROWS_PER_SEC_RE = re.compile(
-    r"(?P<label>streamQueryBatched|streamQuery)\s*:.*?rowsPerSecond=(?P<rows_per_sec>[0-9.]+)",
+    r"(?P<label>streamQueryBatched|streamQueryBuffer|streamQuery)\s*:.*?rowsPerSecond=(?P<rows_per_sec>[0-9.]+)",
     re.MULTILINE | re.IGNORECASE,
 )
 
 _STREAM_ROWS_FALLBACK_RE = re.compile(
-    r"(?P<label>streamQueryBatched|streamQuery)\s*:\s*(?P<ms>\d+)\s*ms,\s*rows=(?P<rows>\d+)",
+    r"(?P<label>streamQueryBatched|streamQueryBuffer|streamQuery)\s*:\s*(?P<ms>[0-9.]+)\s*ms,\s*rows=(?P<rows>\d+)",
     re.MULTILINE | re.IGNORECASE,
 )
 
@@ -38,6 +40,14 @@ class StreamingBenchmarkScenario:
 
 def parse_async_benchmark_scenarios(output: str) -> list[AsyncBenchmarkScenario]:
     scenarios: list[AsyncBenchmarkScenario] = []
+    for line in output.splitlines():
+        try:
+            payload = json.loads(line.removeprefix("Shell:").strip())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("benchmark") == "native_odbc_async":
+            return [AsyncBenchmarkScenario(row["scenario"], float(row["elapsed_ms"]), row["encoding"], int(row["fallbacks"])) for row in payload["scenarios"]]
+    output = "\n".join(line.strip().removeprefix("Shell:").strip() for line in output.splitlines())
     for match in _ASYNC_SCENARIO_RE.finditer(output):
         scenarios.append(
             AsyncBenchmarkScenario(
@@ -59,6 +69,13 @@ def _rows_per_second_from_match(label: str, rows: int, elapsed_ms: int) -> float
 def parse_streaming_benchmark_scenarios(output: str) -> list[StreamingBenchmarkScenario]:
     scenarios: list[StreamingBenchmarkScenario] = []
     by_label: dict[str, StreamingBenchmarkScenario] = {}
+    for line in output.splitlines():
+        try:
+            payload = json.loads(line.strip().removeprefix("Shell:").strip())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("benchmark") == "native_odbc_streaming":
+            return [StreamingBenchmarkScenario(row["scenario"], float(row["rows_per_second"])) for row in payload["scenarios"]]
 
     for match in _STREAM_ROWS_PER_SEC_RE.finditer(output):
         by_label[match.group("label")] = StreamingBenchmarkScenario(
@@ -71,7 +88,7 @@ def parse_streaming_benchmark_scenarios(output: str) -> list[StreamingBenchmarkS
         if label in by_label:
             continue
         rows = int(match.group("rows"))
-        elapsed_ms = int(match.group("ms"))
+        elapsed_ms = float(match.group("ms"))
         by_label[label] = StreamingBenchmarkScenario(
             label=label,
             rows_per_second=_rows_per_second_from_match(label, rows, elapsed_ms),
@@ -89,7 +106,7 @@ def _benchmark_gates_enabled() -> bool:
     }
 
 
-def _read_positive_float_env(name: str, *, default: float | None = None) -> float | None:
+def _read_positive_float_env(name: str, *, default: float | None = None, allow_zero: bool = False) -> float | None:
     raw = os.environ.get(name, "").strip()
     if not raw:
         return default
@@ -98,7 +115,7 @@ def _read_positive_float_env(name: str, *, default: float | None = None) -> floa
     except ValueError:
         print(f"Invalid {name}: {raw}", file=sys.stderr)
         raise SystemExit(2)
-    if value <= 0:
+    if not math.isfinite(value) or value < 0 or (value == 0 and not allow_zero):
         print(f"{name} must be > 0 (got {value})", file=sys.stderr)
         raise SystemExit(2)
     return value
@@ -137,7 +154,10 @@ def enforce_async_benchmark_gates(output: str) -> int:
 
     max_fallbacks = 0
     if gates_enabled or os.environ.get("BENCHMARK_ODBC_FALLBACKS_MAX", "").strip() != "":
-        max_fallbacks = int(_read_positive_float_env("BENCHMARK_ODBC_FALLBACKS_MAX", default=0.0) or 0.0)
+        maximum = _read_positive_float_env("BENCHMARK_ODBC_FALLBACKS_MAX", default=0.0, allow_zero=True) or 0.0
+        if not maximum.is_integer():
+            raise SystemExit(2)
+        max_fallbacks = int(maximum)
 
     total_fallbacks = sum(scenario.fallbacks for scenario in scenarios)
     if total_fallbacks > max_fallbacks:
@@ -167,8 +187,8 @@ def enforce_async_benchmark_gates(output: str) -> int:
         if gates_enabled:
             print(message, file=sys.stderr)
             return 3
-        print(f"{message} Skipping.", file=sys.stderr)
-        return 0
+        print(f"{message} Inconclusive.", file=sys.stderr)
+        return 2
 
     speedups: list[tuple[str, float, float]] = []
     if columnar is not None:
@@ -195,8 +215,8 @@ def enforce_async_benchmark_gates(output: str) -> int:
         if gates_enabled:
             print(message, file=sys.stderr)
             return 3
-        print(f"{message} Skipping.", file=sys.stderr)
-        return 0
+        print(f"{message} Inconclusive.", file=sys.stderr)
+        return 2
 
     best_label, best_ms, best_speedup = max(speedups, key=lambda item: item[2])
     if best_speedup < min_speedup:
@@ -236,15 +256,15 @@ def enforce_streaming_benchmark_gates(output: str) -> int:
     if min_speedup is None:
         return 0
 
-    stream = by_label.get("streamQuery")
+    stream = by_label.get("streamQueryBuffer") or by_label.get("streamQuery")
     batched = by_label.get("streamQueryBatched")
     if stream is None or batched is None:
         message = "Streaming speedup gate failed: missing streamQuery or streamQueryBatched rows/s."
         if gates_enabled:
             print(message, file=sys.stderr)
             return 3
-        print(f"{message} Skipping.", file=sys.stderr)
-        return 0
+        print(f"{message} Inconclusive.", file=sys.stderr)
+        return 2
 
     if stream.rows_per_second <= 0:
         print(

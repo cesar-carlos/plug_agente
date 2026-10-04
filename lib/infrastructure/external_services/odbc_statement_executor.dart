@@ -307,7 +307,13 @@ final class OdbcStatementExecutor {
       while (true) {
         final pollResult = await _service.asyncPoll(requestId);
         if (pollResult.isError()) {
-          return Failure(pollResult.exceptionOrNull()!);
+          final pollError = pollResult.exceptionOrNull()!;
+          final recovered = await _recoverTerminalAsyncPoll(requestId, pollError);
+          if (recovered != null) {
+            completionUnconfirmed = false;
+            return recovered;
+          }
+          return Failure(pollError);
         }
 
         final status = pollResult.getOrThrow();
@@ -452,6 +458,46 @@ final class OdbcStatementExecutor {
     required String connectionId,
     required int requestId,
   }) => abortAsyncRequest(connectionId: connectionId, requestId: requestId);
+
+  /// `odbc_fast` reports a finished statement (`asyncPoll` status < 0) as a
+  /// failed poll. The engine diagnostic is on the result, not on that poll
+  /// error. Recover it so a confirmed SQL failure can release the connection
+  /// instead of quarantining the pool.
+  Future<Result<QueryResult>?> _recoverTerminalAsyncPoll(
+    int requestId,
+    Object pollError,
+  ) async {
+    if (OdbcErrorInspector.outcomeUnknown(pollError)) {
+      return null;
+    }
+    final recovered = await _service.asyncGetResult(requestId);
+    if (recovered.isSuccess()) {
+      return recovered;
+    }
+    final recoveredError = recovered.exceptionOrNull()!;
+    if (!_isGenericAsyncCompletionFailure(recoveredError)) {
+      return Failure(recoveredError);
+    }
+    if (!_isGenericAsyncCompletionFailure(pollError)) {
+      return Failure(pollError is Exception ? pollError : Exception(pollError.toString()));
+    }
+    return null;
+  }
+
+  bool _isGenericAsyncCompletionFailure(Object error) {
+    if (error is! OdbcError) {
+      return false;
+    }
+    final message = error.message.trim();
+    if (!message.startsWith('Failed to complete async')) {
+      return false;
+    }
+    final sqlState = error.sqlState?.trim();
+    if (sqlState != null && sqlState.isNotEmpty) {
+      return false;
+    }
+    return error.nativeCode == null;
+  }
 
   Future<void> _freeAsyncRequestSafely(int requestId) async {
     final freeResult = await _service.asyncFree(requestId);

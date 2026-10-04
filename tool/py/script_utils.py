@@ -352,9 +352,10 @@ def get_long_query_for_driver(driver_family: str) -> str:
 
 def resolve_benchmark_package(benchmark_path: Path) -> tuple[Path, Path, str]:
     resolved = benchmark_path.resolve(strict=True)
-    package_root = resolved.parent.parent
-    relative_path = f"example/{resolved.name}"
-    return package_root, resolved, relative_path
+    package_root = next((parent for parent in resolved.parents if (parent / "pubspec.yaml").is_file()), None)
+    if package_root is None:
+        raise ValueError(f"No pubspec.yaml found above benchmark: {resolved.name}")
+    return package_root, resolved, resolved.relative_to(package_root).as_posix()
 
 
 def forward_script_args(argv: list[str], *, skip_help: bool = True) -> list[str]:

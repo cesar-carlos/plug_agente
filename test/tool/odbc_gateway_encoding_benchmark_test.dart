@@ -21,7 +21,7 @@ void main() {
 
       final resolvedDsn =
           Platform.environment['ODBC_TEST_DSN']?.trim() ?? Platform.environment['ODBC_DSN']?.trim() ?? dsn;
-      final sql = Platform.environment['ODBC_BENCH_QUERY'] ?? resolveDefaultOdbcBenchQuery(dsn: resolvedDsn);
+      final sql = Platform.environment['ODBC_BENCH_QUERY'];
       final payload = await runOdbcGatewayEncodingBenchmark(
         dsn: resolvedDsn!,
         sql: sql,
@@ -31,11 +31,13 @@ void main() {
       expect(payload, isNotNull);
       stdout.writeln(jsonEncode(payload));
 
-      final scenarios = payload!['scenarios']! as List<dynamic>;
-      expect(scenarios, isNotEmpty);
+      final scenarios = payload['scenarios']! as List<dynamic>;
+      expect(scenarios, hasLength(2));
       for (final scenario in scenarios) {
         final map = scenario as Map<String, dynamic>;
         expect(map['median_us'], isA<int>());
+        expect(map['result_encoding'], 'rowMajor');
+        expect(map['rows'], 8000);
       }
     },
     skip: skipReason,

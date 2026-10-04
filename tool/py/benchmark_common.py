@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import math
 import os
 import platform
 import re
@@ -12,8 +14,9 @@ from pathlib import Path
 from typing import Any, Collection, Mapping
 
 from tool.py.script_utils import PROJECT_ROOT, get_dsn_driver_family, import_dotenv_if_present
+from tool.py.script_utils import resolve_command
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BENCHMARKS_DIR = PROJECT_ROOT / "benchmarks"
 BASELINE_PATH = BENCHMARKS_DIR / "baseline" / "summary.json"
 RESULTS_DIR = BENCHMARKS_DIR / "results"
@@ -37,7 +40,7 @@ TIMING_TRIPLE_RE = re.compile(
 )
 
 STREAMING_BENCHMARK_RESULT_RE = re.compile(
-    r"(?P<label>streamQueryBatched|streamQuery):\s*"
+    r"(?P<label>streamQueryBatched|streamQueryBuffer|streamQuery):\s*"
     r"(?P<elapsed_ms>[0-9.]+)\s*ms,\s*"
     r"rows=(?P<rows>\d+),\s*chunks=(?P<chunks>\d+),\s*"
     r"rowsPerSecond=(?P<rows_per_second>[0-9.]+),\s*"
@@ -101,16 +104,45 @@ def collect_git_metadata() -> dict[str, Any]:
         "commit_sha": _run_git(["rev-parse", "HEAD"]),
         "branch": _run_git(["rev-parse", "--abbrev-ref", "HEAD"]),
         "dirty": dirty,
+        "source_sha256": collect_source_identity(PROJECT_ROOT)['source_sha256'],
     }
 
 
+def collect_source_identity(root: Path, *, revision: str | None = None) -> dict[str, str]:
+    digest = hashlib.sha256()
+    files = sorted((root / 'lib').rglob('*.dart')) + [root / 'pubspec.yaml', root / 'pubspec.lock']
+    for path in files:
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(path.read_bytes())
+    if revision is None:
+        revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=root, text=True, capture_output=True, check=True).stdout.strip()
+    return {'commit_sha': revision, 'source_sha256': digest.hexdigest()}
+
+
+def collect_dependency_versions(root: Path) -> dict[str, str]:
+    versions = {}
+    package = None
+    for line in (root / 'pubspec.lock').read_text(encoding='utf-8').splitlines():
+        if line.startswith('  ') and not line.startswith('    ') and line.endswith(':'):
+            package = line.strip().removesuffix(':')
+        elif package and line.startswith('    version:'):
+            versions[package] = line.partition(':')[2].strip().strip('"\'')
+    return versions
+
+
 def collect_machine_metadata() -> dict[str, str]:
-    return {
+    metadata = {
         "platform": platform.platform(),
         "machine": platform.machine(),
         "processor": platform.processor() or "(unknown)",
         "python_version": platform.python_version(),
     }
+    for executable in ("dart", "flutter"):
+        result = subprocess.run(resolve_command([executable, "--version"]), capture_output=True, text=True, encoding='utf-8', errors='replace')
+        metadata[f"{executable}_version"] = (result.stdout or result.stderr).strip()
+    metadata["dependencies_sha256"] = hashlib.sha256(json.dumps(collect_dependency_versions(PROJECT_ROOT), sort_keys=True).encode()).hexdigest()
+    metadata["host_fingerprint"] = hashlib.sha256(platform.node().encode()).hexdigest()
+    return metadata
 
 
 def odbc_dsn_configured() -> bool:
@@ -148,7 +180,9 @@ def collect_env_flags() -> dict[str, Any]:
                 else:
                     flags[key.lower()] = int(value)
             except ValueError:
-                flags[key.lower()] = value
+                flags[key.lower()] = "invalid"
+            if isinstance(flags[key.lower()], float) and not math.isfinite(flags[key.lower()]):
+                flags[key.lower()] = "invalid"
     return flags
 
 
@@ -381,6 +415,9 @@ def parse_gateway_encoding_metrics(output: str) -> dict[str, float]:
         median = scenario.get("median_us")
         if isinstance(name, str) and isinstance(median, (int, float)):
             metrics[f"median_us_{name}"] = float(median)
+            for key in ('rows', 'iterations'):
+                if isinstance(scenario.get(key), (int, float)):
+                    metrics[f'{name}.{key}'] = float(scenario[key])
     return metrics
 
 
@@ -413,11 +450,39 @@ def parse_odbc_benchmark_metrics(output: str) -> dict[str, float]:
         metrics[name] = sum(values) / len(values)
         if len(values) > 1:
             metrics[f"{name}_max"] = max(values)
+    payload = extract_json_object_from_output(output)
+    if payload and payload.get("benchmark") == "native_odbc_async":
+        for scenario in payload.get("scenarios", []):
+            name = scenario.get("scenario")
+            if isinstance(name, str):
+                for key, value in scenario.items():
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        metrics[f"{name}.{key}"] = float(value)
+    else:
+        from tool.py.odbc_benchmark_gate import parse_async_benchmark_scenarios
+        for scenario in parse_async_benchmark_scenarios(output):
+            prefix = f"{scenario.label}.{scenario.encoding}"
+            metrics[f"{prefix}.elapsed_ms"] = scenario.duration_ms
+            metrics[f"{prefix}.fallbacks"] = float(scenario.fallbacks)
+            line = next((strip_shell_log_prefix(line) for line in output.splitlines() if strip_shell_log_prefix(line).startswith(scenario.label + ':')), '')
+            for source, target in {'workers': 'workers', 'poolSize': 'pool_size', 'maxInFlight': 'max_in_flight', 'units': 'units', 'routed': 'routed', 'timeouts': 'timeouts'}.items():
+                match = re.search(rf'\b{source}=(\d+)', line)
+                if match:
+                    metrics[f'{prefix}.{target}'] = float(match.group(1))
     return metrics
 
 
 def parse_odbc_streaming_benchmark_metrics(output: str) -> dict[str, float]:
     metrics: dict[str, float] = {}
+    payload = extract_json_object_from_output(output)
+    if payload and payload.get("benchmark") == "native_odbc_streaming":
+        for scenario in payload.get("scenarios", []):
+            label = scenario.get("scenario")
+            if isinstance(label, str):
+                for key, value in scenario.items():
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        metrics[f"{label}.{key}"] = float(value)
+        return metrics
     for match in STREAMING_BENCHMARK_RESULT_RE.finditer(output):
         label = match.group("label")
         metrics[f"{label}.elapsed_ms"] = float(match.group("elapsed_ms"))
@@ -427,6 +492,39 @@ def parse_odbc_streaming_benchmark_metrics(output: str) -> dict[str, float]:
         metrics[f"{label}.fetch_size"] = float(match.group("fetch_size"))
         metrics[f"{label}.chunk_size"] = float(match.group("chunk_size"))
     return metrics
+
+
+def valid_native_benchmark_report(output: str, mode: str) -> bool:
+    payload = extract_json_object_from_output(output)
+    if not payload or payload.get('benchmark') != f'native_odbc_{mode}' or payload.get('harness_version') != 2:
+        return False
+    if payload.get('workload') != 'deterministic_8000_rows_v1' or payload.get('rows') != 8000 or payload.get('warmup') != 1 or payload.get('repeats') != 3:
+        return False
+    expected = {'streamQueryBuffer', 'streamQueryBatched'} if mode == 'streaming' else {
+        'workerCount=1', 'workerCount=4', 'workerCount=4 columnar',
+        'workerCount=4 columnar compressed', 'native pool', 'prepared reuse'}
+    rows = payload.get('scenarios', [])
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        return False
+    if len(rows) != len(expected) or {row.get('scenario') for row in rows} != expected:
+        return False
+    for row in rows:
+        samples = row.get('samples')
+        if not isinstance(samples, list) or len(samples) != 3:
+            return False
+        for sample in [row, *samples]:
+            if not isinstance(sample, dict) or sample.get('rows') != 8000:
+                return False
+            elapsed = sample.get('elapsed_ms')
+            if not isinstance(elapsed, (float, int)) or not math.isfinite(elapsed) or elapsed <= 0:
+                return False
+            if mode == 'async':
+                expected_encoding = 'columnarCompressed' if row['scenario'].endswith('compressed') else ('columnar' if row['scenario'].endswith('columnar') else 'rowMajor')
+                if sample.get('timeouts') != 0 or sample.get('fallbacks') != 0 or sample.get('encoding') != expected_encoding or sample.get('actual_encoding') != expected_encoding:
+                    return False
+            elif not isinstance(sample.get('chunks'), int) or sample['chunks'] <= 0 or sample.get('chunk_size', 0) <= 0 or (row['scenario'] == 'streamQueryBatched' and sample.get('fetch_size', 0) <= 0):
+                return False
+    return True
 
 
 def _timing_to_micros(value: str) -> float:
@@ -471,14 +569,14 @@ def incompatible_benchmark_suite_reasons(
     current_suites = suites_by_id(current_summary)
     reasons: dict[str, str] = {}
     for suite_id in sorted(set(baseline_suites) & set(current_suites)):
-        if not suite_id.startswith("odbc_"):
-            continue
         baseline_identity = comparison_identity(baseline_suites[suite_id])
         current_identity = comparison_identity(current_suites[suite_id])
         if baseline_identity is None or current_identity is None:
             reasons[suite_id] = "missing comparison identity"
         elif baseline_identity != current_identity:
             reasons[suite_id] = "comparison identity differs"
+        elif baseline_summary.get("machine") != current_summary.get("machine"):
+            reasons[suite_id] = "machine or SDK differs"
     return reasons
 
 
@@ -495,6 +593,8 @@ def flatten_suite_metrics(
         suite_id = str(suite.get("id", "unknown"))
         if suite_id in excluded:
             continue
+        if suite.get("status", "pass") != "pass":
+            continue
         metrics = suite.get("metrics")
         if not isinstance(metrics, dict):
             continue
@@ -502,11 +602,15 @@ def flatten_suite_metrics(
             if isinstance(value, bool):
                 continue
             if isinstance(value, (int, float)):
-                flattened[f"{suite_id}.{key}"] = float(value)
+                metadata = suite.get("metric_metadata", {}).get(key, metric_metadata(key))
+                if metadata.get("category") in {"latency", "throughput", "memory"} and math.isfinite(value):
+                    flattened[f"{suite_id}.{key}"] = float(value)
     return flattened
 
 
 def metric_lower_is_better(metric_key: str) -> bool:
+    if metric_metadata(metric_key)['direction'] == 'higher':
+        return False
     lower = metric_key.lower()
     if lower.endswith(("_ms", "_us")) or any(
         token in lower for token in ("latency", "duration", "median_us", "p50", "p95", "p99")
@@ -520,13 +624,59 @@ def metric_lower_is_better(metric_key: str) -> bool:
     return True
 
 
+def metric_metadata(key: str) -> dict[str, str]:
+    lower = key.lower()
+    if lower == "wall_ms":
+        return {"category": "configuration", "unit": "ms", "direction": "none"}
+    if lower.endswith(("_us", "_ms")) or "median_us_" in lower:
+        return {"category": "latency", "unit": "us" if "_us" in lower else "ms", "direction": "lower"}
+    if any(token in lower for token in ("rows_per_sec", "queries_per_sec", "ops_per_sec", "throughput", "speedup")):
+        unit = 'ratio' if 'speedup' in lower else ('queries/s' if 'queries_per_sec' in lower else ('rows/s' if 'rows_per_sec' in lower else 'ops/s'))
+        return {"category": "throughput", "unit": unit, "direction": "higher"}
+    if any(token in lower for token in ("heap_growth", "rss_peak")):
+        return {"category": "memory", "unit": "bytes", "direction": "lower"}
+    category = "counter" if any(token in lower for token in ("errors", "timeouts", "fallbacks", "chunks", "routed", "completed_requests", "failed_requests")) else "configuration"
+    unit = 'bytes' if lower.endswith('_bytes') or 'chunk_size' in lower else ('rows' if lower.endswith('.rows') or lower == 'rows' or 'fetch_size' in lower else 'count')
+    return {"category": category, "unit": unit, "direction": "none"}
+
+
 def write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def approved_controlled_comparison(report: Mapping[str, Any]) -> bool:
+    if report.get('status') != 'pass':
+        return False
+    expected = {(case, mode, signed) for case in ('small_sql_repetitive', 'large_sql_low_compressibility', 'large_incompressible_blob')
+                for mode in ('none', 'auto', 'gzip') for signed in (False, True)}
+    try:
+        for name in ('control', 'forward', 'reverse'):
+            section = report[name]
+            if section.get('status') != 'pass' or section.get('failures') != [] or section.get('pending_metrics') != [] or section.get('heap_gate_evaluated') is not True:
+                return False
+            scenarios = section['scenarios']
+            if len(scenarios) != len(expected) or {(row['case'], row['compression'], row['signed']) for row in scenarios} != expected:
+                return False
+            if not math.isfinite(section['throughput_ratio']) or section['throughput_ratio'] < 0.85:
+                return False
+            pairs = [(section['heap_growth_bytes'], 1.1)] + [(row[field], 1.05) for row in scenarios for field in ('send_p95_us', 'receive_p95_us')]
+            for metrics, factor in pairs:
+                before, after = metrics['base'], metrics['candidate']
+                if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0 for value in (before, after)):
+                    return False
+                if not math.isclose(metrics['limit'], before * factor) or after > before * factor:
+                    return False
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return False
+    return True
+
+
 def load_summary(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    if summary.get("schema_version", 1) not in (1, 2):
+        raise ValueError("Unsupported benchmark summary version")
+    return summary
 
 
 def bootstrap_env(env_path: Path) -> None:

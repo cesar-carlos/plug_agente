@@ -8707,7 +8707,16 @@ class $$ConfigTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$ConfigTableTable, ConfigData>(table),
+                  BaseReferences<_$AppDatabase, $ConfigTableTable, ConfigData>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -9158,7 +9167,19 @@ class $$ClientTokenCacheTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ClientTokenCacheTableTable,
+                    ClientTokenCacheData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ClientTokenCacheTableTable,
+                    ClientTokenCacheData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -9637,7 +9658,10 @@ class $$AgentActionDefinitionTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $AgentActionDefinitionTableTable,
+                    AgentActionDefinitionData
+                  >(table),
                   $$AgentActionDefinitionTableTableReferences(db, table, e),
                 ),
               )
@@ -10090,7 +10114,10 @@ class $$AgentActionTriggerTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $AgentActionTriggerTableTable,
+                    AgentActionTriggerData
+                  >(table),
                   $$AgentActionTriggerTableTableReferences(db, table, e),
                 ),
               )
@@ -11087,7 +11114,10 @@ class $$AgentActionExecutionTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $AgentActionExecutionTableTable,
+                    AgentActionExecutionData
+                  >(table),
                   $$AgentActionExecutionTableTableReferences(db, table, e),
                 ),
               )
@@ -11344,7 +11374,19 @@ class $$RpcIdempotencyCacheTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $RpcIdempotencyCacheTableTable,
+                    RpcIdempotencyCacheData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $RpcIdempotencyCacheTableTable,
+                    RpcIdempotencyCacheData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -11790,7 +11832,19 @@ class $$AgentActionRemoteAuditTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $AgentActionRemoteAuditTableTable,
+                    AgentActionRemoteAuditData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $AgentActionRemoteAuditTableTable,
+                    AgentActionRemoteAuditData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -12104,7 +12158,10 @@ class $$AgentActionCapturedOutputChunkTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $AgentActionCapturedOutputChunkTableTable,
+                    AgentActionCapturedOutputChunkData
+                  >(table),
                   $$AgentActionCapturedOutputChunkTableTableReferences(
                     db,
                     table,

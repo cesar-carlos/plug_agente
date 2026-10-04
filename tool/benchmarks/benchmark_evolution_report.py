@@ -19,6 +19,7 @@ from tool.py.benchmark_common import (
     flatten_suite_metrics,
     incompatible_benchmark_suite_reasons,
     load_summary,
+    approved_controlled_comparison,
 )
 
 
@@ -32,6 +33,7 @@ class RunReport:
     regression_count: int
     diffs: list
     excluded_suite_reasons: dict[str, str]
+    controlled_approval: bool = False
 
 
 def discover_summaries(root: Path) -> list[Path]:
@@ -68,11 +70,12 @@ def build_run_report(
         regression_count=len(regressions),
         diffs=diffs,
         excluded_suite_reasons=excluded_suite_reasons or {},
+        controlled_approval=summary.get('qualification') == 'pass' and approved_controlled_comparison(summary.get('comparison', {})),
     )
 
 
 def format_run_header(report: RunReport) -> str:
-    status = "REGRESSION" if report.regression_count else "ok"
+    status = 'inconclusive' if not report.controlled_approval or not report.metric_count or report.excluded_suite_reasons else ('REGRESSION' if report.regression_count else 'ok')
     return (
         f"{report.run_id}  captured={report.captured_at or 'n/a'}  "
         f"suites={report.suite_count}  metrics={report.metric_count}  "
@@ -135,9 +138,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if not summaries:
         print("No benchmark runs found.")
-        return 0
+        return 2
 
     total_regressions = 0
+    inconclusive_runs = 0
     for summary_path in summaries:
         current_summary = load_summary(summary_path)
         excluded_suite_reasons = incompatible_benchmark_suite_reasons(
@@ -151,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
             excluded_suite_reasons=excluded_suite_reasons,
         )
         total_regressions += report.regression_count
+        if not report.controlled_approval or not report.metric_count or report.excluded_suite_reasons:
+            inconclusive_runs += 1
         print(format_run_header(report))
         for suite_id, reason in report.excluded_suite_reasons.items():
             print(f"  skipped {suite_id}: {reason}")
@@ -159,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
             print()
 
     print()
+    if inconclusive_runs:
+        print(f"Inconclusive: {inconclusive_runs} run(s) lack compatible metrics or controlled approval; {total_regressions} numeric alert(s).")
+        return 2
     if total_regressions:
         print(f"{total_regressions} regression(s) detected across {len(summaries)} run(s).")
         return 1

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import sys
 import tempfile
 import unittest
@@ -9,7 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tool.py.odbc_benchmark_runner import resolve_benchmark_driver_family, run_odbc_async_benchmark
+from tool.py.odbc_benchmark_runner import resolve_benchmark_driver_family, run_odbc_async_benchmark, run_odbc_streaming_benchmark
 
 
 class OdbcBenchmarkRunnerTests(unittest.TestCase):
@@ -31,6 +32,7 @@ class OdbcBenchmarkRunnerTests(unittest.TestCase):
     def test_async_benchmark_uses_a_child_environment_without_leaking_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             package_root = Path(temporary_directory)
+            (package_root / 'pubspec.yaml').write_text('name: fixture\nversion: 5.0.0\n')
             benchmark_file = package_root / "example" / "async_concurrency_benchmark.dart"
             benchmark_file.parent.mkdir()
             benchmark_file.write_text("void main() {}", encoding="utf-8")
@@ -39,6 +41,10 @@ class OdbcBenchmarkRunnerTests(unittest.TestCase):
 
             def fake_run_streaming(*_args: object, **kwargs: object) -> int:
                 captured_environments.append(dict(kwargs["env"]))
+                labels = ('workerCount=1', 'workerCount=4', 'workerCount=4 columnar', 'workerCount=4 columnar compressed', 'native pool', 'prepared reuse')
+                sample = {'elapsed_ms': 1.5, 'rows': 8000, 'timeouts': 0, 'fallbacks': 0}
+                log_path.write_text(json.dumps({'benchmark': 'native_odbc_async', 'harness_version': 2, 'workload': 'deterministic_8000_rows_v1', 'rows': 8000, 'warmup': 1, 'repeats': 3, 'scenarios': [
+                    {'scenario': label, **sample, 'encoding': encoding, 'actual_encoding': encoding, 'samples': [{**sample, 'encoding': encoding, 'actual_encoding': encoding}] * 3} for label in labels for encoding in ['columnarCompressed' if label.endswith('compressed') else ('columnar' if label.endswith('columnar') else 'rowMajor')]]}))
                 return 0
 
             with patch.dict(
@@ -54,6 +60,7 @@ class OdbcBenchmarkRunnerTests(unittest.TestCase):
                     exit_code, _, _ = run_odbc_async_benchmark(
                         package_root=package_root,
                         log_path=log_path,
+                        benchmark_path=benchmark_file,
                     )
 
                 self.assertEqual(exit_code, 0)
@@ -65,7 +72,30 @@ class OdbcBenchmarkRunnerTests(unittest.TestCase):
                 captured_environments[0]["ODBC_TEST_DSN"],
                 "DRIVER={ODBC Driver 17 for SQL Server};Server=benchmark",
             )
-            self.assertEqual(captured_environments[0]["ODBC_BENCH_QUERY"], "SELECT benchmark")
+            self.assertNotIn("ODBC_BENCH_QUERY", captured_environments[0])
+
+    def test_failed_query_is_not_retried_with_a_smaller_workload(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'pubspec.yaml').write_text('name: fixture\nversion: 5.0.0\n')
+            benchmark = root / 'custom.dart'
+            benchmark.write_text('void main() {}')
+            with patch('tool.py.odbc_benchmark_runner.run_streaming', return_value=1) as run:
+                code, _, _ = run_odbc_streaming_benchmark(package_root=root, log_path=root / 'output.log', benchmark_path=benchmark)
+            self.assertEqual(code, 1)
+            run.assert_called_once()
+            self.assertIn('custom.dart', run.call_args.args[0])
+            self.assertEqual(run.call_args.kwargs['cwd'], root)
+
+    def test_success_without_streaming_rows_is_inconclusive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'pubspec.yaml').write_text('name: fixture\nversion: 5.0.0\n')
+            benchmark = root / 'custom.dart'
+            benchmark.write_text('void main() {}')
+            with patch('tool.py.odbc_benchmark_runner.run_streaming', return_value=0):
+                code, _, _ = run_odbc_streaming_benchmark(package_root=root, log_path=root / 'output.log', benchmark_path=benchmark)
+            self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":

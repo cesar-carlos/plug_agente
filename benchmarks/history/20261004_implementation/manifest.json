@@ -1,0 +1,1304 @@
+{
+  "status": "inconclusive",
+  "baseline_promoted": false,
+  "archive_sha256": "06d21a65bb6ca9af74e2a693a96021af1ddf71b581e035aa95118df95d0b8f65",
+  "archive_bytes": 6450410,
+  "files": [
+    {
+      "path": "benchmarks/results/20261004_123740/odbc_async.log",
+      "bytes": 997,
+      "sha256": "c0912be2a656b1eb75f465e9c6eb61cc41338055e93186f8f86e21fd82ce2a92",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_123740/odbc_gateway_encoding.log",
+      "bytes": 697,
+      "sha256": "9b274ecaba3234ca4fd892d8ea89aab12c158aa8b502ebc780be8bc6753e8c7d",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_123740/odbc_hot_paths.log",
+      "bytes": 718,
+      "sha256": "279a9fccad0bd8a9e9196b92b6803248777bb9b0381e0b55610214978c061652",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_123740/odbc_streaming.log",
+      "bytes": 236,
+      "sha256": "634f89ea0cde35388f8dbdd3dae2d8872d772898f97d08126f21419188a52804",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_123740/plug_agente_stack.log",
+      "bytes": 3134,
+      "sha256": "96c5034cddce2fe7fb3aa468505ebff8fa54995309982392d31507f0a647e28b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_123740/REPORT.md",
+      "bytes": 11905,
+      "sha256": "6bb239aa7cc7014dd9603fc1518b5bbed8c93a109c74ee0174a32d808f9e7545",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_123740/summary.json",
+      "bytes": 14579,
+      "sha256": "d7365dd00d9b4403a85f3925487d0297eaea4c06f0f9c63b863d02523bbb1547",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_123740/transport_pipeline.log",
+      "bytes": 5901,
+      "sha256": "5b6b5dab9f8c4960e55b3c5a8dac2fa28670477780286ffda7682a70aa6125d6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/additional-tests.json",
+      "bytes": 903,
+      "sha256": "ee3985b1da2649649b4df6b6b614966594fbfa2f9ab3d3f130b9e9c935999d73",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/analysis.json",
+      "bytes": 21648,
+      "sha256": "688265ef06bc17562f114a632e1356ad24d873c2c420c87570755d816c2f69c2",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/analysis.txt",
+      "bytes": 4655,
+      "sha256": "f5204c677069935042d3cee89d83a9cf261c2cee4d4ec541ec7504f033c8d45d",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/base-pub-get.log",
+      "bytes": 1612,
+      "sha256": "aa9dd684aaf98a9a13c2fae38ef711ac2df1b1b9217281e99686001f617c5da3",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/benchmark-runner-unit-tests.log",
+      "bytes": 101,
+      "sha256": "b2b4950d5004fc32b44882bb3b85326bbc0b57f0e6dfe21f11bea1f2b6daeb50",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/compare-20261003.txt",
+      "bytes": 21902,
+      "sha256": "3f6e726ec998b55232c06dd6e8d9068f861810fedb47e91145ac2c67908fb44b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/compare-20261004-prior.txt",
+      "bytes": 21902,
+      "sha256": "4b602cdcd27507d4e6d2a9a2155539ffa8b981d5a9ed46343e7d4d641bf7f5db",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/compare-versioned-baseline.txt",
+      "bytes": 20176,
+      "sha256": "58ad107a4e2cee55d331d4dcdd839e333fb2fc167acd78f4d033ca3957d227e6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/corrected-streaming-comparison.json",
+      "bytes": 1649,
+      "sha256": "7330d10f256a27281552a473839f14632afff4c35376055a92e406792ef05dd2",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/corrected-streaming-comparison.log",
+      "bytes": 3275,
+      "sha256": "4df47c4a5d6bb9938d825964d745874c74eae7be87be1ab8bb3f1ec0090eb793",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/diagnostic-checks.json",
+      "bytes": 372,
+      "sha256": "20b8a26d650c23a83d7f435928d0a1f12579e25efb22247b12779cd72129d94a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/driver-matrix/driver_matrix_sql_anywhere_async.log",
+      "bytes": 2219,
+      "sha256": "5989bb856591925c26ea2975bf89880f0ed4e4dd6f57635eb7c60b57b28632eb",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/driver-matrix/driver_matrix_sql_anywhere_streaming.log",
+      "bytes": 473,
+      "sha256": "5bc2acfd545cb9cffd6f5829ef9685029b03a7edb2acc52b9a917b56429312e5",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/driver-matrix/driver_matrix_sql_server_async.log",
+      "bytes": 1325,
+      "sha256": "de62f7c992178ff02a71dbd538123fa8a8e50069167f5c6c204357dfbf48f9ce",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/driver-matrix/driver_matrix_sql_server_streaming.log",
+      "bytes": 473,
+      "sha256": "5bc2acfd545cb9cffd6f5829ef9685029b03a7edb2acc52b9a917b56429312e5",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/driver-matrix-runner.log",
+      "bytes": 4785,
+      "sha256": "83fbee47951a7420674c1c4936377dba156d08959b1c49159b84175eaa9bf5c8",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding-contract-gate.log",
+      "bytes": 27400,
+      "sha256": "c07749f0d13baf9b2f8de27c7c2474ba3c73ea0670a919a5a094302af1b67cc3",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_anywhere_0.log",
+      "bytes": 686,
+      "sha256": "78e82a82ca3a90c19d45fd0720399630a7ec4f69de38a7fdf6974ed0263a9d16",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_anywhere_1.log",
+      "bytes": 686,
+      "sha256": "80cf9a9b07fe0b24520345bbc91102d67b375e07d34bf39315956fa41bf7350b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_anywhere_2.log",
+      "bytes": 689,
+      "sha256": "a5fb1e30319757bdbcb5385f292806910465bd08ee360df0fe969912b5fd32ac",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_anywhere_3.log",
+      "bytes": 688,
+      "sha256": "46cdbd3ffe86223cc3a44379913e077035c411fa3c659cf9c5303c86c8318564",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_anywhere_4.log",
+      "bytes": 686,
+      "sha256": "1276b300694f1d9a18e45135e39510c36f1da44d5231515b46ec8edf76062334",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_server_0.log",
+      "bytes": 713,
+      "sha256": "2a3b84d2487624749f3201841e6151be9222b1f9d1ebaed9cd9594582715b397",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_server_1.log",
+      "bytes": 712,
+      "sha256": "201990c7f30ce3f149f4e958717b498ec204d75f2c1ff78ac06a9439d048edce",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_server_2.log",
+      "bytes": 712,
+      "sha256": "e980e423e67a2d9c02abc697788f8951d094780c116ff10ef63116ba15a941c8",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_server_3.log",
+      "bytes": 713,
+      "sha256": "e156ca5759eee0869d79fcbe6fe49e99961f922f58411e020c438e10dc069dcc",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/encoding_sql_server_4.log",
+      "bytes": 712,
+      "sha256": "46407bfae306b3ffe89edcd0875de4f9a76e33b873c17fad17a649e540d8fa98",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/measure_profiles.py",
+      "bytes": 5315,
+      "sha256": "703ff79b056d3f86b8963c03984c01883db8941d35703edda8327cbca1627ffd",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/odbc_dml_bulk_load_live_e2e_test.log",
+      "bytes": 568,
+      "sha256": "3dcc43b0db5dd78043be89fa1437b7732bb20fe885771c369b8d7d09dcdb54b2",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/odbc_dml_perf_live_e2e_test.log",
+      "bytes": 365,
+      "sha256": "fc57b7f68ffee2f165a7ea31003a06b03e84d9a2e9d8b0655d70a1a087a33444",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/odbc_dml_stress_live_e2e_test.log",
+      "bytes": 1147,
+      "sha256": "acf615f14a70791f3d049c02a568911a08001273644991dc4f330a2782775070",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/odbc_pool_modes_benchmark_test.log",
+      "bytes": 173,
+      "sha256": "814e1e132701a257a080afa104ab776be8fcda3fd6d556615a26fe4ee9029696",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/odbc_transaction_control_benchmark_test.log",
+      "bytes": 342,
+      "sha256": "c23896ccb682c9cf69892e0c230bd86d885ba28953616a0da1d80000617553ef",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_anywhere_async_0.log",
+      "bytes": 998,
+      "sha256": "66dfacd0acd2eb3faf5a20759aee1d1ba53c49617f90532ae4aa8a28e5f41c8a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_anywhere_async_1.log",
+      "bytes": 997,
+      "sha256": "60e2252d9ce57dc32e3165d6aee95aec729a509761dc384a93d2a18fdffebb0c",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_anywhere_async_2.log",
+      "bytes": 998,
+      "sha256": "2b950c96c88b9f3175a03aa77326d1e0c38166ef7baeea2161bc2f565df211c3",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_anywhere_streaming_0.log",
+      "bytes": 742,
+      "sha256": "2c17ce6f05e69681461b4cf3172988738eb4662893cb9d48fa70ab579e9a494a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_anywhere_streaming_1.log",
+      "bytes": 742,
+      "sha256": "2c17ce6f05e69681461b4cf3172988738eb4662893cb9d48fa70ab579e9a494a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_anywhere_streaming_2.log",
+      "bytes": 742,
+      "sha256": "2c17ce6f05e69681461b4cf3172988738eb4662893cb9d48fa70ab579e9a494a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_server_async_0.log",
+      "bytes": 1001,
+      "sha256": "00eb66e918351c0f66b09f6facc6e30aa350b051ca5176dfe78f8a5c112d9066",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_server_async_1.log",
+      "bytes": 1004,
+      "sha256": "711d994be62b0dc7a3624e9653342aac753a528e75044e26cf0045ee73cda9ea",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_server_async_2.log",
+      "bytes": 1003,
+      "sha256": "17eb1969a8d65cd83158468b78119ba02c2811527838e389c3fc8e06c8c7c5bc",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_server_streaming_0.log",
+      "bytes": 250,
+      "sha256": "6edb657a82f02149c80b6301c00d866c8e53faf58cc08ac5af3fa3e2c9448f8c",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_server_streaming_1.log",
+      "bytes": 251,
+      "sha256": "e51b753334062384b604df43d5a52a4e393e638eaf8d91fd93e43c7fab1c0b00",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/representative_sql_server_streaming_2.log",
+      "bytes": 252,
+      "sha256": "7e9806a1ad0ea369128a4b14326c7cd30e5beab4cfac2a05f2a525dc89bba4cc",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/sql-anywhere-native-stream-probe.json",
+      "bytes": 339,
+      "sha256": "095925fc3d6cb1c569e9e19248227391cd15d863cf9d33e83e58027972bd386c",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/sql-anywhere-native-stream-probe.log",
+      "bytes": 2059,
+      "sha256": "0b0356d6a0e7f4e853a69ec4f21aa071b77a04acce67a718f2f2a66c6630aea8",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_base_0.log",
+      "bytes": 6175,
+      "sha256": "e073e1ba6f2f024c5b84ae275dde70542947ea1443b9b162f9433c11b846919f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_base_1.log",
+      "bytes": 6184,
+      "sha256": "e265bdc74cc9e7aed00c965a4ca27105db4821c5586659b9379d0935cd09eb44",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_base_2.log",
+      "bytes": 6190,
+      "sha256": "f0ee919acb9da072cb5dabd5ac515f217c878ef1ecc29ee75e5f97cefc6befd6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_base_3.log",
+      "bytes": 6187,
+      "sha256": "ddfc4f026caa71b6bf4a2572135eda4f5750f97d123b1084b3d87ae3b88e7698",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_base_4.log",
+      "bytes": 6188,
+      "sha256": "5b783b490166697d992f8096da716473b640b0e06a0404da13d468a5efa85fd0",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_candidate_0.log",
+      "bytes": 4228,
+      "sha256": "f9d70cc1d135f16d4f6216ebde80c6d446b1e8bce979e12d1f6f924b04092686",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_candidate_1.log",
+      "bytes": 4232,
+      "sha256": "5a9990c177a70ca9f1b149d95ee474b217309f38e69bbf17985daa709fbde00a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_candidate_2.log",
+      "bytes": 4227,
+      "sha256": "4017ef7d90e8c07510da475fdfacd91e38fc462c3457d60c6d3626bfcc207cdd",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_candidate_3.log",
+      "bytes": 4224,
+      "sha256": "97a7abd47d32c8dec9d1209d5e1a0888379ed05e326643e535da60fbf4b5a714",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/stack_candidate_4.log",
+      "bytes": 4233,
+      "sha256": "73cb91ab78c5f3512df554bc07d7527ce416ed4c93d02f1206794c2d88dc730e",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite/odbc_async.log",
+      "bytes": 996,
+      "sha256": "2ca19d4982d8f43df2e17721885d5546b8f3a6446c92d48da7fdab907a84156f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite/odbc_gateway_encoding.log",
+      "bytes": 689,
+      "sha256": "0e0bc9d4c0263e423c1f8186781f7f6d278047c5bc039be740a69c79e144283b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite/odbc_hot_paths.log",
+      "bytes": 718,
+      "sha256": "31b68ff401adf75fbce1f9a53fcab1f20f319fc030b4eeb2c1c2ece02f8acc15",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite/odbc_streaming.log",
+      "bytes": 236,
+      "sha256": "53e8d41496b6291a127957b4961cec4692f89451c43c2cd212a5d20328f2d4a5",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite/plug_agente_stack.log",
+      "bytes": 3133,
+      "sha256": "4b7d2407ef0369f47d9b30e3bf6086ef6fee01f885e2224986a4c92bf211fd20",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite/REPORT.md",
+      "bytes": 11911,
+      "sha256": "500d1bd946593017ce962b82d37b266efed41cba8695fa283bdbc0eb9d113014",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite/summary.json",
+      "bytes": 14585,
+      "sha256": "1d79aec9d695446f0b73d9adf4fc7c851d84158fea9df5ae5980355ea8331dde",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite/transport_pipeline.log",
+      "bytes": 5915,
+      "sha256": "f6168d30d3077cb6f80aa8ec39ba6f5691e710ff1ee63dcb1c6a426ef8fe0c3b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/suite-runner.log",
+      "bytes": 12022,
+      "sha256": "4db85a87aa995ed7b54d9d63cc47d98bb558da11ba5e90866e7ce4140a515659",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/supplemental-measurements.json",
+      "bytes": 38672,
+      "sha256": "e20338e3f272f7b1648b828d6ee2d0b7daa3956746222a32fbb14b3c149b4ab8",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/supplemental-runner.log",
+      "bytes": 8980,
+      "sha256": "3e3a8df37897e052f9a43bb7cad198e8f15b2b7ed59a31511b908d5d8cb7ab40",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-base-rerun.json",
+      "bytes": 642486,
+      "sha256": "77956f38e0447f41bf7b2ed2309c097e30391ae6838c74567a68df66a507531d",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-base-rerun.log",
+      "bytes": 1830,
+      "sha256": "18f137e78d1e6bafb14064e9da785d0c80f773d17798193e1a41b082e03616e1",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-base.json",
+      "bytes": 642753,
+      "sha256": "b2bf0e1c8be59181c913aa2b4952f9bbadb2d68af9f2a425a5b27c8ab95e6325",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-base.log",
+      "bytes": 1830,
+      "sha256": "c035e40d4c5122882e942e5aa27938298e0064e084952bb1f4f0094c7dc3e462",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-candidate-rerun.json",
+      "bytes": 642792,
+      "sha256": "e0b3a2243f37545ac03c43933e589c57fed6a5e7d943762257de06458c7476fb",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-candidate-rerun.log",
+      "bytes": 203,
+      "sha256": "d0df06aa5f058751f24d65ce2be046b9389fde77b31048352d011234786f2430",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-candidate.json",
+      "bytes": 642781,
+      "sha256": "4d9beb69983fb7fee5a80b26fb22d323c9335ad4cdb409b3556d94c9a728e2c2",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-candidate.log",
+      "bytes": 203,
+      "sha256": "7c30aa54f536114ac9a05560766525146419dc3d337a8bc5fa4ade49c753fd9e",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-comparison-rerun.json",
+      "bytes": 8795,
+      "sha256": "e45fde84c79146994c5a14fdee9c111eb7811990b8d18130489437aa78979544",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-comparison-rerun.txt",
+      "bytes": 2209,
+      "sha256": "2f985535158158c48b4db828f81cdf5f776f7eadac5c1f08e704ed0814fb9981",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-comparison.json",
+      "bytes": 7852,
+      "sha256": "cfb20489f681eb844efb48baa8e4faacd60b986be222e59fb25e2c7273d121a6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_124647_review/transport-comparison.txt",
+      "bytes": 1413,
+      "sha256": "44b432bb8588eb3c1b9970914a6a7a38257958f35ee13eb25cb664d5e6042b46",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/agent-contract.log",
+      "bytes": 19683,
+      "sha256": "437a41aefe4af4bb1d2f08db91430f043f0285876f26a463fb408fbc11f1cb52",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/base-stress-control.json",
+      "bytes": 114,
+      "sha256": "af55a7b75f0f36c33ec3e2734dc83c0036065ce06517c8466aaf2af14c86c4a4",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/base-stress-control.log",
+      "bytes": 3579,
+      "sha256": "9fae93bbe91904cdea60fea81e6746555b61a266fafc6c86cd2142177f693d9a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/candidate-diagnostics-analysis.json",
+      "bytes": 14445,
+      "sha256": "7b3dde93f3d51281419b652ecedca9e3bb61261c4883015353eedaeb75d2e6b9",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/codegen-first.log",
+      "bytes": 915,
+      "sha256": "82f4660ca97b85aab1e8f93a30a96428fe9dfb8150f4950dd9f72bdc645c6d3f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/codegen-second.log",
+      "bytes": 538,
+      "sha256": "665e9c1daf49afb3c31aa966f5e414b40f1d0bca2fa89460497c703832c1d644",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/ctest.log",
+      "bytes": 489,
+      "sha256": "0edaa25955721128250bf2a48b195f8e0054fd28150cee054d30fb032a6db393",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/driver-matrix.log",
+      "bytes": 22154,
+      "sha256": "2f3de39eeb385cbaf507a50078e6f3ea3cab0ef4d234259a681cfbc0f0c29ea2",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers/driver_matrix_sql_anywhere_async.log",
+      "bytes": 12568,
+      "sha256": "1c5e2fedb47ade41ef8ae123dda19dac358aa79cc55967457f8ce2bd93565d58",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers/driver_matrix_sql_anywhere_streaming.log",
+      "bytes": 1220,
+      "sha256": "53dd41358b3713fb42f7461e18bc560a4e11653964c4b039f70075dd12f3092b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers/driver_matrix_sql_server_async.log",
+      "bytes": 6773,
+      "sha256": "95a82cbc41f859572f5b1de0a9fe3737efdb1990d4b9864c69f814a840a36564",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers/driver_matrix_sql_server_streaming.log",
+      "bytes": 1232,
+      "sha256": "2a84e0b440531e4be3a156b8ba578b991a5eac38d3b0ba602fc4e2c16d353671",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers/native_reproducer/columnar-compressed-input.json",
+      "bytes": 779209,
+      "sha256": "d04daa4b56f85ce08ca2c068c54a4467215fa9ca9fe6e9cf71adc87437025696",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers/sql_anywhere_summary.json",
+      "bytes": 3902,
+      "sha256": "9a9ae72b8781469cea459f50dbf19233b68763c8a90e05634077ab9c589fa08f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers/sql_server_summary.json",
+      "bytes": 3906,
+      "sha256": "6ac267720eb69b3f625fa685aad9816ac0028f21a62a0d955905a0257ab9cff7",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers-v2/driver_matrix_sql_anywhere_async.log",
+      "bytes": 12429,
+      "sha256": "8475f002204e62660969de794242fd351c5c54dec41a68415d8903b6d881a373",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers-v2/driver_matrix_sql_anywhere_streaming.log",
+      "bytes": 1346,
+      "sha256": "3b4343c6b12a1706ff71a4a9de479da8c396d28bd67dca198ff36974f11d4b79",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers-v2/driver_matrix_sql_server_async.log",
+      "bytes": 8539,
+      "sha256": "7a0bbff94e00e43eb0cbe5b589e3dbef1631fade6d77da5ef85b16779397a753",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers-v2/driver_matrix_sql_server_streaming.log",
+      "bytes": 1366,
+      "sha256": "a331b04b5a886b115db8c5303fc32c2bb34af99a25a4190f45fc9a1091311eae",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers-v2/native_reproducer/columnar-compressed-input.json",
+      "bytes": 779209,
+      "sha256": "d04daa4b56f85ce08ca2c068c54a4467215fa9ca9fe6e9cf71adc87437025696",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers-v2/sql_anywhere_summary.json",
+      "bytes": 3904,
+      "sha256": "70ca463f5895a0d49aee80a9d5656d616d7a7277b1966462ae5aa97b73613a94",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers-v2/sql_server_summary.json",
+      "bytes": 3900,
+      "sha256": "72f3ee61b3d397e984f6de2734cc7b103bb11eb369287ceb9f85a1ee2a5dc595",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/drivers-v2.log",
+      "bytes": 24041,
+      "sha256": "21000d8dda254fc35cd6e57983461273bb0cd1223095302f5c61d29c0cf4deee",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/encoding-contract.log",
+      "bytes": 27527,
+      "sha256": "6179f4729f889fc79b2f11ec2790637b5857be735d4917fcc62ad51908050d42",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/native_reproducer/columnar-compressed-input.json",
+      "bytes": 779209,
+      "sha256": "d04daa4b56f85ce08ca2c068c54a4467215fa9ca9fe6e9cf71adc87437025696",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/odbc_async.log",
+      "bytes": 12347,
+      "sha256": "05bbbfed6bd96e4da05aa6e676b0d4e2976b9697a46cffc22891eb02d8f55015",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/odbc_gateway_encoding.log",
+      "bytes": 1549,
+      "sha256": "f9bda9593470cfaad0452549b16a6f14a2bf385e2ed67e8f0f9ff3f5c0870d68",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/odbc_hot_paths.log",
+      "bytes": 2205,
+      "sha256": "b7be37b6be0503ac13f0f2f4b658af485a8db3465890706fd355a0a4c524cdfa",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/odbc_streaming.log",
+      "bytes": 1364,
+      "sha256": "a5d8613ba426b8dcabb2927959f5deb4761679d36cd26d328af2c60acbd4271d",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/plug_agente_stack.log",
+      "bytes": 6263,
+      "sha256": "9a21563568c136c067d04dc923fe6c62f71c8a6b539aa232380e2ee3f58dcf46",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/REPORT.md",
+      "bytes": 16073,
+      "sha256": "776d7eb19798eaa4d30f362c9781eec02549a8b1793c8d211cdbba95c856a98a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/summary.json",
+      "bytes": 96792,
+      "sha256": "0dbf9e2b9a51cd2849a7cb18e54d9393f454a3e500b60c1e0100009af63d4075",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite/transport_pipeline.log",
+      "bytes": 11796,
+      "sha256": "0d0619ce33d2c24799b92a93a96d70d77ac7af86dee709471b69c8822f3e483d",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/final-suite.log",
+      "bytes": 24849,
+      "sha256": "309e1fa8b29c765f1dec341cbf3c8a9b9ebe4c6cd9f4e3453b9c25c7b75a194c",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/fixture-cleanup.log",
+      "bytes": 98,
+      "sha256": "9178be90a59ead67f083230423464a3df7970b8c33635962d65880c2a96d0cdd",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/flutter-analyze.log",
+      "bytes": 98,
+      "sha256": "49856184c16194e2e2575e792644cc2e88646b49529a8e81be79b91ef94c95e4",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/harness-tests.log",
+      "bytes": 4808,
+      "sha256": "f6fd775aab530c1fd01ed155db35af65dd45ee6ecb9178deaa0191ea680bb342",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/helpers/invalid-status.json",
+      "bytes": 978,
+      "sha256": "9f950c00ed1f12416a8d1ec20f41ca7d6e82cd4801faa34d3de7965f084d7e9c",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/hot-paths-diagnostics-analysis.json",
+      "bytes": 4313,
+      "sha256": "de2d68726a35c7e0c5ecdc1f7233b9e7b82bee67f165bd4f4dd25b0b9cfd1412",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/hot-paths-diagnostics.json",
+      "bytes": 10503776,
+      "sha256": "49b6cb9b270f6199dc81703725384552ee72462643b475196f82fdae07318c38",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/hot-paths-diagnostics.log",
+      "bytes": 212,
+      "sha256": "be6123c1f13abccccfac3f5d8370e9831e1cac9c1c711f7cb755c3e2590360a5",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/hub-codegen.log",
+      "bytes": 1233,
+      "sha256": "4f823f535c4ae735ee77a576ef5c3984f8a6e505ef09c207d9ca0b68c91fa9fb",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/hub-contract.log",
+      "bytes": 425,
+      "sha256": "964ec2231afcaf64f70a0ef99b330fcb38b4c026fd95a8022ea3c406a549e1ff",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/live/sql_anywhere.log",
+      "bytes": 2770,
+      "sha256": "8c34fffb8ab17dcb406158de72dbd45a3956b59dfb0bf8999a3a1cac13304169",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/live/sql_server.log",
+      "bytes": 3498,
+      "sha256": "dff18fc962284ff3c394ffe08b8e535f7957705da370500606f584d736d9b89f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/live/summary.json",
+      "bytes": 171,
+      "sha256": "7c3c7d05fb997ff87187fa6cafece5be4069a2d065153a9b7b6658fdfd891ef7",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/native-pool-async-reproducer.log",
+      "bytes": 1734,
+      "sha256": "4add17e74bba20f260d8062e393323cce6ea80970e43071fe2c68527f68202a4",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/native-pool-prepared-reproducer.log",
+      "bytes": 1734,
+      "sha256": "4add17e74bba20f260d8062e393323cce6ea80970e43071fe2c68527f68202a4",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/native-pool-reproducer.log",
+      "bytes": 484,
+      "sha256": "fc4df0329ef970e37498c580ecef064d59eaadcb812ba5edbc6f28b4b2c73cff",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/offline-tests.log",
+      "bytes": 3067746,
+      "sha256": "3e9315bc77992763b89e8004a8b627ff451e687dd43962112bb668e7bcc0f6da",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/optional-gates.json",
+      "bytes": 263,
+      "sha256": "24a1fd896e8d8006386367fde64c0e46a5b99dc0c8d607afb6dea4798ee8ad5b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/python-tests.log",
+      "bytes": 16044,
+      "sha256": "c8e1812d49b3ce403eac10771d18008ad58e842ab3ebf651b9a7ffa492b0e232",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/REPORT.md",
+      "bytes": 9387,
+      "sha256": "18cef268c92e7622cb0ae4ab0df039bf9dc256d37503d05e625562d1eeb8e5cc",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/stress-detailed-probe.log",
+      "bytes": 3368,
+      "sha256": "61a3d8eb285df60360eccaf682f344436e7ba9e1e42861f886803eef7e41ff0f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/stress-probe.log",
+      "bytes": 2978,
+      "sha256": "fd4f193a01abd72c8406e084f19d218ed4239420300bfaf4813ca069bedf23f8",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/native_reproducer/columnar-compressed-input.json",
+      "bytes": 779209,
+      "sha256": "d04daa4b56f85ce08ca2c068c54a4467215fa9ca9fe6e9cf71adc87437025696",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/odbc_async.log",
+      "bytes": 12670,
+      "sha256": "db9a7bff2a77178fe3e70283e62f2ba941dcaa92c9fd222405d73ad203af1b26",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/odbc_gateway_encoding.log",
+      "bytes": 650,
+      "sha256": "b1a0c7bde3a3a6a6feaf5e407834d7167c32340588102562659573729928e60b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/odbc_hot_paths.log",
+      "bytes": 1103,
+      "sha256": "5bf22b19d7fe5d2058c9713bd15072d7d55a3b07c198b5de82eb8d584e979644",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/odbc_streaming.log",
+      "bytes": 1226,
+      "sha256": "bf2800affe9ade1e1a491e4ec474edb293fc756507c4b93530e8a31cd46490a9",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/plug_agente_stack.log",
+      "bytes": 3119,
+      "sha256": "d64f7f347a1ac56fba69a79e52aea4f2958d4aef4e30b2edea644ebe3412ee6b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/REPORT.md",
+      "bytes": 16005,
+      "sha256": "a810dfadcf716ca11f5f85d70f99a61fa28f8f58f712d8a0cd478b6ad38b7dc0",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/summary.json",
+      "bytes": 61851,
+      "sha256": "a010a01e914b645b3babdaf01197582bd2645842a4bd3432c566eff854dfcc4b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite/transport_pipeline.log",
+      "bytes": 5953,
+      "sha256": "79ca8020627b256b187c30202664d3a6b9fbfe50b0f36eb91970148c24381ab3",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/native_reproducer/columnar-compressed-input.json",
+      "bytes": 779209,
+      "sha256": "d04daa4b56f85ce08ca2c068c54a4467215fa9ca9fe6e9cf71adc87437025696",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/odbc_async.log",
+      "bytes": 6904,
+      "sha256": "e1f7ec3a254692f1bd7dc21555b7cc928178f44e7dff3a2304dd1dd6ecf51015",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/odbc_gateway_encoding.log",
+      "bytes": 775,
+      "sha256": "9c962f1053c82b7ae06b6b830177c9cd011fec7ac2deb2e5ffa5105e2ea33df6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/odbc_hot_paths.log",
+      "bytes": 1104,
+      "sha256": "c555e618ace5b7703c47a1392ffa48ef971b6ac3de8a8c24ecd52abf0a6f4803",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/odbc_streaming.log",
+      "bytes": 1364,
+      "sha256": "11664379979f231cb5cac6f608a686ee54b31a319dd7a889210a03049bf35156",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/plug_agente_stack.log",
+      "bytes": 3133,
+      "sha256": "331fb47684946babcca7a9fd0259b692e18e566dc43249374d51d8d392ea53cf",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/REPORT.md",
+      "bytes": 16146,
+      "sha256": "544508814db4624f5d6e931b23728a05e82b2d30f79cf19ce3c36fc69c5c821c",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/summary.json",
+      "bytes": 63572,
+      "sha256": "d22eed0d2d90d458e1eeefefcffa4ee0db9519ebbb26d17517f299a449abd08e",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final/transport_pipeline.log",
+      "bytes": 5910,
+      "sha256": "d221e38b109d232603894642c7492ff6dfbc61cecbabd44ad140220862af8663",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-final.log",
+      "bytes": 19429,
+      "sha256": "3a2a2c8ddd1cda02fdcf45cf94de31e9aff07f8e57465762b73f61d408583588",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite-tools-last.log",
+      "bytes": 1378,
+      "sha256": "61dd34c115f6082f5514fc76f8659ddf0c9c892011e4cc91506930999b015b9a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/suite.log",
+      "bytes": 24942,
+      "sha256": "dfa02c4d833d54afabf581f72e7e89f38887af5216a2ef6a179eb098844527a6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/base-diagnostics.log",
+      "bytes": 1841,
+      "sha256": "108dda3d6ee806a2cd6283ce12fa94dadd38955bcc11005fe22a8dc4b8b5f897",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/base-forward.json",
+      "bytes": 645955,
+      "sha256": "49a384c940c28e16cca46c69a12fafc09bcce6263899cbe7ab97935d0e1f60c6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/base-forward.log",
+      "bytes": 2379,
+      "sha256": "78a9166a0743d2d43ced3b992c8d5cf7a97957d1d44fd94e20b77ebc65421fcd",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/base-reverse.json",
+      "bytes": 646352,
+      "sha256": "65902a852a599c3a0b7d42107deab9cd3164ab5731560ea7c44d35aea4e936bd",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/base-reverse.log",
+      "bytes": 1830,
+      "sha256": "bad5c506ad0471de91f8cf80f76789f02b45eb4b4762460988e83b39296aec1b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/candidate-forward.json",
+      "bytes": 646031,
+      "sha256": "96f8bd441088886c97d75a053b73bf57429ab38d6239d91d428eeda0838234c2",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/candidate-forward.log",
+      "bytes": 203,
+      "sha256": "bb7cac40ea914dac56d22f9c17e0389ae937de2cfcf159be1c65beb25023c5ef",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/candidate-reverse.json",
+      "bytes": 645811,
+      "sha256": "8e59c4da9f386d39e34a558e6adca4cea5d26d55319337804012b52ce246e751",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/candidate-reverse.log",
+      "bytes": 203,
+      "sha256": "59a78501142941356e6b3811bcce92daa0a21f47052a7f5c0da630c97cadaa5f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/comparison.json",
+      "bytes": 181,
+      "sha256": "54befc9f1619e1a61206a8c25eabc2973bb8ea962f65ce9892bd336bb46f8b3f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/control-1.json",
+      "bytes": 645953,
+      "sha256": "3f9eac25b1a9cdaa2c2f7bfa34939fe848359e05aacd34be496924ab1b75b7f8",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/control-1.log",
+      "bytes": 1830,
+      "sha256": "11f0a04cf6bc210f6d1ae4a3ac5ba363393f4ebd880b95695f6f0a398bf606b6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/control-2.json",
+      "bytes": 646234,
+      "sha256": "15843e521433da0b9a58bf42d6b8df9c939ae6c2bac8d04f52b289dfb2f783f2",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport/control-2.log",
+      "bytes": 1830,
+      "sha256": "b3ffba8e2f0160d64f3953b5bbc0822a3333339d6c2a6a607fb3a32f7b6740e0",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-comparison-metrics.csv",
+      "bytes": 10864,
+      "sha256": "c54da8fdba447739fd65bb767ebfb457d2533fa7ee738524f9b17850f00c4a82",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-diagnostics-probe-analysis.json",
+      "bytes": 6392,
+      "sha256": "9c7eb5b1a39230c1c34efe2879da40c983bc448e945a4312c22ce4a7332aa07b",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-diagnostics-probe.json",
+      "bytes": 23240094,
+      "sha256": "03ab39cb9e461fbb4069e50607fa04776068d54c7666a906836b323e08a773e3",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-diagnostics-probe.log",
+      "bytes": 245,
+      "sha256": "9773ee8563bf4846c31f3a74d2b51241ec831b9ddaa6b63c7ccb45a1f158e729",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/base-diagnostics.json",
+      "bytes": 22219947,
+      "sha256": "aa083c414aa32a6bba376a5c7a3f264ad7a1c650a1ce94ddb1b4c2a69ac538ec",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/base-diagnostics.log",
+      "bytes": 1869,
+      "sha256": "f94592f167d5a79fb5208be5ca25b95c5db89b8be08a567c6c8cde1854ad0675",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/base-forward.json",
+      "bytes": 672766,
+      "sha256": "01f3bdb0fea8fbdb7c6e00359d065e8d780e63678a41325c876006b81eb1d4c3",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/base-forward.log",
+      "bytes": 1830,
+      "sha256": "68dd2c4f4728a299aad89012cbfa6b057565bd67a0bedb88d9ea97b60d05f5e3",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/base-reverse.json",
+      "bytes": 672510,
+      "sha256": "a4c0f3c5c75d492c67afb6dff566882ad456738da33afe916328cd9b1464d675",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/base-reverse.log",
+      "bytes": 1830,
+      "sha256": "5fa0bd626a619b66854a8a99988c69276b8a6c2b79c66b85ba5ffae26a12b753",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/candidate-diagnostics.json",
+      "bytes": 23215142,
+      "sha256": "d7d19f0218a1c4b45d749a98c2382ce33a120f177e163dad14bd1002155fd53a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/candidate-diagnostics.log",
+      "bytes": 242,
+      "sha256": "06b949298bb6dd760b6f1494607c5fc9f299322f648bd0e65dbd4f9ef55c64ac",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/candidate-forward.json",
+      "bytes": 672404,
+      "sha256": "1c92267c9c101a6216114c4bcbb249e7e1ec5f720e643d5f2837afd3cd577ef6",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/candidate-forward.log",
+      "bytes": 203,
+      "sha256": "ff47a6f57bf6d7e8db7fdf467255429bdd5821b64ca5080a8c97e61f2151d2d2",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/candidate-reverse.json",
+      "bytes": 672370,
+      "sha256": "e69f016b18dd7594b39994fa5ccaf9f0b15a487996e362c2f50b1de26dd5d0d8",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/candidate-reverse.log",
+      "bytes": 203,
+      "sha256": "2199234c747f7e707f0b00b62c15ecc9f855139b3adb2b1cf722d2101320aa57",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/comparison-original.json",
+      "bytes": 24832,
+      "sha256": "e29d2e09a3679b5ddd552fd90c2c88ab040341ebc9e8e6467b14946e4c6d7e5f",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/comparison.json",
+      "bytes": 25165,
+      "sha256": "5336e086c9de77e913a1ecf83a40d7c0822d7d7f6702677f8d4a10e62b4ed66a",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/control-1-diagnostics.json",
+      "bytes": 22075456,
+      "sha256": "9574bb31e3d61bb15bc90dc45a5325bc3442f9880be3b860134cc944bab4a701",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/control-1-diagnostics.log",
+      "bytes": 1869,
+      "sha256": "2700b822e37749dc616f5205f2b66d2d23f10214a1dd7e2f1055b579cf969fed",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/control-1.json",
+      "bytes": 671596,
+      "sha256": "5a53229b75b42de2ceeeee5e148362f8d62028aa400903eedb9afb13c2359a09",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/control-1.log",
+      "bytes": 1830,
+      "sha256": "2a3492f767399d8c100e97b00f46066cb04194213216361a4fc884638d5504db",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/control-2-diagnostics.json",
+      "bytes": 22087921,
+      "sha256": "758cbdd1cf3dfdec4459e88ca0a44786b15e231f70154a50fd64443ed2afcc54",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/control-2-diagnostics.log",
+      "bytes": 1848,
+      "sha256": "8840d9a77b3cb181a2cb4366efa5f706f28019924d791f22ffaafcb403ebf766",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/control-2.json",
+      "bytes": 671792,
+      "sha256": "13f3e3c0aefc036b5dcfd1b784776cd0fea8a421d5628e7300b7beb8cac95041",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified/control-2.log",
+      "bytes": 1809,
+      "sha256": "924ac4eee55d2c7c8fd34721759cf7d309ff9f5d8415da08191029993237cd83",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-qualified.log",
+      "bytes": 314,
+      "sha256": "ad951c0bb2830079756a8b234e0ae53fabe1d0d29ce1608530dd3e626b7a3ad5",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-runner.log",
+      "bytes": 176,
+      "sha256": "7f57d0353ce668b447a19de52e7aefb338bf3ea649f87eea8efdc76e8ceae7b9",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-valid/comparison.json",
+      "bytes": 84,
+      "sha256": "3395e71293203616b085f58c311dc73362b33d96e8555d27108d71a48ed65266",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-valid/control-1.log",
+      "bytes": 1802,
+      "sha256": "1c8f377eb1f8ac6f3eb60e18a3c2cbaf6225d357c2ef3b34734b8622b335b2ce",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/transport-valid.log",
+      "bytes": 60,
+      "sha256": "5cfab1e51ca0ef257f4ce4ef0846fa8083421136c9a1feba0224050f6597df99",
+      "redacted": false
+    },
+    {
+      "path": "benchmarks/results/20261004_implementation/windows-build.log",
+      "bytes": 132,
+      "sha256": "8577515f2077c841b8fc11e95f5255447f94a4c11607147d1ef09ba7e0711335",
+      "redacted": false
+    },
+    {
+      "path": "build/finalize_implementation_report.py",
+      "bytes": 12125,
+      "sha256": "56c894589e8feff84caddd12578e6e1d0a466830093ce7081da0d79650d32863",
+      "redacted": false
+    },
+    {
+      "path": "build/implementation_live_benchmarks_test.dart",
+      "bytes": 948,
+      "sha256": "8f35d31a1838e2b2a595621a147c908d297d90f09048d95d5041a496ae4b2a85",
+      "redacted": false
+    },
+    {
+      "path": "build/implementation_stress_copy_test.dart",
+      "bytes": 19350,
+      "sha256": "c853c2be08ae8ccb86b73d2a14283b00c400df038522d6b88be3e2444360e7ce",
+      "redacted": false
+    },
+    {
+      "path": "build/implementation_stress_probe_test.dart",
+      "bytes": 267,
+      "sha256": "e011c3d391a6a2f102c648c5d52d0a55babb33f9bd22bd8bf0bda73323da1044",
+      "redacted": false
+    },
+    {
+      "path": "build/run_base_stress_control.py",
+      "bytes": 1969,
+      "sha256": "b5131236839a7b48815a946a600365bbb6bb6b3c5d0dcd2b2fee1577230a6292",
+      "redacted": false
+    },
+    {
+      "path": "build/run_implementation_live_benchmarks.py",
+      "bytes": 1576,
+      "sha256": "6c893fe12b11b19ff751415a6054a684f07ec9b974dc3e8b95fc9c3651e2ea9d",
+      "redacted": false
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:plug_agente/core/constants/connection_constants.dart';
 import 'package:plug_agente/infrastructure/codecs/payload_frame.dart';
 import 'package:plug_agente/infrastructure/codecs/transport_pipeline.dart';
@@ -13,7 +14,8 @@ Future<Map<String, dynamic>> runTransportPipelineBenchmarkCaseAsync({
   required int threshold,
   required int gzipIsolateThresholdBytes,
 }) async {
-  final collector = ProtocolMetricsCollector(maxEntries: iterations * 2 + 4);
+  // Signed iterations emit send, sign, verify and receive metrics.
+  final collector = ProtocolMetricsCollector(maxEntries: iterations * 4 + 4);
   final signer = signed
       ? PayloadSigner(
           keys: const <String, String>{'benchmark': 'benchmark-secret'},
@@ -28,6 +30,7 @@ Future<Map<String, dynamic>> runTransportPipelineBenchmarkCaseAsync({
     metricsCollector: collector,
   );
 
+  Object? receivedPayload;
   for (var i = 0; i < iterations; i++) {
     final prepareResult = await pipeline.prepareSendAsync(
       payload,
@@ -40,7 +43,10 @@ Future<Map<String, dynamic>> runTransportPipelineBenchmarkCaseAsync({
       collector: collector,
       eventName: benchmarkCaseName,
     );
-    await pipeline.receiveProcessAsync(wireFrame, metricEventName: benchmarkCaseName);
+    receivedPayload = (await pipeline.receiveProcessAsync(wireFrame, metricEventName: benchmarkCaseName)).getOrThrow();
+  }
+  if (!const DeepCollectionEquality().equals(receivedPayload, payload)) {
+    throw StateError('Decoded transport payload differs from benchmark input');
   }
 
   final summary = collector.getSummary();
@@ -50,6 +56,11 @@ Future<Map<String, dynamic>> runTransportPipelineBenchmarkCaseAsync({
   final receiveSummary = ProtocolMetricsSummaryBuilder.fromList(
     collector.metrics.where((metric) => metric.direction == 'receive').toList(growable: false),
   );
+  final sendCount = collector.metrics.where((metric) => metric.direction == 'send').length;
+  final receiveCount = collector.metrics.where((metric) => metric.direction == 'receive').length;
+  if (sendCount != iterations || receiveCount != iterations) {
+    throw StateError('Transport samples were discarded before percentile calculation');
+  }
   final sendMetric = collector.metrics.firstWhere((metric) => metric.direction == 'send');
   collector.dispose();
 
@@ -59,6 +70,8 @@ Future<Map<String, dynamic>> runTransportPipelineBenchmarkCaseAsync({
     'signed': signed,
     'effective_compression': sendMetric.compression,
     'iterations': iterations,
+    'send_sample_count': sendCount,
+    'receive_sample_count': receiveCount,
     'original_bytes': sendMetric.originalSize,
     'wire_bytes': sendMetric.compressedSize,
     'bytes_saved': sendMetric.bytesSaved,

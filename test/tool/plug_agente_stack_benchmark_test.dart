@@ -263,11 +263,9 @@ Future<String> _buildSqlRpcStreamingBenchmarkReport({required int iterations}) a
   );
 
   Future<int> measure({required bool warmCache}) async {
-    if (!warmCache) {
-      configCache.invalidate();
-    }
     final samples = <int>[];
-    for (var i = 0; i < iterations; i++) {
+    for (var i = -10; i < iterations; i++) {
+      if (!warmCache) configCache.invalidate();
       final stopwatch = Stopwatch()..start();
       final tryResult = await executor.tryStreamingFromDb(
         request,
@@ -284,7 +282,7 @@ Future<String> _buildSqlRpcStreamingBenchmarkReport({required int iterations}) a
       );
       stopwatch.stop();
       expect(tryResult.succeeded, isTrue);
-      samples.add(stopwatch.elapsedMicroseconds);
+      if (i >= 0) samples.add(stopwatch.elapsedMicroseconds);
     }
     samples.sort();
     return samples[samples.length ~/ 2];

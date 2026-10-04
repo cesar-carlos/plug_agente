@@ -139,10 +139,10 @@ Future<void> main(List<String> args) async {
   );
 }
 
-Future<Map<String, dynamic>> buildRepeatedTransportBenchmark({int iterations = 20, int repeats = 9}) async {
+Future<Map<String, dynamic>> buildRepeatedTransportBenchmark({int iterations = 100, int repeats = 9}) async {
   final threshold = ConnectionConstants.gzipIsolateThresholdBytes;
   await _buildBenchmarkResults(
-    iterations: 2,
+    iterations: 10,
     threshold: defaultTransportCompressionThresholdBytes,
     path: 'async',
     gzipIsolateThresholdBytes: threshold,
@@ -164,11 +164,12 @@ Future<Map<String, dynamic>> buildRepeatedTransportBenchmark({int iterations = 2
     peakRss = peakRss > ProcessInfo.currentRss ? peakRss : ProcessInfo.currentRss;
   }
   return <String, dynamic>{
-    'harness_version': 1,
+    'harness_version': 2,
     'dart_version': Platform.version,
     'platform': Platform.operatingSystem,
     'config': {
       'iterations': iterations,
+      'warmup_iterations': 10,
       'repeats': repeats,
       'gzip_threshold': threshold,
       'workers': ConnectionConstants.transportWorkerPoolSize,
@@ -266,6 +267,7 @@ Future<List<Map<String, dynamic>>> _buildBenchmarkResults({
   required int threshold,
   required String path,
   required int gzipIsolateThresholdBytes,
+  String? onlyCase,
 }) async {
   if (iterations <= 0) {
     return const <Map<String, dynamic>>[];
@@ -286,6 +288,7 @@ Future<List<Map<String, dynamic>>> _buildBenchmarkResults({
   final results = <Map<String, dynamic>>[];
 
   for (final benchmarkCase in cases) {
+    if (onlyCase != null && benchmarkCase.name != onlyCase) continue;
     for (final mode in modes) {
       for (final signed in signedModes) {
         final result = path == 'async'
@@ -309,6 +312,16 @@ Future<List<Map<String, dynamic>>> _buildBenchmarkResults({
     }
   }
   return results;
+}
+
+Future<void> runTransportDiagnosticsWorkload({int iterations = 100}) async {
+  await _buildBenchmarkResults(
+    iterations: iterations,
+    threshold: defaultTransportCompressionThresholdBytes,
+    path: 'async',
+    gzipIsolateThresholdBytes: ConnectionConstants.gzipIsolateThresholdBytes,
+    onlyCase: 'large_sql_low_compressibility',
+  );
 }
 
 Future<Map<String, dynamic>> _runCaseAsync({

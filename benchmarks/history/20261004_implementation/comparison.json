@@ -1,0 +1,923 @@
+{
+  "status": "inconclusive",
+  "reason": "Identical-code control violated limits or has missing measurements",
+  "control": {
+    "status": "fail",
+    "scenarios": [
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 61,
+          "candidate": 58,
+          "limit": 64.05
+        },
+        "receive_p95_us": {
+          "base": 27,
+          "candidate": 29,
+          "limit": 28.35
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 65,
+          "candidate": 71,
+          "limit": 68.25
+        },
+        "receive_p95_us": {
+          "base": 37,
+          "candidate": 57,
+          "limit": 38.85
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 218,
+          "candidate": 239,
+          "limit": 228.9
+        },
+        "receive_p95_us": {
+          "base": 69,
+          "candidate": 75,
+          "limit": 72.45
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 163,
+          "candidate": 156,
+          "limit": 171.15
+        },
+        "receive_p95_us": {
+          "base": 74,
+          "candidate": 84,
+          "limit": 77.7
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 236,
+          "candidate": 280,
+          "limit": 247.8
+        },
+        "receive_p95_us": {
+          "base": 66,
+          "candidate": 89,
+          "limit": 69.3
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 155,
+          "candidate": 165,
+          "limit": 162.75
+        },
+        "receive_p95_us": {
+          "base": 70,
+          "candidate": 81,
+          "limit": 73.5
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 7784,
+          "candidate": 7624,
+          "limit": 8173.200000000001
+        },
+        "receive_p95_us": {
+          "base": 8351,
+          "candidate": 8888,
+          "limit": 8768.550000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 5752,
+          "candidate": 6319,
+          "limit": 6039.6
+        },
+        "receive_p95_us": {
+          "base": 4516,
+          "candidate": 5314,
+          "limit": 4741.8
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 10150,
+          "candidate": 10611,
+          "limit": 10657.5
+        },
+        "receive_p95_us": {
+          "base": 7823,
+          "candidate": 8050,
+          "limit": 8214.15
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 8662,
+          "candidate": 9491,
+          "limit": 9095.1
+        },
+        "receive_p95_us": {
+          "base": 4301,
+          "candidate": 5311,
+          "limit": 4516.05
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 10104,
+          "candidate": 10560,
+          "limit": 10609.2
+        },
+        "receive_p95_us": {
+          "base": 7897,
+          "candidate": 8933,
+          "limit": 8291.85
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 8846,
+          "candidate": 9698,
+          "limit": 9288.300000000001
+        },
+        "receive_p95_us": {
+          "base": 4522,
+          "candidate": 5002,
+          "limit": 4748.1
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 7799,
+          "candidate": 7977,
+          "limit": 8188.950000000001
+        },
+        "receive_p95_us": {
+          "base": 2696,
+          "candidate": 2584,
+          "limit": 2830.8
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 5476,
+          "candidate": 5841,
+          "limit": 5749.8
+        },
+        "receive_p95_us": {
+          "base": 1516,
+          "candidate": 1626,
+          "limit": 1591.8
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 22398,
+          "candidate": 22581,
+          "limit": 23517.9
+        },
+        "receive_p95_us": {
+          "base": 8300,
+          "candidate": 8451,
+          "limit": 8715.0
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 19041,
+          "candidate": 19620,
+          "limit": 19993.05
+        },
+        "receive_p95_us": {
+          "base": 5526,
+          "candidate": 5578,
+          "limit": 5802.3
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 21819,
+          "candidate": 22409,
+          "limit": 22909.95
+        },
+        "receive_p95_us": {
+          "base": 8316,
+          "candidate": 8350,
+          "limit": 8731.800000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 19254,
+          "candidate": 20179,
+          "limit": 20216.7
+        },
+        "receive_p95_us": {
+          "base": 5462,
+          "candidate": 5702,
+          "limit": 5735.1
+        }
+      }
+    ],
+    "throughput_ratio": 0.9698339708098468,
+    "rss_peak_bytes": {
+      "base": 197013504,
+      "candidate": 198230016
+    },
+    "heap_gate_evaluated": true,
+    "heap_growth_bytes": {
+      "base": 0,
+      "candidate": 3367424,
+      "limit": 0.0
+    },
+    "pending_metrics": [],
+    "failures": [
+      "('small_sql_repetitive', 'none', False) receive_p95_us: 29 > 28.35",
+      "('small_sql_repetitive', 'none', True) send_p95_us: 71 > 68.25",
+      "('small_sql_repetitive', 'none', True) receive_p95_us: 57 > 38.85",
+      "('small_sql_repetitive', 'auto', False) send_p95_us: 239 > 228.9",
+      "('small_sql_repetitive', 'auto', False) receive_p95_us: 75 > 72.45",
+      "('small_sql_repetitive', 'auto', True) receive_p95_us: 84 > 77.7",
+      "('small_sql_repetitive', 'gzip', False) send_p95_us: 280 > 247.8",
+      "('small_sql_repetitive', 'gzip', False) receive_p95_us: 89 > 69.3",
+      "('small_sql_repetitive', 'gzip', True) send_p95_us: 165 > 162.75",
+      "('small_sql_repetitive', 'gzip', True) receive_p95_us: 81 > 73.5",
+      "('large_sql_low_compressibility', 'none', False) receive_p95_us: 8888 > 8768.550000000001",
+      "('large_sql_low_compressibility', 'none', True) send_p95_us: 6319 > 6039.6",
+      "('large_sql_low_compressibility', 'none', True) receive_p95_us: 5314 > 4741.8",
+      "('large_sql_low_compressibility', 'auto', True) send_p95_us: 9491 > 9095.1",
+      "('large_sql_low_compressibility', 'auto', True) receive_p95_us: 5311 > 4516.05",
+      "('large_sql_low_compressibility', 'gzip', False) receive_p95_us: 8933 > 8291.85",
+      "('large_sql_low_compressibility', 'gzip', True) send_p95_us: 9698 > 9288.300000000001",
+      "('large_sql_low_compressibility', 'gzip', True) receive_p95_us: 5002 > 4748.1",
+      "('large_incompressible_blob', 'none', True) send_p95_us: 5841 > 5749.8",
+      "('large_incompressible_blob', 'none', True) receive_p95_us: 1626 > 1591.8",
+      "Heap growth exceeds 110% of base"
+    ]
+  },
+  "forward": {
+    "status": "fail",
+    "scenarios": [
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 83,
+          "candidate": 62,
+          "limit": 87.15
+        },
+        "receive_p95_us": {
+          "base": 40,
+          "candidate": 31,
+          "limit": 42.0
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 100,
+          "candidate": 89,
+          "limit": 105.0
+        },
+        "receive_p95_us": {
+          "base": 62,
+          "candidate": 59,
+          "limit": 65.10000000000001
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 270,
+          "candidate": 325,
+          "limit": 283.5
+        },
+        "receive_p95_us": {
+          "base": 63,
+          "candidate": 84,
+          "limit": 66.15
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 232,
+          "candidate": 196,
+          "limit": 243.60000000000002
+        },
+        "receive_p95_us": {
+          "base": 111,
+          "candidate": 105,
+          "limit": 116.55000000000001
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 291,
+          "candidate": 255,
+          "limit": 305.55
+        },
+        "receive_p95_us": {
+          "base": 88,
+          "candidate": 86,
+          "limit": 92.4
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 191,
+          "candidate": 201,
+          "limit": 200.55
+        },
+        "receive_p95_us": {
+          "base": 100,
+          "candidate": 102,
+          "limit": 105.0
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 10336,
+          "candidate": 8738,
+          "limit": 10852.800000000001
+        },
+        "receive_p95_us": {
+          "base": 10474,
+          "candidate": 9285,
+          "limit": 10997.7
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 9619,
+          "candidate": 9407,
+          "limit": 10099.95
+        },
+        "receive_p95_us": {
+          "base": 7603,
+          "candidate": 10742,
+          "limit": 7983.150000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 13331,
+          "candidate": 11687,
+          "limit": 13997.550000000001
+        },
+        "receive_p95_us": {
+          "base": 9964,
+          "candidate": 8303,
+          "limit": 10462.2
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 16078,
+          "candidate": 12466,
+          "limit": 16881.9
+        },
+        "receive_p95_us": {
+          "base": 7727,
+          "candidate": 6835,
+          "limit": 8113.35
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 14362,
+          "candidate": 12684,
+          "limit": 15080.1
+        },
+        "receive_p95_us": {
+          "base": 10251,
+          "candidate": 8563,
+          "limit": 10763.550000000001
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 11618,
+          "candidate": 12464,
+          "limit": 12198.9
+        },
+        "receive_p95_us": {
+          "base": 7109,
+          "candidate": 7494,
+          "limit": 7464.450000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 9549,
+          "candidate": 9168,
+          "limit": 10026.45
+        },
+        "receive_p95_us": {
+          "base": 3505,
+          "candidate": 2921,
+          "limit": 3680.25
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 9809,
+          "candidate": 9210,
+          "limit": 10299.45
+        },
+        "receive_p95_us": {
+          "base": 2830,
+          "candidate": 2887,
+          "limit": 2971.5
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 27518,
+          "candidate": 24467,
+          "limit": 28893.9
+        },
+        "receive_p95_us": {
+          "base": 10097,
+          "candidate": 9939,
+          "limit": 10601.85
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 30506,
+          "candidate": 24688,
+          "limit": 32031.300000000003
+        },
+        "receive_p95_us": {
+          "base": 8356,
+          "candidate": 9371,
+          "limit": 8773.800000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 31168,
+          "candidate": 25131,
+          "limit": 32726.4
+        },
+        "receive_p95_us": {
+          "base": 11446,
+          "candidate": 9921,
+          "limit": 12018.300000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 25650,
+          "candidate": 25016,
+          "limit": 26932.5
+        },
+        "receive_p95_us": {
+          "base": 8299,
+          "candidate": 10109,
+          "limit": 8713.95
+        }
+      }
+    ],
+    "throughput_ratio": 1.0925731675859434,
+    "rss_peak_bytes": {
+      "base": 197570560,
+      "candidate": 220319744
+    },
+    "heap_gate_evaluated": true,
+    "heap_growth_bytes": {
+      "base": 1164480,
+      "candidate": 1352496,
+      "limit": 1280928.0
+    },
+    "pending_metrics": [],
+    "failures": [
+      "('small_sql_repetitive', 'auto', False) send_p95_us: 325 > 283.5",
+      "('small_sql_repetitive', 'auto', False) receive_p95_us: 84 > 66.15",
+      "('small_sql_repetitive', 'gzip', True) send_p95_us: 201 > 200.55",
+      "('large_sql_low_compressibility', 'none', True) receive_p95_us: 10742 > 7983.150000000001",
+      "('large_sql_low_compressibility', 'gzip', True) send_p95_us: 12464 > 12198.9",
+      "('large_sql_low_compressibility', 'gzip', True) receive_p95_us: 7494 > 7464.450000000001",
+      "('large_incompressible_blob', 'auto', True) receive_p95_us: 9371 > 8773.800000000001",
+      "('large_incompressible_blob', 'gzip', True) receive_p95_us: 10109 > 8713.95",
+      "Heap growth exceeds 110% of base"
+    ]
+  },
+  "reverse": {
+    "status": "fail",
+    "scenarios": [
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 58,
+          "candidate": 63,
+          "limit": 60.900000000000006
+        },
+        "receive_p95_us": {
+          "base": 33,
+          "candidate": 36,
+          "limit": 34.65
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 78,
+          "candidate": 89,
+          "limit": 81.9
+        },
+        "receive_p95_us": {
+          "base": 46,
+          "candidate": 48,
+          "limit": 48.300000000000004
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 258,
+          "candidate": 273,
+          "limit": 270.90000000000003
+        },
+        "receive_p95_us": {
+          "base": 80,
+          "candidate": 85,
+          "limit": 84.0
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 225,
+          "candidate": 223,
+          "limit": 236.25
+        },
+        "receive_p95_us": {
+          "base": 116,
+          "candidate": 94,
+          "limit": 121.80000000000001
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 248,
+          "candidate": 277,
+          "limit": 260.40000000000003
+        },
+        "receive_p95_us": {
+          "base": 83,
+          "candidate": 89,
+          "limit": 87.15
+        }
+      },
+      {
+        "case": "small_sql_repetitive",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 204,
+          "candidate": 204,
+          "limit": 214.20000000000002
+        },
+        "receive_p95_us": {
+          "base": 100,
+          "candidate": 98,
+          "limit": 105.0
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 9119,
+          "candidate": 9810,
+          "limit": 9574.95
+        },
+        "receive_p95_us": {
+          "base": 10194,
+          "candidate": 9857,
+          "limit": 10703.7
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 8055,
+          "candidate": 9341,
+          "limit": 8457.75
+        },
+        "receive_p95_us": {
+          "base": 5885,
+          "candidate": 10392,
+          "limit": 6179.25
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 12864,
+          "candidate": 13124,
+          "limit": 13507.2
+        },
+        "receive_p95_us": {
+          "base": 10264,
+          "candidate": 9116,
+          "limit": 10777.2
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 11475,
+          "candidate": 11917,
+          "limit": 12048.75
+        },
+        "receive_p95_us": {
+          "base": 5274,
+          "candidate": 5629,
+          "limit": 5537.7
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 12629,
+          "candidate": 11772,
+          "limit": 13260.45
+        },
+        "receive_p95_us": {
+          "base": 9963,
+          "candidate": 9079,
+          "limit": 10461.15
+        }
+      },
+      {
+        "case": "large_sql_low_compressibility",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 14385,
+          "candidate": 11910,
+          "limit": 15104.25
+        },
+        "receive_p95_us": {
+          "base": 7165,
+          "candidate": 5308,
+          "limit": 7523.25
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": false,
+        "send_p95_us": {
+          "base": 10030,
+          "candidate": 8959,
+          "limit": 10531.5
+        },
+        "receive_p95_us": {
+          "base": 3087,
+          "candidate": 2837,
+          "limit": 3241.3500000000004
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "none",
+        "signed": true,
+        "send_p95_us": {
+          "base": 8766,
+          "candidate": 8871,
+          "limit": 9204.300000000001
+        },
+        "receive_p95_us": {
+          "base": 2527,
+          "candidate": 2616,
+          "limit": 2653.35
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": false,
+        "send_p95_us": {
+          "base": 26238,
+          "candidate": 24187,
+          "limit": 27549.9
+        },
+        "receive_p95_us": {
+          "base": 10092,
+          "candidate": 9562,
+          "limit": 10596.6
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "auto",
+        "signed": true,
+        "send_p95_us": {
+          "base": 25594,
+          "candidate": 24264,
+          "limit": 26873.7
+        },
+        "receive_p95_us": {
+          "base": 7239,
+          "candidate": 9711,
+          "limit": 7600.950000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": false,
+        "send_p95_us": {
+          "base": 26183,
+          "candidate": 24690,
+          "limit": 27492.15
+        },
+        "receive_p95_us": {
+          "base": 9321,
+          "candidate": 9627,
+          "limit": 9787.050000000001
+        }
+      },
+      {
+        "case": "large_incompressible_blob",
+        "compression": "gzip",
+        "signed": true,
+        "send_p95_us": {
+          "base": 24193,
+          "candidate": 24422,
+          "limit": 25402.65
+        },
+        "receive_p95_us": {
+          "base": 6960,
+          "candidate": 9557,
+          "limit": 7308.0
+        }
+      }
+    ],
+    "throughput_ratio": 1.0618824331991739,
+    "rss_peak_bytes": {
+      "base": 195809280,
+      "candidate": 212746240
+    },
+    "heap_gate_evaluated": true,
+    "heap_growth_bytes": {
+      "base": 1164480,
+      "candidate": 1352496,
+      "limit": 1280928.0
+    },
+    "pending_metrics": [],
+    "failures": [
+      "('small_sql_repetitive', 'none', False) send_p95_us: 63 > 60.900000000000006",
+      "('small_sql_repetitive', 'none', False) receive_p95_us: 36 > 34.65",
+      "('small_sql_repetitive', 'none', True) send_p95_us: 89 > 81.9",
+      "('small_sql_repetitive', 'auto', False) send_p95_us: 273 > 270.90000000000003",
+      "('small_sql_repetitive', 'auto', False) receive_p95_us: 85 > 84.0",
+      "('small_sql_repetitive', 'gzip', False) send_p95_us: 277 > 260.40000000000003",
+      "('small_sql_repetitive', 'gzip', False) receive_p95_us: 89 > 87.15",
+      "('large_sql_low_compressibility', 'none', False) send_p95_us: 9810 > 9574.95",
+      "('large_sql_low_compressibility', 'none', True) send_p95_us: 9341 > 8457.75",
+      "('large_sql_low_compressibility', 'none', True) receive_p95_us: 10392 > 6179.25",
+      "('large_sql_low_compressibility', 'auto', True) receive_p95_us: 5629 > 5537.7",
+      "('large_incompressible_blob', 'auto', True) receive_p95_us: 9711 > 7600.950000000001",
+      "('large_incompressible_blob', 'gzip', True) receive_p95_us: 9557 > 7308.0",
+      "Heap growth exceeds 110% of base"
+    ]
+  },
+  "base": {
+    "commit_sha": "79ecc2dc44277240ed8b2c230c7d6c578721406b",
+    "source_sha256": "cd4b7b67da4a41bdff967a75accf49d3cb8172d0b43ad0b2470ae054f7f20600"
+  },
+  "candidate": {
+    "commit_sha": "bdfd3ad00edad28e25f8cb6361eda3b8b1c9c785",
+    "source_sha256": "df67a2e06c7ac84d949396fa02a2a8d5da9a8f87d1862cb1c5e848aeff558d9d"
+  }
+}

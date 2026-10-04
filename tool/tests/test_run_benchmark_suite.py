@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,8 @@ from tool.py.benchmark_common import (
     parse_plug_agente_stack_metrics,
     parse_transport_markdown_metrics,
     resolve_dart_odbc_fast_root,
+    valid_native_benchmark_report,
+    parse_odbc_benchmark_metrics,
 )
 from tool.benchmarks.run_benchmark_suite import (
     DART_TOOL_SKIP_REASON,
@@ -21,10 +24,52 @@ from tool.benchmarks.run_benchmark_suite import (
     filter_suite_plans,
     main,
     run_transport_json_tool,
+    complete_suite_metrics,
+    required_metric_keys,
 )
 
 
 class RunBenchmarkSuiteTests(unittest.TestCase):
+    def test_native_gate_exit_code_is_preserved_and_artifacts_are_written(self) -> None:
+        module = 'tool.benchmarks.run_benchmark_suite'
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            suite = {'id': 'odbc_streaming', 'kind': 'dart_odbc_fast', 'status': 'fail',
+                     'wall_ms': 1, 'exit_code': 3, 'metrics': {}, 'comparison_identity': {}}
+            with patch(f'{module}.bootstrap_env'), patch(f'{module}.ensure_on_path'), \
+                 patch(f'{module}.collect_machine_metadata', return_value={'platform': 'test', 'python_version': 'test', 'dart_version': 'test', 'flutter_version': 'test'}), \
+                 patch(f'{module}.build_suite_plans', return_value=[
+                     {'id': 'odbc_streaming', 'kind': 'dart_odbc_fast', 'enabled': True, 'package_root': temporary}]), \
+                 patch(f'{module}.run_odbc_suite', return_value=suite):
+                self.assertEqual(main(['--output-dir', temporary]), 3)
+            self.assertTrue((output / 'summary.json').is_file())
+            self.assertTrue((output / 'REPORT.md').is_file())
+
+    def test_partial_scenario_metrics_cannot_qualify(self) -> None:
+        for suite_id in ('transport_pipeline', 'odbc_hot_paths', 'plug_agente_stack', 'odbc_gateway_encoding', 'odbc_streaming', 'odbc_async'):
+            metrics = {key: 1.0 for key in required_metric_keys(suite_id)}
+            self.assertTrue(complete_suite_metrics({'id': suite_id, 'metrics': metrics}))
+            metrics.pop(next(iter(metrics)))
+            self.assertFalse(complete_suite_metrics({'id': suite_id, 'metrics': metrics}))
+    def test_package_version_is_configuration_but_required_timings_must_be_numeric(self) -> None:
+        metrics = {key: 1.0 for key in required_metric_keys('odbc_streaming')}
+        metrics['package_version'] = '5.0.0'
+        self.assertTrue(complete_suite_metrics({'id': 'odbc_streaming', 'metrics': metrics}))
+        metrics['streamQueryBuffer.elapsed_ms'] = '1.0'
+        self.assertFalse(complete_suite_metrics({'id': 'odbc_streaming', 'metrics': metrics}))
+    def test_native_streaming_requires_both_modes_all_samples_and_positive_rows(self) -> None:
+        sample = {'rows': 8000, 'elapsed_ms': 1.25, 'chunks': 8, 'fetch_size': 1000, 'chunk_size': 1048576, 'rows_per_second': 6400000}
+        payload = {'benchmark': 'native_odbc_streaming', 'harness_version': 2, 'workload': 'deterministic_8000_rows_v1', 'rows': 8000, 'warmup': 1, 'repeats': 3,
+                   'scenarios': [{'scenario': name, **sample, 'samples': [sample.copy() for _ in range(3)]} for name in ('streamQueryBuffer', 'streamQueryBatched')]}
+        self.assertTrue(valid_native_benchmark_report(json.dumps(payload), 'streaming'))
+        payload['scenarios'][0]['samples'][0]['rows'] = 0
+        self.assertFalse(valid_native_benchmark_report(json.dumps(payload), 'streaming'))
+
+    def test_async_decimal_timings_and_shell_prefix_are_preserved(self) -> None:
+        output = 'Shell: workerCount=4 columnar: 42.448 ms, workers=4, encoding=columnar, timeouts=0, fallbacks=0'
+        metrics = parse_odbc_benchmark_metrics(output)
+        self.assertEqual(metrics['workerCount=4 columnar.columnar.elapsed_ms'], 42.448)
+
     def test_dry_run_lists_transport_suite(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             exit_code = main(["--dry-run"])

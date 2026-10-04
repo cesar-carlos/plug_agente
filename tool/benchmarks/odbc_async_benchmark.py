@@ -19,11 +19,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tool.py.benchmark_common import bootstrap_env, resolve_dart_odbc_fast_root
-from tool.py.odbc_benchmark_runner import run_odbc_async_benchmark
+from tool.py.odbc_benchmark_runner import DEFAULT_ASYNC_BENCHMARK, run_odbc_async_benchmark
 from tool.py.script_utils import PROJECT_ROOT, forward_script_args, resolve_env_path
 
 
-DEFAULT_BENCHMARK = Path(r"D:\Developer\dart_odbc_fast\example\async_concurrency_benchmark.dart")
+DEFAULT_BENCHMARK = PROJECT_ROOT / DEFAULT_ASYNC_BENCHMARK
 
 
 def main() -> int:
@@ -31,7 +31,7 @@ def main() -> int:
     parser.add_argument(
         "--benchmark-path",
         default=str(DEFAULT_BENCHMARK),
-        help="Path to async_concurrency_benchmark.dart",
+        help="Path to a native ODBC benchmark harness",
     )
     parser.add_argument("--env-path", default=".env", help="Dotenv file to load when vars are unset")
     args, remainder = parser.parse_known_args()
@@ -46,17 +46,13 @@ def main() -> int:
     print(f"Benchmark: {Path(args.benchmark_path).resolve()}")
     print(f"Package root: {package_root}")
     print(f"ODBC_TEST_DSN configured: {bool(os.environ.get('ODBC_TEST_DSN'))}")
-    print(f"ODBC_POOL_SIZE={os.environ.get('ODBC_POOL_SIZE', '')}")
-    print(f"ODBC_ASYNC_WORKER_COUNT={os.environ.get('ODBC_ASYNC_WORKER_COUNT', '')}")
-    print(
-        "ODBC_ASYNC_MAX_PENDING_REQUESTS="
-        f"{os.environ.get('ODBC_ASYNC_MAX_PENDING_REQUESTS', '')}"
-    )
+    print("Worker counts, concurrency and pool size are recorded per scenario.")
 
     exit_code, _metrics, _output = run_odbc_async_benchmark(
         package_root=package_root,
         log_path=PROJECT_ROOT / "artifacts" / "odbc_async_benchmark.log",
         extra_args=forward_script_args(remainder),
+        benchmark_path=Path(args.benchmark_path),
     )
     return exit_code
 

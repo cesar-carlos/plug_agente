@@ -30,6 +30,20 @@ streamQueryBatched: 45 ms, rows=1969, chunks=2, rowsPerSecond=43756, fetchSize=1
 
 
 class OdbcBenchmarkGateTests(unittest.TestCase):
+    def test_explicit_speedup_with_missing_measurements_is_inconclusive(self) -> None:
+        with mock.patch.dict(os.environ, {'BENCHMARK_STREAMING_MIN_SPEEDUP': '2.0'}, clear=True):
+            self.assertEqual(enforce_streaming_benchmark_gates(''), 2)
+
+    def test_nonfinite_gate_threshold_cannot_approve_measurements(self) -> None:
+        with mock.patch.dict(os.environ, {'BENCHMARK_STREAMING_MIN_SPEEDUP': 'nan'}, clear=True):
+            with self.assertRaises(SystemExit) as error:
+                enforce_streaming_benchmark_gates(SAMPLE_STREAM_OUTPUT)
+            self.assertEqual(error.exception.code, 2)
+
+    def test_zero_fallback_limit_is_supported(self) -> None:
+        with mock.patch.dict(os.environ, {'BENCHMARK_ODBC_FALLBACKS_MAX': '0'}, clear=True):
+            self.assertEqual(enforce_async_benchmark_gates(SAMPLE_ASYNC_OUTPUT), 0)
+
     def test_parse_async_benchmark_scenarios(self) -> None:
         scenarios = parse_async_benchmark_scenarios(SAMPLE_ASYNC_OUTPUT)
         self.assertEqual(len(scenarios), 4)

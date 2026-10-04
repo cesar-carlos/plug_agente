@@ -11,6 +11,7 @@
 
 installer/*.iss text eol=lf
 lib/core/constants/app_version.g.dart text eol=lf
+windows/updater/third_party/* text eol=lf
 
 *.dll binary
 *.exe binary

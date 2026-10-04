@@ -19,6 +19,7 @@ for _entry in (str(_ROOT), str(_TOOL_DIR)):
         sys.path.insert(0, _entry)
 
 import argparse
+import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,8 @@ from tool.py.benchmark_common import (
     incompatible_benchmark_suite_reasons,
     load_summary,
     metric_lower_is_better,
+    metric_metadata,
+    approved_controlled_comparison,
 )
 
 
@@ -39,7 +42,7 @@ class MetricDiff:
     metric: str
     baseline: float
     current: float
-    delta_pct: float
+    delta_pct: float | None
     direction: str
     regression: bool
 
@@ -54,15 +57,21 @@ def compare_metrics(
     for key in sorted(set(baseline_metrics) & set(current_metrics)):
         baseline_value = baseline_metrics[key]
         current_value = current_metrics[key]
-        if baseline_value == 0:
-            continue
-        delta_pct = ((current_value - baseline_value) / baseline_value) * 100.0
+        delta_pct = ((current_value - baseline_value) / baseline_value) * 100.0 if baseline_value else (0.0 if current_value == 0 else None)
+        limit = threshold
+        metadata = metric_metadata(key)
+        if 'p95' in key.lower():
+            limit = min(limit, 0.05)
+        elif metadata['category'] == 'throughput':
+            limit = min(limit, 0.15)
+        elif 'heap_growth' in key.lower():
+            limit = min(limit, 0.10)
         lower_is_better = metric_lower_is_better(key)
         if lower_is_better:
-            regression = current_value > baseline_value * (1.0 + threshold)
+            regression = current_value > baseline_value * (1.0 + limit)
             direction = "lower is better"
         else:
-            regression = current_value < baseline_value * (1.0 - threshold)
+            regression = current_value < baseline_value * (1.0 - limit)
             direction = "higher is better"
         diffs.append(
             MetricDiff(
@@ -87,7 +96,7 @@ def format_table(diffs: list[MetricDiff]) -> str:
             diff.metric,
             f"{diff.baseline:.4g}",
             f"{diff.current:.4g}",
-            f"{diff.delta_pct:+.2f}%",
+            f"{diff.delta_pct:+.2f}%" if diff.delta_pct is not None else "n/a (zero baseline)",
             diff.direction,
             "YES" if diff.regression else "no",
         )
@@ -133,9 +142,11 @@ def main(argv: list[str] | None = None) -> int:
         "--threshold",
         type=float,
         default=0.20,
-        help="Regression threshold as fraction (default: 0.20 = 20%%)",
+        help="Threshold for other metrics; p95 capped at 5%%, throughput 15%%, heap growth 10%%",
     )
     args = parser.parse_args(argv)
+    if not math.isfinite(args.threshold) or args.threshold < 0:
+        parser.error("threshold must be finite and non-negative")
 
     if args.current is None:
         from tool.py.benchmark_common import RESULTS_DIR
@@ -173,14 +184,18 @@ def main(argv: list[str] | None = None) -> int:
     print(format_table(diffs))
 
     regressions = [diff for diff in diffs if diff.regression]
+    invalid = any(suite.get("status", "pass") not in {"pass", "skipped"} for suite in current_summary.get("suites", []))
+    comparison = current_summary.get('comparison', {})
+    source = {key: current_summary.get('git', {}).get(key) for key in ('commit_sha', 'source_sha256')}
+    qualified = current_summary.get('qualification') == 'pass' and approved_controlled_comparison(comparison) and all(source.values()) and comparison.get('candidate') == source
+    if not diffs or excluded_suites or set(baseline_metrics) != set(current_metrics) or invalid or not qualified:
+        print()
+        print("Comparison inconclusive: incomplete metrics, incompatible profiles or missing controlled qualification.")
+        return 2
     if regressions:
         print()
         print(f"Regression detected in {len(regressions)} metric(s).")
         return 1
-
-    if not diffs:
-        print()
-        print("No overlapping metrics; comparison is inconclusive.")
     else:
         print()
         print("No regressions above threshold.")

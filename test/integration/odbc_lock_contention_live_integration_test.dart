@@ -8,6 +8,9 @@ import '../helpers/e2e_env.dart';
 import '../helpers/odbc_e2e_coverage_sql.dart';
 import '../helpers/odbc_e2e_rpc_harness.dart';
 
+const _lockTimeout = Duration(milliseconds: 250);
+const _contenderTimeout = Duration(milliseconds: 1200);
+
 void main() async {
   await E2EEnv.load();
 
@@ -20,77 +23,212 @@ void main() async {
   final skipUnlessOptIn = !runLockContention
       ? 'Defina ODBC_RUN_LOCK_CONTENTION_TESTS=true para rodar este teste de contenção/concorrência real.'
       : false;
+  final skipLive = skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn;
+
+  group('lock contention contract', () {
+    final coverage = OdbcE2eCoverageSql(
+      OdbcE2eSqlDialect.sqlServer,
+      tableName: 'plug_agente_e2e_cov_lock',
+    );
+
+    test('should prefix SQL Server and PostgreSQL lock timeouts', () {
+      expect(
+        _contendedUpdateSql(
+          dialect: OdbcE2eSqlDialect.sqlServer,
+          sql: coverage,
+          rowId: 1,
+          delta: 2,
+          lockTimeout: _lockTimeout,
+        ),
+        'SET LOCK_TIMEOUT ${_lockTimeout.inMilliseconds}; ${coverage.updateAmtById(1, 2)}',
+      );
+
+      final postgres = OdbcE2eCoverageSql(
+        OdbcE2eSqlDialect.postgresql,
+        tableName: 'plug_agente_e2e_cov_lock',
+      );
+      expect(
+        _contendedUpdateSql(
+          dialect: OdbcE2eSqlDialect.postgresql,
+          sql: postgres,
+          rowId: 1,
+          delta: 2,
+          lockTimeout: _lockTimeout,
+        ),
+        "SET lock_timeout = '${_lockTimeout.inMilliseconds}ms'; ${postgres.updateAmtById(1, 2)}",
+      );
+    });
+
+    test('should keep the SQL Anywhere update as one statement', () {
+      final anywhere = OdbcE2eCoverageSql(
+        OdbcE2eSqlDialect.sqlAnywhere,
+        tableName: 'plug_agente_e2e_cov_lock',
+      );
+      expect(
+        _contendedUpdateSql(
+          dialect: OdbcE2eSqlDialect.sqlAnywhere,
+          sql: anywhere,
+          rowId: 1,
+          delta: 2,
+          lockTimeout: _lockTimeout,
+        ),
+        anywhere.updateAmtById(1, 2),
+      );
+    });
+
+    test('should apply SQL Anywhere blocking timeout on the connection string once', () {
+      expect(
+        sqlAnywhereLockContentionConnectionString(
+          'Driver={SQL Anywhere 16};Server=db',
+          _lockTimeout,
+        ),
+        'Driver={SQL Anywhere 16};Server=db;InitString={SET TEMPORARY OPTION blocking_timeout=${_lockTimeout.inMilliseconds}}',
+      );
+      expect(
+        sqlAnywhereLockContentionConnectionString(
+          'Driver={SQL Anywhere 16};Server=db;',
+          _lockTimeout,
+        ),
+        'Driver={SQL Anywhere 16};Server=db;InitString={SET TEMPORARY OPTION blocking_timeout=${_lockTimeout.inMilliseconds}}',
+      );
+
+      const alreadyConfigured = 'Driver={SQL Anywhere 16};InitString={SET TEMPORARY OPTION blocking_timeout=1000}';
+      expect(
+        sqlAnywhereLockContentionConnectionString(alreadyConfigured, _lockTimeout),
+        alreadyConfigured,
+      );
+    });
+
+    test('should reject an unconfirmed client abort as a lock failure', () {
+      final unconfirmed = domain.QueryExecutionFailure.withContext(
+        message: 'Non-query execution timeout',
+        context: const {
+          'timeout': true,
+          'outcome_unknown': true,
+        },
+      );
+      expect(
+        _matchesExpectedLockFailure(unconfirmed, OdbcE2eSqlDialect.sqlAnywhere),
+        isFalse,
+      );
+      expect(
+        _matchesExpectedLockFailure(
+          domain.QueryExecutionFailure('Locked (SQLCODE=-210)'),
+          OdbcE2eSqlDialect.sqlAnywhere,
+        ),
+        isTrue,
+      );
+    });
+  });
 
   group('ODBC lock contention live integration', () {
     OdbcE2eRpcHarness? harness;
     OdbcE2eCoverageSql? sql;
     OdbcE2eSqlDialect? dialect;
+    String? harnessDsn;
+    var schemaCreated = false;
     var isReady = false;
 
+    Future<OdbcE2eRpcHarness?> openHarness() {
+      final localDialect = dialect;
+      final localDsn = harnessDsn;
+      if (localDialect == null || localDsn == null) {
+        return Future<OdbcE2eRpcHarness?>.value();
+      }
+      return OdbcE2eRpcHarness.open(localDsn, localDialect);
+    }
+
     setUpAll(() async {
-      if (!dsnValid) {
+      if (!dsnValid || !runLockContention) {
         return;
       }
       final dsnValue = dsn;
-      if (dsnValue.trim().isEmpty) {
-        return;
-      }
       final localDialect = detectOdbcE2eDialect(dsnValue);
-      final opened = await OdbcE2eRpcHarness.open(dsnValue, localDialect);
-      if (opened == null) {
-        return;
-      }
-      harness = opened;
-      dialect = localDialect;
-      sql = OdbcE2eCoverageSql(
+      final localSql = OdbcE2eCoverageSql(
         localDialect,
         tableName: 'plug_agente_e2e_cov_lock',
       );
+      dialect = localDialect;
+      sql = localSql;
+      harnessDsn = _harnessConnectionString(dsnValue, localDialect);
 
-      final drop = await opened.gateway.executeNonQuery(
-        sql!.dropTableIfExists,
-        null,
-      );
-      expect(drop.isSuccess(), isTrue, reason: 'drop table: $drop');
+      final opened = await openHarness();
+      if (opened == null) {
+        return;
+      }
+      try {
+        final drop = await opened.gateway.executeNonQuery(
+          localSql.dropTableIfExists,
+          null,
+        );
+        expect(drop.isSuccess(), isTrue, reason: 'drop table: $drop');
 
-      final create = await opened.gateway.executeNonQuery(sql!.createTable, null);
-      expect(create.isSuccess(), isTrue, reason: 'create table: $create');
+        final create = await opened.gateway.executeNonQuery(localSql.createTable, null);
+        expect(create.isSuccess(), isTrue, reason: 'create table: $create');
+        schemaCreated = true;
 
-      final seed = await opened.gateway.executeNonQuery(
-        sql!.insertRow(
-          id: 1,
-          code: 'lock-row',
-          amt: 10,
-          birthDate: '2024-01-01',
-          ts: '2024-01-01 00:00:00',
-          isActive: true,
-        ),
-        null,
-      );
-      expect(seed.isSuccess(), isTrue, reason: 'seed row: $seed');
-      isReady = true;
+        final seed = await opened.gateway.executeNonQuery(
+          localSql.insertRow(
+            id: 1,
+            code: 'lock-row',
+            amt: 10,
+            birthDate: '2024-01-01',
+            ts: '2024-01-01 00:00:00',
+            isActive: true,
+          ),
+          null,
+        );
+        expect(seed.isSuccess(), isTrue, reason: 'seed row: $seed');
+        isReady = true;
+      } finally {
+        await opened.shutdown();
+      }
+    });
+
+    setUp(() async {
+      if (!isReady) {
+        return;
+      }
+      harness = await openHarness();
+    });
+
+    tearDown(() async {
+      final opened = harness;
+      harness = null;
+      if (opened == null) {
+        return;
+      }
+      await opened.shutdown();
     });
 
     tearDownAll(() async {
-      final h = harness;
       final localSql = sql;
-      if (h == null || localSql == null) {
+      if (localSql == null || (!schemaCreated && !isReady)) {
         return;
       }
-      await h.gateway.executeNonQuery(localSql.dropTableIfExists, null);
-      await h.shutdown();
+      final opened = await openHarness();
+      if (opened == null) {
+        return;
+      }
+      try {
+        await opened.gateway.executeNonQuery(localSql.dropTableIfExists, null);
+      } finally {
+        await opened.shutdown();
+      }
     });
 
     test(
       'should handle lock contention with timeout without hanging pool',
       () async {
         expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
-        final h = harness!;
+        final h = harness;
+        expect(h, isNotNull, reason: 'ODBC harness did not reopen after schema setup');
+        final opened = h!;
         final localSql = sql!;
         final localDialect = dialect!;
-        final service = h.locator.asyncService;
+        final service = opened.locator.asyncService;
 
-        final holderConnResult = await service.connect(h.connectionString);
+        final holderConnResult = await service.connect(opened.connectionString);
         expect(holderConnResult.isSuccess(), isTrue, reason: '$holderConnResult');
         final holderConn = holderConnResult.getOrThrow();
 
@@ -110,12 +248,12 @@ void main() async {
             sql: localSql,
             rowId: 1,
             delta: 2,
-            lockTimeoutMs: 250,
+            lockTimeout: _lockTimeout,
           );
-          final contender = h.gateway.executeNonQuery(
+          final contender = opened.gateway.executeNonQuery(
             contenderSql,
             null,
-            timeout: const Duration(milliseconds: 1200),
+            timeout: _contenderTimeout,
           );
 
           final result = await contender.timeout(const Duration(seconds: 90));
@@ -126,26 +264,25 @@ void main() async {
             isTrue,
             reason: '$error',
           );
-
-          // Pool should remain usable after contention/cancel path.
-          final healthyQuery = QueryRequest(
-            id: 'after-contention-check',
-            agentId: 'e2e-agent',
-            query: localSql.selectIdCodeAmtById(1),
-            timestamp: DateTime.now(),
-          );
-          final healthyResult = await h.gateway.executeQuery(healthyQuery);
-          expect(healthyResult.isSuccess(), isTrue, reason: '$healthyResult');
-          final activeAfterContention = await h.connectionPool.getActiveCount();
-          expect(activeAfterContention.isSuccess(), isTrue, reason: '$activeAfterContention');
-          expect(activeAfterContention.getOrThrow(), 0);
         } finally {
           await service.rollbackTransaction(holderConn.id, txId);
           await service.disconnect(holderConn.id);
         }
+
+        final healthyQuery = QueryRequest(
+          id: 'after-contention-check',
+          agentId: 'e2e-agent',
+          query: localSql.selectIdCodeAmtById(1),
+          timestamp: DateTime.now(),
+        );
+        final healthyResult = await opened.gateway.executeQuery(healthyQuery);
+        expect(healthyResult.isSuccess(), isTrue, reason: '$healthyResult');
+        final activeAfterContention = await opened.connectionPool.getActiveCount();
+        expect(activeAfterContention.isSuccess(), isTrue, reason: '$activeAfterContention');
+        expect(activeAfterContention.getOrThrow(), 0);
       },
       timeout: const Timeout(Duration(minutes: 2)),
-      skip: skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn,
+      skip: skipLive,
       tags: const ['live', 'slow'],
     );
 
@@ -153,7 +290,9 @@ void main() async {
       'should sustain parallel smoke queries without stuck leases',
       () async {
         expect(isReady, isTrue, reason: 'ODBC init failed or DSN not configured');
-        final h = harness!;
+        final h = harness;
+        expect(h, isNotNull, reason: 'ODBC harness did not reopen after schema setup');
+        final opened = h!;
         final futures = List<Future<Result<QueryResponse>>>.generate(4, (index) {
           final request = QueryRequest(
             id: 'parallel-smoke-$index',
@@ -161,22 +300,45 @@ void main() async {
             query: E2EEnv.odbcSmokeQuery,
             timestamp: DateTime.now(),
           );
-          return h.gateway.executeQuery(request);
+          return opened.gateway.executeQuery(request);
         });
 
         final results = await Future.wait(futures);
         for (final result in results) {
           expect(result.isSuccess(), isTrue, reason: '$result');
         }
-        final activeAfterParallel = await h.connectionPool.getActiveCount();
+        final activeAfterParallel = await opened.connectionPool.getActiveCount();
         expect(activeAfterParallel.isSuccess(), isTrue, reason: '$activeAfterParallel');
         expect(activeAfterParallel.getOrThrow(), 0);
       },
       timeout: const Timeout(Duration(minutes: 2)),
-      skip: skipUnlessDsn != false ? skipUnlessDsn : skipUnlessOptIn,
+      skip: skipLive,
       tags: const ['live'],
     );
   });
+}
+
+String _harnessConnectionString(String connectionString, OdbcE2eSqlDialect dialect) {
+  if (dialect != OdbcE2eSqlDialect.sqlAnywhere) {
+    return connectionString;
+  }
+  return sqlAnywhereLockContentionConnectionString(connectionString, _lockTimeout);
+}
+
+/// SQL Anywhere waits forever for a lock when `blocking_timeout` is 0.
+/// The client deadline then aborts the statement as outcome-unknown, and the
+/// lease pool quarantines that DSN. InitString applies the server wait on the
+/// same connection that runs the update, before that deadline.
+String sqlAnywhereLockContentionConnectionString(
+  String connectionString,
+  Duration lockTimeout,
+) {
+  if (connectionString.toLowerCase().contains('blocking_timeout')) {
+    return connectionString;
+  }
+  final trimmed = connectionString.trimRight();
+  final separator = trimmed.endsWith(';') ? '' : ';';
+  return '$trimmed${separator}InitString={SET TEMPORARY OPTION blocking_timeout=${lockTimeout.inMilliseconds}}';
 }
 
 String _contendedUpdateSql({
@@ -184,9 +346,10 @@ String _contendedUpdateSql({
   required OdbcE2eCoverageSql sql,
   required int rowId,
   required double delta,
-  required int lockTimeoutMs,
+  required Duration lockTimeout,
 }) {
   final updateSql = sql.updateAmtById(rowId, delta);
+  final lockTimeoutMs = lockTimeout.inMilliseconds;
   return switch (dialect) {
     OdbcE2eSqlDialect.sqlServer => 'SET LOCK_TIMEOUT $lockTimeoutMs; $updateSql',
     OdbcE2eSqlDialect.postgresql => "SET lock_timeout = '${lockTimeoutMs}ms'; $updateSql",
@@ -195,6 +358,9 @@ String _contendedUpdateSql({
 }
 
 bool _matchesExpectedLockFailure(Object error, OdbcE2eSqlDialect dialect) {
+  if (error is domain.Failure && error.context['outcome_unknown'] == true) {
+    return false;
+  }
   final raw = error.toString().toLowerCase();
   final isTimeoutContext = error is domain.QueryExecutionFailure && error.context['timeout'] == true;
   final genericMatch = isTimeoutContext || raw.contains('timeout') || raw.contains('deadlock') || raw.contains('lock');

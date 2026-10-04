@@ -17,6 +17,10 @@ void main() {
       final repetitions = report['repetitions'] as List<List<Map<String, dynamic>>>;
       expect(repetitions.first.any((row) => row['effective_compression'] == 'gzip'), isTrue);
       for (final rows in repetitions) {
+        for (final row in rows) {
+          expect(row['send_sample_count'], 100);
+          expect(row['receive_sample_count'], 100);
+        }
         expect(
           rows.map((row) => [row['case'], row['requested_compression'], row['signed']]).toList(),
           repetitions.first.map((row) => [row['case'], row['requested_compression'], row['signed']]).toList(),

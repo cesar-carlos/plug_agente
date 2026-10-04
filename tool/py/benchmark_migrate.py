@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
-from tool.py.benchmark_common import SCHEMA_VERSION, SAFE_ENV_KEYS, write_json
+from tool.py.benchmark_common import SAFE_ENV_KEYS, write_json
 
 _LEGACY_STATUS_MAP = {
     "pass": "pass",
@@ -181,7 +181,7 @@ def migrate_legacy_summary(legacy: Mapping[str, Any], *, source_path: Path | Non
 
     return {
         "$schema": "../schema/summary.schema.json",
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": 1,
         "run_id": run_id,
         "captured_at": _run_timestamp_to_iso(run_id),
         "git": {
